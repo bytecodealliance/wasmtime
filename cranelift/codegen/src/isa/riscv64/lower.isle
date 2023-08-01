@@ -1658,6 +1658,15 @@
 (rule (lower (call_indirect sig_ref val inputs))
   (gen_call_indirect sig_ref val inputs))
 
+;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (return_call (func_ref_data sig_ref extname dist) args))
+      (gen_return_call sig_ref extname dist args))
+
+(rule (lower (return_call_indirect sig_ref callee args))
+      (gen_return_call_indirect sig_ref callee args))
+
+
 ;;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (extractlane x @ (value_type ty) (u8_from_uimm8 idx)))

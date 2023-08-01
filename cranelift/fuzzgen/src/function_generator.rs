@@ -8,8 +8,8 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    types::*, AtomicRmwOp, Block, ConstantData, ExternalName, FuncRef, Function, LibCall, Opcode,
-    SigRef, Signature, StackSlot, Type, UserExternalName, UserFuncName, Value,
+    types::*, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef, Function,
+    LibCall, Opcode, SigRef, Signature, StackSlot, Type, UserExternalName, UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -236,7 +236,13 @@ fn insert_bitcast(
     let to_var = fgen.get_variable_of_type(rets[0])?;
 
     // TODO: We can generate little/big endian flags here.
-    let memflags = MemFlags::new();
+    let mut memflags = MemFlags::new();
+
+    // When bitcasting between vectors of different lane counts, we need to
+    // specify the endianness.
+    if args[0].lane_count() != rets[0].lane_count() {
+        memflags.set_endianness(Endianness::Little);
+    }
 
     let res = builder.ins().bitcast(rets[0], memflags, from_val);
     builder.def_var(to_var, res);
@@ -454,7 +460,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
             assert_eq!(rets.len(), 1);
 
             let arg = args[0];
-            let ret = args[0];
+            let ret = rets[0];
 
             // Vector arguments must produce vector results, and scalar arguments must produce
             // scalar results.
@@ -462,7 +468,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 return false;
             }
 
-            if arg.is_vector() && arg.is_vector() {
+            if arg.is_vector() && ret.is_vector() {
                 // Vector conversions must have the same number of lanes, and the lanes must be the
                 // same bit-width.
                 if arg.lane_count() != ret.lane_count() {
@@ -472,6 +478,20 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 if arg.lane_of().bits() != ret.lane_of().bits() {
                     return false;
                 }
+            }
+        }
+
+        Opcode::Bitcast => {
+            assert_eq!(args.len(), 1);
+            assert_eq!(rets.len(), 1);
+
+            let arg = args[0];
+            let ret = rets[0];
+
+            // The opcode generator still allows bitcasts between different sized types, but these
+            // are rejected in the verifier.
+            if arg.bits() != ret.bits() {
+                return false;
             }
         }
 
@@ -570,6 +590,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     Opcode::Umax | Opcode::Smax | Opcode::Umin | Opcode::Smin,
                     &[I64X2, I64X2]
                 ),
+                // https://github.com/bytecodealliance/wasmtime/issues/6104
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
                 (Opcode::Uunarrow),
@@ -648,6 +669,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // Nothing wrong with this select. But we have an isle rule that can optimize it
                 // into a `min`/`max` instructions, which we don't have implemented yet.
                 (Opcode::Select, &[I8, I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/6104
+                (Opcode::Bitcast, &[I128], &[_]),
+                (Opcode::Bitcast, &[_], &[I128]),
             )
         }
 
@@ -687,6 +711,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[F32 | F64]
                 ),
                 (Opcode::SsubSat | Opcode::SaddSat, &[I64X2, I64X2]),
+                // https://github.com/bytecodealliance/wasmtime/issues/6104
+                (Opcode::Bitcast, &[I128], &[_]),
+                (Opcode::Bitcast, &[_], &[I128]),
             )
         }
 
@@ -731,6 +758,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[I128],
                     &[F32 | F64]
                 ),
+                // https://github.com/bytecodealliance/wasmtime/issues/6104
+                (Opcode::Bitcast, &[I128], &[_]),
+                (Opcode::Bitcast, &[_], &[I128]),
             )
         }
 
@@ -1146,171 +1176,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::Fmax, &[F64X2, F64X2], &[F64X2]),
                 (Opcode::FmaxPseudo, &[F32X4, F32X4], &[F32X4]),
                 (Opcode::FmaxPseudo, &[F64X2, F64X2], &[F64X2]),
-                (Opcode::Bitcast, &[I8], &[I8]),
-                (Opcode::Bitcast, &[I16], &[I8]),
-                (Opcode::Bitcast, &[I32], &[I8]),
-                (Opcode::Bitcast, &[I64], &[I8]),
-                (Opcode::Bitcast, &[I128], &[I8]),
-                (Opcode::Bitcast, &[F32], &[I8]),
-                (Opcode::Bitcast, &[F64], &[I8]),
-                (Opcode::Bitcast, &[I8X16], &[I8]),
-                (Opcode::Bitcast, &[I16X8], &[I8]),
-                (Opcode::Bitcast, &[I32X4], &[I8]),
-                (Opcode::Bitcast, &[I64X2], &[I8]),
-                (Opcode::Bitcast, &[F32X4], &[I8]),
-                (Opcode::Bitcast, &[F64X2], &[I8]),
-                (Opcode::Bitcast, &[I8], &[I16]),
-                (Opcode::Bitcast, &[I16], &[I16]),
-                (Opcode::Bitcast, &[I32], &[I16]),
-                (Opcode::Bitcast, &[I64], &[I16]),
-                (Opcode::Bitcast, &[I128], &[I16]),
-                (Opcode::Bitcast, &[F32], &[I16]),
-                (Opcode::Bitcast, &[F64], &[I16]),
-                (Opcode::Bitcast, &[I8X16], &[I16]),
-                (Opcode::Bitcast, &[I16X8], &[I16]),
-                (Opcode::Bitcast, &[I32X4], &[I16]),
-                (Opcode::Bitcast, &[I64X2], &[I16]),
-                (Opcode::Bitcast, &[F32X4], &[I16]),
-                (Opcode::Bitcast, &[F64X2], &[I16]),
-                (Opcode::Bitcast, &[I8], &[I32]),
-                (Opcode::Bitcast, &[I16], &[I32]),
-                (Opcode::Bitcast, &[I32], &[I32]),
-                (Opcode::Bitcast, &[I64], &[I32]),
-                (Opcode::Bitcast, &[I128], &[I32]),
-                (Opcode::Bitcast, &[F64], &[I32]),
-                (Opcode::Bitcast, &[I8X16], &[I32]),
-                (Opcode::Bitcast, &[I16X8], &[I32]),
-                (Opcode::Bitcast, &[I32X4], &[I32]),
-                (Opcode::Bitcast, &[I64X2], &[I32]),
-                (Opcode::Bitcast, &[F32X4], &[I32]),
-                (Opcode::Bitcast, &[F64X2], &[I32]),
-                (Opcode::Bitcast, &[I8], &[I64]),
-                (Opcode::Bitcast, &[I16], &[I64]),
-                (Opcode::Bitcast, &[I32], &[I64]),
-                (Opcode::Bitcast, &[I64], &[I64]),
-                (Opcode::Bitcast, &[I128], &[I64]),
-                (Opcode::Bitcast, &[F32], &[I64]),
-                (Opcode::Bitcast, &[I8X16], &[I64]),
-                (Opcode::Bitcast, &[I16X8], &[I64]),
-                (Opcode::Bitcast, &[I32X4], &[I64]),
-                (Opcode::Bitcast, &[I64X2], &[I64]),
-                (Opcode::Bitcast, &[F32X4], &[I64]),
-                (Opcode::Bitcast, &[F64X2], &[I64]),
-                (Opcode::Bitcast, &[I8], &[I128]),
-                (Opcode::Bitcast, &[I16], &[I128]),
-                (Opcode::Bitcast, &[I32], &[I128]),
-                (Opcode::Bitcast, &[I64], &[I128]),
-                (Opcode::Bitcast, &[I128], &[I128]),
-                (Opcode::Bitcast, &[F32], &[I128]),
-                (Opcode::Bitcast, &[F64], &[I128]),
-                (Opcode::Bitcast, &[I8X16], &[I128]),
-                (Opcode::Bitcast, &[I16X8], &[I128]),
-                (Opcode::Bitcast, &[I32X4], &[I128]),
-                (Opcode::Bitcast, &[I64X2], &[I128]),
-                (Opcode::Bitcast, &[F32X4], &[I128]),
-                (Opcode::Bitcast, &[F64X2], &[I128]),
-                (Opcode::Bitcast, &[I8], &[F32]),
-                (Opcode::Bitcast, &[I16], &[F32]),
-                (Opcode::Bitcast, &[I64], &[F32]),
-                (Opcode::Bitcast, &[I128], &[F32]),
-                (Opcode::Bitcast, &[F32], &[F32]),
-                (Opcode::Bitcast, &[F64], &[F32]),
-                (Opcode::Bitcast, &[I8X16], &[F32]),
-                (Opcode::Bitcast, &[I16X8], &[F32]),
-                (Opcode::Bitcast, &[I32X4], &[F32]),
-                (Opcode::Bitcast, &[I64X2], &[F32]),
-                (Opcode::Bitcast, &[F32X4], &[F32]),
-                (Opcode::Bitcast, &[F64X2], &[F32]),
-                (Opcode::Bitcast, &[I8], &[F64]),
-                (Opcode::Bitcast, &[I16], &[F64]),
-                (Opcode::Bitcast, &[I32], &[F64]),
-                (Opcode::Bitcast, &[I128], &[F64]),
-                (Opcode::Bitcast, &[F32], &[F64]),
-                (Opcode::Bitcast, &[F64], &[F64]),
-                (Opcode::Bitcast, &[I8X16], &[F64]),
-                (Opcode::Bitcast, &[I16X8], &[F64]),
-                (Opcode::Bitcast, &[I32X4], &[F64]),
-                (Opcode::Bitcast, &[I64X2], &[F64]),
-                (Opcode::Bitcast, &[F32X4], &[F64]),
-                (Opcode::Bitcast, &[F64X2], &[F64]),
-                (Opcode::Bitcast, &[I8], &[I8X16]),
-                (Opcode::Bitcast, &[I16], &[I8X16]),
-                (Opcode::Bitcast, &[I32], &[I8X16]),
-                (Opcode::Bitcast, &[I64], &[I8X16]),
-                (Opcode::Bitcast, &[I128], &[I8X16]),
-                (Opcode::Bitcast, &[F32], &[I8X16]),
-                (Opcode::Bitcast, &[F64], &[I8X16]),
-                (Opcode::Bitcast, &[I8X16], &[I8X16]),
-                (Opcode::Bitcast, &[I16X8], &[I8X16]),
-                (Opcode::Bitcast, &[I32X4], &[I8X16]),
-                (Opcode::Bitcast, &[I64X2], &[I8X16]),
-                (Opcode::Bitcast, &[F32X4], &[I8X16]),
-                (Opcode::Bitcast, &[F64X2], &[I8X16]),
-                (Opcode::Bitcast, &[I8], &[I16X8]),
-                (Opcode::Bitcast, &[I16], &[I16X8]),
-                (Opcode::Bitcast, &[I32], &[I16X8]),
-                (Opcode::Bitcast, &[I64], &[I16X8]),
-                (Opcode::Bitcast, &[I128], &[I16X8]),
-                (Opcode::Bitcast, &[F32], &[I16X8]),
-                (Opcode::Bitcast, &[F64], &[I16X8]),
-                (Opcode::Bitcast, &[I8X16], &[I16X8]),
-                (Opcode::Bitcast, &[I16X8], &[I16X8]),
-                (Opcode::Bitcast, &[I32X4], &[I16X8]),
-                (Opcode::Bitcast, &[I64X2], &[I16X8]),
-                (Opcode::Bitcast, &[F32X4], &[I16X8]),
-                (Opcode::Bitcast, &[F64X2], &[I16X8]),
-                (Opcode::Bitcast, &[I8], &[I32X4]),
-                (Opcode::Bitcast, &[I16], &[I32X4]),
-                (Opcode::Bitcast, &[I32], &[I32X4]),
-                (Opcode::Bitcast, &[I64], &[I32X4]),
-                (Opcode::Bitcast, &[I128], &[I32X4]),
-                (Opcode::Bitcast, &[F32], &[I32X4]),
-                (Opcode::Bitcast, &[F64], &[I32X4]),
-                (Opcode::Bitcast, &[I8X16], &[I32X4]),
-                (Opcode::Bitcast, &[I16X8], &[I32X4]),
-                (Opcode::Bitcast, &[I32X4], &[I32X4]),
-                (Opcode::Bitcast, &[I64X2], &[I32X4]),
-                (Opcode::Bitcast, &[F32X4], &[I32X4]),
-                (Opcode::Bitcast, &[F64X2], &[I32X4]),
-                (Opcode::Bitcast, &[I8], &[I64X2]),
-                (Opcode::Bitcast, &[I16], &[I64X2]),
-                (Opcode::Bitcast, &[I32], &[I64X2]),
-                (Opcode::Bitcast, &[I64], &[I64X2]),
-                (Opcode::Bitcast, &[I128], &[I64X2]),
-                (Opcode::Bitcast, &[F32], &[I64X2]),
-                (Opcode::Bitcast, &[F64], &[I64X2]),
-                (Opcode::Bitcast, &[I8X16], &[I64X2]),
-                (Opcode::Bitcast, &[I16X8], &[I64X2]),
-                (Opcode::Bitcast, &[I32X4], &[I64X2]),
-                (Opcode::Bitcast, &[I64X2], &[I64X2]),
-                (Opcode::Bitcast, &[F32X4], &[I64X2]),
-                (Opcode::Bitcast, &[F64X2], &[I64X2]),
-                (Opcode::Bitcast, &[I8], &[F32X4]),
-                (Opcode::Bitcast, &[I16], &[F32X4]),
-                (Opcode::Bitcast, &[I32], &[F32X4]),
-                (Opcode::Bitcast, &[I64], &[F32X4]),
-                (Opcode::Bitcast, &[I128], &[F32X4]),
-                (Opcode::Bitcast, &[F32], &[F32X4]),
-                (Opcode::Bitcast, &[F64], &[F32X4]),
-                (Opcode::Bitcast, &[I8X16], &[F32X4]),
-                (Opcode::Bitcast, &[I16X8], &[F32X4]),
-                (Opcode::Bitcast, &[I32X4], &[F32X4]),
-                (Opcode::Bitcast, &[I64X2], &[F32X4]),
-                (Opcode::Bitcast, &[F32X4], &[F32X4]),
-                (Opcode::Bitcast, &[F64X2], &[F32X4]),
-                (Opcode::Bitcast, &[I8], &[F64X2]),
-                (Opcode::Bitcast, &[I16], &[F64X2]),
-                (Opcode::Bitcast, &[I32], &[F64X2]),
-                (Opcode::Bitcast, &[I64], &[F64X2]),
-                (Opcode::Bitcast, &[I128], &[F64X2]),
-                (Opcode::Bitcast, &[F32], &[F64X2]),
-                (Opcode::Bitcast, &[F64], &[F64X2]),
-                (Opcode::Bitcast, &[I8X16], &[F64X2]),
-                (Opcode::Bitcast, &[I16X8], &[F64X2]),
-                (Opcode::Bitcast, &[I32X4], &[F64X2]),
-                (Opcode::Bitcast, &[I64X2], &[F64X2]),
-                (Opcode::Bitcast, &[F32X4], &[F64X2]),
-                (Opcode::Bitcast, &[F64X2], &[F64X2]),
                 (Opcode::FcvtToUintSat, &[F32X4], &[I8]),
                 (Opcode::FcvtToUintSat, &[F64X2], &[I8]),
                 (Opcode::FcvtToUintSat, &[F32X4], &[I16]),
@@ -2045,12 +1910,16 @@ where
                     .next()
                     .is_some();
                 let is_tail_caller = self.signature.call_conv == CallConv::Tail;
-                // TODO: This is currently only supported on x86
-                let supports_tail_calls = self.isa.triple().architecture == Architecture::X86_64;
-                // TODO: We currently require frame pointers for tail calls
-                let has_frame_pointers = self.isa.flags().preserve_frame_pointers();
 
-                if is_tail_caller && has_tail_callees && supports_tail_calls & has_frame_pointers {
+                let supports_tail_calls = match self.isa.triple().architecture {
+                    Architecture::Aarch64(_) | Architecture::Riscv64(_) => true,
+                    // TODO: x64 currently requires frame pointers for tail calls.
+                    Architecture::X86_64 => self.isa.flags().preserve_frame_pointers(),
+                    // TODO: Other platforms do not support tail calls yet.
+                    _ => false,
+                };
+
+                if is_tail_caller && has_tail_callees && supports_tail_calls {
                     valid_terminators.extend([
                         BlockTerminatorKind::TailCall,
                         BlockTerminatorKind::TailCallIndirect,

@@ -152,6 +152,10 @@ pub unsafe trait Store {
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
     fn new_epoch(&mut self) -> Result<u64, Error>;
+
+    /// Metadata required for resources for the component model.
+    #[cfg(feature = "component-model")]
+    fn component_calls(&mut self) -> &mut component::CallContexts;
 }
 
 /// Functionality required by this crate for a particular module. This

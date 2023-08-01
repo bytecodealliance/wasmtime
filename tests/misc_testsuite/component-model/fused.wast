@@ -976,13 +976,11 @@
 ;; different size variants
 (component
   (component $c1
-    (type $r' (record))
-    (export $r "t-r" (type $r'))
     (type $a' (variant
       (case "a")
       (case "b" float32)
       (case "c" (tuple float32 u32))
-      (case "d" (tuple float32 $r u64 u8))
+      (case "d" (tuple float32 u64 u8))
     ))
     (export $a "t-a" (type $a'))
 
@@ -1029,13 +1027,11 @@
   )
   (component $c2
     (import "a" (instance $i
-      (type $r' (record))
-      (export $r "t-r" (type (eq $r')))
       (type $a' (variant
         (case "a")
         (case "b" float32)
         (case "c" (tuple float32 u32))
-        (case "d" (tuple float32 $r u64 u8))
+        (case "d" (tuple float32 u64 u8))
       ))
       (export $a "t-a" (type (eq $a')))
       (export "a" (func (param "x" u8) (param "a" $a)))
@@ -1208,7 +1204,6 @@
 
 ;; test that flags get their upper bits all masked off
 (component
-  (type $f0' (flags))
   (type $f1' (flags "f1"))
   (type $f8' (flags "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"))
   (type $f9' (flags "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8" "f9"))
@@ -1257,7 +1252,6 @@
   ))
 
   (component $c1
-    (export $f0 "t-f0" (type $f0'))
     (export $f1 "t-f1" (type $f1'))
     (export $f8 "t-f8" (type $f8'))
     (export $f9 "t-f9" (type $f9'))
@@ -1268,7 +1262,6 @@
     (export $f64 "t-f64" (type $f64'))
     (export $f65 "t-f65" (type $f65'))
     (core module $m
-      (func (export "f0"))
       (func (export "f1") (param i32)
         (if (i32.ne (local.get 0) (i32.const 0x1)) (unreachable))
       )
@@ -1302,7 +1295,6 @@
       )
     )
     (core instance $m (instantiate $m))
-    (func (export "f0") (param "a" $f0) (canon lift (core func $m "f0")))
     (func (export "f1") (param "a" $f1) (canon lift (core func $m "f1")))
     (func (export "f8") (param "a" $f8) (canon lift (core func $m "f8")))
     (func (export "f9") (param "a" $f9) (canon lift (core func $m "f9")))
@@ -1317,7 +1309,6 @@
 
   (component $c2
     (import "a" (instance $i
-      (export $f0 "t-f0" (type (eq $f0')))
       (export $f1 "t-f1" (type (eq $f1')))
       (export $f8 "t-f8" (type (eq $f8')))
       (export $f9 "t-f9" (type (eq $f9')))
@@ -1327,7 +1318,6 @@
       (export $f33 "t-f33" (type (eq $f33')))
       (export $f64 "t-f64" (type (eq $f64')))
       (export $f65 "t-f65" (type (eq $f65')))
-      (export "f0" (func (param "a" $f0)))
       (export "f1" (func (param "a" $f1)))
       (export "f8" (func (param "a" $f8)))
       (export "f9" (func (param "a" $f9)))
@@ -1338,7 +1328,6 @@
       (export "f64" (func (param "a" $f64)))
       (export "f65" (func (param "a" $f65)))
     ))
-    (core func $f0 (canon lower (func $i "f0")))
     (core func $f1 (canon lower (func $i "f1")))
     (core func $f8 (canon lower (func $i "f8")))
     (core func $f9 (canon lower (func $i "f9")))
@@ -1350,7 +1339,6 @@
     (core func $f65 (canon lower (func $i "f65")))
 
     (core module $m
-      (import "" "f0" (func $f0))
       (import "" "f1" (func $f1 (param i32)))
       (import "" "f8" (func $f8 (param i32)))
       (import "" "f9" (func $f9 (param i32)))
@@ -1362,7 +1350,6 @@
       (import "" "f65" (func $f65 (param i32 i32 i32)))
 
       (func $start
-        (call $f0)
         (call $f1 (i32.const 0xffffff01))
         (call $f8 (i32.const 0xffffff11))
         (call $f9 (i32.const 0xffffff11))
@@ -1378,7 +1365,6 @@
     )
     (core instance $m (instantiate $m
       (with "" (instance
-        (export "f0" (func $f0))
         (export "f1" (func $f1))
         (export "f8" (func $f8))
         (export "f9" (func $f9))

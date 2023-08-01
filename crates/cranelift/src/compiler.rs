@@ -65,6 +65,7 @@ impl Default for CompilerContext {
 /// A compiler that compiles a WebAssembly module with Compiler, translating
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
 pub(crate) struct Compiler {
+    tunables: Tunables,
     contexts: Mutex<Vec<CompilerContext>>,
     isa: OwnedTargetIsa,
     linkopts: LinkOptions,
@@ -102,6 +103,7 @@ impl Drop for Compiler {
 
 impl Compiler {
     pub(crate) fn new(
+        tunables: Tunables,
         isa: OwnedTargetIsa,
         cache_store: Option<Arc<dyn CacheStore>>,
         linkopts: LinkOptions,
@@ -109,6 +111,7 @@ impl Compiler {
     ) -> Compiler {
         Compiler {
             contexts: Default::default(),
+            tunables,
             isa,
             linkopts,
             cache_store,
@@ -123,7 +126,6 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         func_index: DefinedFuncIndex,
         input: FunctionBodyData<'_>,
-        tunables: &Tunables,
         types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let isa = &*self.isa;
@@ -135,17 +137,17 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut compiler = self.function_compiler();
 
         let context = &mut compiler.cx.codegen_context;
-        context.func.signature = wasm_call_signature(isa, wasm_func_ty);
+        context.func.signature = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
         context.func.name = UserFuncName::User(UserExternalName {
             namespace: 0,
             index: func_index.as_u32(),
         });
 
-        if tunables.generate_native_debuginfo {
+        if self.tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(isa, translation, types, tunables);
+        let mut func_env = FuncEnvironment::new(isa, translation, types, &self.tunables);
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
@@ -220,7 +222,7 @@ impl wasmtime_environ::Compiler for Compiler {
             write!(output, "{}", context.func.display()).unwrap();
         }
 
-        let (info, func) = compiler.finish_with_info(Some((&body, tunables)))?;
+        let (info, func) = compiler.finish_with_info(Some((&body, &self.tunables)))?;
 
         let timing = cranelift_codegen::timing::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
@@ -241,7 +243,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
-        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty);
+        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
         let array_call_sig = array_call_signature(isa);
 
         let mut compiler = self.function_compiler();
@@ -310,7 +312,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let func_index = translation.module.func_index(def_func_index);
-        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty);
+        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
         let native_call_sig = native_call_signature(isa, wasm_func_ty);
 
         let mut compiler = self.function_compiler();
@@ -351,12 +353,11 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_wasm_to_native_trampoline(
         &self,
-        translation: &ModuleTranslation,
         wasm_func_ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
-        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty);
+        let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
         let native_call_sig = native_call_signature(isa, wasm_func_ty);
 
         let mut compiler = self.function_compiler();
@@ -379,14 +380,14 @@ impl wasmtime_environ::Compiler for Compiler {
             caller_vmctx,
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
-        let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
+        let ptr = isa.pointer_bytes();
         let limits = builder.ins().load(
             pointer_type,
             MemFlags::trusted(),
             caller_vmctx,
-            i32::try_from(offsets.vmctx_runtime_limits()).unwrap(),
+            i32::try_from(ptr.vmcontext_runtime_limits()).unwrap(),
         );
-        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &offsets.ptr, limits);
+        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr, limits);
 
         // If the native call signature for this function uses a return pointer
         // then allocate the return pointer here on the stack and pass it as the
@@ -442,7 +443,6 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send>)],
-        tunables: &Tunables,
         resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
@@ -459,7 +459,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
                 .unwrap();
             let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
-            if tunables.generate_address_map {
+            if self.tunables.generate_address_map {
                 let addr = func.address_map();
                 addrs.push(range.clone(), &addr.instructions);
             }
@@ -474,7 +474,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         builder.finish();
 
-        if tunables.generate_address_map {
+        if self.tunables.generate_address_map {
             addrs.append_to(obj);
         }
         traps.append_to(obj);
@@ -784,7 +784,7 @@ impl Compiler {
     ) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
-        let wasm_call_sig = wasm_call_signature(isa, ty);
+        let wasm_call_sig = wasm_call_signature(isa, ty, &self.tunables);
         let array_call_sig = array_call_signature(isa);
 
         let mut compiler = self.function_compiler();

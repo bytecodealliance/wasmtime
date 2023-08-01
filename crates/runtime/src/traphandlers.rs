@@ -2,6 +2,7 @@
 //! signalhandling mechanisms.
 
 mod backtrace;
+mod coredump;
 
 use crate::{Instance, VMContext, VMRuntimeLimits};
 use anyhow::Error;
@@ -12,6 +13,7 @@ use std::ptr;
 use std::sync::Once;
 
 pub use self::backtrace::{Backtrace, Frame};
+pub use self::coredump::CoreDumpStack;
 pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 cfg_if::cfg_if! {
@@ -24,6 +26,7 @@ cfg_if::cfg_if! {
 
         struct WasmtimeLongjmp;
 
+        #[wasmtime_versioned_export_macros::versioned_export]
         unsafe extern "C" fn wasmtime_setjmp(
             _jmp_buf: *mut *const u8,
             callback: extern "C" fn(*mut u8, *mut VMContext),
@@ -46,12 +49,14 @@ cfg_if::cfg_if! {
             }
         }
 
+        #[wasmtime_versioned_export_macros::versioned_export]
         unsafe extern "C" fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {
             std::panic::panic_any(WasmtimeLongjmp)
         }
     } else {
         #[link(name = "wasmtime-helpers")]
         extern "C" {
+            #[wasmtime_versioned_export_macros::versioned_link]
             #[allow(improper_ctypes)]
             fn wasmtime_setjmp(
                 jmp_buf: *mut *const u8,
@@ -59,6 +64,7 @@ cfg_if::cfg_if! {
                 payload: *mut u8,
                 callee: *mut VMContext,
             ) -> i32;
+            #[wasmtime_versioned_export_macros::versioned_link]
             fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
         }
     }
@@ -172,6 +178,8 @@ pub struct Trap {
     pub reason: TrapReason,
     /// Wasm backtrace of the trap, if any.
     pub backtrace: Option<Backtrace>,
+    /// The Wasm Coredump, if any.
+    pub coredumpstack: Option<CoreDumpStack>,
 }
 
 /// Enumeration of different methods of raising a trap.
@@ -251,6 +259,7 @@ impl From<wasmtime_environ::Trap> for TrapReason {
 pub unsafe fn catch_traps<'a, F>(
     signal_handler: Option<*const SignalHandler<'static>>,
     capture_backtrace: bool,
+    capture_coredump: bool,
     caller: *mut VMContext,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
@@ -259,19 +268,24 @@ where
 {
     let limits = Instance::from_vmctx(caller, |i| i.runtime_limits());
 
-    let result = CallThreadState::new(signal_handler, capture_backtrace, *limits).with(|cx| {
-        wasmtime_setjmp(
-            cx.jmp_buf.as_ptr(),
-            call_closure::<F>,
-            &mut closure as *mut F as *mut u8,
-            caller,
-        )
-    });
+    let result = CallThreadState::new(signal_handler, capture_backtrace, capture_coredump, *limits)
+        .with(|cx| {
+            wasmtime_setjmp(
+                cx.jmp_buf.as_ptr(),
+                call_closure::<F>,
+                &mut closure as *mut F as *mut u8,
+                caller,
+            )
+        });
 
     return match result {
         Ok(x) => Ok(x),
-        Err((UnwindReason::Trap(reason), backtrace)) => Err(Box::new(Trap { reason, backtrace })),
-        Err((UnwindReason::Panic(panic), _)) => std::panic::resume_unwind(panic),
+        Err((UnwindReason::Trap(reason), backtrace, coredumpstack)) => Err(Box::new(Trap {
+            reason,
+            backtrace,
+            coredumpstack,
+        })),
+        Err((UnwindReason::Panic(panic), _, _)) => std::panic::resume_unwind(panic),
     };
 
     extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext)
@@ -290,10 +304,12 @@ mod call_thread_state {
     /// Temporary state stored on the stack which is registered in the `tls` module
     /// below for calls into wasm.
     pub struct CallThreadState {
-        pub(super) unwind: UnsafeCell<MaybeUninit<(UnwindReason, Option<Backtrace>)>>,
+        pub(super) unwind:
+            UnsafeCell<MaybeUninit<(UnwindReason, Option<Backtrace>, Option<CoreDumpStack>)>>,
         pub(super) jmp_buf: Cell<*const u8>,
         pub(super) signal_handler: Option<*const SignalHandler<'static>>,
         pub(super) capture_backtrace: bool,
+        pub(super) capture_coredump: bool,
 
         pub(crate) limits: *const VMRuntimeLimits,
 
@@ -327,6 +343,7 @@ mod call_thread_state {
         pub(super) fn new(
             signal_handler: Option<*const SignalHandler<'static>>,
             capture_backtrace: bool,
+            capture_coredump: bool,
             limits: *const VMRuntimeLimits,
         ) -> CallThreadState {
             CallThreadState {
@@ -334,6 +351,7 @@ mod call_thread_state {
                 jmp_buf: Cell::new(ptr::null()),
                 signal_handler,
                 capture_backtrace,
+                capture_coredump,
                 limits,
                 prev: Cell::new(ptr::null()),
                 old_last_wasm_exit_fp: Cell::new(unsafe { *(*limits).last_wasm_exit_fp.get() }),
@@ -385,7 +403,7 @@ impl CallThreadState {
     fn with(
         mut self,
         closure: impl FnOnce(&CallThreadState) -> i32,
-    ) -> Result<(), (UnwindReason, Option<Backtrace>)> {
+    ) -> Result<(), (UnwindReason, Option<Backtrace>, Option<CoreDumpStack>)> {
         let ret = tls::set(&mut self, |me| closure(me));
         if ret != 0 {
             Ok(())
@@ -395,12 +413,12 @@ impl CallThreadState {
     }
 
     #[cold]
-    unsafe fn read_unwind(&self) -> (UnwindReason, Option<Backtrace>) {
+    unsafe fn read_unwind(&self) -> (UnwindReason, Option<Backtrace>, Option<CoreDumpStack>) {
         (*self.unwind.get()).as_ptr().read()
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
-        let backtrace = match reason {
+        let (backtrace, coredump) = match reason {
             // Panics don't need backtraces. There is nowhere to attach the
             // hypothetical backtrace to and it doesn't really make sense to try
             // in the first place since this is a Rust problem rather than a
@@ -412,11 +430,13 @@ impl CallThreadState {
             | UnwindReason::Trap(TrapReason::User {
                 needs_backtrace: false,
                 ..
-            }) => None,
-            UnwindReason::Trap(_) => self.capture_backtrace(self.limits, None),
+            }) => (None, None),
+            UnwindReason::Trap(_) => (self.capture_backtrace(self.limits, None), self.capture_coredump(self.limits, None)),
         };
         unsafe {
-            (*self.unwind.get()).as_mut_ptr().write((reason, backtrace));
+            (*self.unwind.get())
+                .as_mut_ptr()
+                .write((reason, backtrace, coredump));
             wasmtime_longjmp(self.jmp_buf.get());
         }
     }
@@ -468,6 +488,7 @@ impl CallThreadState {
 
     fn set_jit_trap(&self, pc: *const u8, fp: usize, faulting_addr: Option<usize>) {
         let backtrace = self.capture_backtrace(self.limits, Some((pc as usize, fp)));
+        let coredump = self.capture_coredump(self.limits, Some((pc as usize, fp)));
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write((
                 UnwindReason::Trap(TrapReason::Jit {
@@ -475,6 +496,7 @@ impl CallThreadState {
                     faulting_addr,
                 }),
                 backtrace,
+                coredump,
             ));
         }
     }
@@ -489,6 +511,17 @@ impl CallThreadState {
         }
 
         Some(unsafe { Backtrace::new_with_trap_state(limits, self, trap_pc_and_fp) })
+    }
+
+    fn capture_coredump(
+        &self,
+        limits: *const VMRuntimeLimits,
+        trap_pc_and_fp: Option<(usize, usize)>,
+    ) -> Option<CoreDumpStack> {
+        if !self.capture_coredump {
+            return None;
+        }
+        Some(CoreDumpStack::new(&self, limits, trap_pc_and_fp))
     }
 
     pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &Self> + 'a {

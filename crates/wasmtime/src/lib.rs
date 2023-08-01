@@ -395,6 +395,7 @@ mod compiler;
 
 mod code;
 mod config;
+mod coredump;
 mod engine;
 mod externals;
 mod instance;
@@ -412,6 +413,7 @@ mod types;
 mod values;
 
 pub use crate::config::*;
+pub use crate::coredump::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::func::*;

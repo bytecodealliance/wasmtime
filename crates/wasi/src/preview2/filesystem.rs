@@ -1,8 +1,9 @@
-use crate::preview2::{InputStream, OutputStream, Table, TableError};
-use std::any::Any;
+use crate::preview2::{StreamState, Table, TableError};
+use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 
 bitflags::bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct FilePerms: usize {
         const READ = 0b1;
         const WRITE = 0b10;
@@ -10,6 +11,8 @@ bitflags::bitflags! {
 }
 
 pub(crate) struct File {
+    /// Wrapped in an Arc because the same underlying file is used for
+    /// implementing the stream types. Also needed for [`block`].
     pub file: Arc<cap_std::fs::File>,
     pub perms: FilePerms,
 }
@@ -20,6 +23,17 @@ impl File {
             file: Arc::new(file),
             perms,
         }
+    }
+
+    /// Spawn a task on tokio's blocking thread for performing blocking
+    /// syscalls on the underlying [`cap_std::fs::File`].
+    pub(crate) async fn spawn_blocking<F, R>(&self, body: F) -> R
+    where
+        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let f = self.file.clone();
+        tokio::task::spawn_blocking(move || body(&f)).await.unwrap()
     }
 }
 pub(crate) trait TableFsExt {
@@ -63,6 +77,7 @@ impl TableFsExt for Table {
 }
 
 bitflags::bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct DirPerms: usize {
         const READ = 0b1;
         const MUTATE = 0b10;
@@ -70,7 +85,7 @@ bitflags::bitflags! {
 }
 
 pub(crate) struct Dir {
-    pub dir: cap_std::fs::Dir,
+    pub dir: Arc<cap_std::fs::Dir>,
     pub perms: DirPerms,
     pub file_perms: FilePerms,
 }
@@ -78,10 +93,21 @@ pub(crate) struct Dir {
 impl Dir {
     pub fn new(dir: cap_std::fs::Dir, perms: DirPerms, file_perms: FilePerms) -> Self {
         Dir {
-            dir,
+            dir: Arc::new(dir),
             perms,
             file_perms,
         }
+    }
+
+    /// Spawn a task on tokio's blocking thread for performing blocking
+    /// syscalls on the underlying [`cap_std::fs::Dir`].
+    pub(crate) async fn spawn_blocking<F, R>(&self, body: F) -> R
+    where
+        F: FnOnce(&cap_std::fs::Dir) -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let d = self.dir.clone();
+        tokio::task::spawn_blocking(move || body(&d)).await.unwrap()
     }
 }
 
@@ -93,177 +119,98 @@ impl FileInputStream {
     pub fn new(file: Arc<cap_std::fs::File>, position: u64) -> Self {
         Self { file, position }
     }
-}
 
-#[async_trait::async_trait]
-impl InputStream for FileInputStream {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    #[cfg(unix)]
-    fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
-        use cap_std::io_lifetimes::AsFd;
-        Some(self.file.as_fd())
-    }
-    #[cfg(windows)]
-    fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        use io_extras::os::windows::AsHandleOrSocket;
-        Some(self.file.as_handle_or_socket())
-    }
-    async fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, bool)> {
+    pub async fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
         use system_interface::fs::FileIoExt;
-        let (n, end) = read_result(self.file.read_at(buf, self.position))?;
-        self.position = self.position.wrapping_add(n);
-        Ok((n, end))
+        let f = Arc::clone(&self.file);
+        let p = self.position;
+        let (r, mut buf) = tokio::task::spawn_blocking(move || {
+            let mut buf = BytesMut::zeroed(size);
+            let r = f.read_at(&mut buf, p);
+            (r, buf)
+        })
+        .await
+        .unwrap();
+        let (n, state) = read_result(r)?;
+        buf.truncate(n);
+        self.position += n as u64;
+        Ok((buf.freeze(), state))
     }
-    async fn read_vectored<'a>(
-        &mut self,
-        bufs: &mut [std::io::IoSliceMut<'a>],
-    ) -> anyhow::Result<(u64, bool)> {
-        use system_interface::fs::FileIoExt;
-        let (n, end) = read_result(self.file.read_vectored_at(bufs, self.position))?;
-        self.position = self.position.wrapping_add(n);
-        Ok((n, end))
-    }
-    fn is_read_vectored(&self) -> bool {
-        use system_interface::fs::FileIoExt;
-        self.file.is_read_vectored_at()
-    }
-    async fn num_ready_bytes(&self) -> anyhow::Result<u64> {
-        // FIXME we ought to be able to do better than this
-        Ok(0)
-    }
-    async fn readable(&self) -> anyhow::Result<()> {
-        // FIXME is this the spot to perform the permission check?
-        Ok(())
+
+    pub async fn skip(&mut self, nelem: usize) -> anyhow::Result<(usize, StreamState)> {
+        let mut nread = 0;
+        let mut state = StreamState::Open;
+
+        let (bs, read_state) = self.read(nelem).await?;
+        // TODO: handle the case where `bs.len()` is less than `nelem`
+        nread += bs.len();
+        if read_state.is_closed() {
+            state = read_state;
+        }
+
+        Ok((nread, state))
     }
 }
 
-pub(crate) fn read_result(r: Result<usize, std::io::Error>) -> Result<(u64, bool), std::io::Error> {
+pub(crate) fn read_result(
+    r: Result<usize, std::io::Error>,
+) -> Result<(usize, StreamState), std::io::Error> {
     match r {
-        Ok(0) => Ok((0, true)),
-        Ok(n) => Ok((n as u64, false)),
-        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, false)),
+        Ok(0) => Ok((0, StreamState::Closed)),
+        Ok(n) => Ok((n, StreamState::Open)),
+        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
         Err(e) => Err(e),
     }
 }
 
+pub(crate) fn write_result(
+    r: Result<usize, std::io::Error>,
+) -> Result<(usize, StreamState), std::io::Error> {
+    match r {
+        Ok(0) => Ok((0, StreamState::Closed)),
+        Ok(n) => Ok((n, StreamState::Open)),
+        Err(e) => Err(e),
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum FileOutputMode {
+    Position(u64),
+    Append,
+}
+
 pub(crate) struct FileOutputStream {
     file: Arc<cap_std::fs::File>,
-    position: u64,
+    mode: FileOutputMode,
 }
 impl FileOutputStream {
-    pub fn new(file: Arc<cap_std::fs::File>, position: u64) -> Self {
-        Self { file, position }
+    pub fn write_at(file: Arc<cap_std::fs::File>, position: u64) -> Self {
+        Self {
+            file,
+            mode: FileOutputMode::Position(position),
+        }
     }
-}
-
-#[async_trait::async_trait]
-impl OutputStream for FileOutputStream {
-    fn as_any(&self) -> &dyn Any {
-        self
+    pub fn append(file: Arc<cap_std::fs::File>) -> Self {
+        Self {
+            file,
+            mode: FileOutputMode::Append,
+        }
     }
-
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(unix)]
-    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        use cap_std::io_lifetimes::AsFd;
-        Some(self.file.as_fd())
-    }
-
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(windows)]
-    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        use io_extras::os::windows::AsHandleOrSocket;
-        Some(self.file.as_handle_or_socket())
-    }
-
     /// Write bytes. On success, returns the number of bytes written.
-    async fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
+    pub async fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
         use system_interface::fs::FileIoExt;
-        let n = self.file.write_at(buf, self.position)? as i64 as u64;
-        self.position = self.position.wrapping_add(n);
-        Ok(n)
-    }
-
-    /// Vectored-I/O form of `write`.
-    async fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
-        use system_interface::fs::FileIoExt;
-        let n = self.file.write_vectored_at(bufs, self.position)? as i64 as u64;
-        self.position = self.position.wrapping_add(n);
-        Ok(n)
-    }
-
-    /// Test whether vectored I/O writes are known to be optimized in the
-    /// underlying implementation.
-    fn is_write_vectored(&self) -> bool {
-        use system_interface::fs::FileIoExt;
-        self.file.is_write_vectored_at()
-    }
-
-    /// Test whether this stream is writable.
-    async fn writable(&self) -> anyhow::Result<()> {
-        // FIXME perm check?
-        Ok(())
-    }
-}
-
-pub(crate) struct FileAppendStream {
-    file: Arc<cap_std::fs::File>,
-}
-impl FileAppendStream {
-    pub fn new(file: Arc<cap_std::fs::File>) -> Self {
-        Self { file }
-    }
-}
-
-#[async_trait::async_trait]
-impl OutputStream for FileAppendStream {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(unix)]
-    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        use cap_std::io_lifetimes::AsFd;
-        Some(self.file.as_fd())
-    }
-
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(windows)]
-    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        use io_extras::os::windows::AsHandleOrSocket;
-        Some(self.file.as_handle_or_socket())
-    }
-
-    /// Write bytes. On success, returns the number of bytes written.
-    async fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
-        use system_interface::fs::FileIoExt;
-        Ok(self.file.append(buf)? as i64 as u64)
-    }
-
-    /// Vectored-I/O form of `write`.
-    async fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
-        use system_interface::fs::FileIoExt;
-        let n = self.file.append_vectored(bufs)? as i64 as u64;
-        Ok(n)
-    }
-
-    /// Test whether vectored I/O writes are known to be optimized in the
-    /// underlying implementation.
-    fn is_write_vectored(&self) -> bool {
-        use system_interface::fs::FileIoExt;
-        self.file.is_write_vectored_at()
-    }
-
-    /// Test whether this stream is writable.
-    async fn writable(&self) -> anyhow::Result<()> {
-        // FIXME perm check?
-        Ok(())
+        let f = Arc::clone(&self.file);
+        let m = self.mode;
+        let r = tokio::task::spawn_blocking(move || match m {
+            FileOutputMode::Position(p) => f.write_at(buf.as_ref(), p),
+            FileOutputMode::Append => f.append(buf.as_ref()),
+        })
+        .await
+        .unwrap();
+        let (n, state) = write_result(r)?;
+        if let FileOutputMode::Position(ref mut position) = self.mode {
+            *position += n as u64;
+        }
+        Ok((n, state))
     }
 }

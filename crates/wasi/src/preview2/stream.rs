@@ -1,210 +1,302 @@
+use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
 use crate::preview2::{Table, TableError};
 use anyhow::Error;
-use std::any::Any;
+use bytes::Bytes;
 
-/// An input bytestream.
-///
-/// This is "pseudo" because the real streams will be a type in wit, and
-/// built into the wit bindings, and will support async and type parameters.
-/// This pseudo-stream abstraction is synchronous and only supports bytes.
-#[async_trait::async_trait]
-pub trait InputStream: Send + Sync {
-    fn as_any(&self) -> &dyn Any;
-
-    /// If this stream is reading from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(unix)]
-    fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
-        None
-    }
-
-    /// If this stream is reading from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(windows)]
-    fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        None
-    }
-
-    /// Read bytes. On success, returns a pair holding the number of bytes read
-    /// and a flag indicating whether the end of the stream was reached.
-    async fn read(&mut self, _buf: &mut [u8]) -> Result<(u64, bool), Error> {
-        Err(anyhow::anyhow!("badf"))
-    }
-
-    /// Vectored-I/O form of `read`.
-    async fn read_vectored<'a>(
-        &mut self,
-        _bufs: &mut [std::io::IoSliceMut<'a>],
-    ) -> Result<(u64, bool), Error> {
-        Err(anyhow::anyhow!("badf"))
-    }
-
-    /// Test whether vectored I/O reads are known to be optimized in the
-    /// underlying implementation.
-    fn is_read_vectored(&self) -> bool {
-        false
-    }
-
-    /// Read bytes from a stream and discard them.
-    async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
-        let mut nread = 0;
-        let mut saw_end = false;
-
-        // TODO: Optimize by reading more than one byte at a time.
-        for _ in 0..nelem {
-            let (num, end) = self.read(&mut [0]).await?;
-            nread += num;
-            if end {
-                saw_end = true;
-                break;
-            }
-        }
-
-        Ok((nread, saw_end))
-    }
-
-    /// Return the number of bytes that may be read without blocking.
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(0)
-    }
-
-    /// Test whether this stream is readable.
-    async fn readable(&self) -> Result<(), Error>;
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StreamState {
+    Open,
+    Closed,
 }
 
-/// An output bytestream.
-///
-/// This is "pseudo" because the real streams will be a type in wit, and
-/// built into the wit bindings, and will support async and type parameters.
-/// This pseudo-stream abstraction is synchronous and only supports bytes.
+impl StreamState {
+    pub fn is_closed(&self) -> bool {
+        *self == Self::Closed
+    }
+}
+
+/// Host trait for implementing the `wasi:io/streams.input-stream` resource: A
+/// bytestream which can be read from.
 #[async_trait::async_trait]
-pub trait OutputStream: Send + Sync {
-    fn as_any(&self) -> &dyn Any;
+pub trait HostInputStream: Send + Sync {
+    /// Read bytes. On success, returns a pair holding the number of bytes
+    /// read and a flag indicating whether the end of the stream was reached.
+    /// Important: this read must be non-blocking!
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error>;
 
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(unix)]
-    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        None
+    /// Read bytes from a stream and discard them. Important: this method must
+    /// be non-blocking!
+    fn skip(&mut self, nelem: usize) -> Result<(usize, StreamState), Error> {
+        let mut nread = 0;
+        let mut state = StreamState::Open;
+
+        let (bs, read_state) = self.read(nelem)?;
+        // TODO: handle the case where `bs.len()` is less than `nelem`
+        nread += bs.len();
+        if read_state.is_closed() {
+            state = read_state;
+        }
+
+        Ok((nread, state))
     }
 
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(windows)]
-    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        None
-    }
+    /// Check for read readiness: this method blocks until the stream is ready
+    /// for reading.
+    async fn ready(&mut self) -> Result<(), Error>;
+}
 
+/// Host trait for implementing the `wasi:io/streams.output-stream` resource:
+/// A bytestream which can be written to.
+#[async_trait::async_trait]
+pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
-    async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error> {
-        Err(anyhow::anyhow!("badf"))
-    }
-
-    /// Vectored-I/O form of `write`.
-    async fn write_vectored<'a>(&mut self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
-        Err(anyhow::anyhow!("badf"))
-    }
-
-    /// Test whether vectored I/O writes are known to be optimized in the
-    /// underlying implementation.
-    fn is_write_vectored(&self) -> bool {
-        false
-    }
+    /// Important: this write must be non-blocking!
+    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error>;
 
     /// Transfer bytes directly from an input stream to an output stream.
-    async fn splice(
+    /// Important: this splice must be non-blocking!
+    fn splice(
         &mut self,
-        src: &mut dyn InputStream,
-        nelem: u64,
-    ) -> Result<(u64, bool), Error> {
+        src: &mut dyn HostInputStream,
+        nelem: usize,
+    ) -> Result<(usize, StreamState), Error> {
         let mut nspliced = 0;
-        let mut saw_end = false;
+        let mut state = StreamState::Open;
 
-        // TODO: Optimize by splicing more than one byte at a time.
-        for _ in 0..nelem {
-            let mut buf = [0u8];
-            let (num, end) = src.read(&mut buf).await?;
-            self.write(&buf).await?;
-            nspliced += num;
-            if end {
-                saw_end = true;
-                break;
-            }
+        // TODO: handle the case where `bs.len()` is less than `nelem`
+        let (bs, read_state) = src.read(nelem)?;
+        // TODO: handle the case where write returns less than `bs.len()`
+        let (nwritten, _write_state) = self.write(bs)?;
+        nspliced += nwritten;
+        if read_state.is_closed() {
+            state = read_state;
         }
 
-        Ok((nspliced, saw_end))
+        Ok((nspliced, state))
     }
 
-    /// Repeatedly write a byte to a stream.
-    async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
-        let mut nwritten = 0;
-
-        // TODO: Optimize by writing more than one byte at a time.
-        for _ in 0..nelem {
-            let num = self.write(&[0]).await?;
-            if num == 0 {
-                break;
-            }
-            nwritten += num;
-        }
-
-        Ok(nwritten)
+    /// Repeatedly write a byte to a stream. Important: this write must be
+    /// non-blocking!
+    fn write_zeroes(&mut self, nelem: usize) -> Result<(usize, StreamState), Error> {
+        // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
+        // repeatedly from a 'static buffer of zeros.
+        let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
+        let r = self.write(bs)?;
+        Ok(r)
     }
 
-    /// Test whether this stream is writable.
-    async fn writable(&self) -> Result<(), Error>;
+    /// Check for write readiness: this method blocks until the stream is
+    /// ready for writing.
+    async fn ready(&mut self) -> Result<(), Error>;
 }
 
-pub trait TableStreamExt {
-    fn push_input_stream(&mut self, istream: Box<dyn InputStream>) -> Result<u32, TableError>;
-    fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError>;
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn InputStream>, TableError>;
-
-    fn push_output_stream(&mut self, ostream: Box<dyn OutputStream>) -> Result<u32, TableError>;
-    fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError>;
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError>;
+pub(crate) enum InternalInputStream {
+    Host(Box<dyn HostInputStream>),
+    File(FileInputStream),
 }
-impl TableStreamExt for Table {
-    fn push_input_stream(&mut self, istream: Box<dyn InputStream>) -> Result<u32, TableError> {
+
+pub(crate) enum InternalOutputStream {
+    Host(Box<dyn HostOutputStream>),
+    File(FileOutputStream),
+}
+
+pub(crate) trait InternalTableStreamExt {
+    fn push_internal_input_stream(
+        &mut self,
+        istream: InternalInputStream,
+    ) -> Result<u32, TableError>;
+    fn get_internal_input_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut InternalInputStream, TableError>;
+    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError>;
+
+    fn push_internal_output_stream(
+        &mut self,
+        ostream: InternalOutputStream,
+    ) -> Result<u32, TableError>;
+    fn get_internal_output_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut InternalOutputStream, TableError>;
+    fn delete_internal_output_stream(
+        &mut self,
+        fd: u32,
+    ) -> Result<InternalOutputStream, TableError>;
+}
+impl InternalTableStreamExt for Table {
+    fn push_internal_input_stream(
+        &mut self,
+        istream: InternalInputStream,
+    ) -> Result<u32, TableError> {
         self.push(Box::new(istream))
     }
-    fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError> {
-        self.get::<Box<dyn InputStream>>(fd).map(|f| f.as_ref())
+    fn get_internal_input_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut InternalInputStream, TableError> {
+        self.get_mut(fd)
     }
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn InputStream>, TableError> {
-        self.get_mut::<Box<dyn InputStream>>(fd)
+    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError> {
+        self.delete(fd)
     }
 
-    fn push_output_stream(&mut self, ostream: Box<dyn OutputStream>) -> Result<u32, TableError> {
+    fn push_internal_output_stream(
+        &mut self,
+        ostream: InternalOutputStream,
+    ) -> Result<u32, TableError> {
         self.push(Box::new(ostream))
     }
-    fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError> {
-        self.get::<Box<dyn OutputStream>>(fd).map(|f| f.as_ref())
+    fn get_internal_output_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut InternalOutputStream, TableError> {
+        self.get_mut(fd)
     }
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError> {
-        self.get_mut::<Box<dyn OutputStream>>(fd)
+    fn delete_internal_output_stream(
+        &mut self,
+        fd: u32,
+    ) -> Result<InternalOutputStream, TableError> {
+        self.delete(fd)
+    }
+}
+
+/// Extension trait for managing [`HostInputStream`]s and [`HostOutputStream`]s in the [`Table`].
+pub trait TableStreamExt {
+    /// Push a [`HostInputStream`] into a [`Table`], returning the table index.
+    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
+    /// Get a mutable reference to a [`HostInputStream`] in a [`Table`].
+    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError>;
+    /// Remove [`HostInputStream`] from table:
+    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError>;
+
+    /// Push a [`HostOutputStream`] into a [`Table`], returning the table index.
+    fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
+        -> Result<u32, TableError>;
+    /// Get a mutable reference to a [`HostOutputStream`] in a [`Table`].
+    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError>;
+
+    /// Remove [`HostOutputStream`] from table:
+    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError>;
+}
+impl TableStreamExt for Table {
+    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
+        self.push_internal_input_stream(InternalInputStream::Host(istream))
+    }
+    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError> {
+        match self.get_internal_input_stream_mut(fd)? {
+            InternalInputStream::Host(ref mut h) => Ok(h.as_mut()),
+            _ => Err(TableError::WrongType),
+        }
+    }
+    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError> {
+        let occ = self.entry(fd)?;
+        match occ.get().downcast_ref::<InternalInputStream>() {
+            Some(InternalInputStream::Host(_)) => {
+                let any = occ.remove_entry()?;
+                match *any.downcast().expect("downcast checked above") {
+                    InternalInputStream::Host(h) => Ok(h),
+                    _ => unreachable!("variant checked above"),
+                }
+            }
+            _ => Err(TableError::WrongType),
+        }
+    }
+
+    fn push_output_stream(
+        &mut self,
+        ostream: Box<dyn HostOutputStream>,
+    ) -> Result<u32, TableError> {
+        self.push_internal_output_stream(InternalOutputStream::Host(ostream))
+    }
+    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError> {
+        match self.get_internal_output_stream_mut(fd)? {
+            InternalOutputStream::Host(ref mut h) => Ok(h.as_mut()),
+            _ => Err(TableError::WrongType),
+        }
+    }
+    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError> {
+        let occ = self.entry(fd)?;
+        match occ.get().downcast_ref::<InternalOutputStream>() {
+            Some(InternalOutputStream::Host(_)) => {
+                let any = occ.remove_entry()?;
+                match *any.downcast().expect("downcast checked above") {
+                    InternalOutputStream::Host(h) => Ok(h),
+                    _ => unreachable!("variant checked above"),
+                }
+            }
+            _ => Err(TableError::WrongType),
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::preview2::pipe::{ReadPipe, WritePipe};
+
     #[test]
     fn input_stream_in_table() {
-        let empty_pipe = ReadPipe::new(std::io::empty());
+        struct DummyInputStream;
+        #[async_trait::async_trait]
+        impl HostInputStream for DummyInputStream {
+            fn read(&mut self, _size: usize) -> Result<(Bytes, StreamState), Error> {
+                unimplemented!();
+            }
+            async fn ready(&mut self) -> Result<(), Error> {
+                unimplemented!();
+            }
+        }
+
+        let dummy = DummyInputStream;
         let mut table = Table::new();
-        let ix = table.push_input_stream(Box::new(empty_pipe)).unwrap();
-        let _ = table.get_input_stream(ix).unwrap();
+        // Put it into the table:
+        let ix = table.push_input_stream(Box::new(dummy)).unwrap();
+        // Get a mut ref to it:
         let _ = table.get_input_stream_mut(ix).unwrap();
+        // Fails at wrong type:
+        assert!(matches!(
+            table.get_output_stream_mut(ix),
+            Err(TableError::WrongType)
+        ));
+        // Delete it:
+        let _ = table.delete_input_stream(ix).unwrap();
+        // Now absent from table:
+        assert!(matches!(
+            table.get_input_stream_mut(ix),
+            Err(TableError::NotPresent)
+        ));
     }
 
     #[test]
     fn output_stream_in_table() {
-        let dev_null = WritePipe::new(std::io::sink());
+        struct DummyOutputStream;
+        #[async_trait::async_trait]
+        impl HostOutputStream for DummyOutputStream {
+            fn write(&mut self, _: Bytes) -> Result<(usize, StreamState), Error> {
+                unimplemented!();
+            }
+            async fn ready(&mut self) -> Result<(), Error> {
+                unimplemented!();
+            }
+        }
+
+        let dummy = DummyOutputStream;
         let mut table = Table::new();
-        let ix = table.push_output_stream(Box::new(dev_null)).unwrap();
-        let _ = table.get_output_stream(ix).unwrap();
+        // Put it in the table:
+        let ix = table.push_output_stream(Box::new(dummy)).unwrap();
+        // Get a mut ref to it:
         let _ = table.get_output_stream_mut(ix).unwrap();
+        // Fails at wrong type:
+        assert!(matches!(
+            table.get_input_stream_mut(ix),
+            Err(TableError::WrongType)
+        ));
+        // Delete it:
+        let _ = table.delete_output_stream(ix).unwrap();
+        // Now absent:
+        assert!(matches!(
+            table.get_output_stream_mut(ix),
+            Err(TableError::NotPresent)
+        ));
     }
 }

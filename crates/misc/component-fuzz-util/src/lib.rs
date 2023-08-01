@@ -115,12 +115,12 @@ pub enum Type {
     // don't let the fuzzer go too wild since `wasmparser`'s validator currently
     // has hard limits in the 1000-ish range on the number of fields a record
     // may contain.
-    Record(VecInRange<Type, 0, 200>),
+    Record(VecInRange<Type, 1, 200>),
 
     // Tuples can only have up to 16 type parameters in wasmtime right now for
     // the static API, but the standard library only supports `Debug` up to 11
     // elements, so compromise at an even 10.
-    Tuple(VecInRange<Type, 0, 10>),
+    Tuple(VecInRange<Type, 1, 10>),
 
     // Like records, allow a good number of variants, but variants require at
     // least one case.
@@ -178,9 +178,9 @@ impl Type {
                 err: Type::generate_opt(u, depth - 1, fuel)?.map(Box::new),
             },
             21 => {
-                // Generate 0 flags all the way up to 65 flags which exercises
-                // the 0 to 3 x u32 cases.
-                let amt = u.int_in_range(0..=(*fuel).min(65))?;
+                // Generate 1 flag all the way up to 65 flags which exercises
+                // the 1 to 3 x u32 cases.
+                let amt = u.int_in_range(1..=(*fuel).min(65))?;
                 *fuel -= amt;
                 Type::Flags(amt)
             }

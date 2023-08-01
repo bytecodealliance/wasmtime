@@ -184,7 +184,8 @@ impl<'data> Translator<'_, 'data> {
         // the module using standard core wasm translation, and then fills out
         // the dfg metadata for each adapter.
         for (module_id, adapter_module) in state.adapter_modules.iter() {
-            let mut module = fact::Module::new(self.types, self.tunables.debug_adapter_modules);
+            let mut module =
+                fact::Module::new(self.types.types(), self.tunables.debug_adapter_modules);
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
                 let name = format!("adapter{}", adapter.as_u32());
@@ -256,6 +257,11 @@ fn fact_import_to_core_def(
     import: &fact::Import,
     ty: EntityType,
 ) -> dfg::CoreDef {
+    let mut simple_intrinsic = |trampoline: dfg::Trampoline| {
+        let signature = ty.unwrap_func();
+        let index = dfg.trampolines.push((signature, trampoline));
+        dfg::CoreDef::Trampoline(index)
+    };
     match import {
         fact::Import::CoreDef(def) => def.clone(),
         fact::Import::Transcode {
@@ -275,20 +281,27 @@ fn fact_import_to_core_def(
                 }
             }
 
-            let from = dfg.memories.push_uniq(unwrap_memory(from));
-            let to = dfg.memories.push_uniq(unwrap_memory(to));
-            dfg::CoreDef::Transcoder(dfg.transcoders.push_uniq(dfg::Transcoder {
-                op: *op,
-                from,
-                from64: *from64,
-                to,
-                to64: *to64,
-                signature: match ty {
-                    EntityType::Function(signature) => signature,
-                    _ => unreachable!(),
+            let from = dfg.memories.push(unwrap_memory(from));
+            let to = dfg.memories.push(unwrap_memory(to));
+            let signature = ty.unwrap_func();
+            let index = dfg.trampolines.push((
+                signature,
+                dfg::Trampoline::Transcoder {
+                    op: *op,
+                    from,
+                    from64: *from64,
+                    to,
+                    to64: *to64,
                 },
-            }))
+            ));
+            dfg::CoreDef::Trampoline(index)
         }
+        fact::Import::ResourceTransferOwn => simple_intrinsic(dfg::Trampoline::ResourceTransferOwn),
+        fact::Import::ResourceTransferBorrow => {
+            simple_intrinsic(dfg::Trampoline::ResourceTransferBorrow)
+        }
+        fact::Import::ResourceEnterCall => simple_intrinsic(dfg::Trampoline::ResourceEnterCall),
+        fact::Import::ResourceExitCall => simple_intrinsic(dfg::Trampoline::ResourceExitCall),
     }
 }
 
@@ -378,12 +391,7 @@ impl PartitionAdapterModules {
             }
 
             // These items can't transitively depend on an adapter
-            dfg::CoreDef::Lowered(_)
-            | dfg::CoreDef::AlwaysTrap(_)
-            | dfg::CoreDef::InstanceFlags(_) => {}
-
-            // should not be in the dfg yet
-            dfg::CoreDef::Transcoder(_) => unreachable!(),
+            dfg::CoreDef::Trampoline(_) | dfg::CoreDef::InstanceFlags(_) => {}
         }
     }
 

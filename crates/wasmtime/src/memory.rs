@@ -9,7 +9,7 @@ use std::ops::Range;
 use std::slice;
 use std::time::Instant;
 use wasmtime_environ::MemoryPlan;
-use wasmtime_runtime::{RuntimeLinearMemory, VMMemoryImport};
+use wasmtime_runtime::{ExportMemory, RuntimeLinearMemory, VMMemoryImport};
 
 pub use wasmtime_runtime::WaitResult;
 
@@ -269,6 +269,10 @@ impl Memory {
             let export = generate_memory_export(store, &ty, None)?;
             Ok(Memory::from_wasmtime_memory(export, store))
         }
+    }
+
+    pub(crate) fn from_stored(stored: Stored<ExportMemory>) -> Memory {
+        Memory(stored)
     }
 
     /// Returns the underlying type of this memory.

@@ -9,14 +9,14 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AllCallFunc, ComponentTypes, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeTranscoderIndex,
-    StaticModuleIndex, Translator,
+    AllCallFunc, ComponentTypes, StaticModuleIndex, TrampolineIndex, Translator,
 };
 use wasmtime_environ::{FunctionLoc, ObjectKind, PrimaryMap, ScopeVec};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
-    MmapVec, VMArrayCallFunction, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
+    MmapVec, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction,
+    VMWasmCallFunction,
 };
 
 /// A compiled WebAssembly Component.
@@ -59,20 +59,11 @@ struct CompiledComponentInfo {
     ///
     /// function pointers that end up in a `VMFuncRef` for each
     /// lowering.
-    lowerings: PrimaryMap<LoweredIndex, AllCallFunc<FunctionLoc>>,
+    trampolines: PrimaryMap<TrampolineIndex, AllCallFunc<FunctionLoc>>,
 
-    /// Where the "always trap" functions are located within the `text` section
-    /// of `code_memory`.
-    ///
-    /// These functions are "degenerate functions" here solely to implement
-    /// functions that are `canon lift`'d then immediately `canon lower`'d. The
-    /// `u32` value here is the offset of the trap instruction from the start fo
-    /// the function.
-    always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, AllCallFunc<FunctionLoc>>,
-
-    /// Where all the cranelift-generated transcode functions are located in the
-    /// compiled image of this component.
-    transcoders: PrimaryMap<RuntimeTranscoderIndex, AllCallFunc<FunctionLoc>>,
+    /// The location of the wasm-to-native trampoline for the `resource.drop`
+    /// intrinsic.
+    resource_drop_wasm_to_native_trampoline: Option<FunctionLoc>,
 }
 
 pub(crate) struct AllCallFuncPointers {
@@ -214,17 +205,17 @@ impl Component {
 
         let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
             object,
-            tunables,
+            &engine.config().tunables,
             compiler,
             compiled_funcs,
             module_translations,
         )?;
 
         let info = CompiledComponentInfo {
-            component,
-            always_trap: compilation_artifacts.always_traps,
-            lowerings: compilation_artifacts.lowerings,
-            transcoders: compilation_artifacts.transcoders,
+            component: component.component,
+            trampolines: compilation_artifacts.trampolines,
+            resource_drop_wasm_to_native_trampoline: compilation_artifacts
+                .resource_drop_wasm_to_native_trampoline,
         };
         let artifacts = ComponentArtifacts {
             info,
@@ -303,46 +294,12 @@ impl Component {
         self.inner.code.code_memory().text()
     }
 
-    pub(crate) fn lowering_ptrs(&self, index: LoweredIndex) -> AllCallFuncPointers {
+    pub(crate) fn trampoline_ptrs(&self, index: TrampolineIndex) -> AllCallFuncPointers {
         let AllCallFunc {
             wasm_call,
             array_call,
             native_call,
-        } = &self.inner.info.lowerings[index];
-        AllCallFuncPointers {
-            wasm_call: self.func(wasm_call).cast(),
-            array_call: unsafe {
-                mem::transmute::<NonNull<VMFunctionBody>, VMArrayCallFunction>(
-                    self.func(array_call),
-                )
-            },
-            native_call: self.func(native_call).cast(),
-        }
-    }
-
-    pub(crate) fn always_trap_ptrs(&self, index: RuntimeAlwaysTrapIndex) -> AllCallFuncPointers {
-        let AllCallFunc {
-            wasm_call,
-            array_call,
-            native_call,
-        } = &self.inner.info.always_trap[index];
-        AllCallFuncPointers {
-            wasm_call: self.func(wasm_call).cast(),
-            array_call: unsafe {
-                mem::transmute::<NonNull<VMFunctionBody>, VMArrayCallFunction>(
-                    self.func(array_call),
-                )
-            },
-            native_call: self.func(native_call).cast(),
-        }
-    }
-
-    pub(crate) fn transcoder_ptrs(&self, index: RuntimeTranscoderIndex) -> AllCallFuncPointers {
-        let AllCallFunc {
-            wasm_call,
-            array_call,
-            native_call,
-        } = &self.inner.info.transcoders[index];
+        } = &self.inner.info.trampolines[index];
         AllCallFuncPointers {
             wasm_call: self.func(wasm_call).cast(),
             array_call: unsafe {
@@ -378,6 +335,31 @@ impl Component {
 
     pub(crate) fn runtime_info(&self) -> Arc<dyn ComponentRuntimeInfo> {
         self.inner.clone()
+    }
+
+    /// Creates a new `VMFuncRef` with all fields filled out for the destructor
+    /// specified.
+    ///
+    /// The `dtor`'s own `VMFuncRef` won't have `wasm_call` filled out but this
+    /// component may have `resource_drop_wasm_to_native_trampoline` filled out
+    /// if necessary in which case it's filled in here.
+    pub(crate) fn resource_drop_func_ref(&self, dtor: &crate::func::HostFunc) -> VMFuncRef {
+        // Host functions never have their `wasm_call` filled in at this time.
+        assert!(dtor.func_ref().wasm_call.is_none());
+
+        // Note that if `resource_drop_wasm_to_native_trampoline` is not present
+        // then this can't be called by the component, so it's ok to leave it
+        // blank.
+        let wasm_call = self
+            .inner
+            .info
+            .resource_drop_wasm_to_native_trampoline
+            .as_ref()
+            .map(|i| self.func(i).cast());
+        VMFuncRef {
+            wasm_call,
+            ..*dtor.func_ref()
+        }
     }
 }
 

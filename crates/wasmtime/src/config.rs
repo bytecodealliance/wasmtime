@@ -1,6 +1,6 @@
 use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -110,6 +110,7 @@ pub struct Config {
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
+    pub(crate) coredump_on_trap: bool,
 }
 
 /// User-provided configuration for the compiler.
@@ -199,6 +200,7 @@ impl Config {
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
+            coredump_on_trap: false,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
@@ -619,6 +621,23 @@ impl Config {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn async_stack_size(&mut self, size: usize) -> &mut Self {
         self.async_stack_size = size;
+        self
+    }
+
+    /// Configures whether the WebAssembly tail calls proposal will be enabled
+    /// for compilation or not.
+    ///
+    /// The [WebAssembly tail calls proposal] introduces the `return_call` and
+    /// `return_call_indirect` instructions. These instructions allow for Wasm
+    /// programs to implement some recursive algorithms with *O(1)* stack space
+    /// usage.
+    ///
+    /// This feature is disabled by default.
+    ///
+    /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
+    pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
+        self.features.tail_call = enable;
+        self.tunables.tail_callable = enable;
         self
     }
 
@@ -1450,6 +1469,15 @@ impl Config {
         self
     }
 
+    /// Configures whether or not a coredump should be generated and attached to
+    /// the anyhow::Error when a trap is raised.
+    ///
+    /// This option is disabled by default.
+    pub fn coredump_on_trap(&mut self, enable: bool) -> &mut Self {
+        self.coredump_on_trap = enable;
+        self
+    }
+
     /// Configures the "guaranteed dense image size" for copy-on-write
     /// initialized memories.
     ///
@@ -1498,7 +1526,7 @@ impl Config {
             bail!("feature 'threads' requires 'bulk_memory' to be enabled");
         }
         #[cfg(feature = "async")]
-        if self.max_wasm_stack > self.async_stack_size {
+        if self.async_support && self.max_wasm_stack > self.async_stack_size {
             bail!("max_wasm_stack size cannot exceed the async_stack_size");
         }
         if self.max_wasm_stack == 0 {
@@ -1592,6 +1620,14 @@ impl Config {
                 .insert("enable_probestack".into());
         }
 
+        if self.features.tail_call {
+            ensure!(
+                target.architecture != Architecture::S390x,
+                "Tail calls are not supported on s390x yet: \
+                 https://github.com/bytecodealliance/wasmtime/issues/6530"
+            );
+        }
+
         if self.native_unwind_info ||
              // Windows always needs unwind info, since it is part of the ABI.
              target.operating_system == target_lexicon::OperatingSystem::Windows
@@ -1636,6 +1672,8 @@ impl Config {
         if let Some(cache_store) = &self.compiler_config.cache_store {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
+
+        compiler.set_tunables(self.tunables.clone())?;
 
         Ok((self, compiler.build()?))
     }

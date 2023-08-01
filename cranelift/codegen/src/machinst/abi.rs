@@ -494,10 +494,10 @@ pub trait ABIMachineSpec {
     ///   temporary as this one.
     fn get_stacklimit_reg(call_conv: isa::CallConv) -> Reg;
 
-    /// Generate a store to the given [base+offset] address.
+    /// Generate a load to the given [base+offset] address.
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I;
 
-    /// Generate a load from the given [base+offset] address.
+    /// Generate a store from the given [base+offset] address.
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I;
 
     /// Adjust the stack pointer up or down.
@@ -1253,11 +1253,6 @@ impl<M: ABIMachineSpec> Callee<M> {
         let scratch = Writable::from_reg(M::get_stacklimit_reg(self.call_conv));
         insts.extend(M::gen_add_imm(self.call_conv, scratch, stack_limit, stack_size).into_iter());
         insts.extend(M::gen_stack_lower_bound_trap(scratch.to_reg()));
-    }
-
-    /// Get the register holding the return-area pointer, if any.
-    pub(crate) fn ret_area_ptr(&self) -> Option<Writable<Reg>> {
-        self.ret_area_ptr
     }
 }
 
@@ -2175,12 +2170,12 @@ impl<M: ABIMachineSpec> CallSite<M> {
         }
     }
 
-    pub(crate) fn sig(&self) -> Sig {
-        self.sig
-    }
-
     pub(crate) fn dest(&self) -> &CallDest {
         &self.dest
+    }
+
+    pub(crate) fn opcode(&self) -> ir::Opcode {
+        self.opcode
     }
 
     pub(crate) fn take_uses(self) -> CallArgList {
@@ -2478,6 +2473,47 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 ctx.emit(inst);
             }
         }
+    }
+
+    /// Emit the code to forward a stack-return pointer argument through a tail
+    /// call.
+    pub fn emit_stack_ret_arg_for_tail_call(&mut self, ctx: &mut Lower<M::I>) {
+        if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg() {
+            let ret_area_ptr = ctx.abi().ret_area_ptr.expect(
+                "if the tail callee has a return pointer, then the tail caller \
+                 must as well",
+            );
+            for inst in self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg())) {
+                ctx.emit(inst);
+            }
+        }
+    }
+
+    /// Builds a new temporary callee frame for the tail call and puts arguments into
+    /// registers and stack slots (within the new temporary frame).
+    ///
+    /// It is the caller's responsibility to move the temporary callee frame on
+    /// top of the current caller frame before performing the actual tail call.
+    ///
+    /// Returns a pair of the old caller's stack argument size and the new
+    /// callee's stack argument size.
+    pub fn emit_temporary_tail_call_frame(
+        &mut self,
+        ctx: &mut Lower<M::I>,
+        args: isle::ValueSlice,
+    ) -> (u32, u32) {
+        // Allocate additional stack space for the new stack frame. We will
+        // build it in the newly allocated space, but then copy it over our
+        // current frame at the last moment.
+        let new_stack_arg_size = self.emit_allocate_tail_call_frame(ctx);
+        let old_stack_arg_size = ctx.abi().stack_args_size(ctx.sigs());
+
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.emit_args(ctx, args);
+        self.emit_stack_ret_arg_for_tail_call(ctx);
+
+        (new_stack_arg_size, old_stack_arg_size)
     }
 
     /// Define a return value after the call returns.

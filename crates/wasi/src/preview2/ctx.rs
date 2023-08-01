@@ -2,7 +2,7 @@ use crate::preview2::{
     clocks::{self, HostMonotonicClock, HostWallClock},
     filesystem::{Dir, TableFsExt},
     pipe, random, stdio,
-    stream::{InputStream, OutputStream, TableStreamExt},
+    stream::{HostInputStream, HostOutputStream, TableStreamExt},
     DirPerms, FilePerms, Table,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
@@ -10,9 +10,9 @@ use cap_rand::{Rng, RngCore, SeedableRng};
 use super::clocks::host::{monotonic_clock, wall_clock};
 
 pub struct WasiCtxBuilder {
-    stdin: Box<dyn InputStream>,
-    stdout: Box<dyn OutputStream>,
-    stderr: Box<dyn OutputStream>,
+    stdin: Box<dyn HostInputStream>,
+    stdout: Box<dyn HostOutputStream>,
+    stderr: Box<dyn HostOutputStream>,
     env: Vec<(String, String)>,
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
@@ -35,11 +35,10 @@ impl WasiCtxBuilder {
         // API.
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
-
         Self {
-            stdin: Box::new(pipe::ReadPipe::new(std::io::empty())),
-            stdout: Box::new(pipe::WritePipe::new(std::io::sink())),
-            stderr: Box::new(pipe::WritePipe::new(std::io::sink())),
+            stdin: Box::new(pipe::ClosedInputStream),
+            stdout: Box::new(pipe::SinkOutputStream),
+            stderr: Box::new(pipe::SinkOutputStream),
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
@@ -51,17 +50,17 @@ impl WasiCtxBuilder {
         }
     }
 
-    pub fn set_stdin(mut self, stdin: impl InputStream + 'static) -> Self {
+    pub fn set_stdin(mut self, stdin: impl HostInputStream + 'static) -> Self {
         self.stdin = Box::new(stdin);
         self
     }
 
-    pub fn set_stdout(mut self, stdout: impl OutputStream + 'static) -> Self {
+    pub fn set_stdout(mut self, stdout: impl HostOutputStream + 'static) -> Self {
         self.stdout = Box::new(stdout);
         self
     }
 
-    pub fn set_stderr(mut self, stderr: impl OutputStream + 'static) -> Self {
+    pub fn set_stderr(mut self, stderr: impl HostOutputStream + 'static) -> Self {
         self.stderr = Box::new(stderr);
         self
     }

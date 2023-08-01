@@ -10,7 +10,6 @@
 use crate::disasm::print_all;
 use anyhow::{Context as _, Result};
 use clap::Parser;
-use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
@@ -102,16 +101,12 @@ pub struct Options {
     #[clap(short = 'c')]
     check_translation: bool,
 
-    /// Display values' ranges and their locations
-    #[clap(long = "value-ranges")]
-    value_ranges: bool,
-
     /// Use colors in output? [options: auto/never/always; default: auto]
     #[clap(long = "color", default_value("auto"))]
     color: ColorOpt,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 enum ColorOpt {
     Auto,
     Never,
@@ -185,8 +180,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         }
     };
 
-    let debug_info = options.value_ranges;
-    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config(), debug_info);
+    let mut dummy_environ = DummyEnvironment::new(isa.frontend_config());
     translate_module(&module_binary, &mut dummy_environ)?;
 
     vcprintln!(options.verbose, use_color, terminal, Color::Green, "ok");
@@ -296,17 +290,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             {
                 println!("; Exported as \"{}\"", export_name);
             }
-            let value_ranges = if options.value_ranges {
-                Some(context.compiled_code().unwrap().value_labels_ranges.clone())
-            } else {
-                None
-            };
-            println!(
-                "{}",
-                context.func.display_with(DisplayFunctionAnnotations {
-                    value_ranges: value_ranges.as_ref(),
-                })
-            );
+            println!("{}", context.func.display());
             vprintln!(options.verbose, "");
         }
 

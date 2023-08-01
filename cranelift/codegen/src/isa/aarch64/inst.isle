@@ -788,6 +788,16 @@
        (CallInd
         (info BoxCallIndInfo))
 
+       ;; A return-call macro instruction.
+       (ReturnCall
+        (callee BoxExternalName)
+        (info BoxReturnCallInfo))
+
+       ;; An indirect return-call macro instruction.
+       (ReturnCallInd
+        (callee Reg)
+        (info BoxReturnCallInfo))
+
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
         (args VecArgPair))
@@ -1030,6 +1040,7 @@
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type BoxReturnCallInfo (primitive BoxReturnCallInfo))
 (type CondBrKind (primitive CondBrKind))
 (type BranchTarget (primitive BranchTarget))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))

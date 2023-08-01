@@ -110,7 +110,7 @@ fn serialize_deterministic() {
     assert_deterministic("(module (func (export \"f\")) (func (export \"y\")))");
     assert_deterministic("(module (func $f) (func $g))");
     assert_deterministic("(module (data \"\") (data \"\"))");
-    assert_deterministic("(module (elem) (elem))");
+    assert_deterministic("(module (elem func) (elem func))");
 }
 
 // This test asserts that the optimization to transform separate data segments

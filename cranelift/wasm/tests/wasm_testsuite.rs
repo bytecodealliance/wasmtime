@@ -43,13 +43,10 @@ fn use_name_section() {
     )
     .unwrap();
 
-    let mut dummy_environ = DummyEnvironment::new(
-        TargetFrontendConfig {
-            default_call_conv: CallConv::SystemV,
-            pointer_width: PointerWidth::U32,
-        },
-        false,
-    );
+    let mut dummy_environ = DummyEnvironment::new(TargetFrontendConfig {
+        default_call_conv: CallConv::SystemV,
+        pointer_width: PointerWidth::U32,
+    });
 
     translate_module(data.as_ref(), &mut dummy_environ).unwrap();
 
@@ -75,13 +72,10 @@ fn read_module(path: &Path) -> Vec<u8> {
 }
 
 fn handle_module(data: Vec<u8>, flags: &Flags) {
-    let mut dummy_environ = DummyEnvironment::new(
-        TargetFrontendConfig {
-            default_call_conv: CallConv::SystemV,
-            pointer_width: PointerWidth::U64,
-        },
-        false,
-    );
+    let mut dummy_environ = DummyEnvironment::new(TargetFrontendConfig {
+        default_call_conv: CallConv::SystemV,
+        pointer_width: PointerWidth::U64,
+    });
 
     translate_module(&data, &mut dummy_environ).unwrap();
 
@@ -148,13 +142,10 @@ fn reachability_is_correct() {
 
     for (wat, expected_reachability) in tests {
         println!("testing wat:\n{}", wat);
-        let mut env = DummyEnvironment::new(
-            TargetFrontendConfig {
-                default_call_conv: CallConv::SystemV,
-                pointer_width: PointerWidth::U64,
-            },
-            false,
-        );
+        let mut env = DummyEnvironment::new(TargetFrontendConfig {
+            default_call_conv: CallConv::SystemV,
+            pointer_width: PointerWidth::U64,
+        });
         env.test_expected_reachability(expected_reachability);
         let data = wat::parse_str(wat).unwrap();
         translate_module(data.as_ref(), &mut env).unwrap();

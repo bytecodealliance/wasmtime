@@ -21,7 +21,7 @@ use wasmparser::{
     self, Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind,
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
     GlobalSectionReader, ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader,
-    Naming, Operator, TableSectionReader, TagSectionReader, TagType, Type, TypeRef,
+    Naming, Operator, StructuralType, TableSectionReader, TagSectionReader, TagType, TypeRef,
     TypeSectionReader,
 };
 
@@ -51,12 +51,16 @@ pub fn parse_type_section<'a>(
     environ.reserve_types(count)?;
 
     for entry in types {
-        match entry? {
-            Type::Func(wasm_func_ty) => {
+        let entry = entry?;
+        if entry.is_final || entry.supertype_idx.is_some() {
+            unimplemented!("gc proposal");
+        }
+        match entry.structural_type {
+            StructuralType::Func(wasm_func_ty) => {
                 let ty = environ.convert_func_type(&wasm_func_ty);
                 environ.declare_type_func(ty)?;
             }
-            Type::Array(_) => {
+            StructuralType::Array(_) | StructuralType::Struct(_) => {
                 unimplemented!("gc proposal");
             }
         }
@@ -252,7 +256,7 @@ fn read_elems(items: &ElementItems) -> WasmResult<Box<[FuncIndex]>> {
                 elems.push(FuncIndex::from_u32(func?));
             }
         }
-        ElementItems::Expressions(funcs) => {
+        ElementItems::Expressions(_ty, funcs) => {
             for func in funcs.clone() {
                 let idx = match func?.get_binary_reader().read_operator()? {
                     Operator::RefNull { .. } => FuncIndex::reserved_value(),
@@ -282,7 +286,6 @@ pub fn parse_element_section<'data>(
         let Element {
             kind,
             items,
-            ty: _,
             range: _,
         } = entry?;
         let segments = read_elems(&items)?;

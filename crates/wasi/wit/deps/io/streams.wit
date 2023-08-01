@@ -8,9 +8,31 @@ package wasi:io
 interface streams {
     use wasi:poll/poll.{pollable}
 
-    /// An error type returned from a stream operation. Currently this
-    /// doesn't provide any additional information.
-    record stream-error {}
+    /// An error type returned from a stream operation.
+    ///
+    /// TODO: need to figure out the actual contents of this error. Used to be
+    /// an empty record but that's no longer allowed. The `dummy` field is
+    /// only here to have this be a valid in the component model by being
+    /// non-empty.
+    record stream-error {
+      dummy: u32,
+    }
+
+    /// Streams provide a sequence of data and then end; once they end, they
+    /// no longer provide any further data.
+    ///
+    /// For example, a stream reading from a file ends when the stream reaches
+    /// the end of the file. For another example, a stream reading from a
+    /// socket ends when the socket is closed.
+    enum stream-status {
+        /// The stream is open and may produce further data.
+        open,
+        /// When reading, this indicates that the stream will not produce
+        /// further data.
+        /// When writing, this indicates that the stream will no longer be read.
+        /// Further writes are still permitted.
+        ended,
+    }
 
     /// An input bytestream. In the future, this will be replaced by handle
     /// types.
@@ -31,12 +53,12 @@ interface streams {
     /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
     type input-stream = u32
 
-    /// Read bytes from a stream.
+    /// Perform a non-blocking read from the stream.
     ///
     /// This function returns a list of bytes containing the data that was
-    /// read, along with a bool which, when true, indicates that the end of the
-    /// stream was reached. The returned list will contain up to `len` bytes; it
-    /// may return fewer than requested, but not more.
+    /// read, along with a `stream-status` which, indicates whether further
+    /// reads are expected to produce data. The returned list will contain up to
+    /// `len` bytes; it may return fewer than requested, but not more.
     ///
     /// Once a stream has reached the end, subsequent calls to read or
     /// `skip` will always report end-of-stream rather than producing more
@@ -49,11 +71,17 @@ interface streams {
     /// The len here is a `u64`, but some callees may not be able to allocate
     /// a buffer as large as that would imply.
     /// FIXME: describe what happens if allocation fails.
+    ///
+    /// When the returned `stream-status` is `open`, the length of the returned
+    /// value may be less than `len`. When an empty list is returned, this
+    /// indicates that no more bytes were available from the stream at that
+    /// time. In that case the subscribe-to-input-stream pollable will indicate
+    /// when additional bytes are available for reading.
     read: func(
         this: input-stream,
         /// The maximum number of bytes to read
         len: u64
-    ) -> result<tuple<list<u8>, bool>, stream-error>
+    ) -> result<tuple<list<u8>, stream-status>, stream-error>
 
     /// Read bytes from a stream, with blocking.
     ///
@@ -63,7 +91,7 @@ interface streams {
         this: input-stream,
         /// The maximum number of bytes to read
         len: u64
-    ) -> result<tuple<list<u8>, bool>, stream-error>
+    ) -> result<tuple<list<u8>, stream-status>, stream-error>
 
     /// Skip bytes from a stream.
     ///
@@ -81,7 +109,7 @@ interface streams {
         this: input-stream,
         /// The maximum number of bytes to skip.
         len: u64,
-    ) -> result<tuple<u64, bool>, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Skip bytes from a stream, with blocking.
     ///
@@ -91,7 +119,7 @@ interface streams {
         this: input-stream,
         /// The maximum number of bytes to skip.
         len: u64,
-    ) -> result<tuple<u64, bool>, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Create a `pollable` which will resolve once either the specified stream
     /// has bytes available to read or the other end of the stream has been
@@ -113,7 +141,7 @@ interface streams {
     /// always return promptly, after the number of bytes that can be written
     /// promptly, which could even be zero. To wait for the stream to be ready to
     /// accept data, the `subscribe-to-output-stream` function to obtain a
-    /// `pollable` which can be polled for using `wasi_poll`.
+    /// `pollable` which can be polled for using `wasi:poll`.
     ///
     /// And at present, it is a `u32` instead of being an actual handle, until
     /// the wit-bindgen implementation of handles and resources is ready.
@@ -121,15 +149,25 @@ interface streams {
     /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
     type output-stream = u32
 
-    /// Write bytes to a stream.
+    /// Perform a non-blocking write of bytes to a stream.
     ///
-    /// This function returns a `u64` indicating the number of bytes from
-    /// `buf` that were written; it may be less than the full list.
+    /// This function returns a `u64` and a `stream-status`. The `u64` indicates
+    /// the number of bytes from `buf` that were written, which may be less than
+    /// the length of `buf`. The `stream-status` indicates if further writes to
+    /// the stream are expected to be read.
+    ///
+    /// When the returned `stream-status` is `open`, the `u64` return value may
+    /// be less than the length of `buf`. This indicates that no more bytes may
+    /// be written to the stream promptly. In that case the
+    /// subscribe-to-output-stream pollable will indicate when additional bytes
+    /// may be promptly written.
+    ///
+    /// TODO: document what happens when an empty list is written
     write: func(
         this: output-stream,
         /// Data to write
         buf: list<u8>
-    ) -> result<u64, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Write bytes to a stream, with blocking.
     ///
@@ -139,7 +177,7 @@ interface streams {
         this: output-stream,
         /// Data to write
         buf: list<u8>
-    ) -> result<u64, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Write multiple zero bytes to a stream.
     ///
@@ -149,7 +187,7 @@ interface streams {
         this: output-stream,
         /// The number of zero bytes to write
         len: u64
-    ) -> result<u64, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Write multiple zero bytes to a stream, with blocking.
     ///
@@ -159,7 +197,7 @@ interface streams {
         this: output-stream,
         /// The number of zero bytes to write
         len: u64
-    ) -> result<u64, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Read from one stream and write to another.
     ///
@@ -174,7 +212,7 @@ interface streams {
         src: input-stream,
         /// The number of bytes to splice
         len: u64,
-    ) -> result<tuple<u64, bool>, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Read from one stream and write to another, with blocking.
     ///
@@ -186,7 +224,7 @@ interface streams {
         src: input-stream,
         /// The number of bytes to splice
         len: u64,
-    ) -> result<tuple<u64, bool>, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Forward the entire contents of an input stream to an output stream.
     ///
@@ -198,12 +236,13 @@ interface streams {
     /// of the input stream is seen and all the data has been written to
     /// the output stream.
     ///
-    /// This function returns the number of bytes transferred.
+    /// This function returns the number of bytes transferred, and the status of
+    /// the output stream.
     forward: func(
         this: output-stream,
         /// The stream to read from
         src: input-stream
-    ) -> result<u64, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Create a `pollable` which will resolve once either the specified stream
     /// is ready to accept bytes or the other end of the stream has been closed.

@@ -122,6 +122,22 @@ pub struct CallIndInfo {
     pub callee_pop_size: u32,
 }
 
+/// Additional information for `return_call[_ind]` instructions, left out of
+/// line to lower the size of the `Inst` enum.
+#[derive(Clone, Debug)]
+pub struct ReturnCallInfo {
+    /// Arguments to the call instruction.
+    pub uses: CallArgList,
+    /// Instruction opcode.
+    pub opcode: Opcode,
+    /// The size of the current/old stack frame's stack arguments.
+    pub old_stack_arg_size: u32,
+    /// The size of the new stack frame's stack arguments. This is necessary
+    /// for copying the frame over our current frame. It must already be
+    /// allocated on the stack.
+    pub new_stack_arg_size: u32,
+}
+
 /// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
 /// enum.
 #[derive(Clone, Debug)]
@@ -873,6 +889,20 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
             collector.reg_clobbers(info.clobbers);
         }
+        &Inst::ReturnCall {
+            ref info,
+            callee: _,
+        } => {
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+        }
+        &Inst::ReturnCallInd { ref info, callee } => {
+            collector.reg_use(callee);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+        }
         &Inst::CondBr { ref kind, .. } => match kind {
             CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
                 collector.reg_use(*rt);
@@ -1013,6 +1043,7 @@ impl MachInst for Inst {
     fn is_term(&self) -> MachTerminator {
         match self {
             &Inst::Ret { .. } | &Inst::AuthenticatedRet { .. } => MachTerminator::Ret,
+            &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::IndirectBr { .. } => MachTerminator::Indirect,
@@ -2521,6 +2552,34 @@ impl Inst {
             &Inst::CallInd { ref info, .. } => {
                 let rn = pretty_print_reg(info.rn, allocs);
                 format!("blr {}", rn)
+            }
+            &Inst::ReturnCall {
+                ref callee,
+                ref info,
+            } => {
+                let mut s = format!(
+                    "return_call {callee:?} old_stack_arg_size:{} new_stack_arg_size:{}",
+                    info.old_stack_arg_size, info.new_stack_arg_size
+                );
+                for ret in &info.uses {
+                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
+                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
+            }
+            &Inst::ReturnCallInd { callee, ref info } => {
+                let callee = pretty_print_reg(callee, allocs);
+                let mut s = format!(
+                    "return_call_ind {callee} old_stack_arg_size:{} new_stack_arg_size:{}",
+                    info.old_stack_arg_size, info.new_stack_arg_size
+                );
+                for ret in &info.uses {
+                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
+                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
             }
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();

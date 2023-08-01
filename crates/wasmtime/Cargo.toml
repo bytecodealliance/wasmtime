@@ -29,6 +29,7 @@ wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
+wasm-encoder = { workspace = true }
 anyhow = { workspace = true }
 libc = "0.2"
 cfg-if = { workspace = true }
@@ -37,7 +38,7 @@ wat = { workspace = true, optional = true }
 serde = { version = "1.0.94", features = ["derive"] }
 serde_json = { workspace = true }
 bincode = "1.2.1"
-indexmap = "1.6"
+indexmap = { workspace = true }
 paste = "1.0.3"
 psm = "0.1.11"
 once_cell = { workspace = true }

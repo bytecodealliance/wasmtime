@@ -126,6 +126,9 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
                     .collect::<arbitrary::Result<Box<[_]>>>()?,
             )
             .unwrap(),
+
+        // Resources aren't fuzzed at this time.
+        Type::Own(_) | Type::Borrow(_) => unreachable!(),
     })
 }
 

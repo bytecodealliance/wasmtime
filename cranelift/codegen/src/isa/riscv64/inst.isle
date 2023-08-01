@@ -98,6 +98,16 @@
     (CallInd
       (info BoxCallIndInfo))
 
+    ;; A direct return-call macro instruction.
+    (ReturnCall
+      (callee BoxExternalName)
+      (info BoxReturnCallInfo))
+
+    ;; An indirect return-call macro instruction.
+    (ReturnCallInd
+      (callee Reg)
+      (info BoxReturnCallInfo))
+
     (TrapIf
       (test Reg)
       (trap_code TrapCode))
@@ -720,6 +730,7 @@
 (type VecBranchTarget (primitive VecBranchTarget))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type BoxReturnCallInfo (primitive BoxReturnCallInfo))
 (type IntegerCompare (primitive IntegerCompare))
 (type AMode (primitive AMode))
 (type OptionReg (primitive OptionReg))

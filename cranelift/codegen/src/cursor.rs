@@ -593,7 +593,7 @@ impl<'f> FuncCursor<'f> {
     }
 
     /// Create an instruction builder that inserts an instruction at the current position.
-    pub fn ins(&mut self) -> ir::InsertBuilder<&mut FuncCursor<'f>> {
+    pub fn ins(&mut self) -> ir::InsertBuilder<'_, &mut FuncCursor<'f>> {
         ir::InsertBuilder::new(self)
     }
 }

@@ -62,6 +62,7 @@ use crate::isa::riscv64::lower::isle::generated_code::{MInst, VecAluOpRRImm5, Ve
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
+type BoxReturnCallInfo = Box<ReturnCallInfo>;
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
 /// the Inst enum.
@@ -89,6 +90,16 @@ pub struct CallIndInfo {
     pub callee_callconv: CallConv,
     pub clobbers: PRegSet,
     pub callee_pop_size: u32,
+}
+
+/// Additional information for `return_call[_ind]` instructions, left out of
+/// line to lower the size of the `Inst` enum.
+#[derive(Clone, Debug)]
+pub struct ReturnCallInfo {
+    pub uses: CallArgList,
+    pub opcode: Opcode,
+    pub old_stack_arg_size: u32,
+    pub new_stack_arg_size: u32,
 }
 
 /// A branch target. Either unresolved (basic-block index) or resolved (offset
@@ -447,6 +458,20 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_def(d.vreg, d.preg);
             }
             collector.reg_clobbers(info.clobbers);
+        }
+        &Inst::ReturnCall {
+            callee: _,
+            ref info,
+        } => {
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+        }
+        &Inst::ReturnCallInd { ref info, callee } => {
+            collector.reg_use(callee);
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
         }
         &Inst::TrapIf { test, .. } => {
             collector.reg_use(test);
@@ -863,6 +888,7 @@ impl MachInst for Inst {
             &Inst::Jalr { .. } => MachTerminator::Uncond,
             &Inst::Ret { .. } => MachTerminator::Ret,
             &Inst::BrTable { .. } => MachTerminator::Indirect,
+            &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             _ => MachTerminator::None,
         }
     }
@@ -1049,6 +1075,7 @@ impl Inst {
             }
         }
 
+        let mut empty_allocs = AllocationConsumer::default();
         match self {
             &Inst::Nop0 => {
                 format!("##zero length nop")
@@ -1582,6 +1609,34 @@ impl Inst {
             &MInst::CallInd { ref info } => {
                 let rd = format_reg(info.rn, allocs);
                 format!("callind {}", rd)
+            }
+            &MInst::ReturnCall {
+                ref callee,
+                ref info,
+            } => {
+                let mut s = format!(
+                    "return_call {callee:?} old_stack_arg_size:{} new_stack_arg_size:{}",
+                    info.old_stack_arg_size, info.new_stack_arg_size
+                );
+                for ret in &info.uses {
+                    let preg = format_reg(ret.preg, &mut empty_allocs);
+                    let vreg = format_reg(ret.vreg, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
+            }
+            &MInst::ReturnCallInd { callee, ref info } => {
+                let callee = format_reg(callee, allocs);
+                let mut s = format!(
+                    "return_call_ind {callee} old_stack_arg_size:{} new_stack_arg_size:{}",
+                    info.old_stack_arg_size, info.new_stack_arg_size
+                );
+                for ret in &info.uses {
+                    let preg = format_reg(ret.preg, &mut empty_allocs);
+                    let vreg = format_reg(ret.vreg, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
             }
             &MInst::TrapIf { test, trap_code } => {
                 format!("trap_if {},{}", format_reg(test, allocs), trap_code,)

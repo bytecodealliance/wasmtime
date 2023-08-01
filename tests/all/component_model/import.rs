@@ -4,7 +4,7 @@ use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use std::ops::Deref;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, WasmBacktrace};
+use wasmtime::{Store, StoreContextMut, Trap, WasmBacktrace};
 
 #[test]
 fn can_compile() -> Result<()> {
@@ -446,8 +446,9 @@ fn attempt_to_reenter_during_host() -> Result<()> {
         |mut store: StoreContextMut<'_, StaticState>, _: ()| -> Result<()> {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, ()).unwrap_err();
-            assert!(
-                format!("{trap:?}").contains("cannot reenter component instance"),
+            assert_eq!(
+                trap.downcast_ref(),
+                Some(&Trap::CannotEnterComponent),
                 "bad trap: {trap:?}",
             );
             Ok(())
@@ -472,8 +473,9 @@ fn attempt_to_reenter_during_host() -> Result<()> {
         |mut store: StoreContextMut<'_, DynamicState>, _, _| {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, &[], &mut []).unwrap_err();
-            assert!(
-                format!("{trap:?}").contains("cannot reenter component instance"),
+            assert_eq!(
+                trap.downcast_ref(),
+                Some(&Trap::CannotEnterComponent),
                 "bad trap: {trap:?}",
             );
             Ok(())

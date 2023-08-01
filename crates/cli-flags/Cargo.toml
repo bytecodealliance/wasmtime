@@ -12,7 +12,7 @@ edition.workspace = true
 anyhow = { workspace = true }
 clap = { workspace = true }
 file-per-thread-logger = { workspace = true }
-pretty_env_logger = "0.4.0"
+pretty_env_logger = { workspace = true }
 rayon = "1.5.0"
 wasmtime = { workspace = true }
 

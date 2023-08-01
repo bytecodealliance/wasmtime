@@ -5,7 +5,7 @@ inputs:
   toolchain:
     description: 'Default toolchan to install'
     required: false
-    default: '1.69.0'
+    default: '1.71.0'
   lockfiles:
     description: 'Path glob for Cargo.lock files to use as cache keys'
     required: false

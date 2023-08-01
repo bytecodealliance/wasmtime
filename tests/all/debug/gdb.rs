@@ -59,9 +59,9 @@ pub fn test_debug_dwarf_gdb() -> Result<()> {
         &[
             "--disable-cache",
             "-g",
-            "tests/all/debug/testsuite/fib-wasm.wasm",
             "--invoke",
             "fib",
+            "tests/all/debug/testsuite/fib-wasm.wasm",
             "3",
         ],
         r#"set breakpoint pending on

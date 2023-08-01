@@ -191,7 +191,7 @@ use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-pub use crate::frontend::{FunctionBuilder, FunctionBuilderContext};
+pub use crate::frontend::{FuncInstBuilder, FunctionBuilder, FunctionBuilderContext};
 pub use crate::switch::Switch;
 pub use crate::variable::Variable;
 

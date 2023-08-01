@@ -4,7 +4,7 @@
 //! See `wasmtime --help` for usage.
 
 use anyhow::Result;
-use clap::{ErrorKind, Parser};
+use clap::Parser;
 use wasmtime_cli::commands::{
     CompileCommand, ConfigCommand, ExploreCommand, RunCommand, SettingsCommand, WastCommand,
 };
@@ -27,10 +27,24 @@ use wasmtime_cli::commands::{
                   \n\
                   Invoking a specific function (e.g. `add`) in a WebAssembly module:\n\
                   \n  \
-                  wasmtime example.wasm --invoke add 1 2\n"
+                  wasmtime example.wasm --invoke add 1 2\n",
+
+    // This option enables the pattern below where we ask clap to parse twice
+    // sorta: once where it's trying to find a subcommand and once assuming
+    // a subcommand doesn't get passed. Clap should then, apparently,
+    // fill in the `subcommand` if found and otherwise fill in the
+    // `RunCommand`.
+    args_conflicts_with_subcommands = true
 )]
-enum Wasmtime {
-    // !!! IMPORTANT: if subcommands are added or removed, update `parse_module` in `src/commands/run.rs`. !!!
+struct Wasmtime {
+    #[clap(subcommand)]
+    subcommand: Option<Subcommand>,
+    #[clap(flatten)]
+    run: RunCommand,
+}
+
+#[derive(Parser)]
+enum Subcommand {
     /// Controls Wasmtime configuration settings
     Config(ConfigCommand),
     /// Compiles a WebAssembly module.
@@ -48,24 +62,24 @@ enum Wasmtime {
 impl Wasmtime {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
-        match self {
-            Self::Config(c) => c.execute(),
-            Self::Compile(c) => c.execute(),
-            Self::Explore(c) => c.execute(),
-            Self::Run(c) => c.execute(),
-            Self::Settings(c) => c.execute(),
-            Self::Wast(c) => c.execute(),
+        let subcommand = self.subcommand.unwrap_or(Subcommand::Run(self.run));
+        match subcommand {
+            Subcommand::Config(c) => c.execute(),
+            Subcommand::Compile(c) => c.execute(),
+            Subcommand::Explore(c) => c.execute(),
+            Subcommand::Run(c) => c.execute(),
+            Subcommand::Settings(c) => c.execute(),
+            Subcommand::Wast(c) => c.execute(),
         }
     }
 }
 
 fn main() -> Result<()> {
-    Wasmtime::try_parse()
-        .unwrap_or_else(|e| match e.kind() {
-            ErrorKind::UnrecognizedSubcommand | ErrorKind::UnknownArgument => {
-                Wasmtime::Run(RunCommand::parse())
-            }
-            _ => e.exit(),
-        })
-        .execute()
+    Wasmtime::parse().execute()
+}
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    Wasmtime::command().debug_assert()
 }

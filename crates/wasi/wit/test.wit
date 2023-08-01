@@ -17,3 +17,12 @@ world test-reactor {
   use wasi:filesystem/filesystem.{descriptor-stat}
   export pass-an-imported-record: func(d: descriptor-stat) -> string
 }
+
+world test-command {
+  import wasi:poll/poll
+  import wasi:io/streams
+  import wasi:cli-base/environment
+  import wasi:cli-base/stdin
+  import wasi:cli-base/stdout
+  import wasi:cli-base/stderr
+}

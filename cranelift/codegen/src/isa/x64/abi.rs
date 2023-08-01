@@ -842,11 +842,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
 impl X64CallSite {
     pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
-        // Allocate additional stack space for the new stack frame. We will
-        // build it in the newly allocated space, but then copy it over our
-        // current frame at the last moment.
-        let new_stack_arg_size = self.emit_allocate_tail_call_frame(ctx);
-        let old_stack_arg_size = ctx.abi().stack_args_size(ctx.sigs());
+        let (new_stack_arg_size, old_stack_arg_size) =
+            self.emit_temporary_tail_call_frame(ctx, args);
 
         // Make a copy of the frame pointer, since we use it when copying down
         // the new stack frame.
@@ -874,19 +871,6 @@ impl X64CallSite {
         } else {
             None
         };
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.emit_args(ctx, args);
-        if let Some(i) = ctx.sigs()[self.sig()].stack_ret_arg() {
-            let ret_area_ptr = ctx.abi().ret_area_ptr().expect(
-                "if the tail callee has a return pointer, then the tail caller \
-                 must as well",
-            );
-            for inst in self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg())) {
-                ctx.emit(inst);
-            }
-        }
 
         // Finally, emit the macro instruction to copy the new stack frame over
         // our current one and do the actual tail call!

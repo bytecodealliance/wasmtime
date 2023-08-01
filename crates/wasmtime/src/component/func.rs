@@ -12,6 +12,7 @@ use wasmtime_environ::component::{
     CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, RuntimeComponentInstanceIndex,
     TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
+use wasmtime_runtime::component::ResourceTables;
 use wasmtime_runtime::{Export, ExportFunction};
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
@@ -218,32 +219,40 @@ impl Func {
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
-        self._typed(store.as_context().0)
+        self._typed(store.as_context().0, None)
     }
 
     pub(crate) fn _typed<Params, Return>(
         &self,
         store: &StoreOpaque,
+        instance: Option<&InstanceData>,
     ) -> Result<TypedFunc<Params, Return>>
     where
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
-        self.typecheck::<Params, Return>(store)?;
+        self.typecheck::<Params, Return>(store, instance)?;
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
     }
 
-    fn typecheck<Params, Return>(&self, store: &StoreOpaque) -> Result<()>
+    fn typecheck<Params, Return>(
+        &self,
+        store: &StoreOpaque,
+        instance: Option<&InstanceData>,
+    ) -> Result<()>
     where
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
         let data = &store[self.0];
-        let ty = &data.types[data.ty];
+        let cx = instance
+            .unwrap_or_else(|| &store[data.instance.0].as_ref().unwrap())
+            .ty();
+        let ty = &cx.types[data.ty];
 
-        Params::typecheck(&InterfaceType::Tuple(ty.params), &data.types)
+        Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
             .context("type mismatch with parameters")?;
-        Return::typecheck(&InterfaceType::Tuple(ty.results), &data.types)
+        Return::typecheck(&InterfaceType::Tuple(ty.results), &cx)
             .context("type mismatch with results")?;
 
         Ok(())
@@ -251,21 +260,25 @@ impl Func {
 
     /// Get the parameter types for this function.
     pub fn params(&self, store: impl AsContext) -> Box<[Type]> {
-        let data = &store.as_context()[self.0];
+        let store = store.as_context();
+        let data = &store[self.0];
+        let instance = store[data.instance.0].as_ref().unwrap();
         data.types[data.types[data.ty].params]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &data.types))
+            .map(|ty| Type::from(ty, &instance.ty()))
             .collect()
     }
 
     /// Get the result types for this function.
     pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
-        let data = &store.as_context()[self.0];
+        let store = store.as_context();
+        let data = &store[self.0];
+        let instance = store[data.instance.0].as_ref().unwrap();
         data.types[data.types[data.ty].results]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &data.types))
+            .map(|ty| Type::from(ty, &instance.ty()))
             .collect()
     }
 
@@ -410,7 +423,7 @@ impl Func {
             InterfaceType,
             &mut MaybeUninit<LowerParams>,
         ) -> Result<()>,
-        lift: impl FnOnce(&LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
+        lift: impl FnOnce(&mut LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
     ) -> Result<Return>
     where
         LowerParams: Copy,
@@ -455,18 +468,17 @@ impl Func {
             // never be entered again. The only time this flag is set to `true`
             // again is after post-return logic has completed successfully.
             if !flags.may_enter() {
-                bail!("cannot reenter component instance");
+                bail!(crate::Trap::CannotEnterComponent);
             }
             flags.set_may_enter(false);
 
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
+            let instance_ptr = instance.instance_ptr();
+            let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr);
+            cx.enter_call();
             let result = lower(
-                &mut LowerContext {
-                    store: store.as_context_mut(),
-                    options: &options,
-                    types: &types,
-                },
+                &mut cx,
                 params,
                 InterfaceType::Tuple(types[ty].params),
                 map_maybe_uninit!(space.params),
@@ -507,11 +519,7 @@ impl Func {
             // later get used in post-return.
             flags.set_needs_post_return(true);
             let val = lift(
-                &LiftContext {
-                    store: store.0,
-                    options: &options,
-                    types: &types,
-                },
+                &mut LiftContext::new(store.0, &options, &types, instance_ptr),
                 InterfaceType::Tuple(types[ty].results),
                 ret,
             )?;
@@ -595,10 +603,11 @@ impl Func {
         let post_return = data.post_return;
         let component_instance = data.component_instance;
         let post_return_arg = data.post_return_arg.take();
-        let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let mut flags = instance.instance_flags(component_instance);
+        let instance = store.0[instance.0].as_ref().unwrap().instance_ptr();
 
         unsafe {
+            let mut flags = (*instance).instance_flags(component_instance);
+
             // First assert that the instance is in a "needs post return" state.
             // This will ensure that the previous action on the instance was a
             // function call above. This flag is only set after a component
@@ -648,6 +657,14 @@ impl Func {
             // enter" flag is set to `true` again here which enables further use
             // of the component.
             flags.set_may_enter(true);
+
+            let (calls, host_table) = store.0.component_calls_and_host_table();
+            ResourceTables {
+                calls,
+                host_table: Some(host_table),
+                tables: Some((*instance).component_resource_tables()),
+            }
+            .exit_call()?;
         }
         Ok(())
     }
@@ -673,7 +690,7 @@ impl Func {
     }
 
     fn load_results(
-        cx: &LiftContext<'_>,
+        cx: &mut LiftContext<'_>,
         results_ty: &TypeTuple,
         results: &mut [Val],
         src: &mut std::slice::Iter<'_, ValRaw>,

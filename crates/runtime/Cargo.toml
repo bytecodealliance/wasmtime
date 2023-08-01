@@ -15,10 +15,11 @@ wasmtime-asm-macros = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int"] }
+wasmtime-versioned-export-macros = { workspace = true }
 libc = { version = "0.2.112", default-features = false }
 log = { workspace = true }
-memoffset = "0.8.0"
-indexmap = "1.0.2"
+memoffset = "0.9.0"
+indexmap = { workspace = true }
 cfg-if = { workspace = true }
 rand = { version = "0.8.3", features = ['small_rng'] }
 anyhow = { workspace = true }
@@ -26,6 +27,7 @@ memfd = "0.6.2"
 paste = "1.0.3"
 encoding_rs = { version = "0.8.31", optional = true }
 sptr = "0.3.2"
+wasm-encoder = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mach = "0.3.2"
@@ -50,6 +52,7 @@ once_cell = { workspace = true }
 
 [build-dependencies]
 cc = "1.0"
+wasmtime-versioned-export-macros = { workspace = true }
 
 [features]
 async = ["wasmtime-fiber"]

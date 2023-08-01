@@ -31,6 +31,7 @@ fn main() -> anyhow::Result<()> {
             test_directory(out, "tests/misc_testsuite", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/simd", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/tail-call", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
@@ -61,6 +62,7 @@ fn main() -> anyhow::Result<()> {
                     "tests/spec_testsuite/proposals/relaxed-simd",
                     strategy,
                 )?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/tail-call", strategy)?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -213,11 +215,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         return true;
     }
 
-    // Tail calls are not yet implemented.
-    if testname.contains("return_call") {
-        return true;
-    }
-
     if testsuite == "function_references" {
         // The following tests fail due to function references not yet
         // being exposed in the public API.
@@ -241,6 +238,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         "s390x" => {
             // FIXME: These tests fail under qemu due to a qemu bug.
             testname == "simd_f32x4_pmin_pmax" || testname == "simd_f64x2_pmin_pmax"
+                // TODO(#6530): These tests require tail calls, but s390x
+                // doesn't support them yet.
+                || testsuite == "function_references" || testsuite == "tail_call"
         }
 
         "riscv64" => {

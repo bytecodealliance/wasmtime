@@ -2,23 +2,19 @@
 //
 // struct VMComponentContext {
 //      magic: u32,
-//      transcode_libcalls: &'static VMBuiltinTranscodeArray,
+//      libcalls: &'static VMComponentLibcalls,
 //      store: *mut dyn Store,
 //      limits: *const VMRuntimeLimits,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
-//      lowering_func_refs: [VMFuncRef; component.num_lowerings],
-//      always_trap_func_refs: [VMFuncRef; component.num_always_trap],
-//      transcoder_func_refs: [VMFuncRef; component.num_transcoders],
+//      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_memories],
 //      reallocs: [*mut VMFuncRef; component.num_reallocs],
 //      post_returns: [*mut VMFuncRef; component.num_post_returns],
+//      resource_destructors: [*mut VMFuncRef; component.num_resources],
 // }
 
-use crate::component::{
-    Component, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
-    RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex, RuntimeTranscoderIndex,
-};
+use crate::component::*;
 use crate::PtrSize;
 
 /// Equivalent of `VMCONTEXT_MAGIC` except for components.
@@ -56,25 +52,23 @@ pub struct VMComponentOffsets<P> {
     /// Number of component instances internally in the component (always at
     /// least 1).
     pub num_runtime_component_instances: u32,
-    /// Number of "always trap" functions which have their
-    /// `VMFuncRef` stored inline in the `VMComponentContext`.
-    pub num_always_trap: u32,
-    /// Number of transcoders needed for string conversion.
-    pub num_transcoders: u32,
+    /// Number of cranelift-compiled trampolines required for this component.
+    pub num_trampolines: u32,
+    /// Number of resources within a component which need destructors stored.
+    pub num_resources: u32,
 
     // precalculated offsets of various member fields
     magic: u32,
-    transcode_libcalls: u32,
+    libcalls: u32,
     store: u32,
     limits: u32,
     flags: u32,
-    lowering_func_refs: u32,
-    always_trap_func_refs: u32,
-    transcoder_func_refs: u32,
+    trampoline_func_refs: u32,
     lowerings: u32,
     memories: u32,
     reallocs: u32,
     post_returns: u32,
+    resource_destructors: u32,
     size: u32,
 }
 
@@ -90,7 +84,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn new(ptr: P, component: &Component) -> Self {
         let mut ret = Self {
             ptr,
-            num_lowerings: component.num_lowerings.try_into().unwrap(),
+            num_lowerings: component.num_lowerings,
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
             num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
@@ -98,20 +92,19 @@ impl<P: PtrSize> VMComponentOffsets<P> {
                 .num_runtime_component_instances
                 .try_into()
                 .unwrap(),
-            num_always_trap: component.num_always_trap,
-            num_transcoders: component.num_transcoders,
+            num_trampolines: component.trampolines.len().try_into().unwrap(),
+            num_resources: component.num_resources,
             magic: 0,
-            transcode_libcalls: 0,
+            libcalls: 0,
             store: 0,
             limits: 0,
             flags: 0,
-            lowering_func_refs: 0,
-            always_trap_func_refs: 0,
-            transcoder_func_refs: 0,
+            trampoline_func_refs: 0,
             lowerings: 0,
             memories: 0,
             reallocs: 0,
             post_returns: 0,
+            resource_destructors: 0,
             size: 0,
         };
 
@@ -142,19 +135,18 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         fields! {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
-            size(transcode_libcalls) = ret.ptr.size(),
+            size(libcalls) = ret.ptr.size(),
             size(store) = cmul(2, ret.ptr.size()),
             size(limits) = ret.ptr.size(),
             align(16),
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
-            size(lowering_func_refs) = cmul(ret.num_lowerings, ret.ptr.size_of_vm_func_ref()),
-            size(always_trap_func_refs) = cmul(ret.num_always_trap, ret.ptr.size_of_vm_func_ref()),
-            size(transcoder_func_refs) = cmul(ret.num_transcoders, ret.ptr.size_of_vm_func_ref()),
+            size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
             size(post_returns) = cmul(ret.num_runtime_post_returns, ret.ptr.size()),
+            size(resource_destructors) = cmul(ret.num_resources, ret.ptr.size()),
         }
 
         ret.size = next_field_offset;
@@ -179,10 +171,10 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.magic
     }
 
-    /// The offset of the `transcode_libcalls` field.
+    /// The offset of the `libcalls` field.
     #[inline]
-    pub fn transcode_libcalls(&self) -> u32 {
-        self.transcode_libcalls
+    pub fn libcalls(&self) -> u32 {
+        self.libcalls
     }
 
     /// The offset of the `flags` field.
@@ -204,43 +196,17 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.limits
     }
 
-    /// The offset of the `lowering_func_refs` field.
+    /// The offset of the `trampoline_func_refs` field.
     #[inline]
-    pub fn lowering_func_refs(&self) -> u32 {
-        self.lowering_func_refs
+    pub fn trampoline_func_refs(&self) -> u32 {
+        self.trampoline_func_refs
     }
 
     /// The offset of `VMFuncRef` for the `index` specified.
     #[inline]
-    pub fn lowering_func_ref(&self, index: LoweredIndex) -> u32 {
-        assert!(index.as_u32() < self.num_lowerings);
-        self.lowering_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
-    }
-
-    /// The offset of the `always_trap_func_refs` field.
-    #[inline]
-    pub fn always_trap_func_refs(&self) -> u32 {
-        self.always_trap_func_refs
-    }
-
-    /// The offset of `VMFuncRef` for the `index` specified.
-    #[inline]
-    pub fn always_trap_func_ref(&self, index: RuntimeAlwaysTrapIndex) -> u32 {
-        assert!(index.as_u32() < self.num_always_trap);
-        self.always_trap_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
-    }
-
-    /// The offset of the `transcoder_func_refs` field.
-    #[inline]
-    pub fn transcoder_func_refs(&self) -> u32 {
-        self.transcoder_func_refs
-    }
-
-    /// The offset of `VMFuncRef` for the `index` specified.
-    #[inline]
-    pub fn transcoder_func_ref(&self, index: RuntimeTranscoderIndex) -> u32 {
-        assert!(index.as_u32() < self.num_transcoders);
-        self.transcoder_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
+    pub fn trampoline_func_ref(&self, index: TrampolineIndex) -> u32 {
+        assert!(index.as_u32() < self.num_trampolines);
+        self.trampoline_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
     }
 
     /// The offset of the `lowerings` field.
@@ -326,6 +292,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn runtime_post_return(&self, index: RuntimePostReturnIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_post_returns);
         self.runtime_post_returns() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// The offset of the base of the `resource_destructors` field
+    #[inline]
+    pub fn resource_destructors(&self) -> u32 {
+        self.resource_destructors
+    }
+
+    /// The offset of the `*mut VMFuncRef` for the runtime index
+    /// provided.
+    #[inline]
+    pub fn resource_destructor(&self, index: ResourceIndex) -> u32 {
+        assert!(index.as_u32() < self.num_resources);
+        self.resource_destructors() + index.as_u32() * u32::from(self.ptr.size())
     }
 
     /// Return the size of the `VMComponentContext` allocation.

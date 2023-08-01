@@ -11,6 +11,7 @@ use target_lexicon::Architecture;
 use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
 pub use builder::builder;
+use wasmtime_environ::Tunables;
 
 mod builder;
 mod compiler;
@@ -125,7 +126,11 @@ fn array_call_signature(isa: &dyn TargetIsa) -> ir::Signature {
 }
 
 /// Get the internal Wasm calling convention signature for the given type.
-fn wasm_call_signature(isa: &dyn TargetIsa, wasm_func_ty: &WasmFuncType) -> ir::Signature {
+fn wasm_call_signature(
+    isa: &dyn TargetIsa,
+    wasm_func_ty: &WasmFuncType,
+    tunables: &Tunables,
+) -> ir::Signature {
     // NB: this calling convention in the near future is expected to be
     // unconditionally switched to the "tail" calling convention once all
     // platforms have support for tail calls.
@@ -136,6 +141,18 @@ fn wasm_call_signature(isa: &dyn TargetIsa, wasm_func_ty: &WasmFuncType) -> ir::
     // operates through trampolines either using the `array_call_signature` or
     // `native_call_signature` where the default platform ABI is used.
     let call_conv = match isa.triple().architecture {
+        // If the tail calls proposal is enabled, we must use the tail calling
+        // convention. We don't use it by default yet because of
+        // https://github.com/bytecodealliance/wasmtime/issues/6759
+        arch if tunables.tail_callable => {
+            assert_ne!(
+                arch,
+                Architecture::S390x,
+                "https://github.com/bytecodealliance/wasmtime/issues/6530"
+            );
+            CallConv::Tail
+        }
+
         // On s390x the "wasmtime" calling convention is used to give vectors
         // little-endian lane order at the ABI layer which should reduce the
         // need for conversion when operating on vector function arguments. By
