@@ -1,7 +1,0 @@
-interface preopens {
-  use wasi:filesystem/filesystem.{descriptor}
-  use wasi:io/streams.{input-stream, output-stream}
-
-  /// Return the set of of preopened directories, and their path.
-  get-directories: func() -> list<tuple<descriptor, string>>
-}
