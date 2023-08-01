@@ -17,7 +17,7 @@ impl SlotId {
 }
 
 #[derive(Debug)]
-pub struct IndexAllocator(Mutex<Inner>);
+pub struct ModuleAffinityIndexAllocator(Mutex<Inner>);
 
 #[derive(Debug)]
 struct Inner {
@@ -115,10 +115,10 @@ enum AllocMode {
     AnySlot,
 }
 
-impl IndexAllocator {
+impl ModuleAffinityIndexAllocator {
     /// Create the default state for this strategy.
     pub fn new(max_instances: u32, max_unused_warm_slots: u32) -> Self {
-        IndexAllocator(Mutex::new(Inner {
+        ModuleAffinityIndexAllocator(Mutex::new(Inner {
             last_cold: 0,
             max_unused_warm_slots,
             unused_warm_slots: 0,
@@ -410,13 +410,13 @@ impl List {
 
 #[cfg(test)]
 mod test {
-    use super::{IndexAllocator, SlotId};
+    use super::{ModuleAffinityIndexAllocator, SlotId};
     use crate::CompiledModuleIdAllocator;
 
     #[test]
     fn test_next_available_allocation_strategy() {
         for size in 0..20 {
-            let state = IndexAllocator::new(size, 0);
+            let state = ModuleAffinityIndexAllocator::new(size, 0);
             for i in 0..size {
                 assert_eq!(state.alloc(None).unwrap().index(), i as usize);
             }
@@ -429,7 +429,7 @@ mod test {
         let id_alloc = CompiledModuleIdAllocator::new();
         let id1 = id_alloc.alloc();
         let id2 = id_alloc.alloc();
-        let state = IndexAllocator::new(100, 100);
+        let state = ModuleAffinityIndexAllocator::new(100, 100);
 
         let index1 = state.alloc(Some(id1)).unwrap();
         assert_eq!(index1.index(), 0);
@@ -483,7 +483,7 @@ mod test {
         let id = id_alloc.alloc();
 
         for max_unused_warm_slots in [0, 1, 2] {
-            let state = IndexAllocator::new(100, max_unused_warm_slots);
+            let state = ModuleAffinityIndexAllocator::new(100, max_unused_warm_slots);
 
             let index1 = state.alloc(Some(id)).unwrap();
             let index2 = state.alloc(Some(id)).unwrap();
@@ -504,7 +504,7 @@ mod test {
         let ids = std::iter::repeat_with(|| id_alloc.alloc())
             .take(10)
             .collect::<Vec<_>>();
-        let state = IndexAllocator::new(1000, 1000);
+        let state = ModuleAffinityIndexAllocator::new(1000, 1000);
         let mut allocated: Vec<SlotId> = vec![];
         let mut last_id = vec![None; 1000];
 
@@ -548,7 +548,7 @@ mod test {
         let id1 = id_alloc.alloc();
         let id2 = id_alloc.alloc();
         let id3 = id_alloc.alloc();
-        let state = IndexAllocator::new(10, 2);
+        let state = ModuleAffinityIndexAllocator::new(10, 2);
 
         // Set some slot affinities
         assert_eq!(state.alloc(Some(id1)), Some(SlotId(0)));

@@ -21,7 +21,7 @@ use wasmtime_environ::{
 };
 
 mod index_allocator;
-use index_allocator::{IndexAllocator, SlotId};
+use index_allocator::{ModuleAffinityIndexAllocator, SlotId};
 
 cfg_if::cfg_if! {
     if #[cfg(windows)] {
@@ -375,7 +375,7 @@ struct StackPool {
     stack_size: usize,
     max_instances: usize,
     page_size: usize,
-    index_allocator: IndexAllocator,
+    index_allocator: ModuleAffinityIndexAllocator,
     async_stack_zeroing: bool,
     async_stack_keep_resident: usize,
 }
@@ -427,7 +427,7 @@ impl StackPool {
             // Note that `max_unused_warm_slots` is set to zero since stacks
             // have no affinity so there's no need to keep intentionally unused
             // warm slots around.
-            index_allocator: IndexAllocator::new(config.limits.count, 0),
+            index_allocator: ModuleAffinityIndexAllocator::new(config.limits.count, 0),
         })
     }
 
@@ -572,7 +572,7 @@ impl Default for PoolingInstanceAllocatorConfig {
 pub struct PoolingInstanceAllocator {
     instance_size: usize,
     max_instances: usize,
-    index_allocator: IndexAllocator,
+    index_allocator: ModuleAffinityIndexAllocator,
     memories: MemoryPool,
     tables: TablePool,
     linear_memory_keep_resident: usize,
@@ -596,7 +596,7 @@ impl PoolingInstanceAllocator {
         Ok(Self {
             instance_size: round_up_to_pow2(config.limits.size, mem::align_of::<Instance>()),
             max_instances,
-            index_allocator: IndexAllocator::new(config.limits.count, config.max_unused_warm_slots),
+            index_allocator: ModuleAffinityIndexAllocator::new(config.limits.count, config.max_unused_warm_slots),
             memories: MemoryPool::new(&config.limits, tunables)?,
             tables: TablePool::new(&config.limits)?,
             linear_memory_keep_resident: config.linear_memory_keep_resident,
