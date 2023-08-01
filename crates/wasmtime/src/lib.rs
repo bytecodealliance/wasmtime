@@ -405,6 +405,7 @@ mod memory;
 mod module;
 mod profiling;
 mod r#ref;
+mod resources;
 mod signatures;
 mod store;
 mod trampoline;
@@ -424,6 +425,7 @@ pub use crate::memory::*;
 pub use crate::module::Module;
 pub use crate::profiling::GuestProfiler;
 pub use crate::r#ref::ExternRef;
+pub use crate::resources::*;
 #[cfg(feature = "async")]
 pub use crate::store::CallHookHandler;
 pub use crate::store::{
