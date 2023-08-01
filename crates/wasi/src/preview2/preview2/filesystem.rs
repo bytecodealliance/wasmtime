@@ -843,42 +843,95 @@ impl<T: WasiView> types::Host for T {
         a: types::Descriptor,
         b: types::Descriptor,
     ) -> anyhow::Result<bool> {
-        async fn get_metadata(
-            table: &Table,
-            fd: types::Descriptor,
-        ) -> anyhow::Result<cap_std::fs::Metadata> {
-            if table.is_file(fd) {
-                let f = table.get_file(fd)?;
-                // No permissions check on stat: if opened, allowed to stat it
-                Ok(f.spawn_blocking(|f| f.metadata()).await?)
-            } else if table.is_dir(fd) {
-                let d = table.get_dir(fd)?;
-                // No permissions check on stat: if opened, allowed to stat it
-                Ok(d.spawn_blocking(|d| d.dir_metadata()).await?)
-            } else {
-                Err(ErrorCode::BadDescriptor.into())
-            }
-        }
-
+        use cap_fs_ext::MetadataExt;
         let table = self.table();
-        let meta_a = get_metadata(table, a).await?;
-        let meta_b = get_metadata(table, b).await?;
-        Ok(meta_a.device() == meta_b.device() && meta_a.inode() == meta_b.inode())
+        let meta_a = get_descriptor_metadata(table, a).await?;
+        let meta_b = get_descriptor_metadata(table, b).await?;
+        if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
+            // MetadataHashValue does not derive eq, so use a pair of
+            // comparisons to check equality:
+            debug_assert_eq!(
+                calculate_metadata_hash(&meta_a).upper,
+                calculate_metadata_hash(&meta_b).upper
+            );
+            debug_assert_eq!(
+                calculate_metadata_hash(&meta_a).lower,
+                calculate_metadata_hash(&meta_b).lower
+            );
+            Ok(true)
+        } else {
+            // Hash collisions are possible, so don't assert the negative here
+            Ok(false)
+        }
     }
     async fn metadata_hash(
         &mut self,
         fd: types::Descriptor,
     ) -> Result<types::MetadataHashValue, types::Error> {
-        todo!()
+        let table = self.table();
+        let meta = get_descriptor_metadata(table, fd).await?;
+        Ok(calculate_metadata_hash(&meta))
     }
     async fn metadata_hash_at(
         &mut self,
         fd: types::Descriptor,
-        _path_flags: types::PathFlags,
+        path_flags: types::PathFlags,
         path: String,
     ) -> Result<types::MetadataHashValue, types::Error> {
-        todo!()
+        let table = self.table();
+        let d = table.get_dir(fd)?;
+        // No permissions check on metadata: if dir opened, allowed to stat it
+        let meta = d
+            .spawn_blocking(move |d| {
+                if symlink_follow(path_flags) {
+                    d.metadata(path)
+                } else {
+                    d.symlink_metadata(path)
+                }
+            })
+            .await?;
+        Ok(calculate_metadata_hash(&meta))
     }
+}
+
+async fn get_descriptor_metadata(
+    table: &Table,
+    fd: types::Descriptor,
+) -> Result<cap_std::fs::Metadata, types::Error> {
+    if table.is_file(fd) {
+        let f = table.get_file(fd)?;
+        // No permissions check on metadata: if opened, allowed to stat it
+        Ok(f.spawn_blocking(|f| f.metadata()).await?)
+    } else if table.is_dir(fd) {
+        let d = table.get_dir(fd)?;
+        // No permissions check on metadata: if opened, allowed to stat it
+        Ok(d.spawn_blocking(|d| d.dir_metadata()).await?)
+    } else {
+        Err(ErrorCode::BadDescriptor.into())
+    }
+}
+
+fn calculate_metadata_hash(meta: &cap_std::fs::Metadata) -> types::MetadataHashValue {
+    use cap_fs_ext::MetadataExt;
+    // Without incurring any deps, std provides us with a 64 bit hash
+    // function:
+    use std::hash::{BuildHasher, Hasher};
+    let s = std::collections::hash_map::RandomState::new();
+    let mut hasher = s.build_hasher();
+    hasher.write_u64(meta.dev());
+    hasher.write_u64(meta.ino());
+    let lower = hasher.finish();
+    // MetadataHashValue has a pair of 64-bit members for representing a
+    // single 128-bit number. However, we only have 64 bits of entropy. To
+    // synthesize the upper 64 bits, lets xor the lower half with an arbitrary
+    // constant, in this case the 64 bit integer corresponding to the IEEE
+    // double representation of (a number as close as possible to) pi.
+    // This seems better than just repeating the same bits in the upper and
+    // lower parts outright, which could make folks wonder if the struct was
+    // mangled in the ABI, or worse yet, lead to consumers of this interface
+    // expecting them to be equal.
+    let upper = lower ^ 4614256656552045848u64;
+    types::MetadataHashValue { lower, upper }
 }
 
 #[cfg(unix)]
