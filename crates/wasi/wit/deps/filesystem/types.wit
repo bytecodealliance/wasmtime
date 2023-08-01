@@ -785,7 +785,7 @@ interface types {
     /// same device (`st_dev`) and inode (`st_ino` or `d_ino`) numbers.
     /// wasi-filesystem does not expose device and inode numbers, so this function
     /// may be used instead.
-    is-same-object: func(other: descriptor) -> bool
+    is-same-object: func(this: descriptor, other: descriptor) -> bool
 
     /// Return a hash of the metadata associated with a filesystem object referred
     /// to by a descriptor.

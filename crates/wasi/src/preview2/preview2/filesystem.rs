@@ -255,8 +255,6 @@ impl<T: WasiView> types::Host for T {
         &mut self,
         fd: types::Descriptor,
     ) -> Result<types::DirectoryEntryStream, types::Error> {
-        use cap_fs_ext::{DirEntryExt, MetadataExt};
-
         let table = self.table_mut();
         let d = table.get_dir(fd)?;
         if !d.perms.contains(DirPerms::READ) {
@@ -275,21 +273,20 @@ impl<T: WasiView> types::Host for T {
 
         let entries = d
             .spawn_blocking(|d| {
-                // Both `entries` and `full_metadata` perform syscalls, which is why they are done
-                // within this `block` call, rather than delay calculating the full metadata
+                // Both `entries` and `metadata` perform syscalls, which is why they are done
+                // within this `block` call, rather than delay calculating the metadata
                 // for entries when they're demanded later in the iterator chain.
                 Ok::<_, std::io::Error>(
                     d.entries()?
                         .map(|entry| {
                             let entry = entry?;
-                            let meta = entry.full_metadata()?;
-                            let inode = Some(meta.ino());
+                            let meta = entry.metadata()?;
                             let type_ = descriptortype_from(meta.file_type());
                             let name = entry
                                 .file_name()
                                 .into_string()
                                 .map_err(|_| ReaddirError::IllegalSequence)?;
-                            Ok(types::DirectoryEntry { inode, type_, name })
+                            Ok(types::DirectoryEntry { type_, name })
                         })
                         .collect::<Vec<Result<types::DirectoryEntry, ReaddirError>>>(),
                 )
@@ -840,6 +837,28 @@ impl<T: WasiView> types::Host for T {
 
         Ok(index)
     }
+
+    async fn is_same_object(
+        &mut self,
+        a: types::Descriptor,
+        b: types::Descriptor,
+    ) -> anyhow::Result<bool> {
+        todo!()
+    }
+    async fn metadata_hash(
+        &mut self,
+        fd: types::Descriptor,
+    ) -> Result<types::MetadataHashValue, types::Error> {
+        todo!()
+    }
+    async fn metadata_hash_at(
+        &mut self,
+        fd: types::Descriptor,
+        _path_flags: types::PathFlags,
+        path: String,
+    ) -> Result<types::MetadataHashValue, types::Error> {
+        todo!()
+    }
 }
 
 #[cfg(unix)]
@@ -985,10 +1004,6 @@ fn datetime_from(t: std::time::SystemTime) -> wall_clock::Datetime {
 fn descriptorstat_from(meta: cap_std::fs::Metadata) -> types::DescriptorStat {
     use cap_fs_ext::MetadataExt;
     types::DescriptorStat {
-        // FIXME didn't we agree that the wit could be changed to make the device and ino fields
-        // optional?
-        device: meta.dev(),
-        inode: meta.ino(),
         type_: descriptortype_from(meta.file_type()),
         link_count: meta.nlink(),
         size: meta.len(),

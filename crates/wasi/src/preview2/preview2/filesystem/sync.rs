@@ -388,6 +388,33 @@ impl<T: async_filesystem::Host> sync_filesystem::Host for T {
             async_filesystem::Host::append_via_stream(self, fd).await
         })?)
     }
+
+    fn is_same_object(
+        &mut self,
+        a: sync_filesystem::Descriptor,
+        b: sync_filesystem::Descriptor,
+    ) -> anyhow::Result<bool> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::is_same_object(self, a, b).await
+        })?)
+    }
+    fn metadata_hash(
+        &mut self,
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<sync_filesystem::MetadataHashValue, sync_filesystem::Error> {
+        Ok(in_tokio(async { async_filesystem::Host::metadata_hash(self, fd).await })?.into())
+    }
+    fn metadata_hash_at(
+        &mut self,
+        fd: sync_filesystem::Descriptor,
+        path_flags: sync_filesystem::PathFlags,
+        path: String,
+    ) -> Result<sync_filesystem::MetadataHashValue, sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::metadata_hash_at(self, fd, path_flags.into(), path).await
+        })?
+        .into())
+    }
 }
 
 impl From<async_filesystem::ErrorCode> for sync_filesystem::ErrorCode {
@@ -502,7 +529,6 @@ impl From<async_filesystem::DescriptorType> for sync_filesystem::DescriptorType 
 impl From<async_filesystem::DirectoryEntry> for sync_filesystem::DirectoryEntry {
     fn from(other: async_filesystem::DirectoryEntry) -> Self {
         Self {
-            inode: other.inode,
             type_: other.type_.into(),
             name: other.name,
         }
@@ -512,8 +538,6 @@ impl From<async_filesystem::DirectoryEntry> for sync_filesystem::DirectoryEntry 
 impl From<async_filesystem::DescriptorStat> for sync_filesystem::DescriptorStat {
     fn from(other: async_filesystem::DescriptorStat) -> Self {
         Self {
-            device: other.device,
-            inode: other.inode,
             type_: other.type_.into(),
             link_count: other.link_count,
             size: other.size,
@@ -608,6 +632,14 @@ impl From<sync_filesystem::AccessType> for async_filesystem::AccessType {
         match other {
             AccessType::Access(modes) => Self::Access(modes.into()),
             AccessType::Exists => Self::Exists,
+        }
+    }
+}
+impl From<async_filesystem::MetadataHashValue> for sync_filesystem::MetadataHashValue {
+    fn from(other: async_filesystem::MetadataHashValue) -> Self {
+        Self {
+            lower: other.lower,
+            upper: other.upper,
         }
     }
 }

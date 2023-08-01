@@ -974,8 +974,6 @@ impl<
             }
             Descriptor::PreopenDirectory((fd, _)) | Descriptor::File(File { fd, .. }) => {
                 let filesystem::DescriptorStat {
-                    device: dev,
-                    inode: ino,
                     type_,
                     link_count: nlink,
                     size,
@@ -987,13 +985,18 @@ impl<
                         .context("failed to call `stat`")
                         .unwrap_or_else(types::Error::trap)
                 })?;
+                let metadata_hash = self.metadata_hash(fd).await.map_err(|e| {
+                    e.try_into()
+                        .context("failed to call `metadata_hash`")
+                        .unwrap_or_else(types::Error::trap)
+                })?;
                 let filetype = type_.try_into().map_err(types::Error::trap)?;
                 let atim = data_access_timestamp.try_into()?;
                 let mtim = data_modification_timestamp.try_into()?;
                 let ctim = status_change_timestamp.try_into()?;
                 Ok(types::Filestat {
-                    dev,
-                    ino,
+                    dev: 1,
+                    ino: metadata_hash.lower,
                     filetype,
                     nlink,
                     size,
@@ -1372,20 +1375,14 @@ impl<
                 .context("failed to call `read-directory`")
                 .unwrap_or_else(types::Error::trap)
         })?;
-        let filesystem::DescriptorStat {
-            inode: fd_inode, ..
-        } = self.stat(fd).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `stat`")
-                .unwrap_or_else(types::Error::trap)
-        })?;
+        let dir_metadata_hash = self.metadata_hash(fd).await?;
         let cookie = cookie.try_into().map_err(|_| types::Errno::Overflow)?;
 
         let head = [
             (
                 types::Dirent {
                     d_next: 1u64.to_le(),
-                    d_ino: fd_inode.to_le(),
+                    d_ino: dir_metadata_hash.lower.to_le(),
                     d_type: types::Filetype::Directory,
                     d_namlen: 1u32.to_le(),
                 },
@@ -1394,7 +1391,7 @@ impl<
             (
                 types::Dirent {
                     d_next: 2u64.to_le(),
-                    d_ino: fd_inode.to_le(), // NOTE: incorrect, but legacy implementation returns `fd` inode here
+                    d_ino: dir_metadata_hash.lower.to_le(), // NOTE: incorrect, but legacy implementation returns `fd` inode here
                     d_type: types::Filetype::Directory,
                     d_namlen: 2u32.to_le(),
                 },
@@ -1411,11 +1408,14 @@ impl<
             .into_iter()
             .zip(3u64..)
             .map(|(entry, d_next)| {
-                let filesystem::DirectoryEntry { inode, type_, name } = entry.map_err(|e| {
+                let filesystem::DirectoryEntry { type_, name } = entry.map_err(|e| {
                     e.try_into()
                         .context("failed to inspect `read-directory` entry")
                         .unwrap_or_else(types::Error::trap)
                 })?;
+                let dir_metadata_hash = self
+                    .metadata_hash_at(fd, types::PathFlags::idk, name.clone())
+                    .await?;
                 let d_type = type_.try_into().map_err(types::Error::trap)?;
                 let d_namlen: u32 = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
                 Ok((
