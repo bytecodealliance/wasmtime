@@ -1128,7 +1128,7 @@ impl ReaddirIterator {
 
 impl IntoIterator for ReaddirIterator {
     type Item = Result<types::DirectoryEntry, types::Error>;
-    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + Send>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_inner().unwrap()

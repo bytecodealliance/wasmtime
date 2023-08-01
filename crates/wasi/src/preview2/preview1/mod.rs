@@ -1375,7 +1375,11 @@ impl<
                 .context("failed to call `read-directory`")
                 .unwrap_or_else(types::Error::trap)
         })?;
-        let dir_metadata_hash = self.metadata_hash(fd).await?;
+        let dir_metadata_hash = self.metadata_hash(fd).await.map_err(|e| {
+            e.try_into()
+                .context("failed to call `metadata-hash`")
+                .unwrap_or_else(types::Error::trap)
+        })?;
         let cookie = cookie.try_into().map_err(|_| types::Errno::Overflow)?;
 
         let head = [
@@ -1397,37 +1401,41 @@ impl<
                 },
                 "..".into(),
             ),
-        ]
-        .into_iter()
-        .map(Ok::<_, types::Error>);
+        ];
 
-        let dir = self
+        let mut dir = Vec::new();
+        for (entry, d_next) in self
             .table_mut()
             // remove iterator from table and use it directly:
             .delete_readdir(stream)?
             .into_iter()
             .zip(3u64..)
-            .map(|(entry, d_next)| {
-                let filesystem::DirectoryEntry { type_, name } = entry.map_err(|e| {
+        {
+            let filesystem::DirectoryEntry { type_, name } = entry.map_err(|e| {
+                e.try_into()
+                    .context("failed to inspect `read-directory` entry")
+                    .unwrap_or_else(types::Error::trap)
+            })?;
+            let metadata_hash = self
+                .metadata_hash_at(fd, filesystem::PathFlags::empty(), name.clone())
+                .await
+                .map_err(|e| {
                     e.try_into()
-                        .context("failed to inspect `read-directory` entry")
+                        .context("failed to call `metadata-hash-at`")
                         .unwrap_or_else(types::Error::trap)
                 })?;
-                let dir_metadata_hash = self
-                    .metadata_hash_at(fd, filesystem::PathFlags::empty, name.clone())
-                    .await?;
-                let d_type = type_.try_into().map_err(types::Error::trap)?;
-                let d_namlen: u32 = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
-                Ok((
-                    types::Dirent {
-                        d_next: d_next.to_le(),
-                        d_ino: inode.unwrap_or_default().to_le(),
-                        d_type, // endian-invariant
-                        d_namlen: d_namlen.to_le(),
-                    },
-                    name,
-                ))
-            });
+            let d_type = type_.try_into().map_err(types::Error::trap)?;
+            let d_namlen: u32 = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
+            dir.push((
+                types::Dirent {
+                    d_next: d_next.to_le(),
+                    d_ino: metadata_hash.lower.to_le(),
+                    d_type, // endian-invariant
+                    d_namlen: d_namlen.to_le(),
+                },
+                name,
+            ))
+        }
 
         // assume that `types::Dirent` size always fits in `u32`
         const DIRENT_SIZE: u32 = size_of::<types::Dirent>() as _;
@@ -1438,9 +1446,7 @@ impl<
         );
         let mut buf = *buf;
         let mut cap = buf_len;
-        for entry in head.chain(dir).skip(cookie) {
-            let (ref entry, mut path) = entry?;
-
+        for (ref entry, mut path) in head.into_iter().chain(dir.into_iter()).skip(cookie) {
             assert_eq!(
                 1,
                 size_of_val(&entry.d_type),
@@ -1495,26 +1501,35 @@ impl<
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
         let filesystem::DescriptorStat {
-            device: dev,
-            inode: ino,
             type_,
             link_count: nlink,
             size,
             data_access_timestamp,
             data_modification_timestamp,
             status_change_timestamp,
-        } = self.stat_at(dirfd, flags.into(), path).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `stat-at`")
-                .unwrap_or_else(types::Error::trap)
-        })?;
+        } = self
+            .stat_at(dirfd, flags.into(), path.clone())
+            .await
+            .map_err(|e| {
+                e.try_into()
+                    .context("failed to call `stat-at`")
+                    .unwrap_or_else(types::Error::trap)
+            })?;
+        let metadata_hash = self
+            .metadata_hash_at(dirfd, flags.into(), path)
+            .await
+            .map_err(|e| {
+                e.try_into()
+                    .context("failed to call `metadata-hash-at`")
+                    .unwrap_or_else(types::Error::trap)
+            })?;
         let filetype = type_.try_into().map_err(types::Error::trap)?;
         let atim = data_access_timestamp.try_into()?;
         let mtim = data_modification_timestamp.try_into()?;
         let ctim = status_change_timestamp.try_into()?;
         Ok(types::Filestat {
-            dev,
-            ino,
+            dev: 1,
+            ino: metadata_hash.lower.to_le(),
             filetype,
             nlink,
             size,
