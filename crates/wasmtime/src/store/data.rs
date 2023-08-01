@@ -96,6 +96,14 @@ impl StoreData {
         true
     }
 
+    pub fn iter<T>(&self) -> impl ExactSizeIterator<Item = Stored<T>>
+    where
+        T: StoredData,
+    {
+        let id = self.id;
+        (0..T::list(self).len()).map(move |i| Stored::new(id, i))
+    }
+
     pub(crate) fn reserve_funcs(&mut self, count: usize) {
         self.funcs.reserve(count);
     }
