@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_coredump_attached_to_error() -> Result<()> {
     let mut config = Config::default();
     config.coredump_on_trap(true);
@@ -34,6 +35,7 @@ fn test_coredump_attached_to_error() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_coredump_has_stack() -> Result<()> {
     let mut config = Config::default();
     config.coredump_on_trap(true);
@@ -68,6 +70,7 @@ fn test_coredump_has_stack() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_coredump_has_modules_and_instances() -> Result<()> {
     let mut config = Config::default();
     config.coredump_on_trap(true);
@@ -106,6 +109,7 @@ fn test_coredump_has_modules_and_instances() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_coredump_has_import_globals_and_memory() -> Result<()> {
     let mut config = Config::default();
     config.coredump_on_trap(true);
