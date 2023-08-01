@@ -9,17 +9,8 @@ use filesystem::ErrorCode;
 mod sync;
 
 impl From<TableError> for filesystem::Error {
-    fn from(error: TableError) -> filesystem::Error {
-        match error {
-            TableError::Full => filesystem::Error::trap(anyhow::anyhow!(error)),
-            TableError::NotPresent | TableError::WrongType => ErrorCode::BadDescriptor.into(),
-        }
-    }
-}
-
-impl From<tokio::task::JoinError> for filesystem::Error {
-    fn from(error: tokio::task::JoinError) -> Self {
-        Self::trap(anyhow::anyhow!(error))
+    fn from(error: TableError) -> Self {
+        Self::trap(error.into())
     }
 }
 
