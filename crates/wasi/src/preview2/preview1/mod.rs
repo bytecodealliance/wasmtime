@@ -1,6 +1,6 @@
-use crate::preview2::bindings::cli_base::{preopens, stderr, stdin, stdout};
+use crate::preview2::bindings::cli_base::{stderr, stdin, stdout};
 use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
-use crate::preview2::bindings::filesystem::filesystem;
+use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
 use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::preview2::filesystem::TableReaddirExt;
@@ -36,9 +36,9 @@ struct File {
 
 #[derive(Clone, Debug)]
 enum Descriptor {
-    Stdin(preopens::InputStream),
-    Stdout(preopens::OutputStream),
-    Stderr(preopens::OutputStream),
+    Stdin(streams::InputStream),
+    Stdout(streams::OutputStream),
+    Stderr(streams::OutputStream),
     PreopenDirectory((filesystem::Descriptor, String)),
     File(File),
 }
@@ -319,8 +319,8 @@ pub fn add_to_linker<
     T: WasiPreview1View
         + bindings::cli_base::environment::Host
         + bindings::cli_base::exit::Host
-        + bindings::cli_base::preopens::Host
-        + bindings::filesystem::filesystem::Host
+        + bindings::filesystem::types::Host
+        + bindings::filesystem::preopens::Host
         + bindings::sync_io::poll::poll::Host
         + bindings::random::random::Host
         + bindings::io::streams::Host
@@ -627,9 +627,9 @@ impl<
         T: WasiPreview1View
             + bindings::cli_base::environment::Host
             + bindings::cli_base::exit::Host
-            + bindings::cli_base::preopens::Host
-            + bindings::filesystem::filesystem::Host
-            + bindings::sync_io::poll::poll::Host
+            + bindings::filesystem::preopens::Host
+            + bindings::filesystem::types::Host
+            + bindings::poll::poll::Host
             + bindings::random::random::Host
             + bindings::io::streams::Host
             + bindings::clocks::monotonic_clock::Host

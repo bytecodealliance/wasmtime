@@ -1,5 +1,5 @@
-use crate::preview2::bindings::filesystem::filesystem as async_filesystem;
-use crate::preview2::bindings::sync_io::filesystem::filesystem as sync_filesystem;
+use crate::preview2::bindings::filesystem::types as async_filesystem;
+use crate::preview2::bindings::sync_io::filesystem::types as sync_filesystem;
 use crate::preview2::bindings::sync_io::io::streams;
 use crate::preview2::in_tokio;
 
