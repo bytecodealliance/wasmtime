@@ -929,7 +929,7 @@ pub unsafe extern "C" fn fd_readdir(
                     state,
                     cookie,
                     use_cache: true,
-                    fd,
+                    dir_descriptor: dir.fd,
                 }
             }
 
@@ -944,7 +944,7 @@ pub unsafe extern "C" fn fd_readdir(
                     cookie: wasi::DIRCOOKIE_START,
                     use_cache: false,
                     stream: DirectoryEntryStream(filesystem::read_directory(dir.fd)?),
-                    fd,
+                    dir_descriptor: dir.fd,
                 };
 
                 // Skip to the entry that is requested by the `cookie`
@@ -1023,7 +1023,7 @@ pub unsafe extern "C" fn fd_readdir(
         use_cache: bool,
         cookie: Dircookie,
         stream: DirectoryEntryStream,
-        fd: wasi::Fd,
+        dir_descriptor: filesystem::Descriptor,
     }
 
     impl<'a> Iterator for DirectoryEntryIterator<'a> {
@@ -1040,7 +1040,7 @@ pub unsafe extern "C" fn fd_readdir(
             // Preview2 excludes them, so re-add them.
             match current_cookie {
                 0 => {
-                    let metadata_hash = match filesystem::metadata_hash(self.fd) {
+                    let metadata_hash = match filesystem::metadata_hash(self.dir_descriptor) {
                         Ok(h) => h,
                         Err(e) => return Some(Err(e.into())),
                     };
@@ -1087,10 +1087,13 @@ pub unsafe extern "C" fn fd_readdir(
             };
 
             let filesystem::DirectoryEntry { type_, name } = entry;
-            let d_ino =
-                filesystem::metadata_hash_at(self.fd, filesystem::PathFlags::empty(), &name)
-                    .map(|h| h.lower)
-                    .unwrap_or(0);
+            let d_ino = filesystem::metadata_hash_at(
+                self.dir_descriptor,
+                filesystem::PathFlags::empty(),
+                &name,
+            )
+            .map(|h| h.lower)
+            .unwrap_or(0);
             let name = ManuallyDrop::new(name);
             let dirent = wasi::Dirent {
                 d_next: self.cookie,
