@@ -38,7 +38,6 @@ unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
     );
 
     wasi::fd_close(f_readonly).expect("close readonly");
-    drop(f_readonly);
 
     // =============== WRITE ONLY ==================
     let f_writeonly = wasi::path_open(dir_fd, 0, "file", 0, wasi::RIGHTS_FD_WRITE, 0, 0)
@@ -64,7 +63,6 @@ unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
     assert_eq!(bytes_written, write_buffer.len());
 
     wasi::fd_close(f_writeonly).expect("close writeonly");
-    drop(f_writeonly);
 
     // ============== READ WRITE =======================
 
@@ -111,7 +109,6 @@ unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
     );
 
     wasi::fd_close(f_readwrite).expect("close readwrite");
-    drop(f_readwrite);
 
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
