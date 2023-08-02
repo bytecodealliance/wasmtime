@@ -19,6 +19,7 @@ struct Builder {
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
+    valgrind: bool,
 }
 
 #[derive(Clone, Default)]
@@ -40,6 +41,7 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
         linkopts: LinkOptions::default(),
         cache_store: None,
         clif_dir: None,
+        valgrind: false,
     })
 }
 
@@ -83,6 +85,7 @@ impl CompilerBuilder for Builder {
             self.cache_store.clone(),
             self.linkopts.clone(),
             self.clif_dir.clone(),
+            self.valgrind,
         )))
     }
 
@@ -96,6 +99,10 @@ impl CompilerBuilder for Builder {
     ) -> Result<()> {
         self.cache_store = Some(cache_store);
         Ok(())
+    }
+
+    fn valgrind(&mut self, enable: bool) {
+        self.valgrind = enable;
     }
 }
 

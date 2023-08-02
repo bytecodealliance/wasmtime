@@ -268,7 +268,7 @@ component-model = [
   "wasmtime-cli-flags/component-model"
 ]
 winch = ["wasmtime/winch"]
-valgrind = ["wasmtime-runtime/valgrind"]
+valgrind = ["wasmtime/valgrind"]
 
 [[test]]
 name = "host_segfault"

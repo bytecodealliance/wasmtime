@@ -51,6 +51,9 @@ pub struct InstanceAllocationRequest<'a> {
     /// We use a number of `PhantomPinned` declarations to indicate this to the
     /// compiler. More info on this in `wasmtime/src/store.rs`
     pub store: StorePtr,
+
+    /// Indicates '--valgrind' flag.
+    pub valgrind: bool,
 }
 
 /// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct

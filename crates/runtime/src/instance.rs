@@ -143,7 +143,7 @@ pub struct Instance {
     vmctx_self_reference: SendSyncPtr<VMContext>,
 
     #[cfg(feature = "valgrind")]
-    pub(crate) valgrind_state: Valgrind,
+    pub(crate) valgrind_state: Option<Valgrind>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -193,11 +193,15 @@ impl Instance {
                 },
                 #[cfg(feature = "valgrind")]
                 valgrind_state: {
-                    const MiB: usize = 1024 * 1024; // 1 MiB
-                    // ad-hoc testing seems to show...
-                    // TODO: how do we determine this more consistently?
-                    // const C_STACK_SIZE: usize = 70863;
-                    Valgrind::new(128 * MiB)
+                    if req.valgrind {
+                        const MiB: usize = 1024 * 1024; // 1 MiB
+                        // ad-hoc testing seems to show...
+                        // TODO: how do we determine this more consistently?
+                        // const C_STACK_SIZE: usize = 70863;
+                        Some(Valgrind::new(128 * MiB))
+                    } else {
+                        None
+                    }
                 },
                 // not sure how to access mem & stack size?
             },
@@ -1143,9 +1147,11 @@ impl Instance {
                 GlobalInit::I32Const(x) => {
                     let index = module.global_index(index);
                     if index.index() == 0 {
-                        // println!("stack size: {}", x);
-                        #[cfg(feature = "valgrind")]
-                        self.valgrind_state.set_stack_size(x as usize);
+                        #[cfg(feature = "valgrind")] {
+                            if let Some(valgrind) = &mut self.valgrind_state {
+                                valgrind.set_stack_size(x as usize);
+                            }
+                        }
                     }
                     *(*to).as_i32_mut() = x;
                 }

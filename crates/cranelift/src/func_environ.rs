@@ -153,6 +153,8 @@ pub struct FuncEnvironment<'module_environment> {
     epoch_ptr_var: cranelift_frontend::Variable,
 
     fuel_consumed: i64,
+
+    valgrind: bool,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -161,6 +163,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         translation: &'module_environment ModuleTranslation<'module_environment>,
         types: &'module_environment ModuleTypes,
         tunables: &'module_environment Tunables,
+        valgrind: bool,
     ) -> Self {
         let builtin_function_signatures = BuiltinFunctionSignatures::new(
             isa.pointer_type(),
@@ -189,6 +192,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
             fuel_consumed: 1,
+            valgrind,
         }
     }
 
@@ -2295,24 +2299,26 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 retvals: &[Value],
                 builder: &mut FunctionBuilder,
             ) {
-                let block = builder.func.layout.entry_block().unwrap();
-                let args = builder.func.dfg.block_params(block);
-                let func_index = match &builder.func.name {
-                    UserFuncName::User(user) => {
-                        FuncIndex::from_u32(user.index)
+                if self.valgrind {
+                    let block = builder.func.layout.entry_block().unwrap();
+                    let args = builder.func.dfg.block_params(block);
+                    let func_index = match &builder.func.name {
+                        UserFuncName::User(user) => {
+                            FuncIndex::from_u32(user.index)
+                        }
+                        _ => {
+                            unreachable!()
+                        }
+                    };
+                    let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
+                    if func_name == "malloc" {
+                        self.check_malloc_exit(builder, retvals);
+                    } else if func_name == "free" {
+                        self.check_free_exit(builder);
                     }
-                    _ => {
-                        unreachable!()
-                    }
-                };
-                let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
-                // println!("name: {}, index: {:?}", func_name, func_index);
-                if func_name == "malloc" {
-                    self.check_malloc_exit(builder, retvals);
-                } else if func_name == "free" {
-                    self.check_free_exit(builder);
                 }
             }
+            
         } else {
             fn handle_before_return(&mut self, _retvals: &[Value], builder: &mut FunctionBuilder,
             ) {
@@ -2325,17 +2331,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     cfg_if! {
         if #[cfg(feature = "valgrind")] {
             fn before_load(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
-                let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
-                let (vmctx, check_load) = self.translate_load_builtin_function_address(
-                    &mut builder.cursor(),
-                    BuiltinFunctionIndex::check_load(),
-                );
-                let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
-                let offset_val = builder.ins().iconst(I64, offset as i64);
-                let addr_and_offset = builder.ins().iadd(offset_val, addr);
-                builder
-                    .ins()
-                    .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
+                if self.valgrind {
+                    let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
+                    let (vmctx, check_load) = self.translate_load_builtin_function_address(
+                        &mut builder.cursor(),
+                        BuiltinFunctionIndex::check_load(),
+                    );
+                    let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
+                    let offset_val = builder.ins().iconst(I64, offset as i64);
+                    let addr_and_offset = builder.ins().iadd(offset_val, addr);
+                    builder
+                        .ins()
+                        .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
+                }
             }
         } else {
             fn before_load(&mut self, builder: &mut FunctionBuilder, _val_type: Type, _addr: ir::Value, _offset: u64) {
@@ -2348,16 +2356,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     cfg_if! {
         if #[cfg(feature = "valgrind")] {
             fn before_store(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
-                let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
-                let (vmctx, check_store) = self.translate_load_builtin_function_address(
-                    &mut builder.cursor(),
-                    BuiltinFunctionIndex::check_store(),
-                );
-                let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
-                let offset_val = builder.ins().iconst(I64, offset as i64);
-                builder
-                    .ins()
-                    .call_indirect(check_store_sig, check_store, &[vmctx, num_bytes, addr, offset_val]);
+                if self.valgrind {
+                    let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
+                    let (vmctx, check_store) = self.translate_load_builtin_function_address(
+                        &mut builder.cursor(),
+                        BuiltinFunctionIndex::check_store(),
+                    );
+                    let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
+                    let offset_val = builder.ins().iconst(I64, offset as i64);
+                    builder
+                        .ins()
+                        .call_indirect(check_store_sig, check_store, &[vmctx, num_bytes, addr, offset_val]);
+                }
+                
             }
         } else {
             fn before_store(&mut self, builder: &mut FunctionBuilder, _val_type: Type, _addr: ir::Value, _offset: u64) {
@@ -2369,15 +2380,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     cfg_if! {
         if #[cfg(feature = "valgrind")] {
             fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {
-                if global_index == 0 {
-                    let update_stack_pointer_sig = self.builtin_function_signatures.update_stack_pointer(builder.func);
-                    let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
-                        &mut builder.cursor(),
-                        BuiltinFunctionIndex::update_stack_pointer(),
-                    );
-                    builder
-                        .ins()
-                        .call_indirect(update_stack_pointer_sig, update_stack_pointer, &[vmctx, value]);
+                if self.valgrind {
+                    if global_index == 0 {
+                        let update_stack_pointer_sig = self.builtin_function_signatures.update_stack_pointer(builder.func);
+                        let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
+                            &mut builder.cursor(),
+                            BuiltinFunctionIndex::update_stack_pointer(),
+                        );
+                        builder
+                            .ins()
+                            .call_indirect(update_stack_pointer_sig, update_stack_pointer, &[vmctx, value]);
+                    }
                 }
             }
         } else {

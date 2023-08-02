@@ -2817,8 +2817,6 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
         Reachability::Reachable((f, i, b)) => (f, i, b),
     };
 
-    // TODO: Add a call: wasmtime_valgrind_load_hook(vmctx, wasm_index, memarg.offset)
-
     environ.before_load(builder, result_ty, wasm_index, memarg.offset);
 
     let (load, dfg) = builder
@@ -2844,7 +2842,6 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
         prepare_addr(memarg, mem_op_size(opcode, val_ty), builder, state, environ)?
     );
 
-    // TODO: add call to wasmtime_valgrind_store_hook(vmctx, wasm_index, memarg.offset)
     environ.before_store(builder, val_ty, wasm_index, memarg.offset);
     
     builder

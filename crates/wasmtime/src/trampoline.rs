@@ -47,6 +47,7 @@ fn create_handle(
                 host_state,
                 store: StorePtr::new(store.traitobj()),
                 runtime_info,
+                valgrind: false,
             },
         )?;
 

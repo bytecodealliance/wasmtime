@@ -498,6 +498,7 @@ impl<T> Store<T> {
                     imports: Default::default(),
                     store: StorePtr::empty(),
                     runtime_info: &shim,
+                    valgrind: engine.config().valgrind,
                 })
                 .expect("failed to allocate default callee");
 

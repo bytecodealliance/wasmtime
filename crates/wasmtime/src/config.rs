@@ -110,6 +110,7 @@ pub struct Config {
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
+    pub(crate) valgrind: bool,
 }
 
 /// User-provided configuration for the compiler.
@@ -123,6 +124,7 @@ struct CompilerConfig {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<std::path::PathBuf>,
+    valgrind: bool,
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -135,6 +137,7 @@ impl CompilerConfig {
             flags: HashSet::new(),
             cache_store: None,
             clif_dir: None,
+            valgrind: false,
         }
     }
 
@@ -199,6 +202,7 @@ impl Config {
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
+            valgrind: false,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
@@ -1450,6 +1454,13 @@ impl Config {
         self
     }
 
+    /// This option is disabled by default.
+    pub fn valgrind(&mut self, enable: bool) -> &mut Self {
+        self.valgrind = enable;
+        self.compiler_config.valgrind = enable;
+        self
+    }
+
     /// Configures the "guaranteed dense image size" for copy-on-write
     /// initialized memories.
     ///
@@ -1636,6 +1647,8 @@ impl Config {
         if let Some(cache_store) = &self.compiler_config.cache_store {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
+
+        compiler.valgrind(self.compiler_config.valgrind);
 
         Ok((self, compiler.build()?))
     }

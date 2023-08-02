@@ -494,22 +494,26 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
         unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
-            let result = instance.valgrind_state.malloc(addr as usize, len as usize);
-            instance.valgrind_state.memcheck_on();
-            match result {
-                Ok(()) => {
-                    Ok(0)
-                }
-                Err(DoubleMalloc { addr, len }) => {
-                    panic!("Double malloc at addr {} of size {}", addr, len)
-                }
-                Err(OutOfBounds { addr, len }) => {
-                    panic!("Malloc out of bounds at addr {} of size {}", addr, len);
-                }
-                _ => {
-                    panic!("unreachable")
+            //safe to unwrap bc function will never be called when valgrind_state == None
+            if let Some(valgrind_state) = &mut instance.valgrind_state {
+                let result = valgrind_state.malloc(addr as usize, len as usize);
+                valgrind_state.memcheck_on();
+                match result {
+                    Ok(()) => {
+                        return Ok(0);
+                    }
+                    Err(DoubleMalloc { addr, len }) => {
+                        panic!("Double malloc at addr {} of size {}", addr, len)
+                    }
+                    Err(OutOfBounds { addr, len }) => {
+                        panic!("Malloc out of bounds at addr {} of size {}", addr, len);
+                    }
+                    _ => {
+                        panic!("unreachable")
+                    }
                 }
             }
+            Ok(0)
         }
     } else {
         unsafe fn check_malloc(_instance: &mut Instance, _addr: u32, _len: u32) -> Result<u32> {
@@ -521,19 +525,22 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
         unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
-            let result = instance.valgrind_state.free(addr as usize);
-            instance.valgrind_state.memcheck_on();
-            match result {
-                Ok(()) => {
-                    Ok(0)
-                }
-                Err(InvalidFree { addr }) => {
-                    panic!("Invalid free at addr {}", addr)
-                }
-                _ => {
-                    panic!("unreachable")
+            if let Some(valgrind_state) = &mut instance.valgrind_state {
+                let result = valgrind_state.free(addr as usize);
+                valgrind_state.memcheck_on();
+                match result {
+                    Ok(()) => {
+                        return Ok(0);
+                    }
+                    Err(InvalidFree { addr }) => {
+                        panic!("Invalid free at addr {}", addr)
+                    }
+                    _ => {
+                        panic!("unreachable")
+                    }
                 }
             }
+            Ok(0)
         }
     } else {
         unsafe fn check_free(_instance: &mut Instance, _addr: u32) -> Result<u32> {
@@ -546,17 +553,19 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
         fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
-            let result = instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize);
-            match result {
-                Ok(()) => {}
-                Err(InvalidRead { addr, len }) => {
-                    panic!("Invalid load at addr {} of size {}", addr, len)
-                }
-                Err(OutOfBounds { addr, len }) => {
-                    panic!("Load out of bounds at addr {} of size {}", addr, len);
-                }
-                _ => {
-                    panic!("unreachable")
+            if let Some(valgrind_state) = &mut instance.valgrind_state {
+                let result = valgrind_state.read(addr as usize + offset as usize, num_bytes as usize);
+                match result {
+                    Ok(()) => {}
+                    Err(InvalidRead { addr, len }) => {
+                        panic!("Invalid load at addr {} of size {}", addr, len)
+                    }
+                    Err(OutOfBounds { addr, len }) => {
+                        panic!("Load out of bounds at addr {} of size {}", addr, len);
+                    }
+                    _ => {
+                        panic!("unreachable")
+                    }
                 }
             }
         }
@@ -568,17 +577,19 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
         fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
-            let result = instance.valgrind_state.write(addr as usize + offset as usize, num_bytes as usize);
-            match result {
-                Ok(()) => {}
-                Err(InvalidWrite { addr, len }) => {
-                    panic!("Invalid store at addr {} of size {}", addr, len)
-                }
-                Err(OutOfBounds { addr, len }) => {
-                    panic!("Store out of bounds at addr {} of size {}", addr, len);
-                }
-                _ => {
-                    panic!("unreachable")
+            if let Some(valgrind_state) = &mut instance.valgrind_state {
+                let result = valgrind_state.write(addr as usize + offset as usize, num_bytes as usize);
+                match result {
+                    Ok(()) => {}
+                    Err(InvalidWrite { addr, len }) => {
+                        panic!("Invalid store at addr {} of size {}", addr, len)
+                    }
+                    Err(OutOfBounds { addr, len }) => {
+                        panic!("Store out of bounds at addr {} of size {}", addr, len);
+                    }
+                    _ => {
+                        panic!("unreachable")
+                    }
                 }
             }
         }
@@ -590,7 +601,9 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
         fn malloc_start(instance: &mut Instance) {
-            instance.valgrind_state.memcheck_off();
+            if let Some(valgrind_state) = &mut instance.valgrind_state {
+                valgrind_state.memcheck_off();
+            }
         }
     } else {
         fn malloc_start(_instance: &mut Instance) {}
@@ -600,7 +613,9 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
         fn free_start(instance: &mut Instance) {
-            instance.valgrind_state.memcheck_off();
+            if let Some(valgrind_state) = &mut instance.valgrind_state {
+                valgrind_state.memcheck_off();
+            }
         }
     } else {
         fn free_start(_instance: &mut Instance) {}
@@ -610,7 +625,9 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
         fn update_stack_pointer(instance: &mut Instance, value: u32) {
-            // instance.valgrind_state.update_stack_pointer(value as usize);
+            if let Some(valgrind_state) = &mut instance.valgrind_state {
+                // instance.valgrind_state.update_stack_pointer(value as usize);
+            }
         }
     } else {
         fn update_stack_pointer(_instance: &mut Instance, _value: u32) {}

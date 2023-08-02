@@ -134,3 +134,5 @@ component-model = [
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
 ]
+
+valgrind = ["wasmtime-runtime/valgrind", "wasmtime-cranelift/valgrind"]

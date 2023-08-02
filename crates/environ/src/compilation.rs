@@ -124,6 +124,9 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
 
     /// Builds a new [`Compiler`] object from this configuration.
     fn build(&self) -> Result<Box<dyn Compiler>>;
+
+    ///
+    fn valgrind(&mut self, enable: bool) {}
 }
 
 /// Description of compiler settings returned by [`CompilerBuilder::settings`].

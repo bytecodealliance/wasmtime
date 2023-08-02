@@ -253,6 +253,10 @@ pub struct RunCommand {
     /// memory, for example.
     #[clap(long)]
     trap_on_grow_failure: bool,
+
+    /// Run valgrind
+    #[clap(long)]
+    valgrind: bool,
 }
 
 enum Profile {
@@ -280,6 +284,8 @@ impl RunCommand {
             }
             None => {}
         }
+
+        config.valgrind(self.valgrind);
 
         let engine = Engine::new(&config)?;
 
