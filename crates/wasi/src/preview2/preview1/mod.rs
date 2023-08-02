@@ -665,10 +665,8 @@ impl<
             .map_err(types::Error::trap)?
             .into_iter()
             .try_fold((*argv, *argv_buf), |(argv, argv_buf), arg| -> Result<_> {
-                // NOTE: legacy implementation always returns Inval errno
-
-                argv.write(argv_buf).map_err(|_| types::Errno::Inval)?;
-                let argv = argv.add(1).map_err(|_| types::Errno::Inval)?;
+                argv.write(argv_buf)?;
+                let argv = argv.add(1)?;
 
                 let argv_buf = write_bytes(argv_buf, arg)?;
                 let argv_buf = write_byte(argv_buf, 0)?;
@@ -707,12 +705,8 @@ impl<
             .try_fold(
                 (*environ, *environ_buf),
                 |(environ, environ_buf), (k, v)| -> Result<_, types::Error> {
-                    // NOTE: legacy implementation always returns Inval errno
-
-                    environ
-                        .write(environ_buf)
-                        .map_err(|_| types::Errno::Inval)?;
-                    let environ = environ.add(1).map_err(|_| types::Errno::Inval)?;
+                    environ.write(environ_buf)?;
+                    let environ = environ.add(1)?;
 
                     let environ_buf = write_bytes(environ_buf, k)?;
                     let environ_buf = write_byte(environ_buf, b'=')?;
@@ -731,16 +725,12 @@ impl<
             .get_environment()
             .context("failed to call `get-environment`")
             .map_err(types::Error::trap)?;
-        let num = environ
-            .len()
-            .try_into()
-            .map_err(|_| types::Errno::Overflow)?;
+        let num = environ.len().try_into()?;
         let len = environ
             .iter()
             .map(|(k, v)| k.len() + 1 + v.len() + 1) // Key/value pairs are expected to be joined with `=`s, and terminated with `\0`s.
             .sum::<usize>()
-            .try_into()
-            .map_err(|_| types::Errno::Overflow)?;
+            .try_into()?;
         Ok((num, len))
     }
 
@@ -1753,7 +1743,7 @@ impl<
         path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
-        let path = path.as_cow().map_err(|_| types::Errno::Inval)?.to_string();
+        let path = path.as_cow()?.to_string();
         self.unlink_file_at(dirfd, path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `unlink-file-at`")
