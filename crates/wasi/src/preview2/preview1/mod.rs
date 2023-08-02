@@ -15,7 +15,7 @@ use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use wiggle::tracing::instrument;
-use wiggle::{GuestPtr, GuestSliceMut, GuestStrCow, GuestType};
+use wiggle::{GuestError, GuestPtr, GuestSliceMut, GuestStrCow, GuestType};
 
 #[derive(Clone, Debug)]
 struct File {
@@ -101,14 +101,14 @@ impl Descriptors {
     }
 
     /// Returns next descriptor number, which was never assigned
-    fn unused(&self) -> ErrnoResult<u32> {
+    fn unused(&self) -> Result<u32> {
         match self.last_key_value() {
             Some((fd, _)) => {
                 if let Some(fd) = fd.checked_add(1) {
                     return Ok(fd);
                 }
                 if self.len() == u32::MAX as usize {
-                    return Err(types::Errno::Loop);
+                    return Err(types::Errno::Loop.into());
                 }
                 // TODO: Optimize
                 Ok((0..u32::MAX)
@@ -131,7 +131,7 @@ impl Descriptors {
     /// Pushes the [Descriptor] returning corresponding number.
     /// This operation will try to reuse numbers previously removed via [`Self::remove`]
     /// and rely on [`Self::unused`] if no free numbers are recorded
-    fn push(&mut self, desc: Descriptor) -> ErrnoResult<u32> {
+    fn push(&mut self, desc: Descriptor) -> Result<u32> {
         let fd = if let Some(fd) = self.free.pop() {
             fd
         } else {
@@ -142,7 +142,7 @@ impl Descriptors {
     }
 
     /// Like [Self::push], but for [`File`]
-    fn push_file(&mut self, file: File) -> ErrnoResult<u32> {
+    fn push_file(&mut self, file: File) -> Result<u32> {
         self.push(Descriptor::File(file))
     }
 }
@@ -188,33 +188,35 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     /// # Errors
     ///
     /// Returns [`types::Errno::Badf`] if no [`Descriptor`] is found
-    fn get_descriptor(&mut self, fd: types::Fd) -> ErrnoResult<&Descriptor> {
+    fn get_descriptor(&mut self, fd: types::Fd) -> Result<&Descriptor> {
         let fd = fd.into();
-        self.descriptors
+        let desc = self
+            .descriptors
             .get_mut()
             .get(&fd)
-            .ok_or(types::Errno::Badf)
+            .ok_or(types::Errno::Badf)?;
+        Ok(desc)
     }
 
     /// Borrows [`File`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
-    fn get_file(&mut self, fd: types::Fd) -> ErrnoResult<&File> {
+    fn get_file(&mut self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get_mut().get(&fd) {
             Some(Descriptor::File(file @ File { fd, .. })) if self.view.table().is_file(*fd) => {
                 Ok(file)
             }
-            _ => Err(types::Errno::Badf),
+            _ => Err(types::Errno::Badf.into()),
         }
     }
 
     /// Mutably borrows [`File`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
-    fn get_file_mut(&mut self, fd: types::Fd) -> ErrnoResult<&mut File> {
+    fn get_file_mut(&mut self, fd: types::Fd) -> Result<&mut File> {
         let fd = fd.into();
         match self.descriptors.get_mut().get_mut(&fd) {
             Some(Descriptor::File(file)) if self.view.table().is_file(file.fd) => Ok(file),
-            _ => Err(types::Errno::Badf),
+            _ => Err(types::Errno::Badf.into()),
         }
     }
 
@@ -224,7 +226,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     /// # Errors
     ///
     /// Returns [`types::Errno::Spipe`] if the descriptor corresponds to stdio
-    fn get_seekable(&mut self, fd: types::Fd) -> ErrnoResult<&File> {
+    fn get_seekable(&mut self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get_mut().get(&fd) {
             Some(Descriptor::File(file @ File { fd, .. })) if self.view.table().is_file(*fd) => {
@@ -232,14 +234,14 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
             }
             Some(Descriptor::Stdin(..) | Descriptor::Stdout(..) | Descriptor::Stderr(..)) => {
                 // NOTE: legacy implementation returns SPIPE here
-                Err(types::Errno::Spipe)
+                Err(types::Errno::Spipe.into())
             }
-            _ => Err(types::Errno::Badf),
+            _ => Err(types::Errno::Badf.into()),
         }
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
-    fn get_fd(&mut self, fd: types::Fd) -> ErrnoResult<filesystem::Descriptor> {
+    fn get_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor> {
         match self.get_descriptor(fd)? {
             Descriptor::File(File { fd, .. }) => Ok(*fd),
             Descriptor::PreopenDirectory((fd, _)) => Ok(*fd),
@@ -250,19 +252,19 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
-    fn get_file_fd(&mut self, fd: types::Fd) -> ErrnoResult<filesystem::Descriptor> {
+    fn get_file_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor> {
         self.get_file(fd).map(|File { fd, .. }| *fd)
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
     /// of [`crate::preview2::filesystem::Dir`] type
-    fn get_dir_fd(&mut self, fd: types::Fd) -> ErrnoResult<filesystem::Descriptor> {
+    fn get_dir_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor> {
         let fd = fd.into();
         match self.descriptors.get_mut().get(&fd) {
             Some(Descriptor::File(File { fd, .. })) if self.view.table().is_dir(*fd) => Ok(*fd),
             Some(Descriptor::PreopenDirectory((fd, _))) => Ok(*fd),
-            _ => Err(types::Errno::Badf),
+            _ => Err(types::Errno::Badf.into()),
         }
     }
 }
@@ -356,13 +358,9 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-fn systimespec(
-    set: bool,
-    ts: types::Timestamp,
-    now: bool,
-) -> ErrnoResult<filesystem::NewTimestamp> {
+fn systimespec(set: bool, ts: types::Timestamp, now: bool) -> Result<filesystem::NewTimestamp> {
     if set && now {
-        Err(types::Errno::Inval)
+        Err(types::Errno::Inval.into())
     } else if set {
         Ok(filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
             seconds: ts / 1_000_000_000,
@@ -499,6 +497,41 @@ impl From<filesystem::ErrorCode> for types::Errno {
     }
 }
 
+impl From<std::num::TryFromIntError> for types::Error {
+    fn from(_: std::num::TryFromIntError) -> Self {
+        types::Errno::Overflow.into()
+    }
+}
+
+impl From<GuestError> for types::Error {
+    fn from(err: GuestError) -> Self {
+        use wiggle::GuestError::*;
+        match err {
+            InvalidFlagValue { .. } => types::Errno::Inval.into(),
+            InvalidEnumValue { .. } => types::Errno::Inval.into(),
+            // As per
+            // https://github.com/WebAssembly/wasi/blob/main/legacy/tools/witx-docs.md#pointers
+            //
+            // > If a misaligned pointer is passed to a function, the function
+            // > shall trap.
+            // >
+            // > If an out-of-bounds pointer is passed to a function and the
+            // > function needs to dereference it, the function shall trap.
+            //
+            // so this turns OOB and misalignment errors into traps.
+            PtrOverflow { .. } | PtrOutOfBounds { .. } | PtrNotAligned { .. } => {
+                types::Error::trap(err.into())
+            }
+            PtrBorrowed { .. } => types::Errno::Fault.into(),
+            InvalidUtf8 { .. } => types::Errno::Ilseq.into(),
+            TryFromIntError { .. } => types::Errno::Overflow.into(),
+            SliceLengthsDiffer { .. } => types::Errno::Fault.into(),
+            BorrowCheckerOutOfHandles { .. } => types::Errno::Fault.into(),
+            InFunc { err, .. } => types::Error::from(*err),
+        }
+    }
+}
+
 impl From<filesystem::ErrorCode> for types::Error {
     fn from(code: filesystem::ErrorCode) -> Self {
         types::Errno::from(code).into()
@@ -542,78 +575,63 @@ impl From<TableError> for types::Error {
     }
 }
 
-type ErrnoResult<T> = Result<T, types::Errno>;
+type Result<T, E = types::Error> = std::result::Result<T, E>;
 
 fn write_bytes<'a>(
     ptr: impl Borrow<GuestPtr<'a, u8>>,
     buf: impl AsRef<[u8]>,
-) -> ErrnoResult<GuestPtr<'a, u8>> {
+) -> Result<GuestPtr<'a, u8>, types::Error> {
     // NOTE: legacy implementation always returns Inval errno
 
     let buf = buf.as_ref();
-    let len = buf.len().try_into().or(Err(types::Errno::Inval))?;
+    let len = buf.len().try_into()?;
 
     let ptr = ptr.borrow();
-    ptr.as_array(len)
-        .copy_from_slice(buf)
-        .or(Err(types::Errno::Inval))?;
-    ptr.add(len).or(Err(types::Errno::Inval))
+    ptr.as_array(len).copy_from_slice(buf)?;
+    let next = ptr.add(len)?;
+    Ok(next)
 }
 
-fn write_byte<'a>(ptr: impl Borrow<GuestPtr<'a, u8>>, byte: u8) -> ErrnoResult<GuestPtr<'a, u8>> {
+fn write_byte<'a>(ptr: impl Borrow<GuestPtr<'a, u8>>, byte: u8) -> Result<GuestPtr<'a, u8>> {
     let ptr = ptr.borrow();
-    ptr.write(byte).or(Err(types::Errno::Inval))?;
-    ptr.add(1).or(Err(types::Errno::Inval))
+    ptr.write(byte)?;
+    let next = ptr.add(1)?;
+    Ok(next)
 }
 
-fn read_str<'a>(ptr: impl Borrow<GuestPtr<'a, str>>) -> ErrnoResult<GuestStrCow<'a>> {
-    // NOTE: legacy implementation always returns Inval errno
-    ptr.borrow().as_cow().or(Err(types::Errno::Inval))
+fn read_str<'a>(ptr: impl Borrow<GuestPtr<'a, str>>) -> Result<GuestStrCow<'a>> {
+    let s = ptr.borrow().as_cow()?;
+    Ok(s)
 }
 
-fn read_string<'a>(ptr: impl Borrow<GuestPtr<'a, str>>) -> ErrnoResult<String> {
+fn read_string<'a>(ptr: impl Borrow<GuestPtr<'a, str>>) -> Result<String> {
     read_str(ptr).map(|s| s.to_string())
 }
 
 // Find first non-empty buffer.
-fn first_non_empty_ciovec(ciovs: &types::CiovecArray<'_>) -> ErrnoResult<Option<Vec<u8>>> {
-    ciovs
-        .iter()
-        .map(|iov| {
-            let iov = iov
-                .or(Err(types::Errno::Inval))?
-                .read()
-                .or(Err(types::Errno::Inval))?;
-            if iov.buf_len == 0 {
-                return Ok(None);
-            }
-            iov.buf
-                .as_array(iov.buf_len)
-                .to_vec()
-                .or(Err(types::Errno::Inval))
-                .map(Some)
-        })
-        .find_map(Result::transpose)
-        .transpose()
+fn first_non_empty_ciovec(ciovs: &types::CiovecArray<'_>) -> Result<Option<Vec<u8>>> {
+    for iov in ciovs.iter() {
+        let iov = iov?.read()?;
+        if iov.buf_len == 0 {
+            continue;
+        }
+        return Ok(Some(iov.buf.as_array(iov.buf_len).to_vec()?));
+    }
+    Ok(None)
 }
 
 // Find first non-empty buffer.
 fn first_non_empty_iovec<'a>(
     iovs: &types::IovecArray<'a>,
-) -> ErrnoResult<Option<GuestSliceMut<'a, u8>>> {
+) -> Result<Option<GuestSliceMut<'a, u8>>> {
     iovs.iter()
         .map(|iov| {
-            let iov = iov
-                .or(Err(types::Errno::Inval))?
-                .read()
-                .or(Err(types::Errno::Inval))?;
+            let iov = iov?.read()?;
             if iov.buf_len == 0 {
                 return Ok(None);
             }
-            iov.buf
-                .as_array(iov.buf_len)
-                .as_slice_mut()
-                .map_err(|_| types::Errno::Inval)
+            let slice = iov.buf.as_array(iov.buf_len).as_slice_mut()?;
+            Ok(slice)
         })
         .find_map(Result::transpose)
         .transpose()
@@ -646,20 +664,17 @@ impl<
             .context("failed to call `get-arguments`")
             .map_err(types::Error::trap)?
             .into_iter()
-            .try_fold(
-                (*argv, *argv_buf),
-                |(argv, argv_buf), arg| -> ErrnoResult<_> {
-                    // NOTE: legacy implementation always returns Inval errno
+            .try_fold((*argv, *argv_buf), |(argv, argv_buf), arg| -> Result<_> {
+                // NOTE: legacy implementation always returns Inval errno
 
-                    argv.write(argv_buf).map_err(|_| types::Errno::Inval)?;
-                    let argv = argv.add(1).map_err(|_| types::Errno::Inval)?;
+                argv.write(argv_buf).map_err(|_| types::Errno::Inval)?;
+                let argv = argv.add(1).map_err(|_| types::Errno::Inval)?;
 
-                    let argv_buf = write_bytes(argv_buf, arg)?;
-                    let argv_buf = write_byte(argv_buf, 0)?;
+                let argv_buf = write_bytes(argv_buf, arg)?;
+                let argv_buf = write_byte(argv_buf, 0)?;
 
-                    Ok((argv, argv_buf))
-                },
-            )?;
+                Ok((argv, argv_buf))
+            })?;
         Ok(())
     }
 
@@ -691,7 +706,7 @@ impl<
             .into_iter()
             .try_fold(
                 (*environ, *environ_buf),
-                |(environ, environ_buf), (k, v)| -> ErrnoResult<_> {
+                |(environ, environ_buf), (k, v)| -> Result<_, types::Error> {
                     // NOTE: legacy implementation always returns Inval errno
 
                     environ
@@ -1084,7 +1099,7 @@ impl<
                 }
                 .map_err(|_| types::Errno::Io)?;
 
-                let n = read.len().try_into().or(Err(types::Errno::Overflow))?;
+                let n = read.len().try_into()?;
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
                 position.store(pos, Ordering::Relaxed);
 
@@ -1110,7 +1125,7 @@ impl<
         }
         let (buf, _) = buf.split_at_mut(read.len());
         buf.copy_from_slice(&read);
-        let n = read.len().try_into().or(Err(types::Errno::Overflow))?;
+        let n = read.len().try_into()?;
         Ok(n)
     }
 
@@ -1159,7 +1174,7 @@ impl<
         }
         let (buf, _) = buf.split_at_mut(read.len());
         buf.copy_from_slice(&read);
-        let n = read.len().try_into().or(Err(types::Errno::Overflow))?;
+        let n = read.len().try_into()?;
         Ok(n)
     }
 
@@ -1221,7 +1236,7 @@ impl<
             }
             _ => return Err(types::Errno::Badf.into()),
         };
-        let n = n.try_into().or(Err(types::Errno::Overflow))?;
+        let n = n.try_into()?;
         Ok(n)
     }
 
@@ -1258,7 +1273,7 @@ impl<
             }
             _ => return Err(types::Errno::Badf.into()),
         };
-        let n = n.try_into().or(Err(types::Errno::Overflow))?;
+        let n = n.try_into()?;
         Ok(n)
     }
 
@@ -1266,7 +1281,7 @@ impl<
     #[instrument(skip(self))]
     fn fd_prestat_get(&mut self, fd: types::Fd) -> Result<types::Prestat, types::Error> {
         if let Descriptor::PreopenDirectory((_, p)) = self.transact()?.get_descriptor(fd)? {
-            let pr_name_len = p.len().try_into().or(Err(types::Errno::Overflow))?;
+            let pr_name_len = p.len().try_into()?;
             return Ok(types::Prestat::Dir(types::PrestatDir { pr_name_len }));
         }
         Err(types::Errno::Badf.into()) // NOTE: legacy implementation returns BADF here
@@ -1280,7 +1295,7 @@ impl<
         path: &GuestPtr<'a, u8>,
         path_max_len: types::Size,
     ) -> Result<(), types::Error> {
-        let path_max_len = path_max_len.try_into().or(Err(types::Errno::Overflow))?;
+        let path_max_len = path_max_len.try_into()?;
         if let Descriptor::PreopenDirectory((_, p)) = self.transact()?.get_descriptor(fd)? {
             if p.len() > path_max_len {
                 return Err(types::Errno::Nametoolong.into());
