@@ -329,6 +329,9 @@ impl Instance {
 
         Ok((instance, compiled_module.module().start_func))
     }
+    pub(crate) fn from_stored(stored: Stored<InstanceData>) -> Instance {
+        Instance(stored)
+    }
 
     pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {
         Instance(store.store_data_mut().insert(handle))

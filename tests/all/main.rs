@@ -4,6 +4,7 @@ mod async_functions;
 mod call_hook;
 mod cli_tests;
 mod component_model;
+mod coredump;
 mod custom_signal_handler;
 mod debug;
 mod epoch_interruption;

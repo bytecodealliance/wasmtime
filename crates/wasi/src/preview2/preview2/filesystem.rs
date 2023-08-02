@@ -9,17 +9,8 @@ use types::ErrorCode;
 mod sync;
 
 impl From<TableError> for types::Error {
-    fn from(error: TableError) -> types::Error {
-        match error {
-            TableError::Full => types::Error::trap(anyhow::anyhow!(error)),
-            TableError::NotPresent | TableError::WrongType => ErrorCode::BadDescriptor.into(),
-        }
-    }
-}
-
-impl From<tokio::task::JoinError> for types::Error {
-    fn from(error: tokio::task::JoinError) -> Self {
-        Self::trap(anyhow::anyhow!(error))
+    fn from(error: TableError) -> Self {
+        Self::trap(error.into())
     }
 }
 

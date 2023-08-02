@@ -527,18 +527,9 @@ impl TryFrom<filesystem::Error> for types::Error {
     }
 }
 
-impl From<TableError> for types::Errno {
-    fn from(err: TableError) -> Self {
-        match err {
-            TableError::Full => types::Errno::Nomem,
-            TableError::NotPresent | TableError::WrongType => types::Errno::Badf,
-        }
-    }
-}
-
 impl From<TableError> for types::Error {
     fn from(err: TableError) -> Self {
-        types::Errno::from(err).into()
+        types::Error::trap(err.into())
     }
 }
 

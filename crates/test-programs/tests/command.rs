@@ -443,3 +443,50 @@ async fn read_only() -> Result<()> {
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn stream_pollable_lifetimes() -> Result<()> {
+    // Test program has two modes, dispatching based on argument.
+    {
+        // Correct execution: should succeed
+        let mut table = Table::new();
+        let wasi = WasiCtxBuilder::new()
+            .set_args(&["correct"])
+            .set_stdin(MemoryInputPipe::new(" ".into()))
+            .build(&mut table)?;
+
+        let (mut store, command) = instantiate(
+            get_component("stream_pollable_lifetimes"),
+            CommandCtx { table, wasi },
+        )
+        .await?;
+
+        command
+            .call_run(&mut store)
+            .await?
+            .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))?;
+    }
+    {
+        // Incorrect execution: should trap with a TableError::HasChildren
+        let mut table = Table::new();
+        let wasi = WasiCtxBuilder::new()
+            .set_args(&["trap"])
+            .set_stdin(MemoryInputPipe::new(" ".into()))
+            .build(&mut table)?;
+
+        let (mut store, command) = instantiate(
+            get_component("stream_pollable_lifetimes"),
+            CommandCtx { table, wasi },
+        )
+        .await?;
+
+        let trap = command
+            .call_run(&mut store)
+            .await
+            .err()
+            .expect("should trap");
+        use wasmtime_wasi::preview2::TableError;
+        assert!(matches!(trap.downcast_ref(), Some(TableError::HasChildren)));
+    }
+    Ok(())
+}

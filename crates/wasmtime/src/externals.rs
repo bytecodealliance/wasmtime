@@ -5,6 +5,7 @@ use crate::{
     SharedMemory, TableType, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
+use runtime::ExportGlobal;
 use std::mem;
 use std::ptr;
 use wasmtime_runtime::{self as runtime};
@@ -246,6 +247,10 @@ impl Global {
             let wasmtime_export = generate_global_export(store, ty, val);
             Ok(Global::from_wasmtime_global(wasmtime_export, store))
         }
+    }
+
+    pub(crate) fn from_stored(stored: Stored<ExportGlobal>) -> Global {
+        Global(stored)
     }
 
     /// Returns the underlying type of this `global`.
