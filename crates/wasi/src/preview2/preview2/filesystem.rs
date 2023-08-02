@@ -916,8 +916,15 @@ fn calculate_metadata_hash(meta: &cap_std::fs::Metadata) -> types::MetadataHashV
     // Without incurring any deps, std provides us with a 64 bit hash
     // function:
     use std::hash::{BuildHasher, Hasher};
-    let s = std::collections::hash_map::RandomState::new();
-    let mut hasher = s.build_hasher();
+    // We only want to initialize the BuildHasher impl once so that each Hasher we create performs
+    // the same calculation.
+    // Note that this means that the metadata hash (which becomes a preview1 ino) will be different
+    // in each wasmtime process!
+    static BUILD_HASHER: std::sync::OnceLock<std::collections::hash_map::RandomState> =
+        std::sync::OnceLock::new();
+    let mut hasher = BUILD_HASHER
+        .get_or_init(|| std::collections::hash_map::RandomState::new())
+        .build_hasher();
     hasher.write_u64(meta.dev());
     hasher.write_u64(meta.ino());
     let lower = hasher.finish();
