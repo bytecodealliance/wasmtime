@@ -4492,6 +4492,7 @@ version = "12.0.0"
 dependencies = [
  "anyhow",
  "heck",
+ "indexmap 2.0.0",
  "wit-parser",
 ]
 
