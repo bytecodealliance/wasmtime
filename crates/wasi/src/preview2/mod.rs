@@ -53,8 +53,8 @@ pub mod bindings {
             ",
                 tracing: true,
                 trappable_error_type: {
-                    "streams"::"stream-error": Error,
-                    "types"::"error-code": Error,
+                    "wasi:io/streams"::"stream-error": Error,
+                    "wasi:filesystem/types"::"error-code": Error,
                 },
                 with: {
                     "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
@@ -104,8 +104,8 @@ pub mod bindings {
             tracing: true,
             async: true,
             trappable_error_type: {
-                "streams"::"stream-error": Error,
-                "types"::"error-code": Error,
+                "wasi:io/streams"::"stream-error": Error,
+                "wasi:filesystem/types"::"error-code": Error,
             },
             with: {
                 "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
@@ -130,8 +130,8 @@ pub mod bindings {
             ",
         tracing: true,
         trappable_error_type: {
-            "types"::"error-code": Error,
-            "streams"::"stream-error": Error,
+            "wasi:filesystem/types"::"error-code": Error,
+            "wasi:io/streams"::"stream-error": Error,
         },
         with: {
             "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
