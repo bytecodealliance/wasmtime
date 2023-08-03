@@ -56,9 +56,9 @@ macro_rules! foreach_builtin_function {
             /// Memcheck invoked when free is called.
             check_free(vmctx: vmctx, addr: i32) -> i32;
             /// 
-            check_load(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32);
+            check_load(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> i32;
             ///
-            check_store(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32);
+            check_store(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> i32;
             ///
             malloc_start(vmctx: vmctx);
             ///

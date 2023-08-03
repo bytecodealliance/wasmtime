@@ -68,7 +68,7 @@ use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
 use cfg_if::cfg_if;
-// use crate::wasm_valgrind::AccessError;
+use anyhow::bail;
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
 /// for libcalls.
@@ -503,10 +503,10 @@ cfg_if! {
                         return Ok(0);
                     }
                     Err(DoubleMalloc { addr, len }) => {
-                        panic!("Double malloc at addr {} of size {}", addr, len)
+                        bail!("Double malloc at addr {} of size {}", addr, len)
                     }
                     Err(OutOfBounds { addr, len }) => {
-                        panic!("Malloc out of bounds at addr {} of size {}", addr, len);
+                        bail!("Malloc out of bounds at addr {} of size {}", addr, len);
                     }
                     _ => {
                         panic!("unreachable")
@@ -533,7 +533,7 @@ cfg_if! {
                         return Ok(0);
                     }
                     Err(InvalidFree { addr }) => {
-                        panic!("Invalid free at addr {}", addr)
+                        bail!("Invalid free at addr {:#x}", addr)
                     }
                     _ => {
                         panic!("unreachable")
@@ -552,49 +552,59 @@ cfg_if! {
 //should be returning result? error propogation?
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
-        fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
+        fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 let result = valgrind_state.read(addr as usize + offset as usize, num_bytes as usize);
                 match result {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        return Ok(0);
+                    }
                     Err(InvalidRead { addr, len }) => {
-                        panic!("Invalid load at addr {} of size {}", addr, len)
+                        bail!("Invalid load at addr {} of size {}", addr, len);
                     }
                     Err(OutOfBounds { addr, len }) => {
-                        panic!("Load out of bounds at addr {} of size {}", addr, len);
+                        bail!("Load out of bounds at addr {} of size {}", addr, len);
                     }
                     _ => {
                         panic!("unreachable")
                     }
                 }
             }
+            Ok(0)
         }
     } else {
-        fn check_load(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) {}
+        fn check_load(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) -> Result<u32> {
+            Ok(0)
+        }
     }
 }
 
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
-        fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
+        fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 let result = valgrind_state.write(addr as usize + offset as usize, num_bytes as usize);
                 match result {
-                    Ok(()) => {}
+                    Ok(()) => {
+                        return Ok(0);
+                    }
                     Err(InvalidWrite { addr, len }) => {
-                        panic!("Invalid store at addr {} of size {}", addr, len)
+                        bail!("Invalid store at addr {} of size {}", addr, len)
                     }
                     Err(OutOfBounds { addr, len }) => {
-                        panic!("Store out of bounds at addr {} of size {}", addr, len);
+                        bail!("Store out of bounds at addr {} of size {}", addr, len)
                     }
                     _ => {
                         panic!("unreachable")
                     }
                 }
             }
+            Ok(0)
         }
     } else {
-        fn check_store(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) {}
+        fn check_store(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) -> Result<u32> {
+            Ok(0)
+        }
     }
 }
 
