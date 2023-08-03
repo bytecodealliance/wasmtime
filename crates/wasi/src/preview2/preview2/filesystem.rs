@@ -906,16 +906,10 @@ fn calculate_metadata_hash(meta: &cap_std::fs::Metadata) -> types::MetadataHashV
     use cap_fs_ext::MetadataExt;
     // Without incurring any deps, std provides us with a 64 bit hash
     // function:
-    use std::hash::{BuildHasher, Hasher};
-    // We only want to initialize the BuildHasher impl once so that each Hasher we create performs
-    // the same calculation.
-    // Note that this means that the metadata hash (which becomes a preview1 ino) will be different
-    // in each wasmtime process!
-    static BUILD_HASHER: std::sync::OnceLock<std::collections::hash_map::RandomState> =
-        std::sync::OnceLock::new();
-    let mut hasher = BUILD_HASHER
-        .get_or_init(|| std::collections::hash_map::RandomState::new())
-        .build_hasher();
+    use std::hash::Hasher;
+    // Note that this means that the metadata hash (which becomes a preview1 ino) may
+    // change when a different rustc release is used to build this host implementation:
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
     hasher.write_u64(meta.dev());
     hasher.write_u64(meta.ino());
     let lower = hasher.finish();
