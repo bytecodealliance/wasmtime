@@ -94,7 +94,7 @@ fn main() -> Result<()> {
     // this case we're using `4` for.
     let mut store = Store::new(&engine, 4);
     let instance = linker.instantiate(&mut store, &module)?;
-    let hello = instance.get_typed_func::<(), (), _>(&mut store, "hello")?;
+    let hello = instance.get_typed_func::<(), ()>(&mut store, "hello")?;
 
     // And finally we can call the wasm!
     hello.call(&mut store, ())?;
