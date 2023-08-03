@@ -238,7 +238,7 @@ mod enum_error {
                 enum-error: func(a: float64) -> result<float64, e1>
             }
         }",
-        trappable_error_type: { imports::e1: TrappableE1 }
+        trappable_error_type: { "inline:inline/imports"::e1: TrappableE1 }
     });
 
     #[test]
@@ -402,7 +402,7 @@ mod record_error {
         }",
         // Literal strings can be used for the interface and typename fields instead of
         // identifiers, because wit identifiers arent always Rust identifiers.
-        trappable_error_type: { "imports"::"e2": TrappableE2 }
+        trappable_error_type: { "inline:inline/imports"::"e2": TrappableE2 }
     });
 
     #[test]
@@ -556,7 +556,7 @@ mod variant_error {
                 variant-error: func(a: float64) -> result<float64, e3>
             }
         }",
-        trappable_error_type: { imports::e3: TrappableE3 }
+        trappable_error_type: { "inline:inline/imports"::e3: TrappableE3 }
     });
 
     #[test]
