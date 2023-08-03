@@ -1227,7 +1227,10 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
-    fn special_case_trappable_error(&self, results: &Results) -> Option<(&'a Result_, String)> {
+    fn special_case_trappable_error(
+        &self,
+        results: &Results,
+    ) -> Option<(&'a Result_, TypeId, String)> {
         // We fillin a special trappable error type in the case when a function has just one
         // result, which is itself a `result<a, e>`, and the `e` is *not* a primitive
         // (i.e. defined in std) type, and matches the typename given by the user.
@@ -1250,7 +1253,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         let rust_type = self.trappable_errors.get(&error_typeid)?;
 
-        Some((result, rust_type.clone()))
+        Some((result, error_typeid, rust_type.clone()))
     }
 
     fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
@@ -1431,7 +1434,9 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(")");
         self.push_str(" -> ");
 
-        if let Some((r, error_typename)) = self.special_case_trappable_error(&func.results) {
+        if let Some((r, error_id, error_typename)) =
+            self.special_case_trappable_error(&func.results)
+        {
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
             // for them to trap or use `?` to propogate their errors
@@ -1442,6 +1447,12 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("()");
             }
             self.push_str(",");
+            if let TypeOwner::Interface(id) = self.resolve.types[error_id].owner {
+                if let Some(path) = self.path_to_interface(id) {
+                    self.push_str(&path);
+                    self.push_str("::");
+                }
+            }
             self.push_str(&error_typename);
             self.push_str(">");
         } else {
