@@ -39,3 +39,4 @@ http-body-util = "0.1.0-rc.2"
 [features]
 test_programs = []
 test_programs_http = [ "wasmtime/component-model" ]
+test_programs_sockets = [ "wasmtime/component-model" ]

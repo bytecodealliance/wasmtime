@@ -7,7 +7,11 @@ use crate::preview2::{
     DirPerms, FilePerms, Table,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
+use cap_std::ipnet::{self, IpNet};
+use cap_std::net::Pool;
+use cap_std::{ambient_authority, AmbientAuthority};
 use std::mem;
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 pub struct WasiCtxBuilder {
     stdin: Box<dyn HostInputStream>,
@@ -17,6 +21,7 @@ pub struct WasiCtxBuilder {
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
 
+    pool: Pool,
     random: Box<dyn RngCore + Send + Sync>,
     insecure_random: Box<dyn RngCore + Send + Sync>,
     insecure_random_seed: u128,
@@ -62,6 +67,7 @@ impl WasiCtxBuilder {
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
+            pool: Pool::new(),
             random: random::thread_rng(),
             insecure_random,
             insecure_random_seed,
@@ -178,6 +184,57 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Add all network addresses accessable to the host to the pool.
+    pub fn inherit_network(mut self, ambient_authority: AmbientAuthority) -> Self {
+        self.pool.insert_ip_net_port_any(
+            IpNet::new(Ipv4Addr::UNSPECIFIED.into(), 0).unwrap(),
+            ambient_authority,
+        );
+        self.pool.insert_ip_net_port_any(
+            IpNet::new(Ipv6Addr::UNSPECIFIED.into(), 0).unwrap(),
+            ambient_authority,
+        );
+        self
+    }
+
+    /// Add network addresses to the pool.
+    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(&mut self, addrs: A) -> std::io::Result<()> {
+        self.pool.insert(addrs, ambient_authority())
+    }
+
+    /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
+    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) {
+        self.pool.insert_socket_addr(addr, ambient_authority());
+    }
+
+    /// Add a range of network addresses, accepting any port, to the pool.
+    ///
+    /// Unlike `insert_ip_net`, this function grants access to any requested port.
+    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) {
+        self.pool
+            .insert_ip_net_port_any(ip_net, ambient_authority())
+    }
+
+    /// Add a range of network addresses, accepting a range of ports, to
+    /// per-instance networks.
+    ///
+    /// This grants access to the port range starting at `ports_start` and, if
+    /// `ports_end` is provided, ending before `ports_end`.
+    pub fn insert_ip_net_port_range(
+        &mut self,
+        ip_net: ipnet::IpNet,
+        ports_start: u16,
+        ports_end: Option<u16>,
+    ) {
+        self.pool
+            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority())
+    }
+
+    /// Add a range of network addresses with a specific port to the pool.
+    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) {
+        self.pool.insert_ip_net(ip_net, port, ambient_authority())
+    }
+
     /// Uses the configured context so far to construct the final `WasiCtx`.
     ///
     /// This will insert resources into the provided `table`.
@@ -199,6 +256,7 @@ impl WasiCtxBuilder {
             env,
             args,
             preopens,
+            pool,
             random,
             insecure_random,
             insecure_random_seed,
@@ -229,6 +287,7 @@ impl WasiCtxBuilder {
             env,
             args,
             preopens,
+            pool,
             random,
             insecure_random,
             insecure_random_seed,
@@ -254,6 +313,7 @@ pub struct WasiCtx {
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
     pub(crate) preopens: Vec<(u32, String)>,
+    pub(crate) pool: Pool,
     pub(crate) stdin: u32,
     pub(crate) stdout: u32,
     pub(crate) stderr: u32,
