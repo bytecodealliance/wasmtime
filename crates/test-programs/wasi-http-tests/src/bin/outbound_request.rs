@@ -37,8 +37,8 @@ fn request(
     body: &[u8],
 ) -> Result<Response> {
     let headers = wasi::http::types::new_fields(&[
-        ("User-agent", "WASI-HTTP/0.0.1"),
-        ("Content-type", "application/json"),
+        ("User-agent".to_string(), "WASI-HTTP/0.0.1".to_string()),
+        ("Content-type".to_string(), "application/json".to_string()),
     ]);
 
     let request = wasi::http::types::new_outgoing_request(
