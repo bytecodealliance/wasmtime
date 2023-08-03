@@ -5,6 +5,9 @@ readme = "README.md"
 edition = "2021"
 publish = false
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies]
 anyhow = { workspace = true }
-wit-bindgen = { workspace = true, default-features = false, features = ["macros"] }
+wit-bindgen = { workspace = true, features = ["macros", "realloc"] }

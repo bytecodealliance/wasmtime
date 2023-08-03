@@ -1,7 +1,5 @@
-use crate::wasi::http::outgoing_handler::Host;
-use crate::wasi::http::types::{Error, Host as TypesHost, Method, RequestOptions, Scheme};
-use crate::wasi::io::streams::Host as StreamsHost;
-pub use crate::WasiHttpCtx;
+use crate::wasi::http::types::{Error, Method, RequestOptions, Scheme};
+use crate::{WasiHttpView, WasiHttpViewExt};
 use anyhow::anyhow;
 use std::str;
 use std::vec::Vec;
@@ -105,8 +103,14 @@ fn u32_array_to_u8(arr: &[u32]) -> Vec<u8> {
 
 pub fn add_component_to_linker<T>(
     linker: &mut wasmtime::Linker<T>,
-    get_cx: impl Fn(&mut T) -> &mut WasiHttpCtx + Send + Sync + Copy + 'static,
-) -> anyhow::Result<()> {
+    get_cx: impl Fn(&mut T) -> &mut T + Send + Sync + Copy + 'static,
+) -> anyhow::Result<()>
+where
+    T: WasiHttpView
+        + WasiHttpViewExt
+        + crate::wasi::http::outgoing_handler::Host
+        + crate::wasi::http::types::Host,
+{
     linker.func_wrap(
         "wasi:http/outgoing-handler",
         "handle",
@@ -309,24 +313,6 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "wasi:io/streams",
-        "drop-input-stream",
-        move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            ctx.drop_input_stream(id)?;
-            Ok(())
-        },
-    )?;
-    linker.func_wrap(
-        "wasi:io/streams",
-        "drop-output-stream",
-        move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            ctx.drop_output_stream(id)?;
-            Ok(())
-        },
-    )?;
-    linker.func_wrap(
         "wasi:http/types",
         "outgoing-request-write",
         move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
@@ -390,51 +376,6 @@ pub fn add_component_to_linker<T>(
 
             let ctx = get_cx(caller.data_mut());
             Ok(ctx.new_fields(vec)?)
-        },
-    )?;
-    linker.func_wrap(
-        "wasi:io/streams",
-        "read",
-        move |mut caller: Caller<'_, T>, stream: u32, len: u64, ptr: u32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            let bytes_tuple = ctx.read(stream, len)??;
-            let bytes = bytes_tuple.0;
-            let done = match bytes_tuple.1 {
-                true => 1,
-                false => 0,
-            };
-            let body_len: u32 = bytes.len().try_into()?;
-            let out_ptr = allocate_guest_pointer(&mut caller, body_len)?;
-            let result: [u32; 4] = [0, out_ptr, body_len, done];
-            let raw = u32_array_to_u8(&result);
-
-            let memory = memory_get(&mut caller)?;
-            memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
-            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
-            Ok(())
-        },
-    )?;
-    linker.func_wrap(
-        "wasi:io/streams",
-        "write",
-        move |mut caller: Caller<'_, T>,
-              stream: u32,
-              body_ptr: u32,
-              body_len: u32,
-              ptr: u32|
-              -> anyhow::Result<()> {
-            let memory = memory_get(&mut caller)?;
-            let body = string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
-
-            let result: [u32; 3] = [0, 0, body_len];
-            let raw = u32_array_to_u8(&result);
-
-            let memory = memory_get(&mut caller)?;
-            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
-
-            let ctx = get_cx(caller.data_mut());
-            ctx.write(stream, body.as_bytes().to_vec())??;
-            Ok(())
         },
     )?;
     linker.func_wrap(

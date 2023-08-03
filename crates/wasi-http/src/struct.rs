@@ -1,76 +1,37 @@
 //! Implements the base structure (i.e. [WasiHttpCtx]) that will provide the
 //! implementation of the wasi-http API.
 
-use crate::common::{Error, InputStream, OutputStream, Table};
-use crate::wasi::http::types::{Method, RequestOptions, Scheme};
+use crate::wasi::http::types::{
+    IncomingStream, Method, OutgoingRequest, OutgoingStream, RequestOptions, Scheme,
+};
+use bytes::Bytes;
 use std::any::Any;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use wasmtime_wasi::preview2::{
+    pipe::{AsyncReadStream, AsyncWriteStream},
+    HostInputStream, HostOutputStream, Table, TableError, TableStreamExt, WasiView,
+};
+
+const MAX_BUF_SIZE: usize = 65_536;
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx {
-    pub table: Table,
+    pub streams: HashMap<u32, Stream>,
 }
 
 impl WasiHttpCtx {
     /// Make a new context from the default state.
     pub fn new() -> Self {
         Self {
-            table: Table::new(),
+            streams: HashMap::new(),
         }
     }
+}
 
-    pub fn table(&self) -> &Table {
-        &self.table
-    }
-
-    pub fn table_mut(&mut self) -> &mut Table {
-        &mut self.table
-    }
-
-    pub fn insert_input_stream(&mut self, id: u32, stream: Box<dyn InputStream>) {
-        self.table_mut().insert_at(id, Box::new(stream));
-    }
-
-    pub fn push_input_stream(&mut self, stream: Box<dyn InputStream>) -> Result<u32, Error> {
-        self.table_mut().push(Box::new(stream))
-    }
-
-    pub fn insert_output_stream(&mut self, id: u32, stream: Box<dyn OutputStream>) {
-        self.table_mut().insert_at(id, Box::new(stream));
-    }
-
-    pub fn push_output_stream(&mut self, stream: Box<dyn OutputStream>) -> Result<u32, Error> {
-        self.table_mut().push(Box::new(stream))
-    }
-
-    pub fn push_request(&mut self, request: Box<dyn HttpRequest>) -> Result<u32, Error> {
-        self.table_mut().push(Box::new(request))
-    }
-
-    pub fn push_response(&mut self, response: Box<dyn HttpResponse>) -> Result<u32, Error> {
-        self.table_mut().push(Box::new(response))
-    }
-
-    pub fn push_future(&mut self, future: Box<ActiveFuture>) -> Result<u32, Error> {
-        self.table_mut().push(Box::new(future))
-    }
-
-    pub fn push_fields(&mut self, fields: Box<ActiveFields>) -> Result<u32, Error> {
-        self.table_mut().push(Box::new(fields))
-    }
-
-    pub fn set_stdin(&mut self, s: Box<dyn InputStream>) {
-        self.insert_input_stream(0, s);
-    }
-
-    pub fn set_stdout(&mut self, s: Box<dyn OutputStream>) {
-        self.insert_output_stream(1, s);
-    }
-
-    pub fn set_stderr(&mut self, s: Box<dyn OutputStream>) {
-        self.insert_output_stream(2, s);
-    }
+pub trait WasiHttpView: WasiView {
+    fn http_ctx(&self) -> &WasiHttpCtx;
+    fn http_ctx_mut(&mut self) -> &mut WasiHttpCtx;
 }
 
 pub type FieldsMap = HashMap<String, Vec<Vec<u8>>>;
@@ -224,12 +185,12 @@ impl HttpResponse for ActiveResponse {
 
 #[derive(Clone)]
 pub struct ActiveFuture {
-    pub request_id: u32,
+    pub request_id: OutgoingRequest,
     pub options: Option<RequestOptions>,
 }
 
 impl ActiveFuture {
-    pub fn new(request_id: u32, options: Option<RequestOptions>) -> Self {
+    pub fn new(request_id: OutgoingRequest, options: Option<RequestOptions>) -> Self {
         Self {
             request_id,
             options,
@@ -269,74 +230,153 @@ impl DerefMut for ActiveFields {
     }
 }
 
-pub trait TableExt {
-    fn get_request(&self, id: u32) -> Result<&(dyn HttpRequest), Error>;
-    fn get_request_mut(&mut self, id: u32) -> Result<&mut Box<dyn HttpRequest>, Error>;
-    fn delete_request(&mut self, id: u32) -> Result<(), Error>;
-
-    fn get_response(&self, id: u32) -> Result<&dyn HttpResponse, Error>;
-    fn get_response_mut(&mut self, id: u32) -> Result<&mut Box<dyn HttpResponse>, Error>;
-    fn delete_response(&mut self, id: u32) -> Result<(), Error>;
-
-    fn get_future(&self, id: u32) -> Result<&ActiveFuture, Error>;
-    fn get_future_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFuture>, Error>;
-    fn delete_future(&mut self, id: u32) -> Result<(), Error>;
-
-    fn get_fields(&self, id: u32) -> Result<&ActiveFields, Error>;
-    fn get_fields_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFields>, Error>;
-    fn delete_fields(&mut self, id: u32) -> Result<(), Error>;
-
-    fn get_response_by_stream(&self, id: u32) -> Result<&dyn HttpResponse, Error>;
+#[derive(Clone, Debug)]
+pub struct Stream {
+    input_id: u32,
+    output_id: u32,
+    parent_id: u32,
 }
 
-impl TableExt for crate::common::Table {
-    fn get_request(&self, id: u32) -> Result<&dyn HttpRequest, Error> {
+impl Stream {
+    pub fn new(input_id: u32, output_id: u32, parent_id: u32) -> Self {
+        Self {
+            input_id,
+            output_id,
+            parent_id,
+        }
+    }
+
+    pub fn incoming(&self) -> IncomingStream {
+        self.input_id
+    }
+
+    pub fn outgoing(&self) -> OutgoingStream {
+        self.output_id
+    }
+
+    pub fn parent_id(&self) -> u32 {
+        self.parent_id
+    }
+}
+
+pub trait TableHttpExt {
+    fn push_request(&mut self, request: Box<dyn HttpRequest>) -> Result<u32, TableError>;
+    fn get_request(&self, id: u32) -> Result<&(dyn HttpRequest), TableError>;
+    fn get_request_mut(&mut self, id: u32) -> Result<&mut Box<dyn HttpRequest>, TableError>;
+    fn delete_request(&mut self, id: u32) -> Result<(), TableError>;
+
+    fn push_response(&mut self, response: Box<dyn HttpResponse>) -> Result<u32, TableError>;
+    fn get_response(&self, id: u32) -> Result<&dyn HttpResponse, TableError>;
+    fn get_response_mut(&mut self, id: u32) -> Result<&mut Box<dyn HttpResponse>, TableError>;
+    fn delete_response(&mut self, id: u32) -> Result<(), TableError>;
+
+    fn push_future(&mut self, future: Box<ActiveFuture>) -> Result<u32, TableError>;
+    fn get_future(&self, id: u32) -> Result<&ActiveFuture, TableError>;
+    fn get_future_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFuture>, TableError>;
+    fn delete_future(&mut self, id: u32) -> Result<(), TableError>;
+
+    fn push_fields(&mut self, fields: Box<ActiveFields>) -> Result<u32, TableError>;
+    fn get_fields(&self, id: u32) -> Result<&ActiveFields, TableError>;
+    fn get_fields_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFields>, TableError>;
+    fn delete_fields(&mut self, id: u32) -> Result<(), TableError>;
+
+    fn push_stream(&mut self, content: Bytes, parent: u32) -> Result<(u32, Stream), TableError>;
+    fn get_stream(&self, id: u32) -> Result<&Stream, TableError>;
+    fn get_stream_mut(&mut self, id: u32) -> Result<&mut Box<Stream>, TableError>;
+    fn delete_stream(&mut self, id: u32) -> Result<(), TableError>;
+}
+
+impl TableHttpExt for Table {
+    fn push_request(&mut self, request: Box<dyn HttpRequest>) -> Result<u32, TableError> {
+        self.push(Box::new(request))
+    }
+    fn get_request(&self, id: u32) -> Result<&dyn HttpRequest, TableError> {
         self.get::<Box<dyn HttpRequest>>(id).map(|f| f.as_ref())
     }
-    fn get_request_mut(&mut self, id: u32) -> Result<&mut Box<dyn HttpRequest>, Error> {
+    fn get_request_mut(&mut self, id: u32) -> Result<&mut Box<dyn HttpRequest>, TableError> {
         self.get_mut::<Box<dyn HttpRequest>>(id)
     }
-    fn delete_request(&mut self, id: u32) -> Result<(), Error> {
+    fn delete_request(&mut self, id: u32) -> Result<(), TableError> {
         self.delete::<Box<dyn HttpRequest>>(id).map(|_old| ())
     }
 
-    fn get_response(&self, id: u32) -> Result<&dyn HttpResponse, Error> {
+    fn push_response(&mut self, response: Box<dyn HttpResponse>) -> Result<u32, TableError> {
+        self.push(Box::new(response))
+    }
+    fn get_response(&self, id: u32) -> Result<&dyn HttpResponse, TableError> {
         self.get::<Box<dyn HttpResponse>>(id).map(|f| f.as_ref())
     }
-    fn get_response_mut(&mut self, id: u32) -> Result<&mut Box<dyn HttpResponse>, Error> {
+    fn get_response_mut(&mut self, id: u32) -> Result<&mut Box<dyn HttpResponse>, TableError> {
         self.get_mut::<Box<dyn HttpResponse>>(id)
     }
-    fn delete_response(&mut self, id: u32) -> Result<(), Error> {
+    fn delete_response(&mut self, id: u32) -> Result<(), TableError> {
         self.delete::<Box<dyn HttpResponse>>(id).map(|_old| ())
     }
 
-    fn get_future(&self, id: u32) -> Result<&ActiveFuture, Error> {
+    fn push_future(&mut self, future: Box<ActiveFuture>) -> Result<u32, TableError> {
+        self.push(Box::new(future))
+    }
+    fn get_future(&self, id: u32) -> Result<&ActiveFuture, TableError> {
         self.get::<Box<ActiveFuture>>(id).map(|f| f.as_ref())
     }
-    fn get_future_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFuture>, Error> {
+    fn get_future_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFuture>, TableError> {
         self.get_mut::<Box<ActiveFuture>>(id)
     }
-    fn delete_future(&mut self, id: u32) -> Result<(), Error> {
+    fn delete_future(&mut self, id: u32) -> Result<(), TableError> {
         self.delete::<Box<ActiveFuture>>(id).map(|_old| ())
     }
 
-    fn get_fields(&self, id: u32) -> Result<&ActiveFields, Error> {
+    fn push_fields(&mut self, fields: Box<ActiveFields>) -> Result<u32, TableError> {
+        self.push(Box::new(fields))
+    }
+    fn get_fields(&self, id: u32) -> Result<&ActiveFields, TableError> {
         self.get::<Box<ActiveFields>>(id).map(|f| f.as_ref())
     }
-    fn get_fields_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFields>, Error> {
+    fn get_fields_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFields>, TableError> {
         self.get_mut::<Box<ActiveFields>>(id)
     }
-    fn delete_fields(&mut self, id: u32) -> Result<(), Error> {
+    fn delete_fields(&mut self, id: u32) -> Result<(), TableError> {
         self.delete::<Box<ActiveFields>>(id).map(|_old| ())
     }
 
-    fn get_response_by_stream(&self, id: u32) -> Result<&dyn HttpResponse, Error> {
-        for value in self.list::<Box<dyn HttpResponse>>().into_values() {
-            if Some(id) == value.body() {
-                return Ok(value.as_ref());
-            }
+    fn push_stream(&mut self, content: Bytes, parent: u32) -> Result<(u32, Stream), TableError> {
+        let (a, b) = tokio::io::duplex(MAX_BUF_SIZE);
+        let (_, write_stream) = tokio::io::split(a);
+        let (read_stream, _) = tokio::io::split(b);
+        let input_stream = AsyncReadStream::new(read_stream);
+        let mut output_stream = AsyncWriteStream::new(write_stream);
+
+        let mut cursor = 0;
+        while cursor < content.len() {
+            let (written, _) = output_stream
+                .write(content.slice(cursor..content.len()))
+                .map_err(|_| TableError::NotPresent)?;
+            cursor += written;
         }
-        Err(Error::trap(anyhow::Error::msg("response not found")))
+
+        let input_stream = Box::new(input_stream);
+        let output_id = self.push_output_stream(Box::new(output_stream))?;
+        let input_id = self.push_input_stream(input_stream)?;
+        let stream = Stream::new(input_id, output_id, parent);
+        let cloned_stream = stream.clone();
+        let stream_id = self.push(Box::new(Box::new(stream)))?;
+        Ok((stream_id, cloned_stream))
+    }
+    fn get_stream(&self, id: u32) -> Result<&Stream, TableError> {
+        self.get::<Box<Stream>>(id).map(|f| f.as_ref())
+    }
+    fn get_stream_mut(&mut self, id: u32) -> Result<&mut Box<Stream>, TableError> {
+        self.get_mut::<Box<Stream>>(id)
+    }
+    fn delete_stream(&mut self, id: u32) -> Result<(), TableError> {
+        let stream = self.get_stream_mut(id)?;
+        let input_stream = stream.incoming();
+        let output_stream = stream.outgoing();
+        self.delete::<Box<Stream>>(id).map(|_old| ())?;
+        self.delete::<Box<dyn HostInputStream>>(input_stream)
+            .map(|_old| ())?;
+        self.delete::<Box<dyn HostOutputStream>>(output_stream)
+            .map(|_old| ())
     }
 }
 

@@ -1,17 +1,17 @@
-use crate::bytestream::ByteStream;
-use crate::common::stream::TableStreamExt;
-use crate::r#struct::{ActiveFields, ActiveRequest, HttpFields, HttpRequest, TableExt};
+use crate::http_impl::WasiHttpViewExt;
+use crate::r#struct::{ActiveFields, ActiveRequest, HttpRequest, TableHttpExt};
 use crate::wasi::http::types::{
     Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse,
     IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
 use crate::wasi::poll::poll::Pollable;
-use crate::WasiHttpCtx;
-use anyhow::{anyhow, bail};
-use tokio::runtime::{Handle, Runtime};
+use crate::WasiHttpView;
+use anyhow::{anyhow, bail, Context};
+use bytes::Bytes;
+use wasmtime_wasi::preview2::TableError;
 
-fn convert(error: crate::common::Error) -> anyhow::Error {
+fn convert(error: TableError) -> anyhow::Error {
     // if let Some(errno) = error.downcast_ref() {
     //     Error::UnexpectedError(errno.to_string())
     // } else {
@@ -19,7 +19,7 @@ fn convert(error: crate::common::Error) -> anyhow::Error {
     // }
 }
 
-impl crate::wasi::http::types::Host for WasiHttpCtx {
+impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
     fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
         self.table_mut().delete_fields(fields).map_err(convert)?;
         Ok(())
@@ -30,7 +30,10 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
             map.insert(key, vec![value.clone().into_bytes()]);
         }
 
-        let id = self.push_fields(Box::new(map)).map_err(convert)?;
+        let id = self
+            .table_mut()
+            .push_fields(Box::new(map))
+            .map_err(convert)?;
         Ok(id)
     }
     fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
@@ -93,18 +96,25 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         Ok(result)
     }
     fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields> {
-        let m = self.table().get_fields(fields).map_err(convert)?;
-        let id = self.push_fields(Box::new(m.clone())).map_err(convert)?;
+        let table = self.table_mut();
+        let m = table.get_fields(fields).map_err(convert)?;
+        let id = table.push_fields(Box::new(m.clone())).map_err(convert)?;
         Ok(id)
     }
     fn finish_incoming_stream(
         &mut self,
-        stream: IncomingStream,
+        stream_id: IncomingStream,
     ) -> wasmtime::Result<Option<Trailers>> {
-        match self.table().get_response_by_stream(stream) {
-            Ok(response) => Ok(response.trailers()),
-            Err(_) => bail!("unknown stream!"),
+        for (_, stream) in self.http_ctx().streams.iter() {
+            if stream_id == stream.incoming() {
+                let response = self
+                    .table()
+                    .get_response(stream.parent_id())
+                    .context("get trailers from response")?;
+                return Ok(response.trailers());
+            }
         }
+        bail!("unknown stream!")
     }
     fn finish_outgoing_stream(
         &mut self,
@@ -117,22 +127,16 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         bail!("unimplemented: drop_incoming_request")
     }
     fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
-        // if let Entry::Occupied(e) = self.requests.entry(request) {
-        //     let r = e.remove();
-        //     self.streams.remove(&r.body);
-        // }
-        let r = self.table().get_request(request).map_err(convert)?;
+        let r = self.table_mut().get_request(request).map_err(convert)?;
 
-        // Cleanup dependant resources
+        // Cleanup dependent resources
         let body = r.body();
         let headers = r.headers();
         if let Some(b) = body {
-            self.table_mut()
-                .delete_output_stream(b)
-                .unwrap_or_else(|_| ());
+            self.table_mut().delete_stream(b).ok();
         }
         if let Some(h) = headers {
-            self.table_mut().delete_fields(h).unwrap_or_else(|_| ());
+            self.table_mut().delete_fields(h).ok();
         }
 
         self.table_mut().delete_request(request).map_err(convert)?;
@@ -183,7 +187,10 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         req.method = method;
         req.headers = Some(headers);
         req.scheme = scheme;
-        let id = self.push_request(Box::new(req)).map_err(convert)?;
+        let id = self
+            .table_mut()
+            .push_request(Box::new(req))
+            .map_err(convert)?;
         Ok(id)
     }
     fn outgoing_request_write(
@@ -191,11 +198,12 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
         let req = self.table().get_request(request).map_err(convert)?;
-        let body = req.body().unwrap_or_else(|| {
-            let buf = ByteStream::new();
-            let new = self
-                .push_output_stream(Box::new(buf))
+        let stream_id = req.body().unwrap_or_else(|| {
+            let (new, stream) = self
+                .table_mut()
+                .push_stream(Bytes::new(), request)
                 .expect("valid output stream");
+            self.http_ctx_mut().streams.insert(new, stream);
             let req = self
                 .table_mut()
                 .get_request_mut(request)
@@ -203,7 +211,8 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
             req.set_body(new);
             new
         });
-        Ok(Ok(body))
+        let stream = self.table().get_stream(stream_id)?;
+        Ok(Ok(stream.outgoing()))
     }
     fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
         bail!("unimplemented: drop_response_outparam")
@@ -216,32 +225,35 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         bail!("unimplemented: set_response_outparam")
     }
     fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
-        // if let Entry::Occupied(e) = self.responses.entry(response) {
-        //     let r = e.remove();
-        //     self.streams.remove(&r.body);
-        // }
         let r = self.table().get_response(response).map_err(convert)?;
 
-        // Cleanup dependant resources
+        // Cleanup dependent resources
         let body = r.body();
         let headers = r.headers();
-        if let Some(b) = body {
-            if let Some(trailers) = self.finish_incoming_stream(b)? {
+        if let Some(id) = body {
+            let stream = self.table().get_stream(id)?;
+            let incoming_id = stream.incoming();
+            if let Some(trailers) = self.finish_incoming_stream(incoming_id)? {
                 self.table_mut()
                     .delete_fields(trailers)
+                    .context("[drop_incoming_response] deleting trailers")
                     .unwrap_or_else(|_| ());
             }
             self.table_mut()
-                .delete_input_stream(b)
-                .unwrap_or_else(|_| ());
+                .delete_stream(id)
+                .context("[drop_incoming_response] deleting input stream")
+                .ok();
         }
         if let Some(h) = headers {
-            self.table_mut().delete_fields(h).unwrap_or_else(|_| ());
+            self.table_mut()
+                .delete_fields(h)
+                .context("[drop_incoming_response] deleting fields")
+                .ok();
         }
 
         self.table_mut()
             .delete_response(response)
-            .map_err(convert)?;
+            .context("[drop_incoming_response] deleting response")?;
         Ok(())
     }
     fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
@@ -259,14 +271,23 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         response: IncomingResponse,
     ) -> wasmtime::Result<Headers> {
         let r = self.table().get_response(response).map_err(convert)?;
-        Ok(r.headers().unwrap_or(0))
+        Ok(r.headers().unwrap_or(0 as Headers))
     }
     fn incoming_response_consume(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
-        let r = self.table().get_response(response).map_err(convert)?;
-        Ok(Ok(r.body().unwrap_or(0)))
+        let table = self.table_mut();
+        let r = table.get_response(response).map_err(convert)?;
+        Ok(Ok(r
+            .body()
+            .map(|id| {
+                table
+                    .get_stream(id)
+                    .map(|stream| stream.incoming())
+                    .expect("response body stream")
+            })
+            .unwrap_or(0 as IncomingStream)))
     }
     fn new_outgoing_response(
         &mut self,
@@ -292,18 +313,12 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         &mut self,
         future: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>> {
-        let f = self.table().get_future(future).map_err(convert)?;
+        let f = self
+            .table()
+            .get_future(future)
+            .context("[future_incoming_response_get] getting future")?;
 
-        let (handle, _runtime) = match Handle::try_current() {
-            Ok(h) => (h, None),
-            Err(_) => {
-                let rt = Runtime::new().unwrap();
-                let _enter = rt.enter();
-                (rt.handle().clone(), Some(rt))
-            }
-        };
-        let response = handle
-            .block_on(self.handle_async(f.request_id, f.options))
+        let response = futures::executor::block_on(self.handle_async(f.request_id, f.options))
             .map_err(|e| Error::UnexpectedError(e.to_string()));
         Ok(Some(response))
     }

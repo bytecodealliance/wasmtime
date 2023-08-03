@@ -1,15 +1,11 @@
-use crate::bytestream::ByteStream;
-use crate::common::stream::{InputStream, OutputStream, TableStreamExt};
-use crate::r#struct::{ActiveFields, ActiveFuture, ActiveResponse, HttpResponse, TableExt};
+use crate::r#struct::{ActiveFields, ActiveFuture, ActiveResponse, HttpResponse, TableHttpExt};
 use crate::wasi::http::types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme};
-pub use crate::WasiHttpCtx;
+pub use crate::{WasiHttpCtx, WasiHttpView};
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
-use anyhow::anyhow;
-use anyhow::bail;
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
-use hyper::Method;
-use hyper::Request;
+use anyhow::{anyhow, bail, Context};
+use bytes::{Bytes, BytesMut};
+use http_body_util::{BodyExt, Empty, Full};
+use hyper::{Method, Request};
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,8 +13,9 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
+use wasmtime_wasi::preview2::{StreamState, TableError, TableStreamExt};
 
-fn convert(error: crate::common::Error) -> anyhow::Error {
+fn convert(error: TableError) -> anyhow::Error {
     // if let Some(errno) = error.downcast_ref() {
     //     anyhow::Error::new(crate::types::Error::UnexpectedError(errno.to_string()))
     // } else {
@@ -26,14 +23,17 @@ fn convert(error: crate::common::Error) -> anyhow::Error {
     // }
 }
 
-impl crate::wasi::http::outgoing_handler::Host for WasiHttpCtx {
+impl<T: WasiHttpView> crate::wasi::http::outgoing_handler::Host for T {
     fn handle(
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
     ) -> wasmtime::Result<FutureIncomingResponse> {
         let future = ActiveFuture::new(request_id, options);
-        let future_id = self.push_future(Box::new(future)).map_err(convert)?;
+        let future_id = self
+            .table_mut()
+            .push_future(Box::new(future))
+            .context("[handle] pushing future")?;
         Ok(future_id)
     }
 }
@@ -50,8 +50,18 @@ fn port_for_scheme(scheme: &Option<Scheme>) -> &str {
     }
 }
 
-impl WasiHttpCtx {
-    pub(crate) async fn handle_async(
+#[async_trait::async_trait]
+pub trait WasiHttpViewExt {
+    async fn handle_async(
+        &mut self,
+        request_id: OutgoingRequest,
+        options: Option<RequestOptions>,
+    ) -> wasmtime::Result<FutureIncomingResponse>;
+}
+
+#[async_trait::async_trait]
+impl<T: WasiHttpView> WasiHttpViewExt for T {
+    async fn handle_async(
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
@@ -71,8 +81,11 @@ impl WasiHttpCtx {
         let between_bytes_timeout =
             Duration::from_millis(opts.between_bytes_timeout_ms.unwrap_or(600 * 1000).into());
 
-        let table = self.table_mut();
-        let request = table.get_request(request_id).map_err(convert)?.clone();
+        let request = self
+            .table()
+            .get_request(request_id)
+            .map_err(convert)?
+            .clone();
 
         let method = match request.method() {
             crate::wasi::http::types::Method::Get => Method::GET,
@@ -165,7 +178,7 @@ impl WasiHttpCtx {
             .header(hyper::header::HOST, request.authority());
 
         if let Some(headers) = request.headers() {
-            for (key, val) in table.get_fields(headers)?.iter() {
+            for (key, val) in self.table().get_fields(headers)?.iter() {
                 for item in val {
                     call = call.header(key, item.clone());
                 }
@@ -173,10 +186,26 @@ impl WasiHttpCtx {
         }
 
         let mut response = ActiveResponse::new();
-        let body = Full::<Bytes>::new(match request.body() {
-            Some(body) => table.get_output_stream_mut(body)?.try_into()?,
-            None => Bytes::new(),
-        });
+        let body = match request.body() {
+            Some(id) => {
+                let table = self.table_mut();
+                let stream = table.get_stream(id)?;
+                let input_stream = table.get_input_stream_mut(stream.incoming())?;
+                let mut bytes = BytesMut::new();
+                let mut eof = StreamState::Open;
+                while eof != StreamState::Closed {
+                    let (chunk, state) = input_stream.read(4096)?;
+                    eof = if chunk.len() == 0 {
+                        StreamState::Closed
+                    } else {
+                        state
+                    };
+                    bytes.extend_from_slice(&chunk[..]);
+                }
+                Full::<Bytes>::new(bytes.freeze()).boxed()
+            }
+            None => Empty::<Bytes>::new().boxed(),
+        };
         let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
         let mut res = t?;
         response.status = res.status().try_into()?;
@@ -187,7 +216,10 @@ impl WasiHttpCtx {
             vec.push(value.as_bytes().to_vec());
             map.insert(key.as_str().to_string(), vec);
         }
-        let headers = self.push_fields(Box::new(map)).map_err(convert)?;
+        let headers = self
+            .table_mut()
+            .push_fields(Box::new(map))
+            .map_err(convert)?;
         response.set_headers(headers);
 
         let mut buf: Vec<u8> = Vec::new();
@@ -209,16 +241,27 @@ impl WasiHttpCtx {
                         }
                     };
                 }
-                let trailers = self.push_fields(Box::new(map)).map_err(convert)?;
+                let trailers = self
+                    .table_mut()
+                    .push_fields(Box::new(map))
+                    .map_err(convert)?;
                 response.set_trailers(trailers);
             }
         }
 
-        let stream = self
-            .push_input_stream(Box::new(ByteStream::from(buf)))
-            .map_err(convert)?;
-        response.set_body(stream);
-        let response_id = self.push_response(Box::new(response)).map_err(convert)?;
+        let response_id = self
+            .table_mut()
+            .push_response(Box::new(response))
+            .context("pushing response")?;
+        let (stream_id, stream) = self
+            .table_mut()
+            .push_stream(Bytes::from(buf), response_id)
+            .context("pushing stream")?;
+        let response = self.table_mut().get_response_mut(response_id)?;
+        response.set_body(stream_id);
+
+        self.http_ctx_mut().streams.insert(stream_id, stream);
+
         Ok(response_id)
     }
 }

@@ -1,3 +1,13 @@
-// The macro will generate a macro for defining exports which we won't be reusing
-#![allow(unused)]
-wit_bindgen::generate!({ path: "../../wasi-http/wasi-http/wit" });
+mod outbound_request;
+
+wit_bindgen::generate!("wasi:preview/command-extended" in "../../wasi/wit");
+
+struct Component;
+
+impl CommandExtended for Component {
+    fn run() -> Result<(), ()> {
+        outbound_request::main().map_err(|e| eprintln!("{e:?}"))
+    }
+}
+
+export_command_extended!(Component);
