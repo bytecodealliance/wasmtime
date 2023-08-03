@@ -45,11 +45,11 @@ interface types {
   type fields = u32
   drop-fields: func(fields: fields)
   new-fields: func(entries: list<tuple<string,string>>) -> fields
-  fields-get: func(fields: fields, name: string) -> list<string>
-  fields-set: func(fields: fields, name: string, value: list<string>)
+  fields-get: func(fields: fields, name: string) -> list<list<u8>>
+  fields-set: func(fields: fields, name: string, value: list<list<u8>>)
   fields-delete: func(fields: fields, name: string)
-  fields-append: func(fields: fields, name: string, value: string)
-  fields-entries: func(fields: fields) -> list<tuple<string,string>>
+  fields-append: func(fields: fields, name: string, value: list<u8>)
+  fields-entries: func(fields: fields) -> list<tuple<string,list<u8>>>
   fields-clone: func(fields: fields) -> fields
 
   type headers = fields
@@ -80,18 +80,16 @@ interface types {
   drop-incoming-request: func(request: incoming-request)
   drop-outgoing-request: func(request: outgoing-request)
   incoming-request-method: func(request: incoming-request) -> method
-  incoming-request-path: func(request: incoming-request) -> string
-  incoming-request-query: func(request: incoming-request) -> string
+  incoming-request-path-with-query: func(request: incoming-request) -> option<string>
   incoming-request-scheme: func(request: incoming-request) -> option<scheme>
-  incoming-request-authority: func(request: incoming-request) -> string
+  incoming-request-authority: func(request: incoming-request) -> option<string>
   incoming-request-headers: func(request: incoming-request) -> headers
   incoming-request-consume: func(request: incoming-request) -> result<incoming-stream>
   new-outgoing-request: func(
     method: method,
-    path: string,
-    query: string,
+    path-with-query: option<string>,
     scheme: option<scheme>,
-    authority: string,
+    authority: option<string>,
     headers: headers
   ) -> outgoing-request
   outgoing-request-write: func(request: outgoing-request) -> result<outgoing-stream>
@@ -120,7 +118,7 @@ interface types {
   // simply return a `stream`).
   type response-outparam = u32
   drop-response-outparam: func(response: response-outparam)
-  set-response-outparam: func(response: result<outgoing-response, error>) -> result
+  set-response-outparam: func(param: response-outparam, response: result<outgoing-response, error>) -> result
 
   // This type corresponds to the HTTP standard Status Code.
   type status-code = u16

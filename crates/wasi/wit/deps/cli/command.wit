@@ -18,6 +18,7 @@ world command {
   import wasi:random/insecure-seed
   import wasi:poll/poll
   import wasi:io/streams
+
   import environment
   import exit
   import stdin
