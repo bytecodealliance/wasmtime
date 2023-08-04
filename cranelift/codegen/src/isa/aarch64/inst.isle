@@ -1810,9 +1810,6 @@
 (decl cond_br_cond (Cond) CondBrKind)
 (extern constructor cond_br_cond cond_br_cond)
 
-(decl pair_amode (Value i32) PairAMode)
-(extern constructor pair_amode pair_amode)
-
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for creating the zero register.
@@ -3080,9 +3077,90 @@
         dst))
 
 ;; Lower the address of a load or a store.
+;;
+;; This will create an `AMode` representing the address of the `Value` provided
+;; at runtime plus the immediate offset `i32` provided. The `Type` here is used
+;; to represent the size of the value being loaded or stored for offset scaling
+;; if necessary.
 (decl amode (Type Value i32) AMode)
-;; TODO: Port lower_address() to ISLE.
-(extern constructor amode amode)
+
+;; Base case: move the `offset` into a register and add it to `val` via the
+;; amode
+(rule 0 (amode ty val offset)
+        (AMode.RegReg val (imm $I64 (ImmExtend.Zero) (i64_as_u64 offset))))
+
+;; Optimize cases where the `offset` provided fits into a immediates of
+;; various kinds of addressing modes.
+(rule 1 (amode ty val offset)
+        (if-let simm9 (simm9_from_i64 offset))
+        (AMode.Unscaled val simm9))
+(rule 2 (amode ty val offset)
+        (if-let uimm12 (uimm12_scaled_from_i64 offset ty))
+        (AMode.UnsignedOffset val uimm12))
+
+;; Optimizations where addition can fold some operations into the `amode`.
+;;
+;; Note that here these take higher priority than constants because an
+;; add-of-extend can be folded into an amode, representing 2 otherwise emitted
+;; instructions. Constants on the other hand added to the amode represent only
+;; a single instruction folded in, so fewer instructions should be generated
+;; with these higher priority than the rules above.
+(rule 3 (amode ty (iadd x y) offset)
+        (AMode.RegReg (amode_add x offset) y))
+(rule 4 (amode ty (iadd x (uextend y @ (value_type $I32))) offset)
+        (AMode.RegExtended (amode_add x offset) y (ExtendOp.UXTW)))
+(rule 4 (amode ty (iadd x (sextend y @ (value_type $I32))) offset)
+        (AMode.RegExtended (amode_add x offset) y (ExtendOp.SXTW)))
+(rule 5 (amode ty (iadd (uextend x @ (value_type $I32)) y) offset)
+        (AMode.RegExtended (amode_add y offset) x (ExtendOp.UXTW)))
+(rule 5 (amode ty (iadd (sextend x @ (value_type $I32)) y) offset)
+        (AMode.RegExtended (amode_add y offset) x (ExtendOp.SXTW)))
+
+;; Small optimizations where constants found in `iadd` are folded into the
+;; `offset` immediate.
+;;
+;; NB: this should probably be done by mid-end optimizations rather than here
+;; in the backend, but currently Cranelift doesn't do that.
+(rule 6 (amode ty (iadd x (iconst (simm32 y))) offset)
+        (if-let new_offset (s32_add_fallible y offset))
+        (amode ty x new_offset))
+(rule 7 (amode ty (iadd (iconst (simm32 x)) y) offset)
+        (if-let new_offset (s32_add_fallible x offset))
+        (amode ty y new_offset))
+
+;; Helper to add a 32-bit signed immediate to the register provided. This will
+;; select an appropriate `add` instruction to use.
+(decl amode_add (Reg i32) Reg)
+(rule 0 (amode_add x y)
+        (add $I64 x (imm $I64 (ImmExtend.Zero) (i64_as_u64 y))))
+(rule 1 (amode_add x y)
+        (if-let (imm12_from_u64 imm12) (i64_as_u64 y))
+        (add_imm $I64 x imm12))
+(rule 2 (amode_add x 0) x)
+
+;; Creates a `PairAMode` for the `Value` provided plus the `i32` constant
+;; offset provided.
+(decl pair_amode (Value i32) PairAMode)
+
+;; Base case where `val` and `offset` are combined with an `add`
+(rule 0 (pair_amode val offset)
+        (if-let simm7 (simm7_scaled_from_i64 0 $I64))
+        (PairAMode.SignedOffset (amode_add val offset) simm7))
+
+;; Optimization when `offset` can fit into a `SImm7Scaled`.
+(rule 1 (pair_amode val offset)
+        (if-let simm7 (simm7_scaled_from_i64 offset $I64))
+        (PairAMode.SignedOffset val simm7))
+
+(decl pure partial simm7_scaled_from_i64 (i64 Type) SImm7Scaled)
+(extern constructor simm7_scaled_from_i64 simm7_scaled_from_i64)
+
+(decl pure partial uimm12_scaled_from_i64 (i64 Type) UImm12Scaled)
+(extern constructor uimm12_scaled_from_i64 uimm12_scaled_from_i64)
+
+(decl pure partial simm9_from_i64 (i64) SImm9)
+(extern constructor simm9_from_i64 simm9_from_i64)
+
 
 (decl sink_load_into_addr (Type Inst) Reg)
 (rule (sink_load_into_addr ty x @ (load _ addr (offset32 offset)))

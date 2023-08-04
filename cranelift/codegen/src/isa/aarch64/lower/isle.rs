@@ -8,16 +8,15 @@ use smallvec::SmallVec;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
     fp_reg, lower_condcode, lower_fp_condcode, stack_reg, writable_link_reg, writable_zero_reg,
-    zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond,
-    CondBrKind, ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst,
-    IntCC, JTSequenceInfo, MachLabel, MemLabel, MoveWideConst, MoveWideOp, NarrowValueMode, Opcode,
-    OperandSize, PairAMode, Reg, SImm9, ScalarSize, ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2,
-    VectorSize, NZCV,
+    zero_reg, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind,
+    ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC,
+    JTSequenceInfo, MachLabel, MemLabel, MoveWideConst, MoveWideOp, NarrowValueMode, Opcode,
+    OperandSize, Reg, SImm9, ScalarSize, ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize,
+    NZCV,
 };
 use crate::ir::condcodes;
 use crate::isa;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInfo};
-use crate::isa::aarch64::lower::{lower_address, lower_pair_address};
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::valueregs;
 use crate::machinst::{isle::*, InputSourceInst};
@@ -572,18 +571,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
     }
 
-    fn amode(&mut self, ty: Type, addr: Value, offset: i32) -> AMode {
-        let addr_ty = self.value_type(addr);
-        assert!(addr_ty == I64 || addr_ty == R64);
-        lower_address(self.lower_ctx, ty, addr, offset)
-    }
-
-    fn pair_amode(&mut self, addr: Value, offset: i32) -> PairAMode {
-        let addr_ty = self.value_type(addr);
-        assert!(addr_ty == I64 || addr_ty == R64);
-        lower_pair_address(self.lower_ctx, addr, offset)
-    }
-
     fn fp_cond_code(&mut self, cc: &condcodes::FloatCC) -> Cond {
         lower_fp_condcode(*cc)
     }
@@ -870,5 +857,17 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn shift_masked_imm(&mut self, ty: Type, imm: u64) -> u8 {
         (imm as u8) & ((ty.lane_bits() - 1) as u8)
+    }
+
+    fn simm7_scaled_from_i64(&mut self, val: i64, ty: Type) -> Option<SImm7Scaled> {
+        SImm7Scaled::maybe_from_i64(val, ty)
+    }
+
+    fn simm9_from_i64(&mut self, val: i64) -> Option<SImm9> {
+        SImm9::maybe_from_i64(val)
+    }
+
+    fn uimm12_scaled_from_i64(&mut self, val: i64, ty: Type) -> Option<UImm12Scaled> {
+        UImm12Scaled::maybe_from_i64(val, ty)
     }
 }
