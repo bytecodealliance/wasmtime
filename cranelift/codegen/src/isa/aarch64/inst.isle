@@ -1796,7 +1796,7 @@
 (decl cond_br_cond (Cond) CondBrKind)
 (extern constructor cond_br_cond cond_br_cond)
 
-(decl pair_amode (Value u32) PairAMode)
+(decl pair_amode (Value i32) PairAMode)
 (extern constructor pair_amode pair_amode)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3066,14 +3066,14 @@
         dst))
 
 ;; Lower the address of a load or a store.
-(decl amode (Type Value u32) AMode)
+(decl amode (Type Value i32) AMode)
 ;; TODO: Port lower_address() to ISLE.
 (extern constructor amode amode)
 
 (decl sink_load_into_addr (Type Inst) Reg)
 (rule (sink_load_into_addr ty x @ (load _ addr (offset32 offset)))
       (let ((_ Unit (sink_inst x)))
-        (add_imm_to_addr addr offset)))
+        (add_imm_to_addr addr (i64_as_u64 offset))))
 
 (decl add_imm_to_addr (Reg u64) Reg)
 (rule 2 (add_imm_to_addr val 0) val)
