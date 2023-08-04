@@ -200,3 +200,20 @@ block0:
 ;   fmov v0.4s, #1.31250000
 ;   ret
 
+
+function %load8(i64) -> i8x8 {
+block0(v0: i64):
+  v1 = load.i8x8 v0+0x800
+  return v1
+}
+
+; VCode:
+; block0:
+;   ldr d0, [x0, #2048]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr d0, [x0, #0x800]
+;   ret
+
