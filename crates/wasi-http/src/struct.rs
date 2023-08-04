@@ -1,6 +1,37 @@
 use crate::wasi::http::types::{Method, RequestOptions, Scheme};
 use bytes::{BufMut, Bytes, BytesMut};
+use http_acl::HttpAcl;
 use std::collections::HashMap;
+use std::fmt;
+
+impl fmt::Display for Scheme {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let scheme_str = match self {
+            Scheme::Http => "http",
+            Scheme::Https => "https",
+            Scheme::Other(s) => s,
+        };
+        write!(f, "{}", scheme_str)
+    }
+}
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let method_str = match self {
+            Method::Get => "GET",
+            Method::Put => "PUT",
+            Method::Post => "POST",
+            Method::Options => "OPTIONS",
+            Method::Head => "HEAD",
+            Method::Patch => "PATCH",
+            Method::Connect => "CONNECT",
+            Method::Delete => "DELETE",
+            Method::Trace => "TRACE",
+            Method::Other(s) => s,
+        };
+        write!(f, "{}", method_str)
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct Stream {
@@ -20,6 +51,7 @@ pub struct WasiHttp {
     pub fields: HashMap<u32, HashMap<String, Vec<Vec<u8>>>>,
     pub streams: HashMap<u32, Stream>,
     pub futures: HashMap<u32, ActiveFuture>,
+    pub acl: HttpAcl,
 }
 
 #[derive(Clone)]
@@ -119,6 +151,27 @@ impl WasiHttp {
             fields: HashMap::new(),
             streams: HashMap::new(),
             futures: HashMap::new(),
+            acl: HttpAcl::builder()
+                .host_acl_default(true)
+                .port_acl_default(true)
+                .ip_acl_default(true)
+                .build(),
+        }
+    }
+
+    pub fn new_with_acl(acl: HttpAcl) -> Self {
+        Self {
+            request_id_base: 1,
+            response_id_base: 1,
+            fields_id_base: 1,
+            streams_id_base: 1,
+            future_id_base: 1,
+            requests: HashMap::new(),
+            responses: HashMap::new(),
+            fields: HashMap::new(),
+            streams: HashMap::new(),
+            futures: HashMap::new(),
+            acl,
         }
     }
 }

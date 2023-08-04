@@ -184,5 +184,35 @@ fn main() -> Result<()> {
         "Error::UnexpectedError(\"unsupported scheme WS\")"
     );
 
+    // DELETE is not an allowed method in this test.
+    let r6 = request(
+        wasi::http::types::Method::Delete,
+        wasi::http::types::Scheme::Http,
+        "localhost:3000",
+        "/",
+        &[],
+    );
+
+    let error = r6.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Error::UnexpectedError(\"Method DELETE is not allowed - The entity is denied because the default is to deny if no ACL match is found.\")"
+    );
+
+    // 8080 is not an allowed port in this test.
+    let r7 = request(
+        wasi::http::types::Method::Get,
+        wasi::http::types::Scheme::Http,
+        "localhost:8080",
+        "/",
+        &[],
+    );
+
+    let error = r7.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Error::UnexpectedError(\"Port 8080 is not allowed - The entity is denied because the default is to deny if no ACL match is found.\")"
+    );
+
     Ok(())
 }

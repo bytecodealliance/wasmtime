@@ -9,6 +9,7 @@ use http_body_util::{BodyExt, Full};
 use hyper::Method;
 use hyper::Request;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,15 +32,15 @@ impl crate::wasi::http::outgoing_handler::Host for WasiHttp {
     }
 }
 
-fn port_for_scheme(scheme: &Option<Scheme>) -> &str {
+fn port_for_scheme(scheme: &Option<Scheme>) -> u16 {
     match scheme {
         Some(s) => match s {
-            Scheme::Http => ":80",
-            Scheme::Https => ":443",
+            Scheme::Http => 80,
+            Scheme::Https => 443,
             // This should never happen.
             _ => panic!("unsupported scheme!"),
         },
-        None => ":443",
+        None => 443,
     }
 }
 
@@ -82,21 +83,74 @@ impl WasiHttp {
             crate::wasi::http::types::Method::Other(s) => bail!("unknown method {}", s),
         };
 
+        let acl_method_match = self.acl.is_method_allowed(method.as_str());
+        if acl_method_match.is_denied() {
+            bail!(
+                "Method {} is not allowed - {}",
+                method.as_str(),
+                acl_method_match
+            );
+        }
+
         let scheme = match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
-            Scheme::Http => "http://",
-            Scheme::Https => "https://",
+            Scheme::Http => "http",
+            Scheme::Https => "https",
             Scheme::Other(s) => bail!("unsupported scheme {}", s),
         };
 
-        // Largely adapted from https://hyper.rs/guides/1/client/basic/
-        let authority = match request.authority.find(":") {
-            Some(_) => request.authority.clone(),
-            None => request.authority.clone() + port_for_scheme(&request.scheme),
+        let acl_scheme_match = self.acl.is_scheme_allowed(scheme);
+        if acl_scheme_match.is_denied() {
+            bail!("Scheme {} is not allowed - {}", scheme, acl_scheme_match);
+        }
+
+        let authority = match http_acl::utils::authority::Authority::parse(&request.authority) {
+            Ok(a) => a,
+            Err(e) => bail!("invalid authority: {}", e),
         };
-        let mut sender = if scheme == "https://" {
+
+        let port = if authority.port == 0 {
+            port_for_scheme(&request.scheme)
+        } else {
+            authority.port
+        };
+        let acl_port_match = self.acl.is_port_allowed(port);
+        if acl_port_match.is_denied() {
+            bail!("Port {} is not allowed - {}", port, acl_port_match);
+        }
+
+        let tcp_addresses = match &authority.host {
+            http_acl::utils::authority::Host::Domain(domain) => {
+                let acl_host_match = self.acl.is_host_allowed(domain);
+                if acl_host_match.is_denied() {
+                    bail!("Host {} is not allowed - {}", domain, acl_host_match);
+                }
+
+                tokio::net::lookup_host(&(domain.clone() + ":" + &port.to_string()))
+                    .await?
+                    .collect::<Vec<_>>()
+            }
+            http_acl::utils::authority::Host::Ip(ip) => {
+                let acl_ip_match = self.acl.is_ip_allowed(ip);
+                if acl_ip_match.is_denied() {
+                    bail!("IP {} is not allowed - {}", ip, acl_ip_match);
+                }
+
+                vec![SocketAddr::new(*ip, port)]
+            }
+        };
+
+        for tcp_address in &tcp_addresses {
+            let acl_ip_match = self.acl.is_ip_allowed(&tcp_address.ip());
+            if acl_ip_match.is_denied() {
+                bail!("IP {} is not allowed - {}", tcp_address.ip(), acl_ip_match);
+            }
+        }
+
+        // Largely adapted from https://hyper.rs/guides/1/client/basic/
+        let mut sender = if scheme == "https" {
             #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
             {
-                let stream = TcpStream::connect(authority.clone()).await?;
+                let stream = TcpStream::connect(tcp_addresses.as_slice()).await?;
                 //TODO: uncomment this code and make the tls implementation a feature decision.
                 //let connector = tokio_native_tls::native_tls::TlsConnector::builder().build()?;
                 //let connector = tokio_native_tls::TlsConnector::from(connector);
@@ -119,11 +173,10 @@ impl WasiHttp {
                     .with_root_certificates(root_cert_store)
                     .with_no_client_auth();
                 let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
-                let mut parts = authority.split(":");
-                let host = parts.next().unwrap_or(&authority);
-                let domain =
-                    rustls::ServerName::try_from(host).map_err(|_| anyhow!("invalid dnsname"))?;
-                let stream = connector.connect(domain, stream).await?;
+                let authority_string = authority.host.to_string();
+                let server_name = rustls::ServerName::try_from(authority_string.as_str())
+                    .map_err(|_| anyhow!("invalid dnsname"))?;
+                let stream = connector.connect(server_name, stream).await?;
 
                 let t = timeout(
                     connect_timeout,
@@ -141,7 +194,7 @@ impl WasiHttp {
             #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
             bail!("unsupported architecture for SSL")
         } else {
-            let tcp = TcpStream::connect(authority).await?;
+            let tcp = TcpStream::connect(tcp_addresses.as_slice()).await?;
             let t = timeout(connect_timeout, hyper::client::conn::http1::handshake(tcp)).await?;
             let (s, conn) = t?;
             tokio::task::spawn(async move {
@@ -152,7 +205,7 @@ impl WasiHttp {
             s
         };
 
-        let url = scheme.to_owned() + &request.authority + &request.path_with_query;
+        let url = scheme.to_owned() + "://" + &request.authority + &request.path_with_query;
 
         let mut call = Request::builder()
             .method(method)

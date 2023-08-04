@@ -1,13 +1,19 @@
 #![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
 use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
-use wasmtime_wasi_http::WasiHttp;
+use wasmtime_wasi_http::{
+    http_acl::{acl::HttpRequestMethod, HttpAcl},
+    WasiHttp,
+};
 
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::server::conn::http1;
 use hyper::{body::Bytes, service::service_fn, Request, Response};
-use std::{error::Error, net::SocketAddr};
+use std::{
+    error::Error,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+};
 use tokio::net::TcpListener;
 
 lazy_static::lazy_static! {
@@ -77,12 +83,30 @@ pub fn run(name: &str) -> anyhow::Result<()> {
 
     // Create our wasi context.
     let builder = WasiCtxBuilder::new().inherit_stdio().arg(name)?;
+    let acl = HttpAcl::builder()
+        .clear_allowed_methods()
+        .add_allowed_method(HttpRequestMethod::GET)
+        .unwrap()
+        .add_allowed_method(HttpRequestMethod::POST)
+        .unwrap()
+        .add_allowed_method(HttpRequestMethod::PUT)
+        .unwrap()
+        .add_allowed_host("localhost".to_string())
+        .unwrap()
+        .add_allowed_port_range(3000..=3000)
+        .unwrap()
+        .add_allowed_ip_range(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)).into())
+        .unwrap()
+        .add_allowed_ip_range(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1)).into())
+        .unwrap()
+        .build();
+    let wasi_http = WasiHttp::new_with_acl(acl);
 
     let mut store = Store::new(
         &ENGINE,
         Ctx {
             wasi: builder.build(),
-            http: WasiHttp::new(),
+            http: wasi_http,
         },
     );
 

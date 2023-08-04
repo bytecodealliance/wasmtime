@@ -1,5 +1,6 @@
 use crate::component_impl::add_component_to_linker;
 pub use crate::r#struct::WasiHttp;
+pub use http_acl;
 
 wasmtime::component::bindgen!({ path: "wasi-http/wit", world: "proxy"});
 
