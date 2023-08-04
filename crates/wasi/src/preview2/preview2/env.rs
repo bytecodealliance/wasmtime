@@ -1,4 +1,4 @@
-use crate::preview2::bindings::cli_base::{environment, stderr, stdin, stdout};
+use crate::preview2::bindings::cli::{environment, stderr, stdin, stdout};
 use crate::preview2::bindings::io::streams;
 use crate::preview2::WasiView;
 

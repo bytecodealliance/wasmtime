@@ -122,11 +122,11 @@ pub mod bindings {
               import wasi:random/random
               import wasi:random/insecure
               import wasi:random/insecure-seed
-              import wasi:cli-base/environment
-              import wasi:cli-base/exit
-              import wasi:cli-base/stdin
-              import wasi:cli-base/stdout
-              import wasi:cli-base/stderr
+              import wasi:cli/environment
+              import wasi:cli/exit
+              import wasi:cli/stdin
+              import wasi:cli/stdout
+              import wasi:cli/stderr
             ",
         tracing: true,
         trappable_error_type: {
@@ -142,7 +142,7 @@ pub mod bindings {
         });
     }
 
-    pub use self::_internal_rest::wasi::{cli_base, random};
+    pub use self::_internal_rest::wasi::{cli, random};
     pub mod filesystem {
         pub use super::_internal_io::wasi::filesystem::types;
         pub use super::_internal_rest::wasi::filesystem::preopens;

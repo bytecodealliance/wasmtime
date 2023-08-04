@@ -1,7 +1,7 @@
 use crate::preview2::WasiView;
 
 wasmtime::component::bindgen!({
-    world: "wasi:preview/command",
+    world: "wasi:cli/command",
     tracing: true,
     async: true,
     trappable_error_type: {
@@ -17,11 +17,11 @@ wasmtime::component::bindgen!({
        "wasi:clocks/timezone": crate::preview2::bindings::clocks::timezone,
        "wasi:clocks/wall_clock": crate::preview2::bindings::clocks::wall_clock,
        "wasi:random/random": crate::preview2::bindings::random::random,
-       "wasi:cli_base/environment": crate::preview2::bindings::cli_base::environment,
-       "wasi:cli_base/exit": crate::preview2::bindings::cli_base::exit,
-       "wasi:cli_base/stdin": crate::preview2::bindings::cli_base::stdin,
-       "wasi:cli_base/stdout": crate::preview2::bindings::cli_base::stdout,
-       "wasi:cli_base/stderr": crate::preview2::bindings::cli_base::stderr,
+       "wasi:cli/environment": crate::preview2::bindings::cli::environment,
+       "wasi:cli/exit": crate::preview2::bindings::cli::exit,
+       "wasi:cli/stdin": crate::preview2::bindings::cli::stdin,
+       "wasi:cli/stdout": crate::preview2::bindings::cli::stdout,
+       "wasi:cli/stderr": crate::preview2::bindings::cli::stderr,
     },
 });
 
@@ -34,11 +34,11 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::bindings::poll::poll::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::io::streams::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::random::random::add_to_linker(l, |t| t)?;
-    crate::preview2::bindings::cli_base::exit::add_to_linker(l, |t| t)?;
-    crate::preview2::bindings::cli_base::environment::add_to_linker(l, |t| t)?;
-    crate::preview2::bindings::cli_base::stdin::add_to_linker(l, |t| t)?;
-    crate::preview2::bindings::cli_base::stdout::add_to_linker(l, |t| t)?;
-    crate::preview2::bindings::cli_base::stderr::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::exit::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::environment::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::stdin::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::stdout::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::stderr::add_to_linker(l, |t| t)?;
     Ok(())
 }
 
@@ -46,7 +46,7 @@ pub mod sync {
     use crate::preview2::WasiView;
 
     wasmtime::component::bindgen!({
-        world: "wasi:preview/command",
+        world: "wasi:cli/command",
         tracing: true,
         async: false,
         trappable_error_type: {
@@ -62,11 +62,11 @@ pub mod sync {
            "wasi:clocks/timezone": crate::preview2::bindings::clocks::timezone,
            "wasi:clocks/wall_clock": crate::preview2::bindings::clocks::wall_clock,
            "wasi:random/random": crate::preview2::bindings::random::random,
-           "wasi:cli_base/environment": crate::preview2::bindings::cli_base::environment,
-           "wasi:cli_base/exit": crate::preview2::bindings::cli_base::exit,
-           "wasi:cli_base/stdin": crate::preview2::bindings::cli_base::stdin,
-           "wasi:cli_base/stdout": crate::preview2::bindings::cli_base::stdout,
-           "wasi:cli_base/stderr": crate::preview2::bindings::cli_base::stderr,
+           "wasi:cli/environment": crate::preview2::bindings::cli::environment,
+           "wasi:cli/exit": crate::preview2::bindings::cli::exit,
+           "wasi:cli/stdin": crate::preview2::bindings::cli::stdin,
+           "wasi:cli/stdout": crate::preview2::bindings::cli::stdout,
+           "wasi:cli/stderr": crate::preview2::bindings::cli::stderr,
         },
     });
 
@@ -81,11 +81,11 @@ pub mod sync {
         crate::preview2::bindings::sync_io::poll::poll::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sync_io::io::streams::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::random::random::add_to_linker(l, |t| t)?;
-        crate::preview2::bindings::cli_base::exit::add_to_linker(l, |t| t)?;
-        crate::preview2::bindings::cli_base::environment::add_to_linker(l, |t| t)?;
-        crate::preview2::bindings::cli_base::stdin::add_to_linker(l, |t| t)?;
-        crate::preview2::bindings::cli_base::stdout::add_to_linker(l, |t| t)?;
-        crate::preview2::bindings::cli_base::stderr::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::exit::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::environment::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::stdin::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::stdout::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::stderr::add_to_linker(l, |t| t)?;
         Ok(())
     }
 }

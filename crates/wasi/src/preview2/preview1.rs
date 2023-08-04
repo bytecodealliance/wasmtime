@@ -1,4 +1,4 @@
-use crate::preview2::bindings::cli_base::{stderr, stdin, stdout};
+use crate::preview2::bindings::cli::{stderr, stdin, stdout};
 use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
 use crate::preview2::bindings::io::streams;
@@ -319,8 +319,8 @@ impl<T: WasiPreview1View + preopens::Host> WasiPreview1ViewExt for T {}
 
 pub fn add_to_linker<
     T: WasiPreview1View
-        + bindings::cli_base::environment::Host
-        + bindings::cli_base::exit::Host
+        + bindings::cli::environment::Host
+        + bindings::cli::exit::Host
         + bindings::filesystem::types::Host
         + bindings::filesystem::preopens::Host
         + bindings::sync_io::poll::poll::Host
@@ -634,8 +634,8 @@ fn first_non_empty_iovec<'a>(
 // stored in the WasiPreview1Adapter struct.
 impl<
         T: WasiPreview1View
-            + bindings::cli_base::environment::Host
-            + bindings::cli_base::exit::Host
+            + bindings::cli::environment::Host
+            + bindings::cli::exit::Host
             + bindings::filesystem::preopens::Host
             + bindings::filesystem::types::Host
             + bindings::poll::poll::Host
