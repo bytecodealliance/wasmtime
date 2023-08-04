@@ -1162,9 +1162,9 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Should only be called if `island_needed()` returns true, i.e., if we
     /// actually reach a deadline. It's not necessarily a problem to do so
     /// otherwise but it may result in unnecessary work during emission.
-    pub fn emit_island(&mut self, distance: CodeOffset, ctrl_plane: &mut ControlPlane) {
+    pub fn emit_island(&mut self, ctrl_plane: &mut ControlPlane) {
         self.emit_island_maybe_forced(
-            /* force_veneers = */ false, distance, ctrl_plane, /* last_island = */ false,
+            /* force_veneers = */ false, ctrl_plane, /* last_island = */ false,
         );
     }
 
@@ -1173,7 +1173,6 @@ impl<I: VCodeInst> MachBuffer<I> {
     fn emit_island_maybe_forced(
         &mut self,
         force_veneers: bool,
-        distance: CodeOffset,
         ctrl_plane: &mut ControlPlane,
         last_island: bool,
     ) {
@@ -1403,16 +1402,12 @@ impl<I: VCodeInst> MachBuffer<I> {
         while !self.pending_constants.is_empty()
             || !self.pending_traps.is_empty()
             || !self.fixup_records.is_empty()
+            || !self.fixup_records_max_range.is_empty()
         {
             // `emit_island()` will emit any pending veneers and constants, and
             // as a side-effect, will also take care of any fixups with resolved
             // labels eagerly.
-            self.emit_island_maybe_forced(
-                force_veneers,
-                u32::MAX,
-                ctrl_plane,
-                /* last_island = */ true,
-            );
+            self.emit_island_maybe_forced(force_veneers, ctrl_plane, /* last_island = */ true);
         }
 
         // Ensure that all labels have been fixed up after the last island is emitted. This is a
@@ -1813,7 +1808,6 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
         if self.force_veneers || self.buf.island_needed(size) {
             self.buf.emit_island_maybe_forced(
                 self.force_veneers,
-                size,
                 ctrl_plane,
                 /* last_island = */ false,
             );
@@ -1998,7 +1992,7 @@ mod test {
         buf.bind_label(label(1), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
             if buf.island_needed(0) {
-                buf.emit_island(0, state.ctrl_plane_mut());
+                buf.emit_island(state.ctrl_plane_mut());
             }
             let inst = Inst::Nop4;
             inst.emit(&[], &mut buf, &info, &mut state);
@@ -2035,9 +2029,15 @@ mod test {
             // before the deadline.
             taken: BranchTarget::ResolvedOffset((1 << 20) - 4 - 20),
 
-            // This branch is in-range so no veneers should be needed, it should
-            // go directly to the target.
-            not_taken: BranchTarget::ResolvedOffset(2000000 + 4 - 4),
+            // This branch is in-range so no veneers are technically
+            // be needed; however because we resolve *all* pending
+            // fixups that cross an island when that island occurs, it
+            // will have a veneer as well. This veneer comes just
+            // after the one above. (Note that because the CondBr has
+            // two instructions, the conditinoal and unconditional,
+            // this offset is the same, though the veneer is four
+            // bytes later.)
+            not_taken: BranchTarget::ResolvedOffset((1 << 20) - 4 - 20),
         };
         inst.emit(&[], &mut buf2, &info, &mut state);
 

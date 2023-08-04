@@ -1050,7 +1050,7 @@ impl<I: VCodeInst> VCode<I> {
                 bb_padding.len() as u32 + I::LabelUse::ALIGN - 1
             };
             if buffer.island_needed(padding + worst_case_next_bb) {
-                buffer.emit_island(padding + worst_case_next_bb, ctrl_plane);
+                buffer.emit_island(ctrl_plane);
             }
 
             // Insert padding, if configured, to stress the `MachBuffer`'s
