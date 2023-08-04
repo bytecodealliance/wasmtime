@@ -601,7 +601,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts.push(Inst::StoreP64 {
             rt: fp_reg(),
             rt2: link_reg(),
-            mem: PairAMode::SPPreIndexed(SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap()),
+            mem: PairAMode::SPPreIndexed {
+                simm7: SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
+            },
             flags: MemFlags::trusted(),
         });
 
@@ -639,7 +641,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts.push(Inst::LoadP64 {
             rt: writable_fp_reg(),
             rt2: writable_link_reg(),
-            mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, types::I64).unwrap()),
+            mem: PairAMode::SPPostIndexed {
+                simm7: SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
+            },
             flags: MemFlags::trusted(),
         });
         insts
@@ -796,9 +800,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             insts.push(Inst::StoreP64 {
                 rt,
                 rt2,
-                mem: PairAMode::SPPreIndexed(
-                    SImm7Scaled::maybe_from_i64(-clobber_offset_change, types::I64).unwrap(),
-                ),
+                mem: PairAMode::SPPreIndexed {
+                    simm7: SImm7Scaled::maybe_from_i64(-clobber_offset_change, types::I64).unwrap(),
+                },
                 flags: MemFlags::trusted(),
             });
 
@@ -852,9 +856,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 Inst::FpuStoreP64 {
                     rt,
                     rt2,
-                    mem: PairAMode::SPPreIndexed(
-                        SImm7Scaled::maybe_from_i64(-clobber_offset_change, F64).unwrap(),
-                    ),
+                    mem: PairAMode::SPPreIndexed {
+                        simm7: SImm7Scaled::maybe_from_i64(-clobber_offset_change, F64).unwrap(),
+                    },
                     flags: MemFlags::trusted(),
                 },
                 clobber_offset_change as u32,
@@ -925,7 +929,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let load_vec_reg_pair = |rt, rt2| Inst::FpuLoadP64 {
             rt,
             rt2,
-            mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, F64).unwrap()),
+            mem: PairAMode::SPPostIndexed {
+                simm7: SImm7Scaled::maybe_from_i64(16, F64).unwrap(),
+            },
             flags: MemFlags::trusted(),
         };
 
@@ -961,7 +967,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
             insts.push(Inst::LoadP64 {
                 rt,
                 rt2,
-                mem: PairAMode::SPPostIndexed(SImm7Scaled::maybe_from_i64(16, I64).unwrap()),
+                mem: PairAMode::SPPostIndexed {
+                    simm7: SImm7Scaled::maybe_from_i64(16, I64).unwrap(),
+                },
                 flags: MemFlags::trusted(),
             });
         }

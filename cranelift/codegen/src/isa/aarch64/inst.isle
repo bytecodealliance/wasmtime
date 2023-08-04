@@ -1037,6 +1037,7 @@
 (type NZCV (primitive NZCV))
 (type ASIMDFPModImm (primitive ASIMDFPModImm))
 (type ASIMDMovModImm (primitive ASIMDMovModImm))
+(type SImm7Scaled (primitive SImm7Scaled))
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
@@ -1179,7 +1180,20 @@
          (off i64)
          (ty Type))))
 
-(type PairAMode extern (enum))
+;; A memory argument to a load/store-pair.
+(type PairAMode (enum
+  ;; Signed, scaled 7-bit offset from a register.
+  (SignedOffset
+    (reg Reg)
+    (simm7 SImm7Scaled))
+
+  ;; Pre-increment register before address computation.
+  (SPPreIndexed (simm7 SImm7Scaled))
+
+  ;; Post-increment register after address computation.
+  (SPPostIndexed (simm7 SImm7Scaled))
+))
+
 (type FPUOpRI extern (enum))
 (type FPUOpRIMod extern (enum))
 

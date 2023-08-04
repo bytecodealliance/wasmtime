@@ -343,7 +343,10 @@ pub(crate) fn lower_pair_address(ctx: &mut Lower<Inst>, addr: Value, offset: i32
         (res, SImm7Scaled::maybe_from_i64(0, I64).unwrap())
     };
 
-    PairAMode::SignedOffset(addr, imm7)
+    PairAMode::SignedOffset {
+        reg: addr,
+        simm7: imm7,
+    }
 }
 
 /// Lower the address of a load or store.

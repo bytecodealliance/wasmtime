@@ -29,6 +29,7 @@ use crate::{
     },
     isa::aarch64::abi::AArch64CallSite,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
+    isa::aarch64::inst::SImm7Scaled,
     isa::unwind::UnwindInst,
     machinst::{
         abi::ArgPair, ty_bits, InstOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
