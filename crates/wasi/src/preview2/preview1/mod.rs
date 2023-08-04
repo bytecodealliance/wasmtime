@@ -1565,7 +1565,7 @@ impl<
         let ctim = status_change_timestamp.try_into()?;
         Ok(types::Filestat {
             dev: 1,
-            ino: metadata_hash.lower.to_le(),
+            ino: metadata_hash.lower,
             filetype,
             nlink,
             size,
