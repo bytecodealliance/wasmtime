@@ -451,8 +451,8 @@ async fn stream_pollable_lifetimes() -> Result<()> {
         // Correct execution: should succeed
         let mut table = Table::new();
         let wasi = WasiCtxBuilder::new()
-            .set_args(&["correct"])
-            .set_stdin(MemoryInputPipe::new(" ".into()))
+            .args(&["correct"])
+            .stdin(MemoryInputPipe::new(" ".into()))
             .build(&mut table)?;
 
         let (mut store, command) = instantiate(
@@ -470,8 +470,8 @@ async fn stream_pollable_lifetimes() -> Result<()> {
         // Incorrect execution: should trap with a TableError::HasChildren
         let mut table = Table::new();
         let wasi = WasiCtxBuilder::new()
-            .set_args(&["trap"])
-            .set_stdin(MemoryInputPipe::new(" ".into()))
+            .args(&["trap"])
+            .stdin(MemoryInputPipe::new(" ".into()))
             .build(&mut table)?;
 
         let (mut store, command) = instantiate(
