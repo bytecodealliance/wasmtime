@@ -71,10 +71,7 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(all(target_os = "macos", not(feature = "posix-signals-on-macos")))] {
-        mod macos;
-        use macos as sys;
-    } else if #[cfg(unix)] {
+    if #[cfg(unix)] {
         mod unix;
         use unix as sys;
     } else if #[cfg(target_os = "windows")] {
@@ -82,6 +79,9 @@ cfg_if::cfg_if! {
         use windows as sys;
     }
 }
+
+#[cfg(target_os = "macos")]
+mod macos;
 
 pub use sys::SignalHandler;
 
@@ -91,6 +91,10 @@ pub use sys::SignalHandler;
 /// This is initialized during `init_traps` below. The definition lives within
 /// `wasmtime` currently.
 static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
+
+/// Whether or not macOS is using mach ports.
+#[cfg(target_os = "macos")]
+static mut MACOS_USE_MACH_PORTS: bool = false;
 
 /// This function is required to be called before any WebAssembly is entered.
 /// This will configure global state such as signal handlers to prepare the
@@ -105,12 +109,39 @@ static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
 /// program counter is the pc of an actual wasm trap or not. This is then used
 /// to disambiguate faults that happen due to wasm and faults that happen due to
 /// bugs in Rust or elsewhere.
-pub fn init_traps(is_wasm_pc: fn(usize) -> bool) {
+pub fn init_traps(is_wasm_pc: fn(usize) -> bool, macos_use_mach_ports: bool) {
     static INIT: Once = Once::new();
+
+    // only used on macos, so squelch warnings about this not being used on
+    // other platform.
+    let _ = macos_use_mach_ports;
+
     INIT.call_once(|| unsafe {
         IS_WASM_PC = is_wasm_pc;
+        #[cfg(target_os = "macos")]
+        if macos_use_mach_ports {
+            MACOS_USE_MACH_PORTS = macos_use_mach_ports;
+            return macos::platform_init();
+        }
         sys::platform_init();
     });
+
+    #[cfg(target_os = "macos")]
+    unsafe {
+        assert_eq!(
+            MACOS_USE_MACH_PORTS, macos_use_mach_ports,
+            "cannot configure two different methods of signal handling in the same process"
+        );
+    }
+}
+
+fn lazy_per_thread_init() {
+    unsafe {
+        if MACOS_USE_MACH_PORTS {
+            return macos::lazy_per_thread_init();
+        }
+        sys::lazy_per_thread_init();
+    }
 }
 
 /// Raises a trap immediately.
@@ -592,7 +623,7 @@ mod tls {
                 // performed per-thread initialization for traps.
                 let (prev, initialized) = p.get();
                 if !initialized {
-                    super::super::sys::lazy_per_thread_init();
+                    super::super::lazy_per_thread_init();
                 }
                 p.set((val, true));
                 prev
@@ -609,7 +640,7 @@ mod tls {
                 if initialized {
                     return;
                 }
-                super::super::sys::lazy_per_thread_init();
+                super::super::lazy_per_thread_init();
                 p.set((state, true));
             })
         }
