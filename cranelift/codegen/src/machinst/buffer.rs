@@ -150,7 +150,7 @@ use crate::timing;
 use crate::trace;
 use cranelift_control::ControlPlane;
 use cranelift_entity::{entity_impl, PrimaryMap};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 use std::mem;
 use std::string::String;
@@ -234,6 +234,10 @@ pub struct MachBuffer<I: VCodeInst> {
     pending_traps: SmallVec<[MachLabelTrap; 16]>,
     /// Fixups that must be performed after all code is emitted.
     fixup_records: SmallVec<[MachLabelFixup<I>; 16]>,
+    /// Fixups whose labels are at maximum range already: these need
+    /// not be considered in island emission until we're done
+    /// emitting.
+    fixup_records_max_range: SmallVec<[MachLabelFixup<I>; 16]>,
     /// Current deadline at which all constants are flushed and all code labels
     /// are extended by emitting long-range jumps in an island. This flush
     /// should be rare (e.g., on AArch64, the shortest-range PC-rel references
@@ -389,6 +393,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             pending_constants: SmallVec::new(),
             pending_traps: SmallVec::new(),
             fixup_records: SmallVec::new(),
+            fixup_records_max_range: SmallVec::new(),
             island_deadline: UNKNOWN_LABEL_OFFSET,
             island_worst_case_size: 0,
             latest_branches: SmallVec::new(),
@@ -1158,7 +1163,9 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// actually reach a deadline. It's not necessarily a problem to do so
     /// otherwise but it may result in unnecessary work during emission.
     pub fn emit_island(&mut self, distance: CodeOffset, ctrl_plane: &mut ControlPlane) {
-        self.emit_island_maybe_forced(false, distance, ctrl_plane);
+        self.emit_island_maybe_forced(
+            /* force_veneers = */ false, distance, ctrl_plane, /* last_island = */ false,
+        );
     }
 
     /// Same as `emit_island`, but an internal API with a `force_veneers`
@@ -1168,6 +1175,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         force_veneers: bool,
         distance: CodeOffset,
         ctrl_plane: &mut ControlPlane,
+        last_island: bool,
     ) {
         // We're going to purge fixups, so no latest-branch editing can happen
         // anymore.
@@ -1232,7 +1240,15 @@ impl<I: VCodeInst> MachBuffer<I> {
             self.get_appended_space(size);
         }
 
-        for fixup in mem::take(&mut self.fixup_records) {
+        let last_island_fixups = if last_island {
+            mem::take(&mut self.fixup_records_max_range)
+        } else {
+            smallvec![]
+        };
+        for fixup in mem::take(&mut self.fixup_records)
+            .into_iter()
+            .chain(last_island_fixups.into_iter())
+        {
             trace!("emit_island: fixup {:?}", fixup);
             let MachLabelFixup {
                 label,
@@ -1284,18 +1300,32 @@ impl<I: VCodeInst> MachBuffer<I> {
                 }
             } else {
                 // If the offset of this label is not known at this time then
-                // there's one of two possibilities:
+                // there are three possibilities:
                 //
-                // * First we may be about to exceed the maximum jump range of
-                //   this fixup. In that case a veneer is inserted to buy some
-                //   more budget for the forward-jump. It's guaranteed that the
-                //   label will eventually come after where we're at, so we know
-                //   that the forward jump is necessary.
+                // 1. It's possible that the label is already a "max
+                //    range" label: a veneer would not help us any, and
+                //    so we need not consider the label during island
+                //    emission any more until the very end (the last
+                //    "island" pass). In this case we kick the label into
+                //    a separate list to process once at the end, to
+                //    avoid quadratic behavior (see #6798).
                 //
-                // * Otherwise we're still within range of the forward jump but
-                //   the precise target isn't known yet. In that case we
-                //   enqueue the fixup to get processed later.
-                if forced_threshold - offset > kind.max_pos_range() {
+                // 2. Or, we may be about to exceed the maximum jump range of
+                //    this fixup. In that case a veneer is inserted to buy some
+                //    more budget for the forward-jump. It's guaranteed that the
+                //    label will eventually come after where we're at, so we know
+                //    that the forward jump is necessary.
+                //
+                // 3. Otherwise, we're still within range of the forward jump but
+                //    the precise target isn't known yet. In that case we
+                //    enqueue the fixup to get processed later.
+                if !kind.supports_veneer() {
+                    self.fixup_records_max_range.push(MachLabelFixup {
+                        label,
+                        offset,
+                        kind,
+                    });
+                } else if forced_threshold - offset > kind.max_pos_range() {
                     self.emit_veneer(label, offset, kind);
                 } else {
                     self.use_label_at_offset(offset, label, kind);
@@ -1364,7 +1394,12 @@ impl<I: VCodeInst> MachBuffer<I> {
             // `emit_island()` will emit any pending veneers and constants, and
             // as a side-effect, will also take care of any fixups with resolved
             // labels eagerly.
-            self.emit_island_maybe_forced(force_veneers, u32::MAX, ctrl_plane);
+            self.emit_island_maybe_forced(
+                force_veneers,
+                u32::MAX,
+                ctrl_plane,
+                /* last_island = */ true,
+            );
         }
 
         // Ensure that all labels have been fixed up after the last island is emitted. This is a
@@ -1763,8 +1798,12 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
         // between functions which are too far away.
         let size = func.len() as u32;
         if self.force_veneers || self.buf.island_needed(size) {
-            self.buf
-                .emit_island_maybe_forced(self.force_veneers, size, ctrl_plane);
+            self.buf.emit_island_maybe_forced(
+                self.force_veneers,
+                size,
+                ctrl_plane,
+                /* last_island = */ false,
+            );
         }
 
         self.buf.align_to(align);
