@@ -1182,10 +1182,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.latest_branches.clear();
 
         // Reset internal calculations about islands since we're going to
-        // change the calculus as we apply fixups. The `forced_threshold` is
-        // used here to determine whether jumps to unknown labels will require
-        // a veneer or not.
-        let forced_threshold = self.worst_case_end_of_island(distance);
+        // change the calculus as we apply fixups.
         self.island_deadline = UNKNOWN_LABEL_OFFSET;
         self.island_worst_case_size = 0;
 
@@ -1316,19 +1313,25 @@ impl<I: VCodeInst> MachBuffer<I> {
                 //    label will eventually come after where we're at, so we know
                 //    that the forward jump is necessary.
                 //
-                // 3. Otherwise, we're still within range of the forward jump but
-                //    the precise target isn't known yet. In that case we
-                //    enqueue the fixup to get processed later.
+                // 3. Otherwise, we're still within range of the
+                //    forward jump but the precise target isn't known
+                //    yet. In that case, to avoid quadratic behavior,
+                //    we emit a veneer and if the resulting label-use
+                //    fixup is then max-range, we put it in the
+                //    max-range list. We could enqueue the fixup for
+                //    processing later, and this would enable slightly
+                //    fewer veneers, but islands are relatively rare
+                //    and the cost of "upgrading" all forward label
+                //    refs that cross an island should be relatively
+                //    low.
                 if !kind.supports_veneer() {
                     self.fixup_records_max_range.push(MachLabelFixup {
                         label,
                         offset,
                         kind,
                     });
-                } else if forced_threshold - offset > kind.max_pos_range() {
-                    self.emit_veneer(label, offset, kind);
                 } else {
-                    self.use_label_at_offset(offset, label, kind);
+                    self.emit_veneer(label, offset, kind);
                 }
             }
         }
@@ -1376,10 +1379,20 @@ impl<I: VCodeInst> MachBuffer<I> {
             veneer_fixup_off,
             veneer_label_use
         );
-        // Register a new use of `label` with our new veneer fixup and offset.
-        // This'll recalculate deadlines accordingly and enqueue this fixup to
-        // get processed at some later time.
-        self.use_label_at_offset(veneer_fixup_off, label, veneer_label_use);
+        // Register a new use of `label` with our new veneer fixup and
+        // offset. This'll recalculate deadlines accordingly and
+        // enqueue this fixup to get processed at some later
+        // time. Note that if we now have a max-range, we instead skip
+        // the usual fixup list to avoid quadratic behavior.
+        if veneer_label_use.supports_veneer() {
+            self.use_label_at_offset(veneer_fixup_off, label, veneer_label_use);
+        } else {
+            self.fixup_records_max_range.push(MachLabelFixup {
+                label,
+                offset: veneer_fixup_off,
+                kind: veneer_label_use,
+            });
+        }
     }
 
     fn finish_emission_maybe_forcing_veneers(
