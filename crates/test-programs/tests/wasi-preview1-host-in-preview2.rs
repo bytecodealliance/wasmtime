@@ -4,7 +4,7 @@ use tempfile::TempDir;
 use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::preview2::{
     pipe::MemoryOutputPipe,
-    preview1::{add_to_linker, WasiPreview1Adapter, WasiPreview1View},
+    preview1::{add_to_linker_async, WasiPreview1Adapter, WasiPreview1View},
     DirPerms, FilePerms, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
@@ -34,7 +34,7 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     let stderr = MemoryOutputPipe::new();
     let r = {
         let mut linker = Linker::new(&ENGINE);
-        add_to_linker(&mut linker)?;
+        add_to_linker_async(&mut linker)?;
 
         // Create our wasi context.
         // Additionally register any preopened directories if we have them.

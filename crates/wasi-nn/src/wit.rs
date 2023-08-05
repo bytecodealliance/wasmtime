@@ -128,6 +128,10 @@ impl gen::inference::Host for WasiNnCtx {
     }
 }
 
+impl gen::errors::Host for WasiNnCtx {}
+
+impl gen::tensor::Host for WasiNnCtx {}
+
 impl TryFrom<gen::graph::GraphEncoding> for crate::backend::BackendKind {
     type Error = UsageError;
     fn try_from(value: gen::graph::GraphEncoding) -> Result<Self, Self::Error> {
