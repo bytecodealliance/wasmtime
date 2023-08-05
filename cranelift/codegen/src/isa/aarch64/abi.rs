@@ -396,27 +396,21 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn gen_ret(
         setup_frame: bool,
         isa_flags: &aarch64_settings::Flags,
+        call_conv: isa::CallConv,
         rets: Vec<RetPair>,
         stack_bytes_to_pop: u32,
     ) -> Inst {
-        if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
-            let key = if isa_flags.sign_return_address_with_bkey() {
-                APIKey::B
-            } else {
-                APIKey::A
-            };
-
-            Inst::AuthenticatedRet {
+        match select_api_key(isa_flags, call_conv, setup_frame) {
+            Some(key) => Inst::AuthenticatedRet {
                 key,
                 is_hint: !isa_flags.has_pauth(),
                 rets,
                 stack_bytes_to_pop,
-            }
-        } else {
-            Inst::Ret {
+            },
+            None => Inst::Ret {
                 rets,
                 stack_bytes_to_pop,
-            }
+            },
         }
     }
 
@@ -558,36 +552,32 @@ impl ABIMachineSpec for AArch64MachineDeps {
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
 
-        if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
-            let key = if isa_flags.sign_return_address_with_bkey() {
-                APIKey::B
-            } else {
-                APIKey::A
-            };
-
-            insts.push(Inst::Pacisp { key });
-
-            if flags.unwind_info() {
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::Aarch64SetPointerAuth {
-                        return_addresses: true,
-                    },
-                });
+        match select_api_key(isa_flags, call_conv, setup_frame) {
+            Some(key) => {
+                insts.push(Inst::Paci { key });
+                if flags.unwind_info() {
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::Aarch64SetPointerAuth {
+                            return_addresses: true,
+                        },
+                    });
+                }
             }
-        } else {
-            if isa_flags.use_bti() {
-                insts.push(Inst::Bti {
-                    targets: BranchTargetType::C,
-                });
-            }
+            None => {
+                if isa_flags.use_bti() {
+                    insts.push(Inst::Bti {
+                        targets: BranchTargetType::C,
+                    });
+                }
 
-            if flags.unwind_info() && call_conv.extends_apple_aarch64() {
-                // The macOS unwinder seems to require this.
-                insts.push(Inst::Unwind {
-                    inst: UnwindInst::Aarch64SetPointerAuth {
-                        return_addresses: false,
-                    },
-                });
+                if flags.unwind_info() && call_conv.extends_apple_aarch64() {
+                    // The macOS unwinder seems to require this.
+                    insts.push(Inst::Unwind {
+                        inst: UnwindInst::Aarch64SetPointerAuth {
+                            return_addresses: false,
+                        },
+                    });
+                }
             }
         }
 
@@ -1161,8 +1151,39 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 }
 
+fn select_api_key(
+    isa_flags: &aarch64_settings::Flags,
+    call_conv: isa::CallConv,
+    setup_frame: bool,
+) -> Option<APIKey> {
+    if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
+        // The `tail` calling convention uses a zero modifier rather than SP
+        // because tail calls may happen with a different stack pointer than
+        // when the function was entered, meaning that it won't be the same when
+        // the return address is decrypted.
+        Some(if isa_flags.sign_return_address_with_bkey() {
+            match call_conv {
+                isa::CallConv::Tail => APIKey::BZ,
+                _ => APIKey::BSP,
+            }
+        } else {
+            match call_conv {
+                isa::CallConv::Tail => APIKey::AZ,
+                _ => APIKey::ASP,
+            }
+        })
+    } else {
+        None
+    }
+}
+
 impl AArch64CallSite {
-    pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
+    pub fn emit_return_call(
+        mut self,
+        ctx: &mut Lower<Inst>,
+        args: isle::ValueSlice,
+        isa_flags: &aarch64_settings::Flags,
+    ) {
         let (new_stack_arg_size, old_stack_arg_size) =
             self.emit_temporary_tail_call_frame(ctx, args);
 
@@ -1174,6 +1195,7 @@ impl AArch64CallSite {
             opcode,
             old_stack_arg_size,
             new_stack_arg_size,
+            key: select_api_key(isa_flags, isa::CallConv::Tail, true),
         });
 
         match dest {

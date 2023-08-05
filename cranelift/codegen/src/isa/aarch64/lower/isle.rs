@@ -110,7 +110,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             caller_conv,
             self.backend.flags().clone(),
         );
-        call_site.emit_return_call(self.lower_ctx, args);
+        call_site.emit_return_call(self.lower_ctx, args, &self.backend.isa_flags);
 
         InstOutput::new()
     }
@@ -138,7 +138,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             caller_conv,
             self.backend.flags().clone(),
         );
-        call_site.emit_return_call(self.lower_ctx, args);
+        call_site.emit_return_call(self.lower_ctx, args, &self.backend.isa_flags);
 
         InstOutput::new()
     }
