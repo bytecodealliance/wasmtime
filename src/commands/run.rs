@@ -805,7 +805,7 @@ fn populate_with_wasi(
 }
 
 #[cfg(not(unix))]
-fn ctx_set_listenfd(num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<usize> {
+fn ctx_set_listenfd(num_fd: usize, _builder: &mut WasiCtxBuilder) -> Result<usize> {
     Ok(num_fd)
 }
 
