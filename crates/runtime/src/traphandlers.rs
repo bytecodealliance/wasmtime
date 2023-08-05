@@ -136,12 +136,14 @@ pub fn init_traps(is_wasm_pc: fn(usize) -> bool, macos_use_mach_ports: bool) {
 }
 
 fn lazy_per_thread_init() {
+    #[cfg(target_os = "macos")]
     unsafe {
         if MACOS_USE_MACH_PORTS {
             return macos::lazy_per_thread_init();
         }
-        sys::lazy_per_thread_init();
     }
+
+    sys::lazy_per_thread_init();
 }
 
 /// Raises a trap immediately.
