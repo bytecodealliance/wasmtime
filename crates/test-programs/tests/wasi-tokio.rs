@@ -38,19 +38,19 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         let mut builder = WasiCtxBuilder::new();
 
         if inherit_stdio {
-            builder = builder.inherit_stdio();
+            builder.inherit_stdio();
         } else {
-            builder = builder
+            builder
                 .stdout(Box::new(stdout.clone()))
                 .stderr(Box::new(stderr.clone()));
         }
-        builder = builder.arg(name)?.arg(".")?;
+        builder.arg(name)?.arg(".")?;
         println!("preopen: {:?}", workspace);
         let preopen_dir =
             cap_std::fs::Dir::open_ambient_dir(workspace.path(), cap_std::ambient_authority())?;
-        builder = builder.preopened_dir(preopen_dir, ".")?;
+        builder.preopened_dir(preopen_dir, ".")?;
         for (var, val) in test_programs::wasi_tests_environment() {
-            builder = builder.env(var, val)?;
+            builder.env(var, val)?;
         }
 
         let mut store = Store::new(&ENGINE, builder.build());

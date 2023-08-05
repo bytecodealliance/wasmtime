@@ -63,7 +63,7 @@ async fn instantiate(
 async fn hello_stdout() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_args(&["gussie", "sparky", "willa"])
+        .args(&["gussie", "sparky", "willa"])
         .build(&mut table)?;
     let (mut store, command) =
         instantiate(get_component("hello_stdout"), CommandCtx { table, wasi }).await?;
@@ -77,7 +77,7 @@ async fn hello_stdout() -> Result<()> {
 async fn panic() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_args(&[
+        .args(&[
             "diesel",
             "the",
             "cat",
@@ -100,7 +100,7 @@ async fn panic() -> Result<()> {
 async fn args() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_args(&["hello", "this", "", "is an argument", "with 🚩 emoji"])
+        .args(&["hello", "this", "", "is an argument", "with 🚩 emoji"])
         .build(&mut table)?;
     let (mut store, command) =
         instantiate(get_component("args"), CommandCtx { table, wasi }).await?;
@@ -156,8 +156,8 @@ async fn time() -> Result<()> {
 
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_monotonic_clock(FakeMonotonicClock { now: Mutex::new(0) })
-        .set_wall_clock(FakeWallClock)
+        .monotonic_clock(FakeMonotonicClock { now: Mutex::new(0) })
+        .wall_clock(FakeWallClock)
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -173,7 +173,7 @@ async fn time() -> Result<()> {
 async fn stdin() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_stdin(MemoryInputPipe::new(
+        .stdin(MemoryInputPipe::new(
             "So rested he by the Tumtum tree".into(),
         ))
         .build(&mut table)?;
@@ -191,7 +191,7 @@ async fn stdin() -> Result<()> {
 async fn poll_stdin() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_stdin(MemoryInputPipe::new(
+        .stdin(MemoryInputPipe::new(
             "So rested he by the Tumtum tree".into(),
         ))
         .build(&mut table)?;
@@ -209,8 +209,8 @@ async fn poll_stdin() -> Result<()> {
 async fn env() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .push_env("frabjous", "day")
-        .push_env("callooh", "callay")
+        .env("frabjous", "day")
+        .env("callooh", "callay")
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -232,7 +232,7 @@ async fn file_read() -> Result<()> {
 
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .push_preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
+        .preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -255,7 +255,7 @@ async fn file_append() -> Result<()> {
 
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .push_preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
+        .preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -287,7 +287,7 @@ async fn file_dir_sync() -> Result<()> {
 
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .push_preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
+        .preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -380,7 +380,7 @@ async fn directory_list() -> Result<()> {
     let wasi = WasiCtxBuilder::new()
         .inherit_stdout()
         .inherit_stderr()
-        .push_preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
+        .preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -432,7 +432,7 @@ async fn read_only() -> Result<()> {
     let mut table = Table::new();
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     let wasi = WasiCtxBuilder::new()
-        .push_preopened_dir(open_dir, DirPerms::READ, FilePerms::READ, "/")
+        .preopened_dir(open_dir, DirPerms::READ, FilePerms::READ, "/")
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -451,8 +451,8 @@ async fn stream_pollable_lifetimes() -> Result<()> {
         // Correct execution: should succeed
         let mut table = Table::new();
         let wasi = WasiCtxBuilder::new()
-            .set_args(&["correct"])
-            .set_stdin(MemoryInputPipe::new(" ".into()))
+            .args(&["correct"])
+            .stdin(MemoryInputPipe::new(" ".into()))
             .build(&mut table)?;
 
         let (mut store, command) = instantiate(
@@ -470,8 +470,8 @@ async fn stream_pollable_lifetimes() -> Result<()> {
         // Incorrect execution: should trap with a TableError::HasChildren
         let mut table = Table::new();
         let wasi = WasiCtxBuilder::new()
-            .set_args(&["trap"])
-            .set_stdin(MemoryInputPipe::new(" ".into()))
+            .args(&["trap"])
+            .stdin(MemoryInputPipe::new(" ".into()))
             .build(&mut table)?;
 
         let (mut store, command) = instantiate(

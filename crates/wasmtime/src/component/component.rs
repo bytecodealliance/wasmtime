@@ -1,6 +1,6 @@
 use crate::code::CodeObject;
 use crate::signatures::SignatureCollection;
-use crate::{Engine, Module};
+use crate::{Engine, Module, ResourcesRequired};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -9,7 +9,8 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AllCallFunc, ComponentTypes, StaticModuleIndex, TrampolineIndex, Translator,
+    AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
+    TrampolineIndex, Translator,
 };
 use wasmtime_environ::{FunctionLoc, ObjectKind, PrimaryMap, ScopeVec};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
@@ -360,6 +361,92 @@ impl Component {
             wasm_call,
             ..*dtor.func_ref()
         }
+    }
+
+    /// Returns a summary of the resources required to instantiate this
+    /// [`Component`][crate::component::Component].
+    ///
+    /// Note that when a component imports and instantiates another component or
+    /// core module, we cannot determine ahead of time how many resources
+    /// instantiating this component will require, and therefore this method
+    /// will return `None` in these scenarios.
+    ///
+    /// Potential uses of the returned information:
+    ///
+    /// * Determining whether your pooling allocator configuration supports
+    ///   instantiating this component.
+    ///
+    /// * Deciding how many of which `Component` you want to instantiate within
+    ///   a fixed amount of resources, e.g. determining whether to create 5
+    ///   instances of component X or 10 instances of component Y.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> wasmtime::Result<()> {
+    /// use wasmtime::{Config, Engine, component::Component};
+    ///
+    /// let mut config = Config::new();
+    /// config.wasm_multi_memory(true);
+    /// config.wasm_component_model(true);
+    /// let engine = Engine::new(&config)?;
+    ///
+    /// let component = Component::new(&engine, &r#"
+    ///     (component
+    ///         ;; Define a core module that uses two memories.
+    ///         (core module $m
+    ///             (memory 1)
+    ///             (memory 6)
+    ///         )
+    ///
+    ///         ;; Instantiate that core module three times.
+    ///         (core instance $i1 (instantiate (module $m)))
+    ///         (core instance $i2 (instantiate (module $m)))
+    ///         (core instance $i3 (instantiate (module $m)))
+    ///     )
+    /// "#)?;
+    ///
+    /// let resources = component.resources_required()
+    ///     .expect("this component does not import any core modules or instances");
+    ///
+    /// // Instantiating the component will require allocating two memories per
+    /// // core instance, and there are three instances, so six total memories.
+    /// assert_eq!(resources.num_memories, 6);
+    /// assert_eq!(resources.max_initial_memory_size, Some(6));
+    ///
+    /// // The component doesn't need any tables.
+    /// assert_eq!(resources.num_tables, 0);
+    /// assert_eq!(resources.max_initial_table_size, None);
+    /// # Ok(()) }
+    /// ```
+    pub fn resources_required(&self) -> Option<ResourcesRequired> {
+        let mut resources = ResourcesRequired {
+            num_memories: 0,
+            max_initial_memory_size: None,
+            num_tables: 0,
+            max_initial_table_size: None,
+        };
+        for init in &self.env_component().initializers {
+            match init {
+                GlobalInitializer::InstantiateModule(inst) => match inst {
+                    InstantiateModule::Static(index, _) => {
+                        let module = self.static_module(*index);
+                        resources.add(&module.resources_required());
+                    }
+                    InstantiateModule::Import(_, _) => {
+                        // We can't statically determine the resources required
+                        // to instantiate this component.
+                        return None;
+                    }
+                },
+                GlobalInitializer::LowerImport { .. }
+                | GlobalInitializer::ExtractMemory(_)
+                | GlobalInitializer::ExtractRealloc(_)
+                | GlobalInitializer::ExtractPostReturn(_)
+                | GlobalInitializer::Resource(_) => {}
+            }
+        }
+        Some(resources)
     }
 }
 

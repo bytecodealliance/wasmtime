@@ -70,17 +70,17 @@ impl wasi_config_t {
     pub fn into_wasi_ctx(self) -> Result<WasiCtx> {
         let mut builder = WasiCtxBuilder::new();
         if self.inherit_args {
-            builder = builder.inherit_args()?;
+            builder.inherit_args()?;
         } else if !self.args.is_empty() {
             let args = self
                 .args
                 .into_iter()
                 .map(|bytes| Ok(String::from_utf8(bytes)?))
                 .collect::<Result<Vec<String>>>()?;
-            builder = builder.args(&args)?;
+            builder.args(&args)?;
         }
         if self.inherit_env {
-            builder = builder.inherit_env()?;
+            builder.inherit_env()?;
         } else if !self.env.is_empty() {
             let env = self
                 .env
@@ -91,44 +91,50 @@ impl wasi_config_t {
                     Ok((k, v))
                 })
                 .collect::<Result<Vec<(String, String)>>>()?;
-            builder = builder.envs(&env)?;
+            builder.envs(&env)?;
         }
-        builder = match self.stdin {
-            WasiConfigReadPipe::None => builder,
-            WasiConfigReadPipe::Inherit => builder.inherit_stdin(),
+        match self.stdin {
+            WasiConfigReadPipe::None => {}
+            WasiConfigReadPipe::Inherit => {
+                builder.inherit_stdin();
+            }
             WasiConfigReadPipe::File(file) => {
                 let file = cap_std::fs::File::from_std(file);
                 let file = wasi_cap_std_sync::file::File::from_cap_std(file);
-                builder.stdin(Box::new(file))
+                builder.stdin(Box::new(file));
             }
             WasiConfigReadPipe::Bytes(binary) => {
                 let binary = ReadPipe::from(binary);
-                builder.stdin(Box::new(binary))
+                builder.stdin(Box::new(binary));
             }
         };
-        builder = match self.stdout {
-            WasiConfigWritePipe::None => builder,
-            WasiConfigWritePipe::Inherit => builder.inherit_stdout(),
+        match self.stdout {
+            WasiConfigWritePipe::None => {}
+            WasiConfigWritePipe::Inherit => {
+                builder.inherit_stdout();
+            }
             WasiConfigWritePipe::File(file) => {
                 let file = cap_std::fs::File::from_std(file);
                 let file = wasi_cap_std_sync::file::File::from_cap_std(file);
-                builder.stdout(Box::new(file))
+                builder.stdout(Box::new(file));
             }
         };
-        builder = match self.stderr {
-            WasiConfigWritePipe::None => builder,
-            WasiConfigWritePipe::Inherit => builder.inherit_stderr(),
+        match self.stderr {
+            WasiConfigWritePipe::None => {}
+            WasiConfigWritePipe::Inherit => {
+                builder.inherit_stderr();
+            }
             WasiConfigWritePipe::File(file) => {
                 let file = cap_std::fs::File::from_std(file);
                 let file = wasi_cap_std_sync::file::File::from_cap_std(file);
-                builder.stderr(Box::new(file))
+                builder.stderr(Box::new(file));
             }
         };
         for (dir, path) in self.preopen_dirs {
-            builder = builder.preopened_dir(dir, path)?;
+            builder.preopened_dir(dir, path)?;
         }
         for (fd_num, listener) in self.preopen_sockets {
-            builder = builder.preopened_socket(fd_num, listener)?;
+            builder.preopened_socket(fd_num, listener)?;
         }
         Ok(builder.build())
     }
