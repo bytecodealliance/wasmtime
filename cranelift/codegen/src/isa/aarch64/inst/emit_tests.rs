@@ -71,7 +71,7 @@ fn test_aarch64_binemit() {
             stack_bytes_to_pop: 0,
         },
         "FF0F5FD6",
-        "retab",
+        "retabsp",
     ));
     insns.push((
         Inst::AuthenticatedRet {
@@ -81,7 +81,7 @@ fn test_aarch64_binemit() {
             stack_bytes_to_pop: 16,
         },
         "FF430091FF0B5FD6",
-        "add sp, sp, #16 ; retaa",
+        "add sp, sp, #16 ; retaasp",
     ));
     insns.push((Inst::Paci { key: APIKey::BSP }, "7F2303D5", "pacibsp"));
     insns.push((Inst::Xpaclri, "FF2003D5", "xpaclri"));
