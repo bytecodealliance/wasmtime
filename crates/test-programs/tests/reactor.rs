@@ -88,7 +88,7 @@ async fn instantiate(
 async fn reactor_tests() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .push_env("GOOD_DOG", "gussie")
+        .env("GOOD_DOG", "gussie")
         .build(&mut table)?;
 
     let (mut store, reactor) =

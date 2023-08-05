@@ -61,26 +61,29 @@ fn instantiate(wat: &[u8]) -> (Store<WasiCtx>, TypedFunc<u64, u64>) {
 
 /// Build a WASI context with some actual data to retrieve.
 fn wasi_context() -> WasiCtx {
-    let wasi = WasiCtxBuilder::new();
-    wasi.envs(&[
-        ("a".to_string(), "b".to_string()),
-        ("b".to_string(), "c".to_string()),
-        ("c".to_string(), "d".to_string()),
-    ])
-    .unwrap()
-    .args(&[
-        "exe".to_string(),
-        "--flag1".to_string(),
-        "--flag2".to_string(),
-        "--flag3".to_string(),
-        "--flag4".to_string(),
-    ])
-    .unwrap()
-    .preopened_dir(
-        wasmtime_wasi::Dir::open_ambient_dir("benches/wasi", wasmtime_wasi::ambient_authority())
+    WasiCtxBuilder::new()
+        .envs(&[
+            ("a".to_string(), "b".to_string()),
+            ("b".to_string(), "c".to_string()),
+            ("c".to_string(), "d".to_string()),
+        ])
+        .unwrap()
+        .args(&[
+            "exe".to_string(),
+            "--flag1".to_string(),
+            "--flag2".to_string(),
+            "--flag3".to_string(),
+            "--flag4".to_string(),
+        ])
+        .unwrap()
+        .preopened_dir(
+            wasmtime_wasi::Dir::open_ambient_dir(
+                "benches/wasi",
+                wasmtime_wasi::ambient_authority(),
+            )
             .unwrap(),
-        "/",
-    )
-    .unwrap()
-    .build()
+            "/",
+        )
+        .unwrap()
+        .build()
 }
