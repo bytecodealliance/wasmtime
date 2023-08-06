@@ -22,6 +22,7 @@ wasmtime-wasi = { workspace = true, features = ["tokio"] }
 # These dependencies are necessary for the wasi-nn implementation:
 openvino = { version = "0.5.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
+hyper = { version = "1.0.0-rc.3", features = ["full"] }
 dashmap = "5.4.0"
 
 [build-dependencies]
