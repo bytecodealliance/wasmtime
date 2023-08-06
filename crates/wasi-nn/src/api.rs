@@ -48,4 +48,6 @@ pub enum BackendError {
     InvalidNumberOfBuilders(u32, u32),
     #[error("Not enough memory to copy tensor data of size: {0}")]
     NotEnoughMemory(usize),
+    #[error("Unsupoprted operation: {0}")]
+    UnsupportedOperation(&'static str),
 }
