@@ -45,6 +45,10 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str, isle_dir: &str) -> Result<(), 
         isle_dir,
     )?;
 
+    let mut fmt = srcgen::Formatter::new();
+    fmt.line(crate::constant_hash::SIMPLE_HASH_SOURCE);
+    fmt.update_file("constant_hash.rs", out_dir)?;
+
     // Per ISA definitions.
     for isa in isa::define(isas) {
         gen_settings::generate(

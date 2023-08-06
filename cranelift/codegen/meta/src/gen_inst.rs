@@ -2,14 +2,13 @@
 use std::fmt;
 use std::rc::Rc;
 
-use cranelift_codegen_shared::constant_hash;
-
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::{AllInstructions, Instruction};
 use crate::cdsl::operands::Operand;
 use crate::cdsl::typevar::{TypeSet, TypeVar};
 
+use crate::constant_hash::{generate_table, simple_hash};
 use crate::error;
 use crate::srcgen::{Formatter, Match};
 use crate::unique_table::{UniqueSeqTable, UniqueTable};
@@ -658,10 +657,9 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.empty_line();
 
     // Generate an opcode hash table for looking up opcodes by name.
-    let hash_table =
-        crate::constant_hash::generate_table(all_inst.iter(), all_inst.len(), |inst| {
-            constant_hash::simple_hash(&inst.name)
-        });
+    let hash_table = generate_table(all_inst.iter(), all_inst.len(), |inst| {
+        simple_hash(&inst.name)
+    });
     fmtln!(
         fmt,
         "const OPCODE_HASH_TABLE: [Option<Opcode>; {}] = [",

@@ -12,4 +12,3 @@ edition.workspace = true
 rustdoc-args = [ "--document-private-items" ]
 
 [dependencies]
-cranelift-codegen-shared = { path = "../shared", version = "0.99.0" }

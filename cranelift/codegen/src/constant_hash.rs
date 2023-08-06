@@ -10,8 +10,7 @@
 //!
 //! This module provides runtime support for lookups in these tables.
 
-// Re-export entities from constant_hash for simplicity of use.
-pub use cranelift_codegen_shared::constant_hash::*;
+include!(concat!(env!("OUT_DIR"), "/constant_hash.rs"));
 
 /// Trait that must be implemented by the entries in a constant hash table.
 pub trait Table<K: Copy + Eq> {

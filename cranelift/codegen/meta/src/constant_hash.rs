@@ -9,6 +9,27 @@
 
 use std::iter;
 
+/// A primitive hash function for matching opcodes.
+pub fn simple_hash(s: &str) -> usize {
+    let mut h: u32 = 5381;
+    for c in s.chars() {
+        h = (h ^ c as u32).wrapping_add(h.rotate_right(6));
+    }
+    h as usize
+}
+
+// Note: Keep in sync with the above code.
+pub static SIMPLE_HASH_SOURCE: &str = r#"
+/// A primitive hash function for matching opcodes.
+pub fn simple_hash(s: &str) -> usize {
+    let mut h: u32 = 5381;
+    for c in s.chars() {
+        h = (h ^ c as u32).wrapping_add(h.rotate_right(6));
+    }
+    h as usize
+}
+"#;
+
 /// Compute an open addressed, quadratically probed hash table containing
 /// `items`. The returned table is a list containing the elements of the
 /// iterable `items` and `None` in unused slots.
@@ -44,8 +65,7 @@ pub fn generate_table<'cont, T, I: iter::Iterator<Item = &'cont T>, H: Fn(&T) ->
 
 #[cfg(test)]
 mod tests {
-    use super::generate_table;
-    use cranelift_codegen_shared::constant_hash::simple_hash;
+    use super::{generate_table, simple_hash};
 
     #[test]
     fn test_generate_table() {
@@ -60,5 +80,11 @@ mod tests {
                 None
             ]
         );
+    }
+
+    #[test]
+    fn basic() {
+        assert_eq!(simple_hash("Hello"), 0x2fa70c01);
+        assert_eq!(simple_hash("world"), 0x5b0c31d5);
     }
 }
