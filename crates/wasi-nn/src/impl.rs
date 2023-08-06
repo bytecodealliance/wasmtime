@@ -91,75 +91,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         }
     }
 
-    fn register_named_model(
-        &mut self,
-        model_name: &GuestPtr<'_, str>,
-        model_bytes: &GraphBuilderArray<'_>,
-        encoding: GraphEncoding,
-        target: ExecutionTarget
-    ) -> Result<()> {
-        let length: usize = model_bytes.len().try_into().unwrap();
-        if length > MAX_GUEST_MODEL_REGISTRATION_SIZE {
-            return Err(
-                UsageError::ModelTooLarge(length, MAX_GUEST_MODEL_REGISTRATION_SIZE).into(),
-            );
-        }
-
-        let mut model_bytes_vec: Vec<Vec<u8>> = Vec::with_capacity(length.try_into().unwrap());
-        let mut model_bytes = model_bytes.as_ptr();
-        for _ in 0..length {
-            let v = model_bytes
-                .read()?
-                .as_slice()?
-                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)")
-                .to_vec();
-            model_bytes_vec.push(v);
-            model_bytes = model_bytes.add(1)?;
-        }
-        let model_name_key = model_name.as_str().unwrap().unwrap().to_string();
-        match target {
-            ExecutionTarget::Cpu => {
-                let graph = self.build_graph(&model_bytes_vec, encoding, target)?;
-                self.loaded_models
-                    .insert(model_name_key, LoadedModel { graph });
-            }
-            _ => {
-                self.model_registry.insert(
-                    model_name_key,
-                    RegisteredModel {
-                        model_bytes: model_bytes_vec,
-                        encoding,
-                        target
-                    },
-                );
-            }
-        };
-        Ok(())
-    }
-
-    fn get_model_list<'b>(&mut self,
-                          buffer: &GuestPtr<'b, u8>,
-                          model_list: &GuestPtr<'b, GuestPtr<'b, u8>>,
-                          length: u32) -> Result<()> {
-        let mut model_names: Vec<String> = self.model_registry.iter().map(|e| e.key().to_string()).collect();
-        self.loaded_models.iter().for_each(|e| model_names.push(e.key().to_string()));
-
-        println!("Model names: {:?}", model_names);
-        let model_names_array = StringArray { elems: model_names };
-        model_names_array.write_to_guest(buffer, model_list);
-        Ok(())
-    }
-
-    fn get_model_list_sizes(&mut self) -> Result<(u32, u32)> {
-        let mut model_names: Vec<String> = self.model_registry.iter().map(|e| e.key().to_string()).collect();
-        self.loaded_models.iter().for_each(|e| model_names.push(e.key().to_string()));
-        let lengths: Vec<u32> = model_names.iter().map(|e| e.len() as u32).collect();
-        let string_count = lengths.len() as u32;
-        let buffer_size = lengths.iter().sum::<u32>() as u32 + string_count;
-        Ok((string_count, buffer_size))
-    }
-
-    fn init_execution_context(&mut self, graph_id: Graph) -> Result<GraphExecutionContext> {
+   fn init_execution_context(&mut self, graph_id: Graph) -> Result<GraphExecutionContext> {
         let exec_context = if let Some(graph) = self.graphs.get_mut(graph_id) {
             graph.init_execution_context()?
         } else {
