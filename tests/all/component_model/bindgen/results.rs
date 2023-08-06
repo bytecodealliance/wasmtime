@@ -238,7 +238,7 @@ mod enum_error {
                 enum-error: func(a: float64) -> result<float64, e1>
             }
         }",
-        trappable_error_type: { imports::e1: TrappableE1 }
+        trappable_error_type: { "inline:inline/imports"::e1: TrappableE1 }
     });
 
     #[test]
@@ -402,7 +402,7 @@ mod record_error {
         }",
         // Literal strings can be used for the interface and typename fields instead of
         // identifiers, because wit identifiers arent always Rust identifiers.
-        trappable_error_type: { "imports"::"e2": TrappableE2 }
+        trappable_error_type: { "inline:inline/imports"::"e2": TrappableE2 }
     });
 
     #[test]
@@ -556,7 +556,7 @@ mod variant_error {
                 variant-error: func(a: float64) -> result<float64, e3>
             }
         }",
-        trappable_error_type: { imports::e3: TrappableE3 }
+        trappable_error_type: { "inline:inline/imports"::e3: TrappableE3 }
     });
 
     #[test]
@@ -705,6 +705,187 @@ mod variant_error {
             format!("{}", e.source().expect("trap message is stored in source")),
             "variant_error: trap"
         );
+
+        Ok(())
+    }
+}
+
+mod multiple_interfaces_error {
+    use super::*;
+    use exports::foo;
+    use inline::inline::imports;
+    use inline::inline::types;
+
+    wasmtime::component::bindgen!({
+        inline: "
+        package inline:inline
+        interface types {
+            enum e1 { a, b, c }
+            enum-error: func(a: float64) -> result<float64, e1>
+        }
+        interface imports {
+            use types.{e1}
+            enum-error: func(a: float64) -> result<float64, e1>
+        }
+        world result-playground {
+            import imports
+            export foo: interface {
+                enum e1 { a, b, c }
+                enum-error: func(a: float64) -> result<float64, e1>
+            }
+        }",
+        trappable_error_type: { "inline:inline/types"::e1: TrappableE1 }
+    });
+
+    #[test]
+    fn run() -> Result<(), Error> {
+        let engine = engine();
+        // NOTE: this component doesn't make use of a types import, and relies instead on
+        // subtyping.
+        let component = Component::new(
+            &engine,
+            format!(
+                r#"
+            (component
+                (type $err' (enum "a" "b" "c"))
+                (import (interface "inline:inline/imports") (instance $i
+                    (export $e1 "e1" (type (eq $err')))
+                    (export "enum-error" (func (param "a" float64) (result (result float64 (error $e1)))))
+                ))
+                (core module $libc
+                    (memory (export "memory") 1)
+                    {REALLOC_AND_FREE}
+                )
+                (core instance $libc (instantiate $libc))
+                (core module $m
+                    (import "" "core_enum_error" (func $f (param f64 i32)))
+                    (import "libc" "memory" (memory 0))
+                    (import "libc" "realloc" (func $realloc (param i32 i32 i32 i32) (result i32)))
+                    (func (export "core_enum_error_export") (param f64) (result i32)
+                        (local $retptr i32)
+                        (local.set $retptr
+                            (call $realloc
+                                (i32.const 0)
+                                (i32.const 0)
+                                (i32.const 4)
+                                (i32.const 16)))
+                        (call $f (local.get 0) (local.get $retptr))
+                        (local.get $retptr)
+                    )
+                )
+                (core func $core_enum_error
+                    (canon lower (func $i "enum-error") (memory $libc "memory") (realloc (func $libc "realloc")))
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance (export "core_enum_error" (func $core_enum_error))))
+                    (with "libc" (instance $libc))
+                ))
+                (func $f_enum_error
+                    (param "a" float64)
+                    (result (result float64 (error $err')))
+                    (canon lift (core func $i "core_enum_error_export") (memory $libc "memory"))
+                )
+
+                (component $nested
+                    (import "f-err" (type $err (eq $err')))
+                    (import "f" (func $f (param "a" float64) (result (result float64 (error $err)))))
+                    (export $err2 "err" (type $err'))
+                    (export "enum-error" (func $f) (func (param "a" float64) (result (result float64 (error $err2)))))
+                )
+
+                (instance $n (instantiate $nested
+                    (with "f-err" (type $err'))
+                    (with "f" (func $f_enum_error))
+                ))
+                (export "foo" (instance $n))
+            )
+        "#
+            ),
+        )?;
+
+        // You can create concrete trap types which make it all the way out to the
+        // host caller, via downcast_ref below.
+        #[derive(Debug)]
+        struct MyTrap;
+
+        impl std::fmt::Display for MyTrap {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{:?}", self)
+            }
+        }
+        impl std::error::Error for MyTrap {}
+
+        // It is possible to define From impls that target these generated trappable
+        // types. This allows you to integrate libraries with other error types, or
+        // use your own more descriptive error types, and use ? to convert them at
+        // their throw site.
+        impl From<MyTrap> for types::TrappableE1 {
+            fn from(t: MyTrap) -> types::TrappableE1 {
+                types::TrappableE1::trap(anyhow!(t))
+            }
+        }
+
+        #[derive(Default)]
+        struct MyImports {}
+
+        impl types::Host for MyImports {
+            fn enum_error(&mut self, a: f64) -> Result<f64, types::TrappableE1> {
+                if a == 0.0 {
+                    Ok(a)
+                } else if a == 1.0 {
+                    Err(imports::E1::A)?
+                } else {
+                    Err(MyTrap)?
+                }
+            }
+        }
+
+        impl imports::Host for MyImports {
+            fn enum_error(&mut self, a: f64) -> Result<f64, types::TrappableE1> {
+                if a == 0.0 {
+                    Ok(a)
+                } else if a == 1.0 {
+                    Err(imports::E1::A)?
+                } else {
+                    Err(MyTrap)?
+                }
+            }
+        }
+
+        let mut linker = Linker::new(&engine);
+        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+
+        let mut store = Store::new(&engine, MyImports::default());
+        let (results, _) = ResultPlayground::instantiate(&mut store, &component, &linker)?;
+
+        assert_eq!(
+            results
+                .foo()
+                .call_enum_error(&mut store, 0.0)
+                .expect("no trap")
+                .expect("no error returned"),
+            0.0
+        );
+
+        let e = results
+            .foo()
+            .call_enum_error(&mut store, 1.0)
+            .expect("no trap")
+            .err()
+            .expect("error returned");
+        assert_eq!(e, foo::E1::A);
+
+        let e = results
+            .foo()
+            .call_enum_error(&mut store, 2.0)
+            .err()
+            .expect("trap");
+        assert_eq!(
+            format!("{}", e.source().expect("trap message is stored in source")),
+            "MyTrap"
+        );
+        e.downcast_ref::<MyTrap>()
+            .expect("downcast trap to concrete MyTrap type");
 
         Ok(())
     }

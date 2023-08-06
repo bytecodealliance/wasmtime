@@ -76,12 +76,12 @@ pub fn run(name: &str) -> anyhow::Result<()> {
     wasmtime_wasi_http::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.http)?;
 
     // Create our wasi context.
-    let builder = WasiCtxBuilder::new().inherit_stdio().arg(name)?;
+    let wasi = WasiCtxBuilder::new().inherit_stdio().arg(name)?.build();
 
     let mut store = Store::new(
         &ENGINE,
         Ctx {
-            wasi: builder.build(),
+            wasi,
             http: WasiHttp::new(),
         },
     );

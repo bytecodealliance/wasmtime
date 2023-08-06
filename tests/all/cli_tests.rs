@@ -717,3 +717,17 @@ fn wasm_flags_without_subcommand() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn wasi_misaligned_pointer() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .arg("./tests/all/cli_tests/wasi_misaligned_pointer.wat")
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Pointer not aligned"),
+        "bad stderr: {stderr}",
+    );
+    Ok(())
+}

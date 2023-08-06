@@ -173,6 +173,21 @@ unsafe extern "C" fn trap_handler(
     }
 }
 
+// FIXME(rust-lang/libc#3312) the currenty definition of `ucontext_t` in the
+// `libc` crate is incorrect on aarch64-apple-drawin so it's defined here with a
+// more accurate definition. When that PR and/or issue is resolved then this
+// should no longer be necessary.
+#[repr(C)]
+#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+struct ucontext_t {
+    uc_onstack: libc::c_int,
+    uc_sigmask: libc::sigset_t,
+    uc_stack: libc::stack_t,
+    uc_link: *mut libc::ucontext_t,
+    uc_mcsize: usize,
+    uc_mcontext: libc::mcontext_t,
+}
+
 unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const u8, usize) {
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", target_arch = "x86_64"))] {
@@ -214,7 +229,7 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 (*cx.uc_mcontext).__ss.__rbp as usize,
             )
         } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
-            let cx = &*(cx as *const libc::ucontext_t);
+            let cx = &*(cx as *const ucontext_t);
             (
                 (*cx.uc_mcontext).__ss.__pc as *const u8,
                 (*cx.uc_mcontext).__ss.__fp as usize,
@@ -270,7 +285,7 @@ unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
                 (*cx.uc_mcontext).__ss.__rsp -= 8;
             }
         } else if #[cfg(target_arch = "aarch64")] {
-            let cx = &mut *(cx as *mut libc::ucontext_t);
+            let cx = &mut *(cx as *mut ucontext_t);
             (*cx.uc_mcontext).__ss.__pc = pc as u64;
             (*cx.uc_mcontext).__ss.__x[0] = arg1 as u64;
         } else {
