@@ -139,6 +139,52 @@
 //!
 //! Given these invariants, we argue why each optimization preserves execution
 //! semantics below (grep for "Preserves execution semantics").
+//!
+//! # Avoiding Quadratic Behavior
+//!
+//! There are two cases where we've had to take some care to avoid
+//! quadratic worst-case behavior:
+//!
+//! - The "labels at this branch" list can grow unboundedly if the
+//!   code generator binds many labels at one location. If the count
+//!   gets too high (defined by the `LABEL_LIST_THRESHOLD` constant), we
+//!   simply abort an optimization early in a way that is always correct
+//!   but is conservative.
+//!
+//! - The fixup list can interact with island emission to create
+//!   "quadratic island behvior". In a little more detail, one can hit
+//!   this behavior by having some pending fixups (forward label
+//!   references) with long-range label-use kinds, and some others
+//!   with shorter-range references that nonetheless still are pending
+//!   long enough to trigger island generation. In such a case, we
+//!   process the fixup list, generate veneers to extend some forward
+//!   references' ranges, but leave the other (longer-range) ones
+//!   alone. The way this was implemented put them back on a list and
+//!   resulted in quadratic behavior.
+//!
+//!   To avoid this, we could use a better data structure that allows
+//!   us to query for fixups with deadlines "coming soon" and generate
+//!   veneers for only those fixups. However, there is some
+//!   interaction with the branch peephole optimizations: the
+//!   invariant there is that branches in the "most recent branches
+//!   contiguous with end of buffer" list have corresponding fixups in
+//!   order (so that when we chomp the branch, we can chomp its fixup
+//!   too).
+//!
+//!   So instead, when we generate an island, for now we create
+//!   veneers for *all* pending fixups, then if upgraded to a kind
+//!   that no longer supports veneers (is at "max range"), kick the
+//!   fixups off to a list that is *not* processed at islands except
+//!   for one last pass after emission. This allows us to skip the
+//!   work and avoids the quadratic behvior. We expect that this is
+//!   fine-ish for now: islands are relatively rare, and if they do
+//!   happen and generate unnecessary veneers (as will now happen for
+//!   the case above) we'll only get one unnecessary veneer per
+//!   branch (then they are at max range already).
+//!
+//!   Longer-term, we could use a data structure that allows querying
+//!   by deadline, as long as we can properly chomp just-added fixups
+//!   when chomping branches.
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
 use crate::ir::{ExternalName, Opcode, RelSourceLoc, SourceLoc, TrapCode};
@@ -1309,12 +1355,14 @@ impl<I: VCodeInst> MachBuffer<I> {
                 // there are three possibilities:
                 //
                 // 1. It's possible that the label is already a "max
-                //    range" label: a veneer would not help us any, and
-                //    so we need not consider the label during island
-                //    emission any more until the very end (the last
-                //    "island" pass). In this case we kick the label into
-                //    a separate list to process once at the end, to
-                //    avoid quadratic behavior (see #6798).
+                //    range" label: a veneer would not help us any,
+                //    and so we need not consider the label during
+                //    island emission any more until the very end (the
+                //    last "island" pass). In this case we kick the
+                //    label into a separate list to process once at
+                //    the end, to avoid quadratic behavior (see
+                //    "quadratic island behavior" above, and issue
+                //    #6798).
                 //
                 // 2. Or, we may be about to exceed the maximum jump range of
                 //    this fixup. In that case a veneer is inserted to buy some
@@ -1324,15 +1372,15 @@ impl<I: VCodeInst> MachBuffer<I> {
                 //
                 // 3. Otherwise, we're still within range of the
                 //    forward jump but the precise target isn't known
-                //    yet. In that case, to avoid quadratic behavior,
-                //    we emit a veneer and if the resulting label-use
-                //    fixup is then max-range, we put it in the
-                //    max-range list. We could enqueue the fixup for
-                //    processing later, and this would enable slightly
-                //    fewer veneers, but islands are relatively rare
-                //    and the cost of "upgrading" all forward label
-                //    refs that cross an island should be relatively
-                //    low.
+                //    yet. In that case, to avoid quadratic behavior
+                //    (again, see above), we emit a veneer and if the
+                //    resulting label-use fixup is then max-range, we
+                //    put it in the max-range list. We could enqueue
+                //    the fixup for processing later, and this would
+                //    enable slightly fewer veneers, but islands are
+                //    relatively rare and the cost of "upgrading" all
+                //    forward label refs that cross an island should
+                //    be relatively low.
                 if !kind.supports_veneer() {
                     self.fixup_records_max_range.push(MachLabelFixup {
                         label,
