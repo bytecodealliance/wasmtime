@@ -47,9 +47,9 @@ optional = true
 
 [workspace.dependencies]
 wasmprinter = "0.2.60"
-wasmtime = "10.0"
-wasmtime-wasi = "10.0"
-wasi-cap-std-sync = "10.0"
+wasmtime = "11.0.1"
+wasmtime-wasi = "11.0.1"
+wasi-cap-std-sync = "11.0.1"
 
 
 [dev-dependencies]
