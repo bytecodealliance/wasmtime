@@ -14,7 +14,7 @@ proposal is not listed, then it is not supported by Wasmtime.
 | [Poll][wasi-poll]                      | **Yes**                 | **Yes**              | `wasi-common`               |
 | [Machine Learning (wasi-nn)][wasi-nn]  | **Yes**                 | No                   | `experimental-wasi-nn`      |
 | [Blob Store][wasi-blob-store]          | No                      | No                   | N/A                         |
-| [Crypto][wasi-crypto]                  | **Yes** [^crypto]       | No                   | `experimental-wasi-crypto`  |
+| [Crypto][wasi-crypto]                  | No                      | No                   | N/A                         |
 | [Distributed Lock Service][wasi-distributed-lock-service] | No   | No                   | N/A                         |
 | [gRPC][wasi-grpc]                      | No                      | No                   | N/A                         |
 | [HTTP][wasi-http]                      | No                      | No                   | N/A                         |

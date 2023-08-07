@@ -49,7 +49,6 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-pc-windows-msvc`         | CI testing, unwinding, full-time maintainer |
 | Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
 | WASI Proposal        | `wasi-nn`                         | More expansive CI testing   |
-| WASI Proposal        | `wasi-crypto`                     | CI testing, clear owner     |
 | WebAssembly Proposal | `threads`                         | Complete implementation     |
 | WebAssembly Proposal | `component-model`                 | Complete implementation     |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
