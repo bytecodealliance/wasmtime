@@ -685,6 +685,26 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // gen_prologue is called at emit stage.
             // no need let reg alloc know.
         }
+        &Inst::VecAluRRRR {
+            op,
+            vd,
+            vd_src,
+            vs1,
+            vs2,
+            ref mask,
+            ..
+        } => {
+            debug_assert_eq!(vd_src.class(), RegClass::Vector);
+            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
+            debug_assert_eq!(vs2.class(), RegClass::Vector);
+            debug_assert_eq!(vs1.class(), op.vs1_regclass());
+
+            collector.reg_late_use(vs1);
+            collector.reg_late_use(vs2);
+            collector.reg_use(vd_src);
+            collector.reg_reuse_def(vd, 2); // `vd` == `vd_src`.
+            vec_mask_late_operands(mask, collector);
+        }
         &Inst::VecAluRRRImm5 {
             op,
             vd,
@@ -1754,6 +1774,31 @@ impl Inst {
             &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
+            &Inst::VecAluRRRR {
+                op,
+                vd,
+                vd_src,
+                vs1,
+                vs2,
+                ref mask,
+                ref vstate,
+            } => {
+                let vs1_s = format_reg(vs1, allocs);
+                let vs2_s = format_reg(vs2, allocs);
+                let vd_src_s = format_reg(vd_src, allocs);
+                let vd_s = format_reg(vd.to_reg(), allocs);
+                let mask = format_mask(mask, allocs);
+
+                let vd_fmt = if vd_s != vd_src_s {
+                    format!("{},{}", vd_s, vd_src_s)
+                } else {
+                    vd_s
+                };
+
+                // Note: vs2 and vs1 here are opposite to the standard scalar ordering.
+                // This is noted in Section 10.1 of the RISC-V Vector spec.
+                format!("{op} {vd_fmt},{vs2_s},{vs1_s}{mask} {vstate}")
+            }
             &Inst::VecAluRRRImm5 {
                 op,
                 vd,

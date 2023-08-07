@@ -473,6 +473,7 @@ impl Inst {
 
             Inst::VecAluRR { vstate, .. } |
             Inst::VecAluRRR { vstate, .. } |
+            Inst::VecAluRRRR { vstate, .. } |
             Inst::VecAluRImm5 { vstate, .. } |
             Inst::VecAluRRImm5 { vstate, .. } |
             Inst::VecAluRRRImm5 { vstate, .. } |
@@ -2908,6 +2909,25 @@ impl MachInstEmit for Inst {
                 debug_assert_eq!(vd.to_reg(), vd_src);
 
                 sink.put4(encode_valu_rrr_imm(op, vd, imm, vs2, mask));
+            }
+            &Inst::VecAluRRRR {
+                op,
+                vd,
+                vd_src,
+                vs1,
+                vs2,
+                ref mask,
+                ..
+            } => {
+                let vs1 = allocs.next(vs1);
+                let vs2 = allocs.next(vs2);
+                let vd_src = allocs.next(vd_src);
+                let vd = allocs.next_writable(vd);
+                let mask = mask.with_allocs(&mut allocs);
+
+                debug_assert_eq!(vd.to_reg(), vd_src);
+
+                sink.put4(encode_valu_rrrr(op, vd, vs1, vs2, mask));
             }
             &Inst::VecAluRRR {
                 op,
