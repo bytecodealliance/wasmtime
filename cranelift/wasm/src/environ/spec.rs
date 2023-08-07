@@ -592,7 +592,6 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {}
 
     ///
-    // Type::bytes (?)
     fn before_load(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {}
 
     ///

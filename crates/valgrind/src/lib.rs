@@ -1,13 +1,9 @@
-/*
-The following implementation assumes that the stack sits at the bottom of memory.
-*/
-
 use std::cmp::*;
 use std::collections::HashMap;
 
 pub struct Valgrind {
     metadata: Vec<MemState>,
-    mallocs: HashMap<usize, usize>, // start addr, len
+    mallocs: HashMap<usize, usize>,
     pub stack_pointer: usize,
     max_stack_size: usize,
     pub flag: bool,

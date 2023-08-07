@@ -194,11 +194,11 @@ impl Instance {
                 #[cfg(feature = "valgrind")]
                 valgrind_state: {
                     if req.valgrind {
-                        const MiB: usize = 1024 * 1024; // 1 MiB
+                        const MIB: usize = 1024 * 1024; // 1 MiB
                         // ad-hoc testing seems to show...
                         // TODO: how do we determine this more consistently?
                         // const C_STACK_SIZE: usize = 70863;
-                        Some(Valgrind::new(128 * MiB))
+                        Some(Valgrind::new(128 * MIB))
                     } else {
                         None
                     }

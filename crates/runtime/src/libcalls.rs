@@ -493,8 +493,8 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 
 cfg_if! {
     if #[cfg(feature = "valgrind")] {
+        // Hook for validating malloc using valgrind_state.
         unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
-            //safe to unwrap bc function will never be called when valgrind_state == None
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 let result = valgrind_state.malloc(addr as usize, len as usize);
                 valgrind_state.memcheck_on();
@@ -503,10 +503,10 @@ cfg_if! {
                         return Ok(0);
                     }
                     Err(DoubleMalloc { addr, len }) => {
-                        bail!("Double malloc at addr {} of size {}", addr, len)
+                        bail!("Double malloc at addr {:#x} of size {}", addr, len)
                     }
                     Err(OutOfBounds { addr, len }) => {
-                        bail!("Malloc out of bounds at addr {} of size {}", addr, len);
+                        bail!("Malloc out of bounds at addr {:#x} of size {}", addr, len);
                     }
                     _ => {
                         panic!("unreachable")
@@ -515,15 +515,8 @@ cfg_if! {
             }
             Ok(0)
         }
-    } else {
-        unsafe fn check_malloc(_instance: &mut Instance, _addr: u32, _len: u32) -> Result<u32> {
-            Ok(0)
-        }
-    }
-}
 
-cfg_if! {
-    if #[cfg(feature = "valgrind")] {
+        // Hook for validating free using valgrind_state.
         unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 let result = valgrind_state.free(addr as usize);
@@ -542,16 +535,8 @@ cfg_if! {
             }
             Ok(0)
         }
-    } else {
-        unsafe fn check_free(_instance: &mut Instance, _addr: u32) -> Result<u32> {
-            Ok(0)
-        }
-    }
-}
 
-//should be returning result? error propogation?
-cfg_if! {
-    if #[cfg(feature = "valgrind")] {
+        // Hook for validating load using valgrind_state.
         fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 let result = valgrind_state.read(addr as usize + offset as usize, num_bytes as usize);
@@ -560,10 +545,10 @@ cfg_if! {
                         return Ok(0);
                     }
                     Err(InvalidRead { addr, len }) => {
-                        bail!("Invalid load at addr {} of size {}", addr, len);
+                        bail!("Invalid load at addr {:#x} of size {}", addr, len);
                     }
                     Err(OutOfBounds { addr, len }) => {
-                        bail!("Load out of bounds at addr {} of size {}", addr, len);
+                        bail!("Load out of bounds at addr {:#x} of size {}", addr, len);
                     }
                     _ => {
                         panic!("unreachable")
@@ -572,15 +557,8 @@ cfg_if! {
             }
             Ok(0)
         }
-    } else {
-        fn check_load(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) -> Result<u32> {
-            Ok(0)
-        }
-    }
-}
 
-cfg_if! {
-    if #[cfg(feature = "valgrind")] {
+        // Hook for validating store using valgrind_state.
         fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 let result = valgrind_state.write(addr as usize + offset as usize, num_bytes as usize);
@@ -589,10 +567,10 @@ cfg_if! {
                         return Ok(0);
                     }
                     Err(InvalidWrite { addr, len }) => {
-                        bail!("Invalid store at addr {} of size {}", addr, len)
+                        bail!("Invalid store at addr {:#x} of size {}", addr, len)
                     }
                     Err(OutOfBounds { addr, len }) => {
-                        bail!("Store out of bounds at addr {} of size {}", addr, len)
+                        bail!("Store out of bounds at addr {:#x} of size {}", addr, len)
                     }
                     _ => {
                         panic!("unreachable")
@@ -601,45 +579,41 @@ cfg_if! {
             }
             Ok(0)
         }
-    } else {
-        fn check_store(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) -> Result<u32> {
-            Ok(0)
-        }
-    }
-}
 
-cfg_if! {
-    if #[cfg(feature = "valgrind")] {
+        // Hook for turning valgrind load/store validation off when entering a malloc function.
         fn malloc_start(instance: &mut Instance) {
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 valgrind_state.memcheck_off();
             }
         }
-    } else {
-        fn malloc_start(_instance: &mut Instance) {}
-    }
-}
 
-cfg_if! {
-    if #[cfg(feature = "valgrind")] {
+        // Hook for turning valgrind load/store validation off when entering a free function.
         fn free_start(instance: &mut Instance) {
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 valgrind_state.memcheck_off();
             }
         }
-    } else {
-        fn free_start(_instance: &mut Instance) {}
-    }
-}
 
-cfg_if! {
-    if #[cfg(feature = "valgrind")] {
+        // Hook for tracking wasm stack updates using valgrind_state.
         fn update_stack_pointer(instance: &mut Instance, value: u32) {
             if let Some(valgrind_state) = &mut instance.valgrind_state {
                 // instance.valgrind_state.update_stack_pointer(value as usize);
             }
         }
     } else {
+        // No-op for all valgrind hooks.
+        unsafe fn check_malloc(_instance: &mut Instance, _addr: u32, _len: u32) -> Result<u32> { Ok(0) }
+
+        unsafe fn check_free(_instance: &mut Instance, _addr: u32) -> Result<u32> { Ok(0) }
+
+        fn check_load(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) -> Result<u32> { Ok(0) }
+
+        fn check_store(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) -> Result<u32> { Ok(0) }
+
+        fn malloc_start(_instance: &mut Instance) {}
+
+        fn free_start(_instance: &mut Instance) {}
+
         fn update_stack_pointer(_instance: &mut Instance, _value: u32) {}
     }
 }
