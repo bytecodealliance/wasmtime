@@ -167,7 +167,7 @@ async fn fd_flags_set() {
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn fd_readdir() {
-    run("fd_readdir", false).await.unwrap()
+    run("fd_readdir", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_allocate() {
