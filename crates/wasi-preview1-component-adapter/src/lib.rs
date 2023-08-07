@@ -380,21 +380,20 @@ pub unsafe extern "C" fn clock_time_get(
         get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
-        State::with(|state| {
-            match id {
-                CLOCKID_MONOTONIC => {
-                    *time = monotonic_clock::now();
-                }
-                CLOCKID_REALTIME => {
-                    let res = wall_clock::now();
-                    *time = Timestamp::from(res.seconds)
-                        .checked_mul(1_000_000_000)
-                        .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
-                        .ok_or(ERRNO_OVERFLOW)?;
-                }
-                _ => unreachable!(),
+        State::with(|state| match id {
+            CLOCKID_MONOTONIC => {
+                *time = monotonic_clock::now();
+                Ok(())
             }
-            Ok(())
+            CLOCKID_REALTIME => {
+                let res = wall_clock::now();
+                *time = Timestamp::from(res.seconds)
+                    .checked_mul(1_000_000_000)
+                    .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
+                    .ok_or(ERRNO_OVERFLOW)?;
+                Ok(())
+            }
+            _ => Err(ERRNO_BADF),
         })
     } else {
         *time = Timestamp::from(0u64);
