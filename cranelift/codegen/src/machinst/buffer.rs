@@ -190,6 +190,18 @@ impl CompilePhase for Final {
     type SourceLocType = SourceLoc;
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ForceVeneers {
+    Yes,
+    No,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum IsLastIsland {
+    Yes,
+    No,
+}
+
 /// A buffer of output to be produced, fixed up, and then emitted to a CodeSink
 /// in bulk.
 ///
@@ -1163,18 +1175,16 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// actually reach a deadline. It's not necessarily a problem to do so
     /// otherwise but it may result in unnecessary work during emission.
     pub fn emit_island(&mut self, ctrl_plane: &mut ControlPlane) {
-        self.emit_island_maybe_forced(
-            /* force_veneers = */ false, ctrl_plane, /* last_island = */ false,
-        );
+        self.emit_island_maybe_forced(ForceVeneers::No, IsLastIsland::No, ctrl_plane);
     }
 
     /// Same as `emit_island`, but an internal API with a `force_veneers`
     /// argument to force all veneers to always get emitted for debugging.
     fn emit_island_maybe_forced(
         &mut self,
-        force_veneers: bool,
+        force_veneers: ForceVeneers,
+        last_island: IsLastIsland,
         ctrl_plane: &mut ControlPlane,
-        last_island: bool,
     ) {
         // We're going to purge fixups, so no latest-branch editing can happen
         // anymore.
@@ -1236,10 +1246,9 @@ impl<I: VCodeInst> MachBuffer<I> {
             self.get_appended_space(size);
         }
 
-        let last_island_fixups = if last_island {
-            mem::take(&mut self.fixup_records_max_range)
-        } else {
-            smallvec![]
+        let last_island_fixups = match last_island {
+            IsLastIsland::Yes => mem::take(&mut self.fixup_records_max_range),
+            IsLastIsland::No => smallvec![],
         };
         for fixup in mem::take(&mut self.fixup_records)
             .into_iter()
@@ -1287,7 +1296,8 @@ impl<I: VCodeInst> MachBuffer<I> {
                     kind.max_neg_range()
                 );
 
-                if (force_veneers && kind.supports_veneer()) || veneer_required {
+                if (force_veneers == ForceVeneers::Yes && kind.supports_veneer()) || veneer_required
+                {
                     self.emit_veneer(label, offset, kind);
                 } else {
                     let slice = &mut self.data[start..end];
@@ -1396,7 +1406,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     fn finish_emission_maybe_forcing_veneers(
         &mut self,
-        force_veneers: bool,
+        force_veneers: ForceVeneers,
         ctrl_plane: &mut ControlPlane,
     ) {
         while !self.pending_constants.is_empty()
@@ -1407,7 +1417,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             // `emit_island()` will emit any pending veneers and constants, and
             // as a side-effect, will also take care of any fixups with resolved
             // labels eagerly.
-            self.emit_island_maybe_forced(force_veneers, ctrl_plane, /* last_island = */ true);
+            self.emit_island_maybe_forced(force_veneers, IsLastIsland::Yes, ctrl_plane);
         }
 
         // Ensure that all labels have been fixed up after the last island is emitted. This is a
@@ -1428,7 +1438,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         // had bound one last label.
         self.optimize_branches(ctrl_plane);
 
-        self.finish_emission_maybe_forcing_veneers(false, ctrl_plane);
+        self.finish_emission_maybe_forcing_veneers(ForceVeneers::No, ctrl_plane);
 
         let alignment = self.finish_constants(constants);
 
@@ -1777,7 +1787,7 @@ impl MachBranch {
 pub struct MachTextSectionBuilder<I: VCodeInst> {
     buf: MachBuffer<I>,
     next_func: usize,
-    force_veneers: bool,
+    force_veneers: ForceVeneers,
 }
 
 impl<I: VCodeInst> MachTextSectionBuilder<I> {
@@ -1789,7 +1799,7 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
         MachTextSectionBuilder {
             buf,
             next_func: 0,
-            force_veneers: false,
+            force_veneers: ForceVeneers::No,
         }
     }
 }
@@ -1805,12 +1815,9 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
         // Conditionally emit an island if it's necessary to resolve jumps
         // between functions which are too far away.
         let size = func.len() as u32;
-        if self.force_veneers || self.buf.island_needed(size) {
-            self.buf.emit_island_maybe_forced(
-                self.force_veneers,
-                ctrl_plane,
-                /* last_island = */ false,
-            );
+        if self.force_veneers == ForceVeneers::Yes || self.buf.island_needed(size) {
+            self.buf
+                .emit_island_maybe_forced(self.force_veneers, IsLastIsland::No, ctrl_plane);
         }
 
         self.buf.align_to(align);
@@ -1842,7 +1849,7 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
     }
 
     fn force_veneers(&mut self) {
-        self.force_veneers = true;
+        self.force_veneers = ForceVeneers::Yes;
     }
 
     fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8> {
