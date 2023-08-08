@@ -1,0 +1,6 @@
+package wasi:filesystem
+
+world example-world {
+    import types
+    import preopens
+}

@@ -4,7 +4,7 @@ use wasmtime::{
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::bindings::clocks::wall_clock;
-use wasmtime_wasi::preview2::bindings::filesystem::filesystem;
+use wasmtime_wasi::preview2::bindings::filesystem::types as filesystem;
 use wasmtime_wasi::preview2::{self, Table, WasiCtx, WasiCtxBuilder, WasiView};
 
 lazy_static::lazy_static! {
@@ -28,9 +28,9 @@ wasmtime::component::bindgen!({
     async: true,
     with: {
        "wasi:io/streams": preview2::bindings::io::streams,
-       "wasi:filesystem/filesystem": preview2::bindings::filesystem::filesystem,
+       "wasi:filesystem/types": preview2::bindings::filesystem::types,
+       "wasi:filesystem/preopens": preview2::bindings::filesystem::preopens,
        "wasi:cli-base/environment": preview2::bindings::cli_base::environment,
-       "wasi:cli-base/preopens": preview2::bindings::cli_base::preopens,
        "wasi:cli-base/exit": preview2::bindings::cli_base::exit,
        "wasi:cli-base/stdin": preview2::bindings::cli_base::stdin,
        "wasi:cli-base/stdout": preview2::bindings::cli_base::stdout,
@@ -68,10 +68,10 @@ async fn instantiate(
     let mut linker = Linker::new(&ENGINE);
 
     // All of the imports available to the world are provided by the wasi-common crate:
-    preview2::bindings::filesystem::filesystem::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::filesystem::types::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::filesystem::preopens::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::io::streams::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::cli_base::environment::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli_base::preopens::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::cli_base::exit::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::cli_base::stdin::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::cli_base::stdout::add_to_linker(&mut linker, |x| x)?;
@@ -129,8 +129,6 @@ async fn reactor_tests() -> Result<()> {
             nanoseconds: 789,
             seconds: 10,
         },
-        device: 0,
-        inode: 0,
         link_count: 0,
         size: 0,
         status_change_timestamp: wall_clock::Datetime {
