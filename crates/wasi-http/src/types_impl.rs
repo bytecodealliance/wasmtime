@@ -5,11 +5,10 @@ use crate::wasi::http::types::{
     IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
-use crate::wasi::poll::poll::Pollable;
 use crate::WasiHttpView;
 use anyhow::{anyhow, bail, Context};
 use bytes::Bytes;
-use wasmtime_wasi::preview2::TableError;
+use wasmtime_wasi::preview2::{bindings::poll::poll::Pollable, TableError};
 
 fn convert(error: TableError) -> anyhow::Error {
     // if let Some(errno) = error.downcast_ref() {

@@ -7,6 +7,7 @@ wasmtime::component::bindgen!({
     world: "proxy",
     with: {
         "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
+        "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
     }
 });
 
@@ -32,7 +33,9 @@ where
     T: WasiHttpView
         + WasiHttpViewExt
         + crate::wasi::http::outgoing_handler::Host
-        + crate::wasi::http::types::Host,
+        + crate::wasi::http::types::Host
+        + wasmtime_wasi::preview2::bindings::io::streams::Host
+        + wasmtime_wasi::preview2::bindings::poll::poll::Host,
 {
     add_component_to_linker::<T>(linker, |t| t)
 }
