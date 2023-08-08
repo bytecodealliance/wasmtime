@@ -43,6 +43,11 @@ pub trait HostInputStream: Send + Sync {
     /// Check for read readiness: this method blocks until the stream is ready
     /// for reading.
     async fn ready(&mut self) -> Result<(), Error>;
+
+    /// Terminate all background tasks. Exposed only to the host, not accessible from WebAssembly.
+    /// Must cancel background tasks even if dropped before completion.
+    /// No other methods may be used after calling this method.
+    async fn join_background_tasks(&mut self) {}
 }
 
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
@@ -88,6 +93,11 @@ pub trait HostOutputStream: Send + Sync {
     /// Check for write readiness: this method blocks until the stream is
     /// ready for writing.
     async fn ready(&mut self) -> Result<(), Error>;
+
+    /// Flush any output which has been buffered, and terminate all background tasks. Exposed only
+    /// to the host, not accessible from WebAssembly. Must cancel background tasks even if dropped
+    /// before completion. No other methods may be used after calling this method.
+    async fn join_background_tasks(&mut self) {}
 }
 
 pub(crate) enum InternalInputStream {

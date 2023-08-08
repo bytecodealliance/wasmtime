@@ -44,7 +44,7 @@ pub fn stdin() -> Stdin {
         //
         // As we can't tell the difference between these two, we assume the latter and restart the
         // task.
-        if guard.join_handle.is_finished() {
+        if guard.is_finished() {
             *guard = init_stdin();
         }
     }

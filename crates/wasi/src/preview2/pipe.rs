@@ -102,7 +102,9 @@ pub struct AsyncReadStream {
     state: StreamState,
     buffer: Option<Result<Bytes, std::io::Error>>,
     receiver: tokio::sync::mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
-    pub(crate) join_handle: tokio::task::JoinHandle<()>,
+    // the join handle for the background task is Some until join_background_tasks, after which
+    // further use of the AsyncReadStream is not allowed.
+    join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl AsyncReadStream {
@@ -131,14 +133,26 @@ impl AsyncReadStream {
             state: StreamState::Open,
             buffer: None,
             receiver,
-            join_handle,
+            join_handle: Some(join_handle),
         }
+    }
+    // stdio implementation uses this to determine if the backing tokio runtime has been shutdown and
+    // restarted:
+    pub(crate) fn is_finished(&self) -> bool {
+        assert!(
+            self.join_handle.is_some(),
+            "illegal use of AsyncReadStream after join_background_tasks"
+        );
+        self.join_handle.as_ref().unwrap().is_finished()
     }
 }
 
+// Make sure the background task does not outlive the AsyncReadStream handle.
+// It will join on its own if it reaches a sender await, but if it is blocked
+// on reader.read_buf's await it could hold the reader open indefinitely.
 impl Drop for AsyncReadStream {
     fn drop(&mut self) {
-        self.join_handle.abort()
+        self.join_handle.take().map(|h| h.abort());
     }
 }
 
@@ -146,6 +160,10 @@ impl Drop for AsyncReadStream {
 impl HostInputStream for AsyncReadStream {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         use tokio::sync::mpsc::error::TryRecvError;
+        assert!(
+            self.join_handle.is_some(),
+            "illegal use of AsyncReadStream after join_background_tasks"
+        );
 
         match self.buffer.take() {
             Some(Ok(mut bytes)) => {
@@ -188,6 +206,11 @@ impl HostInputStream for AsyncReadStream {
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
+        assert!(
+            self.join_handle.is_some(),
+            "illegal use of AsyncReadStream after join_background_tasks"
+        );
+
         if self.buffer.is_some() || self.state == StreamState::Closed {
             return Ok(());
         }
@@ -207,6 +230,9 @@ impl HostInputStream for AsyncReadStream {
         }
         Ok(())
     }
+    async fn join_background_tasks(&mut self) {
+        self.join_handle.take().map(|h| h.abort());
+    }
 }
 
 #[derive(Debug)]
@@ -221,7 +247,9 @@ pub struct AsyncWriteStream {
     state: Option<WriteState>,
     sender: tokio::sync::mpsc::Sender<Bytes>,
     result_receiver: tokio::sync::mpsc::Receiver<Result<StreamState, std::io::Error>>,
-    join_handle: tokio::task::JoinHandle<()>,
+    // the join handle for the background task is Some until join_background_tasks, after which
+    // further use of the AsyncReadStream is not allowed.
+    join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl AsyncWriteStream {
@@ -269,7 +297,7 @@ impl AsyncWriteStream {
             state: Some(WriteState::Ready),
             sender,
             result_receiver,
-            join_handle,
+            join_handle: Some(join_handle),
         }
     }
 
@@ -290,11 +318,41 @@ impl AsyncWriteStream {
             Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
         }
     }
+
+    // Factored out: when called from a wasm stream operation, there is a strict precondition that
+    // join_handle is_some, but when called as part of join_background_tasks, join_handle is None.
+    async fn ready_(&mut self) -> Result<(), Error> {
+        match &self.state {
+            Some(WriteState::Pending) => match self.result_receiver.recv().await {
+                Some(Ok(StreamState::Open)) => {
+                    self.state = Some(WriteState::Ready);
+                }
+
+                Some(Ok(StreamState::Closed)) => {
+                    self.state = None;
+                }
+
+                Some(Err(e)) => {
+                    self.state = Some(WriteState::Err(e));
+                }
+
+                None => {
+                    unreachable!("background task has died")
+                }
+            },
+
+            Some(WriteState::Ready | WriteState::Err(_)) | None => {}
+        }
+
+        Ok(())
+    }
 }
 
+// Make sure the background task does not outlive the AsyncWriteStream handle.
+// In order to make sure output is flushed before dropping, use `join_background_tasks`.
 impl Drop for AsyncWriteStream {
     fn drop(&mut self) {
-        self.join_handle.abort()
+        self.join_handle.take().map(|h| h.abort());
     }
 }
 
@@ -302,6 +360,10 @@ impl Drop for AsyncWriteStream {
 impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
         use tokio::sync::mpsc::error::TryRecvError;
+        assert!(
+            self.join_handle.is_some(),
+            "illegal use of AsyncWriteStream after join_background_tasks"
+        );
 
         match self.state {
             Some(WriteState::Ready) => self.send(bytes),
@@ -344,28 +406,24 @@ impl HostOutputStream for AsyncWriteStream {
         }
     }
 
-    async fn ready(&mut self) -> Result<(), Error> {
-        match &self.state {
-            Some(WriteState::Pending) => match self.result_receiver.recv().await {
-                Some(Ok(StreamState::Open)) => {
-                    self.state = Some(WriteState::Ready);
-                }
+    async fn ready(&mut self) -> anyhow::Result<()> {
+        assert!(
+            self.join_handle.is_some(),
+            "illegal use of AsyncWriteStream after join_background_tasks"
+        );
+        // Body is factored out: call from join_background_tasks does not have the above
+        // precondition.
+        self.ready_().await
+    }
 
-                Some(Ok(StreamState::Closed)) => {
-                    self.state = None;
-                }
-
-                Some(Err(e)) => {
-                    self.state = Some(WriteState::Err(e));
-                }
-
-                None => unreachable!("task shouldn't die while pending"),
-            },
-
-            Some(WriteState::Ready | WriteState::Err(_)) | None => {}
-        }
-
-        Ok(())
+    async fn join_background_tasks(&mut self) {
+        // Do this at most once, after which the rest of methods are not to be used:
+        if let Some(jh) = self.join_handle.take() {
+            // Worker task has flushed outputs when it is ready for writing again:
+            let _ = self.ready_().await;
+            // Now abort the task:
+            jh.abort();
+        };
     }
 }
 

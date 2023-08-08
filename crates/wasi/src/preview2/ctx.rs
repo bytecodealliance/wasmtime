@@ -2,11 +2,14 @@ use super::clocks::host::{monotonic_clock, wall_clock};
 use crate::preview2::{
     clocks::{self, HostMonotonicClock, HostWallClock},
     filesystem::{Dir, TableFsExt},
-    pipe, random, stdio,
+    pipe,
+    poll::TablePollableExt,
+    random, stdio,
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
     DirPerms, FilePerms, Table,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
+use std::future::Future;
 use std::mem;
 
 pub struct WasiCtxBuilder {
@@ -257,4 +260,107 @@ pub struct WasiCtx {
     pub(crate) stdin: u32,
     pub(crate) stdout: u32,
     pub(crate) stderr: u32,
+}
+
+impl WasiCtx {
+    /// Wait for all background tasks to join (complete) gracefully, after flushing any
+    /// buffered output.
+    ///
+    /// NOTE: This function should be used when [`WasiCtx`] is used in an async embedding
+    /// (i.e. with [`crate::preview2::command::add_to_linker`]). Use its counterpart
+    /// `sync_join_background_tasks` in a synchronous embedding (i.e. with
+    /// [`crate::preview2::command::sync::add_to_linker`].
+    ///
+    /// In order to implement non-blocking streams, we often often need to offload async
+    /// operations to background `tokio::task`s. These tasks are aborted when the resources
+    /// in the `Table` referencing them are dropped. In some cases, this abort may occur before
+    /// buffered output has been flushed. Use this function to wait for all background tasks to
+    /// join gracefully.
+    ///
+    /// In some embeddings, a misbehaving client might cause this graceful exit to await for an
+    /// unbounded amount of time, so we recommend bounding this with a timeout or other mechanism.
+    pub fn join_background_tasks<'a>(&mut self, table: &'a mut Table) -> impl Future<Output = ()> {
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+        let keys = table.keys().cloned().collect::<Vec<u32>>();
+        let mut set = Vec::new();
+        // we can't remove an stream from the table if it has any child pollables,
+        // so first delete all pollables from the table.
+        for k in keys.iter() {
+            let _ = table.delete_host_pollable(*k);
+        }
+        for k in keys {
+            match table.delete_output_stream(k) {
+                Ok(mut ostream) => {
+                    // async block takes ownership of the ostream and flushes it
+                    let f = async move { ostream.join_background_tasks().await };
+                    set.push(Box::pin(f) as _)
+                }
+                _ => {}
+            }
+            match table.delete_input_stream(k) {
+                Ok(mut istream) => {
+                    // async block takes ownership of the istream and flushes it
+                    let f = async move { istream.join_background_tasks().await };
+                    set.push(Box::pin(f) as _)
+                }
+                _ => {}
+            }
+        }
+        // poll futures until all are ready.
+        // We can't write this as an `async fn` because we want to eagerly poll on each possible
+        // join, rather than sequentially awaiting on them.
+        struct JoinAll(Vec<Pin<Box<dyn Future<Output = ()> + Send>>>);
+        impl Future for JoinAll {
+            type Output = ();
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+                // Iterate through the set, polling each future and removing it from the set if it
+                // is ready:
+                self.as_mut()
+                    .0
+                    .retain_mut(|fut| match fut.as_mut().poll(cx) {
+                        Poll::Ready(_) => false,
+                        _ => true,
+                    });
+                // Ready if set is empty:
+                if self.as_mut().0.is_empty() {
+                    Poll::Ready(())
+                } else {
+                    Poll::Pending
+                }
+            }
+        }
+
+        JoinAll(set)
+    }
+
+    /// Wait for all background tasks to join (complete) gracefully, after flushing any
+    /// buffered output.
+    ///
+    /// NOTE: This function should be used when [`WasiCtx`] is used in an synchronous embedding
+    /// (i.e. with [`crate::preview2::command::sync::add_to_linker`]). Use its counterpart
+    /// `join_background_tasks` in an async embedding (i.e. with
+    /// [`crate::preview2::command::add_to_linker`].
+    ///
+    /// In order to implement non-blocking streams, we often often need to offload async
+    /// operations to background `tokio::task`s. These tasks are aborted when the resources
+    /// in the `Table` referencing them are dropped. In some cases, this abort may occur before
+    /// buffered output has been flushed. Use this function to wait for all background tasks to
+    /// join gracefully.
+    ///
+    /// In some embeddings, a misbehaving client might cause this graceful exit to await for an
+    /// unbounded amount of time, so we recommend providing a timeout for this method.
+    pub fn sync_join_background_tasks<'a>(
+        &mut self,
+        table: &'a mut Table,
+        timeout: Option<std::time::Duration>,
+    ) {
+        crate::preview2::in_tokio(async move {
+            if let Some(timeout) = timeout {
+                let _ = tokio::time::timeout(timeout, self.join_background_tasks(table)).await;
+            } else {
+                self.join_background_tasks(table).await
+            }
+        })
+    }
 }

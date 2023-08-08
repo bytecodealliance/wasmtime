@@ -164,6 +164,11 @@ impl Table {
         self.map.contains_key(&key)
     }
 
+    /// Iterator of the keys in the table.
+    pub fn keys(&self) -> impl Iterator<Item = &u32> {
+        self.map.keys()
+    }
+
     /// Check if the resource at a given index can be downcast to a given type.
     /// Note: this will always fail if the resource is already borrowed.
     pub fn is<T: Any + Sized>(&self, key: u32) -> bool {
