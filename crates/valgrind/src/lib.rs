@@ -37,6 +37,7 @@ impl Valgrind {
             flag: true,
         }
     }
+
     pub fn malloc(&mut self, addr: usize, len: usize) -> Result<(), AccessError> {
         if !self.is_in_bounds_heap(addr, len) {
             return Err(AccessError::OutOfBounds {
@@ -67,6 +68,7 @@ impl Valgrind {
         self.mallocs.insert(addr, len);
         Ok(())
     }
+
     pub fn read(&mut self, addr: usize, len: usize) -> Result<(), AccessError> {
         if !self.flag {
             return Ok(());
@@ -96,6 +98,7 @@ impl Valgrind {
         }
         Ok(())
     }
+
     pub fn write(&mut self, addr: usize, len: usize) -> Result<(), AccessError> {
         if !self.flag {
             return Ok(());
@@ -119,6 +122,7 @@ impl Valgrind {
         }
         Ok(())
     }
+
     pub fn free(&mut self, addr: usize) -> Result<(), AccessError> {
         if !self.mallocs.contains_key(&addr) {
             return Err(AccessError::InvalidFree { addr: addr });
@@ -135,12 +139,15 @@ impl Valgrind {
         }
         Ok(())
     }
+
     fn is_in_bounds_heap(&self, addr: usize, len: usize) -> bool {
         self.max_stack_size <= addr && addr + len <= self.metadata.len()
     }
+
     fn is_in_bounds_stack(&self, addr: usize, len: usize) -> bool {
         self.stack_pointer <= addr && addr + len < self.max_stack_size
     }
+
     pub fn update_stack_pointer(&mut self, new_sp: usize) -> Result<(), AccessError> {
         if new_sp > self.max_stack_size {
             return Err(AccessError::OutOfBounds {
@@ -160,18 +167,26 @@ impl Valgrind {
         self.stack_pointer = new_sp;
         Ok(())
     }
+
     pub fn memcheck_on(&mut self) {
         self.flag = true;
     }
+
     pub fn memcheck_off(&mut self) {
         self.flag = false;
     }
+
     pub fn set_stack_size(&mut self, stack_size: usize) {
         self.max_stack_size = stack_size + 1;
         //temporary solution to initialize the entire stack
         //while keeping stack tracing plumbing in place
         self.stack_pointer = stack_size;
-        self.update_stack_pointer(0);
+        let _ = self.update_stack_pointer(0);
+    }
+
+    pub fn update_mem_size(&mut self, num_bytes: usize) {
+        let to_append = vec![MemState::Unallocated; num_bytes];
+        self.metadata.extend(to_append);
     }
 }
 

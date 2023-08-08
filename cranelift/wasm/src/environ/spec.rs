@@ -592,13 +592,16 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {}
 
     ///
-    fn before_load(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {}
+    fn before_load(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {}
 
     ///
-    fn before_store(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {}
+    fn before_store(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {}
 
     ///
     fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {}
+
+    ///
+    fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, num_bytes: ir::Value) {}
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

@@ -2299,8 +2299,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder: &mut FunctionBuilder,
             ) {
                 if self.valgrind {
-                    let block = builder.func.layout.entry_block().unwrap();
-                    let args = builder.func.dfg.block_params(block);
                     let func_index = match &builder.func.name {
                         UserFuncName::User(user) => {
                             FuncIndex::from_u32(user.index)
@@ -2318,30 +2316,29 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 }
             }
             
-            fn before_load(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
+            fn before_load(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
                 if self.valgrind {
                     let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
                     let (vmctx, check_load) = self.translate_load_builtin_function_address(
                         &mut builder.cursor(),
                         BuiltinFunctionIndex::check_load(),
                     );
-                    let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
+                    let num_bytes = builder.ins().iconst(I32, val_size as i64);
                     let offset_val = builder.ins().iconst(I64, offset as i64);
-                    // let addr_and_offset = builder.ins().iadd(offset_val, addr);
                     builder
                         .ins()
                         .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
                 }
             }
 
-            fn before_store(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
+            fn before_store(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
                 if self.valgrind {
                     let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
                     let (vmctx, check_store) = self.translate_load_builtin_function_address(
                         &mut builder.cursor(),
                         BuiltinFunctionIndex::check_store(),
                     );
-                    let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
+                    let num_bytes = builder.ins().iconst(I32, val_size as i64);
                     let offset_val = builder.ins().iconst(I64, offset as i64);
                     builder
                         .ins()
@@ -2364,6 +2361,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 }
             }
 
+            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, num_pages: ir::Value) {
+                if self.valgrind {
+                    let update_mem_size_sig = self.builtin_function_signatures.update_mem_size(builder.func);
+                    let (vmctx, update_mem_size) = self.translate_load_builtin_function_address(
+                        &mut builder.cursor(),
+                        BuiltinFunctionIndex::update_mem_size(),
+                    );
+                    builder
+                        .ins()
+                        .call_indirect(update_mem_size_sig, update_mem_size, &[vmctx, num_pages]);
+                }
+            }
         } else {
             fn handle_before_return(&mut self, _retvals: &[Value], builder: &mut FunctionBuilder) {
                 let _ = self.builtin_function_signatures.check_malloc(builder.func);
@@ -2380,6 +2389,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
             fn update_global(&mut self, builder: &mut FunctionBuilder, _global_index: u32, _value: ir::Value) {
                 let _ = self.builtin_function_signatures.update_stack_pointer(builder.func);
+            }
+
+            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, _num_pages: Value) {
+                let _ = self.builtin_function_signatures.update_mem_size(builder.func);
             }
         }
     }

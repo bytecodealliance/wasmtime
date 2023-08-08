@@ -123,7 +123,7 @@ pub unsafe trait InstanceAllocator {
             return Err(e);
         }
 
-        unsafe { Ok(Instance::new(req, index, memories, tables)) }
+        unsafe { Ok(Instance::new(req, index, memories, tables, &module.memory_plans)) }
     }
 
     /// Deallocates the provided instance.

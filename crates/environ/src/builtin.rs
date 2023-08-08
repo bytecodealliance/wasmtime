@@ -65,6 +65,8 @@ macro_rules! foreach_builtin_function {
             free_start(vmctx: vmctx);
             /// Invoked when wasm stack pointer is updated.
             update_stack_pointer(vmctx: vmctx, value: i32);
+            /// Invoked before memory.grow is called.
+            update_mem_size(vmctx: vmctx, num_bytes: i32);
         }
     };
 }

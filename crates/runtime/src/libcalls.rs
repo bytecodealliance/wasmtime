@@ -600,6 +600,15 @@ cfg_if! {
                 // instance.valgrind_state.update_stack_pointer(value as usize);
             }
         }
+
+        // Hook updating valgrind_state memory state vector every time memory.grow is called.
+        fn update_mem_size(instance: &mut Instance, num_pages: u32) {
+            if let Some(valgrind_state) = &mut instance.valgrind_state {
+                let kib: usize = 1024;
+                let num_bytes = num_pages as usize * kib * 64;
+                valgrind_state.update_mem_size(num_bytes);
+            }
+        }
     } else {
         // No-op for all valgrind hooks.
         unsafe fn check_malloc(_instance: &mut Instance, _addr: u32, _len: u32) -> Result<u32> { Ok(0) }
@@ -615,6 +624,8 @@ cfg_if! {
         fn free_start(_instance: &mut Instance) {}
 
         fn update_stack_pointer(_instance: &mut Instance, _value: u32) {}
+
+        fn update_mem_size(instance: &mut Instance, _num_pages: u32) {}
     }
 }
 

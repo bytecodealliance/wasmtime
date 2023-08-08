@@ -33,6 +33,7 @@ use wasmtime_environ::{
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
     TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
+    MemoryPlan,
 };
 
 mod allocator;
@@ -162,6 +163,7 @@ impl Instance {
         index: usize,
         memories: PrimaryMap<DefinedMemoryIndex, Memory>,
         tables: PrimaryMap<DefinedTableIndex, Table>,
+        memory_plans: &PrimaryMap<MemoryIndex, MemoryPlan>,
     ) -> InstanceHandle {
         // The allocation must be *at least* the size required of `Instance`.
         let layout = Self::alloc_layout(req.runtime_info.offsets());
@@ -194,16 +196,13 @@ impl Instance {
                 #[cfg(feature = "valgrind")]
                 valgrind_state: {
                     if req.valgrind {
-                        const MIB: usize = 1024 * 1024; // 1 MiB
-                        // ad-hoc testing seems to show...
-                        // TODO: how do we determine this more consistently?
-                        // const C_STACK_SIZE: usize = 70863;
-                        Some(Valgrind::new(128 * MIB))
+                        let size = memory_plans.iter().next().map(|plan| plan.1.memory.minimum).unwrap_or(0) * 64 * 1024;
+                        println!("this is the size: {}", size);
+                        Some(Valgrind::new(size as usize))
                     } else {
                         None
                     }
                 },
-                // not sure how to access mem & stack size?
             },
         );
 
@@ -1147,6 +1146,7 @@ impl Instance {
                 GlobalInit::I32Const(x) => {
                     let index = module.global_index(index);
                     if index.index() == 0 {
+                        println!("stack pointer: {}", x);
                         #[cfg(feature = "valgrind")] {
                             if let Some(valgrind) = &mut self.valgrind_state {
                                 valgrind.set_stack_size(x as usize);

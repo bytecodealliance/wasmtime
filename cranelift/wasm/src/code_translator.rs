@@ -686,6 +686,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap_index = MemoryIndex::from_u32(*mem);
             let heap = state.get_heap(builder.func, *mem, environ)?;
             let val = state.pop1();
+            environ.before_memory_grow(builder, val);
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::MemorySize { mem, mem_byte: _ } => {
@@ -2806,9 +2807,10 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<Reachability<()>> {
+    let mem_op_size = mem_op_size(opcode, result_ty);
     let (flags, wasm_index, base) = match prepare_addr(
         memarg,
-        mem_op_size(opcode, result_ty),
+        mem_op_size,
         builder,
         state,
         environ,
@@ -2817,7 +2819,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
         Reachability::Reachable((f, i, b)) => (f, i, b),
     };
 
-    environ.before_load(builder, result_ty, wasm_index, memarg.offset);
+    environ.before_load(builder, mem_op_size, wasm_index, memarg.offset);
 
     let (load, dfg) = builder
         .ins()
@@ -2836,13 +2838,14 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 ) -> WasmResult<()> {
     let val = state.pop1();
     let val_ty = builder.func.dfg.value_type(val);
+    let mem_op_size = mem_op_size(opcode, val_ty);
 
     let (flags, wasm_index, base) = unwrap_or_return_unreachable_state!(
         state,
-        prepare_addr(memarg, mem_op_size(opcode, val_ty), builder, state, environ)?
+        prepare_addr(memarg, mem_op_size, builder, state, environ)?
     );
 
-    environ.before_store(builder, val_ty, wasm_index, memarg.offset);
+    environ.before_store(builder, mem_op_size, wasm_index, memarg.offset);
     
     builder
         .ins()
