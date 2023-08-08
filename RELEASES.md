@@ -62,6 +62,10 @@ Unreleased.
   `async_support` is disabled at runtime.
   [#6771](https://github.com/bytecodealliance/wasmtime/pull/6771)
 
+* WASI Preview 1 APIs will now trap on misaligned or out-of-bounds pointers
+  instead of returning an error.
+  [#6776](https://github.com/bytecodealliance/wasmtime/pull/6776)
+
 ### Changed
 
 * Options to the `wasmtime` CLI for Wasmtime itself must now come before the
@@ -73,10 +77,6 @@ Unreleased.
 
 * Empty types are no longer allowed in the component model.
   [#6777](https://github.com/bytecodealliance/wasmtime/pull/6777)
-
-* WASI Preview 1 APIs will now trap on misaligned or out-of-bounds pointers
-  instead of returning an error.
-  [#6776](https://github.com/bytecodealliance/wasmtime/pull/6776)
 
 --------------------------------------------------------------------------------
 
