@@ -588,19 +588,24 @@ pub trait FuncEnvironment: TargetEnvironment {
         false
     }
 
-    ///
+    /// Inserts call to check_malloc and check_free before the return of malloc
+    /// and free if wasmtime is compiled and run with valgrind.
     fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {}
 
-    ///
+    /// Inserts call to check_load before a load instruction if wasmtime is 
+    /// compiled and run with valgrind.
     fn before_load(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {}
 
-    ///
+    /// Inserts call to check_store before a store instruction if wasmtime is
+    /// compiled and run with valgrind.
     fn before_store(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {}
 
-    ///
+    /// Inserts call to update_stack_pointer when stack pointer is updated if
+    /// wasmtime is compiled and run with valgrind.
     fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {}
 
-    ///
+    /// Inserts calls to update_mem_size after memory.grow if wasmtime is
+    /// compiled and run with valgrind.
     fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, num_bytes: ir::Value) {}
 }
 
