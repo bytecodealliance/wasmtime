@@ -3,16 +3,17 @@ use crate::preview2::{
     clocks::{self, HostMonotonicClock, HostWallClock},
     filesystem::{Dir, TableFsExt},
     pipe, random, stdio,
+    stdio::{StdioInput, StdioOutput},
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
-    DirPerms, FilePerms, Table,
+    DirPerms, FilePerms, IsATTY, Table,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
 use std::mem;
 
 pub struct WasiCtxBuilder {
-    stdin: Box<dyn HostInputStream>,
-    stdout: Box<dyn HostOutputStream>,
-    stderr: Box<dyn HostOutputStream>,
+    stdin: (Box<dyn HostInputStream>, IsATTY),
+    stdout: (Box<dyn HostOutputStream>, IsATTY),
+    stderr: (Box<dyn HostOutputStream>, IsATTY),
     env: Vec<(String, String)>,
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
@@ -56,9 +57,9 @@ impl WasiCtxBuilder {
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
         Self {
-            stdin: Box::new(pipe::ClosedInputStream),
-            stdout: Box::new(pipe::SinkOutputStream),
-            stderr: Box::new(pipe::SinkOutputStream),
+            stdin: (Box::new(pipe::ClosedInputStream), IsATTY::None),
+            stdout: (Box::new(pipe::SinkOutputStream), IsATTY::None),
+            stderr: (Box::new(pipe::SinkOutputStream), IsATTY::None),
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
@@ -71,31 +72,31 @@ impl WasiCtxBuilder {
         }
     }
 
-    pub fn stdin(&mut self, stdin: impl HostInputStream + 'static) -> &mut Self {
-        self.stdin = Box::new(stdin);
+    pub fn stdin(&mut self, stdin: impl HostInputStream + 'static, isatty: IsATTY) -> &mut Self {
+        self.stdin = (Box::new(stdin), isatty);
         self
     }
 
-    pub fn stdout(&mut self, stdout: impl HostOutputStream + 'static) -> &mut Self {
+    pub fn stdout(&mut self, stdout: impl HostOutputStream + 'static, isatty: IsATTY) -> &mut Self {
         self.stdout = Box::new(stdout);
         self
     }
 
-    pub fn stderr(&mut self, stderr: impl HostOutputStream + 'static) -> &mut Self {
+    pub fn stderr(&mut self, stderr: impl HostOutputStream + 'static, isatty: IsATTY) -> &mut Self {
         self.stderr = Box::new(stderr);
         self
     }
 
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.stdin(stdio::stdin())
+        self.set_stdin(stdio::stdin(), IsATTY::TTY)
     }
 
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.stdout(stdio::stdout())
+        self.set_stdout(stdio::stdout(), IsATTY::TTY)
     }
 
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.stderr(stdio::stderr())
+        self.set_stderr(stdio::stderr(), IsATTY::TTY)
     }
 
     pub fn inherit_stdio(&mut self) -> &mut Self {
@@ -208,9 +209,9 @@ impl WasiCtxBuilder {
         } = mem::replace(self, Self::new());
         self.built = true;
 
-        let stdin = table.push_input_stream(stdin).context("stdin")?;
-        let stdout = table.push_output_stream(stdout).context("stdout")?;
-        let stderr = table.push_output_stream(stderr).context("stderr")?;
+        let stdin_ix = table.push_input_stream(stdin.0).context("stdin")?;
+        let stdout_ix = table.push_output_stream(stdout.0).context("stdout")?;
+        let stderr_ix = table.push_output_stream(stderr.0).context("stderr")?;
 
         let preopens = preopens
             .into_iter()
@@ -223,9 +224,18 @@ impl WasiCtxBuilder {
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         Ok(WasiCtx {
-            stdin,
-            stdout,
-            stderr,
+            stdin: StdioInput {
+                input_stream: stdin_ix,
+                isatty: stdin.1,
+            },
+            stdout: StdioOutput {
+                output_stream: stdout_ix,
+                isatty: stdout.1,
+            },
+            stderr: StdioOutput {
+                output_stream: stderr_ix,
+                isatty: stderr.1,
+            },
             env,
             args,
             preopens,
@@ -254,7 +264,7 @@ pub struct WasiCtx {
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
     pub(crate) preopens: Vec<(u32, String)>,
-    pub(crate) stdin: u32,
-    pub(crate) stdout: u32,
-    pub(crate) stderr: u32,
+    pub(crate) stdin: StdioInput,
+    pub(crate) stdout: StdioOutput,
+    pub(crate) stderr: StdioOutput,
 }

@@ -22,6 +22,11 @@ wasmtime::component::bindgen!({
        "wasi:cli/stdin": crate::preview2::bindings::cli::stdin,
        "wasi:cli/stdout": crate::preview2::bindings::cli::stdout,
        "wasi:cli/stderr": crate::preview2::bindings::cli::stderr,
+       "wasi:cli/terminal-input": crate::preview2::bindings::cli::terminal_input,
+       "wasi:cli/terminal-output": crate::preview2::bindings::cli::terminal_output,
+       "wasi:cli/terminal-stdin": crate::preview2::bindings::cli::terminal_stdin,
+       "wasi:cli/terminal-stdout": crate::preview2::bindings::cli::terminal_stdout,
+       "wasi:cli/terminal-stderr": crate::preview2::bindings::cli::terminal_stderr,
     },
 });
 
@@ -39,6 +44,11 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::bindings::cli::stdin::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::cli::stdout::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::cli::stderr::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::terminal_input::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::terminal_output::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::terminal_stdin::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::terminal_stdout::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::cli::terminal_stderr::add_to_linker(l, |t| t)?;
     Ok(())
 }
 
@@ -67,6 +77,11 @@ pub mod sync {
            "wasi:cli/stdin": crate::preview2::bindings::cli::stdin,
            "wasi:cli/stdout": crate::preview2::bindings::cli::stdout,
            "wasi:cli/stderr": crate::preview2::bindings::cli::stderr,
+           "wasi:cli/terminal-input": crate::preview2::bindings::cli::terminal_input,
+           "wasi:cli/terminal-output": crate::preview2::bindings::cli::terminal_output,
+           "wasi:cli/terminal-stdin": crate::preview2::bindings::cli::terminal_stdin,
+           "wasi:cli/terminal-stdout": crate::preview2::bindings::cli::terminal_stdout,
+           "wasi:cli/terminal-stderr": crate::preview2::bindings::cli::terminal_stderr,
         },
     });
 
@@ -86,6 +101,11 @@ pub mod sync {
         crate::preview2::bindings::cli::stdin::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::cli::stdout::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::cli::stderr::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::terminal_input::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::terminal_output::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::terminal_stdin::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::terminal_stdout::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::cli::terminal_stderr::add_to_linker(l, |t| t)?;
         Ok(())
     }
 }

@@ -1,4 +1,10 @@
+use crate::preview2::bindings::cli::{
+    stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
+    terminal_stdout,
+};
+use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe::AsyncWriteStream;
+use crate::preview2::WasiView;
 
 #[cfg(unix)]
 mod unix;
@@ -19,6 +25,82 @@ pub type Stderr = AsyncWriteStream;
 
 pub fn stderr() -> Stderr {
     AsyncWriteStream::new(tokio::io::stderr())
+}
+
+pub enum IsATTY {
+    TTY,
+    None,
+}
+
+pub(crate) struct StdioInput {
+    pub input_stream: streams::InputStream,
+    pub isatty: IsATTY,
+}
+
+pub(crate) struct StdioOutput {
+    pub output_stream: streams::OutputStream,
+    pub isatty: IsATTY,
+}
+
+impl<T: WasiView> stdin::Host for T {
+    fn get_stdin(&mut self) -> Result<streams::InputStream, anyhow::Error> {
+        Ok(self.ctx().stdin.input_stream)
+    }
+}
+
+impl<T: WasiView> stdout::Host for T {
+    fn get_stdout(&mut self) -> Result<streams::OutputStream, anyhow::Error> {
+        Ok(self.ctx().stdout.output_stream)
+    }
+}
+
+impl<T: WasiView> stderr::Host for T {
+    fn get_stderr(&mut self) -> Result<streams::OutputStream, anyhow::Error> {
+        Ok(self.ctx().stderr.output_stream)
+    }
+}
+
+struct HostTerminalInput;
+struct HostTerminalOutput;
+
+impl<T: WasiView> terminal_input::Host for T {
+    fn drop_terminal_input(&mut self, r: terminal_input::TerminalInput) -> anyhow::Result<()> {
+        self.table_mut().delete::<HostTerminalInput>(r)?;
+        Ok(())
+    }
+}
+impl<T: WasiView> terminal_output::Host for T {
+    fn drop_terminal_output(&mut self, r: terminal_output::TerminalOutput) -> anyhow::Result<()> {
+        self.table_mut().delete::<HostTerminalOutput>(r)?;
+        Ok(())
+    }
+}
+impl<T: WasiView> terminal_stdin::Host for T {
+    fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<terminal_input::TerminalInput>> {
+        if let IsATTY::TTY = self.ctx().stdin.isatty {
+            Ok(Some(self.table_mut().push(Box::new(HostTerminalInput))?))
+        } else {
+            Ok(None)
+        }
+    }
+}
+impl<T: WasiView> terminal_stdout::Host for T {
+    fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<terminal_output::TerminalOutput>> {
+        if let IsATTY::TTY = self.ctx().stdout.isatty {
+            Ok(Some(self.table_mut().push(Box::new(HostTerminalOutput))?))
+        } else {
+            Ok(None)
+        }
+    }
+}
+impl<T: WasiView> terminal_stderr::Host for T {
+    fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<terminal_output::TerminalOutput>> {
+        if let IsATTY::TTY = self.ctx().stderr.isatty {
+            Ok(Some(self.table_mut().push(Box::new(HostTerminalOutput))?))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[cfg(all(unix, test))]

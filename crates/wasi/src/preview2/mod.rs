@@ -36,6 +36,7 @@ pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, TablePollableExt};
 pub use self::random::{thread_rng, Deterministic};
+pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
 pub use self::stream::{HostInputStream, HostOutputStream, StreamState, TableStreamExt};
 pub use self::table::{OccupiedEntry, Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
@@ -127,6 +128,11 @@ pub mod bindings {
               import wasi:cli/stdin
               import wasi:cli/stdout
               import wasi:cli/stderr
+              import wasi:cli/terminal-input
+              import wasi:cli/terminal-output
+              import wasi:cli/terminal-stdin
+              import wasi:cli/terminal-stdout
+              import wasi:cli/terminal-stderr
             ",
         tracing: true,
         trappable_error_type: {
