@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use std::str;
 use std::vec::Vec;
 use wasmtime::{AsContext, AsContextMut, Caller, Extern, Memory};
+use wasmtime_wasi::preview2::bindings::{io, poll};
 
 const MEMORY: &str = "memory";
 
@@ -79,7 +80,10 @@ fn read_option_string(
     }
 }
 
-fn allocate_guest_pointer<T>(caller: &mut Caller<'_, T>, size: u32) -> anyhow::Result<u32> {
+async fn allocate_guest_pointer<T: Send>(
+    caller: &mut Caller<'_, T>,
+    size: u32,
+) -> anyhow::Result<u32> {
     let realloc = caller
         .get_export("cabi_realloc")
         .ok_or_else(|| anyhow!("missing required export cabi_realloc"))?;
@@ -87,7 +91,9 @@ fn allocate_guest_pointer<T>(caller: &mut Caller<'_, T>, size: u32) -> anyhow::R
         .into_func()
         .ok_or_else(|| anyhow!("cabi_realloc must be a func"))?;
     let typed = func.typed::<(u32, u32, u32, u32), u32>(caller.as_context())?;
-    Ok(typed.call(caller.as_context_mut(), (0, 0, 4, size))?)
+    Ok(typed
+        .call_async(caller.as_context_mut(), (0, 0, 4, size))
+        .await?)
 }
 
 fn u32_array_to_u8(arr: &[u32]) -> Vec<u8> {
@@ -109,7 +115,9 @@ where
     T: WasiHttpView
         + WasiHttpViewExt
         + crate::wasi::http::outgoing_handler::Host
-        + crate::wasi::http::types::Host,
+        + crate::wasi::http::types::Host
+        + io::streams::Host
+        + poll::poll::Host,
 {
     linker.func_wrap(
         "wasi:http/outgoing-handler",
@@ -242,40 +250,42 @@ where
             Ok(())
         },
     )?;
-    linker.func_wrap(
+    linker.func_wrap2_async(
         "wasi:http/types",
         "future-incoming-response-get",
-        move |mut caller: Caller<'_, T>, future: u32, ptr: i32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            let response = ctx.future_incoming_response_get(future)?.unwrap_or(Ok(0));
+        move |mut caller: Caller<'_, T>, future: u32, ptr: i32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                let response = ctx.future_incoming_response_get(future)?.unwrap_or(Ok(0));
 
-            let memory = memory_get(&mut caller)?;
+                let memory = memory_get(&mut caller)?;
 
-            // First == is_some
-            // Second == is_err
-            // Third == {ok: is_err = false, tag: is_err = true}
-            // Fourth == string ptr
-            // Fifth == string len
-            let result: [u32; 5] = match response {
-                Ok(value) => [1, 0, value, 0, 0],
-                Err(error) => {
-                    let (tag, err_string) = match error {
-                        Error::InvalidUrl(e) => (0u32, e),
-                        Error::TimeoutError(e) => (1u32, e),
-                        Error::ProtocolError(e) => (2u32, e),
-                        Error::UnexpectedError(e) => (3u32, e),
-                    };
-                    let bytes = err_string.as_bytes();
-                    let len = bytes.len().try_into().unwrap();
-                    let ptr = allocate_guest_pointer(&mut caller, len)?;
-                    memory.write(caller.as_context_mut(), ptr as _, bytes)?;
-                    [1, 1, tag, ptr, len]
-                }
-            };
-            let raw = u32_array_to_u8(&result);
+                // First == is_some
+                // Second == is_err
+                // Third == {ok: is_err = false, tag: is_err = true}
+                // Fourth == string ptr
+                // Fifth == string len
+                let result: [u32; 5] = match response {
+                    Ok(value) => [1, 0, value, 0, 0],
+                    Err(error) => {
+                        let (tag, err_string) = match error {
+                            Error::InvalidUrl(e) => (0u32, e),
+                            Error::TimeoutError(e) => (1u32, e),
+                            Error::ProtocolError(e) => (2u32, e),
+                            Error::UnexpectedError(e) => (3u32, e),
+                        };
+                        let bytes = err_string.as_bytes();
+                        let len = bytes.len().try_into().unwrap();
+                        let ptr = allocate_guest_pointer(&mut caller, len).await?;
+                        memory.write(caller.as_context_mut(), ptr as _, bytes)?;
+                        [1, 1, tag, ptr, len]
+                    }
+                };
+                let raw = u32_array_to_u8(&result);
 
-            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
-            Ok(())
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+                Ok(())
+            })
         },
     )?;
     linker.func_wrap(
@@ -296,11 +306,155 @@ where
             Ok(())
         },
     )?;
-    linker.func_wrap(
-        "wasi:io/poll",
+    linker.func_wrap1_async(
+        "wasi:poll/poll",
         "drop-pollable",
-        move |_caller: Caller<'_, T>, _a: i32| -> anyhow::Result<()> {
-            anyhow::bail!("unimplemented")
+        move |mut caller: Caller<'_, T>, id: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                poll::poll::Host::drop_pollable(ctx, id).await?;
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap3_async(
+        "wasi:poll/poll",
+        "poll-oneoff",
+        move |mut caller: Caller<'_, T>, base_ptr: u32, len: u32, out_ptr: u32| {
+            Box::new(async move {
+                let memory = memory_get(&mut caller)?;
+
+                let mut vec = Vec::new();
+                let mut i = 0;
+                while i < len {
+                    let ptr = base_ptr + i * 4;
+                    let pollable_ptr = u32_from_memory(&memory, caller.as_context_mut(), ptr)?;
+                    vec.push(pollable_ptr);
+                    i = i + 1;
+                }
+
+                let ctx = get_cx(caller.data_mut());
+                let result = poll::poll::Host::poll_oneoff(ctx, vec).await?;
+
+                let result_len = result.len();
+                let result_ptr =
+                    allocate_guest_pointer(&mut caller, (4 * result_len).try_into()?).await?;
+                let mut ptr = result_ptr;
+                for item in result.iter() {
+                    let completion: u32 = match item {
+                        true => 1,
+                        false => 0,
+                    };
+                    memory.write(caller.as_context_mut(), ptr as _, &completion.to_be_bytes())?;
+
+                    ptr = ptr + 4;
+                }
+
+                let result: [u32; 2] = [result_ptr, result_len.try_into()?];
+                let raw = u32_array_to_u8(&result);
+                memory.write(caller.as_context_mut(), out_ptr as _, &raw)?;
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap1_async(
+        "wasi:io/streams",
+        "drop-input-stream",
+        move |mut caller: Caller<'_, T>, id: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                io::streams::Host::drop_input_stream(ctx, id).await?;
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap1_async(
+        "wasi:io/streams",
+        "drop-output-stream",
+        move |mut caller: Caller<'_, T>, id: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                io::streams::Host::drop_output_stream(ctx, id).await?;
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap3_async(
+        "wasi:io/streams",
+        "read",
+        move |mut caller: Caller<'_, T>, stream: u32, len: u64, ptr: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+
+                let bytes_tuple = io::streams::Host::read(ctx, stream, len).await?;
+                let bytes = bytes_tuple.0;
+                let done = match bytes_tuple.1 {
+                    io::streams::StreamStatus::Open => 0,
+                    io::streams::StreamStatus::Ended => 1,
+                };
+                let body_len: u32 = bytes.len().try_into()?;
+                let out_ptr = allocate_guest_pointer(&mut caller, body_len).await?;
+                let result: [u32; 4] = [0, out_ptr, body_len, done];
+                let raw = u32_array_to_u8(&result);
+
+                let memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap1_async(
+        "wasi:io/streams",
+        "subscribe-to-input-stream",
+        move |mut caller: Caller<'_, T>, stream: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                let pollable = io::streams::Host::subscribe_to_input_stream(ctx, stream).await?;
+                Ok(pollable)
+            })
+        },
+    )?;
+    linker.func_wrap1_async(
+        "wasi:io/streams",
+        "subscribe-to-output-stream",
+        move |mut caller: Caller<'_, T>, stream: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                let pollable = io::streams::Host::subscribe_to_output_stream(ctx, stream).await?;
+                Ok(pollable)
+            })
+        },
+    )?;
+    linker.func_wrap4_async(
+        "wasi:io/streams",
+        "write",
+        move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
+            Box::new(async move {
+                let memory: Memory = memory_get(&mut caller)?;
+                let body =
+                    string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+
+                let ctx = get_cx(caller.data_mut());
+
+                let result =
+                    match io::streams::Host::write(ctx, stream, body.as_bytes().to_vec()).await {
+                        Ok((len, _status)) => [0, 0, len as u32, 0, 0],
+                        Err(_error) => {
+                            let err_string = "Error while writing to stream";
+                            let bytes = err_string.as_bytes();
+                            let len = bytes.len().try_into().unwrap();
+                            let ptr = allocate_guest_pointer(&mut caller, len).await?;
+                            memory.write(caller.as_context_mut(), ptr as _, bytes)?;
+                            [1, 1, 0, ptr, len]
+                        }
+                    };
+                let raw = u32_array_to_u8(&result);
+
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
         },
     )?;
     linker.func_wrap(
@@ -378,41 +532,44 @@ where
             Ok(ctx.new_fields(vec)?)
         },
     )?;
-    linker.func_wrap(
+    linker.func_wrap2_async(
         "wasi:http/types",
         "fields-entries",
-        move |mut caller: Caller<'_, T>, fields: u32, out_ptr: u32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            let entries = ctx.fields_entries(fields)?;
+        move |mut caller: Caller<'_, T>, fields: u32, out_ptr: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                let entries = ctx.fields_entries(fields)?;
 
-            let header_len = entries.len();
-            let tuple_ptr = allocate_guest_pointer(&mut caller, (16 * header_len).try_into()?)?;
-            let mut ptr = tuple_ptr;
-            for item in entries.iter() {
-                let name = &item.0;
-                let value = &item.1;
-                let name_len: u32 = name.len().try_into()?;
-                let value_len: u32 = value.len().try_into()?;
+                let header_len = entries.len();
+                let tuple_ptr =
+                    allocate_guest_pointer(&mut caller, (16 * header_len).try_into()?).await?;
+                let mut ptr = tuple_ptr;
+                for item in entries.iter() {
+                    let name = &item.0;
+                    let value = &item.1;
+                    let name_len: u32 = name.len().try_into()?;
+                    let value_len: u32 = value.len().try_into()?;
 
-                let name_ptr = allocate_guest_pointer(&mut caller, name_len)?;
-                let value_ptr = allocate_guest_pointer(&mut caller, value_len)?;
+                    let name_ptr = allocate_guest_pointer(&mut caller, name_len).await?;
+                    let value_ptr = allocate_guest_pointer(&mut caller, value_len).await?;
+
+                    let memory = memory_get(&mut caller)?;
+                    memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
+                    memory.write(caller.as_context_mut(), value_ptr as _, value)?;
+
+                    let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
+                    let raw_pair = u32_array_to_u8(&pair);
+                    memory.write(caller.as_context_mut(), ptr as _, &raw_pair)?;
+
+                    ptr = ptr + 16;
+                }
 
                 let memory = memory_get(&mut caller)?;
-                memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
-                memory.write(caller.as_context_mut(), value_ptr as _, value)?;
-
-                let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
-                let raw_pair = u32_array_to_u8(&pair);
-                memory.write(caller.as_context_mut(), ptr as _, &raw_pair)?;
-
-                ptr = ptr + 16;
-            }
-
-            let memory = memory_get(&mut caller)?;
-            let result: [u32; 2] = [tuple_ptr, header_len.try_into()?];
-            let raw = u32_array_to_u8(&result);
-            memory.write(caller.as_context_mut(), out_ptr as _, &raw)?;
-            Ok(())
+                let result: [u32; 2] = [tuple_ptr, header_len.try_into()?];
+                let raw = u32_array_to_u8(&result);
+                memory.write(caller.as_context_mut(), out_ptr as _, &raw)?;
+                Ok(())
+            })
         },
     )?;
     linker.func_wrap(
