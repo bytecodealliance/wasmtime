@@ -4,6 +4,7 @@ use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor, TensorType};
 use std::sync::Arc;
 use std::time::Duration;
+use serde::{Deserialize, Serialize};
 
 #[derive(Default)]
 pub(crate) struct TritonBackend();
@@ -84,8 +85,64 @@ fn map_execution_target_to_string(target: ExecutionTarget) -> &'static str {
 
 struct TritonClient {
     server_url: String,
+
 }
 
 impl TritonClient {
     //Bulk of the logic will be here.
+
+    fn build_inference_url(model_name: String) -> String {
+        return format!("/v2/models/{}/infer", model_name)
+    }
+
+
+}
+
+
+#[derive(Serialize, Deserialize)]
+struct TritonTensorParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    binary_data_size: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    binary_data: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TritonTensorMetadata {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shape: Option<Vec<u32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    datatype: Option<TritonDatatype>,
+    parameters: TritonTensorParameters,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TritonBinaryInferenceRequest {
+    model_name: String,
+    inputs: Vec<TritonTensorMetadata>,
+    outputs: Vec<TritonTensorMetadata>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TritonBinaryInferenceResult {
+    outputs: Vec<TritonTensorMetadata>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum TritonDatatype {
+    BOOL,
+    UINT8,
+    UINT16,
+    UINT32,
+    UINT64,
+    INT8,
+    INT16,
+    INT32,
+    INT64,
+    FP16,
+    FP32,
+    FP64,
+    BYTES,
+    BF16,
 }

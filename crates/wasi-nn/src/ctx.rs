@@ -4,7 +4,6 @@ use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::openvino::OpenvinoBackend;
 use crate::r#impl::UsageError;
 use crate::witx::types::{ExecutionTarget, Graph, GraphEncoding, GraphExecutionContext};
-use dashmap::DashMap;
 use std::collections::HashMap;
 use std::hash::Hash;
 use thiserror::Error;
@@ -15,8 +14,8 @@ pub struct WasiNnCtx {
     pub(crate) backends: HashMap<u8, Box<dyn Backend>>,
     pub(crate) graphs: Table<Graph, Box<dyn BackendGraph>>,
     pub(crate) executions: Table<GraphExecutionContext, Box<dyn BackendExecutionContext>>,
-    pub(crate) model_registry: DashMap<String, RegisteredModel>,
-    pub(crate) loaded_models: DashMap<String, LoadedModel>,
+    pub(crate) model_registry: HashMap<String, RegisteredModel>,
+    pub(crate) loaded_models: HashMap<String, LoadedModel>,
 }
 
 pub(crate) struct RegisteredModel {
@@ -43,8 +42,8 @@ impl WasiNnCtx {
             backends,
             graphs: Table::default(),
             executions: Table::default(),
-            model_registry: DashMap::new(),
-            loaded_models: DashMap::new(),
+            model_registry: HashMap::new(),
+            loaded_models: HashMap::new(),
         })
     }
 }

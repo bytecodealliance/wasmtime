@@ -115,6 +115,20 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         }
     }
 
+    fn set_input_by_name<'b>(
+        &mut self,
+        exec_context_id: GraphExecutionContext,
+        name: &GuestPtr<'_, str>,
+        tensor: &Tensor<'b>,
+    ) -> Result<()> {
+        let name = name.as_str().unwrap().unwrap().to_string();
+        if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
+            todo!("Implement setting input by name.")
+        } else {
+            Err(UsageError::InvalidGraphHandle.into())
+        }
+    }
+
     fn compute(&mut self, exec_context_id: GraphExecutionContext) -> Result<()> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
             Ok(exec_context.compute()?)
