@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use wasmtime::{
@@ -15,9 +16,6 @@ use wasmtime::{
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
-
-#[cfg(any(feature = "wasi-nn", feature = "wasi-threads", feature = "wasi-http"))]
-use std::sync::Arc;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
