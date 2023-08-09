@@ -297,3 +297,7 @@ async fn unlink_file_trailing_slashes() {
 async fn path_open_preopen() {
     run("path_open_preopen", true).await.unwrap()
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn unicode_output() {
+    run("unicode_output", true).await.unwrap()
+}
