@@ -78,25 +78,25 @@ impl WasiCtxBuilder {
     }
 
     pub fn stdout(&mut self, stdout: impl HostOutputStream + 'static, isatty: IsATTY) -> &mut Self {
-        self.stdout = Box::new(stdout);
+        self.stdout = (Box::new(stdout), isatty);
         self
     }
 
     pub fn stderr(&mut self, stderr: impl HostOutputStream + 'static, isatty: IsATTY) -> &mut Self {
-        self.stderr = Box::new(stderr);
+        self.stderr = (Box::new(stderr), isatty);
         self
     }
 
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.set_stdin(stdio::stdin(), IsATTY::TTY)
+        self.stdin(stdio::stdin(), IsATTY::TTY)
     }
 
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.set_stdout(stdio::stdout(), IsATTY::TTY)
+        self.stdout(stdio::stdout(), IsATTY::TTY)
     }
 
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.set_stderr(stdio::stderr(), IsATTY::TTY)
+        self.stderr(stdio::stderr(), IsATTY::TTY)
     }
 
     pub fn inherit_stdio(&mut self) -> &mut Self {
