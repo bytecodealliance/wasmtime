@@ -1,38 +1,45 @@
 # wasmtime-wasi-nn
 
-This crate enables support for the [wasi-nn] API in Wasmtime. Currently it contains an implementation of [wasi-nn] using
-OpenVINO™ but in the future it could support multiple machine learning backends. Since the [wasi-nn] API is expected
-to be an optional feature of WASI, this crate is currently separate from the [wasi-common] crate. This crate is
-experimental and its API, functionality, and location could quickly change.
+This crate enables support for the [wasi-nn] API in Wasmtime. Currently it
+contains an implementation of [wasi-nn] using OpenVINO™ but in the future it
+could support multiple machine learning backends. Since the [wasi-nn] API is
+expected to be an optional feature of WASI, this crate is currently separate
+from the [wasi-common] crate. This crate is experimental and its API,
+functionality, and location could quickly change.
 
 [examples]: examples
 [openvino]: https://crates.io/crates/openvino
 [wasi-nn]: https://github.com/WebAssembly/wasi-nn
 [wasi-common]: ../wasi-common
+[bindings]: https://crates.io/crates/wasi-nn
 
 ### Use
 
-Use the Wasmtime APIs to instantiate a Wasm module and link in the `WasiNn` implementation as follows:
+Use the Wasmtime APIs to instantiate a Wasm module and link in the `wasi-nn`
+implementation as follows:
 
-```
-let wasi_nn = WasiNn::new(&store, WasiNnCtx::new()?);
-wasi_nn.add_to_linker(&mut linker)?;
+```rust
+let wasi_nn = WasiNnCtx::new()?;
+wasmtime_wasi_nn::witx::add_to_linker(...);
 ```
 
 ### Build
 
-This crate should build as usual (i.e. `cargo build`) but note that using an existing installation of OpenVINO™, rather
-than building from source, will drastically improve the build times. See the [openvino] crate for more information
+```sh
+$ cargo build
+```
+
+To use the WIT-based ABI, compile with `--features component-model` and use `wasmtime_wasi_nn::wit::add_to_linker`.
 
 ### Example
 
 An end-to-end example demonstrating ML classification is included in [examples]:
- - `tests/wasi-nn-rust-bindings` contains ergonomic bindings for writing Rust code against the [wasi-nn] APIs
- - `tests/classification-example` contains a standalone Rust project that uses the [wasi-nn] APIs and is compiled to the 
- `wasm32-wasi` target using the `wasi-nn-rust-bindings`
+`examples/classification-example` contains a standalone Rust project that uses
+the [wasi-nn] APIs and is compiled to the `wasm32-wasi` target using the
+high-level `wasi-nn` [bindings].
 
 Run the example from the Wasmtime project directory:
 
-```
-ci/run-wasi-nn-example.sh
+```sh
+$ ci/run-wasi-nn-example.sh
 ```
