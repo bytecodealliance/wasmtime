@@ -208,34 +208,6 @@ impl Config {
             }
         }
 
-        // Try to configure cranelift to insert padding between basic blocks to
-        // stress code layout mechanisms within Cranelift. This padding can get
-        // unwieldy quickly, however, generating a 4G+ function which isn't
-        // particularly interesting at this time.
-        //
-        // To keep this setting under control there are a few limits in place:
-        //
-        // * Cranelift will generate at most 150M of padding per-function,
-        //   regardless of how many basic blocks there are.
-        // * Here it's limited to enable this setting only when there's at most
-        //   10 functions to ensure that the overhead for all functions is <1G
-        //   ish or otherwise doesn't run away.
-        // * The `bb_padding_log2_minus_one` setting isn't allowed to be
-        //   larger than 26 as that allows for `1<<25` maximum padding size
-        //   which is 32M.
-        //
-        // With all that combined this is intended to still be enabled,
-        // although perhaps not all the time, and stress enough interesting test
-        // cases in cranelift.
-        if self.module_config.config.max_funcs < 5 {
-            unsafe {
-                cfg.cranelift_flag_set(
-                    "bb_padding_log2_minus_one",
-                    &(self.wasmtime.bb_padding_log2 % 27).to_string(),
-                );
-            }
-        }
-
         // Vary the memory configuration, but only if threads are not enabled.
         // When the threads proposal is enabled we might generate shared memory,
         // which is less amenable to different memory configurations:
@@ -426,7 +398,6 @@ pub struct WasmtimeConfig {
     native_unwind_info: bool,
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
-    bb_padding_log2: u8,
 }
 
 impl WasmtimeConfig {
