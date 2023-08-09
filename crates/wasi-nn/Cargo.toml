@@ -27,4 +27,4 @@ thiserror = { workspace = true }
 walkdir = { workspace = true }
 
 [features]
-preview2 = ["wasmtime"]
+component-model = ["wasmtime"]
