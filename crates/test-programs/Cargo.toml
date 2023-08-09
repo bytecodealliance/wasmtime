@@ -14,14 +14,22 @@ wit-component = { workspace = true }
 heck = { workspace = true }
 
 [dependencies]
+http = { version = "0.2.9" }
+http-body = "1.0.0-rc.2"
+http-body-util = "0.1.0-rc.2"
+hyper = { version = "1.0.0-rc.3", features = ["full"] }
 is-terminal = { workspace = true }
+tokio = { workspace = true, features = ["net", "rt-multi-thread", "macros"] }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 tempfile = { workspace = true }
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter'] }
+tracing-subscriber = { version = "0.3.1", default-features = false, features = [
+    'fmt',
+    'env-filter',
+] }
 lazy_static = "1"
 wasmtime = { workspace = true, features = ['cranelift', 'component-model'] }
 
@@ -30,14 +38,9 @@ wasi-cap-std-sync = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["tokio"] }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
-tokio = { version = "1.8.0", features = ["net", "rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 wasmtime-wasi-http = { workspace = true }
-hyper = { version = "1.0.0-rc.3", features = ["full"] }
-http = { version = "0.2.9" }
-http-body = "1.0.0-rc.2"
-http-body-util = "0.1.0-rc.2"
 
 [features]
 test_programs = []
-test_programs_http = [ "wasmtime/component-model" ]

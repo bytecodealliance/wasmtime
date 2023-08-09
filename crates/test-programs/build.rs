@@ -58,17 +58,8 @@ fn build_and_generate_tests() {
     components_rs(&meta, "wasi-tests", "bin", &command_adapter, &out_dir);
 
     if BUILD_WASI_HTTP_TESTS {
-        // modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
-        // FIXME this is broken at the moment because guest bindgen is embedding the proxy world type,
-        // so wit-component expects the module to contain the proxy's exports. we need a different
-        // world to pass guest bindgen that is just "a command that also can do outbound http"
-        components_rs(
-            &meta,
-            "wasi-http-tests",
-            "cdylib",
-            &reactor_adapter,
-            &out_dir,
-        );
+        modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
+        components_rs(&meta, "wasi-http-tests", "bin", &reactor_adapter, &out_dir);
     }
 
     components_rs(&meta, "command-tests", "bin", &command_adapter, &out_dir);
@@ -76,7 +67,7 @@ fn build_and_generate_tests() {
 }
 
 // Creates an `${out_dir}/${package}_modules.rs` file that exposes a `get_module(&str) -> Module`,
-// and a contains a `use self::{module} as _;` for each module that ensures that the user defines
+// and contains a `use self::{module} as _;` for each module that ensures that the user defines
 // a symbol (ideally a #[test]) corresponding to each module.
 fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_dir: &PathBuf) {
     let modules = targets_in_package(meta, package, kind)

@@ -1,4 +1,5 @@
 #![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
+use futures::future;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -9,12 +10,7 @@ use wasmtime_wasi::preview2::{
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-use http_body_util::combinators::BoxBody;
-use http_body_util::BodyExt;
-use hyper::server::conn::http1;
-use hyper::{body::Bytes, service::service_fn, Request, Response};
-use std::{error::Error, net::SocketAddr};
-use tokio::{net::TcpListener, runtime::Handle};
+use test_programs::http_server;
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -28,36 +24,6 @@ lazy_static::lazy_static! {
 }
 // uses ENGINE, creates a fn get_module(&str) -> Module
 include!(concat!(env!("OUT_DIR"), "/wasi_http_tests_components.rs"));
-
-async fn test(
-    req: Request<hyper::body::Incoming>,
-) -> http::Result<Response<BoxBody<Bytes, hyper::Error>>> {
-    let method = req.method().to_string();
-    Response::builder()
-        .status(http::StatusCode::OK)
-        .header("x-wasmtime-test-method", method)
-        .header("x-wasmtime-test-uri", req.uri().to_string())
-        .body(req.into_body().boxed())
-}
-
-async fn async_run_serve() -> Result<(), Box<dyn Error + Send + Sync>> {
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-
-    let listener = TcpListener::bind(addr).await?;
-
-    loop {
-        let (stream, _) = listener.accept().await?;
-
-        tokio::task::spawn(async move {
-            if let Err(err) = http1::Builder::new()
-                .serve_connection(stream, service_fn(test))
-                .await
-            {
-                println!("Error serving connection: {:?}", err);
-            }
-        });
-    }
-}
 
 struct Ctx {
     table: Table,
@@ -89,7 +55,7 @@ impl WasiHttpView for Ctx {
     }
 }
 
-async fn instantiate(
+async fn instantiate_component(
     component: Component,
     ctx: Ctx,
 ) -> Result<(Store<Ctx>, Command), anyhow::Error> {
@@ -104,24 +70,17 @@ async fn instantiate(
 }
 
 async fn run(name: &str) -> anyhow::Result<()> {
-    let _thread = Handle::current().spawn(async move {
-        async_run_serve()
-            .await
-            .map_err(|_| anyhow::anyhow!("error while running test server"))
-            .unwrap();
-    });
-
     let mut table = Table::new();
     let component = get_component(name);
 
     // Create our wasi context.
-    let http = WasiHttpCtx::new();
     let wasi = WasiCtxBuilder::new()
         .inherit_stdio()
-        .push_arg(name)
+        .arg(name)
         .build(&mut table)?;
+    let http = WasiHttpCtx::new();
 
-    let (mut store, command) = instantiate(component, Ctx { table, wasi, http }).await?;
+    let (mut store, command) = instantiate_component(component, Ctx { table, wasi, http }).await?;
     command
         .call_run(&mut store)
         .await
@@ -130,6 +89,7 @@ async fn run(name: &str) -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn wasi_http_tests() {
-    run("wasi_http_tests").await.unwrap()
+async fn outbound_request() {
+    let (_, result) = future::join(http_server::run_server(), run("outbound_request")).await;
+    result.unwrap();
 }
