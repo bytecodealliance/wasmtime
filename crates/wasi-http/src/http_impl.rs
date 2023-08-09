@@ -2,7 +2,7 @@ use crate::r#struct::{ActiveFields, ActiveFuture, ActiveResponse, HttpResponse, 
 use crate::wasi::http::types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme};
 pub use crate::{WasiHttpCtx, WasiHttpView};
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
-use anyhow::{anyhow, bail, Context};
+use anyhow::Context;
 use bytes::{Bytes, BytesMut};
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::{Method, Request};
@@ -13,15 +13,7 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
-use wasmtime_wasi::preview2::{StreamState, TableError, TableStreamExt};
-
-fn convert(error: TableError) -> anyhow::Error {
-    // if let Some(errno) = error.downcast_ref() {
-    //     anyhow::Error::new(crate::types::Error::UnexpectedError(errno.to_string()))
-    // } else {
-    error.into()
-    // }
-}
+use wasmtime_wasi::preview2::{StreamState, TableStreamExt};
 
 impl<T: WasiHttpView> crate::wasi::http::outgoing_handler::Host for T {
     fn handle(
@@ -56,7 +48,7 @@ pub trait WasiHttpViewExt {
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
-    ) -> wasmtime::Result<FutureIncomingResponse>;
+    ) -> wasmtime::Result<FutureIncomingResponse, crate::wasi::http::types::Error>;
 }
 
 #[async_trait::async_trait]
@@ -65,7 +57,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
-    ) -> wasmtime::Result<FutureIncomingResponse> {
+    ) -> wasmtime::Result<FutureIncomingResponse, crate::wasi::http::types::Error> {
         let opts = options.unwrap_or(
             // TODO: Configurable defaults here?
             RequestOptions {
@@ -84,7 +76,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let request = self
             .table()
             .get_request(request_id)
-            .map_err(convert)?
+            .context("[handle_async] getting request")?
             .clone();
 
         let method = match request.method() {
@@ -97,13 +89,25 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             crate::wasi::http::types::Method::Options => Method::OPTIONS,
             crate::wasi::http::types::Method::Trace => Method::TRACE,
             crate::wasi::http::types::Method::Patch => Method::PATCH,
-            crate::wasi::http::types::Method::Other(s) => bail!("unknown method {}", s),
+            crate::wasi::http::types::Method::Other(s) => {
+                return Err(crate::wasi::http::types::Error::InvalidUrl(format!(
+                    "unknown method {}",
+                    s
+                ))
+                .into());
+            }
         };
 
         let scheme = match request.scheme().as_ref().unwrap_or(&Scheme::Https) {
             Scheme::Http => "http://",
             Scheme::Https => "https://",
-            Scheme::Other(s) => bail!("unsupported scheme {}", s),
+            Scheme::Other(s) => {
+                return Err(crate::wasi::http::types::Error::InvalidUrl(format!(
+                    "unsupported scheme {}",
+                    s
+                ))
+                .into());
+            }
         };
 
         // Largely adapted from https://hyper.rs/guides/1/client/basic/
@@ -111,10 +115,10 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             Some(_) => request.authority().to_owned(),
             None => request.authority().to_owned() + port_for_scheme(request.scheme()),
         };
+        let tcp_stream = TcpStream::connect(authority.clone()).await?;
         let mut sender = if scheme == "https://" {
             #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
             {
-                let stream = TcpStream::connect(authority.clone()).await?;
                 //TODO: uncomment this code and make the tls implementation a feature decision.
                 //let connector = tokio_native_tls::native_tls::TlsConnector::builder().build()?;
                 //let connector = tokio_native_tls::TlsConnector::from(connector);
@@ -139,9 +143,11 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
                 let mut parts = authority.split(":");
                 let host = parts.next().unwrap_or(&authority);
-                let domain =
-                    rustls::ServerName::try_from(host).map_err(|_| anyhow!("invalid dnsname"))?;
-                let stream = connector.connect(domain, stream).await?;
+                let domain = rustls::ServerName::try_from(host)?;
+                let stream = connector
+                    .connect(domain, tcp_stream)
+                    .await
+                    .map_err(|e| crate::wasi::http::types::Error::ProtocolError(e.to_string()))?;
 
                 let t = timeout(
                     connect_timeout,
@@ -157,10 +163,15 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 s
             }
             #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
-            bail!("unsupported architecture for SSL")
+            return Err(crate::wasi::http::types::Error::UnexpectedError(
+                "unsupported architecture for SSL",
+            ));
         } else {
-            let tcp = TcpStream::connect(authority).await?;
-            let t = timeout(connect_timeout, hyper::client::conn::http1::handshake(tcp)).await?;
+            let t = timeout(
+                connect_timeout,
+                hyper::client::conn::http1::handshake(tcp_stream),
+            )
+            .await?;
             let (s, conn) = t?;
             tokio::task::spawn(async move {
                 if let Err(err) = conn.await {
@@ -178,7 +189,12 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             .header(hyper::header::HOST, request.authority());
 
         if let Some(headers) = request.headers() {
-            for (key, val) in self.table().get_fields(headers)?.iter() {
+            for (key, val) in self
+                .table()
+                .get_fields(headers)
+                .context("[handle_async] getting request headers")?
+                .iter()
+            {
                 for item in val {
                     call = call.header(key, item.clone());
                 }
@@ -189,13 +205,17 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let body = match request.body() {
             Some(id) => {
                 let table = self.table_mut();
-                let stream = table.get_stream(id)?;
-                let input_stream = table.get_input_stream_mut(stream.incoming())?;
+                let stream = table
+                    .get_stream(id)
+                    .context("[handle_async] getting stream")?;
+                let input_stream = table
+                    .get_input_stream_mut(stream.incoming())
+                    .context("[handle_async] getting mutable input stream")?;
                 let mut bytes = BytesMut::new();
                 let mut eof = StreamState::Open;
                 while eof != StreamState::Closed {
                     let (chunk, state) = input_stream.read(4096)?;
-                    eof = if chunk.len() == 0 {
+                    eof = if chunk.is_empty() {
                         StreamState::Closed
                     } else {
                         state
@@ -208,7 +228,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         };
         let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
         let mut res = t?;
-        response.status = res.status().try_into()?;
+        response.status = res.status().as_u16();
 
         let mut map = ActiveFields::new();
         for (key, value) in res.headers().iter() {
@@ -219,7 +239,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let headers = self
             .table_mut()
             .push_fields(Box::new(map))
-            .map_err(convert)?;
+            .context("[handle_async] pushing response headers")?;
         response.set_headers(headers);
 
         let mut buf: Vec<u8> = Vec::new();
@@ -244,7 +264,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 let trailers = self
                     .table_mut()
                     .push_fields(Box::new(map))
-                    .map_err(convert)?;
+                    .context("[handle_async] pushing response trailers")?;
                 response.set_trailers(trailers);
             }
         }
@@ -252,12 +272,15 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let response_id = self
             .table_mut()
             .push_response(Box::new(response))
-            .context("pushing response")?;
+            .context("[handle_async] pushing response")?;
         let (stream_id, stream) = self
             .table_mut()
             .push_stream(Bytes::from(buf), response_id)
-            .context("pushing stream")?;
-        let response = self.table_mut().get_response_mut(response_id)?;
+            .context("[handle_async] pushing stream")?;
+        let response = self
+            .table_mut()
+            .get_response_mut(response_id)
+            .context("[handle_async] getting mutable response")?;
         response.set_body(stream_id);
 
         self.http_ctx_mut().streams.insert(stream_id, stream);
