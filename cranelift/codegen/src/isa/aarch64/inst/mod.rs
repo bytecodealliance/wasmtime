@@ -136,6 +136,8 @@ pub struct ReturnCallInfo {
     /// for copying the frame over our current frame. It must already be
     /// allocated on the stack.
     pub new_stack_arg_size: u32,
+    /// API key to use to restore the return address, if any.
+    pub key: Option<APIKey>,
 }
 
 /// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
@@ -939,7 +941,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
             memarg_operands(mem, collector);
         }
-        &Inst::Pacisp { .. } | &Inst::Xpaclri => {
+        &Inst::Paci { .. } | &Inst::Xpaclri => {
             // Neither LR nor SP is an allocatable register, so there is no need
             // to do anything.
         }
@@ -2613,15 +2615,17 @@ impl Inst {
                 ref rets,
             } => {
                 let key = match key {
-                    APIKey::A => "a",
-                    APIKey::B => "b",
+                    APIKey::AZ => "az",
+                    APIKey::BZ => "bz",
+                    APIKey::ASP => "asp",
+                    APIKey::BSP => "bsp",
                 };
                 let mut s = match (is_hint, stack_bytes_to_pop) {
                     (false, 0) => format!("reta{key}"),
                     (false, n) => {
                         format!("add sp, sp, #{n} ; reta{key}")
                     }
-                    (true, 0) => format!("auti{key}sp ; ret"),
+                    (true, 0) => format!("auti{key} ; ret"),
                     (true, n) => {
                         format!("add sp, sp, #{n} ; auti{key} ; ret")
                     }
@@ -2814,13 +2818,15 @@ impl Inst {
                 }
                 ret
             }
-            &Inst::Pacisp { key } => {
+            &Inst::Paci { key } => {
                 let key = match key {
-                    APIKey::A => "a",
-                    APIKey::B => "b",
+                    APIKey::AZ => "az",
+                    APIKey::BZ => "bz",
+                    APIKey::ASP => "asp",
+                    APIKey::BSP => "bsp",
                 };
 
-                "paci".to_string() + key + "sp"
+                "paci".to_string() + key
             }
             &Inst::Xpaclri => "xpaclri".to_string(),
             &Inst::Bti { targets } => {

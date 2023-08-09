@@ -902,7 +902,7 @@
        ;; Pointer authentication code for instruction address with modifier in SP;
        ;; equivalent to a no-op if Pointer authentication (FEAT_PAuth) is not
        ;; supported.
-       (Pacisp
+       (Paci
         (key APIKey))
 
        ;; Strip pointer authentication code from instruction address in LR;
@@ -1645,8 +1645,14 @@
 ;; Keys for instruction address PACs
 (type APIKey
   (enum
-    (A)
-    (B)
+    ;; API key A with the modifier of SP
+    (ASP)
+    ;; API key B with the modifier of SP
+    (BSP)
+    ;; API key A with the modifier of zero
+    (AZ)
+    ;; API key B with the modifier of zero
+    (BZ)
 ))
 
 ;; Branch target types

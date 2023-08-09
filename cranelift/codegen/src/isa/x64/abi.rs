@@ -351,6 +351,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn gen_ret(
         _setup_frame: bool,
         _isa_flags: &x64_settings::Flags,
+        _call_conv: isa::CallConv,
         rets: Vec<RetPair>,
         stack_bytes_to_pop: u32,
     ) -> Self::I {
