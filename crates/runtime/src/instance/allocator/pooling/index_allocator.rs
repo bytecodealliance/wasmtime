@@ -5,10 +5,10 @@ use std::collections::hash_map::{Entry, HashMap};
 use std::mem;
 use std::sync::Mutex;
 
-/// A slot index. The job of this allocator is to hand out these
-/// indices.
+/// A slot index.
 #[derive(Hash, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SlotId(pub u32);
+
 impl SlotId {
     /// The index of this slot.
     pub fn index(self) -> usize {
@@ -16,6 +16,30 @@ impl SlotId {
     }
 }
 
+/// A simple index allocator.
+///
+/// This index allocator doesn't do any module affinity or anything like that,
+/// however it is built on top of the `ModuleAffinityIndexAllocator` to save
+/// code (and code size).
+#[derive(Debug)]
+pub struct SimpleIndexAllocator(ModuleAffinityIndexAllocator);
+
+impl SimpleIndexAllocator {
+    pub fn new(capacity: u32) -> Self {
+        SimpleIndexAllocator(ModuleAffinityIndexAllocator::new(capacity, 0))
+    }
+
+    pub fn alloc(&self) -> Option<SlotId> {
+        self.0.alloc(None)
+    }
+
+    pub(crate) fn free(&self, index: SlotId) {
+        self.0.free(index);
+    }
+}
+
+/// An index allocator that has configurable affinity between slots and modules
+/// so that slots are often reused for the same module again.
 #[derive(Debug)]
 pub struct ModuleAffinityIndexAllocator(Mutex<Inner>);
 
@@ -117,13 +141,13 @@ enum AllocMode {
 
 impl ModuleAffinityIndexAllocator {
     /// Create the default state for this strategy.
-    pub fn new(max_instances: u32, max_unused_warm_slots: u32) -> Self {
+    pub fn new(capacity: u32, max_unused_warm_slots: u32) -> Self {
         ModuleAffinityIndexAllocator(Mutex::new(Inner {
             last_cold: 0,
             max_unused_warm_slots,
             unused_warm_slots: 0,
             module_affine: HashMap::new(),
-            slot_state: (0..max_instances).map(|_| SlotState::UnusedCold).collect(),
+            slot_state: (0..capacity).map(|_| SlotState::UnusedCold).collect(),
             warm: List::default(),
         }))
     }
