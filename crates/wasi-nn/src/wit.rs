@@ -23,7 +23,7 @@ pub use gen_::Ml as ML;
 mod gen_ {
     wasmtime::component::bindgen!("ml");
 }
-use gen_::wasi::nn as wit; // Shortcut to the module containing the types we need.
+use gen_::wasi::nn as gen; // Shortcut to the module containing the types we need.
 
 impl gen::inference::Host for WasiNnCtx {
     /// Load an opaque sequence of bytes to use for inference.
