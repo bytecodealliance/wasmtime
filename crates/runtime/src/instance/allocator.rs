@@ -4,15 +4,17 @@ use crate::memory::Memory;
 use crate::table::Table;
 use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Result};
-use std::alloc;
-use std::any::Any;
-use std::convert::TryFrom;
-use std::ptr;
-use std::sync::Arc;
+use std::{alloc, any::Any, mem, ptr, sync::Arc};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, PrimaryMap, TableInitialValue, TableSegment, Trap, VMOffsets,
-    WasmType, WASM_PAGE_SIZE,
+    MemoryInitializer, MemoryPlan, Module, PrimaryMap, TableInitialValue, TablePlan, TableSegment,
+    Trap, VMOffsets, WasmType, WASM_PAGE_SIZE,
+};
+
+#[cfg(feature = "component-model")]
+use wasmtime_environ::{
+    component::{Component, VMComponentOffsets},
+    StaticModuleIndex,
 };
 
 mod on_demand;
@@ -64,20 +66,25 @@ pub struct InstanceAllocationRequest<'a> {
 /// itself, because several use-sites require a split mut borrow on the
 /// InstanceAllocationRequest.
 pub struct StorePtr(Option<*mut dyn Store>);
+
 impl StorePtr {
     /// A pointer to no Store.
     pub fn empty() -> Self {
         Self(None)
     }
+
     /// A pointer to a Store.
     pub fn new(ptr: *mut dyn Store) -> Self {
         Self(Some(ptr))
     }
+
     /// The raw contents of this struct
     pub fn as_raw(&self) -> Option<*mut dyn Store> {
         self.0.clone()
     }
+
     /// Use the StorePtr as a mut ref to the Store.
+    ///
     /// Safety: must not be used outside the original lifetime of the borrow.
     pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn Store> {
         match self.0 {
@@ -87,111 +94,144 @@ impl StorePtr {
     }
 }
 
-/// Represents a runtime instance allocator.
+/// The index of a memory allocation within an `InstanceAllocator`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct MemoryAllocationIndex(u32);
+
+impl Default for MemoryAllocationIndex {
+    fn default() -> Self {
+        // A default `MemoryAllocationIndex` that can be used with
+        // `InstanceAllocator`s that don't actually need indices.
+        MemoryAllocationIndex(u32::MAX)
+    }
+}
+
+impl MemoryAllocationIndex {
+    /// Get the underlying index of this `MemoryAllocationIndex`.
+    pub fn index(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// The index of a table allocation within an `InstanceAllocator`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct TableAllocationIndex(u32);
+
+impl Default for TableAllocationIndex {
+    fn default() -> Self {
+        // A default `TableAllocationIndex` that can be used with
+        // `InstanceAllocator`s that don't actually need indices.
+        TableAllocationIndex(u32::MAX)
+    }
+}
+
+impl TableAllocationIndex {
+    /// Get the underlying index of this `TableAllocationIndex`.
+    pub fn index(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// Trait that represents the hooks needed to implement an instance allocator.
+///
+/// Implement this trait when implementing new instance allocators, but don't
+/// use this trait when you need an instance allocator. Instead use the
+/// `InstanceAllocator` trait for that, which has additional helper methods and
+/// a blanket implementation for all types that implement this trait.
 ///
 /// # Safety
 ///
-/// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
-pub unsafe trait InstanceAllocator {
-    /// Validates that a module is supported by the allocator.
-    fn validate(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        let _ = (module, offsets);
-        Ok(())
-    }
-
-    /// Allocates a fresh `InstanceHandle` for the `req` given.
-    ///
-    /// This will allocate memories and tables internally from this allocator
-    /// and weave that altogether into a final and complete `InstanceHandle`
-    /// ready to be registered with a store.
-    ///
-    /// Note that the returned instance must still have `.initialize(..)` called
-    /// on it to complete the instantiation process.
-    fn allocate(&self, mut req: InstanceAllocationRequest) -> Result<InstanceHandle> {
-        let index = self.allocate_index(&req)?;
-        let module = req.runtime_info.module();
-        let mut memories =
-            PrimaryMap::with_capacity(module.memory_plans.len() - module.num_imported_memories);
-        let mut tables =
-            PrimaryMap::with_capacity(module.table_plans.len() - module.num_imported_tables);
-
-        let result = self
-            .allocate_memories(index, &mut req, &mut memories)
-            .and_then(|()| self.allocate_tables(index, &mut req, &mut tables));
-        if let Err(e) = result {
-            self.deallocate_memories(index, &mut memories);
-            self.deallocate_tables(index, &mut tables);
-            self.deallocate_index(index);
-            return Err(e);
-        }
-
-        unsafe {
-            Ok(Instance::new(
-                req,
-                index,
-                memories,
-                tables,
-                &module.memory_plans,
-            ))
-        }
-    }
-
-    /// Deallocates the provided instance.
-    ///
-    /// This will null-out the pointer within `handle` and otherwise reclaim
-    /// resources such as tables, memories, and the instance memory itself.
-    fn deallocate(&self, handle: &mut InstanceHandle) {
-        let index = handle.instance().index;
-        self.deallocate_memories(index, &mut handle.instance_mut().memories);
-        self.deallocate_tables(index, &mut handle.instance_mut().tables);
-        unsafe {
-            let layout = Instance::alloc_layout(handle.instance().offsets());
-            let ptr = handle.instance.take().unwrap();
-            ptr::drop_in_place(ptr.as_ptr());
-            alloc::dealloc(ptr.as_ptr().cast(), layout);
-        }
-        self.deallocate_index(index);
-    }
-
-    /// Optionally allocates an allocator-defined index for the `req` provided.
-    ///
-    /// The return value here, if successful, is passed to the various methods
-    /// below for memory/table allocation/deallocation.
-    fn allocate_index(&self, req: &InstanceAllocationRequest) -> Result<usize>;
-
-    /// Deallocates indices allocated by `allocate_index`.
-    fn deallocate_index(&self, index: usize);
-
-    /// Attempts to allocate all defined linear memories for a module.
-    ///
-    /// Pushes all memories for `req` onto the `mems` storage provided which is
-    /// already appropriately allocated to contain all memories.
-    ///
-    /// Note that this is allowed to fail. Failure can additionally happen after
-    /// some memories have already been successfully allocated. All memories
-    /// pushed onto `mem` are guaranteed to one day make their way to
-    /// `deallocate_memories`.
-    fn allocate_memories(
+/// This trait is unsafe as it requires knowledge of Wasmtime's runtime
+/// internals to implement correctly.
+pub unsafe trait InstanceAllocatorImpl {
+    /// Validate whether a component (including all of its contained core
+    /// modules) is allocatable by this instance allocator.
+    #[cfg(feature = "component-model")]
+    fn validate_component_impl<'a>(
         &self,
-        index: usize,
-        req: &mut InstanceAllocationRequest,
-        mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+        component: &Component,
+        offsets: &VMComponentOffsets<HostPtr>,
+        get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
     ) -> Result<()>;
 
-    /// Deallocates all memories provided, optionally reclaiming resources for
-    /// the pooling allocator for example.
-    fn deallocate_memories(&self, index: usize, mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>);
+    /// Validate whether a module is allocatable by this instance allocator.
+    fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()>;
 
-    /// Same as `allocate_memories`, but for tables.
-    fn allocate_tables(
+    /// Increment the count of concurrent component instances that are currently
+    /// allocated, if applicable.
+    ///
+    /// Not all instance allocators will have limits for the maximum number of
+    /// concurrent component instances that can be live at the same time, and
+    /// these allocators may implement this method with a no-op.
+    fn increment_component_instance_count(&self) -> Result<()>;
+
+    /// The dual of `increment_component_instance_count`.
+    fn decrement_component_instance_count(&self);
+
+    /// Increment the count of concurrent core module instances that are
+    /// currently allocated, if applicable.
+    ///
+    /// Not all instance allocators will have limits for the maximum number of
+    /// concurrent core module instances that can be live at the same time, and
+    /// these allocators may implement this method with a no-op.
+    fn increment_core_instance_count(&self) -> Result<()>;
+
+    /// The dual of `increment_core_instance_count`.
+    fn decrement_core_instance_count(&self);
+
+    /// Allocate a memory for an instance.
+    ///
+    /// # Unsafety
+    ///
+    /// The memory and its associated module must have already been validated by
+    /// `Self::validate_module` and passed that validation.
+    unsafe fn allocate_memory(
         &self,
-        index: usize,
-        req: &mut InstanceAllocationRequest,
-        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
-    ) -> Result<()>;
+        request: &mut InstanceAllocationRequest,
+        memory_plan: &MemoryPlan,
+        memory_index: DefinedMemoryIndex,
+    ) -> Result<(MemoryAllocationIndex, Memory)>;
 
-    /// Same as `deallocate_memories`, but for tables.
-    fn deallocate_tables(&self, index: usize, tables: &mut PrimaryMap<DefinedTableIndex, Table>);
+    /// Deallocate an instance's previously allocated memory.
+    ///
+    /// # Unsafety
+    ///
+    /// The memory must have previously been allocated by
+    /// `Self::allocate_memory`, be at the given index, and must currently be
+    /// allocated. It must never be used again.
+    unsafe fn deallocate_memory(
+        &self,
+        memory_index: DefinedMemoryIndex,
+        allocation_index: MemoryAllocationIndex,
+        memory: Memory,
+    );
+
+    /// Allocate a table for an instance.
+    ///
+    /// # Unsafety
+    ///
+    /// The table and its associated module must have already been validated by
+    /// `Self::validate_module` and passed that validation.
+    unsafe fn allocate_table(
+        &self,
+        req: &mut InstanceAllocationRequest,
+        table_plan: &TablePlan,
+        table_index: DefinedTableIndex,
+    ) -> Result<(TableAllocationIndex, Table)>;
+
+    /// Deallocate an instance's previously allocated table.
+    ///
+    /// # Unsafety
+    ///
+    /// The table must have previously been allocated by `Self::allocate_table`,
+    /// be at the given index, and must currently be allocated. It must never be
+    /// used again.
+    unsafe fn deallocate_table(
+        &self,
+        table_index: DefinedTableIndex,
+        allocation_index: TableAllocationIndex,
+        table: Table,
+    );
 
     /// Allocates a fiber stack for calling async functions on.
     #[cfg(feature = "async")]
@@ -212,6 +252,199 @@ pub unsafe trait InstanceAllocator {
     /// this module from slots in linear memory.
     fn purge_module(&self, module: CompiledModuleId);
 }
+
+/// A thing that can allocate instances.
+///
+/// Don't implement this trait directly, instead implement
+/// `InstanceAllocatorImpl` and you'll get this trait for free via a blanket
+/// impl.
+pub trait InstanceAllocator: InstanceAllocatorImpl {
+    /// Validate whether a component (including all of its contained core
+    /// modules) is allocatable with this instance allocator.
+    #[cfg(feature = "component-model")]
+    fn validate_component<'a>(
+        &self,
+        component: &Component,
+        offsets: &VMComponentOffsets<HostPtr>,
+        get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
+    ) -> Result<()> {
+        InstanceAllocatorImpl::validate_component_impl(self, component, offsets, get_module)
+    }
+
+    /// Validate whether a core module is allocatable with this instance
+    /// allocator.
+    fn validate_module(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
+        InstanceAllocatorImpl::validate_module_impl(self, module, offsets)
+    }
+
+    /// Allocates a fresh `InstanceHandle` for the `req` given.
+    ///
+    /// This will allocate memories and tables internally from this allocator
+    /// and weave that altogether into a final and complete `InstanceHandle`
+    /// ready to be registered with a store.
+    ///
+    /// Note that the returned instance must still have `.initialize(..)` called
+    /// on it to complete the instantiation process.
+    ///
+    /// # Unsafety
+    ///
+    /// The request's associated module, memories, tables, and vmctx must have
+    /// already have been validated by `Self::validate_module`.
+    unsafe fn allocate_module(
+        &self,
+        mut request: InstanceAllocationRequest,
+    ) -> Result<InstanceHandle> {
+        let module = request.runtime_info.module();
+
+        #[cfg(debug_assertions)]
+        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
+            .expect("module should have already been validated before allocation");
+
+        self.increment_core_instance_count()?;
+
+        let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
+        let mut memories = PrimaryMap::with_capacity(num_defined_memories);
+
+        let num_defined_tables = module.table_plans.len() - module.num_imported_tables;
+        let mut tables = PrimaryMap::with_capacity(num_defined_tables);
+
+        let result = self
+            .allocate_memories(&mut request, &mut memories)
+            .and_then(|()| self.allocate_tables(&mut request, &mut tables));
+        if let Err(e) = result {
+            self.deallocate_memories(&mut memories);
+            self.deallocate_tables(&mut tables);
+            self.decrement_core_instance_count();
+            return Err(e);
+        }
+
+        unsafe {
+            Ok(Instance::new(
+                request,
+                memories,
+                tables,
+                &module.memory_plans,
+            ))
+        }
+    }
+
+    /// Deallocates the provided instance.
+    ///
+    /// This will null-out the pointer within `handle` and otherwise reclaim
+    /// resources such as tables, memories, and the instance memory itself.
+    ///
+    /// # Unsafety
+    ///
+    /// The instance must have previously been allocated by `Self::allocate`.
+    unsafe fn deallocate_module(&self, handle: &mut InstanceHandle) {
+        self.deallocate_memories(&mut handle.instance_mut().memories);
+        self.deallocate_tables(&mut handle.instance_mut().tables);
+
+        let layout = Instance::alloc_layout(handle.instance().offsets());
+        let ptr = handle.instance.take().unwrap();
+        ptr::drop_in_place(ptr.as_ptr());
+        alloc::dealloc(ptr.as_ptr().cast(), layout);
+
+        self.decrement_core_instance_count();
+    }
+
+    /// Allocate the memories for the given instance allocation request, pushing
+    /// them into `memories`.
+    ///
+    /// # Unsafety
+    ///
+    /// The request's associated module and memories must have previously been
+    /// validated by `Self::validate_module`.
+    unsafe fn allocate_memories(
+        &self,
+        request: &mut InstanceAllocationRequest,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+    ) -> Result<()> {
+        let module = request.runtime_info.module();
+
+        #[cfg(debug_assertions)]
+        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
+            .expect("module should have already been validated before allocation");
+
+        for (memory_index, memory_plan) in module
+            .memory_plans
+            .iter()
+            .skip(module.num_imported_memories)
+        {
+            let memory_index = module
+                .defined_memory_index(memory_index)
+                .expect("should be a defined memory since we skipped imported ones");
+
+            memories.push(self.allocate_memory(request, memory_plan, memory_index)?);
+        }
+
+        Ok(())
+    }
+
+    /// Deallocate all the memories in the given primary map.
+    ///
+    /// # Unsafety
+    ///
+    /// The memories must have previously been allocated by
+    /// `Self::allocate_memories`.
+    unsafe fn deallocate_memories(
+        &self,
+        memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+    ) {
+        for (memory_index, (allocation_index, memory)) in mem::take(memories) {
+            self.deallocate_memory(memory_index, allocation_index, memory);
+        }
+    }
+
+    /// Allocate tables for the given instance allocation request, pushing them
+    /// into `tables`.
+    ///
+    /// # Unsafety
+    ///
+    /// The request's associated module and tables must have previously been
+    /// validated by `Self::validate_module`.
+    unsafe fn allocate_tables(
+        &self,
+        request: &mut InstanceAllocationRequest,
+        tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+    ) -> Result<()> {
+        let module = request.runtime_info.module();
+
+        #[cfg(debug_assertions)]
+        InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
+            .expect("module should have already been validated before allocation");
+
+        for (index, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
+            let def_index = module
+                .defined_table_index(index)
+                .expect("should be a defined table since we skipped imported ones");
+
+            tables.push(self.allocate_table(request, plan, def_index)?);
+        }
+
+        Ok(())
+    }
+
+    /// Deallocate all the tables in the given primary map.
+    ///
+    /// # Unsafety
+    ///
+    /// The tables must have previously been allocated by
+    /// `Self::allocate_tables`.
+    unsafe fn deallocate_tables(
+        &self,
+        tables: &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
+    ) {
+        for (table_index, (allocation_index, table)) in mem::take(tables) {
+            self.deallocate_table(table_index, allocation_index, table);
+        }
+    }
+}
+
+// Every `InstanceAllocatorImpl` is an `InstanceAllocator` when used
+// correctly. Also, no one is allowed to override this trait's methods, they
+// must use the defaults. This blanket impl provides both of those things.
+impl<T: InstanceAllocatorImpl> InstanceAllocator for T {}
 
 fn get_table_init_start(init: &TableSegment, instance: &mut Instance) -> Result<u32> {
     match init.base {
@@ -364,7 +597,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
             // pre-initializing it via mmap magic, then this initializer can be
             // skipped entirely.
             if let Some(memory_index) = module.defined_memory_index(memory_index) {
-                if !instance.memories[memory_index].needs_init() {
+                if !instance.memories[memory_index].1.needs_init() {
                     return true;
                 }
             }
@@ -422,4 +655,15 @@ pub(super) fn initialize_instance(
     initialize_memories(instance, &module)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allocator_traits_are_object_safe() {
+        fn _instance_allocator(_: &dyn InstanceAllocatorImpl) {}
+        fn _instance_allocator_ext(_: &dyn InstanceAllocator) {}
+    }
 }

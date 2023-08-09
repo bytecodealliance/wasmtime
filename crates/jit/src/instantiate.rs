@@ -56,7 +56,7 @@ impl CompiledFunctionInfo {
 #[derive(Serialize, Deserialize)]
 pub struct CompiledModuleInfo {
     /// Type information about the compiled WebAssembly module.
-    module: Module,
+    pub module: Module,
 
     /// Metadata about each compiled function.
     funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,

@@ -4,6 +4,7 @@ use crate::CompiledModuleId;
 use std::collections::hash_map::{Entry, HashMap};
 use std::mem;
 use std::sync::Mutex;
+use wasmtime_environ::DefinedMemoryIndex;
 
 /// A slot index.
 #[derive(Hash, Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,6 +37,11 @@ impl SimpleIndexAllocator {
     pub(crate) fn free(&self, index: SlotId) {
         self.0.free(index);
     }
+
+    #[cfg(test)]
+    pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
+        self.0.testing_freelist()
+    }
 }
 
 /// An index allocator that has configurable affinity between slots and modules
@@ -45,7 +51,7 @@ pub struct ModuleAffinityIndexAllocator(Mutex<Inner>);
 
 #[derive(Debug)]
 struct Inner {
-    /// Maximum  number of "unused warm slots" which will be allowed during
+    /// Maximum number of "unused warm slots" which will be allowed during
     /// allocation.
     ///
     /// This is a user-configurable knob which can be used to influence the
@@ -80,7 +86,7 @@ struct Inner {
     ///
     /// The `List` here is appended to during deallocation and removal happens
     /// from the tail during allocation.
-    module_affine: HashMap<CompiledModuleId, List>,
+    module_affine: HashMap<(CompiledModuleId, DefinedMemoryIndex), List>,
 }
 
 /// A helper "linked list" data structure which is based on indices.
@@ -100,8 +106,8 @@ struct Link {
 
 #[derive(Clone, Debug)]
 enum SlotState {
-    /// This slot is currently in use and is affine to the specified module.
-    Used(Option<CompiledModuleId>),
+    /// This slot is currently in use and is affine to the specified module's memory.
+    Used(Option<(CompiledModuleId, DefinedMemoryIndex)>),
 
     /// This slot is not currently used, and has never been used.
     UnusedCold,
@@ -125,7 +131,7 @@ impl SlotState {
 #[derive(Default, Copy, Clone, Debug)]
 struct Unused {
     /// Which module this slot was historically affine to, if any.
-    affinity: Option<CompiledModuleId>,
+    affinity: Option<(CompiledModuleId, DefinedMemoryIndex)>,
 
     /// Metadata about the linked list for all slots affine to `affinity`.
     affine_list_link: Link,
@@ -156,8 +162,11 @@ impl ModuleAffinityIndexAllocator {
     /// affinity request if the allocation strategy supports it.
     ///
     /// Returns `None` if no more slots are available.
-    pub fn alloc(&self, module_id: Option<CompiledModuleId>) -> Option<SlotId> {
-        self._alloc(module_id, AllocMode::AnySlot)
+    pub fn alloc(
+        &self,
+        for_memory: Option<(CompiledModuleId, DefinedMemoryIndex)>,
+    ) -> Option<SlotId> {
+        self._alloc(for_memory, AllocMode::AnySlot)
     }
 
     /// Attempts to allocate a guaranteed-affine slot to the module `id`
@@ -167,18 +176,29 @@ impl ModuleAffinityIndexAllocator {
     /// this slot will not record the affinity to `id`, instead simply listing
     /// it as taken. This is intended to be used for clearing out all affine
     /// slots to a module.
-    pub fn alloc_affine_and_clear_affinity(&self, module_id: CompiledModuleId) -> Option<SlotId> {
-        self._alloc(Some(module_id), AllocMode::ForceAffineAndClear)
+    pub fn alloc_affine_and_clear_affinity(
+        &self,
+        module_id: CompiledModuleId,
+        memory_index: DefinedMemoryIndex,
+    ) -> Option<SlotId> {
+        self._alloc(
+            Some((module_id, memory_index)),
+            AllocMode::ForceAffineAndClear,
+        )
     }
 
-    fn _alloc(&self, module_id: Option<CompiledModuleId>, mode: AllocMode) -> Option<SlotId> {
+    fn _alloc(
+        &self,
+        for_memory: Option<(CompiledModuleId, DefinedMemoryIndex)>,
+        mode: AllocMode,
+    ) -> Option<SlotId> {
         let mut inner = self.0.lock().unwrap();
         let inner = &mut *inner;
 
         // As a first-pass always attempt an affine allocation. This will
         // succeed if any slots are considered affine to `module_id` (if it's
         // specified). Failing that something else is attempted to be chosen.
-        let slot_id = inner.pick_affine(module_id).or_else(|| {
+        let slot_id = inner.pick_affine(for_memory).or_else(|| {
             match mode {
                 // If any slot is requested then this is a normal instantiation
                 // looking for an index. Without any affine candidates there are
@@ -221,7 +241,7 @@ impl ModuleAffinityIndexAllocator {
 
         inner.slot_state[slot_id.index()] = SlotState::Used(match mode {
             AllocMode::ForceAffineAndClear => None,
-            AllocMode::AnySlot => module_id,
+            AllocMode::AnySlot => for_memory,
         });
 
         Some(slot_id)
@@ -230,8 +250,8 @@ impl ModuleAffinityIndexAllocator {
     pub(crate) fn free(&self, index: SlotId) {
         let mut inner = self.0.lock().unwrap();
         let inner = &mut *inner;
-        let module = match inner.slot_state[index.index()] {
-            SlotState::Used(module) => module,
+        let module_memory = match inner.slot_state[index.index()] {
+            SlotState::Used(module_memory) => module_memory,
             _ => unreachable!(),
         };
 
@@ -243,7 +263,7 @@ impl ModuleAffinityIndexAllocator {
             .warm
             .append(index, &mut inner.slot_state, |s| &mut s.unused_list_link);
 
-        let affine_list_link = match module {
+        let affine_list_link = match module_memory {
             // If this slot is affine to a particular module then append this
             // index to the linked list for the affine module. Otherwise insert
             // a new one-element linked list.
@@ -262,7 +282,7 @@ impl ModuleAffinityIndexAllocator {
         };
 
         inner.slot_state[index.index()] = SlotState::UnusedWarm(Unused {
-            affinity: module,
+            affinity: module_memory,
             affine_list_link,
             unused_list_link,
         });
@@ -282,7 +302,9 @@ impl ModuleAffinityIndexAllocator {
     /// For testing only, get the list of all modules with at least
     /// one slot with affinity for that module.
     #[cfg(test)]
-    pub(crate) fn testing_module_affinity_list(&self) -> Vec<CompiledModuleId> {
+    pub(crate) fn testing_module_affinity_list(
+        &self,
+    ) -> Vec<(CompiledModuleId, DefinedMemoryIndex)> {
         let inner = self.0.lock().unwrap();
         inner.module_affine.keys().copied().collect()
     }
@@ -291,11 +313,14 @@ impl ModuleAffinityIndexAllocator {
 impl Inner {
     /// Attempts to allocate a slot already affine to `id`, returning `None` if
     /// `id` is `None` or if there are no affine slots.
-    fn pick_affine(&mut self, module_id: Option<CompiledModuleId>) -> Option<SlotId> {
+    fn pick_affine(
+        &mut self,
+        for_memory: Option<(CompiledModuleId, DefinedMemoryIndex)>,
+    ) -> Option<SlotId> {
         // Note that the `tail` is chosen here of the affine list as it's the
         // most recently used, which for affine allocations is what we want --
         // maximizing temporal reuse.
-        let ret = self.module_affine.get(&module_id?)?.tail?;
+        let ret = self.module_affine.get(&for_memory?)?.tail?;
         self.remove(ret);
         Some(ret)
     }
@@ -434,8 +459,9 @@ impl List {
 
 #[cfg(test)]
 mod test {
-    use super::{ModuleAffinityIndexAllocator, SlotId};
+    use super::*;
     use crate::CompiledModuleIdAllocator;
+    use wasmtime_environ::EntityRef;
 
     #[test]
     fn test_next_available_allocation_strategy() {
@@ -451,8 +477,8 @@ mod test {
     #[test]
     fn test_affinity_allocation_strategy() {
         let id_alloc = CompiledModuleIdAllocator::new();
-        let id1 = id_alloc.alloc();
-        let id2 = id_alloc.alloc();
+        let id1 = (id_alloc.alloc(), DefinedMemoryIndex::new(0));
+        let id2 = (id_alloc.alloc(), DefinedMemoryIndex::new(0));
         let state = ModuleAffinityIndexAllocator::new(100, 100);
 
         let index1 = state.alloc(Some(id1)).unwrap();
@@ -505,17 +531,25 @@ mod test {
     fn clear_affine() {
         let id_alloc = CompiledModuleIdAllocator::new();
         let id = id_alloc.alloc();
+        let memory_index = DefinedMemoryIndex::new(0);
 
         for max_unused_warm_slots in [0, 1, 2] {
             let state = ModuleAffinityIndexAllocator::new(100, max_unused_warm_slots);
 
-            let index1 = state.alloc(Some(id)).unwrap();
-            let index2 = state.alloc(Some(id)).unwrap();
+            let index1 = state.alloc(Some((id, memory_index))).unwrap();
+            let index2 = state.alloc(Some((id, memory_index))).unwrap();
             state.free(index2);
             state.free(index1);
-            assert!(state.alloc_affine_and_clear_affinity(id).is_some());
-            assert!(state.alloc_affine_and_clear_affinity(id).is_some());
-            assert_eq!(state.alloc_affine_and_clear_affinity(id), None);
+            assert!(state
+                .alloc_affine_and_clear_affinity(id, memory_index)
+                .is_some());
+            assert!(state
+                .alloc_affine_and_clear_affinity(id, memory_index)
+                .is_some());
+            assert_eq!(
+                state.alloc_affine_and_clear_affinity(id, memory_index),
+                None
+            );
         }
     }
 
@@ -525,7 +559,7 @@ mod test {
         let mut rng = rand::thread_rng();
 
         let id_alloc = CompiledModuleIdAllocator::new();
-        let ids = std::iter::repeat_with(|| id_alloc.alloc())
+        let ids = std::iter::repeat_with(|| (id_alloc.alloc(), DefinedMemoryIndex::new(0)))
             .take(10)
             .collect::<Vec<_>>();
         let state = ModuleAffinityIndexAllocator::new(1000, 1000);
@@ -569,9 +603,9 @@ mod test {
     #[test]
     fn test_affinity_threshold() {
         let id_alloc = CompiledModuleIdAllocator::new();
-        let id1 = id_alloc.alloc();
-        let id2 = id_alloc.alloc();
-        let id3 = id_alloc.alloc();
+        let id1 = (id_alloc.alloc(), DefinedMemoryIndex::new(0));
+        let id2 = (id_alloc.alloc(), DefinedMemoryIndex::new(0));
+        let id3 = (id_alloc.alloc(), DefinedMemoryIndex::new(0));
         let state = ModuleAffinityIndexAllocator::new(10, 2);
 
         // Set some slot affinities
@@ -605,13 +639,22 @@ mod test {
         state.free(SlotId(0));
 
         // LRU is 1, so that should be picked
-        assert_eq!(state.alloc(Some(id_alloc.alloc())), Some(SlotId(1)));
+        assert_eq!(
+            state.alloc(Some((id_alloc.alloc(), DefinedMemoryIndex::new(0)))),
+            Some(SlotId(1))
+        );
 
         // Pick another LRU entry, this time 2
-        assert_eq!(state.alloc(Some(id_alloc.alloc())), Some(SlotId(2)));
+        assert_eq!(
+            state.alloc(Some((id_alloc.alloc(), DefinedMemoryIndex::new(0)))),
+            Some(SlotId(2))
+        );
 
         // This should preserve slot `0` and pick up something new
-        assert_eq!(state.alloc(Some(id_alloc.alloc())), Some(SlotId(3)));
+        assert_eq!(
+            state.alloc(Some((id_alloc.alloc(), DefinedMemoryIndex::new(0)))),
+            Some(SlotId(3))
+        );
 
         state.free(SlotId(1));
         state.free(SlotId(2));

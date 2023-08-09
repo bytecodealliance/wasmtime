@@ -73,13 +73,13 @@ impl Config {
         // If using the pooling allocator, update the instance limits too
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.wasmtime.strategy {
             // One single-page memory
-            pooling.instance_memories = config.max_memories as u32;
-            pooling.instance_memory_pages = 10;
+            pooling.total_memories = config.max_memories as u32;
+            pooling.memory_pages = 10;
 
-            pooling.instance_tables = config.max_tables as u32;
-            pooling.instance_table_elements = 1_000;
+            pooling.total_tables = config.max_tables as u32;
+            pooling.table_elements = 1_000;
 
-            pooling.instance_size = 1_000_000;
+            pooling.core_instance_size = 1_000_000;
         }
     }
 
@@ -126,12 +126,12 @@ impl Config {
         if let InstanceAllocationStrategy::Pooling(pooling) = &self.wasmtime.strategy {
             // Check to see if any item limit is less than the required
             // threshold to execute the spec tests.
-            if pooling.instance_memories < 1
-                || pooling.instance_tables < 5
-                || pooling.instance_table_elements < 1_000
-                || pooling.instance_memory_pages < 900
-                || pooling.instance_count < 500
-                || pooling.instance_size < 64 * 1024
+            if pooling.total_memories < 1
+                || pooling.total_tables < 5
+                || pooling.table_elements < 1_000
+                || pooling.memory_pages < 900
+                || pooling.total_core_instances < 500
+                || pooling.core_instance_size < 64 * 1024
             {
                 return false;
             }
@@ -333,23 +333,23 @@ impl<'a> Arbitrary<'a> for Config {
 
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
-            if cfg.max_memory_pages < pooling.instance_memory_pages {
-                pooling.instance_memory_pages = cfg.max_memory_pages;
+            if cfg.max_memory_pages < pooling.memory_pages {
+                pooling.memory_pages = cfg.max_memory_pages;
             } else {
-                cfg.max_memory_pages = pooling.instance_memory_pages;
+                cfg.max_memory_pages = pooling.memory_pages;
             }
 
             // If traps are disallowed then memories must have at least one page
             // of memory so if we still are only allowing 0 pages of memory then
             // increase that to one here.
             if cfg.disallow_traps {
-                if pooling.instance_memory_pages == 0 {
-                    pooling.instance_memory_pages = 1;
+                if pooling.memory_pages == 0 {
+                    pooling.memory_pages = 1;
                     cfg.max_memory_pages = 1;
                 }
                 // .. additionally update tables
-                if pooling.instance_table_elements == 0 {
-                    pooling.instance_table_elements = 1;
+                if pooling.table_elements == 0 {
+                    pooling.table_elements = 1;
                 }
             }
 
@@ -366,8 +366,8 @@ impl<'a> Arbitrary<'a> for Config {
 
             // Force this pooling allocator to always be able to accommodate the
             // module that may be generated.
-            pooling.instance_memories = cfg.max_memories as u32;
-            pooling.instance_tables = cfg.max_tables as u32;
+            pooling.total_memories = cfg.max_memories as u32;
+            pooling.total_tables = cfg.max_tables as u32;
         }
 
         Ok(config)

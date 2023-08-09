@@ -1,11 +1,21 @@
-use super::{InstanceAllocationRequest, InstanceAllocator};
+use super::{
+    InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
+};
 use crate::instance::RuntimeMemoryCreator;
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::CompiledModuleId;
 use anyhow::Result;
 use std::sync::Arc;
-use wasmtime_environ::{DefinedMemoryIndex, DefinedTableIndex, PrimaryMap};
+use wasmtime_environ::{
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, VMOffsets,
+};
+
+#[cfg(feature = "component-model")]
+use wasmtime_environ::{
+    component::{Component, VMComponentOffsets},
+    StaticModuleIndex,
+};
 
 /// Represents the on-demand instance allocator.
 #[derive(Clone)]
@@ -37,75 +47,92 @@ impl Default for OnDemandInstanceAllocator {
     }
 }
 
-unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
-    fn allocate_index(&self, _req: &InstanceAllocationRequest) -> Result<usize> {
-        Ok(0)
-    }
-
-    fn deallocate_index(&self, index: usize) {
-        assert_eq!(index, 0);
-    }
-
-    fn allocate_memories(
+unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
+    #[cfg(feature = "component-model")]
+    fn validate_component_impl<'a>(
         &self,
-        _index: usize,
-        req: &mut InstanceAllocationRequest,
-        memories: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+        _component: &Component,
+        _offsets: &VMComponentOffsets<HostPtr>,
+        _get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
     ) -> Result<()> {
-        let module = req.runtime_info.module();
+        Ok(())
+    }
+
+    fn validate_module_impl(&self, _module: &Module, _offsets: &VMOffsets<HostPtr>) -> Result<()> {
+        Ok(())
+    }
+
+    fn increment_component_instance_count(&self) -> Result<()> {
+        Ok(())
+    }
+
+    fn decrement_component_instance_count(&self) {}
+
+    fn increment_core_instance_count(&self) -> Result<()> {
+        Ok(())
+    }
+
+    fn decrement_core_instance_count(&self) {}
+
+    unsafe fn allocate_memory(
+        &self,
+        request: &mut InstanceAllocationRequest,
+        memory_plan: &MemoryPlan,
+        memory_index: DefinedMemoryIndex,
+    ) -> Result<(MemoryAllocationIndex, Memory)> {
         let creator = self
             .mem_creator
             .as_deref()
             .unwrap_or_else(|| &DefaultMemoryCreator);
-        let num_imports = module.num_imported_memories;
-        for (memory_idx, plan) in module.memory_plans.iter().skip(num_imports) {
-            let defined_memory_idx = module
-                .defined_memory_index(memory_idx)
-                .expect("Skipped imports, should never be None");
-            let image = req.runtime_info.memory_image(defined_memory_idx)?;
-
-            memories.push(Memory::new_dynamic(
-                plan,
-                creator,
-                unsafe {
-                    req.store
-                        .get()
-                        .expect("if module has memory plans, store is not empty")
-                },
-                image,
-            )?);
-        }
-        Ok(())
+        let image = request.runtime_info.memory_image(memory_index)?;
+        let allocation_index = MemoryAllocationIndex::default();
+        let memory = Memory::new_dynamic(
+            memory_plan,
+            creator,
+            request
+                .store
+                .get()
+                .expect("if module has memory plans, store is not empty"),
+            image,
+        )?;
+        Ok((allocation_index, memory))
     }
 
-    fn deallocate_memories(
+    unsafe fn deallocate_memory(
         &self,
-        _index: usize,
-        _mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+        _memory_index: DefinedMemoryIndex,
+        allocation_index: MemoryAllocationIndex,
+        _memory: Memory,
     ) {
-        // normal destructors do cleanup here
+        debug_assert_eq!(allocation_index, MemoryAllocationIndex::default());
+        // Normal destructors do all the necessary clean up.
     }
 
-    fn allocate_tables(
+    unsafe fn allocate_table(
         &self,
-        _index: usize,
-        req: &mut InstanceAllocationRequest,
-        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
-    ) -> Result<()> {
-        let module = req.runtime_info.module();
-        let num_imports = module.num_imported_tables;
-        for (_, table) in module.table_plans.iter().skip(num_imports) {
-            tables.push(Table::new_dynamic(table, unsafe {
-                req.store
-                    .get()
-                    .expect("if module has table plans, store is not empty")
-            })?);
-        }
-        Ok(())
+        request: &mut InstanceAllocationRequest,
+        table_plan: &TablePlan,
+        _table_index: DefinedTableIndex,
+    ) -> Result<(TableAllocationIndex, Table)> {
+        let allocation_index = TableAllocationIndex::default();
+        let table = Table::new_dynamic(
+            table_plan,
+            request
+                .store
+                .get()
+                .expect("if module has table plans, store is not empty"),
+        )?;
+        Ok((allocation_index, table))
     }
 
-    fn deallocate_tables(&self, _index: usize, _tables: &mut PrimaryMap<DefinedTableIndex, Table>) {
-        // normal destructors do cleanup here
+    unsafe fn deallocate_table(
+        &self,
+        _table_index: DefinedTableIndex,
+        allocation_index: TableAllocationIndex,
+        _table: Table,
+    ) {
+        debug_assert_eq!(allocation_index, TableAllocationIndex::default());
+        // Normal destructors do all the necessary clean up.
     }
 
     #[cfg(feature = "async")]

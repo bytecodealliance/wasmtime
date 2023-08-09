@@ -6,17 +6,30 @@ use arbitrary::{Arbitrary, Unstructured};
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 #[allow(missing_docs)]
 pub struct PoolingAllocationConfig {
+    pub total_component_instances: u32,
+    pub total_core_instances: u32,
+    pub total_memories: u32,
+    pub total_tables: u32,
+    pub total_stacks: u32,
+
+    pub memory_pages: u64,
+    pub table_elements: u32,
+
+    pub component_instance_size: usize,
+    pub max_memories_per_component: u32,
+    pub max_tables_per_component: u32,
+
+    pub core_instance_size: usize,
+    pub max_memories_per_module: u32,
+    pub max_tables_per_module: u32,
+
+    pub table_keep_resident: usize,
+    pub linear_memory_keep_resident: usize,
+
     pub max_unused_warm_slots: u32,
-    pub instance_count: u32,
-    pub instance_memories: u32,
-    pub instance_tables: u32,
-    pub instance_memory_pages: u64,
-    pub instance_table_elements: u32,
-    pub instance_size: usize,
+
     pub async_stack_zeroing: bool,
     pub async_stack_keep_resident: usize,
-    pub linear_memory_keep_resident: usize,
-    pub table_keep_resident: usize,
 }
 
 impl PoolingAllocationConfig {
@@ -24,17 +37,31 @@ impl PoolingAllocationConfig {
     pub fn to_wasmtime(&self) -> wasmtime::PoolingAllocationConfig {
         let mut cfg = wasmtime::PoolingAllocationConfig::default();
 
-        cfg.max_unused_warm_slots(self.max_unused_warm_slots)
-            .instance_count(self.instance_count)
-            .instance_memories(self.instance_memories)
-            .instance_tables(self.instance_tables)
-            .instance_memory_pages(self.instance_memory_pages)
-            .instance_table_elements(self.instance_table_elements)
-            .instance_size(self.instance_size)
-            .async_stack_zeroing(self.async_stack_zeroing)
-            .async_stack_keep_resident(self.async_stack_keep_resident)
-            .linear_memory_keep_resident(self.linear_memory_keep_resident)
-            .table_keep_resident(self.table_keep_resident);
+        cfg.total_component_instances(self.total_component_instances);
+        cfg.total_core_instances(self.total_core_instances);
+        cfg.total_memories(self.total_memories);
+        cfg.total_tables(self.total_tables);
+        cfg.total_stacks(self.total_stacks);
+
+        cfg.memory_pages(self.memory_pages);
+        cfg.table_elements(self.table_elements);
+
+        cfg.component_instance_size(self.component_instance_size);
+        cfg.max_memories_per_component(self.max_memories_per_component);
+        cfg.max_tables_per_component(self.max_tables_per_component);
+
+        cfg.core_instance_size(self.core_instance_size);
+        cfg.max_memories_per_module(self.max_memories_per_module);
+        cfg.max_tables_per_module(self.max_tables_per_module);
+
+        cfg.table_keep_resident(self.table_keep_resident);
+        cfg.linear_memory_keep_resident(self.linear_memory_keep_resident);
+
+        cfg.max_unused_warm_slots(self.max_unused_warm_slots);
+
+        cfg.async_stack_zeroing(self.async_stack_zeroing);
+        cfg.async_stack_keep_resident(self.async_stack_keep_resident);
+
         cfg
     }
 }
@@ -42,26 +69,41 @@ impl PoolingAllocationConfig {
 impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         const MAX_COUNT: u32 = 100;
-        const MAX_TABLES: u32 = 10;
-        const MAX_MEMORIES: u32 = 10;
+        const MAX_TABLES: u32 = 100;
+        const MAX_MEMORIES: u32 = 100;
         const MAX_ELEMENTS: u32 = 1000;
         const MAX_MEMORY_PAGES: u64 = 160; // 10 MiB
         const MAX_SIZE: usize = 1 << 20; // 1 MiB
+        const MAX_INSTANCE_MEMORIES: u32 = 10;
+        const MAX_INSTANCE_TABLES: u32 = 10;
 
-        let instance_count = u.int_in_range(1..=MAX_COUNT)?;
+        let total_memories = u.int_in_range(1..=MAX_MEMORIES)?;
 
         Ok(Self {
-            max_unused_warm_slots: u.int_in_range(0..=instance_count + 10)?,
-            instance_tables: u.int_in_range(0..=MAX_TABLES)?,
-            instance_memories: u.int_in_range(0..=MAX_MEMORIES)?,
-            instance_table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
-            instance_memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
-            instance_count,
-            instance_size: u.int_in_range(0..=MAX_SIZE)?,
+            total_component_instances: u.int_in_range(1..=MAX_COUNT)?,
+            total_core_instances: u.int_in_range(1..=MAX_COUNT)?,
+            total_memories,
+            total_tables: u.int_in_range(1..=MAX_TABLES)?,
+            total_stacks: u.int_in_range(1..=MAX_COUNT)?,
+
+            memory_pages: u.int_in_range(0..=MAX_MEMORY_PAGES)?,
+            table_elements: u.int_in_range(0..=MAX_ELEMENTS)?,
+
+            component_instance_size: u.int_in_range(0..=MAX_SIZE)?,
+            max_memories_per_component: u.int_in_range(1..=MAX_INSTANCE_MEMORIES)?,
+            max_tables_per_component: u.int_in_range(1..=MAX_INSTANCE_TABLES)?,
+
+            core_instance_size: u.int_in_range(0..=MAX_SIZE)?,
+            max_memories_per_module: u.int_in_range(1..=MAX_INSTANCE_MEMORIES)?,
+            max_tables_per_module: u.int_in_range(1..=MAX_INSTANCE_TABLES)?,
+
+            table_keep_resident: u.int_in_range(0..=1 << 20)?,
+            linear_memory_keep_resident: u.int_in_range(0..=1 << 20)?,
+
+            max_unused_warm_slots: u.int_in_range(0..=total_memories + 10)?,
+
             async_stack_zeroing: u.arbitrary()?,
             async_stack_keep_resident: u.int_in_range(0..=1 << 20)?,
-            linear_memory_keep_resident: u.int_in_range(0..=1 << 20)?,
-            table_keep_resident: u.int_in_range(0..=1 << 20)?,
         })
     }
 }

@@ -587,10 +587,22 @@ impl<T> InstancePre<T> {
 
     fn instantiate_impl(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
         let mut store = store.as_context_mut();
-        let mut i = Instantiator::new(&self.component, store.0, &self.imports);
-        i.run(&mut store)?;
-        let data = Box::new(i.data);
-        Ok(Instance(store.0.store_data_mut().insert(Some(data))))
+        store
+            .engine()
+            .allocator()
+            .increment_component_instance_count()?;
+        let mut instantiator = Instantiator::new(&self.component, store.0, &self.imports);
+        instantiator.run(&mut store).map_err(|e| {
+            store
+                .engine()
+                .allocator()
+                .decrement_component_instance_count();
+            e
+        })?;
+        let data = Box::new(instantiator.data);
+        let instance = Instance(store.0.store_data_mut().insert(Some(data)));
+        store.0.push_component_instance(instance);
+        Ok(instance)
     }
 }
 

@@ -80,3 +80,19 @@ pub(crate) fn skip_pooling_allocator_tests() -> bool {
     // - https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
     std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
 }
+
+/// Get the default pooling allocator configuration for tests, which is a
+/// smaller pool than the normal default.
+pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
+    let mut config = wasmtime::PoolingAllocationConfig::default();
+
+    config.total_memories(1);
+    config.memory_pages(1);
+    config.total_tables(1);
+    config.table_elements(10);
+
+    #[cfg(feature = "async")]
+    config.total_stacks(1);
+
+    config
+}

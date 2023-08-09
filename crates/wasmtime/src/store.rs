@@ -291,6 +291,8 @@ pub struct StoreOpaque {
     engine: Engine,
     runtime_limits: VMRuntimeLimits,
     instances: Vec<StoreInstance>,
+    #[cfg(feature = "component-model")]
+    component_instances: Vec<crate::component::Instance>,
     signal_handler: Option<Box<SignalHandler<'static>>>,
     externref_activations_table: VMExternRefActivationsTable,
     modules: ModuleRegistry,
@@ -461,6 +463,8 @@ impl<T> Store<T> {
                 engine: engine.clone(),
                 runtime_limits: Default::default(),
                 instances: Vec::new(),
+                #[cfg(feature = "component-model")]
+                component_instances: Vec::new(),
                 signal_handler: None,
                 externref_activations_table: VMExternRefActivationsTable::new(),
                 modules: ModuleRegistry::default(),
@@ -505,15 +509,21 @@ impl<T> Store<T> {
         inner.default_caller = {
             let module = Arc::new(wasmtime_environ::Module::default());
             let shim = BareModuleInfo::empty(module).into_traitobj();
-            let mut instance = OnDemandInstanceAllocator::default()
-                .allocate(InstanceAllocationRequest {
-                    host_state: Box::new(()),
-                    imports: Default::default(),
-                    store: StorePtr::empty(),
-                    runtime_info: &shim,
-                    wmemcheck: engine.config().wmemcheck,
-                })
-                .expect("failed to allocate default callee");
+            let allocator = OnDemandInstanceAllocator::default();
+            allocator
+                .validate_module(shim.module(), shim.offsets())
+                .unwrap();
+            let mut instance = unsafe {
+                allocator
+                    .allocate_module(InstanceAllocationRequest {
+                        host_state: Box::new(()),
+                        imports: Default::default(),
+                        store: StorePtr::empty(),
+                        runtime_info: &shim,
+                        wmemcheck: engine.config().wmemcheck,
+                    })
+                    .expect("failed to allocate default callee")
+            };
 
             // Note the erasure of the lifetime here into `'static`, so in
             // general usage of this trait object must be strictly bounded to
@@ -1579,6 +1589,11 @@ at https://bytecodealliance.org/security.
     ) {
         (&mut self.component_calls, &mut self.component_host_table)
     }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn push_component_instance(&mut self, instance: crate::component::Instance) {
+        self.component_instances.push(instance);
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -2181,12 +2196,19 @@ impl Drop for StoreOpaque {
             let ondemand = OnDemandInstanceAllocator::default();
             for instance in self.instances.iter_mut() {
                 if instance.ondemand {
-                    ondemand.deallocate(&mut instance.handle);
+                    ondemand.deallocate_module(&mut instance.handle);
                 } else {
-                    allocator.deallocate(&mut instance.handle);
+                    allocator.deallocate_module(&mut instance.handle);
                 }
             }
-            ondemand.deallocate(&mut self.default_caller);
+            ondemand.deallocate_module(&mut self.default_caller);
+
+            #[cfg(feature = "component-model")]
+            {
+                for _ in self.component_instances.iter() {
+                    allocator.decrement_component_instance_count();
+                }
+            }
 
             // See documentation for these fields on `StoreOpaque` for why they
             // must be dropped in this order.
