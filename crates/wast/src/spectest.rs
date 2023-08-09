@@ -57,6 +57,10 @@ pub fn link_spectest<T>(
 
 #[cfg(feature = "component-model")]
 pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
+    use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
+    use std::sync::Arc;
+    use wasmtime::component::Resource;
+
     let engine = linker.engine().clone();
     linker
         .root()
@@ -76,5 +80,75 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         "#,
     )?;
     i.module("simple-module", &module)?;
+
+    struct Resource1;
+    struct Resource2;
+
+    #[derive(Default)]
+    struct ResourceState {
+        drops: AtomicU32,
+        last_drop: AtomicU32,
+    }
+
+    let state = Arc::new(ResourceState::default());
+
+    i.resource::<Resource1>("resource1", {
+        let state = state.clone();
+        move |_, rep| {
+            state.drops.fetch_add(1, SeqCst);
+            state.last_drop.store(rep, SeqCst);
+        }
+    })?;
+    i.resource::<Resource2>("resource2", |_, _| {})?;
+    // Currently the embedder API requires redefining the resource destructor
+    // here despite this being the same type as before, and fixing that is left
+    // for a future refactoring.
+    i.resource::<Resource1>("resource1-again", |_, _| {
+        panic!("shouldn't be destroyed");
+    })?;
+
+    i.func_wrap("[constructor]resource1", |_cx, (rep,): (u32,)| {
+        Ok((Resource::<Resource1>::new_own(rep),))
+    })?;
+    i.func_wrap(
+        "[static]resource1.assert",
+        |_cx, (resource, rep): (Resource<Resource1>, u32)| {
+            assert_eq!(resource.rep(), rep);
+            Ok(())
+        },
+    )?;
+    i.func_wrap("[static]resource1.last-drop", {
+        let state = state.clone();
+        move |_, (): ()| Ok((state.last_drop.load(SeqCst),))
+    })?;
+    i.func_wrap("[static]resource1.drops", {
+        let state = state.clone();
+        move |_, (): ()| Ok((state.drops.load(SeqCst),))
+    })?;
+    i.func_wrap(
+        "[method]resource1.simple",
+        |_cx, (resource, rep): (Resource<Resource1>, u32)| {
+            assert!(!resource.owned());
+            assert_eq!(resource.rep(), rep);
+            Ok(())
+        },
+    )?;
+
+    i.func_wrap(
+        "[method]resource1.take-borrow",
+        |_, (a, b): (Resource<Resource1>, Resource<Resource1>)| {
+            assert!(!a.owned());
+            assert!(!b.owned());
+            Ok(())
+        },
+    )?;
+    i.func_wrap(
+        "[method]resource1.take-own",
+        |_cx, (a, b): (Resource<Resource1>, Resource<Resource1>)| {
+            assert!(!a.owned());
+            assert!(b.owned());
+            Ok(())
+        },
+    )?;
     Ok(())
 }

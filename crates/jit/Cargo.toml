@@ -20,7 +20,7 @@ cfg-if = { workspace = true }
 gimli = { workspace = true }
 object = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"] }
-addr2line = { version = "0.19.0", default-features = false }
+addr2line = { version = "0.20.0", default-features = false }
 bincode = "1.2.1"
 rustc-demangle = "0.1.16"
 cpp_demangle = "0.3.2"

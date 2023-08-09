@@ -7,10 +7,11 @@ use cranelift_codegen::ir;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
-use target_lexicon::CallingConvention;
+use target_lexicon::Architecture;
 use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
 pub use builder::builder;
+use wasmtime_environ::Tunables;
 
 mod builder;
 mod compiler;
@@ -125,19 +126,44 @@ fn array_call_signature(isa: &dyn TargetIsa) -> ir::Signature {
 }
 
 /// Get the internal Wasm calling convention signature for the given type.
-fn wasm_call_signature(isa: &dyn TargetIsa, wasm_func_ty: &WasmFuncType) -> ir::Signature {
-    let call_conv = if isa.triple().default_calling_convention().ok()
-        == Some(CallingConvention::AppleAarch64)
-    {
-        // FIXME: We need an Apple-specific calling convention, so that
-        // Cranelift's ABI implementation generates unwinding directives
-        // about pointer authentication usage, so we can't just use
-        // `CallConv::Fast`.
-        CallConv::AppleAarch64
-    } else {
-        CallConv::Fast
-    };
+fn wasm_call_signature(
+    isa: &dyn TargetIsa,
+    wasm_func_ty: &WasmFuncType,
+    tunables: &Tunables,
+) -> ir::Signature {
+    // NB: this calling convention in the near future is expected to be
+    // unconditionally switched to the "tail" calling convention once all
+    // platforms have support for tail calls.
+    //
+    // Also note that the calling convention for wasm functions is purely an
+    // internal implementation detail of cranelift and Wasmtime. Native Rust
+    // code does not interact with raw wasm functions and instead always
+    // operates through trampolines either using the `array_call_signature` or
+    // `native_call_signature` where the default platform ABI is used.
+    let call_conv = match isa.triple().architecture {
+        // If the tail calls proposal is enabled, we must use the tail calling
+        // convention. We don't use it by default yet because of
+        // https://github.com/bytecodealliance/wasmtime/issues/6759
+        arch if tunables.tail_callable => {
+            assert_ne!(
+                arch,
+                Architecture::S390x,
+                "https://github.com/bytecodealliance/wasmtime/issues/6530"
+            );
+            CallConv::Tail
+        }
 
+        // On s390x the "wasmtime" calling convention is used to give vectors
+        // little-endian lane order at the ABI layer which should reduce the
+        // need for conversion when operating on vector function arguments. By
+        // default vectors on s390x are otherwise in big-endian lane order which
+        // would require conversions.
+        Architecture::S390x => CallConv::WasmtimeSystemV,
+
+        // All other platforms pick "fast" as the calling convention since it's
+        // presumably, well, the fastest.
+        _ => CallConv::Fast,
+    };
     let mut sig = blank_sig(isa, call_conv);
     let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm_func_ty.params().iter().map(&cvt));

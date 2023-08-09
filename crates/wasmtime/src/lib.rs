@@ -395,6 +395,7 @@ mod compiler;
 
 mod code;
 mod config;
+mod coredump;
 mod engine;
 mod externals;
 mod instance;
@@ -404,6 +405,7 @@ mod memory;
 mod module;
 mod profiling;
 mod r#ref;
+mod resources;
 mod signatures;
 mod store;
 mod trampoline;
@@ -412,6 +414,7 @@ mod types;
 mod values;
 
 pub use crate::config::*;
+pub use crate::coredump::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::func::*;
@@ -422,6 +425,7 @@ pub use crate::memory::*;
 pub use crate::module::Module;
 pub use crate::profiling::GuestProfiler;
 pub use crate::r#ref::ExternRef;
+pub use crate::resources::*;
 #[cfg(feature = "async")]
 pub use crate::store::CallHookHandler;
 pub use crate::store::{

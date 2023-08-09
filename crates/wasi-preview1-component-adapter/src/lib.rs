@@ -380,21 +380,20 @@ pub unsafe extern "C" fn clock_time_get(
         get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
-        State::with(|state| {
-            match id {
-                CLOCKID_MONOTONIC => {
-                    *time = monotonic_clock::now();
-                }
-                CLOCKID_REALTIME => {
-                    let res = wall_clock::now();
-                    *time = Timestamp::from(res.seconds)
-                        .checked_mul(1_000_000_000)
-                        .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
-                        .ok_or(ERRNO_OVERFLOW)?;
-                }
-                _ => unreachable!(),
+        State::with(|state| match id {
+            CLOCKID_MONOTONIC => {
+                *time = monotonic_clock::now();
+                Ok(())
             }
-            Ok(())
+            CLOCKID_REALTIME => {
+                let res = wall_clock::now();
+                *time = Timestamp::from(res.seconds)
+                    .checked_mul(1_000_000_000)
+                    .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
+                    .ok_or(ERRNO_OVERFLOW)?;
+                Ok(())
+            }
+            _ => Err(ERRNO_BADF),
         })
     } else {
         *time = Timestamp::from(0u64);
@@ -481,41 +480,86 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
         }) => {
             let flags = filesystem::get_flags(file.fd)?;
             let type_ = filesystem::get_type(file.fd)?;
+            match type_ {
+                filesystem::DescriptorType::Directory => {
+                    // Hard-coded set of rights expected by many userlands:
+                    let fs_rights_base = wasi::RIGHTS_PATH_CREATE_DIRECTORY
+                        | wasi::RIGHTS_PATH_CREATE_FILE
+                        | wasi::RIGHTS_PATH_LINK_SOURCE
+                        | wasi::RIGHTS_PATH_LINK_TARGET
+                        | wasi::RIGHTS_PATH_OPEN
+                        | wasi::RIGHTS_FD_READDIR
+                        | wasi::RIGHTS_PATH_READLINK
+                        | wasi::RIGHTS_PATH_RENAME_SOURCE
+                        | wasi::RIGHTS_PATH_RENAME_TARGET
+                        | wasi::RIGHTS_PATH_SYMLINK
+                        | wasi::RIGHTS_PATH_REMOVE_DIRECTORY
+                        | wasi::RIGHTS_PATH_UNLINK_FILE
+                        | wasi::RIGHTS_PATH_FILESTAT_GET
+                        | wasi::RIGHTS_PATH_FILESTAT_SET_TIMES
+                        | wasi::RIGHTS_FD_FILESTAT_GET
+                        | wasi::RIGHTS_FD_FILESTAT_SET_TIMES;
 
-            let fs_filetype = type_.into();
+                    let fs_rights_inheriting = fs_rights_base
+                        | wasi::RIGHTS_FD_DATASYNC
+                        | wasi::RIGHTS_FD_READ
+                        | wasi::RIGHTS_FD_SEEK
+                        | wasi::RIGHTS_FD_FDSTAT_SET_FLAGS
+                        | wasi::RIGHTS_FD_SYNC
+                        | wasi::RIGHTS_FD_TELL
+                        | wasi::RIGHTS_FD_WRITE
+                        | wasi::RIGHTS_FD_ADVISE
+                        | wasi::RIGHTS_FD_ALLOCATE
+                        | wasi::RIGHTS_FD_FILESTAT_GET
+                        | wasi::RIGHTS_FD_FILESTAT_SET_SIZE
+                        | wasi::RIGHTS_FD_FILESTAT_SET_TIMES
+                        | wasi::RIGHTS_POLL_FD_READWRITE;
 
-            let mut fs_flags = 0;
-            let mut fs_rights_base = !0;
-            if !flags.contains(filesystem::DescriptorFlags::READ) {
-                fs_rights_base &= !RIGHTS_FD_READ;
-            }
-            if !flags.contains(filesystem::DescriptorFlags::WRITE) {
-                fs_rights_base &= !RIGHTS_FD_WRITE;
-            }
-            if flags.contains(filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
-                fs_flags |= FDFLAGS_DSYNC;
-            }
-            if flags.contains(filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
-                fs_flags |= FDFLAGS_RSYNC;
-            }
-            if flags.contains(filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
-                fs_flags |= FDFLAGS_SYNC;
-            }
-            if file.append {
-                fs_flags |= FDFLAGS_APPEND;
-            }
-            if !file.blocking {
-                fs_flags |= FDFLAGS_NONBLOCK;
-            }
-            let fs_rights_inheriting = fs_rights_base;
+                    stat.write(Fdstat {
+                        fs_filetype: wasi::FILETYPE_DIRECTORY,
+                        fs_flags: 0,
+                        fs_rights_base,
+                        fs_rights_inheriting,
+                    });
+                    Ok(())
+                }
+                _ => {
+                    let fs_filetype = type_.into();
 
-            stat.write(Fdstat {
-                fs_filetype,
-                fs_flags,
-                fs_rights_base,
-                fs_rights_inheriting,
-            });
-            Ok(())
+                    let mut fs_flags = 0;
+                    let mut fs_rights_base = !0;
+                    if !flags.contains(filesystem::DescriptorFlags::READ) {
+                        fs_rights_base &= !RIGHTS_FD_READ;
+                    }
+                    if !flags.contains(filesystem::DescriptorFlags::WRITE) {
+                        fs_rights_base &= !RIGHTS_FD_WRITE;
+                    }
+                    if flags.contains(filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
+                        fs_flags |= FDFLAGS_DSYNC;
+                    }
+                    if flags.contains(filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
+                        fs_flags |= FDFLAGS_RSYNC;
+                    }
+                    if flags.contains(filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
+                        fs_flags |= FDFLAGS_SYNC;
+                    }
+                    if file.append {
+                        fs_flags |= FDFLAGS_APPEND;
+                    }
+                    if !file.blocking {
+                        fs_flags |= FDFLAGS_NONBLOCK;
+                    }
+                    let fs_rights_inheriting = fs_rights_base;
+
+                    stat.write(Fdstat {
+                        fs_filetype,
+                        fs_flags,
+                        fs_rights_base,
+                        fs_rights_inheriting,
+                    });
+                    Ok(())
+                }
+            }
         }
         Descriptor::Streams(Streams {
             input,
@@ -839,7 +883,7 @@ pub unsafe extern "C" fn fd_read(
 
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
-                let (data, end) = state
+                let (data, stream_stat) = state
                     .import_alloc
                     .with_buffer(ptr, len, || {
                         if blocking {
@@ -861,7 +905,7 @@ pub unsafe extern "C" fn fd_read(
 
                 let len = data.len();
                 forget(data);
-                if !end && len == 0 {
+                if stream_stat == crate::streams::StreamStatus::Open && len == 0 {
                     Err(ERRNO_INTR)
                 } else {
                     *nread = len;
@@ -1215,14 +1259,16 @@ pub unsafe extern "C" fn fd_write(
                 Descriptor::Streams(streams) => {
                     let wasi_stream = streams.get_write_stream()?;
 
-                    let bytes = if let StreamType::File(file) = &streams.type_ {
+                    let (bytes, _stream_stat) = if let StreamType::File(file) = &streams.type_ {
                         if file.blocking {
                             streams::blocking_write(wasi_stream, bytes)
                         } else {
                             streams::write(wasi_stream, bytes)
                         }
                     } else {
-                        streams::write(wasi_stream, bytes)
+                        // Use blocking writes on non-file streams (stdout, stderr, as sockets
+                        // aren't currently used).
+                        streams::blocking_write(wasi_stream, bytes)
                     }
                     .map_err(|_| ERRNO_IO)?;
 
@@ -1376,7 +1422,7 @@ pub unsafe extern "C" fn path_open(
     fdflags: Fdflags,
     opened_fd: *mut Fd,
 ) -> Errno {
-    drop(fs_rights_inheriting);
+    let _ = fs_rights_inheriting;
 
     let path = slice::from_raw_parts(path_ptr, path_len);
     let at_flags = at_flags_from_lookupflags(dirflags);

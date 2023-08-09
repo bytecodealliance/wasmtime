@@ -121,7 +121,7 @@
     (memory (export "memory") 0)
   )
   (core instance $m (instantiate $m))
-  (type $t' (record))
+  (type $t' (result))
   (export $t "t" (type $t'))
   (func $f (param "a" (list $t))
     (canon lift

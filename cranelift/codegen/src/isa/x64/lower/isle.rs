@@ -95,7 +95,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
         let callee = self.put_in_reg(callee);
 
-        let mut call_site = X64CallSite::from_ptr(
+        let call_site = X64CallSite::from_ptr(
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
@@ -103,58 +103,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             caller_conv,
             self.backend.flags().clone(),
         );
-
-        // Allocate additional stack space for the new stack frame. We will
-        // build it in the newly allocated space, but then copy it over our
-        // current frame at the last moment.
-        let new_stack_arg_size = call_site.emit_allocate_tail_call_frame(self.lower_ctx);
-        let old_stack_arg_size = self.lower_ctx.abi().stack_args_size(self.lower_ctx.sigs());
-
-        // Make a copy of the frame pointer, since we use it when copying down
-        // the new stack frame.
-        let fp = self.temp_writable_gpr();
-        let rbp = self.preg_rbp();
-        self.lower_ctx
-            .emit(MInst::MovFromPReg { src: rbp, dst: fp });
-
-        // Load the return address, because copying our new stack frame
-        // over our current stack frame might overwrite it, and we'll need to
-        // place it in the correct location after we do that copy.
-        //
-        // But we only need to actually move the return address if the size of
-        // stack arguments changes.
-        let ret_addr = if new_stack_arg_size != old_stack_arg_size {
-            let ret_addr = self.temp_writable_gpr();
-            self.lower_ctx.emit(MInst::Mov64MR {
-                src: SyntheticAmode::Real(Amode::ImmReg {
-                    simm32: 8,
-                    base: fp.to_reg().to_reg(),
-                    flags: MemFlags::trusted(),
-                }),
-                dst: ret_addr,
-            });
-            Some(ret_addr)
-        } else {
-            None
-        };
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.gen_call_common_args(&mut call_site, args);
-
-        // Finally, emit the macro instruction to copy the new stack frame over
-        // our current one and do the actual tail call!
-        let tmp = self.temp_writable_gpr();
-        let tmp2 = self.temp_writable_gpr();
-        call_site.emit_return_call(
-            self.lower_ctx,
-            new_stack_arg_size,
-            old_stack_arg_size,
-            ret_addr.map(|r| r.to_reg().to_reg()),
-            fp.to_reg().to_reg(),
-            tmp.to_writable_reg(),
-            tmp2.to_writable_reg(),
-        );
+        call_site.emit_return_call(self.lower_ctx, args);
 
         InstOutput::new()
     }
@@ -173,7 +122,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             "Can only do `return_call`s from within a `tail` calling convention function"
         );
 
-        let mut call_site = X64CallSite::from_func(
+        let call_site = X64CallSite::from_func(
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
@@ -181,58 +130,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             caller_conv,
             self.backend.flags().clone(),
         );
-
-        // Allocate additional stack space for the new stack frame. We will
-        // build it in the newly allocated space, but then copy it over our
-        // current frame at the last moment.
-        let new_stack_arg_size = call_site.emit_allocate_tail_call_frame(self.lower_ctx);
-        let old_stack_arg_size = self.lower_ctx.abi().stack_args_size(self.lower_ctx.sigs());
-
-        // Make a copy of the frame pointer, since we use it when copying down
-        // the new stack frame.
-        let fp = self.temp_writable_gpr();
-        let rbp = self.preg_rbp();
-        self.lower_ctx
-            .emit(MInst::MovFromPReg { src: rbp, dst: fp });
-
-        // Load the return address, because copying our new stack frame
-        // over our current stack frame might overwrite it, and we'll need to
-        // place it in the correct location after we do that copy.
-        //
-        // But we only need to actually move the return address if the size of
-        // stack arguments changes.
-        let ret_addr = if new_stack_arg_size != old_stack_arg_size {
-            let ret_addr = self.temp_writable_gpr();
-            self.lower_ctx.emit(MInst::Mov64MR {
-                src: SyntheticAmode::Real(Amode::ImmReg {
-                    simm32: 8,
-                    base: fp.to_reg().to_reg(),
-                    flags: MemFlags::trusted(),
-                }),
-                dst: ret_addr,
-            });
-            Some(ret_addr)
-        } else {
-            None
-        };
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.gen_call_common_args(&mut call_site, args);
-
-        // Finally, emit the macro instruction to copy the new stack frame over
-        // our current one and do the actual tail call!
-        let tmp = self.temp_writable_gpr();
-        let tmp2 = self.temp_writable_gpr();
-        call_site.emit_return_call(
-            self.lower_ctx,
-            new_stack_arg_size,
-            old_stack_arg_size,
-            ret_addr.map(|r| r.to_reg().to_reg()),
-            fp.to_reg().to_reg(),
-            tmp.to_writable_reg(),
-            tmp2.to_writable_reg(),
-        );
+        call_site.emit_return_call(self.lower_ctx, args);
 
         InstOutput::new()
     }
@@ -599,12 +497,12 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn temp_writable_gpr(&mut self) -> WritableGpr {
-        Writable::from_reg(Gpr::new(self.temp_writable_reg(I64).to_reg()).unwrap())
+        self.lower_ctx.temp_writable_gpr()
     }
 
     #[inline]
     fn temp_writable_xmm(&mut self) -> WritableXmm {
-        Writable::from_reg(Xmm::new(self.temp_writable_reg(I8X16).to_reg()).unwrap())
+        self.lower_ctx.temp_writable_xmm()
     }
 
     #[inline]

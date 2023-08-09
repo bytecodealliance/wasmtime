@@ -12,7 +12,7 @@ use wasmtime_asm_macros::{asm_func, asm_sym};
 
 // fn(top_of_stack(%r0): *mut u8)
 asm_func!(
-    "wasmtime_fiber_switch",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
     "
         // Save callee-saved registers
         push {{r4-r11,lr}}
@@ -34,7 +34,7 @@ asm_func!(
 //    entry_arg0(%r2): *mut u8,
 // )
 asm_func!(
-    "wasmtime_fiber_init",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
     "
         adr r3, wasmtime_fiber_start
         str r3, [r0, #-0x0c] // => lr
@@ -49,7 +49,7 @@ asm_func!(
 );
 
 asm_func!(
-    "wasmtime_fiber_start",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
     "
         .cfi_startproc simple
         .cfi_def_cfa_offset 0

@@ -496,3 +496,158 @@ fn no_gc_middle_of_args() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(any(
+    miri,
+    // TODO(6530): s390x doesn't support tail calls yet.
+    target_arch = "s390x"
+), ignore)]
+fn gc_and_tail_calls_and_stack_arguments() -> anyhow::Result<()> {
+    // Test that GC refs in tail-calls' stack arguments get properly accounted
+    // for in stack maps.
+    //
+    // What we do _not_ want to happen is for tail callers to be responsible for
+    // including stack arguments in their stack maps (and therefore whether or
+    // not they get marked at runtime). If that was the case, then we could have
+    // the following scenario:
+    //
+    // * `f` calls `g` without any stack arguments,
+    // * `g` tail calls `h` with GC ref stack arguments,
+    // * and then `h` triggers a GC.
+    //
+    // Because `g`, who is responsible for including the GC refs in its stack
+    // map in this hypothetical scenario, is no longer on the stack, we never
+    // see its stack map, and therefore never mark the GC refs, and then we
+    // collect them too early, and then we can get user-after-free bugs. Not
+    // good! Note also that `f`, which is the frame that `h` will return to,
+    // _cannot_ be responsible for including these stack arguments in its stack
+    // map, because it has no idea what frame will be returning to it, and it
+    // could be any number of different functions using that frame for long (and
+    // indirect!) tail-call chains.
+    //
+    // In Cranelift we avoid this scenario because stack arguments are eagerly
+    // loaded into virtual registers, and then when we insert a GC safe point,
+    // we spill these virtual registers to the callee stack frame, and the stack
+    // map includes entries for these stack slots.
+    //
+    // Nonetheless, this test exercises the above scenario just in case we do
+    // something in the future like lazily load stack arguments into virtual
+    // registers, to make sure that everything shows up in stack maps like they
+    // are supposed to.
+
+    let (mut store, module) = ref_types_module(
+        false,
+        r#"
+            (module
+                (import "" "make_some" (func $make (result externref externref externref)))
+                (import "" "take_some" (func $take (param externref externref externref)))
+                (import "" "gc" (func $gc))
+
+                (func $stack_args (param externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref externref)
+                  call $gc
+                  ;; Make sure all these GC refs are live, so that they need to
+                  ;; be put into the stack map.
+                  local.get 0
+                  local.get 1
+                  local.get 2
+                  call $take
+                  local.get 3
+                  local.get 4
+                  local.get 5
+                  call $take
+                  local.get 6
+                  local.get 7
+                  local.get 8
+                  call $take
+                  local.get 9
+                  local.get 10
+                  local.get 11
+                  call $take
+                  local.get 12
+                  local.get 13
+                  local.get 14
+                  call $take
+                  local.get 15
+                  local.get 16
+                  local.get 17
+                  call $take
+                  local.get 18
+                  local.get 19
+                  local.get 20
+                  call $take
+                  local.get 21
+                  local.get 22
+                  local.get 23
+                  call $take
+                  local.get 24
+                  local.get 25
+                  local.get 26
+                  call $take
+                  local.get 27
+                  local.get 28
+                  local.get 29
+                  call $take
+                )
+
+                (func $no_stack_args
+                  call $make
+                  call $make
+                  call $make
+                  call $make
+                  call $make
+                  call $make
+                  call $make
+                  call $make
+                  call $make
+                  call $make
+                  return_call $stack_args
+                )
+
+                (func (export "run")
+                    (local i32)
+                    i32.const 1000
+                    local.set 0
+                    loop
+                        call $no_stack_args
+                        local.get 0
+                        i32.const -1
+                        i32.add
+                        local.tee 0
+                        br_if 0
+                    end
+                )
+            )
+        "#,
+    )?;
+
+    let mut linker = Linker::new(store.engine());
+    linker.func_wrap("", "make_some", || {
+        (
+            Some(ExternRef::new("a".to_string())),
+            Some(ExternRef::new("b".to_string())),
+            Some(ExternRef::new("c".to_string())),
+        )
+    })?;
+    linker.func_wrap(
+        "",
+        "take_some",
+        |a: Option<ExternRef>, b: Option<ExternRef>, c: Option<ExternRef>| {
+            let a = a.unwrap();
+            let b = b.unwrap();
+            let c = c.unwrap();
+            assert_eq!(a.data().downcast_ref::<String>().unwrap(), "a");
+            assert_eq!(b.data().downcast_ref::<String>().unwrap(), "b");
+            assert_eq!(c.data().downcast_ref::<String>().unwrap(), "c");
+        },
+    )?;
+    linker.func_wrap("", "gc", |mut caller: Caller<()>| {
+        caller.gc();
+    })?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    func.call(&mut store, ())?;
+
+    Ok(())
+}

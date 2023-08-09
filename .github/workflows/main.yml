@@ -86,19 +86,12 @@ jobs:
     needs: determine
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
-    env:
-      CARGO_VET_VERSION: 0.8.0
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - uses: actions/cache@v3
-      with:
-        path: ${{ runner.tool_cache }}/cargo-vet
-        key: cargo-vet-bin-${{ env.CARGO_VET_VERSION }}
-    - run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
+    - uses: ./.github/actions/install-cargo-vet
     - run: cargo vet --locked
 
     # common logic to cancel the entire run if this job fails
@@ -194,7 +187,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2023-03-20
+        toolchain: nightly-2023-07-02
 
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
@@ -353,7 +346,7 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2023-03-20
+        toolchain: nightly-2023-07-02
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
@@ -505,28 +498,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-  # Build and test the wasi-crypto module.
-  test_wasi_crypto:
-    needs: determine
-    if: needs.determine.outputs.run-full
-    name: Test wasi-crypto module
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: true
-    - run: rustup update stable && rustup default stable
-    - run: rustup target add wasm32-wasi
-    - run: ./ci/run-wasi-crypto-example.sh
-      env:
-        RUST_BACKTRACE: 1
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
-
   build-preview1-component-adapter:
     name: Build wasi-preview1-component-adapter
     needs: determine
@@ -651,7 +622,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2023-03-20
+        toolchain: nightly-2023-07-02
     - run: rustup component add rust-src miri
     - uses: actions/cache@v3
       with:
@@ -775,7 +746,6 @@ jobs:
       - checks_winarm64
       - fuzz_targets
       - test_wasi_nn
-      - test_wasi_crypto
       - bench
       - meta_deterministic_check
       - verify-publish

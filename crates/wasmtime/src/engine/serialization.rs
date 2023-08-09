@@ -162,6 +162,7 @@ struct WasmFeatures {
     bulk_memory: bool,
     component_model: bool,
     simd: bool,
+    tail_call: bool,
     threads: bool,
     multi_memory: bool,
     exceptions: bool,
@@ -190,6 +191,7 @@ impl Metadata {
             memory_control,
             function_references,
             gc,
+            component_model_values,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -199,8 +201,8 @@ impl Metadata {
         } = engine.config().features;
 
         assert!(!memory_control);
-        assert!(!tail_call);
         assert!(!gc);
+        assert!(!component_model_values);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -214,6 +216,7 @@ impl Metadata {
                 component_model,
                 simd,
                 threads,
+                tail_call,
                 multi_memory,
                 exceptions,
                 memory64,
@@ -313,6 +316,7 @@ impl Metadata {
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
             relaxed_simd_deterministic,
+            tail_callable,
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
@@ -373,6 +377,7 @@ impl Metadata {
             other.relaxed_simd_deterministic,
             "relaxed simd deterministic semantics",
         )?;
+        Self::check_bool(tail_callable, other.tail_callable, "WebAssembly tail calls")?;
 
         Ok(())
     }
@@ -384,6 +389,7 @@ impl Metadata {
             bulk_memory,
             component_model,
             simd,
+            tail_call,
             threads,
             multi_memory,
             exceptions,
@@ -414,6 +420,7 @@ impl Metadata {
             "WebAssembly component model support",
         )?;
         Self::check_bool(simd, other.simd, "WebAssembly SIMD support")?;
+        Self::check_bool(tail_call, other.tail_call, "WebAssembly tail calls support")?;
         Self::check_bool(threads, other.threads, "WebAssembly threads support")?;
         Self::check_bool(
             multi_memory,

@@ -10,7 +10,7 @@ publish = false
 edition.workspace = true
 
 [dependencies]
-cranelift-codegen = { workspace = true, features = ["testing_hooks", "disas"] }
+cranelift-codegen = { workspace = true, features = ["disas"] }
 cranelift-frontend = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-native = { workspace = true }

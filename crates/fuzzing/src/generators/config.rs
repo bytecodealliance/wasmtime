@@ -152,6 +152,7 @@ impl Config {
             .wasm_multi_memory(self.module_config.config.max_memories > 1)
             .wasm_simd(self.module_config.config.simd_enabled)
             .wasm_memory64(self.module_config.config.memory64_enabled)
+            .wasm_tail_call(self.module_config.config.tail_call_enabled)
             .wasm_threads(self.module_config.config.threads_enabled)
             .native_unwind_info(self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
@@ -207,15 +208,32 @@ impl Config {
             }
         }
 
-        // Allow at most 1<<16 == 64k of padding between basic blocks. If this
-        // gets too large then functions actually grow to 4G+ sizes which is not
-        // really that interesting to test as it's pretty unrealistic at this
-        // time.
-        unsafe {
-            cfg.cranelift_flag_set(
-                "bb_padding_log2_minus_one",
-                &(self.wasmtime.bb_padding_log2 & 0xf).to_string(),
-            );
+        // Try to configure cranelift to insert padding between basic blocks to
+        // stress code layout mechanisms within Cranelift. This padding can get
+        // unwieldy quickly, however, generating a 4G+ function which isn't
+        // particularly interesting at this time.
+        //
+        // To keep this setting under control there are a few limits in place:
+        //
+        // * Cranelift will generate at most 150M of padding per-function,
+        //   regardless of how many basic blocks there are.
+        // * Here it's limited to enable this setting only when there's at most
+        //   10 functions to ensure that the overhead for all functions is <1G
+        //   ish or otherwise doesn't run away.
+        // * The `bb_padding_log2_minus_one` setting isn't allowed to be
+        //   larger than 26 as that allows for `1<<25` maximum padding size
+        //   which is 32M.
+        //
+        // With all that combined this is intended to still be enabled,
+        // although perhaps not all the time, and stress enough interesting test
+        // cases in cranelift.
+        if self.module_config.config.max_funcs < 5 {
+            unsafe {
+                cfg.cranelift_flag_set(
+                    "bb_padding_log2_minus_one",
+                    &(self.wasmtime.bb_padding_log2 % 27).to_string(),
+                );
+            }
         }
 
         // Vary the memory configuration, but only if threads are not enabled.

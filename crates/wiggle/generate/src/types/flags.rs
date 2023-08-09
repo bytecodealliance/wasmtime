@@ -23,6 +23,7 @@ pub(super) fn define_flags(
 
     quote! {
         wiggle::bitflags::bitflags! {
+            #[derive(Copy, Clone, Debug, PartialEq, Eq)]
             pub struct #ident: #repr {
                 #(const #names_ = #values_;)*
             }
@@ -34,7 +35,7 @@ pub(super) fn define_flags(
                 f.write_str("(")?;
                 ::std::fmt::Debug::fmt(self, f)?;
                 f.write_str(" (0x")?;
-                ::std::fmt::LowerHex::fmt(&self.bits, f)?;
+                ::std::fmt::LowerHex::fmt(&self.bits(), f)?;
                 f.write_str("))")?;
                 Ok(())
             }
@@ -44,11 +45,8 @@ pub(super) fn define_flags(
             type Error = wiggle::GuestError;
             #[inline]
             fn try_from(value: #repr) -> Result<Self, wiggle::GuestError> {
-                if #repr::from(!#ident::all()) & value != 0 {
-                    Err(wiggle::GuestError::InvalidFlagValue(stringify!(#ident)))
-                } else {
-                    Ok(#ident { bits: value })
-                }
+                #ident::from_bits(value)
+                    .ok_or(wiggle::GuestError::InvalidFlagValue(stringify!(#ident)))
             }
         }
 
@@ -63,7 +61,7 @@ pub(super) fn define_flags(
         impl From<#ident> for #repr {
             #[inline]
             fn from(e: #ident) -> #repr {
-                e.bits
+                e.bits()
             }
         }
 

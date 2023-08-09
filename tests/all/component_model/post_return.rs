@@ -40,18 +40,16 @@ fn invalid_api() -> Result<()> {
     // Ensure that we can't reenter the instance through either this function or
     // another one.
     let err = thunk1.call(&mut store, ()).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("cannot reenter component instance"),
-        "{}",
-        err
+    assert_eq!(
+        err.downcast_ref(),
+        Some(&Trap::CannotEnterComponent),
+        "{err}",
     );
     let err = thunk2.call(&mut store, ()).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("cannot reenter component instance"),
-        "{}",
-        err
+    assert_eq!(
+        err.downcast_ref(),
+        Some(&Trap::CannotEnterComponent),
+        "{err}",
     );
 
     // Calling post-return on the wrong function should panic
@@ -288,11 +286,10 @@ fn trap_in_post_return_poisons_instance() -> Result<()> {
     let trap = f.post_return(&mut store).unwrap_err().downcast::<Trap>()?;
     assert_eq!(trap, Trap::UnreachableCodeReached);
     let err = f.call(&mut store, ()).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("cannot reenter component instance"),
-        "{}",
-        err
+    assert_eq!(
+        err.downcast_ref(),
+        Some(&Trap::CannotEnterComponent),
+        "{err}",
     );
     assert_panics(
         || drop(f.post_return(&mut store)),

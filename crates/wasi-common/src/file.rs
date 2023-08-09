@@ -150,6 +150,7 @@ pub enum FileType {
 }
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct FdFlags: u32 {
         const APPEND   = 0b1;
         const DSYNC    = 0b10;
@@ -160,6 +161,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct SdFlags: u32 {
         const RD = 0b1;
         const WR = 0b10;
@@ -167,11 +169,13 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct SiFlags: u32 {
     }
 }
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct RiFlags: u32 {
         const RECV_PEEK    = 0b1;
         const RECV_WAITALL = 0b10;
@@ -179,12 +183,14 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct RoFlags: u32 {
         const RECV_DATA_TRUNCATED = 0b1;
     }
 }
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct OFlags: u32 {
         const CREATE    = 0b1;
         const DIRECTORY = 0b10;
@@ -224,6 +230,7 @@ pub(crate) struct FileEntry {
 }
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct FileAccessMode : u32 {
         const READ = 0b1;
         const WRITE= 0b10;

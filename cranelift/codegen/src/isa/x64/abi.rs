@@ -11,7 +11,7 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
-use regalloc2::{PRegSet, VReg};
+use regalloc2::{PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -713,52 +713,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn gen_return_call(
-        callee: CallDest,
-        new_stack_arg_size: u32,
-        old_stack_arg_size: u32,
-        ret_addr: Option<Reg>,
-        fp: Reg,
-        tmp: Writable<Reg>,
-        tmp2: Writable<Reg>,
-        uses: abi::CallArgList,
-    ) -> SmallVec<[Self::I; 2]> {
-        let ret_addr = ret_addr.map(|r| Gpr::new(r).unwrap());
-        let fp = Gpr::new(fp).unwrap();
-        let tmp = WritableGpr::from_writable_reg(tmp).unwrap();
-        let info = Box::new(ReturnCallInfo {
-            new_stack_arg_size,
-            old_stack_arg_size,
-            ret_addr,
-            fp,
-            tmp,
-            uses,
-        });
-        match callee {
-            CallDest::ExtName(callee, RelocDistance::Near) => {
-                smallvec![Inst::ReturnCallKnown { callee, info }]
-            }
-            CallDest::ExtName(callee, RelocDistance::Far) => {
-                smallvec![
-                    Inst::LoadExtName {
-                        dst: tmp2,
-                        name: Box::new(callee.clone()),
-                        offset: 0,
-                        distance: RelocDistance::Far,
-                    },
-                    Inst::ReturnCallUnknown {
-                        callee: tmp2.into(),
-                        info,
-                    }
-                ]
-            }
-            CallDest::Reg(callee) => smallvec![Inst::ReturnCallUnknown {
-                callee: callee.into(),
-                info,
-            }],
-        }
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -883,6 +837,75 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _frame_storage_size: u32,
     ) -> bool {
         true
+    }
+}
+
+impl X64CallSite {
+    pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
+        let (new_stack_arg_size, old_stack_arg_size) =
+            self.emit_temporary_tail_call_frame(ctx, args);
+
+        // Make a copy of the frame pointer, since we use it when copying down
+        // the new stack frame.
+        let fp = ctx.temp_writable_gpr();
+        let rbp = PReg::from(regs::rbp().to_real_reg().unwrap());
+        ctx.emit(Inst::MovFromPReg { src: rbp, dst: fp });
+
+        // Load the return address, because copying our new stack frame
+        // over our current stack frame might overwrite it, and we'll need to
+        // place it in the correct location after we do that copy.
+        //
+        // But we only need to actually move the return address if the size of
+        // stack arguments changes.
+        let ret_addr = if new_stack_arg_size != old_stack_arg_size {
+            let ret_addr = ctx.temp_writable_gpr();
+            ctx.emit(Inst::Mov64MR {
+                src: SyntheticAmode::Real(Amode::ImmReg {
+                    simm32: 8,
+                    base: *fp.to_reg(),
+                    flags: MemFlags::trusted(),
+                }),
+                dst: ret_addr,
+            });
+            Some(ret_addr.to_reg())
+        } else {
+            None
+        };
+
+        // Finally, emit the macro instruction to copy the new stack frame over
+        // our current one and do the actual tail call!
+
+        let dest = self.dest().clone();
+        let info = Box::new(ReturnCallInfo {
+            new_stack_arg_size,
+            old_stack_arg_size,
+            ret_addr,
+            fp: fp.to_reg(),
+            tmp: ctx.temp_writable_gpr(),
+            uses: self.take_uses(),
+        });
+        match dest {
+            CallDest::ExtName(callee, RelocDistance::Near) => {
+                ctx.emit(Inst::ReturnCallKnown { callee, info });
+            }
+            CallDest::ExtName(callee, RelocDistance::Far) => {
+                let tmp2 = ctx.temp_writable_gpr();
+                ctx.emit(Inst::LoadExtName {
+                    dst: tmp2.to_writable_reg(),
+                    name: Box::new(callee),
+                    offset: 0,
+                    distance: RelocDistance::Far,
+                });
+                ctx.emit(Inst::ReturnCallUnknown {
+                    callee: tmp2.to_writable_reg().into(),
+                    info,
+                });
+            }
+            CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallUnknown {
+                callee: callee.into(),
+                info,
+            }),
+        }
     }
 }
 

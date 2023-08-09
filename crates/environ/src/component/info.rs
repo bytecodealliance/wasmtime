@@ -47,9 +47,18 @@
 // requirements of embeddings change over time.
 
 use crate::component::*;
-use crate::{EntityIndex, PrimaryMap, SignatureIndex};
+use crate::{EntityIndex, PrimaryMap, SignatureIndex, WasmType};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+
+/// Metadata as a result of compiling a component.
+pub struct ComponentTranslation {
+    /// Serializable information that will be emitted into the final artifact.
+    pub component: Component,
+
+    /// Metadata about required trampolines and what they're supposed to do.
+    pub trampolines: PrimaryMap<TrampolineIndex, Trampoline>,
+}
 
 /// Run-time-type-information about a `Component`, its structure, and how to
 /// instantiate it.
@@ -136,21 +145,52 @@ pub struct Component {
     /// Same as `num_runtime_reallocs`, but for post-return functions.
     pub num_runtime_post_returns: u32,
 
+    /// WebAssembly type signature of all trampolines.
+    pub trampolines: PrimaryMap<TrampolineIndex, SignatureIndex>,
+
     /// The number of lowered host functions (maximum `LoweredIndex`) needed to
     /// instantiate this component.
     pub num_lowerings: u32,
 
-    /// The number of modules that are required to be saved within an instance
-    /// at runtime, or effectively the number of exported modules.
-    pub num_runtime_modules: u32,
+    /// Maximal number of tables that required at runtime for resource-related
+    /// information in this component.
+    pub num_resource_tables: usize,
 
-    /// The number of functions which "always trap" used to implement
-    /// `canon.lower` of `canon.lift`'d functions within the same component.
-    pub num_always_trap: u32,
+    /// Total number of resources both imported and defined within this
+    /// component.
+    pub num_resources: u32,
 
-    /// The number of host transcoder functions needed for strings in adapter
-    /// modules.
-    pub num_transcoders: u32,
+    /// Metadata about imported resources and where they are within the runtime
+    /// imports array.
+    ///
+    /// This map is only as large as the number of imported resources.
+    pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
+
+    /// Metadata about which component instances defined each resource within
+    /// this component.
+    ///
+    /// This is used to determine which set of instance flags are inspected when
+    /// testing reentrance.
+    pub defined_resource_instances: PrimaryMap<DefinedResourceIndex, RuntimeComponentInstanceIndex>,
+}
+
+impl Component {
+    /// Attempts to convert a resource index into a defined index.
+    ///
+    /// Returns `None` if `idx` is for an imported resource in this component or
+    /// `Some` if it's a locally defined resource.
+    pub fn defined_resource_index(&self, idx: ResourceIndex) -> Option<DefinedResourceIndex> {
+        let idx = idx
+            .as_u32()
+            .checked_sub(self.imported_resources.len() as u32)?;
+        Some(DefinedResourceIndex::from_u32(idx))
+    }
+
+    /// Converts a defined resource index to a component-local resource index
+    /// which includes all imports.
+    pub fn resource_index(&self, idx: DefinedResourceIndex) -> ResourceIndex {
+        ResourceIndex::from_u32(self.imported_resources.len() as u32 + idx.as_u32())
+    }
 }
 
 /// GlobalInitializer instructions to get processed when instantiating a component
@@ -179,13 +219,18 @@ pub enum GlobalInitializer {
     /// `VMComponentContext` and information about this lowering such as the
     /// cranelift-compiled trampoline function pointer, the host function
     /// pointer the trampoline calls, and the canonical ABI options.
-    LowerImport(LowerImport),
+    LowerImport {
+        /// The index of the lowered function that's being created.
+        ///
+        /// This is guaranteed to be the `n`th `LowerImport` instruction
+        /// if the index is `n`.
+        index: LoweredIndex,
 
-    /// A core wasm function was "generated" via `canon lower` of a function
-    /// that was `canon lift`'d in the same component, meaning that the function
-    /// always traps. This is recorded within the `VMComponentContext` as a new
-    /// `VMFuncRef` that's available for use.
-    AlwaysTrap(AlwaysTrap),
+        /// The index of the imported host function that is being lowered.
+        ///
+        /// It's guaranteed that this `RuntimeImportIndex` points to a function.
+        import: RuntimeImportIndex,
+    },
 
     /// A core wasm linear memory is going to be saved into the
     /// `VMComponentContext`.
@@ -205,17 +250,10 @@ pub enum GlobalInitializer {
     /// used as a `post-return` function.
     ExtractPostReturn(ExtractPostReturn),
 
-    /// The `module` specified is saved into the runtime state at the next
-    /// `RuntimeModuleIndex`, referred to later by `Export` definitions.
-    SaveStaticModule(StaticModuleIndex),
-
-    /// Same as `SaveModuleUpvar`, but for imports.
-    SaveModuleImport(RuntimeImportIndex),
-
-    /// Similar to `ExtractMemory` and friends and indicates that a `VMFuncRef`
-    /// needs to be initialized for a transcoder function and this will later be
-    /// used to instantiate an adapter module.
-    Transcoder(Transcoder),
+    /// Declares a new defined resource within this component.
+    ///
+    /// Contains information about the destructor, for example.
+    Resource(Resource),
 }
 
 /// Metadata for extraction of a memory of what's being extracted and where it's
@@ -268,54 +306,6 @@ pub enum InstantiateModule {
     ),
 }
 
-/// Description of a lowered import used in conjunction with
-/// `GlobalInitializer::LowerImport`.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LowerImport {
-    /// The index of the lowered function that's being created.
-    ///
-    /// This is guaranteed to be the `n`th `LowerImport` instruction
-    /// if the index is `n`.
-    pub index: LoweredIndex,
-
-    /// The index of the imported host function that is being lowered.
-    ///
-    /// It's guaranteed that this `RuntimeImportIndex` points to a function.
-    pub import: RuntimeImportIndex,
-
-    /// The core wasm signature of the function that's being created.
-    pub canonical_abi: SignatureIndex,
-
-    /// The canonical ABI options used when lowering this function specified in
-    /// the original component.
-    pub options: CanonicalOptions,
-}
-
-impl LowerImport {
-    /// Get the symbol name for this lowered import.
-    pub fn symbol_name(&self) -> String {
-        format!("wasm_component_lowering_{}", self.index.as_u32())
-    }
-}
-
-/// Description of what to initialize when a `GlobalInitializer::AlwaysTrap` is
-/// encountered.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AlwaysTrap {
-    /// The index of the function that is being initialized in the
-    /// `VMComponentContext`.
-    pub index: RuntimeAlwaysTrapIndex,
-    /// The core wasm signature of the function that's inserted.
-    pub canonical_abi: SignatureIndex,
-}
-
-impl AlwaysTrap {
-    /// Get the symbol name for this always-trap function.
-    pub fn symbol_name(&self) -> String {
-        format!("wasm_component_always_trap_{}", self.index.as_u32())
-    }
-}
-
 /// Definition of a core wasm item and where it can come from within a
 /// component.
 ///
@@ -328,20 +318,12 @@ pub enum CoreDef {
     /// This item refers to an export of a previously instantiated core wasm
     /// instance.
     Export(CoreExport<EntityIndex>),
-    /// This item is a core wasm function with the index specified here. Note
-    /// that this `LoweredIndex` corresponds to the nth
-    /// `GlobalInitializer::LowerImport` instruction.
-    Lowered(LoweredIndex),
-    /// This is used to represent a degenerate case of where a `canon lift`'d
-    /// function is immediately `canon lower`'d in the same instance. Such a
-    /// function always traps at runtime.
-    AlwaysTrap(RuntimeAlwaysTrapIndex),
     /// This is a reference to a wasm global which represents the
     /// runtime-managed flags for a wasm instance.
     InstanceFlags(RuntimeComponentInstanceIndex),
-    /// This refers to a cranelift-generated trampoline which calls to a
-    /// host-defined transcoding function.
-    Transcoder(RuntimeTranscoderIndex),
+    /// This is a reference to a Cranelift-generated trampoline which is
+    /// described in the `trampolines` array.
+    Trampoline(TrampolineIndex),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -418,10 +400,9 @@ pub enum Export {
         options: CanonicalOptions,
     },
     /// A module defined within this component is exported.
-    ///
-    /// The module index here indexes a module recorded with
-    /// `GlobalInitializer::SaveModule` above.
-    Module(RuntimeModuleIndex),
+    ModuleStatic(StaticModuleIndex),
+    /// A module imported into this component is exported.
+    ModuleImport(RuntimeImportIndex),
     /// A nested instance is being exported which has recursively defined
     /// `Export` items.
     Instance(IndexMap<String, Export>),
@@ -463,52 +444,140 @@ pub enum StringEncoding {
     CompactUtf16,
 }
 
-/// Information about a string transcoding function required by an adapter
-/// module.
+pub use crate::fact::{FixedEncoding, Transcode};
+
+/// Description of a new resource declared in a `GlobalInitializer::Resource`
+/// variant.
 ///
-/// A transcoder is used when strings are passed between adapter modules,
-/// optionally changing string encodings at the same time. The transcoder is
-/// implemented in a few different layers:
-///
-/// * Each generated adapter module has some glue around invoking the transcoder
-///   represented by this item. This involves bounds-checks and handling
-///   `realloc` for example.
-/// * Each transcoder gets a cranelift-generated trampoline which has the
-///   appropriate signature for the adapter module in question. Existence of
-///   this initializer indicates that this should be compiled by Cranelift.
-/// * The cranelift-generated trampoline will invoke a "transcoder libcall"
-///   which is implemented natively in Rust that has a signature independent of
-///   memory64 configuration options for example.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
-pub struct Transcoder {
-    /// The index of the transcoder being defined and initialized.
-    ///
-    /// This indicates which `VMFuncRef` slot is written to in a
-    /// `VMComponentContext`.
-    pub index: RuntimeTranscoderIndex,
-    /// The transcoding operation being performed.
-    pub op: Transcode,
-    /// The linear memory that the string is being read from.
-    pub from: RuntimeMemoryIndex,
-    /// Whether or not the source linear memory is 64-bit or not.
-    pub from64: bool,
-    /// The linear memory that the string is being written to.
-    pub to: RuntimeMemoryIndex,
-    /// Whether or not the destination linear memory is 64-bit or not.
-    pub to64: bool,
-    /// The wasm signature of the cranelift-generated trampoline.
-    pub signature: SignatureIndex,
+/// This will have the effect of initializing runtime state for this resource,
+/// namely the destructor is fetched and stored.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Resource {
+    /// The local index of the resource being defined.
+    pub index: DefinedResourceIndex,
+    /// Core wasm representation of this resource.
+    pub rep: WasmType,
+    /// Optionally-specified destructor and where it comes from.
+    pub dtor: Option<CoreDef>,
+    /// Which component instance this resource logically belongs to.
+    pub instance: RuntimeComponentInstanceIndex,
 }
 
-impl Transcoder {
-    /// Get the symbol name for this transcoder function.
+/// A list of all possible trampolines that may be required to compile a
+/// component completely.
+///
+/// These trampolines are used often as core wasm definitions and require
+/// Cranelift support to generate these functions. Each trampoline serves a
+/// different purpose for implementing bits and pieces of the component model.
+///
+/// All trampolines have a core wasm function signature associated with them
+/// which is stored in the `Component::trampolines` array.
+///
+/// Note that this type does not implement `Serialize` or `Deserialize` and
+/// that's intentional as this isn't stored in the final compilation artifact.
+pub enum Trampoline {
+    /// Description of a lowered import used in conjunction with
+    /// `GlobalInitializer::LowerImport`.
+    LowerImport {
+        /// The runtime lowering state that this trampoline will access.
+        index: LoweredIndex,
+
+        /// The type of the function that is being lowered, as perceived by the
+        /// component doing the lowering.
+        lower_ty: TypeFuncIndex,
+
+        /// The canonical ABI options used when lowering this function specified
+        /// in the original component.
+        options: CanonicalOptions,
+    },
+
+    /// Information about a string transcoding function required by an adapter
+    /// module.
+    ///
+    /// A transcoder is used when strings are passed between adapter modules,
+    /// optionally changing string encodings at the same time. The transcoder is
+    /// implemented in a few different layers:
+    ///
+    /// * Each generated adapter module has some glue around invoking the
+    ///   transcoder represented by this item. This involves bounds-checks and
+    ///   handling `realloc` for example.
+    /// * Each transcoder gets a cranelift-generated trampoline which has the
+    ///   appropriate signature for the adapter module in question. Existence of
+    ///   this initializer indicates that this should be compiled by Cranelift.
+    /// * The cranelift-generated trampoline will invoke a "transcoder libcall"
+    ///   which is implemented natively in Rust that has a signature independent
+    ///   of memory64 configuration options for example.
+    Transcoder {
+        /// The transcoding operation being performed.
+        op: Transcode,
+        /// The linear memory that the string is being read from.
+        from: RuntimeMemoryIndex,
+        /// Whether or not the source linear memory is 64-bit or not.
+        from64: bool,
+        /// The linear memory that the string is being written to.
+        to: RuntimeMemoryIndex,
+        /// Whether or not the destination linear memory is 64-bit or not.
+        to64: bool,
+    },
+
+    /// A small adapter which simply traps, used for degenerate lift/lower
+    /// combinations.
+    AlwaysTrap,
+
+    /// A `resource.new` intrinsic which will inject a new resource into the
+    /// table specified.
+    ResourceNew(TypeResourceTableIndex),
+
+    /// Same as `ResourceNew`, but for the `resource.rep` intrinsic.
+    ResourceRep(TypeResourceTableIndex),
+
+    /// Same as `ResourceNew`, but for the `resource.drop` intrinsic.
+    ResourceDrop(TypeResourceTableIndex),
+
+    /// An intrinsic used by FACT-generated modules which will transfer an owned
+    /// resource from one table to another. Used in component-to-component
+    /// adapter trampolines.
+    ResourceTransferOwn,
+
+    /// Same as `ResourceTransferOwn` but for borrows.
+    ResourceTransferBorrow,
+
+    /// An intrinsic used by FACT-generated modules which indicates that a call
+    /// is being entered and resource-related metadata needs to be configured.
+    ///
+    /// Note that this is currently only invoked when borrowed resources are
+    /// detected, otherwise this is "optimized out".
+    ResourceEnterCall,
+
+    /// Same as `ResourceEnterCall` except for when exiting a call.
+    ResourceExitCall,
+}
+
+impl Trampoline {
+    /// Returns the name to use for the symbol of this trampoline in the final
+    /// compiled artifact
     pub fn symbol_name(&self) -> String {
-        let index = self.index.as_u32();
-        let op = self.op.symbol_fragment();
-        let from = if self.from64 { "64" } else { "32" };
-        let to = if self.to64 { "64" } else { "32" };
-        format!("wasm_component_transcoder_{index}_{op}_memory{from}_to_memory{to}")
+        use Trampoline::*;
+        match self {
+            LowerImport { index, .. } => {
+                format!("component-lower-import[{}]", index.as_u32())
+            }
+            Transcoder {
+                op, from64, to64, ..
+            } => {
+                let op = op.symbol_fragment();
+                let from = if *from64 { "64" } else { "32" };
+                let to = if *to64 { "64" } else { "32" };
+                format!("component-transcode-{op}-m{from}-m{to}")
+            }
+            AlwaysTrap => format!("component-always-trap"),
+            ResourceNew(i) => format!("component-resource-new[{}]", i.as_u32()),
+            ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
+            ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
+            ResourceTransferOwn => format!("component-resource-transfer-own"),
+            ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
+            ResourceEnterCall => format!("component-resource-enter-call"),
+            ResourceExitCall => format!("component-resource-exit-call"),
+        }
     }
 }
-
-pub use crate::fact::{FixedEncoding, Transcode};

@@ -163,7 +163,7 @@ notes = "I am an author of this crate"
 [[wildcard-audits.regalloc2]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
-user-id = 3726
+user-id = 3726 # Chris Fallin (cfallin)
 start = "2021-12-03"
 end = "2024-05-02"
 notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-develop it with Cranelift/Wasmtime, with the same code-review, testing/fuzzing, and security standards."
@@ -171,7 +171,7 @@ notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-deve
 [[wildcard-audits.regalloc2]]
 who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
-user-id = 187138 # Trevor Elliott (elliottt)
+user-id = 187138
 start = "2022-11-29"
 end = "2024-05-02"
 notes = """
@@ -670,6 +670,18 @@ This is a minor update for addr2line which looks to mainly update its
 dependencies and refactor existing code to expose more functionality and such.
 """
 
+[[audits.addr2line]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.19.0 -> 0.20.0"
+notes = "This version brings support for split-dwarf which while it uses the filesystem is always done at the behest of the caller, so everything is as expected for this update."
+
+[[audits.adler]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.2"
+notes = "This is a small crate which forbids unsafe code and is a straightforward implementation of the adler hashing algorithm."
+
 [[audits.ahash]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -779,6 +791,15 @@ notes = """
 This version adds unsafe impls of traits from the bytemuck crate when built
 with that library enabled, but I believe the impls satisfy the documented
 safety requirements for bytemuck. The other changes are minor.
+"""
+
+[[audits.bitflags]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.3.2 -> 2.3.3"
+notes = """
+Nothing outside the realm of what one would expect from a bitflags generator,
+all as expected.
 """
 
 [[audits.block-buffer]]
@@ -1050,6 +1071,18 @@ spin lock with a lock from the standard library. Minor bits of `unsafe` code
 are modified but that's expected given the nature of this crate.
 """
 
+[[audits.crossbeam-epoch]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.9 -> 0.9.15"
+notes = """
+In general crossbeam has quite a lot of unsafe code as it's a primitive tool for
+concurrency but this update isn't adding any extra unsafe than there already
+was and all the updates here are related to odds-and-ends maintenance. In
+other words everything is as one would expect from a minor update for this
+crate.
+"""
+
 [[audits.crypto-common]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
@@ -1066,6 +1099,12 @@ who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 version = "1.1.4"
 notes = "I am the author of this crate."
+
+[[audits.derive_arbitrary]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.3.0 -> 1.3.1"
+notes = "This updates `syn` to 2.x.x, nothing else in this diff."
 
 [[audits.digest]]
 who = "Benjamin Bouvier <public@benj.me>"
@@ -1232,6 +1271,12 @@ This is a standard update to gimli for more DWARF support for more platforms,
 more features, etc. Some minor `unsafe` code was added that does not appear
 incorrect. Otherwise looks like someone probably ran clippy and/or rustfmt.
 """
+
+[[audits.gimli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.27.0 -> 0.27.3"
+notes = "More support for more DWARF, nothing major in this update. Some small refactorings and updates to publication of the package but otherwise everything's in order."
 
 [[audits.glob]]
 who = "Jamey Sharp <jsharp@fastly.com>"
@@ -1402,6 +1447,12 @@ ensure that the ABI it describes matches the ABI described by the C header
 files in the correspond to match.
 """
 
+[[audits.libc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.146 -> 0.2.147"
+notes = "Only new type definitions and updating others for some platforms, no major changes"
+
 [[audits.libfuzzer-sys]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-run"
@@ -1481,6 +1532,12 @@ criteria = "safe-to-deploy"
 delta = "0.7.1 -> 0.8.0"
 notes = "This was a small update to the crate which has to do with Rust language features and compiler versions, no substantial changes."
 
+[[audits.memoffset]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.0"
+notes = "No major changes in the crate, mostly updates to use new nightly Rust features."
+
 [[audits.memory_units]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -1492,6 +1549,20 @@ contains no significant changes.
 
 [[audits.miniz_oxide]]
 who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.7.1"
+notes = """
+This crate is a Rust implementation of zlib compression/decompression and has
+been used by default by the Rust standard library for quite some time. It's also
+a default dependency of the popular `backtrace` crate for decompressing debug
+information. This crate forbids unsafe code and does not otherwise access system
+resources. It's originally a port of the `miniz.c` library as well, and given
+its own longevity should be relatively hardened against some of the more common
+compression-related issues.
+"""
+
+[[audits.miniz_oxide]]
+who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
 delta = "0.5.1 -> 0.5.3"
 notes = """
@@ -1499,6 +1570,12 @@ This looks to be a minor update to the crate to remove some `unsafe` code,
 update Rust stylistic conventions, and perhaps some clippy lints. No major
 changes.
 """
+
+[[audits.mio]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.6 -> 0.8.8"
+notes = "Mostly OS portability updates along with some minor bugfixes."
 
 [[audits.native-tls]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -1519,6 +1596,12 @@ notes = """
 No unsafe blocks or I/O in the diff. The only changes clearly implement what
 the changelog says is new in these versions.
 """
+
+[[audits.object]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.30.3 -> 0.31.1"
+notes = "A large-ish update to the crate but nothing out of the ordering. Support for new formats like xcoff, new constants, minor refactorings, etc. Nothing out of the ordinary."
 
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
@@ -1602,10 +1685,25 @@ criteria = "safe-to-deploy"
 version = "0.3.25"
 notes = "This crate shells out to the pkg-config executable, but it appears to sanitize inputs reasonably."
 
+[[audits.pretty_env_logger]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.5.0"
+notes = "This is a minor update which bumps the `env_logger` dependency and has other formatting, no major changes."
+
 [[audits.proc-macro2]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.51 -> 1.0.57"
+
+[[audits.proc-macro2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.59 -> 1.0.63"
+notes = """
+This is a routine update for new nightly features and new syntax popping up on
+nightly, nothing out of the ordinary.
+"""
 
 [[audits.pulldown-cmark]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1615,6 +1713,18 @@ notes = """
 This crate has `unsafe` blocks and they're all related to SIMD-acceleration and
 are otherwise not doing other `unsafe` operations. Additionally the crate does
 not do anything other than markdown rendering as is expected.
+"""
+
+[[audits.pulldown-cmark]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.3"
+notes = """
+This is a large change to the `pulldown-cmark` crate but it tightens
+restrictions on `unsafe` code to forbid it in non-SIMD mode and additionally
+many changes look to be related to refactoring, improving, and restructuring.
+This crate is not fundamentally different from before, which was trusted, but
+looks to be receiving new assistance for maintainership as well.
 """
 
 [[audits.quote]]
@@ -1751,6 +1861,12 @@ few minor issues related to Stacked Borrows and running in MIRI. No fundamental
 change to any preexisting unsafe code is happening here.
 """
 
+[[audits.socket2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.7 -> 0.4.9"
+notes = "Minor OS compat updates but otherwise nothing major here."
+
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -1813,6 +1929,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "3.3.0 -> 3.5.0"
 
+[[audits.tempfile]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "3.5.0 -> 3.6.0"
+notes = "Dependency updates and new optimized trait implementations, but otherwise everything looks normal."
+
 [[audits.test-log]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1848,6 +1970,12 @@ issue plus some reorganization around lazy initialization. Altogether nothing
 amiss here.
 """
 
+[[audits.tokio-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.7.0 -> 2.1.0"
+notes = "A number of updates to parsed syntax and such but nothing unexpected and entirely what one would expect a Rust procedural macro to do."
+
 [[audits.tokio-native-tls]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1865,6 +1993,41 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.7.4"
 notes = "Alex Crichton audited the safety of src/sync/reusable_box.rs, I audited the remainder of the crate."
+
+[[audits.tracing]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.34 -> 0.1.37"
+notes = """
+A routine set of updates for the tracing crate this includes minor refactorings,
+addition of benchmarks, some test updates, but overall nothing out of the
+ordinary.
+"""
+
+[[audits.tracing-attributes]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.21 -> 0.1.26"
+notes = "This range notably updated `syn` to 2.x.x and otherwise adds a few features here and there but nothing out of the ordering for a procedural macro."
+
+[[audits.tracing-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.28 -> 0.1.31"
+notes = """
+This is a relatively minor set of releases with minor refactorings and bug
+fixes. Nothing fundamental was added in these changes.
+"""
+
+[[audits.tracing-subscriber]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.3.11 -> 0.3.17"
+notes = """
+Largely documentation changes in this update but there was additionally a crop
+of other miscellaneous updates to APIs all covered in the changelog without,
+business as usual for minor updates in this crate.
+"""
 
 [[audits.try-lock]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -2648,6 +2811,384 @@ criteria = "safe-to-deploy"
 version = "0.6.4"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[trusted.aho-corasick]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-03-28"
+end = "2024-07-15"
+
+[[trusted.anstream]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2023-03-16"
+end = "2024-07-14"
+
+[[trusted.anstyle]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2022-05-18"
+end = "2024-07-14"
+
+[[trusted.anstyle-parse]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2023-03-08"
+end = "2024-07-14"
+
+[[trusted.anstyle-query]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2023-04-13"
+end = "2024-07-14"
+
+[[trusted.anstyle-wincon]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2023-03-08"
+end = "2024-07-14"
+
+[[trusted.async-trait]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-07-23"
+end = "2024-07-06"
+
+[[trusted.backtrace]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2023-06-29"
+end = "2024-07-14"
+
+[[trusted.bstr]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-04-02"
+end = "2024-07-15"
+
+[[trusted.byteorder]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-06-09"
+end = "2024-07-15"
+
+[[trusted.cap-fs-ext]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-12-11"
+end = "2024-07-14"
+
+[[trusted.cap-primitives]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-08-07"
+end = "2024-07-14"
+
+[[trusted.cap-rand]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-09-24"
+end = "2024-07-14"
+
+[[trusted.cap-std]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-06-25"
+end = "2024-07-14"
+
+[[trusted.cap-tempfile]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-08-07"
+end = "2024-07-14"
+
+[[trusted.cap-time-ext]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-09-21"
+end = "2024-07-14"
+
+[[trusted.clap]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2021-12-08"
+end = "2024-07-06"
+
+[[trusted.clap_builder]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2023-03-28"
+end = "2024-07-14"
+
+[[trusted.clap_derive]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2021-12-08"
+end = "2024-07-06"
+
+[[trusted.clap_lex]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2022-04-15"
+end = "2024-07-06"
+
+[[trusted.equivalent]]
+criteria = "safe-to-deploy"
+user-id = 539 # Josh Stone (cuviper)
+start = "2023-02-05"
+end = "2024-07-11"
+
+[[trusted.fd-lock]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2022-01-21"
+end = "2024-07-14"
+
+[[trusted.filecheck]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-03-17"
+end = "2024-07-14"
+
+[[trusted.fs-set-times]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-09-15"
+end = "2024-07-14"
+
+[[trusted.hashbrown]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2019-04-02"
+end = "2024-07-11"
+
+[[trusted.indexmap]]
+criteria = "safe-to-deploy"
+user-id = 539 # Josh Stone (cuviper)
+start = "2020-01-15"
+end = "2024-07-06"
+
+[[trusted.io-extras]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-11-09"
+end = "2024-07-14"
+
+[[trusted.io-lifetimes]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-06-12"
+end = "2024-07-14"
+
+[[trusted.is-terminal]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2022-01-22"
+end = "2024-07-14"
+
+[[trusted.itoa]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-05-02"
+end = "2024-07-06"
+
+[[trusted.libc]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2021-01-27"
+end = "2024-07-06"
+
+[[trusted.libm]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2022-02-06"
+end = "2024-07-06"
+
+[[trusted.linux-raw-sys]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-06-12"
+end = "2024-07-14"
+
+[[trusted.lock_api]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2019-05-04"
+end = "2024-07-06"
+
+[[trusted.memchr]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-07-07"
+end = "2024-07-15"
+
+[[trusted.parking_lot]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2019-05-04"
+end = "2024-07-06"
+
+[[trusted.parking_lot_core]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2019-05-04"
+end = "2024-07-06"
+
+[[trusted.paste]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-03-19"
+end = "2024-07-06"
+
+[[trusted.quote]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-04-09"
+end = "2024-07-11"
+
+[[trusted.regex]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-02-27"
+end = "2024-07-15"
+
+[[trusted.regex-automata]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-02-25"
+end = "2024-07-15"
+
+[[trusted.regex-syntax]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-03-30"
+end = "2024-07-15"
+
+[[trusted.rustix]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-10-29"
+end = "2024-07-14"
+
+[[trusted.ryu]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-05-02"
+end = "2024-07-06"
+
+[[trusted.same-file]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-07-16"
+end = "2024-07-15"
+
+[[trusted.scopeguard]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2020-02-16"
+end = "2024-07-06"
+
+[[trusted.serde]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-03-01"
+end = "2024-07-06"
+
+[[trusted.serde_derive]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-03-01"
+end = "2024-07-06"
+
+[[trusted.serde_json]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-02-28"
+end = "2024-07-06"
+
+[[trusted.syn]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-03-01"
+end = "2024-07-06"
+
+[[trusted.system-interface]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-10-27"
+end = "2024-07-14"
+
+[[trusted.target-lexicon]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2019-03-06"
+end = "2024-07-14"
+
+[[trusted.termcolor]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-06-04"
+end = "2024-07-15"
+
+[[trusted.thiserror]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-10-09"
+end = "2024-07-06"
+
+[[trusted.thiserror-impl]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-10-09"
+end = "2024-07-06"
+
+[[trusted.toml]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-05-16"
+end = "2024-07-06"
+
+[[trusted.walkdir]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-06-09"
+end = "2024-07-15"
+
+[[trusted.wasm-bindgen]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-03-04"
+end = "2024-07-14"
+
+[[trusted.wasm-bindgen-backend]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-03-04"
+end = "2024-07-14"
+
+[[trusted.wasm-bindgen-macro]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-03-04"
+end = "2024-07-14"
+
+[[trusted.wasm-bindgen-macro-support]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-03-04"
+end = "2024-07-14"
+
+[[trusted.wasm-bindgen-shared]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-03-04"
+end = "2024-07-14"
+
+[[trusted.winapi-util]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2020-01-11"
+end = "2024-07-15"
+
 [[trusted.windows-sys]]
 criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
@@ -2701,3 +3242,9 @@ criteria = "safe-to-deploy"
 user-id = 64539 # Kenny Kerr (kennykerr)
 start = "2021-10-27"
 end = "2024-06-17"
+
+[[trusted.winx]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2019-08-20"
+end = "2024-07-14"

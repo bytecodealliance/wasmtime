@@ -18,7 +18,7 @@ doctest = false
 [dependencies]
 wiggle-generate = { workspace = true }
 quote = "1.0"
-syn = { version = "1.0", features = ["full"] }
+syn = { workspace = true, features = ["full"] }
 proc-macro2 = "1.0"
 
 [dev-dependencies]

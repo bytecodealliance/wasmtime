@@ -22,7 +22,7 @@ pub struct WastCommand {
     common: CommonOptions,
 
     /// The path of the WebAssembly test script to run
-    #[clap(required = true, value_name = "SCRIPT_FILE", parse(from_os_str))]
+    #[clap(required = true, value_name = "SCRIPT_FILE")]
     scripts: Vec<PathBuf>,
 }
 

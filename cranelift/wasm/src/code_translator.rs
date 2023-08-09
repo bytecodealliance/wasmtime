@@ -626,7 +626,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             );
 
             let call = environ.translate_call(
-                builder.cursor(),
+                builder,
                 FuncIndex::from_u32(*function_index),
                 fref,
                 args,
@@ -675,6 +675,79 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             );
             state.popn(num_args);
             state.pushn(inst_results);
+        }
+        /******************************* Tail Calls ******************************************
+         * The tail call instructions pop their arguments from the stack and
+         * then permanently transfer control to their callee. The indirect
+         * version requires environment support (while the direct version can
+         * optionally be hooked but doesn't require it) it interacts with the
+         * VM's runtime state via tables.
+         ************************************************************************************/
+        Operator::ReturnCall { function_index } => {
+            let (fref, num_args) = state.get_direct_func(builder.func, *function_index, environ)?;
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let args = state.peekn_mut(num_args);
+            bitcast_wasm_params(
+                environ,
+                builder.func.dfg.ext_funcs[fref].signature,
+                args,
+                builder,
+            );
+
+            environ.translate_return_call(
+                builder,
+                FuncIndex::from_u32(*function_index),
+                fref,
+                args,
+            )?;
+
+            state.popn(num_args);
+            state.reachable = false;
+        }
+        Operator::ReturnCallIndirect {
+            type_index,
+            table_index,
+        } => {
+            // `type_index` is the index of the function's signature and
+            // `table_index` is the index of the table to search the function
+            // in.
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
+            let table = state.get_or_create_table(builder.func, *table_index, environ)?;
+            let callee = state.pop1();
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let args = state.peekn_mut(num_args);
+            bitcast_wasm_params(environ, sigref, args, builder);
+
+            environ.translate_return_call_indirect(
+                builder,
+                TableIndex::from_u32(*table_index),
+                table,
+                TypeIndex::from_u32(*type_index),
+                sigref,
+                callee,
+                state.peekn(num_args),
+            )?;
+
+            state.popn(num_args);
+            state.reachable = false;
+        }
+        Operator::ReturnCallRef { type_index } => {
+            // Get function signature
+            // `index` is the index of the function's signature and `table_index` is the index of
+            // the table to search the function in.
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
+            let callee = state.pop1();
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let args = state.peekn_mut(num_args);
+            bitcast_wasm_params(environ, sigref, args, builder);
+
+            environ.translate_return_call_ref(builder, sigref, callee, state.peekn(num_args))?;
+
+            state.popn(num_args);
+            state.reachable = false;
         }
         /******************************* Memory management ***********************************
          * Memory management is handled by environment. It is usually translated into calls to
@@ -2161,9 +2234,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let b_high = builder.ins().uwiden_high(b);
             state.push1(builder.ins().imul(a_high, b_high));
         }
-        Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
-            return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));
-        }
         Operator::MemoryDiscard { .. } => {
             return Err(wasm_unsupported!(
                 "proposed memory-control operator {:?}",
@@ -2344,12 +2414,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().iadd(dot32, c));
         }
 
-        Operator::ReturnCallRef { type_index: _ } => {
-            return Err(wasm_unsupported!(
-                "proposed tail-call operator for function references {:?}",
-                op
-            ));
-        }
         Operator::BrOnNull { relative_depth } => {
             let r = state.pop1();
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);

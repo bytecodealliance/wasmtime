@@ -3,7 +3,7 @@ use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::preview2::{
-    pipe::WritePipe,
+    pipe::MemoryOutputPipe,
     preview1::{add_to_linker, WasiPreview1Adapter, WasiPreview1View},
     DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
@@ -30,8 +30,8 @@ pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
 
 async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     let workspace = prepare_workspace(name)?;
-    let stdout = WritePipe::new_in_memory();
-    let stderr = WritePipe::new_in_memory();
+    let stdout = MemoryOutputPipe::new();
+    let stderr = MemoryOutputPipe::new();
     let r = {
         let mut linker = Linker::new(&ENGINE);
         add_to_linker(&mut linker)?;
@@ -41,19 +41,17 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         let mut builder = WasiCtxBuilder::new();
 
         if inherit_stdio {
-            builder = builder.inherit_stdio();
+            builder.inherit_stdio();
         } else {
-            builder = builder
-                .set_stdout(stdout.clone())
-                .set_stderr(stderr.clone());
+            builder.stdout(stdout.clone()).stderr(stderr.clone());
         }
-        builder = builder.set_args(&[name, "."]);
+        builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);
         let preopen_dir =
             cap_std::fs::Dir::open_ambient_dir(workspace.path(), cap_std::ambient_authority())?;
-        builder = builder.push_preopened_dir(preopen_dir, DirPerms::all(), FilePerms::all(), ".");
+        builder.preopened_dir(preopen_dir, DirPerms::all(), FilePerms::all(), ".");
         for (var, val) in test_programs::wasi_tests_environment() {
-            builder = builder.push_env(var, val);
+            builder.env(var, val);
         }
 
         let mut table = Table::new();
@@ -102,17 +100,11 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     };
 
     r.map_err(move |trap: anyhow::Error| {
-        let stdout = stdout
-            .try_into_inner()
-            .expect("sole ref to stdout")
-            .into_inner();
+        let stdout = stdout.try_into_inner().expect("sole ref to stdout");
         if !stdout.is_empty() {
             println!("guest stdout:\n{}\n===", String::from_utf8_lossy(&stdout));
         }
-        let stderr = stderr
-            .try_into_inner()
-            .expect("sole ref to stderr")
-            .into_inner();
+        let stderr = stderr.try_into_inner().expect("sole ref to stderr");
         if !stderr.is_empty() {
             println!("guest stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
         }
@@ -129,124 +121,126 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
 // tests which fail.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn big_random_buf() {
-    run("big_random_buf", true).await.unwrap()
+    run("big_random_buf", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn clock_time_get() {
-    run("clock_time_get", true).await.unwrap()
+    run("clock_time_get", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn close_preopen() {
-    run("close_preopen", true).await.unwrap()
+    run("close_preopen", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn dangling_fd() {
-    run("dangling_fd", true).await.unwrap()
+    run("dangling_fd", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn dangling_symlink() {
-    run("dangling_symlink", true).await.unwrap()
+    run("dangling_symlink", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn directory_seek() {
-    run("directory_seek", true).await.unwrap()
+    run("directory_seek", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn dir_fd_op_failures() {
-    run("dir_fd_op_failures", true).await.unwrap()
+    run("dir_fd_op_failures", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn fd_advise() {
-    run("fd_advise", true).await.unwrap()
+    run("fd_advise", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn fd_filestat_get() {
-    run("fd_filestat_get", true).await.unwrap()
+    run("fd_filestat_get", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn fd_filestat_set() {
-    run("fd_filestat_set", true).await.unwrap()
+    run("fd_filestat_set", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn fd_flags_set() {
-    run("fd_flags_set", true).await.unwrap()
+    run("fd_flags_set", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn fd_readdir() {
-    run("fd_readdir", true).await.unwrap()
+    run("fd_readdir", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_allocate() {
-    run("file_allocate", true).await.unwrap()
+    run("file_allocate", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_pread_pwrite() {
-    run("file_pread_pwrite", true).await.unwrap()
+    run("file_pread_pwrite", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_seek_tell() {
-    run("file_seek_tell", true).await.unwrap()
+    run("file_seek_tell", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_truncation() {
-    run("file_truncation", true).await.unwrap()
+    run("file_truncation", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_unbuffered_write() {
-    run("file_unbuffered_write", true).await.unwrap()
+    run("file_unbuffered_write", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 #[cfg_attr(windows, should_panic)]
 async fn interesting_paths() {
-    run("interesting_paths", true).await.unwrap()
+    run("interesting_paths", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn isatty() {
-    run("isatty", true).await.unwrap()
+    run("isatty", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn nofollow_errors() {
-    run("nofollow_errors", true).await.unwrap()
+    run("nofollow_errors", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn overwrite_preopen() {
-    run("overwrite_preopen", true).await.unwrap()
+    run("overwrite_preopen", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_exists() {
-    run("path_exists", true).await.unwrap()
+    run("path_exists", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_filestat() {
-    run("path_filestat", true).await.unwrap()
+    run("path_filestat", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_link() {
-    run("path_link", true).await.unwrap()
+    run("path_link", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_open_create_existing() {
-    run("path_open_create_existing", true).await.unwrap()
+    run("path_open_create_existing", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_open_read_write() {
-    run("path_open_read_write", true).await.unwrap()
+    run("path_open_read_write", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_open_dirfd_not_dir() {
-    run("path_open_dirfd_not_dir", true).await.unwrap()
+    run("path_open_dirfd_not_dir", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_open_missing() {
-    run("path_open_missing", true).await.unwrap()
+    run("path_open_missing", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_open_nonblock() {
-    run("path_open_nonblock", true).await.unwrap()
+    run("path_open_nonblock", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_rename_dir_trailing_slashes() {
-    run("path_rename_dir_trailing_slashes", true).await.unwrap()
+    run("path_rename_dir_trailing_slashes", false)
+        .await
+        .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 #[should_panic]
@@ -257,11 +251,11 @@ async fn path_rename_file_trailing_slashes() {
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_rename() {
-    run("path_rename", true).await.unwrap()
+    run("path_rename", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_symlink_trailing_slashes() {
-    run("path_symlink_trailing_slashes", true).await.unwrap()
+    run("path_symlink_trailing_slashes", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 #[should_panic]
@@ -276,7 +270,7 @@ async fn poll_oneoff_stdio() {
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn readlink() {
-    run("readlink", true).await.unwrap()
+    run("readlink", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 #[should_panic]
@@ -287,37 +281,37 @@ async fn remove_directory_trailing_slashes() {
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn remove_nonempty_directory() {
-    run("remove_nonempty_directory", true).await.unwrap()
+    run("remove_nonempty_directory", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn renumber() {
-    run("renumber", true).await.unwrap()
+    run("renumber", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn sched_yield() {
-    run("sched_yield", true).await.unwrap()
+    run("sched_yield", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdio() {
-    run("stdio", true).await.unwrap()
+    run("stdio", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn symlink_create() {
-    run("symlink_create", true).await.unwrap()
+    run("symlink_create", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn symlink_filestat() {
-    run("symlink_filestat", true).await.unwrap()
+    run("symlink_filestat", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn symlink_loop() {
-    run("symlink_loop", true).await.unwrap()
+    run("symlink_loop", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn unlink_file_trailing_slashes() {
-    run("unlink_file_trailing_slashes", true).await.unwrap()
+    run("unlink_file_trailing_slashes", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_open_preopen() {
-    run("path_open_preopen", true).await.unwrap()
+    run("path_open_preopen", false).await.unwrap()
 }

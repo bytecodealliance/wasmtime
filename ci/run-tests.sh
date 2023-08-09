@@ -6,7 +6,6 @@ cargo test \
     --features wasi-http \
     --workspace \
     --exclude 'wasmtime-wasi-*' \
-    --exclude wasi-crypto \
     --exclude wasi-tests \
     --exclude command-tests \
     --exclude reactor-tests \

@@ -1046,19 +1046,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_return_call(
-        _callee: CallDest,
-        _new_stack_arg_size: u32,
-        _old_stack_arg_size: u32,
-        _ret_addr: Option<Reg>,
-        _fp: Reg,
-        _tmp: Writable<Reg>,
-        _tmp2: Writable<Reg>,
-        _uses: abi::CallArgList,
-    ) -> SmallVec<[Self::I; 2]> {
-        todo!();
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -1171,6 +1158,43 @@ impl ABIMachineSpec for AArch64MachineDeps {
             || stack_args_size > 0
             || num_clobbered_callee_saves > 0
             || fixed_frame_storage_size > 0
+    }
+}
+
+impl AArch64CallSite {
+    pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
+        let (new_stack_arg_size, old_stack_arg_size) =
+            self.emit_temporary_tail_call_frame(ctx, args);
+
+        let dest = self.dest().clone();
+        let opcode = self.opcode();
+        let uses = self.take_uses();
+        let info = Box::new(ReturnCallInfo {
+            uses,
+            opcode,
+            old_stack_arg_size,
+            new_stack_arg_size,
+        });
+
+        match dest {
+            CallDest::ExtName(callee, RelocDistance::Near) => {
+                let callee = Box::new(callee);
+                ctx.emit(Inst::ReturnCall { callee, info });
+            }
+            CallDest::ExtName(name, RelocDistance::Far) => {
+                let callee = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                ctx.emit(Inst::LoadExtName {
+                    rd: callee,
+                    name: Box::new(name),
+                    offset: 0,
+                });
+                ctx.emit(Inst::ReturnCallInd {
+                    callee: callee.to_reg(),
+                    info,
+                });
+            }
+            CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallInd { callee, info }),
+        }
     }
 }
 

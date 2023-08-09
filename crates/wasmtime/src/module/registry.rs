@@ -63,6 +63,14 @@ impl ModuleRegistry {
         Some((code.module(pc)?, offset))
     }
 
+    /// Gets an iterator over all modules in the registry.
+    pub fn all_modules(&self) -> impl Iterator<Item = &'_ Module> + '_ {
+        self.loaded_code
+            .values()
+            .flat_map(|(_, code)| code.modules.values())
+            .chain(self.modules_without_code.iter())
+    }
+
     /// Registers a new module with the registry.
     pub fn register_module(&mut self, module: &Module) {
         self.register(module.code_object(), Some(module))

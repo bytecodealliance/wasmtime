@@ -1,5 +1,6 @@
-use crate::code::CodeObject;
 use crate::{
+    code::CodeObject,
+    resources::ResourcesRequired,
     signatures::SignatureCollection,
     types::{ExportType, ExternType, ImportType},
     Engine,
@@ -235,9 +236,11 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
+        let file = file.as_ref();
         match Self::new(
             engine,
-            &fs::read(&file).with_context(|| "failed to read input file")?,
+            &fs::read(file)
+                .with_context(|| format!("failed to read input file: {}", file.display()))?,
         ) {
             Ok(m) => Ok(m),
             Err(e) => {
@@ -900,6 +903,75 @@ impl Module {
     /// Returns the [`Engine`] that this [`Module`] was compiled by.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
+    }
+
+    /// Returns a summary of the resources required to instantiate this
+    /// [`Module`].
+    ///
+    /// Potential uses of the returned information:
+    ///
+    /// * Determining whether your pooling allocator configuration supports
+    ///   instantiating this module.
+    ///
+    /// * Deciding how many of which `Module` you want to instantiate within a
+    ///   fixed amount of resources, e.g. determining whether to create 5
+    ///   instances of module X or 10 instances of module Y.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> wasmtime::Result<()> {
+    /// use wasmtime::{Config, Engine, Module};
+    ///
+    /// let mut config = Config::new();
+    /// config.wasm_multi_memory(true);
+    /// let engine = Engine::new(&config)?;
+    ///
+    /// let module = Module::new(&engine, r#"
+    ///     (module
+    ///         ;; Import a memory. Doesn't count towards required resources.
+    ///         (import "a" "b" (memory 10))
+    ///         ;; Define two local memories. These count towards the required
+    ///         ;; resources.
+    ///         (memory 1)
+    ///         (memory 6)
+    ///     )
+    /// "#)?;
+    ///
+    /// let resources = module.resources_required();
+    ///
+    /// // Instantiating the module will require allocating two memories, and
+    /// // the maximum initial memory size is six Wasm pages.
+    /// assert_eq!(resources.num_memories, 2);
+    /// assert_eq!(resources.max_initial_memory_size, Some(6));
+    ///
+    /// // The module doesn't need any tables.
+    /// assert_eq!(resources.num_tables, 0);
+    /// assert_eq!(resources.max_initial_table_size, None);
+    /// # Ok(()) }
+    /// ```
+    pub fn resources_required(&self) -> ResourcesRequired {
+        let em = self.env_module();
+        let num_memories = u32::try_from(em.memory_plans.len() - em.num_imported_memories).unwrap();
+        let max_initial_memory_size = em
+            .memory_plans
+            .values()
+            .skip(em.num_imported_memories)
+            .map(|plan| plan.memory.minimum)
+            .max();
+        let num_tables = u32::try_from(em.table_plans.len() - em.num_imported_tables).unwrap();
+        let max_initial_table_size = em
+            .table_plans
+            .values()
+            .skip(em.num_imported_tables)
+            .map(|plan| plan.table.minimum)
+            .max();
+        ResourcesRequired {
+            num_memories,
+            max_initial_memory_size,
+            num_tables,
+            max_initial_table_size,
+        }
     }
 
     /// Returns the `ModuleInner` cast as `ModuleRuntimeInfo` for use

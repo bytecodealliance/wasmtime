@@ -4,7 +4,7 @@ use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use std::ops::Deref;
 use wasmtime::component::*;
-use wasmtime::{Store, StoreContextMut, WasmBacktrace};
+use wasmtime::{Store, StoreContextMut, Trap, WasmBacktrace};
 
 #[test]
 fn can_compile() -> Result<()> {
@@ -164,6 +164,111 @@ fn simple() -> Result<()> {
         .get_func(&mut store, "call")
         .unwrap()
         .call(&mut store, &[], &mut [])?;
+    assert_eq!(store.data().as_ref().unwrap(), "hello world");
+
+    Ok(())
+}
+
+#[test]
+fn functions_in_instances() -> Result<()> {
+    let component = r#"
+        (component
+            (type $import-type (instance
+                (export "a" (func (param "a" string)))
+            ))
+            (import (interface "test:test/foo") (instance $import (type $import-type)))
+            (alias export $import "a" (func $log))
+
+            (core module $libc
+                (memory (export "memory") 1)
+
+                (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+                    unreachable)
+            )
+            (core instance $libc (instantiate $libc))
+            (core func $log_lower
+                (canon lower (func $log) (memory $libc "memory") (realloc (func $libc "realloc")))
+            )
+            (core module $m
+                (import "libc" "memory" (memory 1))
+                (import "host" "log" (func $log (param i32 i32)))
+
+                (func (export "call")
+                    i32.const 5
+                    i32.const 11
+                    call $log)
+
+                (data (i32.const 5) "hello world")
+            )
+            (core instance $i (instantiate $m
+                (with "libc" (instance $libc))
+                (with "host" (instance (export "log" (func $log_lower))))
+            ))
+            (func $call
+                (canon lift (core func $i "call"))
+            )
+            (component $c
+                (import "import-call" (func $f))
+                (export "call" (func $f))
+            )
+            (instance $export (instantiate $c
+                (with "import-call" (func $call))
+            ))
+            (export (interface "test:test/foo") (instance $export))
+        )
+    "#;
+
+    let engine = super::engine();
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, None);
+    assert!(store.data().is_none());
+
+    // First, test the static API
+
+    let mut linker = Linker::new(&engine);
+    linker.instance("test:test/foo")?.func_wrap(
+        "a",
+        |mut store: StoreContextMut<'_, Option<String>>, (arg,): (WasmStr,)| -> Result<_> {
+            let s = arg.to_str(&store)?.to_string();
+            assert!(store.data().is_none());
+            *store.data_mut() = Some(s);
+            Ok(())
+        },
+    )?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance
+        .exports(&mut store)
+        .instance("test:test/foo")
+        .unwrap()
+        .typed_func::<(), ()>("call")?;
+    func.call(&mut store, ())?;
+    assert_eq!(store.data().as_ref().unwrap(), "hello world");
+
+    // Next, test the dynamic API
+
+    *store.data_mut() = None;
+    let mut linker = Linker::new(&engine);
+    linker.instance("test:test/foo")?.func_new(
+        &component,
+        "a",
+        |mut store: StoreContextMut<'_, Option<String>>, args, _results| {
+            if let Val::String(s) = &args[0] {
+                assert!(store.data().is_none());
+                *store.data_mut() = Some(s.to_string());
+                Ok(())
+            } else {
+                panic!()
+            }
+        },
+    )?;
+    let instance = linker.instantiate(&mut store, &component)?;
+    let func = instance
+        .exports(&mut store)
+        .instance("test:test/foo")
+        .unwrap()
+        .func("call")
+        .unwrap();
+    func.call(&mut store, &[], &mut [])?;
     assert_eq!(store.data().as_ref().unwrap(), "hello world");
 
     Ok(())
@@ -341,8 +446,9 @@ fn attempt_to_reenter_during_host() -> Result<()> {
         |mut store: StoreContextMut<'_, StaticState>, _: ()| -> Result<()> {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, ()).unwrap_err();
-            assert!(
-                format!("{trap:?}").contains("cannot reenter component instance"),
+            assert_eq!(
+                trap.downcast_ref(),
+                Some(&Trap::CannotEnterComponent),
                 "bad trap: {trap:?}",
             );
             Ok(())
@@ -367,8 +473,9 @@ fn attempt_to_reenter_during_host() -> Result<()> {
         |mut store: StoreContextMut<'_, DynamicState>, _, _| {
             let func = store.data_mut().func.take().unwrap();
             let trap = func.call(&mut store, &[], &mut []).unwrap_err();
-            assert!(
-                format!("{trap:?}").contains("cannot reenter component instance"),
+            assert_eq!(
+                trap.downcast_ref(),
+                Some(&Trap::CannotEnterComponent),
                 "bad trap: {trap:?}",
             );
             Ok(())

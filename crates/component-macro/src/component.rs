@@ -1,4 +1,4 @@
-use proc_macro2::{Literal, TokenStream, TokenTree};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::HashSet;
 use std::fmt;
@@ -6,6 +6,13 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{braced, parse_quote, Data, DeriveInput, Error, Result, Token};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
+
+mod kw {
+    syn::custom_keyword!(record);
+    syn::custom_keyword!(variant);
+    syn::custom_keyword!(flags);
+    syn::custom_keyword!(name);
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum VariantStyle {
@@ -34,102 +41,67 @@ fn find_style(input: &DeriveInput) -> Result<Style> {
     let mut style = None;
 
     for attribute in &input.attrs {
-        if attribute.path.leading_colon.is_some() || attribute.path.segments.len() != 1 {
+        if !attribute.path().is_ident("component") {
             continue;
         }
-
-        let ident = &attribute.path.segments[0].ident;
-
-        if "component" != &ident.to_string() {
-            continue;
-        }
-
-        let syntax_error = || {
-            Err(Error::new_spanned(
-                &attribute.tokens,
-                "expected `component(<style>)` syntax",
-            ))
-        };
-
-        let style_string = if let [TokenTree::Group(group)] =
-            &attribute.tokens.clone().into_iter().collect::<Vec<_>>()[..]
-        {
-            if let [TokenTree::Ident(style)] = &group.stream().into_iter().collect::<Vec<_>>()[..] {
-                style.to_string()
-            } else {
-                return syntax_error();
-            }
-        } else {
-            return syntax_error();
-        };
+        let attr_style = attribute.parse_args()?;
 
         if style.is_some() {
-            return Err(Error::new(ident.span(), "duplicate `component` attribute"));
+            return Err(Error::new_spanned(
+                attribute,
+                "duplicate `component` attribute",
+            ));
         }
-
-        style = Some(match style_string.as_ref() {
-            "record" => Style::Record,
-            "variant" => Style::Variant(VariantStyle::Variant),
-            "enum" => Style::Variant(VariantStyle::Enum),
-            "union" => Style::Variant(VariantStyle::Union),
-            "flags" => {
-                return Err(Error::new_spanned(
-                    &attribute.tokens,
-                    "`flags` not allowed here; \
-                     use `wasmtime::component::flags!` macro to define `flags` types",
-                ))
-            }
-            _ => {
-                return Err(Error::new_spanned(
-                    &attribute.tokens,
-                    "unrecognized component type keyword \
-                     (expected `record`, `variant`, `enum`, or `union`)",
-                ))
-            }
-        });
+        style = Some(attr_style);
     }
 
     style.ok_or_else(|| Error::new_spanned(input, "missing `component` attribute"))
 }
 
-fn find_rename(attributes: &[syn::Attribute]) -> Result<Option<Literal>> {
+impl Parse for Style {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::record) {
+            input.parse::<kw::record>()?;
+            Ok(Style::Record)
+        } else if lookahead.peek(kw::variant) {
+            input.parse::<kw::variant>()?;
+            Ok(Style::Variant(VariantStyle::Variant))
+        } else if lookahead.peek(Token![enum]) {
+            input.parse::<Token![enum]>()?;
+            Ok(Style::Variant(VariantStyle::Enum))
+        } else if lookahead.peek(Token![union]) {
+            input.parse::<Token![union]>()?;
+            Ok(Style::Variant(VariantStyle::Union))
+        } else if input.peek(kw::flags) {
+            Err(input.error(
+                "`flags` not allowed here; \
+                 use `wasmtime::component::flags!` macro to define `flags` types",
+            ))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+fn find_rename(attributes: &[syn::Attribute]) -> Result<Option<syn::LitStr>> {
     let mut name = None;
 
     for attribute in attributes {
-        if attribute.path.leading_colon.is_some() || attribute.path.segments.len() != 1 {
+        if !attribute.path().is_ident("component") {
             continue;
         }
-
-        let ident = &attribute.path.segments[0].ident;
-
-        if "component" != &ident.to_string() {
-            continue;
-        }
-
-        let syntax_error = || {
-            Err(Error::new_spanned(
-                &attribute.tokens,
-                "expected `component(name = <name literal>)` syntax",
-            ))
-        };
-
-        let name_literal = if let [TokenTree::Group(group)] =
-            &attribute.tokens.clone().into_iter().collect::<Vec<_>>()[..]
-        {
-            match &group.stream().into_iter().collect::<Vec<_>>()[..] {
-                [TokenTree::Ident(key), TokenTree::Punct(op), TokenTree::Literal(literal)]
-                    if "name" == &key.to_string() && '=' == op.as_char() =>
-                {
-                    literal.clone()
-                }
-                _ => return syntax_error(),
-            }
-        } else {
-            return syntax_error();
-        };
+        let name_literal = attribute.parse_args_with(|parser: ParseStream<'_>| {
+            parser.parse::<kw::name>()?;
+            parser.parse::<Token![=]>()?;
+            parser.parse::<syn::LitStr>()
+        })?;
 
         if name.is_some() {
-            return Err(Error::new(ident.span(), "duplicate field rename attribute"));
+            return Err(Error::new_spanned(
+                attribute,
+                "duplicate field rename attribute",
+            ));
         }
 
         name = Some(name_literal);
@@ -353,7 +325,7 @@ fn expand_record_for_component_type(
             #[inline]
             fn typecheck(
                 ty: &#internal::InterfaceType,
-                types: &#internal::ComponentTypes,
+                types: &#internal::InstanceType<'_>,
             ) -> #internal::anyhow::Result<()> {
                 #internal::#typecheck(ty, types, &[#typecheck_argument])
             }
@@ -394,13 +366,14 @@ impl Expander for LiftExpander {
         let mut lifts = TokenStream::new();
         let mut loads = TokenStream::new();
 
-        for syn::Field { ident, ty, .. } in fields {
+        for (i, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
+            let field_ty = quote!(ty.fields[#i].ty);
             lifts.extend(quote!(#ident: <#ty as wasmtime::component::Lift>::lift(
-                store, options, &src.#ident
+                cx, #field_ty, &src.#ident
             )?,));
 
             loads.extend(quote!(#ident: <#ty as wasmtime::component::Lift>::load(
-                memory,
+                cx, #field_ty,
                 &bytes
                     [<#ty as wasmtime::component::ComponentType>::ABI.next_field32_size(&mut offset)..]
                     [..<#ty as wasmtime::component::ComponentType>::SIZE32]
@@ -410,21 +383,34 @@ impl Expander for LiftExpander {
         let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::Lift));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+        let extract_ty = quote! {
+            let ty = match ty {
+                #internal::InterfaceType::Record(i) => &cx.types[i],
+                _ => #internal::bad_type_info(),
+            };
+        };
+
         let expanded = quote! {
             unsafe impl #impl_generics wasmtime::component::Lift for #name #ty_generics #where_clause {
                 #[inline]
                 fn lift(
-                    store: &#internal::StoreOpaque,
-                    options: &#internal::Options,
+                    cx: &mut #internal::LiftContext<'_>,
+                    ty: #internal::InterfaceType,
                     src: &Self::Lower,
                 ) -> #internal::anyhow::Result<Self> {
+                    #extract_ty
                     Ok(Self {
                         #lifts
                     })
                 }
 
                 #[inline]
-                fn load(memory: &#internal::Memory, bytes: &[u8]) -> #internal::anyhow::Result<Self> {
+                fn load(
+                    cx: &mut #internal::LiftContext<'_>,
+                    ty: #internal::InterfaceType,
+                    bytes: &[u8],
+                ) -> #internal::anyhow::Result<Self> {
+                    #extract_ty
                     debug_assert!(
                         (bytes.as_ptr() as usize)
                             % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
@@ -447,12 +433,18 @@ impl Expander for LiftExpander {
         generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
-        _style: VariantStyle,
+        style: VariantStyle,
     ) -> Result<TokenStream> {
         let internal = quote!(wasmtime::component::__internal);
 
         let mut lifts = TokenStream::new();
         let mut loads = TokenStream::new();
+
+        let interface_type_variant = match style {
+            VariantStyle::Variant => quote!(Variant),
+            VariantStyle::Enum => quote!(Enum),
+            VariantStyle::Union => quote!(Union),
+        };
 
         for (index, VariantCase { ident, ty, .. }) in cases.iter().enumerate() {
             let index_u32 = u32::try_from(index).unwrap();
@@ -460,15 +452,22 @@ impl Expander for LiftExpander {
             let index_quoted = quote(discriminant_size, index);
 
             if let Some(ty) = ty {
+                let payload_ty = match style {
+                    VariantStyle::Variant => {
+                        quote!(ty.cases[#index].ty.unwrap_or_else(#internal::bad_type_info))
+                    }
+                    VariantStyle::Union => quote!(ty.types[#index]),
+                    VariantStyle::Enum => unreachable!(),
+                };
                 lifts.extend(
                     quote!(#index_u32 => Self::#ident(<#ty as wasmtime::component::Lift>::lift(
-                        store, options, unsafe { &src.payload.#ident }
+                        cx, #payload_ty, unsafe { &src.payload.#ident }
                     )?),),
                 );
 
                 loads.extend(
                     quote!(#index_quoted => Self::#ident(<#ty as wasmtime::component::Lift>::load(
-                        memory, &payload[..<#ty as wasmtime::component::ComponentType>::SIZE32]
+                        cx, #payload_ty, &payload[..<#ty as wasmtime::component::ComponentType>::SIZE32]
                     )?),),
                 );
             } else {
@@ -487,14 +486,22 @@ impl Expander for LiftExpander {
             DiscriminantSize::Size4 => quote!(u32::from_le_bytes(bytes[0..4].try_into()?)),
         };
 
+        let extract_ty = quote! {
+            let ty = match ty {
+                #internal::InterfaceType::#interface_type_variant(i) => &cx.types[i],
+                _ => #internal::bad_type_info(),
+            };
+        };
+
         let expanded = quote! {
             unsafe impl #impl_generics wasmtime::component::Lift for #name #ty_generics #where_clause {
                 #[inline]
                 fn lift(
-                    store: &#internal::StoreOpaque,
-                    options: &#internal::Options,
+                    cx: &mut #internal::LiftContext<'_>,
+                    ty: #internal::InterfaceType,
                     src: &Self::Lower,
                 ) -> #internal::anyhow::Result<Self> {
+                    #extract_ty
                     Ok(match src.tag.get_u32() {
                         #lifts
                         discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
@@ -502,12 +509,17 @@ impl Expander for LiftExpander {
                 }
 
                 #[inline]
-                fn load(memory: &#internal::Memory, bytes: &[u8]) -> #internal::anyhow::Result<Self> {
+                fn load(
+                    cx: &mut #internal::LiftContext<'_>,
+                    ty: #internal::InterfaceType,
+                    bytes: &[u8],
+                ) -> #internal::anyhow::Result<Self> {
                     let align = <Self as wasmtime::component::ComponentType>::ALIGN32;
                     debug_assert!((bytes.as_ptr() as usize) % (align as usize) == 0);
                     let discrim = #from_bytes;
                     let payload_offset = <Self as #internal::ComponentVariant>::PAYLOAD_OFFSET32;
                     let payload = &bytes[payload_offset..];
+                    #extract_ty
                     Ok(match discrim {
                         #loads
                         discrim => #internal::anyhow::bail!("unexpected discriminant: {}", discrim),
@@ -534,14 +546,16 @@ impl Expander for LowerExpander {
         let mut lowers = TokenStream::new();
         let mut stores = TokenStream::new();
 
-        for syn::Field { ident, ty, .. } in fields {
+        for (i, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
+            let field_ty = quote!(ty.fields[#i].ty);
             lowers.extend(quote!(wasmtime::component::Lower::lower(
-                &self.#ident, store, options, #internal::map_maybe_uninit!(dst.#ident)
+                &self.#ident, cx, #field_ty, #internal::map_maybe_uninit!(dst.#ident)
             )?;));
 
             stores.extend(quote!(wasmtime::component::Lower::store(
                 &self.#ident,
-                memory,
+                cx,
+                #field_ty,
                 <#ty as wasmtime::component::ComponentType>::ABI.next_field32_size(&mut offset),
             )?;));
         }
@@ -549,15 +563,23 @@ impl Expander for LowerExpander {
         let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::Lower));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+        let extract_ty = quote! {
+            let ty = match ty {
+                #internal::InterfaceType::Record(i) => &cx.types[i],
+                _ => #internal::bad_type_info(),
+            };
+        };
+
         let expanded = quote! {
             unsafe impl #impl_generics wasmtime::component::Lower for #name #ty_generics #where_clause {
                 #[inline]
                 fn lower<T>(
                     &self,
-                    store: &mut wasmtime::StoreContextMut<T>,
-                    options: &#internal::Options,
+                    cx: &mut #internal::LowerContext<'_, T>,
+                    ty: #internal::InterfaceType,
                     dst: &mut std::mem::MaybeUninit<Self::Lower>,
                 ) -> #internal::anyhow::Result<()> {
+                    #extract_ty
                     #lowers
                     Ok(())
                 }
@@ -565,10 +587,12 @@ impl Expander for LowerExpander {
                 #[inline]
                 fn store<T>(
                     &self,
-                    memory: &mut #internal::MemoryMut<'_, T>,
+                    cx: &mut #internal::LowerContext<'_, T>,
+                    ty: #internal::InterfaceType,
                     mut offset: usize
                 ) -> #internal::anyhow::Result<()> {
                     debug_assert!(offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0);
+                    #extract_ty
                     #stores
                     Ok(())
                 }
@@ -584,12 +608,18 @@ impl Expander for LowerExpander {
         generics: &syn::Generics,
         discriminant_size: DiscriminantSize,
         cases: &[VariantCase],
-        _style: VariantStyle,
+        style: VariantStyle,
     ) -> Result<TokenStream> {
         let internal = quote!(wasmtime::component::__internal);
 
         let mut lowers = TokenStream::new();
         let mut stores = TokenStream::new();
+
+        let interface_type_variant = match style {
+            VariantStyle::Variant => quote!(Variant),
+            VariantStyle::Enum => quote!(Enum),
+            VariantStyle::Union => quote!(Union),
+        };
 
         for (index, VariantCase { ident, ty, .. }) in cases.iter().enumerate() {
             let index_u32 = u32::try_from(index).unwrap();
@@ -603,10 +633,18 @@ impl Expander for LowerExpander {
             let store;
 
             if ty.is_some() {
+                let ty = match style {
+                    VariantStyle::Variant => {
+                        quote!(ty.cases[#index].ty.unwrap_or_else(#internal::bad_type_info))
+                    }
+                    VariantStyle::Union => quote!(ty.types[#index]),
+                    VariantStyle::Enum => unreachable!(),
+                };
                 pattern = quote!(Self::#ident(value));
-                lower = quote!(value.lower(store, options, dst));
+                lower = quote!(value.lower(cx, #ty, dst));
                 store = quote!(value.store(
-                    memory,
+                    cx,
+                    #ty,
                     offset + <Self as #internal::ComponentVariant>::PAYLOAD_OFFSET32,
                 ));
             } else {
@@ -627,7 +665,7 @@ impl Expander for LowerExpander {
             }));
 
             stores.extend(quote!(#pattern => {
-                *memory.get::<#discriminant_size>(offset) = #index_quoted.to_le_bytes();
+                *cx.get::<#discriminant_size>(offset) = #index_quoted.to_le_bytes();
                 #store
             }));
         }
@@ -635,15 +673,23 @@ impl Expander for LowerExpander {
         let generics = add_trait_bounds(generics, parse_quote!(wasmtime::component::Lower));
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
+        let extract_ty = quote! {
+            let ty = match ty {
+                #internal::InterfaceType::#interface_type_variant(i) => &cx.types[i],
+                _ => #internal::bad_type_info(),
+            };
+        };
+
         let expanded = quote! {
             unsafe impl #impl_generics wasmtime::component::Lower for #name #ty_generics #where_clause {
                 #[inline]
                 fn lower<T>(
                     &self,
-                    store: &mut wasmtime::StoreContextMut<T>,
-                    options: &#internal::Options,
+                    cx: &mut #internal::LowerContext<'_, T>,
+                    ty: #internal::InterfaceType,
                     dst: &mut std::mem::MaybeUninit<Self::Lower>,
                 ) -> #internal::anyhow::Result<()> {
+                    #extract_ty
                     match self {
                         #lowers
                     }
@@ -652,9 +698,11 @@ impl Expander for LowerExpander {
                 #[inline]
                 fn store<T>(
                     &self,
-                    memory: &mut #internal::MemoryMut<'_, T>,
+                    cx: &mut #internal::LowerContext<'_, T>,
+                    ty: #internal::InterfaceType,
                     mut offset: usize
                 ) -> #internal::anyhow::Result<()> {
+                    #extract_ty
                     debug_assert!(offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0);
                     match self {
                         #stores
@@ -688,7 +736,8 @@ impl Expander for ComponentTypeExpander {
                          attrs, ident, ty, ..
                      }| {
                         let name = find_rename(attrs)?.unwrap_or_else(|| {
-                            Literal::string(&ident.as_ref().unwrap().to_string())
+                            let ident = ident.as_ref().unwrap();
+                            syn::LitStr::new(&ident.to_string(), ident.span())
                         });
 
                         Ok(quote!((#name, <#ty as wasmtime::component::ComponentType>::typecheck),))
@@ -726,7 +775,7 @@ impl Expander for ComponentTypeExpander {
                 ));
             }
 
-            let name = rename.unwrap_or_else(|| Literal::string(&ident.to_string()));
+            let name = rename.unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
 
             if let Some(ty) = ty {
                 abi_list.extend(quote!(Some(<#ty as wasmtime::component::ComponentType>::ABI),));
@@ -812,7 +861,7 @@ impl Expander for ComponentTypeExpander {
                 #[inline]
                 fn typecheck(
                     ty: &#internal::InterfaceType,
-                    types: &#internal::ComponentTypes,
+                    types: &#internal::InstanceType<'_>,
                 ) -> #internal::anyhow::Result<()> {
                     #internal::#typecheck(ty, types, &[#case_names_and_checks])
                 }
@@ -840,16 +889,7 @@ impl Parse for Flag {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = syn::Attribute::parse_outer(input)?;
 
-        let rename = find_rename(&attributes)?
-            .map(|literal| {
-                let s = literal.to_string();
-
-                s.strip_prefix('"')
-                    .and_then(|s| s.strip_suffix('"'))
-                    .map(|s| s.to_owned())
-                    .ok_or_else(|| Error::new(literal.span(), "expected string literal"))
-            })
-            .transpose()?;
+        let rename = find_rename(&attributes)?.map(|literal| literal.value());
 
         input.parse::<Token![const]>()?;
         let name = input.parse::<syn::Ident>()?.to_string();
@@ -872,7 +912,7 @@ impl Parse for Flags {
         braced!(content in input);
 
         let flags = content
-            .parse_terminated::<_, Token![;]>(Flag::parse)?
+            .parse_terminated(Flag::parse, Token![;])?
             .into_iter()
             .collect();
 
@@ -1070,6 +1110,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 ident: Some(format_ident!("__inner{}", index)),
                 colon_token: None,
                 ty: ty.clone(),
+                mutability: syn::FieldMutability::None,
             })
             .collect::<Vec<_>>()
     };
@@ -1084,16 +1125,24 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         component_names,
     )?;
 
-    let lower_impl = LowerExpander.expand_record(&name, &generics, &fields)?;
-
-    let lift_impl = LiftExpander.expand_record(&name, &generics, &fields)?;
-
     let internal = quote!(wasmtime::component::__internal);
+
+    let field_names = fields
+        .iter()
+        .map(|syn::Field { ident, .. }| ident)
+        .collect::<Vec<_>>();
 
     let fields = fields
         .iter()
         .map(|syn::Field { ident, .. }| quote!(#[doc(hidden)] #ident: #ty,))
         .collect::<TokenStream>();
+
+    let (field_interface_type, field_size) = match size {
+        FlagsSize::Size0 => (quote!(NOT USED), 0usize),
+        FlagsSize::Size1 => (quote!(#internal::InterfaceType::U8), 1),
+        FlagsSize::Size2 => (quote!(#internal::InterfaceType::U16), 2),
+        FlagsSize::Size4Plus(_) => (quote!(#internal::InterfaceType::U32), 4),
+    };
 
     let expanded = quote! {
         #[derive(Copy, Clone, Default)]
@@ -1190,9 +1239,80 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
 
         #component_type_impl
 
-        #lower_impl
+        unsafe impl wasmtime::component::Lower for #name {
+            fn lower<T>(
+                &self,
+                cx: &mut #internal::LowerContext<'_, T>,
+                _ty: #internal::InterfaceType,
+                dst: &mut std::mem::MaybeUninit<Self::Lower>,
+            ) -> #internal::anyhow::Result<()> {
+                #(
+                    self.#field_names.lower(
+                        cx,
+                        #field_interface_type,
+                        #internal::map_maybe_uninit!(dst.#field_names),
+                    )?;
+                )*
+                Ok(())
+            }
 
-        #lift_impl
+            fn store<T>(
+                &self,
+                cx: &mut #internal::LowerContext<'_, T>,
+                _ty: #internal::InterfaceType,
+                mut offset: usize
+            ) -> #internal::anyhow::Result<()> {
+                debug_assert!(offset % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize) == 0);
+                #(
+                    self.#field_names.store(
+                        cx,
+                        #field_interface_type,
+                        offset,
+                    )?;
+                    offset += std::mem::size_of_val(&self.#field_names);
+                )*
+                Ok(())
+            }
+        }
+
+        unsafe impl wasmtime::component::Lift for #name {
+            fn lift(
+                cx: &mut #internal::LiftContext<'_>,
+                _ty: #internal::InterfaceType,
+                src: &Self::Lower,
+            ) -> #internal::anyhow::Result<Self> {
+                Ok(Self {
+                    #(
+                        #field_names: wasmtime::component::Lift::lift(
+                            cx,
+                            #field_interface_type,
+                            &src.#field_names,
+                        )?,
+                    )*
+                })
+            }
+
+            fn load(
+                cx: &mut #internal::LiftContext<'_>,
+                _ty: #internal::InterfaceType,
+                bytes: &[u8],
+            ) -> #internal::anyhow::Result<Self> {
+                debug_assert!(
+                    (bytes.as_ptr() as usize)
+                        % (<Self as wasmtime::component::ComponentType>::ALIGN32 as usize)
+                        == 0
+                );
+                #(
+                    let (field, bytes) = bytes.split_at(#field_size);
+                    let #field_names = wasmtime::component::Lift::load(
+                        cx,
+                        #field_interface_type,
+                        field,
+                    )?;
+                )*
+                Ok(Self { #(#field_names,)* })
+            }
+        }
     };
 
     Ok(expanded)

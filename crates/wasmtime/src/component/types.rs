@@ -1,5 +1,6 @@
 //! This module defines the `Type` type, representing the dynamic form of a component interface type.
 
+use crate::component::matching::InstanceType;
 use crate::component::values::{self, Val};
 use anyhow::{anyhow, Result};
 use std::fmt;
@@ -7,15 +8,54 @@ use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeEnumIndex, TypeFlagsIndex, TypeListIndex,
-    TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex, TypeUnionIndex,
-    TypeVariantIndex, VariantInfo,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, ResourceIndex, TypeEnumIndex, TypeFlagsIndex,
+    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex,
+    TypeUnionIndex, TypeVariantIndex,
 };
+use wasmtime_environ::PrimaryMap;
 
+pub use crate::component::resources::ResourceType;
+
+/// An owned and `'static` handle for type information in a component.
+///
+/// The components here are:
+///
+/// * `index` - a `TypeFooIndex` defined in the `wasmtime_environ` crate. This
+///   then points into the next field of...
+///
+/// * `types` - this is an allocation originally created from compilation and is
+///   stored in a compiled `Component`. This contains all types necessary and
+///   information about recursive structures and all other type information
+///   within the component. The above `index` points into this structure.
+///
+/// * `resources` - this is used to "close the loop" and represent a concrete
+///   instance type rather than an abstract component type. Instantiating a
+///   component with different resources produces different instance types but
+///   the same underlying component type, so this field serves the purpose to
+///   distinguish instance types from one another. This is runtime state created
+///   during instantiation and threaded through here.
 #[derive(Clone)]
 struct Handle<T> {
     index: T,
     types: Arc<ComponentTypes>,
+    resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+}
+
+impl<T> Handle<T> {
+    fn new(index: T, ty: &InstanceType<'_>) -> Handle<T> {
+        Handle {
+            index,
+            types: ty.types.clone(),
+            resources: ty.resources.clone(),
+        }
+    }
+
+    fn instance(&self) -> InstanceType<'_> {
+        InstanceType {
+            types: &self.types,
+            resources: &self.resources,
+        }
+    }
 }
 
 impl<T: fmt::Debug> fmt::Debug for Handle<T> {
@@ -31,7 +71,9 @@ impl<T: PartialEq> PartialEq for Handle<T> {
         // FIXME: This is an overly-restrictive definition of equality in that it doesn't consider types to be
         // equal unless they refer to the same declaration in the same component.  It's a good shortcut for the
         // common case, but we should also do a recursive structural equality test if the shortcut test fails.
-        self.index == other.index && Arc::ptr_eq(&self.types, &other.types)
+        self.index == other.index
+            && Arc::ptr_eq(&self.types, &other.types)
+            && Arc::ptr_eq(&self.resources, &other.resources)
     }
 }
 
@@ -47,9 +89,13 @@ impl List {
         Ok(Val::List(values::List::new(self, values)?))
     }
 
+    pub(crate) fn from(index: TypeListIndex, ty: &InstanceType<'_>) -> Self {
+        List(Handle::new(index, ty))
+    }
+
     /// Retreive the element type of this `list`.
     pub fn ty(&self) -> Type {
-        Type::from(&self.0.types[self.0.index].element, &self.0.types)
+        Type::from(&self.0.types[self.0.index].element, &self.0.instance())
     }
 }
 
@@ -71,16 +117,16 @@ impl Record {
         Ok(Val::Record(values::Record::new(self, values)?))
     }
 
+    pub(crate) fn from(index: TypeRecordIndex, ty: &InstanceType<'_>) -> Self {
+        Record(Handle::new(index, ty))
+    }
+
     /// Retrieve the fields of this `record` in declaration order.
     pub fn fields(&self) -> impl ExactSizeIterator<Item = Field<'_>> {
         self.0.types[self.0.index].fields.iter().map(|field| Field {
             name: &field.name,
-            ty: Type::from(&field.ty, &self.0.types),
+            ty: Type::from(&field.ty, &self.0.instance()),
         })
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -94,16 +140,16 @@ impl Tuple {
         Ok(Val::Tuple(values::Tuple::new(self, values)?))
     }
 
+    pub(crate) fn from(index: TypeTupleIndex, ty: &InstanceType<'_>) -> Self {
+        Tuple(Handle::new(index, ty))
+    }
+
     /// Retrieve the types of the fields of this `tuple` in declaration order.
     pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
         self.0.types[self.0.index]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &self.0.types))
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
+            .map(|ty| Type::from(ty, &self.0.instance()))
     }
 }
 
@@ -125,20 +171,19 @@ impl Variant {
         Ok(Val::Variant(values::Variant::new(self, name, value)?))
     }
 
+    pub(crate) fn from(index: TypeVariantIndex, ty: &InstanceType<'_>) -> Self {
+        Variant(Handle::new(index, ty))
+    }
+
     /// Retrieve the cases of this `variant` in declaration order.
     pub fn cases(&self) -> impl ExactSizeIterator<Item = Case> {
         self.0.types[self.0.index].cases.iter().map(|case| Case {
             name: &case.name,
-            ty: case.ty.as_ref().map(|ty| Type::from(ty, &self.0.types)),
+            ty: case
+                .ty
+                .as_ref()
+                .map(|ty| Type::from(ty, &self.0.instance())),
         })
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -152,20 +197,16 @@ impl Enum {
         Ok(Val::Enum(values::Enum::new(self, name)?))
     }
 
+    pub(crate) fn from(index: TypeEnumIndex, ty: &InstanceType<'_>) -> Self {
+        Enum(Handle::new(index, ty))
+    }
+
     /// Retrieve the names of the cases of this `enum` in declaration order.
     pub fn names(&self) -> impl ExactSizeIterator<Item = &str> {
         self.0.types[self.0.index]
             .names
             .iter()
             .map(|name| name.deref())
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -179,20 +220,16 @@ impl Union {
         Ok(Val::Union(values::Union::new(self, discriminant, value)?))
     }
 
+    pub(crate) fn from(index: TypeUnionIndex, ty: &InstanceType<'_>) -> Self {
+        Union(Handle::new(index, ty))
+    }
+
     /// Retrieve the types of the cases of this `union` in declaration order.
     pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
         self.0.types[self.0.index]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &self.0.types))
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
+            .map(|ty| Type::from(ty, &self.0.instance()))
     }
 }
 
@@ -206,17 +243,13 @@ impl OptionType {
         Ok(Val::Option(values::OptionVal::new(self, value)?))
     }
 
+    pub(crate) fn from(index: TypeOptionIndex, ty: &InstanceType<'_>) -> Self {
+        OptionType(Handle::new(index, ty))
+    }
+
     /// Retrieve the type parameter for this `option`.
     pub fn ty(&self) -> Type {
-        Type::from(&self.0.types[self.0.index].ty, &self.0.types)
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
+        Type::from(&self.0.types[self.0.index].ty, &self.0.instance())
     }
 }
 
@@ -230,11 +263,15 @@ impl ResultType {
         Ok(Val::Result(values::ResultVal::new(self, value)?))
     }
 
+    pub(crate) fn from(index: TypeResultIndex, ty: &InstanceType<'_>) -> Self {
+        ResultType(Handle::new(index, ty))
+    }
+
     /// Retrieve the `ok` type parameter for this `option`.
     pub fn ok(&self) -> Option<Type> {
         Some(Type::from(
             self.0.types[self.0.index].ok.as_ref()?,
-            &self.0.types,
+            &self.0.instance(),
         ))
     }
 
@@ -242,16 +279,8 @@ impl ResultType {
     pub fn err(&self) -> Option<Type> {
         Some(Type::from(
             self.0.types[self.0.index].err.as_ref()?,
-            &self.0.types,
+            &self.0.instance(),
         ))
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -263,6 +292,10 @@ impl Flags {
     /// Instantiate this type with the specified flag `names`.
     pub fn new_val(&self, names: &[&str]) -> Result<Val> {
         Ok(Val::Flags(values::Flags::new(self, names)?))
+    }
+
+    pub(crate) fn from(index: TypeFlagsIndex, ty: &InstanceType<'_>) -> Self {
+        Flags(Handle::new(index, ty))
     }
 
     /// Retrieve the names of the flags of this `flags` type in declaration order.
@@ -304,6 +337,8 @@ pub enum Type {
     Option(OptionType),
     Result(ResultType),
     Flags(Flags),
+    Own(ResourceType),
+    Borrow(ResourceType),
 }
 
 impl Type {
@@ -424,6 +459,30 @@ impl Type {
         }
     }
 
+    /// Retrieve the inner [`ResourceType`] of a [`Type::Own`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Own`].
+    pub fn unwrap_own(&self) -> &ResourceType {
+        match self {
+            Type::Own(ty) => ty,
+            _ => panic!("attempted to unwrap a {} as a own", self.desc()),
+        }
+    }
+
+    /// Retrieve the inner [`ResourceType`] of a [`Type::Borrow`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Borrow`].
+    pub fn unwrap_borrow(&self) -> &ResourceType {
+        match self {
+            Type::Borrow(ty) => ty,
+            _ => panic!("attempted to unwrap a {} as a own", self.desc()),
+        }
+    }
+
     pub(crate) fn check(&self, value: &Val) -> Result<()> {
         let other = &value.ty();
         if self == other {
@@ -443,7 +502,7 @@ impl Type {
     }
 
     /// Convert the specified `InterfaceType` to a `Type`.
-    pub(crate) fn from(ty: &InterfaceType, types: &Arc<ComponentTypes>) -> Self {
+    pub(crate) fn from(ty: &InterfaceType, instance: &InstanceType<'_>) -> Self {
         match ty {
             InterfaceType::Bool => Type::Bool,
             InterfaceType::S8 => Type::S8,
@@ -458,42 +517,17 @@ impl Type {
             InterfaceType::Float64 => Type::Float64,
             InterfaceType::Char => Type::Char,
             InterfaceType::String => Type::String,
-            InterfaceType::List(index) => Type::List(List(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Record(index) => Type::Record(Record(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Tuple(index) => Type::Tuple(Tuple(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Variant(index) => Type::Variant(Variant(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Enum(index) => Type::Enum(Enum(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Union(index) => Type::Union(Union(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Option(index) => Type::Option(OptionType(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Result(index) => Type::Result(ResultType(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Flags(index) => Type::Flags(Flags(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
+            InterfaceType::List(index) => Type::List(List::from(*index, instance)),
+            InterfaceType::Record(index) => Type::Record(Record::from(*index, instance)),
+            InterfaceType::Tuple(index) => Type::Tuple(Tuple::from(*index, instance)),
+            InterfaceType::Variant(index) => Type::Variant(Variant::from(*index, instance)),
+            InterfaceType::Enum(index) => Type::Enum(Enum::from(*index, instance)),
+            InterfaceType::Union(index) => Type::Union(Union::from(*index, instance)),
+            InterfaceType::Option(index) => Type::Option(OptionType::from(*index, instance)),
+            InterfaceType::Result(index) => Type::Result(ResultType::from(*index, instance)),
+            InterfaceType::Flags(index) => Type::Flags(Flags::from(*index, instance)),
+            InterfaceType::Own(index) => Type::Own(instance.resource_type(*index)),
+            InterfaceType::Borrow(index) => Type::Borrow(instance.resource_type(*index)),
         }
     }
 
@@ -521,25 +555,8 @@ impl Type {
             Type::Option(_) => "option",
             Type::Result(_) => "result",
             Type::Flags(_) => "flags",
-        }
-    }
-
-    /// Calculate the size and alignment requirements for the specified type.
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        match self {
-            Type::Bool | Type::S8 | Type::U8 => &CanonicalAbiInfo::SCALAR1,
-            Type::S16 | Type::U16 => &CanonicalAbiInfo::SCALAR2,
-            Type::S32 | Type::U32 | Type::Char | Type::Float32 => &CanonicalAbiInfo::SCALAR4,
-            Type::S64 | Type::U64 | Type::Float64 => &CanonicalAbiInfo::SCALAR8,
-            Type::String | Type::List(_) => &CanonicalAbiInfo::POINTER_PAIR,
-            Type::Record(handle) => handle.canonical_abi(),
-            Type::Tuple(handle) => handle.canonical_abi(),
-            Type::Variant(handle) => handle.canonical_abi(),
-            Type::Enum(handle) => handle.canonical_abi(),
-            Type::Union(handle) => handle.canonical_abi(),
-            Type::Option(handle) => handle.canonical_abi(),
-            Type::Result(handle) => handle.canonical_abi(),
-            Type::Flags(handle) => handle.canonical_abi(),
+            Type::Own(_) => "own",
+            Type::Borrow(_) => "borrow",
         }
     }
 }

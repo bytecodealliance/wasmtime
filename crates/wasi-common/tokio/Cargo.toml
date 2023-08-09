@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE" ]
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
 wiggle = { workspace = true }
-tokio = { version = "1.8.0", features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"] }
+tokio = { workspace = true, features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"] }
 cap-std = { workspace = true }
 anyhow = { workspace = true }
 io-lifetimes = { workspace = true }
@@ -23,9 +23,9 @@ io-lifetimes = { workspace = true }
 rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.17.0"
+io-extras = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.1.0"
-tokio = { version = "1.8.0", features = [ "macros" ] }
-cap-tempfile = "1.0.0"
+tokio = { workspace = true, features = [ "macros" ] }
+cap-tempfile = { workspace = true }

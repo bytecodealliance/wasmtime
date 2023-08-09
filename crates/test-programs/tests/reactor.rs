@@ -1,11 +1,10 @@
 use anyhow::Result;
-use std::sync::{Arc, RwLock};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::wasi::clocks::wall_clock;
-use wasmtime_wasi::preview2::wasi::filesystem::filesystem;
+use wasmtime_wasi::preview2::bindings::clocks::wall_clock;
+use wasmtime_wasi::preview2::bindings::filesystem::filesystem;
 use wasmtime_wasi::preview2::{self, Table, WasiCtx, WasiCtxBuilder, WasiView};
 
 lazy_static::lazy_static! {
@@ -28,14 +27,14 @@ wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,
     with: {
-       "wasi:io/streams": preview2::wasi::io::streams,
-       "wasi:filesystem/filesystem": preview2::wasi::filesystem::filesystem,
-       "wasi:cli-base/environment": preview2::wasi::cli_base::environment,
-       "wasi:cli-base/preopens": preview2::wasi::cli_base::preopens,
-       "wasi:cli-base/exit": preview2::wasi::cli_base::exit,
-       "wasi:cli-base/stdin": preview2::wasi::cli_base::stdin,
-       "wasi:cli-base/stdout": preview2::wasi::cli_base::stdout,
-       "wasi:cli-base/stderr": preview2::wasi::cli_base::stderr,
+       "wasi:io/streams": preview2::bindings::io::streams,
+       "wasi:filesystem/filesystem": preview2::bindings::filesystem::filesystem,
+       "wasi:cli-base/environment": preview2::bindings::cli_base::environment,
+       "wasi:cli-base/preopens": preview2::bindings::cli_base::preopens,
+       "wasi:cli-base/exit": preview2::bindings::cli_base::exit,
+       "wasi:cli-base/stdin": preview2::bindings::cli_base::stdin,
+       "wasi:cli-base/stdout": preview2::bindings::cli_base::stdout,
+       "wasi:cli-base/stderr": preview2::bindings::cli_base::stderr,
     },
     ownership: Borrowing {
         duplicate_if_necessary: false
@@ -69,14 +68,14 @@ async fn instantiate(
     let mut linker = Linker::new(&ENGINE);
 
     // All of the imports available to the world are provided by the wasi-common crate:
-    preview2::wasi::filesystem::filesystem::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::io::streams::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::environment::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::preopens::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::exit::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::stdin::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::stdout::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::stderr::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::filesystem::filesystem::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::io::streams::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::environment::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::preopens::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::exit::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::stdin::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::stdout::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::stderr::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);
 
@@ -89,7 +88,7 @@ async fn instantiate(
 async fn reactor_tests() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .push_env("GOOD_DOG", "gussie")
+        .env("GOOD_DOG", "gussie")
         .build(&mut table)?;
 
     let (mut store, reactor) =
@@ -109,14 +108,15 @@ async fn reactor_tests() -> Result<()> {
     // `host` and `wasi-common` crate.
     // Note, this works because of the add_to_linker invocations using the
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
-    let write_dest: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(Vec::new()));
-    let writepipe = wasmtime_wasi::preview2::pipe::WritePipe::from_shared(write_dest.clone());
-    let outputstream: Box<dyn wasmtime_wasi::preview2::OutputStream> = Box::new(writepipe);
-    let table_ix = store.data_mut().table_mut().push(Box::new(outputstream))?;
+    let writepipe = preview2::pipe::MemoryOutputPipe::new();
+    let table_ix = preview2::TableStreamExt::push_output_stream(
+        store.data_mut().table_mut(),
+        Box::new(writepipe.clone()),
+    )?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 
-    assert_eq!(*write_dest.read().unwrap(), b"hellogussie");
+    assert_eq!(writepipe.contents().as_ref(), b"hellogussie");
 
     // Show that the `with` invocation in the macro means we get to re-use the
     // type definitions from inside the `host` crate for these structures:

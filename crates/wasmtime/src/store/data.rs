@@ -96,6 +96,14 @@ impl StoreData {
         true
     }
 
+    pub fn iter<T>(&self) -> impl ExactSizeIterator<Item = Stored<T>>
+    where
+        T: StoredData,
+    {
+        let id = self.id;
+        (0..T::list(self).len()).map(move |i| Stored::new(id, i))
+    }
+
     pub(crate) fn reserve_funcs(&mut self, count: usize) {
         self.funcs.reserve(count);
     }
@@ -187,7 +195,7 @@ where
 /// owned by a `Store` and will embed a `StoreId` internally to say which store
 /// it came from. Comparisons with this value are how panics are generated for
 /// mismatching the item that a store belongs to.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct StoreId(NonZeroU64);
 
 impl StoreId {

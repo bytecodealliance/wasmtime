@@ -76,11 +76,12 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::instance::PrePatchedFuncRef;
+use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::BareModuleInfo;
 use crate::trampoline::VMHostGlobalContext;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
+use crate::{Global, Instance, Memory};
 use anyhow::{anyhow, bail, Result};
 use std::cell::UnsafeCell;
 use std::convert::TryFrom;
@@ -95,9 +96,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
-    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMRuntimeLimits, WasmFault,
+    ExportGlobal, ExportMemory, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    ModuleInfo, OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext,
+    VMExternRef, VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
 };
 
 mod context;
@@ -339,6 +340,14 @@ pub struct StoreOpaque {
     /// Note that this is `ManuallyDrop` as it must be dropped after
     /// `store_data` above, where the function pointers are stored.
     rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
+
+    /// Runtime state for components used in the handling of resources, borrow,
+    /// and calls. These also interact with the `ResourceAny` type and its
+    /// internal representation.
+    #[cfg(feature = "component-model")]
+    component_host_table: wasmtime_runtime::component::ResourceTable,
+    #[cfg(feature = "component-model")]
+    component_calls: wasmtime_runtime::component::CallContexts,
 }
 
 #[cfg(feature = "async")]
@@ -475,6 +484,10 @@ impl<T> Store<T> {
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
                 rooted_host_funcs: ManuallyDrop::new(Vec::new()),
+                #[cfg(feature = "component-model")]
+                component_host_table: Default::default(),
+                #[cfg(feature = "component-model")]
+                component_calls: Default::default(),
             },
             limiter: None,
             call_hook: None,
@@ -1216,7 +1229,7 @@ impl StoreOpaque {
         self.func_refs.fill(&mut self.modules);
     }
 
-    pub(crate) fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[PrePatchedFuncRef]>) {
+    pub(crate) fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[VMFuncRef]>) {
         self.func_refs.push_instance_pre_func_refs(func_refs);
     }
 
@@ -1238,6 +1251,24 @@ impl StoreOpaque {
 
     pub fn instance_mut(&mut self, id: InstanceId) -> &mut InstanceHandle {
         &mut self.instances[id.0].handle
+    }
+
+    pub fn all_instances(&self) -> impl ExactSizeIterator<Item = Instance> {
+        self.store_data()
+            .iter::<InstanceData>()
+            .map(Instance::from_stored)
+    }
+
+    pub fn all_memories(&self) -> impl ExactSizeIterator<Item = Memory> {
+        self.store_data()
+            .iter::<ExportMemory>()
+            .map(Memory::from_stored)
+    }
+
+    pub fn all_globals(&self) -> impl ExactSizeIterator<Item = Global> {
+        self.store_data()
+            .iter::<ExportGlobal>()
+            .map(Global::from_stored)
     }
 
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
@@ -1537,6 +1568,16 @@ at https://bytecodealliance.org/security.
 "
         );
         std::process::abort();
+    }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn component_calls_and_host_table(
+        &mut self,
+    ) -> (
+        &mut wasmtime_runtime::component::CallContexts,
+        &mut wasmtime_runtime::component::ResourceTable,
+    ) {
+        (&mut self.component_calls, &mut self.component_host_table)
     }
 }
 
@@ -2048,6 +2089,11 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         // Put back the original behavior which was replaced by `take`.
         self.epoch_deadline_behavior = behavior;
         delta_result
+    }
+
+    #[cfg(feature = "component-model")]
+    fn component_calls(&mut self) -> &mut wasmtime_runtime::component::CallContexts {
+        &mut self.component_calls
     }
 }
 

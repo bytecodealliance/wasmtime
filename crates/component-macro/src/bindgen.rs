@@ -251,18 +251,9 @@ impl Parse for Opt {
             input.parse::<Token![:]>()?;
             let contents;
             let _lbrace = braced!(contents in input);
-            let fields: Punctuated<(String, String, String), Token![,]> =
-                contents.parse_terminated(trappable_error_field_parse)?;
-            Ok(Opt::TrappableErrorType(
-                fields
-                    .into_iter()
-                    .map(|(wit_owner, wit_name, rust_name)| TrappableError {
-                        wit_owner: Some(wit_owner),
-                        wit_name,
-                        rust_name,
-                    })
-                    .collect(),
-            ))
+            let fields: Punctuated<_, Token![,]> =
+                contents.parse_terminated(trappable_error_field_parse, Token![,])?;
+            Ok(Opt::TrappableErrorType(Vec::from_iter(fields.into_iter())))
         } else if l.peek(kw::interfaces) {
             input.parse::<kw::interfaces>()?;
             input.parse::<Token![:]>()?;
@@ -273,7 +264,7 @@ impl Parse for Opt {
             let contents;
             let _lbrace = braced!(contents in input);
             let fields: Punctuated<(String, String), Token![,]> =
-                contents.parse_terminated(with_field_parse)?;
+                contents.parse_terminated(with_field_parse, Token![,])?;
             Ok(Opt::With(HashMap::from_iter(fields.into_iter())))
         } else {
             Err(l.error())
@@ -281,7 +272,7 @@ impl Parse for Opt {
     }
 }
 
-fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<(String, String, String)> {
+fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<TrappableError> {
     // Accept a Rust identifier or a string literal. This is required
     // because not all wit identifiers are Rust identifiers, so we can
     // smuggle the invalid ones inside quotes.
@@ -296,12 +287,16 @@ fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<(String, String
         }
     }
 
-    let interface = ident_or_str(input)?;
+    let wit_package_path = input.parse::<syn::LitStr>()?.value();
     input.parse::<Token![::]>()?;
-    let type_ = ident_or_str(input)?;
+    let wit_type_name = ident_or_str(input)?;
     input.parse::<Token![:]>()?;
-    let rust_type = input.parse::<Ident>()?.to_string();
-    Ok((interface, type_, rust_type))
+    let rust_type_name = input.parse::<Ident>()?.to_string();
+    Ok(TrappableError {
+        wit_package_path,
+        wit_type_name,
+        rust_type_name,
+    })
 }
 
 fn with_field_parse(input: ParseStream<'_>) -> Result<(String, String)> {

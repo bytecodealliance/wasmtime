@@ -43,7 +43,7 @@ pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
 };
 pub use crate::ir::extname::{ExternalName, UserExternalName, UserFuncName};
-pub use crate::ir::function::{DisplayFunctionAnnotations, Function};
+pub use crate::ir::function::Function;
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::instructions::{
     BlockCall, InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
@@ -62,7 +62,6 @@ pub use crate::ir::stackslot::{
 pub use crate::ir::table::TableData;
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
-pub use crate::value_label::LabelValueLoc;
 
 use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
 

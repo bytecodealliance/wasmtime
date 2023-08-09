@@ -1,10 +1,8 @@
 //! Riscv64 ISA: binary code emission.
 
 use crate::binemit::StackMap;
-use crate::ir::RelSourceLoc;
-use crate::ir::TrapCode;
+use crate::ir::{self, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -426,6 +424,8 @@ impl Inst {
             | Inst::AdjustSp { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
+            | Inst::ReturnCall { .. }
+            | Inst::ReturnCallInd { .. }
             | Inst::TrapIf { .. }
             | Inst::Jal { .. }
             | Inst::CondBr { .. }
@@ -885,6 +885,58 @@ impl MachInstEmit for Inst {
                 );
             }
 
+            &Inst::ReturnCall {
+                ref callee,
+                ref info,
+            } => {
+                emit_return_call_common_sequence(
+                    &mut allocs,
+                    sink,
+                    emit_info,
+                    state,
+                    info.new_stack_arg_size,
+                    info.old_stack_arg_size,
+                    &info.uses,
+                );
+
+                sink.add_call_site(ir::Opcode::ReturnCall);
+                sink.add_reloc(Reloc::RiscvCall, &callee, 0);
+                Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                // `emit_return_call_common_sequence` emits an island if
+                // necessary, so we can safely disable the worst-case-size check
+                // in this case.
+                start_off = sink.cur_offset();
+            }
+
+            &Inst::ReturnCallInd { callee, ref info } => {
+                let callee = allocs.next(callee);
+
+                emit_return_call_common_sequence(
+                    &mut allocs,
+                    sink,
+                    emit_info,
+                    state,
+                    info.new_stack_arg_size,
+                    info.old_stack_arg_size,
+                    &info.uses,
+                );
+
+                Inst::Jalr {
+                    rd: writable_zero_reg(),
+                    base: callee,
+                    offset: Imm12::zero(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // `emit_return_call_common_sequence` emits an island if
+                // necessary, so we can safely disable the worst-case-size check
+                // in this case.
+                start_off = sink.cur_offset();
+            }
+
             &Inst::Jal { dest } => {
                 let code: u32 = 0b1101111;
                 match dest {
@@ -1137,7 +1189,7 @@ impl MachInstEmit for Inst {
                 // we need to emit a jump table here to support that jump.
                 let distance = (targets.len() * 2 * Inst::INSTRUCTION_SIZE as usize) as u32;
                 if sink.island_needed(distance) {
-                    sink.emit_island(distance, &mut state.ctrl_plane);
+                    sink.emit_island(&mut state.ctrl_plane);
                 }
 
                 // Emit the jumps back to back
@@ -1976,10 +2028,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 // trap
                 sink.bind_label(label_trap, &mut state.ctrl_plane);
-                Inst::Udf {
-                    trap_code: trap_code,
-                }
-                .emit(&[], sink, emit_info, state);
+                Inst::Udf { trap_code }.emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::TrapIf { test, trap_code } => {
@@ -3055,4 +3104,151 @@ fn alloc_value_regs(orgin: &ValueRegs<Reg>, alloc: &mut AllocationConsumer) -> V
         2 => ValueRegs::two(alloc.next(orgin.regs()[0]), alloc.next(orgin.regs()[1])),
         _ => unreachable!(),
     }
+}
+
+fn emit_return_call_common_sequence(
+    allocs: &mut AllocationConsumer<'_>,
+    sink: &mut MachBuffer<Inst>,
+    emit_info: &EmitInfo,
+    state: &mut EmitState,
+    new_stack_arg_size: u32,
+    old_stack_arg_size: u32,
+    uses: &CallArgList,
+) {
+    for u in uses {
+        let _ = allocs.next(u.vreg);
+    }
+
+    // We are emitting a dynamic number of instructions and might need an
+    // island. We emit four instructions regardless of how many stack arguments
+    // we have, up to two instructions for the actual call, and then two
+    // instructions per word of stack argument space.
+    let new_stack_words = new_stack_arg_size / 8;
+    let insts = 4 + 2 + 2 * new_stack_words;
+    let space_needed = insts * u32::try_from(Inst::INSTRUCTION_SIZE).unwrap();
+    if sink.island_needed(space_needed) {
+        let jump_around_label = sink.get_label();
+        Inst::Jal {
+            dest: BranchTarget::Label(jump_around_label),
+        }
+        .emit(&[], sink, emit_info, state);
+        sink.emit_island(&mut state.ctrl_plane);
+        sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+    }
+
+    // Copy the new frame on top of our current frame.
+    //
+    // The current stack layout is the following:
+    //
+    //            | ...                 |
+    //            +---------------------+
+    //            | ...                 |
+    //            | stack arguments     |
+    //            | ...                 |
+    //    current | return address      |
+    //    frame   | old FP              | <-- FP
+    //            | ...                 |
+    //            | old stack slots     |
+    //            | ...                 |
+    //            +---------------------+
+    //            | ...                 |
+    //    new     | new stack arguments |
+    //    frame   | ...                 | <-- SP
+    //            +---------------------+
+    //
+    // We need to restore the old FP, restore the return address from the stack
+    // to the link register, copy the new stack arguments over the old stack
+    // arguments, adjust SP to point to the new stack arguments, and then jump
+    // to the callee (which will push the old FP and RA again). Note that the
+    // actual jump happens outside this helper function.
+
+    assert_eq!(
+        new_stack_arg_size % 8,
+        0,
+        "size of new stack arguments must be 8-byte aligned"
+    );
+
+    // The delta from our frame pointer to the (eventual) stack pointer value
+    // when we jump to the tail callee. This is the difference in size of stack
+    // arguments as well as accounting for the two words we pushed onto the
+    // stack upon entry to this function (the return address and old frame
+    // pointer).
+    let fp_to_callee_sp = i64::from(old_stack_arg_size) - i64::from(new_stack_arg_size) + 16;
+
+    let tmp1 = regs::writable_spilltmp_reg();
+    let tmp2 = regs::writable_spilltmp_reg2();
+
+    // Restore the return address to the link register, and load the old FP into
+    // a temporary register.
+    //
+    // We can't put the old FP into the FP register until after we copy the
+    // stack arguments into place, since that uses address modes that are
+    // relative to our current FP.
+    //
+    // Note that the FP is saved in the function prologue for all non-leaf
+    // functions, even when `preserve_frame_pointers=false`. Note also that
+    // `return_call` instructions make it so that a function is considered
+    // non-leaf. Therefore we always have an FP to restore here.
+
+    Inst::gen_load(
+        writable_link_reg(),
+        AMode::FPOffset(8, I64),
+        I64,
+        MemFlags::trusted(),
+    )
+    .emit(&[], sink, emit_info, state);
+    Inst::gen_load(tmp1, AMode::FPOffset(0, I64), I64, MemFlags::trusted()).emit(
+        &[],
+        sink,
+        emit_info,
+        state,
+    );
+
+    // Copy the new stack arguments over the old stack arguments.
+    for i in (0..new_stack_words).rev() {
+        // Load the `i`th new stack argument word from the temporary stack
+        // space.
+        Inst::gen_load(
+            tmp2,
+            AMode::SPOffset(i64::from(i * 8), types::I64),
+            types::I64,
+            ir::MemFlags::trusted(),
+        )
+        .emit(&[], sink, emit_info, state);
+
+        // Store it to its final destination on the stack, overwriting our
+        // current frame.
+        Inst::gen_store(
+            AMode::FPOffset(fp_to_callee_sp + i64::from(i * 8), types::I64),
+            tmp2.to_reg(),
+            types::I64,
+            ir::MemFlags::trusted(),
+        )
+        .emit(&[], sink, emit_info, state);
+    }
+
+    // Initialize the SP for the tail callee, deallocating the temporary stack
+    // argument space and our current frame at the same time.
+    Inst::AluRRImm12 {
+        alu_op: AluOPRRI::Addi,
+        rd: regs::writable_stack_reg(),
+        rs: regs::fp_reg(),
+        imm12: Imm12::maybe_from_u64(fp_to_callee_sp as u64).unwrap(),
+    }
+    .emit(&[], sink, emit_info, state);
+
+    // Move the old FP value from the temporary into the FP register.
+    Inst::Mov {
+        ty: types::I64,
+        rd: regs::writable_fp_reg(),
+        rm: tmp1.to_reg(),
+    }
+    .emit(&[], sink, emit_info, state);
+
+    state.virtual_sp_offset -= i64::from(new_stack_arg_size);
+    trace!(
+        "return_call[_ind] adjusts virtual sp offset by {} -> {}",
+        new_stack_arg_size,
+        state.virtual_sp_offset
+    );
 }

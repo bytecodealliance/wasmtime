@@ -235,9 +235,19 @@ impl From<wiggle::GuestError> for Error {
         match err {
             InvalidFlagValue { .. } => Errno::Inval.into(),
             InvalidEnumValue { .. } => Errno::Inval.into(),
-            PtrOverflow { .. } => Errno::Fault.into(),
-            PtrOutOfBounds { .. } => Errno::Fault.into(),
-            PtrNotAligned { .. } => Errno::Inval.into(),
+            // As per
+            // https://github.com/WebAssembly/wasi/blob/main/legacy/tools/witx-docs.md#pointers
+            //
+            // > If a misaligned pointer is passed to a function, the function
+            // > shall trap.
+            // >
+            // > If an out-of-bounds pointer is passed to a function and the
+            // > function needs to dereference it, the function shall trap.
+            //
+            // so this turns OOB and misalignment errors into traps.
+            PtrOverflow { .. } | PtrOutOfBounds { .. } | PtrNotAligned { .. } => {
+                Error::trap(err.into())
+            }
             PtrBorrowed { .. } => Errno::Fault.into(),
             InvalidUtf8 { .. } => Errno::Ilseq.into(),
             TryFromIntError { .. } => Errno::Overflow.into(),

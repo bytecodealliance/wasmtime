@@ -2,10 +2,10 @@ use anyhow::Result;
 use arbitrary::Arbitrary;
 use std::mem::MaybeUninit;
 use wasmtime::component::__internal::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, Memory, MemoryMut, Options, StoreOpaque,
+    CanonicalAbiInfo, InstanceType, InterfaceType, LiftContext, LowerContext,
 };
 use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, Val};
-use wasmtime::{AsContextMut, Config, Engine, StoreContextMut};
+use wasmtime::{AsContextMut, Config, Engine};
 
 pub trait TypedFuncExt<P, R> {
     fn call_and_post_return(&self, store: impl AsContextMut, params: P) -> Result<R>;
@@ -87,7 +87,7 @@ macro_rules! forward_impls {
             const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
 
             #[inline]
-            fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
                 <$b as ComponentType>::typecheck(ty, types)
             }
         }
@@ -95,25 +95,25 @@ macro_rules! forward_impls {
         unsafe impl Lower for $a {
             fn lower<U>(
                 &self,
-                store: &mut StoreContextMut<U>,
-                options: &Options,
+                cx: &mut LowerContext<'_, U>,
+                ty: InterfaceType,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
-                <$b as Lower>::lower(&self.0, store, options, dst)
+                <$b as Lower>::lower(&self.0, cx, ty, dst)
             }
 
-            fn store<U>(&self, memory: &mut MemoryMut<'_, U>, offset: usize) -> Result<()> {
-                <$b as Lower>::store(&self.0, memory, offset)
+            fn store<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType, offset: usize) -> Result<()> {
+                <$b as Lower>::store(&self.0, cx, ty, offset)
             }
         }
 
         unsafe impl Lift for $a {
-            fn lift(store: &StoreOpaque, options: &Options, src: &Self::Lower) -> Result<Self> {
-                Ok(Self(<$b as Lift>::lift(store, options, src)?))
+            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+                Ok(Self(<$b as Lift>::lift(cx, ty, src)?))
             }
 
-            fn load(memory: &Memory<'_>, bytes: &[u8]) -> Result<Self> {
-                Ok(Self(<$b as Lift>::load(memory, bytes)?))
+            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+                Ok(Self(<$b as Lift>::load(cx, ty, bytes)?))
             }
         }
 

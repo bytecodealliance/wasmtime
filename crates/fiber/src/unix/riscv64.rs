@@ -9,7 +9,7 @@ use wasmtime_asm_macros::asm_func;
 
 // fn(top_of_stack(rdi): *mut u8)
 asm_func!(
-    "wasmtime_fiber_switch",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
     "
       // See https://github.com/rust-lang/rust/issues/80608.
       .attribute arch, \"rv64gc\"
@@ -90,7 +90,7 @@ asm_func!(
 // )
 #[rustfmt::skip]
 asm_func!(
-    "wasmtime_fiber_init",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
     "
       lla t0,{}
       sd t0,-0x18(a0)  // ra,first should be wasmtime_fiber_start.
@@ -107,7 +107,7 @@ asm_func!(
 );
 
 asm_func!(
-    "wasmtime_fiber_start",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
     "
     .cfi_startproc simple
     .cfi_def_cfa_offset 0

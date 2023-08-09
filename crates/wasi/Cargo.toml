@@ -20,7 +20,10 @@ wasi-cap-std-sync = { workspace = true, optional = true }
 wasi-tokio = { workspace = true, optional = true }
 wiggle = { workspace = true, optional = true }
 libc = { workspace = true }
+once_cell = { workspace = true }
 
+tokio = { workspace = true, optional = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net"] }
+bytes = { workspace = true }
 thiserror = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 cap-std = { workspace = true, optional = true }
@@ -31,13 +34,19 @@ fs-set-times = { workspace = true, optional = true }
 bitflags = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 system-interface = { workspace = true, optional = true}
-rustix = { workspace = true, features = ["net"], optional = true}
+futures = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros"] }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["fs"] }
+rustix = { workspace = true, features = ["fs"], optional = true }
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.17.1"
+io-extras = { workspace = true }
 windows-sys = { workspace = true }
 
 [features]
@@ -59,6 +68,8 @@ preview2 = [
     'dep:async-trait',
     'dep:system-interface',
     'dep:rustix',
+    'dep:tokio',
+    'dep:futures',
 ]
 preview1-on-preview2 = [
     "preview2",

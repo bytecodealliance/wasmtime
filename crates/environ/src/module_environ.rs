@@ -16,8 +16,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
     types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
-    FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, Type,
-    TypeRef, Validator, ValidatorResources,
+    FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload,
+    StructuralType, TypeRef, Validator, ValidatorResources,
 };
 
 /// Object containing the standalone environment information.
@@ -238,12 +238,16 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.types.reserve_wasm_signatures(num);
 
                 for ty in types {
-                    match ty? {
-                        Type::Func(wasm_func_ty) => {
+                    let ty = ty?;
+                    if ty.is_final || ty.supertype_idx.is_some() {
+                        unimplemented!("gc proposal")
+                    }
+                    match ty.structural_type {
+                        StructuralType::Func(wasm_func_ty) => {
                             let ty = self.convert_func_type(&wasm_func_ty);
                             self.declare_type_func(ty)?;
                         }
-                        Type::Array(_) => {
+                        StructuralType::Array(_) | StructuralType::Struct(_) => {
                             unimplemented!("gc proposal")
                         }
                     }
@@ -446,7 +450,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let wasmparser::Element {
                         kind,
                         items,
-                        ty: _,
                         range: _,
                     } = entry?;
 
@@ -465,7 +468,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 elements.push(func);
                             }
                         }
-                        ElementItems::Expressions(funcs) => {
+                        ElementItems::Expressions(_ty, funcs) => {
                             elements.reserve(usize::try_from(funcs.count()).unwrap());
                             for func in funcs {
                                 let func = match func?.get_binary_reader().read_operator()? {

@@ -118,11 +118,6 @@ fn build_command<P: AsRef<Path>>(module: P, extra_flags: &[&str], spec: &Spec) -
             cmd.arg(format!("{}::{}", dir, parent_dir.join(dir).display()));
         }
     }
-    cmd.arg(module.as_ref().to_str().unwrap());
-    if let Some(spec_args) = &spec.args {
-        cmd.args(spec_args);
-    }
-
     // Add environment variables as CLI arguments.
     if let Some(env) = &spec.env {
         for env_pair in env {
@@ -130,6 +125,10 @@ fn build_command<P: AsRef<Path>>(module: P, extra_flags: &[&str], spec: &Spec) -
             cmd.arg(format!("{}={}", env_pair.0, env_pair.1));
         }
         cmd.envs(env);
+    }
+    cmd.arg(module.as_ref().to_str().unwrap());
+    if let Some(spec_args) = &spec.args {
+        cmd.args(spec_args);
     }
 
     Ok(cmd)

@@ -37,7 +37,7 @@ impl ComponentTypesBuilder {
         let mut params = match self.flatten_types(
             &options.options,
             MAX_FLAT_PARAMS,
-            ty.params.iter().copied(),
+            self[ty.params].types.iter().copied(),
         ) {
             Some(list) => list,
             None => {
@@ -50,7 +50,7 @@ impl ComponentTypesBuilder {
         let results = match self.flatten_types(
             &options.options,
             MAX_FLAT_RESULTS,
-            ty.results.iter().map(|ty| *ty),
+            self[ty.results].types.iter().map(|ty| *ty),
         ) {
             Some(list) => list,
             None => {
@@ -114,5 +114,22 @@ impl ComponentTypesBuilder {
         } else {
             (abi.size32, abi.align32)
         }
+    }
+
+    /// Tests whether the type signature for `options` contains a borrowed
+    /// resource anywhere.
+    pub(super) fn contains_borrow_resource(&self, options: &AdapterOptions) -> bool {
+        let ty = &self[options.ty];
+
+        // Only parameters need to be checked since results should never have
+        // borrowed resources.
+        debug_assert!(!self[ty.results]
+            .types
+            .iter()
+            .any(|t| self.ty_contains_borrow_resource(t)));
+        self[ty.params]
+            .types
+            .iter()
+            .any(|t| self.ty_contains_borrow_resource(t))
     }
 }

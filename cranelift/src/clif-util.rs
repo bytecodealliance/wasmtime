@@ -142,3 +142,9 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    Commands::command().debug_assert()
+}

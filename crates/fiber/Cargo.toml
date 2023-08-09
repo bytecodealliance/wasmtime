@@ -7,14 +7,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
-# We link to some native code with symbols that don't change often, so let Cargo
-# know that we can't show up multiple times in a crate graph. If this is an
-# issue in the future we should tweak the build script to set `#define`
-# directives or similar to embed a version number of this crate in symbols.
-links = "wasmtime-fiber-shims"
-
 [dependencies]
 cfg-if = { workspace = true }
+wasmtime-versioned-export-macros = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }
@@ -29,6 +24,7 @@ features = [
 
 [build-dependencies]
 cc = "1.0"
+wasmtime-versioned-export-macros = { workspace = true }
 
 [dev-dependencies]
-backtrace = "0.3.61"
+backtrace = "0.3.68"

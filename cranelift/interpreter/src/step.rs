@@ -1040,12 +1040,13 @@ where
             let any = fold_vector(arg(0), ctrl_ty, init.clone(), |acc, lane| acc.or(lane))?;
             assign(DataValue::bool(any != init, false, types::I8)?)
         }
-        Opcode::VallTrue => {
-            let lane_ty = ctrl_ty.lane_type();
-            let init = DataValue::bool(true, true, lane_ty)?;
-            let all = fold_vector(arg(0), ctrl_ty, init.clone(), |acc, lane| acc.and(lane))?;
-            assign(DataValue::bool(all == init, false, types::I8)?)
-        }
+        Opcode::VallTrue => assign(DataValue::bool(
+            !(arg(0).iter_lanes(ctrl_ty)?.try_fold(false, |acc, lane| {
+                Ok::<bool, ValueError>(acc | lane.is_zero()?)
+            })?),
+            false,
+            types::I8,
+        )?),
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
             let new_type = ctrl_ty.merge_lanes().unwrap();
             let conv_type = match inst.opcode() {
@@ -1434,11 +1435,14 @@ fn fcmp(code: FloatCC, left: &DataValue, right: &DataValue) -> ValueResult<bool>
     })
 }
 
-type SimdVec<DataValue> = SmallVec<[DataValue; 4]>;
+pub type SimdVec<DataValue> = SmallVec<[DataValue; 4]>;
 
 /// Converts a SIMD vector value into a Rust array of [Value] for processing.
 /// If `x` is a scalar, it will be returned as a single-element array.
-fn extractlanes(x: &DataValue, vector_type: types::Type) -> ValueResult<SimdVec<DataValue>> {
+pub(crate) fn extractlanes(
+    x: &DataValue,
+    vector_type: types::Type,
+) -> ValueResult<SimdVec<DataValue>> {
     let lane_type = vector_type.lane_type();
     let mut lanes = SimdVec::new();
     // Wrap scalar values as a single-element vector and return.

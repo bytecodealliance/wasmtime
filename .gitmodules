@@ -10,9 +10,6 @@
 [submodule "crates/wasi-nn/spec"]
 	path = crates/wasi-nn/spec
 	url = https://github.com/WebAssembly/wasi-nn
-[submodule "crates/wasi-crypto/spec"]
-	path = crates/wasi-crypto/spec
-	url = https://github.com/WebAssembly/wasi-crypto.git
 [submodule "tests/wasi_testsuite/wasi-threads"]
 	path = tests/wasi_testsuite/wasi-threads
 	url = https://github.com/WebAssembly/wasi-threads
@@ -23,6 +20,3 @@
 	path = tests/wasi_testsuite/wasi-common
 	url = https://github.com/WebAssembly/wasi-testsuite.git
 	branch = prod/testsuite-base
-[submodule "wasm-valgrind"]
-	path = wasm-valgrind
-	url = https://github.com/ssunkin-fastly/wasm-valgrind.git

@@ -1,12 +1,16 @@
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::TypeChecker;
-use crate::component::{Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, Val};
+use crate::component::{
+    Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
+};
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
+use indexmap::IndexMap;
 use std::collections::hash_map::{Entry, HashMap};
 use std::future::Future;
 use std::marker;
+use std::ops::Deref;
 use std::pin::Pin;
 use std::sync::Arc;
 use wasmtime_environ::component::TypeDef;
@@ -22,6 +26,7 @@ pub struct Linker<T> {
     engine: Engine,
     strings: Strings,
     map: NameMap,
+    path: Vec<usize>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -38,20 +43,23 @@ pub struct Strings {
 /// a "bag of named items", so each [`LinkerInstance`] can further define items
 /// internally.
 pub struct LinkerInstance<'a, T> {
-    engine: Engine,
+    engine: &'a Engine,
+    path: &'a mut Vec<usize>,
+    path_len: usize,
     strings: &'a mut Strings,
     map: &'a mut NameMap,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-pub type NameMap = HashMap<usize, Definition>;
+pub(crate) type NameMap = HashMap<usize, Definition>;
 
 #[derive(Clone)]
-pub enum Definition {
+pub(crate) enum Definition {
     Instance(NameMap),
     Func(Arc<HostFunc>),
     Module(Module),
+    Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
 impl<T> Linker<T> {
@@ -63,6 +71,7 @@ impl<T> Linker<T> {
             strings: Strings::default(),
             map: NameMap::default(),
             allow_shadowing: false,
+            path: Vec::new(),
             _marker: marker::PhantomData,
         }
     }
@@ -85,7 +94,9 @@ impl<T> Linker<T> {
     /// the root namespace.
     pub fn root(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
-            engine: self.engine.clone(),
+            engine: &self.engine,
+            path: &mut self.path,
+            path_len: 0,
             strings: &mut self.strings,
             map: &mut self.map,
             allow_shadowing: self.allow_shadowing,
@@ -121,9 +132,11 @@ impl<T> Linker<T> {
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
-        let cx = TypeChecker {
+        let mut cx = TypeChecker {
+            component: component.env_component(),
             types: component.types(),
             strings: &self.strings,
+            imported_resources: Default::default(),
         };
 
         // Walk over the component's list of import names and use that to lookup
@@ -162,6 +175,11 @@ impl<T> Linker<T> {
             let import = match cur {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
+                Definition::Resource(t, dtor) => RuntimeImport::Resource {
+                    ty: t.clone(),
+                    _dtor: dtor.clone(),
+                    dtor_funcref: component.resource_drop_func_ref(dtor),
+                },
 
                 // This is guaranteed by the compilation process that "leaf"
                 // runtime imports are never instances.
@@ -230,7 +248,9 @@ impl<T> Linker<T> {
 impl<T> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
-            engine: self.engine.clone(),
+            engine: self.engine,
+            path: self.path,
+            path_len: self.path_len,
             strings: self.strings,
             map: self.map,
             allow_shadowing: self.allow_shadowing,
@@ -310,21 +330,39 @@ impl<T> LinkerInstance<'_, T> {
         name: &str,
         func: F,
     ) -> Result<()> {
-        for (import_name, ty) in component.env_component().import_types.values() {
-            if name == import_name {
-                if let TypeDef::ComponentFunc(index) = ty {
-                    let name = self.strings.intern(name);
-                    return self.insert(
-                        name,
-                        Definition::Func(HostFunc::new_dynamic(func, *index, component.types())),
-                    );
+        let mut map = &component
+            .env_component()
+            .import_types
+            .values()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect::<IndexMap<_, _>>();
+
+        for name in self.path.iter().copied().take(self.path_len) {
+            let name = self.strings.strings[name].deref();
+            if let Some(ty) = map.get(name) {
+                if let TypeDef::ComponentInstance(index) = ty {
+                    map = &component.types()[*index].exports;
                 } else {
-                    bail!("import `{name}` has the wrong type (expected a function)");
+                    bail!("import `{name}` has the wrong type (expected a component instance)");
                 }
+            } else {
+                bail!("import `{name}` not found");
             }
         }
 
-        Err(anyhow!("import `{name}` not found"))
+        if let Some(ty) = map.get(name) {
+            if let TypeDef::ComponentFunc(index) = ty {
+                let name = self.strings.intern(name);
+                return self.insert(
+                    name,
+                    Definition::Func(HostFunc::new_dynamic(func, *index, component.types())),
+                );
+            } else {
+                bail!("import `{name}` has the wrong type (expected a function)");
+            }
+        } else {
+            Err(anyhow!("import `{name}` not found"))
+        }
     }
 
     // TODO: define func_new_async
@@ -337,6 +375,40 @@ impl<T> LinkerInstance<'_, T> {
     pub fn module(&mut self, name: &str, module: &Module) -> Result<()> {
         let name = self.strings.intern(name);
         self.insert(name, Definition::Module(module.clone()))
+    }
+
+    /// Defines a new host [`ResourceType`] in this linker.
+    ///
+    /// This function is used to specify resources defined in the host. The `U`
+    /// type parameter here is the type parameter to [`Resource<U>`]. This means
+    /// that component types using this resource type will be visible in
+    /// Wasmtime as [`Resource<U>`].
+    ///
+    /// The `name` argument is the name to define the resource within this
+    /// linker.
+    ///
+    /// The `dtor` provided is a destructor that will get invoked when an owned
+    /// version of this resource is destroyed from the guest. Note that this
+    /// destructor is not called when a host-owned resource is destroyed as it's
+    /// assumed the host knows how to handle destroying its own resources.
+    ///
+    /// The `dtor` closure is provided the store state as the first argument
+    /// along with the representation of the resource that was just destroyed.
+    ///
+    /// [`Resource<U>`]: crate::component::Resource
+    pub fn resource<U: 'static>(
+        &mut self,
+        name: &str,
+        dtor: impl Fn(StoreContextMut<'_, T>, u32) + Send + Sync + 'static,
+    ) -> Result<()> {
+        let name = self.strings.intern(name);
+        let dtor = Arc::new(crate::func::HostFunc::wrap(
+            &self.engine,
+            move |mut cx: crate::Caller<'_, T>, param: u32| {
+                dtor(cx.as_context_mut(), param);
+            },
+        ));
+        self.insert(name, Definition::Resource(ResourceType::host::<U>(), dtor))
     }
 
     /// Defines a nested instance within this instance.
@@ -367,6 +439,9 @@ impl<T> LinkerInstance<'_, T> {
             Definition::Instance(map) => map,
             _ => unreachable!(),
         };
+        self.path.truncate(self.path_len);
+        self.path.push(name);
+        self.path_len += 1;
         Ok(self)
     }
 

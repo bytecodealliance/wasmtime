@@ -24,30 +24,30 @@
 
 use crate::Engine;
 use anyhow::Result;
-use std::collections::{btree_map, BTreeMap};
+use std::collections::{btree_map, BTreeMap, BTreeSet};
 use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
-    Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, FunctionLoc, ModuleTranslation,
-    ModuleType, ModuleTypes, PrimaryMap, SignatureIndex, StaticModuleIndex, Tunables,
-    WasmFunctionInfo,
+    Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleType,
+    ModuleTypes, PrimaryMap, SignatureIndex, StaticModuleIndex, Tunables, WasmFunctionInfo,
 };
 use wasmtime_jit::{CompiledFunctionInfo, CompiledModuleInfo};
 
-type CompileInput<'a> =
-    Box<dyn FnOnce(&Tunables, &dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
+type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
 
 /// A sortable, comparable key for a compilation output.
 ///
 /// Two `u32`s to align with `cranelift_codegen::ir::UserExternalName`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CompileKey {
-    // [ kind:i3 module:i29 ]
+    // [ kind:i4 module:i28 ]
     namespace: u32,
     index: u32,
 }
 
 impl CompileKey {
-    const KIND_MASK: u32 = 0b111 << 29;
+    const KIND_BITS: u32 = 3;
+    const KIND_OFFSET: u32 = 32 - Self::KIND_BITS;
+    const KIND_MASK: u32 = ((1 << Self::KIND_BITS) - 1) << Self::KIND_OFFSET;
 
     fn kind(&self) -> u32 {
         self.namespace & Self::KIND_MASK
@@ -57,10 +57,16 @@ impl CompileKey {
         StaticModuleIndex::from_u32(self.namespace & !Self::KIND_MASK)
     }
 
-    const WASM_FUNCTION_KIND: u32 = 0b000 << 29;
-    const ARRAY_TO_WASM_TRAMPOLINE_KIND: u32 = 0b001 << 29;
-    const NATIVE_TO_WASM_TRAMPOLINE_KIND: u32 = 0b010 << 29;
-    const WASM_TO_NATIVE_TRAMPOLINE_KIND: u32 = 0b011 << 29;
+    const WASM_FUNCTION_KIND: u32 = Self::new_kind(0);
+    const ARRAY_TO_WASM_TRAMPOLINE_KIND: u32 = Self::new_kind(1);
+    const NATIVE_TO_WASM_TRAMPOLINE_KIND: u32 = Self::new_kind(2);
+    const WASM_TO_NATIVE_TRAMPOLINE_KIND: u32 = Self::new_kind(3);
+
+    const fn new_kind(kind: u32) -> u32 {
+        assert!(kind < (1 << Self::KIND_BITS));
+        kind << Self::KIND_OFFSET
+    }
+
     // NB: more kinds in the other `impl` block.
 
     fn wasm_function(module: StaticModuleIndex, index: DefinedFuncIndex) -> Self {
@@ -97,28 +103,20 @@ impl CompileKey {
 
 #[cfg(feature = "component-model")]
 impl CompileKey {
-    const LOWERING_KIND: u32 = 0b100 << 29;
-    const ALWAYS_TRAP_KIND: u32 = 0b101 << 29;
-    const TRANSCODER_KIND: u32 = 0b110 << 29;
+    const TRAMPOLINE_KIND: u32 = Self::new_kind(4);
+    const RESOURCE_DROP_WASM_TO_NATIVE_KIND: u32 = Self::new_kind(5);
 
-    fn lowering(index: wasmtime_environ::component::LoweredIndex) -> Self {
+    fn trampoline(index: wasmtime_environ::component::TrampolineIndex) -> Self {
         Self {
-            namespace: Self::LOWERING_KIND,
+            namespace: Self::TRAMPOLINE_KIND,
             index: index.as_u32(),
         }
     }
 
-    fn always_trap(index: wasmtime_environ::component::RuntimeAlwaysTrapIndex) -> Self {
+    fn resource_drop_wasm_to_native_trampoline() -> Self {
         Self {
-            namespace: Self::ALWAYS_TRAP_KIND,
-            index: index.as_u32(),
-        }
-    }
-
-    fn transcoder(index: wasmtime_environ::component::RuntimeTranscoderIndex) -> Self {
-        Self {
-            namespace: Self::TRANSCODER_KIND,
-            index: index.as_u32(),
+            namespace: Self::RESOURCE_DROP_WASM_TO_NATIVE_KIND,
+            index: 0,
         }
     }
 }
@@ -163,41 +161,35 @@ struct CompileOutput {
 }
 
 /// The collection of things we need to compile for a Wasm module or component.
+#[derive(Default)]
 pub struct CompileInputs<'a> {
     inputs: Vec<CompileInput<'a>>,
 }
 
-fn push_input<'a, 'data>(
-    inputs: &mut Vec<CompileInput<'a>>,
-    f: impl FnOnce(&Tunables, &dyn Compiler) -> Result<CompileOutput> + Send + 'a,
-) {
-    inputs.push(Box::new(f) as _);
-}
-
 impl<'a> CompileInputs<'a> {
+    fn push_input(&mut self, f: impl FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a) {
+        self.inputs.push(Box::new(f));
+    }
+
     /// Create the `CompileInputs` for a core Wasm module.
     pub fn for_module(
         types: &'a ModuleTypes,
         translation: &'a ModuleTranslation<'a>,
         functions: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'a>>,
     ) -> Self {
-        let mut inputs = vec![];
+        let mut ret = Self::default();
         let module_index = StaticModuleIndex::from_u32(0);
 
-        Self::collect_inputs_in_translations(
-            types,
-            [(module_index, translation, functions)],
-            &mut inputs,
-        );
+        ret.collect_inputs_in_translations(types, [(module_index, translation, functions)]);
 
-        CompileInputs { inputs }
+        ret
     }
 
     /// Create a `CompileInputs` for a component.
     #[cfg(feature = "component-model")]
     pub fn for_component(
         types: &'a wasmtime_environ::component::ComponentTypes,
-        component: &'a wasmtime_environ::component::Component,
+        component: &'a wasmtime_environ::component::ComponentTranslation,
         module_translations: impl IntoIterator<
             Item = (
                 StaticModuleIndex,
@@ -206,70 +198,49 @@ impl<'a> CompileInputs<'a> {
             ),
         >,
     ) -> Self {
-        let mut inputs = vec![];
+        let mut ret = CompileInputs::default();
 
-        Self::collect_inputs_in_translations(
-            types.module_types(),
-            module_translations,
-            &mut inputs,
-        );
+        ret.collect_inputs_in_translations(types.module_types(), module_translations);
 
-        for init in &component.initializers {
-            match init {
-                wasmtime_environ::component::GlobalInitializer::AlwaysTrap(always_trap) => {
-                    push_input(&mut inputs, move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::always_trap(always_trap.index),
-                            symbol: always_trap.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_always_trap(&types[always_trap.canonical_abi])?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-                wasmtime_environ::component::GlobalInitializer::Transcoder(transcoder) => {
-                    push_input(&mut inputs, move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::transcoder(transcoder.index),
-                            symbol: transcoder.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_transcoder(component, transcoder, types)?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-                wasmtime_environ::component::GlobalInitializer::LowerImport(lower_import) => {
-                    push_input(&mut inputs, move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::lowering(lower_import.index),
-                            symbol: lower_import.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_lowered_trampoline(component, lower_import, types)?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-                wasmtime_environ::component::GlobalInitializer::InstantiateModule(_)
-                | wasmtime_environ::component::GlobalInitializer::ExtractMemory(_)
-                | wasmtime_environ::component::GlobalInitializer::ExtractRealloc(_)
-                | wasmtime_environ::component::GlobalInitializer::ExtractPostReturn(_)
-                | wasmtime_environ::component::GlobalInitializer::SaveStaticModule(_)
-                | wasmtime_environ::component::GlobalInitializer::SaveModuleImport(_) => {
-                    // Nothing to compile for these.
-                }
+        for (idx, trampoline) in component.trampolines.iter() {
+            ret.push_input(move |compiler| {
+                Ok(CompileOutput {
+                    key: CompileKey::trampoline(idx),
+                    symbol: trampoline.symbol_name(),
+                    function: compiler
+                        .component_compiler()
+                        .compile_trampoline(component, types, idx)?
+                        .into(),
+                    info: None,
+                })
+            });
+        }
+
+        // If there are any resources defined within this component, the
+        // signature for `resource.drop` is mentioned somewhere, and the
+        // wasm-to-native trampoline for `resource.drop` hasn't been created yet
+        // then insert that here. This is possibly required by destruction of
+        // resources from the embedder and otherwise won't be explicitly
+        // requested through initializers above or such.
+        if component.component.num_resources > 0 {
+            if let Some(sig) = types.find_resource_drop_signature() {
+                ret.push_input(move |compiler| {
+                    let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
+                    Ok(CompileOutput {
+                        key: CompileKey::resource_drop_wasm_to_native_trampoline(),
+                        symbol: "resource_drop_trampoline".to_string(),
+                        function: CompiledFunction::Function(trampoline),
+                        info: None,
+                    })
+                });
             }
         }
 
-        CompileInputs { inputs }
+        ret
     }
 
     fn collect_inputs_in_translations(
+        &mut self,
         types: &'a ModuleTypes,
         translations: impl IntoIterator<
             Item = (
@@ -278,21 +249,15 @@ impl<'a> CompileInputs<'a> {
                 PrimaryMap<DefinedFuncIndex, FunctionBodyData<'a>>,
             ),
         >,
-        inputs: &mut Vec<CompileInput<'a>>,
     ) {
-        let mut sigs = BTreeMap::new();
+        let mut sigs = BTreeSet::new();
 
         for (module, translation, functions) in translations {
             for (def_func_index, func_body) in functions {
-                push_input(inputs, move |tunables, compiler| {
+                self.push_input(move |compiler| {
                     let func_index = translation.module.func_index(def_func_index);
-                    let (info, function) = compiler.compile_function(
-                        translation,
-                        def_func_index,
-                        func_body,
-                        tunables,
-                        types,
-                    )?;
+                    let (info, function) =
+                        compiler.compile_function(translation, def_func_index, func_body, types)?;
                     Ok(CompileOutput {
                         key: CompileKey::wasm_function(module, def_func_index),
                         symbol: format!(
@@ -307,7 +272,7 @@ impl<'a> CompileInputs<'a> {
 
                 let func_index = translation.module.func_index(def_func_index);
                 if translation.module.functions[func_index].is_escaping() {
-                    push_input(inputs, move |_tunables, compiler| {
+                    self.push_input(move |compiler| {
                         let func_index = translation.module.func_index(def_func_index);
                         let trampoline = compiler.compile_array_to_wasm_trampoline(
                             translation,
@@ -326,7 +291,7 @@ impl<'a> CompileInputs<'a> {
                         })
                     });
 
-                    push_input(inputs, move |_tunables, compiler| {
+                    self.push_input(move |compiler| {
                         let func_index = translation.module.func_index(def_func_index);
                         let trampoline = compiler.compile_native_to_wasm_trampoline(
                             translation,
@@ -348,15 +313,14 @@ impl<'a> CompileInputs<'a> {
             }
 
             sigs.extend(translation.module.types.iter().map(|(_, ty)| match ty {
-                ModuleType::Function(ty) => (*ty, translation),
+                ModuleType::Function(ty) => *ty,
             }));
         }
 
-        for (signature, translation) in sigs {
-            push_input(inputs, move |_tunables, compiler| {
+        for signature in sigs {
+            self.push_input(move |compiler| {
                 let wasm_func_ty = &types[signature];
-                let trampoline =
-                    compiler.compile_wasm_to_native_trampoline(translation, wasm_func_ty)?;
+                let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
                 Ok(CompileOutput {
                     key: CompileKey::wasm_to_native_trampoline(signature),
                     symbol: format!(
@@ -373,11 +337,10 @@ impl<'a> CompileInputs<'a> {
     /// Compile these `CompileInput`s (maybe in parallel) and return the
     /// resulting `UnlinkedCompileOutput`s.
     pub fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs> {
-        let tunables = &engine.config().tunables;
         let compiler = engine.compiler();
 
         // Compile each individual input in parallel.
-        let raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(tunables, compiler))?;
+        let raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(compiler))?;
 
         // Bucket the outputs by kind.
         let mut outputs: BTreeMap<u32, Vec<CompileOutput>> = BTreeMap::new();
@@ -497,7 +460,6 @@ impl FunctionIndices {
         let symbol_ids_and_locs = compiler.append_code(
             &mut obj,
             &compiled_funcs,
-            tunables,
             &|caller_index: usize, callee_index: FuncIndex| {
                 let module = self
                     .compiled_func_index_to_module
@@ -588,6 +550,13 @@ impl FunctionIndices {
             .remove(&CompileKey::NATIVE_TO_WASM_TRAMPOLINE_KIND)
             .unwrap_or_default();
 
+        // NB: unlike the above maps this is not emptied out during iteration
+        // since each module may reach into different portions of this map.
+        let wasm_to_native_trampolines = self
+            .indices
+            .remove(&CompileKey::WASM_TO_NATIVE_TRAMPOLINE_KIND)
+            .unwrap_or_default();
+
         artifacts.modules = translations
             .into_iter()
             .map(|(module, translation)| {
@@ -621,16 +590,20 @@ impl FunctionIndices {
                         })
                         .collect();
 
-                let wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)> = self
-                    .indices
-                    .remove(&CompileKey::WASM_TO_NATIVE_TRAMPOLINE_KIND)
-                    .into_iter()
-                    .flat_map(|x| x)
-                    .map(|(key, i)| {
-                        (
-                            SignatureIndex::from_u32(key.index),
-                            symbol_ids_and_locs[i.unwrap_function()].1,
-                        )
+                let unique_and_sorted_sigs = translation
+                    .module
+                    .types
+                    .iter()
+                    .map(|(_, ty)| match ty {
+                        ModuleType::Function(ty) => *ty,
+                    })
+                    .collect::<BTreeSet<_>>();
+                let wasm_to_native_trampolines = unique_and_sorted_sigs
+                    .iter()
+                    .map(|idx| {
+                        let key = CompileKey::wasm_to_native_trampoline(*idx);
+                        let compiled = wasm_to_native_trampolines[&key];
+                        (*idx, symbol_ids_and_locs[compiled.unwrap_function()].1)
                     })
                     .collect();
 
@@ -640,27 +613,22 @@ impl FunctionIndices {
 
         #[cfg(feature = "component-model")]
         {
-            artifacts.lowerings = self
+            artifacts.trampolines = self
                 .indices
-                .remove(&CompileKey::LOWERING_KIND)
+                .remove(&CompileKey::TRAMPOLINE_KIND)
                 .unwrap_or_default()
                 .into_iter()
                 .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
                 .collect();
-            artifacts.transcoders = self
+            let map = self
                 .indices
-                .remove(&CompileKey::TRANSCODER_KIND)
-                .unwrap_or_default()
+                .remove(&CompileKey::RESOURCE_DROP_WASM_TO_NATIVE_KIND)
+                .unwrap_or_default();
+            assert!(map.len() <= 1);
+            artifacts.resource_drop_wasm_to_native_trampoline = map
                 .into_iter()
-                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
-                .collect();
-            artifacts.always_traps = self
-                .indices
-                .remove(&CompileKey::ALWAYS_TRAP_KIND)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
-                .collect();
+                .next()
+                .map(|(_id, x)| symbol_ids_and_locs[x.unwrap_function()].1);
         }
 
         debug_assert!(
@@ -678,20 +646,12 @@ impl FunctionIndices {
 pub struct Artifacts {
     pub modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
     #[cfg(feature = "component-model")]
-    pub lowerings: PrimaryMap<
-        wasmtime_environ::component::LoweredIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+    pub trampolines: PrimaryMap<
+        wasmtime_environ::component::TrampolineIndex,
+        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
     #[cfg(feature = "component-model")]
-    pub always_traps: PrimaryMap<
-        wasmtime_environ::component::RuntimeAlwaysTrapIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
-    >,
-    #[cfg(feature = "component-model")]
-    pub transcoders: PrimaryMap<
-        wasmtime_environ::component::RuntimeTranscoderIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
-    >,
+    pub resource_drop_wasm_to_native_trampoline: Option<wasmtime_environ::FunctionLoc>,
 }
 
 impl Artifacts {
@@ -700,11 +660,7 @@ impl Artifacts {
     pub fn unwrap_as_module_info(self) -> CompiledModuleInfo {
         assert_eq!(self.modules.len(), 1);
         #[cfg(feature = "component-model")]
-        {
-            assert!(self.lowerings.is_empty());
-            assert!(self.always_traps.is_empty());
-            assert!(self.transcoders.is_empty());
-        }
+        assert!(self.trampolines.is_empty());
         self.modules.into_iter().next().unwrap().1
     }
 }

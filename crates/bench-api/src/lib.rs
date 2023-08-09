@@ -419,8 +419,6 @@ struct HostState {
     wasi: WasiCtx,
     #[cfg(feature = "wasi-nn")]
     wasi_nn: wasmtime_wasi_nn::WasiNnCtx,
-    #[cfg(feature = "wasi-crypto")]
-    wasi_crypto: wasmtime_wasi_crypto::WasiCryptoCtx,
 }
 
 impl BenchState {
@@ -472,11 +470,6 @@ impl BenchState {
             wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
         }
 
-        #[cfg(feature = "wasi-crypto")]
-        if wasi_modules.wasi_crypto {
-            wasmtime_wasi_crypto::add_to_linker(&mut linker, |cx| &mut cx.wasi_crypto)?;
-        }
-
         Ok(Self {
             linker,
             compilation_timer,
@@ -517,8 +510,6 @@ impl BenchState {
             wasi: (self.make_wasi_cx)().context("failed to create a WASI context")?,
             #[cfg(feature = "wasi-nn")]
             wasi_nn: wasmtime_wasi_nn::WasiNnCtx::new()?,
-            #[cfg(feature = "wasi-crypto")]
-            wasi_crypto: wasmtime_wasi_nn::WasiCryptoCtx::new(),
         };
 
         // NB: Start measuring instantiation time *after* we've created the WASI

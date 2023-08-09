@@ -9,9 +9,10 @@ use std::mem::{self, MaybeUninit};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, CanonicalOptions, ComponentTypes, CoreDef, RuntimeComponentInstanceIndex,
-    TypeFuncIndex, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, RuntimeComponentInstanceIndex,
+    TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
+use wasmtime_runtime::component::ResourceTables;
 use wasmtime_runtime::{Export, ExportFunction};
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
@@ -218,52 +219,66 @@ impl Func {
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
-        self._typed(store.as_context().0)
+        self._typed(store.as_context().0, None)
     }
 
     pub(crate) fn _typed<Params, Return>(
         &self,
         store: &StoreOpaque,
+        instance: Option<&InstanceData>,
     ) -> Result<TypedFunc<Params, Return>>
     where
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
-        self.typecheck::<Params, Return>(store)?;
+        self.typecheck::<Params, Return>(store, instance)?;
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
     }
 
-    fn typecheck<Params, Return>(&self, store: &StoreOpaque) -> Result<()>
+    fn typecheck<Params, Return>(
+        &self,
+        store: &StoreOpaque,
+        instance: Option<&InstanceData>,
+    ) -> Result<()>
     where
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
         let data = &store[self.0];
-        let ty = &data.types[data.ty];
+        let cx = instance
+            .unwrap_or_else(|| &store[data.instance.0].as_ref().unwrap())
+            .ty();
+        let ty = &cx.types[data.ty];
 
-        Params::typecheck_list(&ty.params, &data.types).context("type mismatch with parameters")?;
-        Return::typecheck_list(&ty.results, &data.types).context("type mismatch with results")?;
+        Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
+            .context("type mismatch with parameters")?;
+        Return::typecheck(&InterfaceType::Tuple(ty.results), &cx)
+            .context("type mismatch with results")?;
 
         Ok(())
     }
 
     /// Get the parameter types for this function.
     pub fn params(&self, store: impl AsContext) -> Box<[Type]> {
-        let data = &store.as_context()[self.0];
-        data.types[data.ty]
-            .params
+        let store = store.as_context();
+        let data = &store[self.0];
+        let instance = store[data.instance.0].as_ref().unwrap();
+        data.types[data.types[data.ty].params]
+            .types
             .iter()
-            .map(|ty| Type::from(ty, &data.types))
+            .map(|ty| Type::from(ty, &instance.ty()))
             .collect()
     }
 
     /// Get the result types for this function.
     pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
-        let data = &store.as_context()[self.0];
-        data.types[data.ty]
-            .results
+        let store = store.as_context();
+        let data = &store[self.0];
+        let instance = store[data.instance.0].as_ref().unwrap();
+        data.types[data.types[data.ty].results]
+            .types
             .iter()
-            .map(|ty| Type::from(ty, &data.types))
+            .map(|ty| Type::from(ty, &instance.ty()))
             .collect()
     }
 
@@ -350,14 +365,15 @@ impl Func {
             ty.check(param).context("type mismatch with parameters")?;
         }
 
-        let param_abi = CanonicalAbiInfo::record(param_tys.iter().map(|t| t.canonical_abi()));
-        let result_abi = CanonicalAbiInfo::record(result_tys.iter().map(|t| t.canonical_abi()));
-
         self.call_raw(
             store,
             params,
-            |store, options, params, dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>| {
-                if param_abi.flat_count(MAX_FLAT_PARAMS).is_some() {
+            |cx, params, params_ty, dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>| {
+                let params_ty = match params_ty {
+                    InterfaceType::Tuple(i) => &cx.types[i],
+                    _ => unreachable!(),
+                };
+                if params_ty.abi.flat_count(MAX_FLAT_PARAMS).is_some() {
                     let dst = &mut unsafe {
                         mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
                     }
@@ -365,26 +381,25 @@ impl Func {
 
                     params
                         .iter()
-                        .try_for_each(|param| param.lower(store, &options, dst))
+                        .zip(params_ty.types.iter())
+                        .try_for_each(|(param, ty)| param.lower(cx, *ty, dst))
                 } else {
-                    self.store_args(store, &options, &param_abi, &param_tys, params, dst)
+                    self.store_args(cx, &params_ty, params, dst)
                 }
             },
-            |store, options, src: &[ValRaw; MAX_FLAT_RESULTS]| {
-                if result_abi.flat_count(MAX_FLAT_RESULTS).is_some() {
+            |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
+                let results_ty = match results_ty {
+                    InterfaceType::Tuple(i) => &cx.types[i],
+                    _ => unreachable!(),
+                };
+                if results_ty.abi.flat_count(MAX_FLAT_RESULTS).is_some() {
                     let mut flat = src.iter();
-                    for (ty, slot) in result_tys.iter().zip(results) {
-                        *slot = Val::lift(ty, store, &options, &mut flat)?;
+                    for (ty, slot) in results_ty.types.iter().zip(results) {
+                        *slot = Val::lift(cx, *ty, &mut flat)?;
                     }
                     Ok(())
                 } else {
-                    Self::load_results(
-                        &Memory::new(store, &options),
-                        &result_abi,
-                        &result_tys,
-                        results,
-                        &mut src.iter(),
-                    )
+                    Self::load_results(cx, results_ty, results, &mut src.iter())
                 }
             },
         )
@@ -403,12 +418,12 @@ impl Func {
         store: &mut StoreContextMut<'_, T>,
         params: &Params,
         lower: impl FnOnce(
-            &mut StoreContextMut<'_, T>,
-            &Options,
+            &mut LowerContext<'_, T>,
             &Params,
+            InterfaceType,
             &mut MaybeUninit<LowerParams>,
         ) -> Result<()>,
-        lift: impl FnOnce(&StoreOpaque, &Options, &LowerReturn) -> Result<Return>,
+        lift: impl FnOnce(&mut LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
     ) -> Result<Return>
     where
         LowerParams: Copy,
@@ -419,6 +434,7 @@ impl Func {
             options,
             instance,
             component_instance,
+            ty,
             ..
         } = store.0[self.0];
 
@@ -439,8 +455,9 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let mut flags = instance.instance_flags(component_instance);
+        let instance = store.0[instance.0].as_ref().unwrap();
+        let types = instance.component_types().clone();
+        let mut flags = instance.instance().instance_flags(component_instance);
 
         unsafe {
             // Test the "may enter" flag which is a "lock" on this instance.
@@ -451,13 +468,21 @@ impl Func {
             // never be entered again. The only time this flag is set to `true`
             // again is after post-return logic has completed successfully.
             if !flags.may_enter() {
-                bail!("cannot reenter component instance");
+                bail!(crate::Trap::CannotEnterComponent);
             }
             flags.set_may_enter(false);
 
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
-            let result = lower(store, &options, params, map_maybe_uninit!(space.params));
+            let instance_ptr = instance.instance_ptr();
+            let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr);
+            cx.enter_call();
+            let result = lower(
+                &mut cx,
+                params,
+                InterfaceType::Tuple(types[ty].params),
+                map_maybe_uninit!(space.params),
+            );
             flags.set_may_leave(true);
             result?;
 
@@ -493,7 +518,11 @@ impl Func {
             // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
             // later get used in post-return.
             flags.set_needs_post_return(true);
-            let val = lift(store.0, &options, ret)?;
+            let val = lift(
+                &mut LiftContext::new(store.0, &options, &types, instance_ptr),
+                InterfaceType::Tuple(types[ty].results),
+                ret,
+            )?;
             let ret_slice = storage_as_slice(ret);
             let data = &mut store.0[self.0];
             assert!(data.post_return_arg.is_none());
@@ -574,10 +603,11 @@ impl Func {
         let post_return = data.post_return;
         let component_instance = data.component_instance;
         let post_return_arg = data.post_return_arg.take();
-        let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let mut flags = instance.instance_flags(component_instance);
+        let instance = store.0[instance.0].as_ref().unwrap().instance_ptr();
 
         unsafe {
+            let mut flags = (*instance).instance_flags(component_instance);
+
             // First assert that the instance is in a "needs post return" state.
             // This will ensure that the previous action on the instance was a
             // function call above. This flag is only set after a component
@@ -627,26 +657,31 @@ impl Func {
             // enter" flag is set to `true` again here which enables further use
             // of the component.
             flags.set_may_enter(true);
+
+            let (calls, host_table) = store.0.component_calls_and_host_table();
+            ResourceTables {
+                calls,
+                host_table: Some(host_table),
+                tables: Some((*instance).component_resource_tables()),
+            }
+            .exit_call()?;
         }
         Ok(())
     }
 
     fn store_args<T>(
         &self,
-        store: &mut StoreContextMut<'_, T>,
-        options: &Options,
-        abi: &CanonicalAbiInfo,
-        params: &[Type],
+        cx: &mut LowerContext<'_, T>,
+        params_ty: &TypeTuple,
         args: &[Val],
         dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
     ) -> Result<()> {
-        let mut memory = MemoryMut::new(store.as_context_mut(), options);
-        let size = usize::try_from(abi.size32).unwrap();
-        let ptr = memory.realloc(0, 0, abi.align32, size)?;
+        let size = usize::try_from(params_ty.abi.size32).unwrap();
+        let ptr = cx.realloc(0, 0, params_ty.abi.align32, size)?;
         let mut offset = ptr;
-        for (ty, arg) in params.iter().zip(args) {
-            let abi = ty.canonical_abi();
-            arg.store(&mut memory, abi.next_field32_size(&mut offset))?;
+        for (ty, arg) in params_ty.types.iter().zip(args) {
+            let abi = cx.types.canonical_abi(ty);
+            arg.store(cx, *ty, abi.next_field32_size(&mut offset))?;
         }
 
         map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
@@ -654,30 +689,29 @@ impl Func {
         Ok(())
     }
 
-    fn load_results<'a>(
-        mem: &Memory,
-        abi: &CanonicalAbiInfo,
-        result_tys: &[Type],
+    fn load_results(
+        cx: &mut LiftContext<'_>,
+        results_ty: &TypeTuple,
         results: &mut [Val],
         src: &mut std::slice::Iter<'_, ValRaw>,
     ) -> Result<()> {
         // FIXME: needs to read an i64 for memory64
         let ptr = usize::try_from(src.next().unwrap().get_u32())?;
-        if ptr % usize::try_from(abi.align32)? != 0 {
+        if ptr % usize::try_from(results_ty.abi.align32)? != 0 {
             bail!("return pointer not aligned");
         }
 
-        let bytes = mem
-            .as_slice()
+        let bytes = cx
+            .memory()
             .get(ptr..)
-            .and_then(|b| b.get(..usize::try_from(abi.size32).unwrap()))
+            .and_then(|b| b.get(..usize::try_from(results_ty.abi.size32).unwrap()))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
 
         let mut offset = 0;
-        for (ty, slot) in result_tys.iter().zip(results) {
-            let abi = ty.canonical_abi();
+        for (ty, slot) in results_ty.types.iter().zip(results) {
+            let abi = cx.types.canonical_abi(ty);
             let offset = abi.next_field32_size(&mut offset);
-            *slot = Val::load(ty, mem, &bytes[offset..][..abi.size32 as usize])?;
+            *slot = Val::load(cx, *ty, &bytes[offset..][..abi.size32 as usize])?;
         }
         Ok(())
     }

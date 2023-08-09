@@ -67,3 +67,11 @@ impl<T: ?Sized> Clone for SendSyncPtr<T> {
 }
 
 impl<T: ?Sized> Copy for SendSyncPtr<T> {}
+
+impl<T: ?Sized> PartialEq for SendSyncPtr<T> {
+    fn eq(&self, other: &SendSyncPtr<T>) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T: ?Sized> Eq for SendSyncPtr<T> {}

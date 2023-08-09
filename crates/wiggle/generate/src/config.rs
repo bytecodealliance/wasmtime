@@ -164,7 +164,7 @@ impl Parse for Config {
         let contents;
         let _lbrace = braced!(contents in input);
         let fields: Punctuated<ConfigField, Token![,]> =
-            contents.parse_terminated(ConfigField::parse)?;
+            contents.parse_terminated(ConfigField::parse, Token![,])?;
         Ok(Config::build(fields.into_iter(), input.span())?)
     }
 }
@@ -239,7 +239,8 @@ impl Parse for Paths {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
         let _ = bracketed!(content in input);
-        let path_lits: Punctuated<LitStr, Token![,]> = content.parse_terminated(Parse::parse)?;
+        let path_lits: Punctuated<LitStr, Token![,]> =
+            content.parse_terminated(Parse::parse, Token![,])?;
 
         let expanded_paths = path_lits
             .iter()
@@ -287,7 +288,7 @@ impl Parse for ErrorConf {
         let content;
         let _ = braced!(content in input);
         let items: Punctuated<ErrorConfField, Token![,]> =
-            content.parse_terminated(Parse::parse)?;
+            content.parse_terminated(Parse::parse, Token![,])?;
         let mut m = HashMap::new();
         for i in items {
             match m.insert(i.abi_error().clone(), i.clone()) {
@@ -466,7 +467,7 @@ impl Parse for AsyncFunctions {
         if lookahead.peek(syn::token::Brace) {
             let _ = braced!(content in input);
             let items: Punctuated<FunctionField, Token![,]> =
-                content.parse_terminated(Parse::parse)?;
+                content.parse_terminated(Parse::parse, Token![,])?;
             let mut functions: HashMap<String, Vec<String>> = HashMap::new();
             use std::collections::hash_map::Entry;
             for i in items {
@@ -509,7 +510,7 @@ impl Parse for FunctionField {
             let content;
             let _ = braced!(content in input);
             let function_names: Punctuated<Ident, Token![,]> =
-                content.parse_terminated(Parse::parse)?;
+                content.parse_terminated(Parse::parse, Token![,])?;
             Ok(FunctionField {
                 module_name,
                 function_names: function_names.iter().cloned().collect(),
@@ -569,7 +570,7 @@ impl Parse for WasmtimeConfig {
         let contents;
         let _lbrace = braced!(contents in input);
         let fields: Punctuated<WasmtimeConfigField, Token![,]> =
-            contents.parse_terminated(WasmtimeConfigField::parse)?;
+            contents.parse_terminated(WasmtimeConfigField::parse, Token![,])?;
         Ok(WasmtimeConfig::build(fields.into_iter(), input.span())?)
     }
 }
@@ -665,7 +666,7 @@ impl Parse for TracingConf {
             let content;
             let _ = braced!(content in input);
             let items: Punctuated<FunctionField, Token![,]> =
-                content.parse_terminated(Parse::parse)?;
+                content.parse_terminated(Parse::parse, Token![,])?;
             let mut functions: HashMap<String, Vec<String>> = HashMap::new();
             use std::collections::hash_map::Entry;
             for i in items {

@@ -1,6 +1,6 @@
 use crate::code::CodeObject;
 use crate::signatures::SignatureCollection;
-use crate::{Engine, Module};
+use crate::{Engine, Module, ResourcesRequired};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -9,13 +9,15 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AllCallFunc, ComponentTypes, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeTranscoderIndex,
-    StaticModuleIndex, Translator,
+    AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
+    TrampolineIndex, Translator,
 };
 use wasmtime_environ::{FunctionLoc, ObjectKind, PrimaryMap, ScopeVec};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
+use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
-    MmapVec, VMArrayCallFunction, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
+    MmapVec, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction,
+    VMWasmCallFunction,
 };
 
 /// A compiled WebAssembly Component.
@@ -58,20 +60,11 @@ struct CompiledComponentInfo {
     ///
     /// function pointers that end up in a `VMFuncRef` for each
     /// lowering.
-    lowerings: PrimaryMap<LoweredIndex, AllCallFunc<FunctionLoc>>,
+    trampolines: PrimaryMap<TrampolineIndex, AllCallFunc<FunctionLoc>>,
 
-    /// Where the "always trap" functions are located within the `text` section
-    /// of `code_memory`.
-    ///
-    /// These functions are "degenerate functions" here solely to implement
-    /// functions that are `canon lift`'d then immediately `canon lower`'d. The
-    /// `u32` value here is the offset of the trap instruction from the start fo
-    /// the function.
-    always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, AllCallFunc<FunctionLoc>>,
-
-    /// Where all the cranelift-generated transcode functions are located in the
-    /// compiled image of this component.
-    transcoders: PrimaryMap<RuntimeTranscoderIndex, AllCallFunc<FunctionLoc>>,
+    /// The location of the wasm-to-native trampoline for the `resource.drop`
+    /// intrinsic.
+    resource_drop_wasm_to_native_trampoline: Option<FunctionLoc>,
 }
 
 pub(crate) struct AllCallFuncPointers {
@@ -213,17 +206,17 @@ impl Component {
 
         let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
             object,
-            tunables,
+            &engine.config().tunables,
             compiler,
             compiled_funcs,
             module_translations,
         )?;
 
         let info = CompiledComponentInfo {
-            component,
-            always_trap: compilation_artifacts.always_traps,
-            lowerings: compilation_artifacts.lowerings,
-            transcoders: compilation_artifacts.transcoders,
+            component: component.component,
+            trampolines: compilation_artifacts.trampolines,
+            resource_drop_wasm_to_native_trampoline: compilation_artifacts
+                .resource_drop_wasm_to_native_trampoline,
         };
         let artifacts = ComponentArtifacts {
             info,
@@ -291,12 +284,7 @@ impl Component {
     }
 
     pub(crate) fn types(&self) -> &Arc<ComponentTypes> {
-        match self.inner.code.types() {
-            crate::code::Types::Component(types) => types,
-            // The only creator of a `Component` is itself which uses the other
-            // variant, so this shouldn't be possible.
-            crate::code::Types::Module(_) => unreachable!(),
-        }
+        self.inner.component_types()
     }
 
     pub(crate) fn signatures(&self) -> &SignatureCollection {
@@ -307,46 +295,12 @@ impl Component {
         self.inner.code.code_memory().text()
     }
 
-    pub(crate) fn lowering_ptrs(&self, index: LoweredIndex) -> AllCallFuncPointers {
+    pub(crate) fn trampoline_ptrs(&self, index: TrampolineIndex) -> AllCallFuncPointers {
         let AllCallFunc {
             wasm_call,
             array_call,
             native_call,
-        } = &self.inner.info.lowerings[index];
-        AllCallFuncPointers {
-            wasm_call: self.func(wasm_call).cast(),
-            array_call: unsafe {
-                mem::transmute::<NonNull<VMFunctionBody>, VMArrayCallFunction>(
-                    self.func(array_call),
-                )
-            },
-            native_call: self.func(native_call).cast(),
-        }
-    }
-
-    pub(crate) fn always_trap_ptrs(&self, index: RuntimeAlwaysTrapIndex) -> AllCallFuncPointers {
-        let AllCallFunc {
-            wasm_call,
-            array_call,
-            native_call,
-        } = &self.inner.info.always_trap[index];
-        AllCallFuncPointers {
-            wasm_call: self.func(wasm_call).cast(),
-            array_call: unsafe {
-                mem::transmute::<NonNull<VMFunctionBody>, VMArrayCallFunction>(
-                    self.func(array_call),
-                )
-            },
-            native_call: self.func(native_call).cast(),
-        }
-    }
-
-    pub(crate) fn transcoder_ptrs(&self, index: RuntimeTranscoderIndex) -> AllCallFuncPointers {
-        let AllCallFunc {
-            wasm_call,
-            array_call,
-            native_call,
-        } = &self.inner.info.transcoders[index];
+        } = &self.inner.info.trampolines[index];
         AllCallFuncPointers {
             wasm_call: self.func(wasm_call).cast(),
             array_call: unsafe {
@@ -378,5 +332,135 @@ impl Component {
     /// [`Module`]: crate::Module
     pub fn serialize(&self) -> Result<Vec<u8>> {
         Ok(self.code_object().code_memory().mmap().to_vec())
+    }
+
+    pub(crate) fn runtime_info(&self) -> Arc<dyn ComponentRuntimeInfo> {
+        self.inner.clone()
+    }
+
+    /// Creates a new `VMFuncRef` with all fields filled out for the destructor
+    /// specified.
+    ///
+    /// The `dtor`'s own `VMFuncRef` won't have `wasm_call` filled out but this
+    /// component may have `resource_drop_wasm_to_native_trampoline` filled out
+    /// if necessary in which case it's filled in here.
+    pub(crate) fn resource_drop_func_ref(&self, dtor: &crate::func::HostFunc) -> VMFuncRef {
+        // Host functions never have their `wasm_call` filled in at this time.
+        assert!(dtor.func_ref().wasm_call.is_none());
+
+        // Note that if `resource_drop_wasm_to_native_trampoline` is not present
+        // then this can't be called by the component, so it's ok to leave it
+        // blank.
+        let wasm_call = self
+            .inner
+            .info
+            .resource_drop_wasm_to_native_trampoline
+            .as_ref()
+            .map(|i| self.func(i).cast());
+        VMFuncRef {
+            wasm_call,
+            ..*dtor.func_ref()
+        }
+    }
+
+    /// Returns a summary of the resources required to instantiate this
+    /// [`Component`][crate::component::Component].
+    ///
+    /// Note that when a component imports and instantiates another component or
+    /// core module, we cannot determine ahead of time how many resources
+    /// instantiating this component will require, and therefore this method
+    /// will return `None` in these scenarios.
+    ///
+    /// Potential uses of the returned information:
+    ///
+    /// * Determining whether your pooling allocator configuration supports
+    ///   instantiating this component.
+    ///
+    /// * Deciding how many of which `Component` you want to instantiate within
+    ///   a fixed amount of resources, e.g. determining whether to create 5
+    ///   instances of component X or 10 instances of component Y.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # fn main() -> wasmtime::Result<()> {
+    /// use wasmtime::{Config, Engine, component::Component};
+    ///
+    /// let mut config = Config::new();
+    /// config.wasm_multi_memory(true);
+    /// config.wasm_component_model(true);
+    /// let engine = Engine::new(&config)?;
+    ///
+    /// let component = Component::new(&engine, &r#"
+    ///     (component
+    ///         ;; Define a core module that uses two memories.
+    ///         (core module $m
+    ///             (memory 1)
+    ///             (memory 6)
+    ///         )
+    ///
+    ///         ;; Instantiate that core module three times.
+    ///         (core instance $i1 (instantiate (module $m)))
+    ///         (core instance $i2 (instantiate (module $m)))
+    ///         (core instance $i3 (instantiate (module $m)))
+    ///     )
+    /// "#)?;
+    ///
+    /// let resources = component.resources_required()
+    ///     .expect("this component does not import any core modules or instances");
+    ///
+    /// // Instantiating the component will require allocating two memories per
+    /// // core instance, and there are three instances, so six total memories.
+    /// assert_eq!(resources.num_memories, 6);
+    /// assert_eq!(resources.max_initial_memory_size, Some(6));
+    ///
+    /// // The component doesn't need any tables.
+    /// assert_eq!(resources.num_tables, 0);
+    /// assert_eq!(resources.max_initial_table_size, None);
+    /// # Ok(()) }
+    /// ```
+    pub fn resources_required(&self) -> Option<ResourcesRequired> {
+        let mut resources = ResourcesRequired {
+            num_memories: 0,
+            max_initial_memory_size: None,
+            num_tables: 0,
+            max_initial_table_size: None,
+        };
+        for init in &self.env_component().initializers {
+            match init {
+                GlobalInitializer::InstantiateModule(inst) => match inst {
+                    InstantiateModule::Static(index, _) => {
+                        let module = self.static_module(*index);
+                        resources.add(&module.resources_required());
+                    }
+                    InstantiateModule::Import(_, _) => {
+                        // We can't statically determine the resources required
+                        // to instantiate this component.
+                        return None;
+                    }
+                },
+                GlobalInitializer::LowerImport { .. }
+                | GlobalInitializer::ExtractMemory(_)
+                | GlobalInitializer::ExtractRealloc(_)
+                | GlobalInitializer::ExtractPostReturn(_)
+                | GlobalInitializer::Resource(_) => {}
+            }
+        }
+        Some(resources)
+    }
+}
+
+impl ComponentRuntimeInfo for ComponentInner {
+    fn component(&self) -> &wasmtime_environ::component::Component {
+        &self.info.component
+    }
+
+    fn component_types(&self) -> &Arc<ComponentTypes> {
+        match self.code.types() {
+            crate::code::Types::Component(types) => types,
+            // The only creator of a `Component` is itself which uses the other
+            // variant, so this shouldn't be possible.
+            crate::code::Types::Module(_) => unreachable!(),
+        }
     }
 }

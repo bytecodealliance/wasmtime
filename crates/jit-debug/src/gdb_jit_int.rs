@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 use std::pin::Pin;
 use std::ptr;
 use std::sync::Mutex;
+use wasmtime_versioned_export_macros::versioned_link;
 
 #[repr(C)]
 struct JITCodeEntry {
@@ -28,6 +29,7 @@ struct JITDescriptor {
 }
 
 extern "C" {
+    #[versioned_link]
     fn wasmtime_jit_debug_descriptor() -> *mut JITDescriptor;
     fn __jit_debug_register_code();
 }

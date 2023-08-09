@@ -3,10 +3,10 @@
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
 use once_cell::sync::Lazy;
-use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use wasmtime::{
@@ -17,19 +17,8 @@ use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
-#[cfg(any(
-    feature = "wasi-crypto",
-    feature = "wasi-nn",
-    feature = "wasi-threads",
-    feature = "wasi-http"
-))]
-use std::sync::Arc;
-
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
-
-#[cfg(feature = "wasi-crypto")]
-use wasmtime_wasi_crypto::WasiCryptoCtx;
 
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
@@ -37,24 +26,12 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttp;
 
-fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
-    // Do not accept wasmtime subcommand names as the module name
-    match s.to_str() {
-        Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
-            bail!("module name cannot be the same as a subcommand")
-        }
-        #[cfg(unix)]
-        Some("-") => Ok(PathBuf::from("/dev/stdin")),
-        _ => Ok(s.into()),
-    }
-}
-
-fn parse_env_var(s: &str) -> Result<(String, String)> {
-    let parts: Vec<_> = s.splitn(2, '=').collect();
-    if parts.len() != 2 {
-        bail!("must be of the form `key=value`");
-    }
-    Ok((parts[0].to_owned(), parts[1].to_owned()))
+fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
+    let mut parts = s.splitn(2, '=');
+    Ok((
+        parts.next().unwrap().to_string(),
+        parts.next().map(|s| s.to_string()),
+    ))
 }
 
 fn parse_map_dirs(s: &str) -> Result<(String, String)> {
@@ -109,7 +86,7 @@ static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_strin
 
 /// Runs a WebAssembly module
 #[derive(Parser)]
-#[structopt(name = "run", trailing_var_arg = true, after_help = AFTER_HELP.as_str())]
+#[structopt(name = "run", after_help = AFTER_HELP.as_str())]
 pub struct RunCommand {
     #[clap(flatten)]
     common: CommonOptions,
@@ -154,32 +131,30 @@ pub struct RunCommand {
     #[clap(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
     dirs: Vec<String>,
 
-    /// Pass an environment variable to the program
-    #[clap(long = "env", number_of_values = 1, value_name = "NAME=VAL", parse(try_from_str = parse_env_var))]
-    vars: Vec<(String, String)>,
+    /// Pass an environment variable to the program.
+    ///
+    /// The `--env FOO=BAR` form will set the environment variable named `FOO`
+    /// to the value `BAR` for the guest program using WASI. The `--env FOO`
+    /// form will set the environment variable named `FOO` to the same value it
+    /// has in the calling process for the guest, or in other words it will
+    /// cause the environment variable `FOO` to be inherited.
+    #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
+    vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
     #[clap(long, value_name = "FUNCTION")]
     invoke: Option<String>,
 
     /// Grant access to a guest directory mapped as a host directory
-    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", parse(try_from_str = parse_map_dirs))]
+    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)]
     map_dirs: Vec<(String, String)>,
-
-    /// The path of the WebAssembly module to run
-    #[clap(
-        required = true,
-        value_name = "MODULE",
-        parse(try_from_os_str = parse_module),
-    )]
-    module: PathBuf,
 
     /// Load the given WebAssembly module before the main module
     #[clap(
         long = "preload",
         number_of_values = 1,
         value_name = "NAME=MODULE_PATH",
-        parse(try_from_str = parse_preloads)
+        value_parser = parse_preloads,
     )]
     preloads: Vec<(String, PathBuf)>,
 
@@ -187,7 +162,7 @@ pub struct RunCommand {
     #[clap(
         long = "wasm-timeout",
         value_name = "TIME",
-        parse(try_from_str = parse_dur),
+        value_parser = parse_dur,
     )]
     wasm_timeout: Option<Duration>,
 
@@ -209,18 +184,13 @@ pub struct RunCommand {
     #[clap(
         long,
         value_name = "STRATEGY",
-        parse(try_from_str = parse_profile),
+        value_parser = parse_profile,
     )]
     profile: Option<Profile>,
 
     /// Enable coredump generation after a WebAssembly trap.
     #[clap(long = "coredump-on-trap", value_name = "PATH")]
     coredump_on_trap: Option<String>,
-
-    // NOTE: this must come last for trailing varargs
-    /// The arguments to pass to the module
-    #[clap(value_name = "ARGS")]
-    module_args: Vec<String>,
 
     /// Maximum size, in bytes, that a linear memory is allowed to reach.
     ///
@@ -254,11 +224,20 @@ pub struct RunCommand {
     #[clap(long)]
     trap_on_grow_failure: bool,
 
-    /// Run valgrind
+    /// Enable valgrind.
     #[clap(long)]
     valgrind: bool,
+
+    /// The WebAssembly module to run and arguments to pass to it.
+    ///
+    /// Arguments passed to the wasm module will be configured as WASI CLI
+    /// arguments unless the `--invoke` CLI argument is passed in which case
+    /// arguments will be interpreted as arguments to the function specified.
+    #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
+    module_and_args: Vec<PathBuf>,
 }
 
+#[derive(Clone)]
 enum Profile {
     Native(wasmtime::ProfilingStrategy),
     Guest { path: String, interval: Duration },
@@ -300,13 +279,13 @@ impl RunCommand {
 
         // Make wasi available by default.
         let preopen_dirs = self.compute_preopen_dirs()?;
-        let argv = self.compute_argv();
+        let argv = self.compute_argv()?;
 
         let mut linker = Linker::new(&engine);
         linker.allow_unknown_exports(self.allow_unknown_exports);
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        let module = self.load_module(linker.engine(), &self.module)?;
+        let module = self.load_module(linker.engine(), &self.module_and_args[0])?;
         let mut modules = vec![(String::new(), module.clone())];
 
         let host = Host::default();
@@ -367,8 +346,12 @@ impl RunCommand {
         // Load the main wasm module.
         match self
             .load_main_module(&mut store, &mut linker, module, modules, &argv[0])
-            .with_context(|| format!("failed to run main module `{}`", self.module.display()))
-        {
+            .with_context(|| {
+                format!(
+                    "failed to run main module `{}`",
+                    self.module_and_args[0].display()
+                )
+            }) {
             Ok(()) => (),
             Err(e) => {
                 // Exit the process if Wasmtime understands the error;
@@ -417,27 +400,25 @@ impl RunCommand {
         Ok(listeners)
     }
 
-    fn compute_argv(&self) -> Vec<String> {
+    fn compute_argv(&self) -> Result<Vec<String>> {
         let mut result = Vec::new();
 
-        // Add argv[0], which is the program name. Only include the base name of the
-        // main wasm module, to avoid leaking path information.
-        result.push(
-            self.module
-                .components()
-                .next_back()
-                .map(Component::as_os_str)
-                .and_then(OsStr::to_str)
-                .unwrap_or("")
-                .to_owned(),
-        );
-
-        // Add the remaining arguments.
-        for arg in self.module_args.iter() {
-            result.push(arg.clone());
+        for (i, arg) in self.module_and_args.iter().enumerate() {
+            // For argv[0], which is the program name. Only include the base
+            // name of the main wasm module, to avoid leaking path information.
+            let arg = if i == 0 {
+                arg.components().next_back().unwrap().as_os_str()
+            } else {
+                arg.as_ref()
+            };
+            result.push(
+                arg.to_str()
+                    .ok_or_else(|| anyhow!("failed to convert {arg:?} to utf-8"))?
+                    .to_string(),
+            );
         }
 
-        result
+        Ok(result)
     }
 
     fn setup_epoch_handler(
@@ -538,9 +519,10 @@ impl RunCommand {
         }
 
         // Use "" as a default module name.
-        linker
-            .module(&mut *store, "", &module)
-            .context(format!("failed to instantiate {:?}", self.module))?;
+        linker.module(&mut *store, "", &module).context(format!(
+            "failed to instantiate {:?}",
+            self.module_and_args[0]
+        ))?;
 
         // If a function to invoke was given, invoke it.
         let func = if let Some(name) = &self.invoke {
@@ -581,7 +563,7 @@ impl RunCommand {
                  is experimental and may break in the future"
             );
         }
-        let mut args = self.module_args.iter();
+        let mut args = self.module_and_args.iter().skip(1);
         let mut values = Vec::new();
         for ty in ty.params() {
             let val = match args.next() {
@@ -594,6 +576,9 @@ impl RunCommand {
                     }
                 }
             };
+            let val = val
+                .to_str()
+                .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
             values.push(match ty {
                 // TODO: integer parsing here should handle hexadecimal notation
                 // like `0x0...`, but the Rust standard library currently only
@@ -620,7 +605,9 @@ impl RunCommand {
         if let Err(err) = invoke_res {
             let err = if err.is::<wasmtime::Trap>() {
                 if let Some(coredump_path) = self.coredump_on_trap.as_ref() {
-                    let source_name = self.module.to_str().unwrap_or_else(|| "unknown");
+                    let source_name = self.module_and_args[0]
+                        .to_str()
+                        .unwrap_or_else(|| "unknown");
 
                     if let Err(coredump_err) = generate_coredump(&err, &source_name, coredump_path)
                     {
@@ -661,6 +648,12 @@ impl RunCommand {
     }
 
     fn load_module(&self, engine: &Engine, path: &Path) -> Result<Module> {
+        let path = match path.to_str() {
+            #[cfg(unix)]
+            Some("-") => "/dev/stdin".as_ref(),
+            _ => path,
+        };
+
         if self.allow_precompiled {
             unsafe { Module::from_trusted_file(engine, path) }
         } else {
@@ -673,8 +666,6 @@ impl RunCommand {
 #[derive(Default, Clone)]
 struct Host {
     wasi: Option<wasmtime_wasi::WasiCtx>,
-    #[cfg(feature = "wasi-crypto")]
-    wasi_crypto: Option<Arc<WasiCryptoCtx>>,
     #[cfg(feature = "wasi-nn")]
     wasi_nn: Option<Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
@@ -692,7 +683,7 @@ fn populate_with_wasi(
     module: Module,
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
-    vars: &[(String, String)],
+    vars: &[(String, Option<String>)],
     wasi_modules: &WasiModules,
     listenfd: bool,
     mut tcplisten: Vec<TcpListener>,
@@ -701,48 +692,33 @@ fn populate_with_wasi(
         wasmtime_wasi::add_to_linker(linker, |host| host.wasi.as_mut().unwrap())?;
 
         let mut builder = WasiCtxBuilder::new();
-        builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
+        builder.inherit_stdio().args(argv)?;
+
+        for (key, value) in vars {
+            let value = match value {
+                Some(value) => value.clone(),
+                None => std::env::var(key)
+                    .map_err(|_| anyhow!("environment varialbe `{key}` not found"))?,
+            };
+            builder.env(key, &value)?;
+        }
 
         let mut num_fd: usize = 3;
 
         if listenfd {
-            let (n, b) = ctx_set_listenfd(num_fd, builder)?;
-            num_fd = n;
-            builder = b;
+            num_fd = ctx_set_listenfd(num_fd, &mut builder)?;
         }
 
         for listener in tcplisten.drain(..) {
-            builder = builder.preopened_socket(num_fd as _, listener)?;
+            builder.preopened_socket(num_fd as _, listener)?;
             num_fd += 1;
         }
 
         for (name, dir) in preopen_dirs.into_iter() {
-            builder = builder.preopened_dir(dir, name)?;
+            builder.preopened_dir(dir, name)?;
         }
 
         store.data_mut().wasi = Some(builder.build());
-    }
-
-    if wasi_modules.wasi_crypto {
-        #[cfg(not(feature = "wasi-crypto"))]
-        {
-            bail!("Cannot enable wasi-crypto when the binary is not compiled with this feature.");
-        }
-        #[cfg(feature = "wasi-crypto")]
-        {
-            wasmtime_wasi_crypto::add_to_linker(linker, |host| {
-                // This WASI proposal is currently not protected against
-                // concurrent access--i.e., when wasi-threads is actively
-                // spawning new threads, we cannot (yet) safely allow access and
-                // fail if more than one thread has `Arc`-references to the
-                // context. Once this proposal is updated (as wasi-common has
-                // been) to allow concurrent access, this `Arc::get_mut`
-                // limitation can be removed.
-                Arc::get_mut(host.wasi_crypto.as_mut().unwrap())
-                    .expect("wasi-crypto is not implemented with multi-threading support")
-            })?;
-            store.data_mut().wasi_crypto = Some(Arc::new(WasiCryptoCtx::new()));
-        }
     }
 
     if wasi_modules.wasi_nn {
@@ -753,7 +729,13 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-nn")]
         {
             wasmtime_wasi_nn::add_to_linker(linker, |host| {
-                // See documentation for wasi-crypto for why this is needed.
+                // This WASI proposal is currently not protected against
+                // concurrent access--i.e., when wasi-threads is actively
+                // spawning new threads, we cannot (yet) safely allow access and
+                // fail if more than one thread has `Arc`-references to the
+                // context. Once this proposal is updated (as wasi-common has
+                // been) to allow concurrent access, this `Arc::get_mut`
+                // limitation can be removed.
                 Arc::get_mut(host.wasi_nn.as_mut().unwrap())
                     .expect("wasi-nn is not implemented with multi-threading support")
             })?;
@@ -801,20 +783,17 @@ fn populate_with_wasi(
 }
 
 #[cfg(not(unix))]
-fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, WasiCtxBuilder)> {
-    Ok((num_fd, builder))
+fn ctx_set_listenfd(num_fd: usize, _builder: &mut WasiCtxBuilder) -> Result<usize> {
+    Ok(num_fd)
 }
 
 #[cfg(unix)]
-fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, WasiCtxBuilder)> {
+fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<usize> {
     use listenfd::ListenFd;
-
-    let mut builder = builder;
-    let mut num_fd = num_fd;
 
     for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {
         if let Ok(val) = std::env::var(env) {
-            builder = builder.env(env, &val)?;
+            builder.env(env, &val)?;
         }
     }
 
@@ -824,12 +803,12 @@ fn ctx_set_listenfd(num_fd: usize, builder: WasiCtxBuilder) -> Result<(usize, Wa
         if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
             let _ = stdlistener.set_nonblocking(true)?;
             let listener = TcpListener::from_std(stdlistener);
-            builder = builder.preopened_socket((3 + i) as _, listener)?;
+            builder.preopened_socket((3 + i) as _, listener)?;
             num_fd = 3 + i;
         }
     }
 
-    Ok((num_fd, builder))
+    Ok(num_fd)
 }
 
 fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str) -> Result<()> {
