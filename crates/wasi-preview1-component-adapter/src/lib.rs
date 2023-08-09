@@ -1,6 +1,6 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
-use crate::bindings::wasi::cli_base::exit;
+use crate::bindings::wasi::cli::exit;
 use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
 use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams;
@@ -31,7 +31,7 @@ pub mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen::generate!({
         path: "../wasi/wit",
-        world: "wasi:preview/command",
+        world: "wasi:cli/command",
         std_feature,
         raw_strings,
         // Automatically generated bindings for these functions will allocate
@@ -46,7 +46,7 @@ pub mod bindings {
     #[cfg(feature = "reactor")]
     wit_bindgen::generate!({
         path: "../wasi/wit",
-        world: "wasi:preview/reactor",
+        world: "wasmtime:wasi/preview1-adapter-reactor",
         std_feature,
         raw_strings,
         // Automatically generated bindings for these functions will allocate

@@ -1,4 +1,4 @@
-use crate::bindings::wasi::cli_base::{stderr, stdin, stdout};
+use crate::bindings::wasi::cli::{stderr, stdin, stdout};
 use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams::{self, InputStream, OutputStream};
 use crate::bindings::wasi::sockets::tcp;
