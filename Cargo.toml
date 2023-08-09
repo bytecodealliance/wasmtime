@@ -265,7 +265,6 @@ wasi-threads = ["dep:wasmtime-wasi-threads"]
 wasi-http = ["dep:wasmtime-wasi-http"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
-posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
 component-model = [
   "wasmtime/component-model",
   "wasmtime-wast/component-model",
