@@ -1219,17 +1219,17 @@ impl MachInstEmit for Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 match &mem {
-                    &PairAMode::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset { reg, simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_pair(0b1010100100, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPreIndexed(simm7) => {
+                    &PairAMode::SPPreIndexed { simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100110, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPostIndexed(simm7) => {
+                    &PairAMode::SPPostIndexed { simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100010, simm7, reg, rt, rt2));
@@ -1252,17 +1252,17 @@ impl MachInstEmit for Inst {
                 }
 
                 match &mem {
-                    &PairAMode::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset { reg, simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_pair(0b1010100101, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPreIndexed(simm7) => {
+                    &PairAMode::SPPreIndexed { simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100111, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPostIndexed(simm7) => {
+                    &PairAMode::SPPostIndexed { simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100011, simm7, reg, rt, rt2));
@@ -1298,17 +1298,17 @@ impl MachInstEmit for Inst {
                 };
 
                 match &mem {
-                    &PairAMode::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset { reg, simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_vec_pair(opc, 0b10, true, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPreIndexed(simm7) => {
+                    &PairAMode::SPPreIndexed { simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b11, true, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPostIndexed(simm7) => {
+                    &PairAMode::SPPostIndexed { simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b01, true, simm7, reg, rt, rt2));
@@ -1344,17 +1344,17 @@ impl MachInstEmit for Inst {
                 };
 
                 match &mem {
-                    &PairAMode::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset { reg, simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_vec_pair(opc, 0b10, false, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPreIndexed(simm7) => {
+                    &PairAMode::SPPreIndexed { simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b11, false, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPostIndexed(simm7) => {
+                    &PairAMode::SPPostIndexed { simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b01, false, simm7, reg, rt, rt2));
@@ -3837,10 +3837,10 @@ fn emit_return_call_common_sequence(
     Inst::LoadP64 {
         rt: tmp1,
         rt2: writable_link_reg(),
-        mem: PairAMode::SignedOffset(
-            regs::fp_reg(),
-            SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
-        ),
+        mem: PairAMode::SignedOffset {
+            reg: regs::fp_reg(),
+            simm7: SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
+        },
         flags: MemFlags::trusted(),
     }
     .emit(&[], sink, emit_info, state);

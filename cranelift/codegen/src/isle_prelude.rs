@@ -44,6 +44,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn i32_as_i64(&mut self, x: i32) -> i64 {
+            x.into()
+        }
+
+        #[inline]
         fn i64_neg(&mut self, x: i64) -> i64 {
             x.wrapping_neg()
         }
@@ -647,10 +652,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn s32_add_fallible(&mut self, a: u32, b: u32) -> Option<u32> {
-            let a = a as i32;
-            let b = b as i32;
-            a.checked_add(b).map(|sum| sum as u32)
+        fn s32_add_fallible(&mut self, a: i32, b: i32) -> Option<i32> {
+            a.checked_add(b)
         }
 
         #[inline]
@@ -700,10 +703,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn simm32(&mut self, x: Imm64) -> Option<u32> {
-            let x64: i64 = x.into();
-            let x32: i32 = x64.try_into().ok()?;
-            Some(x32 as u32)
+        fn simm32(&mut self, x: Imm64) -> Option<i32> {
+            i64::from(x).try_into().ok()
         }
 
         #[inline]
@@ -714,9 +715,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn offset32(&mut self, x: Offset32) -> u32 {
-            let x: i32 = x.into();
-            x as u32
+        fn offset32(&mut self, x: Offset32) -> i32 {
+            x.into()
         }
 
         #[inline]
@@ -767,14 +767,13 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn offset32_to_u32(&mut self, offset: Offset32) -> u32 {
-            let offset: i32 = offset.into();
-            offset as u32
+        fn offset32_to_i32(&mut self, offset: Offset32) -> i32 {
+            offset.into()
         }
 
         #[inline]
-        fn u32_to_offset32(&mut self, offset: u32) -> Offset32 {
-            Offset32::new(offset as i32)
+        fn i32_to_offset32(&mut self, offset: i32) -> Offset32 {
+            Offset32::new(offset)
         }
 
         fn range(&mut self, start: usize, end: usize) -> Range {

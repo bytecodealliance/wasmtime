@@ -225,7 +225,7 @@ impl Assembler {
 
     /// Register-to-memory move.
     pub fn mov_rm(&mut self, src: Reg, base: Reg, disp: u32, size: OperandSize) {
-        let dst = Amode::imm_reg(disp, base.into());
+        let dst = Amode::imm_reg(disp as i32, base.into());
 
         self.emit(Inst::MovRM {
             size: size.into(),
@@ -236,7 +236,7 @@ impl Assembler {
 
     /// Immediate-to-memory move.
     pub fn mov_im(&mut self, src: u64, base: Reg, disp: u32, size: OperandSize) {
-        let dst = Amode::imm_reg(disp, base.into());
+        let dst = Amode::imm_reg(disp as i32, base.into());
         self.emit(Inst::MovImmM {
             size: size.into(),
             simm64: src,
@@ -260,7 +260,7 @@ impl Assembler {
     pub fn mov_mr(&mut self, base: Reg, disp: u32, dst: Reg, size: OperandSize) {
         use OperandSize::S64;
 
-        let amode = Amode::imm_reg(disp, base.into());
+        let amode = Amode::imm_reg(disp as i32, base.into());
         let src = SyntheticAmode::real(amode);
 
         if size == S64 {

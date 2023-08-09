@@ -203,25 +203,17 @@ impl AMode {
     }
 }
 
-/// A memory argument to a load/store-pair.
-#[derive(Clone, Debug)]
-pub enum PairAMode {
-    /// Signed, scaled 7-bit offset from a register.
-    SignedOffset(Reg, SImm7Scaled),
-    /// Pre-increment register before address computation.
-    SPPreIndexed(SImm7Scaled),
-    /// Post-increment register after address computation.
-    SPPostIndexed(SImm7Scaled),
-}
+pub use crate::isa::aarch64::lower::isle::generated_code::PairAMode;
 
 impl PairAMode {
     pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
         // Should match `pairmemarg_operands()`.
         match self {
-            &PairAMode::SignedOffset(reg, simm7scaled) => {
-                PairAMode::SignedOffset(allocs.next(reg), simm7scaled)
-            }
-            &PairAMode::SPPreIndexed(..) | &PairAMode::SPPostIndexed(..) => self.clone(),
+            &PairAMode::SignedOffset { reg, simm7 } => PairAMode::SignedOffset {
+                reg: allocs.next(reg),
+                simm7,
+            },
+            &PairAMode::SPPreIndexed { .. } | &PairAMode::SPPostIndexed { .. } => self.clone(),
         }
     }
 }
@@ -486,7 +478,7 @@ impl PrettyPrint for AMode {
 impl PrettyPrint for PairAMode {
     fn pretty_print(&self, _: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
-            &PairAMode::SignedOffset(reg, simm7) => {
+            &PairAMode::SignedOffset { reg, simm7 } => {
                 let reg = pretty_print_reg(reg, allocs);
                 if simm7.value != 0 {
                     let simm7 = simm7.pretty_print(8, allocs);
@@ -495,11 +487,11 @@ impl PrettyPrint for PairAMode {
                     format!("[{}]", reg)
                 }
             }
-            &PairAMode::SPPreIndexed(simm7) => {
+            &PairAMode::SPPreIndexed { simm7 } => {
                 let simm7 = simm7.pretty_print(8, allocs);
                 format!("[sp, {}]!", simm7)
             }
-            &PairAMode::SPPostIndexed(simm7) => {
+            &PairAMode::SPPostIndexed { simm7 } => {
                 let simm7 = simm7.pretty_print(8, allocs);
                 format!("[sp], {}", simm7)
             }

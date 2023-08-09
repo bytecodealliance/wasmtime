@@ -102,9 +102,9 @@ impl TryFrom<Address> for PairAMode {
                 })?;
 
                 if indexing == Pre {
-                    Ok(PairAMode::SPPreIndexed(simm7))
+                    Ok(PairAMode::SPPreIndexed { simm7 })
                 } else {
-                    Ok(PairAMode::SPPostIndexed(simm7))
+                    Ok(PairAMode::SPPostIndexed { simm7 })
                 }
             }
             other => Err(anyhow!(

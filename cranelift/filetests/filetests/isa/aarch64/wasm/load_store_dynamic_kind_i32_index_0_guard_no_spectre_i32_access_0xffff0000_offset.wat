@@ -50,9 +50,9 @@
 ;;   b.hi label3 ; b label1
 ;; block1:
 ;;   ldr x13, [x2]
+;;   add x13, x13, x0, UXTW
 ;;   movz x14, #65535, LSL #16
-;;   add x13, x14, x13
-;;   str w1, [x13, w0, UXTW]
+;;   str w1, [x13, x14]
 ;;   b label2
 ;; block2:
 ;;   ret
@@ -70,9 +70,9 @@
 ;;   b.hi label3 ; b label1
 ;; block1:
 ;;   ldr x13, [x1]
-;;   movz x12, #65535, LSL #16
-;;   add x12, x12, x13
-;;   ldr w0, [x12, w0, UXTW]
+;;   add x13, x13, x0, UXTW
+;;   movz x14, #65535, LSL #16
+;;   ldr w0, [x13, x14]
 ;;   b label2
 ;; block2:
 ;;   ret

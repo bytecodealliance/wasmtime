@@ -48,8 +48,8 @@
 ;;   b.hi label3 ; b label1
 ;; block1:
 ;;   ldr x10, [x2]
-;;   add x11, x0, #4096
-;;   strb w1, [x11, x10]
+;;   add x10, x10, #4096
+;;   strb w1, [x10, x0]
 ;;   b label2
 ;; block2:
 ;;   ret
@@ -65,8 +65,8 @@
 ;;   b.hi label3 ; b label1
 ;; block1:
 ;;   ldr x10, [x1]
-;;   add x9, x0, #4096
-;;   ldrb w0, [x9, x10]
+;;   add x9, x10, #4096
+;;   ldrb w0, [x9, x0]
 ;;   b label2
 ;; block2:
 ;;   ret

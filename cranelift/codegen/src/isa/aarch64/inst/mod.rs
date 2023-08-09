@@ -412,10 +412,10 @@ fn pairmemarg_operands<F: Fn(VReg) -> VReg>(
 ) {
     // This should match `PairAMode::with_allocs()`.
     match pairmemarg {
-        &PairAMode::SignedOffset(reg, ..) => {
+        &PairAMode::SignedOffset { reg, .. } => {
             collector.reg_use(reg);
         }
-        &PairAMode::SPPreIndexed(..) | &PairAMode::SPPostIndexed(..) => {}
+        &PairAMode::SPPreIndexed { .. } | &PairAMode::SPPostIndexed { .. } => {}
     }
 }
 
