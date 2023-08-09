@@ -59,7 +59,7 @@ pub mod bindings {
     });
 }
 
-#[no_mangle]
+#[export_name = "wasi:cli/run#run"]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
@@ -2430,7 +2430,7 @@ impl State {
 
     fn get_environment(&self) -> &[StrTuple] {
         if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli-base/environment")]
+            #[link(wasm_import_module = "wasi:cli/environment")]
             extern "C" {
                 #[link_name = "get-environment"]
                 fn get_environment_import(rval: *mut StrTupleList);
@@ -2454,7 +2454,7 @@ impl State {
 
     fn get_args(&self) -> &[WasmStr] {
         if self.args.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli-base/environment")]
+            #[link(wasm_import_module = "wasi:cli/environment")]
             extern "C" {
                 #[link_name = "get-arguments"]
                 fn get_args_import(rval: *mut WasmStrList);
