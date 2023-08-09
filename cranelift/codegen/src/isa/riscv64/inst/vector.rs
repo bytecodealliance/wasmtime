@@ -1,5 +1,6 @@
 use crate::isa::riscv64::inst::AllocationConsumer;
 use crate::isa::riscv64::inst::EmitState;
+use crate::isa::riscv64::lower::isle::generated_code::VecAluOpRRRR;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAvl,
     VecElementWidth, VecLmul, VecMaskMode, VecOpCategory, VecOpMasking, VecTailMode,
@@ -249,6 +250,49 @@ impl VecOpMasking {
             },
             VecOpMasking::Disabled => VecOpMasking::Disabled,
         }
+    }
+}
+
+impl VecAluOpRRRR {
+    pub fn opcode(&self) -> u32 {
+        // Vector Opcode
+        0x57
+    }
+    pub fn funct3(&self) -> u32 {
+        self.category().encode()
+    }
+
+    pub fn funct6(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
+        match self {
+            VecAluOpRRRR::VmaccVV | VecAluOpRRRR::VmaccVX => 0b101101,
+            VecAluOpRRRR::VnmsacVV | VecAluOpRRRR::VnmsacVX => 0b101111,
+        }
+    }
+
+    pub fn category(&self) -> VecOpCategory {
+        match self {
+            VecAluOpRRRR::VmaccVV | VecAluOpRRRR::VnmsacVV => VecOpCategory::OPMVV,
+            VecAluOpRRRR::VmaccVX | VecAluOpRRRR::VnmsacVX => VecOpCategory::OPMVX,
+        }
+    }
+
+    // vs1 is the only variable source, vs2 is fixed.
+    pub fn vs1_regclass(&self) -> RegClass {
+        match self.category() {
+            VecOpCategory::OPMVV => RegClass::Vector,
+            VecOpCategory::OPMVX => RegClass::Int,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl fmt::Display for VecAluOpRRRR {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = format!("{self:?}");
+        s.make_ascii_lowercase();
+        let (opcode, category) = s.split_at(s.len() - 2);
+        f.write_str(&format!("{opcode}.{category}"))
     }
 }
 
