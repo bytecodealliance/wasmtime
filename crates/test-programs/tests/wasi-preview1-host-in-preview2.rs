@@ -5,7 +5,7 @@ use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::preview2::{
     pipe::MemoryOutputPipe,
     preview1::{add_to_linker, WasiPreview1Adapter, WasiPreview1View},
-    DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 lazy_static::lazy_static! {
@@ -43,7 +43,9 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         if inherit_stdio {
             builder.inherit_stdio();
         } else {
-            builder.stdout(stdout.clone()).stderr(stderr.clone());
+            builder
+                .stdout(stdout.clone(), IsATTY::None)
+                .stderr(stderr.clone(), IsATTY::None);
         }
         builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);

@@ -30,11 +30,11 @@ wasmtime::component::bindgen!({
        "wasi:io/streams": preview2::bindings::io::streams,
        "wasi:filesystem/types": preview2::bindings::filesystem::types,
        "wasi:filesystem/preopens": preview2::bindings::filesystem::preopens,
-       "wasi:cli-base/environment": preview2::bindings::cli_base::environment,
-       "wasi:cli-base/exit": preview2::bindings::cli_base::exit,
-       "wasi:cli-base/stdin": preview2::bindings::cli_base::stdin,
-       "wasi:cli-base/stdout": preview2::bindings::cli_base::stdout,
-       "wasi:cli-base/stderr": preview2::bindings::cli_base::stderr,
+       "wasi:cli/environment": preview2::bindings::cli::environment,
+       "wasi:cli/exit": preview2::bindings::cli::exit,
+       "wasi:cli/stdin": preview2::bindings::cli::stdin,
+       "wasi:cli/stdout": preview2::bindings::cli::stdout,
+       "wasi:cli/stderr": preview2::bindings::cli::stderr,
     },
     ownership: Borrowing {
         duplicate_if_necessary: false
@@ -71,11 +71,11 @@ async fn instantiate(
     preview2::bindings::filesystem::types::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::filesystem::preopens::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::io::streams::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli_base::environment::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli_base::exit::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli_base::stdin::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli_base::stdout::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli_base::stderr::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::environment::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::exit::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::stdin::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::stdout::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::stderr::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);
 

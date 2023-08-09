@@ -5,7 +5,7 @@ use wasmtime::{component::Linker, Config, Engine, Store};
 use wasmtime_wasi::preview2::{
     command::sync::{add_to_linker, Command},
     pipe::MemoryOutputPipe,
-    DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 lazy_static::lazy_static! {
@@ -43,7 +43,9 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         if inherit_stdio {
             builder.inherit_stdio();
         } else {
-            builder.stdout(stdout.clone()).stderr(stderr.clone());
+            builder
+                .stdout(stdout.clone(), IsATTY::None)
+                .stderr(stderr.clone(), IsATTY::None);
         }
         builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);
@@ -79,6 +81,7 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         let mut store = Store::new(&ENGINE, ctx);
         let (command, _instance) = Command::instantiate(&mut store, &get_component(name), &linker)?;
         command
+            .wasi_cli_run()
             .call_run(&mut store)?
             .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
         Ok(())
