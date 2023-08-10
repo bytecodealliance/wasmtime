@@ -314,7 +314,10 @@ impl AsyncWriteStream {
                 Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
             },
             Some(WriteState::Pending) => unreachable!(),
-            Some(WriteState::Err(e)) => Err(e.into()),
+            Some(WriteState::Err(e)) => {
+                self.state = None;
+                Err(e.into())
+            }
             None => {
                 self.state = None;
                 Ok(false)
