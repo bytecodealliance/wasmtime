@@ -69,7 +69,9 @@ use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
 #[cfg(feature = "wmemcheck")]
-use wmemcheck::AccessError::{DoubleMalloc, InvalidFree, InvalidRead, InvalidWrite, OutOfBounds};
+use wasmtime_wmemcheck::AccessError::{
+    DoubleMalloc, InvalidFree, InvalidRead, InvalidWrite, OutOfBounds,
+};
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
 /// for libcalls.

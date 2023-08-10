@@ -1,5 +1,5 @@
 [package]
-name = "wmemcheck"
+name = "wasmtime-wmemcheck"
 version.workspace = true
 authors.workspace = true
 description = "Memcheck implementation for Wasmtime"

@@ -224,8 +224,7 @@ pub struct RunCommand {
     #[clap(long)]
     trap_on_grow_failure: bool,
 
-    /// Enables memory error checking by including wmemcheck_state in
-    /// a runtime Instance.
+    /// Enables memory error checking.
     ///
     /// See wmemcheck.md for documentation on how to use.
     #[clap(long)]

@@ -33,7 +33,7 @@ use wasmtime_environ::{
     TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
-use wmemcheck::Wmemcheck;
+use wasmtime_wmemcheck::Wmemcheck;
 
 mod allocator;
 

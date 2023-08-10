@@ -11,7 +11,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
 [dependencies]
-wmemcheck = { workspace = true }
+wasmtime-wmemcheck = { workspace = true }
 wasmtime-asm-macros = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }

@@ -3697,8 +3697,8 @@ dependencies = [
  "wasmtime-fiber",
  "wasmtime-jit-debug",
  "wasmtime-versioned-export-macros",
+ "wasmtime-wmemcheck",
  "windows-sys",
- "wmemcheck",
 ]
 
 [[package]]
@@ -3825,6 +3825,10 @@ dependencies = [
  "indexmap 2.0.0",
  "wit-parser",
 ]
+
+[[package]]
+name = "wasmtime-wmemcheck"
+version = "13.0.0"
 
 [[package]]
 name = "wast"
@@ -4226,10 +4230,6 @@ dependencies = [
  "thiserror",
  "wast 35.0.2",
 ]
-
-[[package]]
-name = "wmemcheck"
-version = "13.0.0"
 
 [[package]]
 name = "zstd"
