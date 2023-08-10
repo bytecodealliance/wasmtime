@@ -25,7 +25,7 @@ compile_error!("only one of the `command` and `reactor` features may be selected
 mod macros;
 
 mod descriptors;
-use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
+use crate::descriptors::{Descriptor, Descriptors, IsATTY, StreamType, Streams};
 
 pub mod bindings {
     #[cfg(feature = "command")]
@@ -564,14 +564,8 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
         Descriptor::Streams(Streams {
             input,
             output,
-            type_: StreamType::Socket(_),
-        })
-        | Descriptor::Streams(Streams {
-            input,
-            output,
-            type_: StreamType::Stdio,
+            type_: StreamType::Stdio(isatty),
         }) => {
-            let fs_filetype = FILETYPE_CHARACTER_DEVICE;
             let fs_flags = 0;
             let mut fs_rights_base = 0;
             if input.get().is_some() {
@@ -582,7 +576,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             }
             let fs_rights_inheriting = fs_rights_base;
             stat.write(Fdstat {
-                fs_filetype,
+                fs_filetype: isatty.filetype(),
                 fs_flags,
                 fs_rights_base,
                 fs_rights_inheriting,
@@ -590,6 +584,11 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             Ok(())
         }
         Descriptor::Closed(_) => Err(ERRNO_BADF),
+        Descriptor::Streams(Streams {
+            input,
+            output,
+            type_: StreamType::Socket(_),
+        }) => unreachable!(),
     })
 }
 
@@ -657,13 +656,13 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
             }
             // Stdio is all zero fields, except for filetype character device
             Descriptor::Streams(Streams {
-                type_: StreamType::Stdio,
+                type_: StreamType::Stdio(isatty),
                 ..
             }) => {
                 *buf = Filestat {
                     dev: 0,
                     ino: 0,
-                    filetype: FILETYPE_CHARACTER_DEVICE,
+                    filetype: isatty.filetype(),
                     nlink: 0,
                     size: 0,
                     atim: 0,
@@ -1848,7 +1847,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                                }
                                                */
                             }
-                            StreamType::Stdio => {
+                            StreamType::Stdio(_) => {
                                 error = ERRNO_SUCCESS;
                                 nbytes = 1;
                                 flags = 0;
@@ -1865,7 +1864,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match streams.type_ {
-                            StreamType::File(_) | StreamType::Stdio => {
+                            StreamType::File(_) | StreamType::Stdio(_) => {
                                 error = ERRNO_SUCCESS;
                                 nbytes = 1;
                                 flags = 0;

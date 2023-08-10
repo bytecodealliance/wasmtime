@@ -35,6 +35,11 @@ wasmtime::component::bindgen!({
        "wasi:cli/stdin": preview2::bindings::cli::stdin,
        "wasi:cli/stdout": preview2::bindings::cli::stdout,
        "wasi:cli/stderr": preview2::bindings::cli::stderr,
+       "wasi:cli/terminal_input": preview2::bindings::cli::terminal_input,
+       "wasi:cli/terminal_output": preview2::bindings::cli::terminal_output,
+       "wasi:cli/terminal_stdin": preview2::bindings::cli::terminal_stdin,
+       "wasi:cli/terminal_stdout": preview2::bindings::cli::terminal_stdout,
+       "wasi:cli/terminal_stderr": preview2::bindings::cli::terminal_stderr,
     },
     ownership: Borrowing {
         duplicate_if_necessary: false
@@ -76,6 +81,11 @@ async fn instantiate(
     preview2::bindings::cli::stdin::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::cli::stdout::add_to_linker(&mut linker, |x| x)?;
     preview2::bindings::cli::stderr::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::terminal_input::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::terminal_output::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::terminal_stdin::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::terminal_stdout::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli::terminal_stderr::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);
 
