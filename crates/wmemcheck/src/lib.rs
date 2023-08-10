@@ -1,7 +1,7 @@
 use std::cmp::*;
 use std::collections::HashMap;
 
-pub struct Valgrind {
+pub struct Wmemcheck {
     metadata: Vec<MemState>,
     mallocs: HashMap<usize, usize>,
     pub stack_pointer: usize,
@@ -25,11 +25,11 @@ pub enum MemState {
     ValidToReadWrite,
 }
 
-impl Valgrind {
-    pub fn new(mem_size: usize) -> Valgrind {
+impl Wmemcheck {
+    pub fn new(mem_size: usize) -> Wmemcheck {
         let metadata = vec![MemState::Unallocated; mem_size];
         let mallocs = HashMap::new();
-        Valgrind {
+        Wmemcheck {
             metadata,
             mallocs,
             stack_pointer: 0,
@@ -123,6 +123,7 @@ impl Valgrind {
         Ok(())
     }
 
+    /// 
     pub fn free(&mut self, addr: usize) -> Result<(), AccessError> {
         if !self.mallocs.contains_key(&addr) {
             return Err(AccessError::InvalidFree { addr: addr });
@@ -191,43 +192,43 @@ impl Valgrind {
 }
 
 #[test]
-fn basic_valgrind() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 0);
+fn basic_wmemcheck() {
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 0);
 
-    assert!(valgrind_state.malloc(0x1000, 32).is_ok());
-    assert!(valgrind_state.write(0x1000, 4).is_ok());
-    assert!(valgrind_state.read(0x1000, 4).is_ok());
-    assert_eq!(valgrind_state.mallocs, HashMap::from([(0x1000, 32)]));
-    assert!(valgrind_state.free(0x1000).is_ok());
-    assert!(valgrind_state.mallocs.is_empty());
+    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.write(0x1000, 4).is_ok());
+    assert!(wmemcheck_state.read(0x1000, 4).is_ok());
+    assert_eq!(wmemcheck_state.mallocs, HashMap::from([(0x1000, 32)]));
+    assert!(wmemcheck_state.free(0x1000).is_ok());
+    assert!(wmemcheck_state.mallocs.is_empty());
 }
 
 #[test]
 fn read_before_initializing() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 0);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 0);
 
-    assert!(valgrind_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
     assert_eq!(
-        valgrind_state.read(0x1000, 4),
+        wmemcheck_state.read(0x1000, 4),
         Err(AccessError::InvalidRead {
             addr: 0x1000,
             len: 4
         })
     );
-    assert!(valgrind_state.write(0x1000, 4).is_ok());
-    assert!(valgrind_state.free(0x1000).is_ok());
+    assert!(wmemcheck_state.write(0x1000, 4).is_ok());
+    assert!(wmemcheck_state.free(0x1000).is_ok());
 }
 
 #[test]
 fn use_after_free() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 0);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 0);
 
-    assert!(valgrind_state.malloc(0x1000, 32).is_ok());
-    assert!(valgrind_state.write(0x1000, 4).is_ok());
-    assert!(valgrind_state.write(0x1000, 4).is_ok());
-    assert!(valgrind_state.free(0x1000).is_ok());
+    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.write(0x1000, 4).is_ok());
+    assert!(wmemcheck_state.write(0x1000, 4).is_ok());
+    assert!(wmemcheck_state.free(0x1000).is_ok());
     assert_eq!(
-        valgrind_state.write(0x1000, 4),
+        wmemcheck_state.write(0x1000, 4),
         Err(AccessError::InvalidWrite {
             addr: 0x1000,
             len: 4
@@ -237,45 +238,45 @@ fn use_after_free() {
 
 #[test]
 fn double_free() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 0);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 0);
 
-    assert!(valgrind_state.malloc(0x1000, 32).is_ok());
-    assert!(valgrind_state.write(0x1000, 4).is_ok());
-    assert!(valgrind_state.free(0x1000).is_ok());
+    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.write(0x1000, 4).is_ok());
+    assert!(wmemcheck_state.free(0x1000).is_ok());
     assert_eq!(
-        valgrind_state.free(0x1000),
+        wmemcheck_state.free(0x1000),
         Err(AccessError::InvalidFree { addr: 0x1000 })
     );
 }
 
 #[test]
 fn out_of_bounds_malloc() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 0);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 0);
 
     assert_eq!(
-        valgrind_state.malloc(640 * 1024, 1),
+        wmemcheck_state.malloc(640 * 1024, 1),
         Err(AccessError::OutOfBounds {
             addr: 640 * 1024,
             len: 1
         })
     );
     assert_eq!(
-        valgrind_state.malloc(640 * 1024 - 10, 15),
+        wmemcheck_state.malloc(640 * 1024 - 10, 15),
         Err(AccessError::OutOfBounds {
             addr: 640 * 1024 - 10,
             len: 15
         })
     );
-    assert!(valgrind_state.mallocs.is_empty());
+    assert!(wmemcheck_state.mallocs.is_empty());
 }
 
 #[test]
 fn out_of_bounds_read() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 0);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 0);
 
-    assert!(valgrind_state.malloc(640 * 1024 - 24, 24).is_ok());
+    assert!(wmemcheck_state.malloc(640 * 1024 - 24, 24).is_ok());
     assert_eq!(
-        valgrind_state.read(640 * 1024 - 24, 25),
+        wmemcheck_state.read(640 * 1024 - 24, 25),
         Err(AccessError::OutOfBounds {
             addr: 640 * 1024 - 24,
             len: 25
@@ -285,74 +286,74 @@ fn out_of_bounds_read() {
 
 #[test]
 fn double_malloc() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 0);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 0);
 
-    assert!(valgrind_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
     assert_eq!(
-        valgrind_state.malloc(0x1000, 32),
+        wmemcheck_state.malloc(0x1000, 32),
         Err(AccessError::DoubleMalloc {
             addr: 0x1000,
             len: 32
         })
     );
     assert_eq!(
-        valgrind_state.malloc(0x1002, 32),
+        wmemcheck_state.malloc(0x1002, 32),
         Err(AccessError::DoubleMalloc {
             addr: 0x1002,
             len: 32
         })
     );
-    assert!(valgrind_state.free(0x1000).is_ok());
+    assert!(wmemcheck_state.free(0x1000).is_ok());
 }
 
 #[test]
 fn error_type() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 0);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 0);
 
-    assert!(valgrind_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
     assert_eq!(
-        valgrind_state.malloc(0x1000, 32),
+        wmemcheck_state.malloc(0x1000, 32),
         Err(AccessError::DoubleMalloc {
             addr: 0x1000,
             len: 32
         })
     );
     assert_eq!(
-        valgrind_state.malloc(640 * 1024, 32),
+        wmemcheck_state.malloc(640 * 1024, 32),
         Err(AccessError::OutOfBounds {
             addr: 640 * 1024,
             len: 32
         })
     );
-    assert!(valgrind_state.free(0x1000).is_ok());
+    assert!(wmemcheck_state.free(0x1000).is_ok());
 }
 
 #[test]
 fn update_sp_no_error() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1024);
 
-    assert_eq!(valgrind_state.max_stack_size, 1024);
-    assert!(valgrind_state.update_stack_pointer(768).is_ok());
-    assert_eq!(valgrind_state.stack_pointer, 768);
-    assert!(valgrind_state.malloc(1024 * 2, 32).is_ok());
-    assert!(valgrind_state.free(1024 * 2).is_ok());
-    assert!(valgrind_state.update_stack_pointer(896).is_ok());
-    assert_eq!(valgrind_state.stack_pointer, 896);
-    assert!(valgrind_state.update_stack_pointer(1024).is_ok());
+    assert_eq!(wmemcheck_state.max_stack_size, 1024);
+    assert!(wmemcheck_state.update_stack_pointer(768).is_ok());
+    assert_eq!(wmemcheck_state.stack_pointer, 768);
+    assert!(wmemcheck_state.malloc(1024 * 2, 32).is_ok());
+    assert!(wmemcheck_state.free(1024 * 2).is_ok());
+    assert!(wmemcheck_state.update_stack_pointer(896).is_ok());
+    assert_eq!(wmemcheck_state.stack_pointer, 896);
+    assert!(wmemcheck_state.update_stack_pointer(1024).is_ok());
 }
 
 #[test]
 fn bad_stack_malloc() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1024);
 
-    assert!(valgrind_state.update_stack_pointer(0).is_ok());
-    assert_eq!(valgrind_state.stack_pointer, 0);
+    assert!(wmemcheck_state.update_stack_pointer(0).is_ok());
+    assert_eq!(wmemcheck_state.stack_pointer, 0);
     assert_eq!(
-        valgrind_state.malloc(512, 32),
+        wmemcheck_state.malloc(512, 32),
         Err(AccessError::OutOfBounds { addr: 512, len: 32 })
     );
     assert_eq!(
-        valgrind_state.malloc(1022, 32),
+        wmemcheck_state.malloc(1022, 32),
         Err(AccessError::OutOfBounds {
             addr: 1022,
             len: 32
@@ -362,56 +363,56 @@ fn bad_stack_malloc() {
 
 #[test]
 fn bad_stack_read_write() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1024);
 
-    assert!(valgrind_state.update_stack_pointer(512).is_ok());
-    assert_eq!(valgrind_state.stack_pointer, 512);
+    assert!(wmemcheck_state.update_stack_pointer(512).is_ok());
+    assert_eq!(wmemcheck_state.stack_pointer, 512);
     assert_eq!(
-        valgrind_state.read(256, 16),
+        wmemcheck_state.read(256, 16),
         Err(AccessError::InvalidRead { addr: 256, len: 16 })
     );
     assert_eq!(
-        valgrind_state.write(500, 32),
+        wmemcheck_state.write(500, 32),
         Err(AccessError::InvalidWrite { addr: 500, len: 32 })
     );
 }
 
 #[test]
 fn stack_full_empty() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1024);
 
-    assert!(valgrind_state.update_stack_pointer(0).is_ok());
-    assert_eq!(valgrind_state.stack_pointer, 0);
-    assert!(valgrind_state.update_stack_pointer(1024).is_ok());
-    assert_eq!(valgrind_state.stack_pointer, 1024)
+    assert!(wmemcheck_state.update_stack_pointer(0).is_ok());
+    assert_eq!(wmemcheck_state.stack_pointer, 0);
+    assert!(wmemcheck_state.update_stack_pointer(1024).is_ok());
+    assert_eq!(wmemcheck_state.stack_pointer, 1024)
 }
 
 #[test]
 fn stack_underflow() {
-    let mut valgrind_state = Valgrind::new(640 * 1024, 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1024);
 
-    assert!(valgrind_state.update_stack_pointer(800).is_ok());
+    assert!(wmemcheck_state.update_stack_pointer(800).is_ok());
     assert_eq!(
-        valgrind_state.update_stack_pointer(1025),
+        wmemcheck_state.update_stack_pointer(1025),
         Err(AccessError::OutOfBounds {
             addr: 800,
             len: 225
         })
     );
     assert_eq!(
-        valgrind_state.update_stack_pointer(2000),
+        wmemcheck_state.update_stack_pointer(2000),
         Err(AccessError::OutOfBounds {
             addr: 800,
             len: 1200
         })
     );
-    assert_eq!(valgrind_state.stack_pointer, 800);
+    assert_eq!(wmemcheck_state.stack_pointer, 800);
 }
 
 #[test]
 fn from_test_program() {
-    let mut valgrind_state = Valgrind::new(1024 * 1024 * 128, 70864);
+    let mut wmemcheck_state = Wmemcheck::new(1024 * 1024 * 128, 70864);
 
-    assert!(valgrind_state.write(70832, 1).is_ok());
-    assert!(valgrind_state.read(1138, 1).is_ok());
+    assert!(wmemcheck_state.write(70832, 1).is_ok());
+    assert!(wmemcheck_state.read(1138, 1).is_ok());
 }

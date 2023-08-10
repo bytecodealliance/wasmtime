@@ -152,16 +152,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15811caf2415fb889178633e7724bad2509101cde276048e013b9def5e51fa0"
 
 [[package]]
-name = "wasm-valgrind-fuzz"
+name = "wmemcheck-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "rand 0.3.23",
- "wasm_valgrind",
+ "wmemcheck",
 ]
 
 [[package]]
-name = "wasm_valgrind"
+name = "wmemcheck"
 version = "0.1.0"
 
 [[package]]

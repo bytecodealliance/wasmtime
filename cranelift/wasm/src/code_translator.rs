@@ -759,7 +759,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap_index = MemoryIndex::from_u32(*mem);
             let heap = state.get_heap(builder.func, *mem, environ)?;
             let val = state.pop1();
-            environ.before_memory_grow(builder, val);
+            environ.before_memory_grow(builder, val, heap_index);
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::MemorySize { mem, mem_byte: _ } => {
@@ -862,6 +862,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             );
         }
         Operator::V128Load8x8S { memarg } => {
+            //TODO(#6829): add before_load() and before_store() hooks for SIMD loads and stores.
             let (flags, _, base) = unwrap_or_return_unreachable_state!(
                 state,
                 prepare_addr(memarg, 8, builder, state, environ)?

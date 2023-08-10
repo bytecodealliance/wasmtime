@@ -20,7 +20,7 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes, PtrSize,
     TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
-use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK}; // is this the right place to import Value from?
+use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 use cfg_if::cfg_if;
 
 macro_rules! declare_function_signatures {
@@ -154,7 +154,8 @@ pub struct FuncEnvironment<'module_environment> {
 
     fuel_consumed: i64,
 
-    valgrind: bool,
+    #[cfg(feature = "wmemcheck")]
+    wmemcheck: bool,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -163,7 +164,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         translation: &'module_environment ModuleTranslation<'module_environment>,
         types: &'module_environment ModuleTypes,
         tunables: &'module_environment Tunables,
-        valgrind: bool,
+        wmemcheck: bool,
     ) -> Self {
         let builtin_function_signatures = BuiltinFunctionSignatures::new(
             isa.pointer_type(),
@@ -174,6 +175,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             },
             CallConv::triple_default(isa.triple()),
         );
+
+        // Avoid unused warning in default build.
+        #[cfg(not(feature = "wmemcheck"))]
+        let _ = wmemcheck;
+        
         Self {
             isa,
             module: &translation.module,
@@ -192,7 +198,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
             fuel_consumed: 1,
-            valgrind,
+            #[cfg(feature = "wmemcheck")]
+            wmemcheck,
         }
     }
 
@@ -201,8 +208,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
-        //arbitrarily printing funcname/index from inside func_environ
-        // println!("from vmctx {:?}", self.translation.debuginfo.name_section.func_names);
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
             self.vmctx = Some(vmctx);
@@ -614,27 +619,46 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.epoch_check(builder);
     }
 
-    #[cfg(feature = "valgrind")]
-    fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[Value]) {
+    #[cfg(feature = "wmemcheck")]
+    fn hook_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[Value]) {
         let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
         let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
             &mut builder.cursor(),
             BuiltinFunctionIndex::check_malloc(),
         );
-        let len = builder.func.dfg.block_params(builder.func.layout.entry_block().unwrap())[2];
+        let func_args = builder.func.dfg.block_params(builder.func.layout.entry_block().unwrap());
+        let len = if func_args.len() < 3 {
+            return;
+        } else {
+            // If a function named `malloc` has at least one argument, we assume the
+            // first argument is the requested allocation size.
+            func_args[2]
+        };
+        let retval = if retvals.len() < 1 {
+            return;
+        } else {
+            retvals[0]
+        };
         builder
             .ins()
-            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, retvals[0], len]);
+            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, retval, len]);
     }
 
-    #[cfg(feature = "valgrind")]
-    fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
+    #[cfg(feature = "wmemcheck")]
+    fn hook_free_exit(&mut self, builder: &mut FunctionBuilder) {
         let check_free_sig = self.builtin_function_signatures.check_free(builder.func);
         let (vmctx, check_free) = self.translate_load_builtin_function_address(
             &mut builder.cursor(),
             BuiltinFunctionIndex::check_free(),
         );
-        let ptr = builder.func.dfg.block_params(builder.func.layout.entry_block().unwrap())[2];
+        let func_args = builder.func.dfg.block_params(builder.func.layout.entry_block().unwrap());
+        let ptr = if func_args.len() < 3 {
+            return;
+        } else {
+            // If a function named `free` has at least one argument, we assume the
+            // first argument is a pointer to memory.
+            func_args[2]
+        };
         builder
             .ins()
             .call_indirect(check_free_sig, check_free, &[vmctx, ptr]);
@@ -870,6 +894,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder
             .ins()
             .call_indirect(free_start_sig, free_start, &[vmctx]);
+    }
+
+    fn current_func_name(&self, builder: &mut FunctionBuilder) -> Option<&str> {
+        let func_index = match &builder.func.name {
+            UserFuncName::User(user) => {
+                FuncIndex::from_u32(user.index)
+            }
+            _ => {
+                panic!("function name not a UserFuncName::User as expected")
+            }
+        };
+        self.translation.debuginfo.name_section.func_names.get(&func_index).map(|s| *s)
     }
 }
 
@@ -2393,18 +2429,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.epoch_function_entry(builder);
         }
 
-        let func_index = match &builder.func.name {
-            UserFuncName::User(user) => {
-                FuncIndex::from_u32(user.index)
-            }
-            _ => {
-                unreachable!()
-            }
-        };
-        let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
-        if func_name == "malloc" {
+        let func_name = self.current_func_name(builder);
+        if func_name == Some("malloc") {
             self.check_malloc_start(builder);
-        } else if func_name == "free" {
+        } else if func_name == Some("free") {
             self.check_free_start(builder);
         }
 
@@ -2451,32 +2479,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     cfg_if! {
-        if #[cfg(feature = "valgrind")] {
+        if #[cfg(feature = "wmemcheck")] {
             fn handle_before_return(
                 &mut self,
                 retvals: &[Value],
                 builder: &mut FunctionBuilder,
             ) {
-                if self.valgrind {
-                    let func_index = match &builder.func.name {
-                        UserFuncName::User(user) => {
-                            FuncIndex::from_u32(user.index)
-                        }
-                        _ => {
-                            unreachable!()
-                        }
-                    };
-                    let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
-                    if func_name == "malloc" {
-                        self.check_malloc_exit(builder, retvals);
-                    } else if func_name == "free" {
-                        self.check_free_exit(builder);
+                if self.wmemcheck {
+                    let func_name = self.current_func_name(builder);
+                    if func_name == Some("malloc") {
+                        self.hook_malloc_exit(builder, retvals);
+                    } else if func_name == Some("free") {
+                        self.hook_free_exit(builder);
                     }
                 }
             }
             
             fn before_load(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
-                if self.valgrind {
+                if self.wmemcheck {
                     let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
                     let (vmctx, check_load) = self.translate_load_builtin_function_address(
                         &mut builder.cursor(),
@@ -2491,7 +2511,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
 
             fn before_store(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
-                if self.valgrind {
+                if self.wmemcheck {
                     let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
                     let (vmctx, check_store) = self.translate_load_builtin_function_address(
                         &mut builder.cursor(),
@@ -2506,8 +2526,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
 
             fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {
-                if self.valgrind {
+                if self.wmemcheck {
                     if global_index == 0 {
+                        // We are making the assumption that global 0 is the auxiliary stack pointer.
                         let update_stack_pointer_sig = self.builtin_function_signatures.update_stack_pointer(builder.func);
                         let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
                             &mut builder.cursor(),
@@ -2520,8 +2541,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 }
             }
 
-            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, num_pages: ir::Value) {
-                if self.valgrind {
+            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, num_pages: ir::Value, mem_index: MemoryIndex) {
+                if self.wmemcheck && mem_index.0 == 0 {
                     let update_mem_size_sig = self.builtin_function_signatures.update_mem_size(builder.func);
                     let (vmctx, update_mem_size) = self.translate_load_builtin_function_address(
                         &mut builder.cursor(),
@@ -2538,11 +2559,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let _ = self.builtin_function_signatures.check_free(builder.func);
             }
 
-            fn before_load(&mut self, builder: &mut FunctionBuilder, _val_type: Type, _addr: ir::Value, _offset: u64) {
+            fn before_load(&mut self, builder: &mut FunctionBuilder, _val_size: u8, _addr: ir::Value, _offset: u64) {
                 let _ = self.builtin_function_signatures.check_load(builder.func);
             }
 
-            fn before_store(&mut self, builder: &mut FunctionBuilder, _val_type: Type, _addr: ir::Value, _offset: u64) {
+            fn before_store(&mut self, builder: &mut FunctionBuilder, _val_size: u8, _addr: ir::Value, _offset: u64) {
                 let _ = self.builtin_function_signatures.check_store(builder.func);
             }
 
@@ -2550,7 +2571,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let _ = self.builtin_function_signatures.update_stack_pointer(builder.func);
             }
 
-            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, _num_pages: Value) {
+            fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, _num_pages: Value, _mem_index: MemoryIndex) {
                 let _ = self.builtin_function_signatures.update_mem_size(builder.func);
             }
         }

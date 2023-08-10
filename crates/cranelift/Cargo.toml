@@ -33,4 +33,4 @@ wasmtime-versioned-export-macros = { workspace = true }
 all-arch = ["cranelift-codegen/all-arch"]
 component-model = ["wasmtime-environ/component-model"]
 incremental-cache = ["cranelift-codegen/incremental-cache"]
-valgrind = []
+wmemcheck = []

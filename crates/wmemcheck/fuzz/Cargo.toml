@@ -1,5 +1,5 @@
 [package]
-name = "wasm-valgrind-fuzz"
+name = "wmemcheck-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -11,7 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
 rand="0.3.14"
 
-[dependencies.wasm_valgrind]
+[dependencies.wmemcheck]
 path = ".."
 
 # Prevent this from interfering with workspaces

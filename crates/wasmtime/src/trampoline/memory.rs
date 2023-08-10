@@ -56,7 +56,7 @@ pub fn create_memory(
         host_state,
         store: StorePtr::new(store.traitobj()),
         runtime_info,
-        valgrind: false,
+        wmemcheck: false,
     };
 
     unsafe {

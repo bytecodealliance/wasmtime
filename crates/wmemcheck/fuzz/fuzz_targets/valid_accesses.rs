@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured, Error};
-use wasm_valgrind::{Valgrind, MemState};
+use wmemcheck::{Wmemcheck, MemState};
 use std::cmp::*;
 
 const TEST_MAX_ADDR: usize = 1024 * 640 - 1;
@@ -10,7 +10,7 @@ const TEST_MAX_STACK_SIZE: usize = 1024;
 
 fuzz_target!(|data: &[u8]| {
     let u = &mut Unstructured::new(data);
-    let mut valgrind_state = Valgrind::new(TEST_MAX_ADDR + 1, TEST_MAX_STACK_SIZE);
+    let mut wmemcheck_state = Wmemcheck::new(TEST_MAX_ADDR + 1, TEST_MAX_STACK_SIZE);
     let cmds = match CommandSequence::arbitrary(u) {
         Ok(val) => val,
         Err(_) => return,
@@ -20,16 +20,16 @@ fuzz_target!(|data: &[u8]| {
         let cmd: &Command = cmd;
         match cmd {
             &Command::Malloc { addr, len } => {
-                assert!(valgrind_state.malloc(addr, len).is_ok());
+                assert!(wmemcheck_state.malloc(addr, len).is_ok());
             }
             &Command::Free { addr } => {
-                assert!(valgrind_state.free(addr).is_ok());
+                assert!(wmemcheck_state.free(addr).is_ok());
             }
             &Command::Read { addr, len } => {
-                assert!(valgrind_state.read(addr, len).is_ok());
+                assert!(wmemcheck_state.read(addr, len).is_ok());
             }
             &Command::Write { addr, len } => {
-                assert!(valgrind_state.write(addr, len).is_ok());
+                assert!(wmemcheck_state.write(addr, len).is_ok());
             }
         }
     }
@@ -169,7 +169,7 @@ fn pick_read_range(state: &CommandSequenceState, u: &mut Unstructured<'_>) -> Re
     if state.allocations.is_empty() {
         return Err(Error::NotEnoughData);
     }
-    let mut alloc_index = u.choose_index(state.allocations.len())?; // may error when state.allocations.len() == 1
+    let mut alloc_index = u.choose_index(state.allocations.len())?;
     let mut attempts = 0;
     while !state.allocations[alloc_index].memstate.contains(&MemState::ValidToReadWrite) {
         alloc_index = u.choose_index(state.allocations.len())?;

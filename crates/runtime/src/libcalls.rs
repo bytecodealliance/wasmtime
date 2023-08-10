@@ -58,8 +58,8 @@ use crate::externref::VMExternRef;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::VMFuncRef;
 use crate::{Instance, TrapReason};
-#[cfg(feature = "valgrind")]
-use wasm_valgrind::AccessError::{DoubleMalloc, InvalidRead, InvalidWrite, InvalidFree, OutOfBounds};
+#[cfg(feature = "wmemcheck")]
+use wmemcheck::AccessError::{DoubleMalloc, InvalidRead, InvalidWrite, InvalidFree, OutOfBounds};
 use anyhow::Result;
 use std::mem;
 use std::ptr::{self, NonNull};
@@ -68,6 +68,7 @@ use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
 use cfg_if::cfg_if;
+#[cfg(feature = "wmemcheck")]
 use anyhow::bail;
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
@@ -493,12 +494,12 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 }
 
 cfg_if! {
-    if #[cfg(feature = "valgrind")] {
-        // Hook for validating malloc using valgrind_state.
+    if #[cfg(feature = "wmemcheck")] {
+        // Hook for validating malloc using wmemcheck_state.
         unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
-            if let Some(valgrind_state) = &mut instance.valgrind_state {
-                let result = valgrind_state.malloc(addr as usize, len as usize);
-                valgrind_state.memcheck_on();
+            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+                let result = wmemcheck_state.malloc(addr as usize, len as usize);
+                wmemcheck_state.memcheck_on();
                 match result {
                     Ok(()) => {
                         return Ok(0);
@@ -517,11 +518,11 @@ cfg_if! {
             Ok(0)
         }
 
-        // Hook for validating free using valgrind_state.
+        // Hook for validating free using wmemcheck_state.
         unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
-            if let Some(valgrind_state) = &mut instance.valgrind_state {
-                let result = valgrind_state.free(addr as usize);
-                valgrind_state.memcheck_on();
+            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+                let result = wmemcheck_state.free(addr as usize);
+                wmemcheck_state.memcheck_on();
                 match result {
                     Ok(()) => {
                         return Ok(0);
@@ -537,10 +538,10 @@ cfg_if! {
             Ok(0)
         }
 
-        // Hook for validating load using valgrind_state.
+        // Hook for validating load using wmemcheck_state.
         fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
-            if let Some(valgrind_state) = &mut instance.valgrind_state {
-                let result = valgrind_state.read(addr as usize + offset as usize, num_bytes as usize);
+            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+                let result = wmemcheck_state.read(addr as usize + offset as usize, num_bytes as usize);
                 match result {
                     Ok(()) => {
                         return Ok(0);
@@ -559,10 +560,10 @@ cfg_if! {
             Ok(0)
         }
 
-        // Hook for validating store using valgrind_state.
+        // Hook for validating store using wmemcheck_state.
         fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) -> Result<u32> {
-            if let Some(valgrind_state) = &mut instance.valgrind_state {
-                let result = valgrind_state.write(addr as usize + offset as usize, num_bytes as usize);
+            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+                let result = wmemcheck_state.write(addr as usize + offset as usize, num_bytes as usize);
                 match result {
                     Ok(()) => {
                         return Ok(0);
@@ -581,37 +582,40 @@ cfg_if! {
             Ok(0)
         }
 
-        // Hook for turning valgrind load/store validation off when entering a malloc function.
+        // Hook for turning wmemcheck load/store validation off when entering a malloc function.
         fn malloc_start(instance: &mut Instance) {
-            if let Some(valgrind_state) = &mut instance.valgrind_state {
-                valgrind_state.memcheck_off();
+            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+                wmemcheck_state.memcheck_off();
             }
         }
 
-        // Hook for turning valgrind load/store validation off when entering a free function.
+        // Hook for turning wmemcheck load/store validation off when entering a free function.
         fn free_start(instance: &mut Instance) {
-            if let Some(valgrind_state) = &mut instance.valgrind_state {
-                valgrind_state.memcheck_off();
+            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+                wmemcheck_state.memcheck_off();
             }
         }
 
-        // Hook for tracking wasm stack updates using valgrind_state.
-        fn update_stack_pointer(instance: &mut Instance, value: u32) {
-            if let Some(valgrind_state) = &mut instance.valgrind_state {
-                // instance.valgrind_state.update_stack_pointer(value as usize);
-            }
+        // Hook for tracking wasm stack updates using wmemcheck_state.
+        fn update_stack_pointer(_instance: &mut Instance, _value: u32) {
+            // TODO: stack-tracing has yet to be finalized. All memory below
+            // the address of the top of the stack is marked as valid for
+            // loads and stores.
+            // if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+            //     instance.wmemcheck_state.update_stack_pointer(value as usize);
+            // }
         }
 
-        // Hook updating valgrind_state memory state vector every time memory.grow is called.
+        // Hook updating wmemcheck_state memory state vector every time memory.grow is called.
         fn update_mem_size(instance: &mut Instance, num_pages: u32) {
-            if let Some(valgrind_state) = &mut instance.valgrind_state {
-                let kib: usize = 1024;
-                let num_bytes = num_pages as usize * kib * 64;
-                valgrind_state.update_mem_size(num_bytes);
+            if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+                const KIB: usize = 1024;
+                let num_bytes = num_pages as usize * 64 * KIB;
+                wmemcheck_state.update_mem_size(num_bytes);
             }
         }
     } else {
-        // No-op for all valgrind hooks.
+        // No-op for all wmemcheck hooks.
         unsafe fn check_malloc(_instance: &mut Instance, _addr: u32, _len: u32) -> Result<u32> { Ok(0) }
 
         unsafe fn check_free(_instance: &mut Instance, _addr: u32) -> Result<u32> { Ok(0) }
@@ -626,7 +630,7 @@ cfg_if! {
 
         fn update_stack_pointer(_instance: &mut Instance, _value: u32) {}
 
-        fn update_mem_size(instance: &mut Instance, _num_pages: u32) {}
+        fn update_mem_size(_instance: &mut Instance, _num_pages: u32) {}
     }
 }
 

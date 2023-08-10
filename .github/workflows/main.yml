@@ -266,6 +266,7 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features component-model
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
     - run: cargo check -p wasmtime --no-default-features --features winch
+    - run: cargo check -p wasmtime --no-default-features --features wmemcheck
     - run: cargo check --features component-model
     - run: cargo check -p wasmtime --features incremental-cache
 

@@ -20,7 +20,7 @@ struct Builder {
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
-    valgrind: bool,
+    wmemcheck: bool,
 }
 
 #[derive(Clone, Default)]
@@ -43,7 +43,7 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
         linkopts: LinkOptions::default(),
         cache_store: None,
         clif_dir: None,
-        valgrind: false,
+        wmemcheck: false,
     })
 }
 
@@ -93,7 +93,7 @@ impl CompilerBuilder for Builder {
             self.cache_store.clone(),
             self.linkopts.clone(),
             self.clif_dir.clone(),
-            self.valgrind,
+            self.wmemcheck,
         )))
     }
 
@@ -109,8 +109,8 @@ impl CompilerBuilder for Builder {
         Ok(())
     }
 
-    fn valgrind(&mut self, enable: bool) {
-        self.valgrind = enable;
+    fn wmemcheck(&mut self, enable: bool) {
+        self.wmemcheck = enable;
     }
 }
 

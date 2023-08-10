@@ -11,7 +11,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
 [dependencies]
-wasm-valgrind = { workspace = true }
+wmemcheck = { workspace = true }
 wasmtime-asm-macros = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }
@@ -71,4 +71,4 @@ component-model = [
   "dep:encoding_rs",
 ]
 
-valgrind = []
+wmemcheck = []

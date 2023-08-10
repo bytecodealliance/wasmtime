@@ -136,4 +136,4 @@ component-model = [
   "dep:encoding_rs",
 ]
 
-valgrind = ["wasmtime-runtime/valgrind", "wasmtime-cranelift/valgrind"]
+wmemcheck = ["wasmtime-runtime/wmemcheck", "wasmtime-cranelift/wmemcheck"]

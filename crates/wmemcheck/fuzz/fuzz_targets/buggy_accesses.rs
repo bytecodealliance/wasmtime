@@ -2,14 +2,14 @@
 
 use libfuzzer_sys::fuzz_target;
 use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
-use wasm_valgrind::{Valgrind, MemState, AccessError};
+use wmemcheck::{Wmemcheck, MemState, AccessError};
 
 const TEST_MAX_ADDR: usize = 1024 * 640 - 1;
 const TEST_MAX_STACK_SIZE: usize = 1024;
 
 fuzz_target!(|data: &[u8]| {
     let u = &mut Unstructured::new(data);
-    let mut valgrind_state = Valgrind::new(TEST_MAX_ADDR + 1, TEST_MAX_STACK_SIZE);
+    let mut wmemcheck_state = Wmemcheck::new(TEST_MAX_ADDR + 1, TEST_MAX_STACK_SIZE);
     let cmds = match BuggyCommandSequence::arbitrary(u) {
         Ok(val) => val,
         Err(_) => return,
@@ -20,16 +20,16 @@ fuzz_target!(|data: &[u8]| {
         let cmd: &Command = cmd;
         match cmd {
             &Command::Malloc { addr, len } => {
-                assert_eq!(valgrind_state.malloc(addr, len), *result);
+                assert_eq!(wmemcheck_state.malloc(addr, len), *result);
             }
             &Command::Free { addr } => {
-                assert_eq!(valgrind_state.free(addr), *result);
+                assert_eq!(wmemcheck_state.free(addr), *result);
             }
             &Command::Read { addr, len } => {
-                assert_eq!(valgrind_state.read(addr, len), *result);
+                assert_eq!(wmemcheck_state.read(addr, len), *result);
             }
             &Command::Write { addr, len } => {
-                assert_eq!(valgrind_state.write(addr, len), *result);
+                assert_eq!(wmemcheck_state.write(addr, len), *result);
             }
         }
     }
@@ -40,7 +40,7 @@ pub struct Allocation {
     addr: usize,
     len: usize,
     memstate: Vec<MemState>,
-} //TODO: model the stack as an allocation
+}
 
 impl Allocation {
     fn new(addr: usize, len: usize) -> Allocation {

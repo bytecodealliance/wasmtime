@@ -388,7 +388,6 @@ pub fn parse_name_section<'data>(
                     // We reserve `u32::MAX` for our own use in cranelift-entity.
                     if index != u32::max_value() {
                         environ.declare_func_name(FuncIndex::from_u32(index), name);
-                        //this is where the function name is translated CLIF
                     }
                 }
             }

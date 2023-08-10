@@ -3206,10 +3206,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-valgrind"
-version = "0.1.0"
-
-[[package]]
 name = "wasmi"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3696,13 +3692,13 @@ dependencies = [
  "rustix 0.38.4",
  "sptr",
  "wasm-encoder 0.31.1",
- "wasm-valgrind",
  "wasmtime-asm-macros",
  "wasmtime-environ",
  "wasmtime-fiber",
  "wasmtime-jit-debug",
  "wasmtime-versioned-export-macros",
  "windows-sys",
+ "wmemcheck",
 ]
 
 [[package]]
@@ -4230,6 +4226,10 @@ dependencies = [
  "thiserror",
  "wast 35.0.2",
 ]
+
+[[package]]
+name = "wmemcheck"
+version = "13.0.0"
 
 [[package]]
 name = "zstd"

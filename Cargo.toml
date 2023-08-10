@@ -100,7 +100,7 @@ members = [
   "crates/test-programs/wasi-http-tests",
   "crates/test-programs/command-tests",
   "crates/test-programs/reactor-tests",
-  "crates/valgrind",
+  "crates/wmemcheck",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/winch",
@@ -123,7 +123,7 @@ edition = "2021"
 rust-version = "1.66.0"
 
 [workspace.dependencies]
-wasm-valgrind = { path = "crates/valgrind", version = "0.1.0" }
+wmemcheck = { path = "crates/wmemcheck", version = "13.0.0" }
 wasmtime = { path = "crates/wasmtime", version = "13.0.0", default-features = false }
 wasmtime-cache = { path = "crates/cache", version = "=13.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=13.0.0" }
@@ -274,7 +274,7 @@ component-model = [
   "wasmtime-cli-flags/component-model"
 ]
 winch = ["wasmtime/winch"]
-valgrind = ["wasmtime/valgrind"]
+wmemcheck = ["wasmtime/wmemcheck"]
 
 [[test]]
 name = "host_segfault"

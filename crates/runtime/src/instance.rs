@@ -15,8 +15,8 @@ use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo,
     SendSyncPtr, Store, VMFunctionBody, VMSharedSignatureIndex, WasmFault,
 };
-#[cfg(feature = "valgrind")]
-use wasm_valgrind::Valgrind;
+#[cfg(feature = "wmemcheck")]
+use wmemcheck::Wmemcheck;
 use anyhow::Error;
 use anyhow::Result;
 use sptr::Strict;
@@ -143,8 +143,10 @@ pub struct Instance {
     /// seems not too bad.
     vmctx_self_reference: SendSyncPtr<VMContext>,
 
-    #[cfg(feature = "valgrind")]
-    pub(crate) valgrind_state: Option<Valgrind>,
+    #[cfg(feature = "wmemcheck")]
+    pub(crate) wmemcheck_state: Option<Wmemcheck>,
+    // TODO: add support for multiple memories, wmemcheck_state corresponds to 
+    // memory 0.
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -177,6 +179,9 @@ impl Instance {
         let dropped_elements = EntitySet::with_capacity(module.passive_elements.len());
         let dropped_data = EntitySet::with_capacity(module.passive_data_map.len());
 
+        #[cfg(not(feature = "wmemcheck"))]
+        let _ = memory_plans;
+        
         ptr::write(
             ptr,
             Instance {
@@ -193,12 +198,11 @@ impl Instance {
                 vmctx: VMContext {
                     _marker: std::marker::PhantomPinned,
                 },
-                #[cfg(feature = "valgrind")]
-                valgrind_state: {
-                    if req.valgrind {
+                #[cfg(feature = "wmemcheck")]
+                wmemcheck_state: {
+                    if req.wmemcheck {
                         let size = memory_plans.iter().next().map(|plan| plan.1.memory.minimum).unwrap_or(0) * 64 * 1024;
-                        println!("this is the size: {}", size);
-                        Some(Valgrind::new(size as usize))
+                        Some(Wmemcheck::new(size as usize))
                     } else {
                         None
                     }
@@ -1146,10 +1150,9 @@ impl Instance {
                 GlobalInit::I32Const(x) => {
                     let index = module.global_index(index);
                     if index.index() == 0 {
-                        println!("stack pointer: {}", x);
-                        #[cfg(feature = "valgrind")] {
-                            if let Some(valgrind) = &mut self.valgrind_state {
-                                valgrind.set_stack_size(x as usize);
+                        #[cfg(feature = "wmemcheck")] {
+                            if let Some(wmemcheck) = &mut self.wmemcheck_state {
+                                wmemcheck.set_stack_size(x as usize);
                             }
                         }
                     }

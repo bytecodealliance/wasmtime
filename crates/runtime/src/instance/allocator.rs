@@ -54,8 +54,8 @@ pub struct InstanceAllocationRequest<'a> {
     /// compiler. More info on this in `wasmtime/src/store.rs`
     pub store: StorePtr,
 
-    /// Indicates '--valgrind' flag.
-    pub valgrind: bool,
+    /// Indicates '--wmemcheck' flag.
+    pub wmemcheck: bool,
 }
 
 /// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct

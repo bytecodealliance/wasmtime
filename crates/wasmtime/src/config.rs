@@ -110,7 +110,7 @@ pub struct Config {
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
-    pub(crate) valgrind: bool,
+    pub(crate) wmemcheck: bool,
     pub(crate) coredump_on_trap: bool,
 }
 
@@ -125,7 +125,7 @@ struct CompilerConfig {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<std::path::PathBuf>,
-    valgrind: bool,
+    wmemcheck: bool,
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -138,7 +138,7 @@ impl CompilerConfig {
             flags: HashSet::new(),
             cache_store: None,
             clif_dir: None,
-            valgrind: false,
+            wmemcheck: false,
         }
     }
 
@@ -203,7 +203,7 @@ impl Config {
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
-            valgrind: false,
+            wmemcheck: false,
             coredump_on_trap: false,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -1482,10 +1482,12 @@ impl Config {
         self
     }
 
+    /// Enables memory error checking for wasm programs.
+    /// 
     /// This option is disabled by default.
-    pub fn valgrind(&mut self, enable: bool) -> &mut Self {
-        self.valgrind = enable;
-        self.compiler_config.valgrind = enable;
+    pub fn wmemcheck(&mut self, enable: bool) -> &mut Self {
+        self.wmemcheck = enable;
+        self.compiler_config.wmemcheck = enable;
         self
     }
 
@@ -1685,7 +1687,7 @@ impl Config {
         }
 
         compiler.set_tunables(self.tunables.clone())?;
-        compiler.valgrind(self.compiler_config.valgrind);
+        compiler.wmemcheck(self.compiler_config.wmemcheck);
 
         Ok((self, compiler.build()?))
     }

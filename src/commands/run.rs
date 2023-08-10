@@ -224,9 +224,12 @@ pub struct RunCommand {
     #[clap(long)]
     trap_on_grow_failure: bool,
 
-    /// Enable valgrind.
+    /// Enables memory error checking by including wmemcheck_state in
+    /// a runtime Instance.
+    /// 
+    /// See wmemcheck.md for documentation on how to use.
     #[clap(long)]
-    valgrind: bool,
+    wmemcheck: bool,
 
     /// The WebAssembly module to run and arguments to pass to it.
     ///
@@ -264,7 +267,7 @@ impl RunCommand {
             None => {}
         }
 
-        config.valgrind(self.valgrind);
+        config.wmemcheck(self.wmemcheck);
 
         let engine = Engine::new(&config)?;
 

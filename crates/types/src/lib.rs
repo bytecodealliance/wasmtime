@@ -203,7 +203,7 @@ entity_impl!(GlobalIndex);
 
 /// Index type of a linear memory (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct MemoryIndex(u32);
+pub struct MemoryIndex(pub u32);
 entity_impl!(MemoryIndex);
 
 /// Index type of a signature (imported or defined) inside the WebAssembly module.
