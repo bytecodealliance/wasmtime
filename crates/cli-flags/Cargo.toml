@@ -25,4 +25,4 @@ default = [
     "wasmtime/parallel-compilation",
 ]
 pooling-allocator = []
-component-model = []
+component-model = ["wasmtime/component-model"]
