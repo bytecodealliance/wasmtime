@@ -451,6 +451,7 @@ pub trait ABIMachineSpec {
     fn gen_ret(
         setup_frame: bool,
         isa_flags: &Self::F,
+        call_conv: isa::CallConv,
         rets: Vec<RetPair>,
         stack_bytes_to_pop: u32,
     ) -> Self::I;
@@ -1713,6 +1714,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         M::gen_ret(
             self.setup_frame,
             &self.isa_flags,
+            self.call_conv,
             rets,
             self.stack_bytes_to_pop(sigs),
         )
@@ -1980,6 +1982,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         insts.push(M::gen_ret(
             self.setup_frame,
             &self.isa_flags,
+            self.call_conv,
             vec![],
             self.stack_bytes_to_pop(sigs),
         ));

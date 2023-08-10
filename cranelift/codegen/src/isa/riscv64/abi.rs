@@ -253,6 +253,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     fn gen_ret(
         _setup_frame: bool,
         _isa_flags: &Self::F,
+        _call_conv: isa::CallConv,
         rets: Vec<RetPair>,
         stack_bytes_to_pop: u32,
     ) -> Inst {

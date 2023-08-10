@@ -118,11 +118,6 @@ all-arch = [
   "wasmtime-winch?/all-arch",
 ]
 
-# Enables trap handling using POSIX signals instead of Mach exceptions on MacOS.
-# It is useful for applications that do not bind their own exception ports and
-# need portable signal handling.
-posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
-
 # Enables in-progress support for the component model. Note that this feature is
 # in-progress, buggy, and incomplete. This is primarily here for internal
 # testing purposes.

@@ -212,6 +212,17 @@
   (VslideupVI)
 ))
 
+;; Register-Register ALU Ops that modify the destination register
+(type VecAluOpRRRR (enum
+  ;; Vector-Vector Opcodes
+  (VmaccVV)
+  (VnmsacVV)
+
+  ;; Vector-Scalar Opcodes
+  (VmaccVX)
+  (VnmsacVX)
+))
+
 ;; Register-Imm ALU Ops
 (type VecAluOpRRImm5 (enum
   ;; Regular VI Opcodes
@@ -334,6 +345,14 @@
 ;; of the usual RISC-V register order.
 ;; See Section 10.1 of the RISC-V Vector Extension Specification.
 
+
+;; Helper for emitting `MInst.VecAluRRRR` instructions.
+;; These instructions modify the destination register.
+(decl vec_alu_rrrr (VecAluOpRRRR VReg VReg Reg VecOpMasking  VState) VReg)
+(rule (vec_alu_rrrr op vd_src vs2 vs1 mask vstate)
+      (let ((vd WritableVReg (temp_writable_vreg))
+            (_ Unit (emit (MInst.VecAluRRRR op vd vd_src vs2 vs1 mask vstate))))
+        vd))
 
 ;; Helper for emitting `MInst.VecAluRRRImm5` instructions.
 ;; These instructions modify the destination register.
@@ -644,6 +663,38 @@
 (decl rv_vsmul_vx (VReg XReg VecOpMasking VState) VReg)
 (rule (rv_vsmul_vx vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VsmulVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmacc.vv` instruction.
+;;
+;; Integer multiply-add, overwrite addend
+;; # vd[i] = +(vs1[i] * vs2[i]) + vd[i]
+(decl rv_vmacc_vv (VReg VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vmacc_vv vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VmaccVV) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmacc.vx` instruction.
+;;
+;; Integer multiply-add, overwrite addend
+;; # vd[i] = +(x[rs1] * vs2[i]) + vd[i]
+(decl rv_vmacc_vx (VReg VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vmacc_vx vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VmaccVX) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vnmsac.vv` instruction.
+;;
+;; Integer multiply-sub, overwrite minuend
+;; # vd[i] = -(vs1[i] * vs2[i]) + vd[i]
+(decl rv_vnmsac_vv (VReg VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vnmsac_vv vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VnmsacVV) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vnmsac.vx` instruction.
+;;
+;; Integer multiply-sub, overwrite minuend
+;; # vd[i] = -(x[rs1] * vs2[i]) + vd[i]
+(decl rv_vnmsac_vx (VReg VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vnmsac_vx vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VnmsacVX) vd vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `sll.vv` instruction.
 (decl rv_vsll_vv (VReg VReg VecOpMasking VState) VReg)

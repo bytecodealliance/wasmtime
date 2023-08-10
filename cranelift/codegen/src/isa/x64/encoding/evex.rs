@@ -641,7 +641,7 @@ mod tests {
             (
                 regs::xmm10(),
                 Amode::ImmReg {
-                    simm32: (-16i32) as u32,
+                    simm32: -16,
                     base: regs::r14(),
                     flags: MemFlags::trusted(),
                 }
@@ -652,7 +652,7 @@ mod tests {
             (
                 regs::xmm11(),
                 Amode::ImmReg {
-                    simm32: (-5i32) as u32,
+                    simm32: -5,
                     base: regs::r15(),
                     flags: MemFlags::trusted(),
                 }
@@ -663,7 +663,7 @@ mod tests {
             (
                 regs::xmm12(),
                 Amode::ImmReg {
-                    simm32: (-2048i32) as u32,
+                    simm32: -2048,
                     base: regs::rdx(),
                     flags: MemFlags::trusted(),
                 }
@@ -674,7 +674,7 @@ mod tests {
             (
                 regs::xmm13(),
                 Amode::ImmReg {
-                    simm32: (-2064i32) as u32,
+                    simm32: -2064,
                     base: regs::rsi(),
                     flags: MemFlags::trusted(),
                 }

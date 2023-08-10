@@ -249,6 +249,49 @@
                                                             (uwiden_low y))))
   (rv_vwaddu_vv (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
+;; Fused Multiply Accumulate Rules `vmacc`
+;;
+;; I dont think we can use `vmadd`/`vmnsub` here since it just modifies the multiplication
+;; register instead of the addition one. The actual pattern matched seems to be
+;; exactly the same.
+
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul y z))))
+  (rv_vmacc_vv x y z (unmasked) ty))
+
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul y (splat z)))))
+  (rv_vmacc_vx x y z (unmasked) ty))
+
+(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul (splat y) z))))
+  (rv_vmacc_vx x z y (unmasked) ty))
+
+(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul x y) z)))
+  (rv_vmacc_vv z x y (unmasked) ty))
+
+(rule 13 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul x (splat y)) z)))
+  (rv_vmacc_vx z x y (unmasked) ty))
+
+(rule 14 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul (splat x) y) z)))
+  (rv_vmacc_vx z y x (unmasked) ty))
+
+;; Fused Multiply Subtract Rules `vnmsac`
+
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul y z)))))
+  (rv_vnmsac_vv x y z (unmasked) ty))
+
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul y (splat z))))))
+  (rv_vnmsac_vx x y z (unmasked) ty))
+
+(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul (splat y) z)))))
+  (rv_vnmsac_vx x z y (unmasked) ty))
+
+(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul x y)) z)))
+  (rv_vnmsac_vv z x y (unmasked) ty))
+
+(rule 13 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul x (splat y))) z)))
+  (rv_vnmsac_vx z x y (unmasked) ty))
+
+(rule 14 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul (splat x) y)) z)))
+  (rv_vnmsac_vx z y x (unmasked) ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
 (rule

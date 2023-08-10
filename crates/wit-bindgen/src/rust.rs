@@ -17,7 +17,7 @@ pub trait RustGenerator<'a> {
     fn info(&self, ty: TypeId) -> TypeInfo;
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String>;
 
-    /// This determines whether we generate owning types or (where appopriate)
+    /// This determines whether we generate owning types or (where appropriate)
     /// borrowing types.
     ///
     /// For example, when generating a type which is only used as a parameter to

@@ -1,6 +1,6 @@
 test compile precise-output
 set unwind_info=false
-target aarch64 sign_return_address
+target aarch64 sign_return_address sign_return_address_with_bkey has_pauth
 
 function %f1(i64) -> i64 {
     fn0 = %g(i64) -> i64
@@ -11,18 +11,18 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   paciasp
+;   pacibsp
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
 ;   load_ext_name x3, TestCase(%g)+0
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
-;   autiasp ; ret
+;   retabsp
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   paciasp
+;   pacibsp
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0xc
@@ -32,8 +32,7 @@ block0(v0: i64):
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x3
 ;   ldp x29, x30, [sp], #0x10
-;   autiasp
-;   ret
+;   retab
 
 function %f2(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -60,7 +59,7 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   paciaz
+;   pacibz
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
@@ -69,11 +68,11 @@ block0(v0: i64):
 ;   blr x3
 ;   mov x2, x0
 ;   ldp fp, lr, [sp], #16
-;   autiaz ; ret
+;   retabz
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   paciaz
+;   pacibz
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0xc
@@ -85,7 +84,7 @@ block0(v0: i64):
 ;   blr x3
 ;   mov x2, x0
 ;   ldp x29, x30, [sp], #0x10
-;   autiaz
+;   autibz
 ;   ret
 
 function %tail_call(i64) -> i64 tail {
@@ -96,7 +95,7 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   paciaz
+;   pacibz
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ; block0:
@@ -105,7 +104,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   paciaz
+;   pacibz
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ; block1: ; offset 0xc
@@ -116,6 +115,6 @@ block0(v0: i64):
 ;   ldp x16, x30, [x29]
 ;   add sp, x29, #0x10
 ;   mov x29, x16
-;   autiaz
+;   autibz
 ;   br x3
 

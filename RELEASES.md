@@ -16,7 +16,67 @@ Unreleased.
 
 ### Added
 
+* Wasmtime now supports having multiple different versions of itself being
+  linked into the same final executable by mangling some C symbols used by
+  Wasmtime.
+  [#6673](https://github.com/bytecodealliance/wasmtime/pull/6673)
+
+* The `perfmap` profiling option is now supported on any Unix platform instead
+  of just Linux.
+  [#6701](https://github.com/bytecodealliance/wasmtime/pull/6701)
+
+* The `wasmtime` CLI now supports `--env FOO` to inherit the value of the
+  environment variable `FOO` which avoids needing to do `--env FOO=$FOO` for
+  example.
+  [#6746](https://github.com/bytecodealliance/wasmtime/pull/6746)
+
+* Wasmtime now supports component model resources, although support has not yet
+  been added to `bindgen!`.
+  [#6691](https://github.com/bytecodealliance/wasmtime/pull/6691)
+
+* Wasmtime now supports configuration to enable the tail calls proposal.
+  Platform support now also includes AArch64 and RISC-V in addition to the
+  previous x86\_64 support.
+  [#6723](https://github.com/bytecodealliance/wasmtime/pull/6723)
+  [#6749](https://github.com/bytecodealliance/wasmtime/pull/6749)
+  [#6774](https://github.com/bytecodealliance/wasmtime/pull/6774)
+
+* Wasmtime's implementation of WASI Preview 2 now supports streams/pollables
+  with host objects that are all backed by Rust `async`.
+  [#6556](https://github.com/bytecodealliance/wasmtime/pull/6556)
+
+* Support for core dumps has now been added to the `wasmtime` crate.
+  [#6513](https://github.com/bytecodealliance/wasmtime/pull/6513)
+
+* New `{Module,Component}::resources_required` APIs allow inspecting what will
+  be required when instantiating the module or component.
+  [#6789](https://github.com/bytecodealliance/wasmtime/pull/6789)
+
+### Fixed
+
+* Functions on instances defined through `component::Linker::func_new` are now
+  defined correctly.
+  [#6637](https://github.com/bytecodealliance/wasmtime/pull/6637)
+
+* The `async_stack_size` configuration option is no longer inspected when
+  `async_support` is disabled at runtime.
+  [#6771](https://github.com/bytecodealliance/wasmtime/pull/6771)
+
+* WASI Preview 1 APIs will now trap on misaligned or out-of-bounds pointers
+  instead of returning an error.
+  [#6776](https://github.com/bytecodealliance/wasmtime/pull/6776)
+
 ### Changed
+
+* Options to the `wasmtime` CLI for Wasmtime itself must now come before the
+  WebAssembly module. For example `wasmtime run foo.wasm --disable-cache` now
+  must be specified as `wasmtime run --disable-cache foo.wasm`. Any
+  argument/option after the WebAssembly module is now interpreted as an argument
+  to the wasm module itself.
+  [#6737](https://github.com/bytecodealliance/wasmtime/pull/6737)
+
+* Empty types are no longer allowed in the component model.
+  [#6777](https://github.com/bytecodealliance/wasmtime/pull/6777)
 
 --------------------------------------------------------------------------------
 

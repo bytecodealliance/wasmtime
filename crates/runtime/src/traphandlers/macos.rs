@@ -161,16 +161,21 @@ mod mach_addons {
 
 use mach_addons::*;
 
-/// Just used below
-pub enum Void {}
-/// For now this is basically unused, we don't expose this any more for
-/// Wasmtime on macOS.
-pub type SignalHandler<'a> = dyn Fn(Void) -> bool + Send + Sync + 'a;
-
 /// Process-global port that we use to route thread-level exceptions to.
 static mut WASMTIME_PORT: mach_port_name_t = MACH_PORT_NULL;
 
+static mut CHILD_OF_FORKED_PROCESS: bool = false;
+
 pub unsafe fn platform_init() {
+    // Mach ports do not currently work across forks, so configure Wasmtime to
+    // panic in `lazy_per_thread_init` if the child attempts to invoke
+    // WebAssembly.
+    unsafe extern "C" fn child() {
+        CHILD_OF_FORKED_PROCESS = true;
+    }
+    let rc = libc::pthread_atfork(None, None, Some(child));
+    assert_eq!(rc, 0, "failed to configure `pthread_atfork` handler");
+
     // Allocate our WASMTIME_PORT and make sure that it can be sent to so we
     // can receive exceptions.
     let me = mach_task_self();
@@ -461,6 +466,11 @@ unsafe extern "C" fn unwind(
 #[cold]
 pub fn lazy_per_thread_init() {
     unsafe {
+        assert!(
+            !CHILD_OF_FORKED_PROCESS,
+            "cannot use Wasmtime in a forked process when mach ports are \
+             configured, see `Config::macos_use_mach_ports`"
+        );
         assert!(WASMTIME_PORT != MACH_PORT_NULL);
         let this_thread = mach_thread_self();
         let kret = thread_set_exception_ports(

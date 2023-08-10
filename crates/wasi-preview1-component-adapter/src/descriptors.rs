@@ -1,5 +1,5 @@
 use crate::bindings::wasi::cli_base::{stderr, stdin, stdout};
-use crate::bindings::wasi::filesystem::filesystem;
+use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams::{self, InputStream, OutputStream};
 use crate::bindings::wasi::sockets::tcp;
 use crate::{set_stderr_stream, BumpArena, File, ImportAlloc, TrappingUnwrap, WasmStr};
@@ -166,7 +166,7 @@ impl Descriptors {
         }))
         .trapping_unwrap();
 
-        #[link(wasm_import_module = "wasi:cli-base/preopens")]
+        #[link(wasm_import_module = "wasi:filesystem/preopens")]
         extern "C" {
             #[link_name = "get-directories"]
             fn get_preopens_import(rval: *mut PreopenList);
