@@ -1,11 +1,14 @@
 //! The module that implements the `wasmtime run` command.
 
 use anyhow::{anyhow, bail, Context as _, Result};
+use clap::builder::{OsStringValueParser, TypedValueParser};
 use clap::Parser;
 use once_cell::sync::Lazy;
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 use wasmtime::{
@@ -35,6 +38,18 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttp;
+
+fn parse_module(s: OsString) -> anyhow::Result<PathBuf> {
+    // Do not accept wasmtime subcommand names as the module name
+    match s.to_str() {
+        Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
+            bail!("module name cannot be the same as a subcommand")
+        }
+        #[cfg(unix)]
+        Some("-") => Ok(PathBuf::from("/dev/stdin")),
+        _ => Ok(s.into()),
+    }
+}
 
 fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
     let mut parts = s.splitn(2, '=');
@@ -96,7 +111,7 @@ static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_strin
 
 /// Runs a WebAssembly module
 #[derive(Parser)]
-#[structopt(name = "run", after_help = AFTER_HELP.as_str())]
+#[structopt(name = "run", trailing_var_arg = true, after_help = AFTER_HELP.as_str())]
 pub struct RunCommand {
     #[clap(flatten)]
     common: CommonOptions,
@@ -159,6 +174,14 @@ pub struct RunCommand {
     #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)]
     map_dirs: Vec<(String, String)>,
 
+    /// The path of the WebAssembly module to run
+    #[clap(
+        required = true,
+        value_name = "MODULE",
+        value_parser = OsStringValueParser::new().try_map(parse_module),
+    )]
+    module: PathBuf,
+
     /// Load the given WebAssembly module before the main module
     #[clap(
         long = "preload",
@@ -202,6 +225,11 @@ pub struct RunCommand {
     #[clap(long = "coredump-on-trap", value_name = "PATH")]
     coredump_on_trap: Option<String>,
 
+    // NOTE: this must come last for trailing varargs
+    /// The arguments to pass to the module
+    #[clap(value_name = "ARGS")]
+    module_args: Vec<String>,
+
     /// Maximum size, in bytes, that a linear memory is allowed to reach.
     ///
     /// Growth beyond this limit will cause `memory.grow` instructions in
@@ -233,14 +261,6 @@ pub struct RunCommand {
     /// memory, for example.
     #[clap(long)]
     trap_on_grow_failure: bool,
-
-    /// The WebAssembly module to run and arguments to pass to it.
-    ///
-    /// Arguments passed to the wasm module will be configured as WASI CLI
-    /// arguments unless the `--invoke` CLI argument is passed in which case
-    /// arguments will be interpreted as arguments to the function specified.
-    #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
-    module_and_args: Vec<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -283,13 +303,13 @@ impl RunCommand {
 
         // Make wasi available by default.
         let preopen_dirs = self.compute_preopen_dirs()?;
-        let argv = self.compute_argv()?;
+        let argv = self.compute_argv();
 
         let mut linker = Linker::new(&engine);
         linker.allow_unknown_exports(self.allow_unknown_exports);
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        let module = self.load_module(linker.engine(), &self.module_and_args[0])?;
+        let module = self.load_module(linker.engine(), &self.module)?;
         let mut modules = vec![(String::new(), module.clone())];
 
         let host = Host::default();
@@ -350,12 +370,8 @@ impl RunCommand {
         // Load the main wasm module.
         match self
             .load_main_module(&mut store, &mut linker, module, modules, &argv[0])
-            .with_context(|| {
-                format!(
-                    "failed to run main module `{}`",
-                    self.module_and_args[0].display()
-                )
-            }) {
+            .with_context(|| format!("failed to run main module `{}`", self.module.display()))
+        {
             Ok(()) => (),
             Err(e) => {
                 // Exit the process if Wasmtime understands the error;
@@ -404,25 +420,27 @@ impl RunCommand {
         Ok(listeners)
     }
 
-    fn compute_argv(&self) -> Result<Vec<String>> {
+    fn compute_argv(&self) -> Vec<String> {
         let mut result = Vec::new();
 
-        for (i, arg) in self.module_and_args.iter().enumerate() {
-            // For argv[0], which is the program name. Only include the base
-            // name of the main wasm module, to avoid leaking path information.
-            let arg = if i == 0 {
-                arg.components().next_back().unwrap().as_os_str()
-            } else {
-                arg.as_ref()
-            };
-            result.push(
-                arg.to_str()
-                    .ok_or_else(|| anyhow!("failed to convert {arg:?} to utf-8"))?
-                    .to_string(),
-            );
+        // Add argv[0], which is the program name. Only include the base name of the
+        // main wasm module, to avoid leaking path information.
+        result.push(
+            self.module
+                .components()
+                .next_back()
+                .map(Component::as_os_str)
+                .and_then(OsStr::to_str)
+                .unwrap_or("")
+                .to_owned(),
+        );
+
+        // Add the remaining arguments.
+        for arg in self.module_args.iter() {
+            result.push(arg.clone());
         }
 
-        Ok(result)
+        result
     }
 
     fn setup_epoch_handler(
@@ -523,10 +541,9 @@ impl RunCommand {
         }
 
         // Use "" as a default module name.
-        linker.module(&mut *store, "", &module).context(format!(
-            "failed to instantiate {:?}",
-            self.module_and_args[0]
-        ))?;
+        linker
+            .module(&mut *store, "", &module)
+            .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
         let func = if let Some(name) = &self.invoke {
@@ -567,7 +584,7 @@ impl RunCommand {
                  is experimental and may break in the future"
             );
         }
-        let mut args = self.module_and_args.iter().skip(1);
+        let mut args = self.module_args.iter();
         let mut values = Vec::new();
         for ty in ty.params() {
             let val = match args.next() {
@@ -580,9 +597,6 @@ impl RunCommand {
                     }
                 }
             };
-            let val = val
-                .to_str()
-                .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
             values.push(match ty {
                 // TODO: integer parsing here should handle hexadecimal notation
                 // like `0x0...`, but the Rust standard library currently only
@@ -609,9 +623,7 @@ impl RunCommand {
         if let Err(err) = invoke_res {
             let err = if err.is::<wasmtime::Trap>() {
                 if let Some(coredump_path) = self.coredump_on_trap.as_ref() {
-                    let source_name = self.module_and_args[0]
-                        .to_str()
-                        .unwrap_or_else(|| "unknown");
+                    let source_name = self.module.to_str().unwrap_or_else(|| "unknown");
 
                     if let Err(coredump_err) = generate_coredump(&err, &source_name, coredump_path)
                     {
@@ -652,12 +664,6 @@ impl RunCommand {
     }
 
     fn load_module(&self, engine: &Engine, path: &Path) -> Result<Module> {
-        let path = match path.to_str() {
-            #[cfg(unix)]
-            Some("-") => "/dev/stdin".as_ref(),
-            _ => path,
-        };
-
         if self.allow_precompiled {
             unsafe { Module::from_trusted_file(engine, path) }
         } else {
