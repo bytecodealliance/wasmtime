@@ -59,6 +59,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cache",
     "winch-codegen",
     "wasmtime-winch",
+    "wasmtime-wmemcheck",
     "wasmtime",
     // wasi-common/wiggle
     "wiggle",
