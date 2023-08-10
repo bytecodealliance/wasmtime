@@ -7,9 +7,12 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
+
 use crate::preview2::{HostInputStream, HostOutputStream, StreamState};
 use anyhow::Error;
 use bytes::Bytes;
+use std::mem;
+use tokio::sync::mpsc::error::TrySendError;
 
 #[derive(Debug)]
 pub struct MemoryInputPipe {
@@ -242,28 +245,31 @@ enum WriteState {
     Err(std::io::Error),
 }
 
+enum WriteMesage {
+    Write(Bytes),
+    Flush,
+}
+
 /// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
 pub struct AsyncWriteStream {
     state: Option<WriteState>,
-    sender: tokio::sync::mpsc::Sender<Bytes>,
+    sender: tokio::sync::mpsc::Sender<WriteMesage>,
     result_receiver: tokio::sync::mpsc::Receiver<Result<StreamState, std::io::Error>>,
-    // the join handle for the background task is Some until join_background_tasks, after which
-    // further use of the AsyncReadStream is not allowed.
-    join_handle: Option<tokio::task::JoinHandle<()>>,
+    join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl AsyncWriteStream {
     /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
     pub fn new<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(mut writer: T) -> Self {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel::<Bytes>(1);
+        let (sender, mut receiver) = tokio::sync::mpsc::channel::<WriteMesage>(1);
         let (result_sender, result_receiver) = tokio::sync::mpsc::channel(1);
 
         let join_handle = crate::preview2::spawn(async move {
             'outer: loop {
                 use tokio::io::AsyncWriteExt;
                 match receiver.recv().await {
-                    Some(mut bytes) => {
+                    Some(WriteMesage::Write(mut bytes)) => {
                         while !bytes.is_empty() {
                             match writer.write_buf(&mut bytes).await {
                                 Ok(0) => {
@@ -286,6 +292,15 @@ impl AsyncWriteStream {
                             }
                         }
                     }
+                    Some(WriteMesage::Flush) => match writer.flush().await {
+                        Ok(()) => {
+                            let _ = result_sender.send(Ok(StreamState::Open)).await;
+                        }
+                        Err(e) => {
+                            let _ = result_sender.send(Err(e)).await;
+                            break 'outer;
+                        }
+                    },
 
                     // The other side of the channel hung up, the task can exit now
                     None => break 'outer,
@@ -297,54 +312,75 @@ impl AsyncWriteStream {
             state: Some(WriteState::Ready),
             sender,
             result_receiver,
-            join_handle: Some(join_handle),
+            join_handle,
         }
     }
 
-    fn send(&mut self, bytes: Bytes) -> anyhow::Result<(usize, StreamState)> {
-        use tokio::sync::mpsc::error::TrySendError;
+    fn send(&mut self, msg: WriteMesage) -> anyhow::Result<bool> {
+        assert!(!self.has_pending_op());
 
-        debug_assert!(matches!(self.state, Some(WriteState::Ready)));
-
-        let len = bytes.len();
-        match self.sender.try_send(bytes) {
-            Ok(_) => {
-                self.state = Some(WriteState::Pending);
-                Ok((len, StreamState::Open))
-            }
-            Err(TrySendError::Full(_)) => {
-                unreachable!("task shouldnt be full when writestate is ready")
-            }
-            Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
-        }
-    }
-
-    // Factored out: when called from a wasm stream operation, there is a strict precondition that
-    // join_handle is_some, but when called as part of join_background_tasks, join_handle is None.
-    async fn ready_(&mut self) -> Result<(), Error> {
-        match &self.state {
-            Some(WriteState::Pending) => match self.result_receiver.recv().await {
-                Some(Ok(StreamState::Open)) => {
-                    self.state = Some(WriteState::Ready);
+        match mem::replace(&mut self.state, Some(WriteState::Pending)) {
+            Some(WriteState::Ready) => match self.sender.try_send(msg) {
+                Ok(_) => Ok(true),
+                Err(TrySendError::Full(_)) => {
+                    unreachable!("task shouldnt be full when writestate is ready")
                 }
-
-                Some(Ok(StreamState::Closed)) => {
-                    self.state = None;
-                }
-
-                Some(Err(e)) => {
-                    self.state = Some(WriteState::Err(e));
-                }
-
-                None => {
-                    unreachable!("background task has died")
-                }
+                Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
             },
+            Some(WriteState::Pending) => unreachable!(),
+            Some(WriteState::Err(e)) => Err(e.into()),
+            None => {
+                self.state = None;
+                Ok(false)
+            }
+        }
+    }
 
-            Some(WriteState::Ready | WriteState::Err(_)) | None => {}
+    fn update_with_result(&mut self, result: std::io::Result<StreamState>) {
+        assert!(self.has_pending_op());
+        self.state = match result {
+            Ok(StreamState::Open) => Some(WriteState::Ready),
+            Ok(StreamState::Closed) => None,
+            Err(e) => Some(WriteState::Err(e)),
+        };
+    }
+
+    fn has_pending_op(&self) -> bool {
+        matches!(self.state, Some(WriteState::Pending))
+    }
+
+    async fn flush(&mut self) -> anyhow::Result<()> {
+        // NB: This method needs to be "cancel safe" where it can be cancelled
+        // at any `.await` point but the flush operation still needs to be able
+        // to be restarted successfully.
+
+        // First wait for any pending operation to complete to have the ability
+        // to send another message.
+        self.ready().await?;
+
+        // Queue up a flush operation in our background task, and if it's
+        // already gone then that's ok as flushing has completed anyway.
+        //
+        // Note that this may end up returning a queued error from a previous
+        // write or flush.
+        if !self.send(WriteMesage::Flush)? {
+            return Ok(());
         }
 
-        Ok(())
+        // Wait again for the flush to fully complete before considering this
+        // request to flush as fully complete.
+        self.ready().await?;
+
+        // Extract the error, if any, that occurred.
+        match mem::replace(&mut self.state, Some(WriteState::Ready)) {
+            Some(WriteState::Err(e)) => Err(e.into()),
+            Some(WriteState::Pending) => unreachable!(),
+            Some(WriteState::Ready) => Ok(()),
+            None => {
+                self.state = None;
+                Ok(())
+            }
+        }
     }
 }
 
@@ -352,7 +388,7 @@ impl AsyncWriteStream {
 // In order to make sure output is flushed before dropping, use `join_background_tasks`.
 impl Drop for AsyncWriteStream {
     fn drop(&mut self) {
-        self.join_handle.take().map(|h| h.abort());
+        self.join_handle.abort();
     }
 }
 
@@ -360,70 +396,41 @@ impl Drop for AsyncWriteStream {
 impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
         use tokio::sync::mpsc::error::TryRecvError;
-        assert!(
-            self.join_handle.is_some(),
-            "illegal use of AsyncWriteStream after join_background_tasks"
-        );
 
-        match self.state {
-            Some(WriteState::Ready) => self.send(bytes),
-            Some(WriteState::Pending) => match self.result_receiver.try_recv() {
-                Ok(Ok(StreamState::Open)) => {
-                    self.state = Some(WriteState::Ready);
-                    self.send(bytes)
-                }
-
-                Ok(Ok(StreamState::Closed)) => {
-                    self.state = None;
-                    Ok((0, StreamState::Closed))
-                }
-
-                Ok(Err(e)) => {
-                    self.state = None;
-                    Err(e.into())
-                }
-
-                Err(TryRecvError::Empty) => {
-                    self.state = Some(WriteState::Pending);
-                    Ok((0, StreamState::Open))
-                }
-
-                Err(TryRecvError::Disconnected) => {
-                    unreachable!("task shouldn't die while pending")
-                }
-            },
-            Some(WriteState::Err(_)) => {
-                // Move the error payload out of self.state, because errors are not Copy,
-                // and set self.state to None, because the stream is now closed.
-                if let Some(WriteState::Err(e)) = self.state.take() {
-                    Err(e.into())
-                } else {
-                    unreachable!("self.state shown to be Some(Err(e)) in match clause")
-                }
+        if self.has_pending_op() {
+            match self.result_receiver.try_recv() {
+                Ok(result) => self.update_with_result(result),
+                Err(TryRecvError::Empty) => return Ok((0, StreamState::Open)),
+                Err(TryRecvError::Disconnected) => unreachable!("background task died"),
             }
+        }
 
-            None => Ok((0, StreamState::Closed)),
+        let len = bytes.len();
+        if self.send(WriteMesage::Write(bytes))? {
+            Ok((len, StreamState::Open))
+        } else {
+            Ok((0, StreamState::Closed))
         }
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
-        assert!(
-            self.join_handle.is_some(),
-            "illegal use of AsyncWriteStream after join_background_tasks"
-        );
-        // Body is factored out: call from join_background_tasks does not have the above
-        // precondition.
-        self.ready_().await
+        if !self.has_pending_op() {
+            return Ok(());
+        }
+
+        let result = self
+            .result_receiver
+            .recv()
+            .await
+            .expect("badkground task has died");
+        self.update_with_result(result);
+        assert!(!self.has_pending_op());
+
+        Ok(())
     }
 
     async fn join_background_tasks(&mut self) {
-        // Do this at most once, after which the rest of methods are not to be used:
-        if let Some(jh) = self.join_handle.take() {
-            // Worker task has flushed outputs when it is ready for writing again:
-            let _ = self.ready_().await;
-            // Now abort the task:
-            jh.abort();
-        };
+        let _ = self.flush().await;
     }
 }
 
