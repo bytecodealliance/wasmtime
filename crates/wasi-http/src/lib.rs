@@ -109,6 +109,7 @@ impl From<hyper::Error> for crate::wasi::http::types::Error {
             || err.is_canceled()
             || err.is_closed()
             || err.is_incomplete_message()
+            || err.is_parse()
         {
             Self::ProtocolError(message)
         } else {
