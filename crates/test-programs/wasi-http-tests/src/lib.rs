@@ -47,11 +47,18 @@ pub fn request(
     authority: &str,
     path_with_query: &str,
     body: Option<&[u8]>,
+    additional_headers: Option<&[(String, String)]>,
 ) -> Result<Response> {
-    let headers = http_types::new_fields(&[
-        ("User-agent".to_string(), "WASI-HTTP/0.0.1".to_string()),
-        ("Content-type".to_string(), "application/json".to_string()),
-    ]);
+    let headers = http_types::new_fields(
+        &[
+            &[
+                ("User-agent".to_string(), "WASI-HTTP/0.0.1".to_string()),
+                ("Content-type".to_string(), "application/json".to_string()),
+            ],
+            additional_headers.unwrap_or(&[]),
+        ]
+        .concat(),
+    );
 
     let request = http_types::new_outgoing_request(
         &method,

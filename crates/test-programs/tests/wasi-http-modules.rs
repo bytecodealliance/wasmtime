@@ -1,5 +1,4 @@
 #![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
-use futures::future;
 use wasmtime::{Config, Engine, Func, Linker, Module, Store};
 use wasmtime_wasi::preview2::{
     preview1::{WasiPreview1Adapter, WasiPreview1View},
@@ -7,7 +6,7 @@ use wasmtime_wasi::preview2::{
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
-use test_programs::http_server;
+use test_programs::http_server::{setup_http1, setup_http2};
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -103,7 +102,43 @@ async fn run(name: &str) -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn outbound_request() {
-    let (_, result) = future::join(http_server::run_server(), run("outbound_request")).await;
-    result.unwrap();
+async fn outbound_request_get() {
+    setup_http1(run("outbound_request_get")).await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn outbound_request_post() {
+    setup_http1(run("outbound_request_post")).await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn outbound_request_put() {
+    setup_http1(run("outbound_request_put")).await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn outbound_request_invalid_version() {
+    setup_http2(run("outbound_request_invalid_version"))
+        .await
+        .unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn outbound_request_unknown_method() {
+    run("outbound_request_unknown_method").await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn outbound_request_unsupported_scheme() {
+    run("outbound_request_unsupported_scheme").await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn outbound_request_invalid_port() {
+    run("outbound_request_invalid_port").await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn outbound_request_invalid_dnsname() {
+    run("outbound_request_invalid_dnsname").await.unwrap();
 }

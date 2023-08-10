@@ -14,6 +14,7 @@ wit-component = { workspace = true }
 heck = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 http = { version = "0.2.9" }
 http-body = "1.0.0-rc.2"
 http-body-util = "0.1.0-rc.2"
