@@ -87,6 +87,10 @@ impl HostOutputStream for MemoryOutputPipe {
         // This stream is always ready for writing.
         Ok(())
     }
+
+    async fn flush(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 /// TODO
@@ -105,9 +109,7 @@ pub struct AsyncReadStream {
     state: StreamState,
     buffer: Option<Result<Bytes, std::io::Error>>,
     receiver: tokio::sync::mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
-    // the join handle for the background task is Some until join_background_tasks, after which
-    // further use of the AsyncReadStream is not allowed.
-    join_handle: Option<tokio::task::JoinHandle<()>>,
+    join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl AsyncReadStream {
@@ -136,17 +138,13 @@ impl AsyncReadStream {
             state: StreamState::Open,
             buffer: None,
             receiver,
-            join_handle: Some(join_handle),
+            join_handle,
         }
     }
     // stdio implementation uses this to determine if the backing tokio runtime has been shutdown and
     // restarted:
     pub(crate) fn is_finished(&self) -> bool {
-        assert!(
-            self.join_handle.is_some(),
-            "illegal use of AsyncReadStream after join_background_tasks"
-        );
-        self.join_handle.as_ref().unwrap().is_finished()
+        self.join_handle.is_finished()
     }
 }
 
@@ -155,7 +153,7 @@ impl AsyncReadStream {
 // on reader.read_buf's await it could hold the reader open indefinitely.
 impl Drop for AsyncReadStream {
     fn drop(&mut self) {
-        self.join_handle.take().map(|h| h.abort());
+        self.join_handle.abort();
     }
 }
 
@@ -163,10 +161,6 @@ impl Drop for AsyncReadStream {
 impl HostInputStream for AsyncReadStream {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         use tokio::sync::mpsc::error::TryRecvError;
-        assert!(
-            self.join_handle.is_some(),
-            "illegal use of AsyncReadStream after join_background_tasks"
-        );
 
         match self.buffer.take() {
             Some(Ok(mut bytes)) => {
@@ -209,11 +203,6 @@ impl HostInputStream for AsyncReadStream {
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
-        assert!(
-            self.join_handle.is_some(),
-            "illegal use of AsyncReadStream after join_background_tasks"
-        );
-
         if self.buffer.is_some() || self.state == StreamState::Closed {
             return Ok(());
         }
@@ -232,9 +221,6 @@ impl HostInputStream for AsyncReadStream {
             }
         }
         Ok(())
-    }
-    async fn join_background_tasks(&mut self) {
-        self.join_handle.take().map(|h| h.abort());
     }
 }
 
@@ -348,40 +334,6 @@ impl AsyncWriteStream {
     fn has_pending_op(&self) -> bool {
         matches!(self.state, Some(WriteState::Pending))
     }
-
-    async fn flush(&mut self) -> anyhow::Result<()> {
-        // NB: This method needs to be "cancel safe" where it can be cancelled
-        // at any `.await` point but the flush operation still needs to be able
-        // to be restarted successfully.
-
-        // First wait for any pending operation to complete to have the ability
-        // to send another message.
-        self.ready().await?;
-
-        // Queue up a flush operation in our background task, and if it's
-        // already gone then that's ok as flushing has completed anyway.
-        //
-        // Note that this may end up returning a queued error from a previous
-        // write or flush.
-        if !self.send(WriteMesage::Flush)? {
-            return Ok(());
-        }
-
-        // Wait again for the flush to fully complete before considering this
-        // request to flush as fully complete.
-        self.ready().await?;
-
-        // Extract the error, if any, that occurred.
-        match mem::replace(&mut self.state, Some(WriteState::Ready)) {
-            Some(WriteState::Err(e)) => Err(e.into()),
-            Some(WriteState::Pending) => unreachable!(),
-            Some(WriteState::Ready) => Ok(()),
-            None => {
-                self.state = None;
-                Ok(())
-            }
-        }
-    }
 }
 
 // Make sure the background task does not outlive the AsyncWriteStream handle.
@@ -429,8 +381,38 @@ impl HostOutputStream for AsyncWriteStream {
         Ok(())
     }
 
-    async fn join_background_tasks(&mut self) {
-        let _ = self.flush().await;
+    async fn flush(&mut self) -> anyhow::Result<()> {
+        // NB: This method needs to be "cancel safe" where it can be cancelled
+        // at any `.await` point but the flush operation still needs to be able
+        // to be restarted successfully.
+
+        // First wait for any pending operation to complete to have the ability
+        // to send another message.
+        self.ready().await?;
+
+        // Queue up a flush operation in our background task, and if it's
+        // already gone then that's ok as flushing has completed anyway.
+        //
+        // Note that this may end up returning a queued error from a previous
+        // write or flush.
+        if !self.send(WriteMesage::Flush)? {
+            return Ok(());
+        }
+
+        // Wait again for the flush to fully complete before considering this
+        // request to flush as fully complete.
+        self.ready().await?;
+
+        // Extract the error, if any, that occurred.
+        match mem::replace(&mut self.state, Some(WriteState::Ready)) {
+            Some(WriteState::Err(e)) => Err(e.into()),
+            Some(WriteState::Pending) => unreachable!(),
+            Some(WriteState::Ready) => Ok(()),
+            None => {
+                self.state = None;
+                Ok(())
+            }
+        }
     }
 }
 
@@ -444,6 +426,10 @@ impl HostOutputStream for SinkOutputStream {
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn flush(&mut self) -> Result<(), Error> {
         Ok(())
     }
 }
@@ -472,6 +458,10 @@ impl HostOutputStream for ClosedOutputStream {
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn flush(&mut self) -> Result<(), Error> {
         Ok(())
     }
 }
