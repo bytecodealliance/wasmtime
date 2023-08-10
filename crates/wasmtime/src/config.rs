@@ -1550,6 +1550,10 @@ impl Config {
         {
             bail!("static memory guard size cannot be smaller than dynamic memory guard size");
         }
+        #[cfg(not(feature = "wmemcheck"))]
+        if self.wmemcheck {
+            bail!("wmemcheck (memory checker) was requested but is not enabled in this build");
+        }
 
         Ok(())
     }

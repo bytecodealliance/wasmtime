@@ -2552,7 +2552,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
 
             fn before_memory_grow(&mut self, builder: &mut FunctionBuilder, num_pages: ir::Value, mem_index: MemoryIndex) {
-                if self.wmemcheck && mem_index.0 == 0 {
+                if self.wmemcheck && mem_index.as_u32() == 0 {
                     let update_mem_size_sig = self.builtin_function_signatures.update_mem_size(builder.func);
                     let (vmctx, update_mem_size) = self.translate_load_builtin_function_address(
                         &mut builder.cursor(),
