@@ -608,26 +608,6 @@ fn run_just_stdin_argument() -> Result<()> {
 }
 
 #[test]
-fn wasm_flags_without_subcommand() -> Result<()> {
-    let output = get_wasmtime_command()?
-        .current_dir("tests/all/cli_tests/")
-        .arg("print-arguments.wat")
-        .arg("-foo")
-        .arg("bar")
-        .output()?;
-    assert!(output.status.success());
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "\
-            print-arguments.wat\n\
-            -foo\n\
-            bar\n\
-        "
-    );
-    Ok(())
-}
-
-#[test]
 fn wasi_misaligned_pointer() -> Result<()> {
     let output = get_wasmtime_command()?
         .arg("./tests/all/cli_tests/wasi_misaligned_pointer.wat")
