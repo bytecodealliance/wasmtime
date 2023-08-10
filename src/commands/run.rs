@@ -226,7 +226,7 @@ pub struct RunCommand {
 
     /// Enables memory error checking by including wmemcheck_state in
     /// a runtime Instance.
-    /// 
+    ///
     /// See wmemcheck.md for documentation on how to use.
     #[clap(long)]
     wmemcheck: bool,

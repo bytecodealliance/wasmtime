@@ -1,9 +1,12 @@
+use cfg_if::cfg_if;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature, Value, UserFuncName};
+use cranelift_codegen::ir::{
+    AbiParam, ArgumentPurpose, Function, InstBuilder, Signature, UserFuncName, Value,
+};
 use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -21,7 +24,6 @@ use wasmtime_environ::{
     TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
-use cfg_if::cfg_if;
 
 macro_rules! declare_function_signatures {
     (
@@ -179,7 +181,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // Avoid unused warning in default build.
         #[cfg(not(feature = "wmemcheck"))]
         let _ = wmemcheck;
-        
+
         Self {
             isa,
             module: &translation.module,
@@ -626,7 +628,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             &mut builder.cursor(),
             BuiltinFunctionIndex::check_malloc(),
         );
-        let func_args = builder.func.dfg.block_params(builder.func.layout.entry_block().unwrap());
+        let func_args = builder
+            .func
+            .dfg
+            .block_params(builder.func.layout.entry_block().unwrap());
         let len = if func_args.len() < 3 {
             return;
         } else {
@@ -651,7 +656,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             &mut builder.cursor(),
             BuiltinFunctionIndex::check_free(),
         );
-        let func_args = builder.func.dfg.block_params(builder.func.layout.entry_block().unwrap());
+        let func_args = builder
+            .func
+            .dfg
+            .block_params(builder.func.layout.entry_block().unwrap());
         let ptr = if func_args.len() < 3 {
             return;
         } else {
@@ -663,7 +671,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .ins()
             .call_indirect(check_free_sig, check_free, &[vmctx, ptr]);
     }
-    
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let vmctx = self.vmctx(builder.func);
@@ -898,14 +905,17 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     fn current_func_name(&self, builder: &mut FunctionBuilder) -> Option<&str> {
         let func_index = match &builder.func.name {
-            UserFuncName::User(user) => {
-                FuncIndex::from_u32(user.index)
-            }
+            UserFuncName::User(user) => FuncIndex::from_u32(user.index),
             _ => {
                 panic!("function name not a UserFuncName::User as expected")
             }
         };
-        self.translation.debuginfo.name_section.func_names.get(&func_index).map(|s| *s)
+        self.translation
+            .debuginfo
+            .name_section
+            .func_names
+            .get(&func_index)
+            .map(|s| *s)
     }
 }
 
@@ -2494,7 +2504,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     }
                 }
             }
-            
+
             fn before_load(&mut self, builder: &mut FunctionBuilder, val_size: u8, addr: ir::Value, offset: u64) {
                 if self.wmemcheck {
                     let check_load_sig = self.builtin_function_signatures.check_load(builder.func);

@@ -653,21 +653,47 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// and free if wasmtime is compiled and run with wmemcheck.
     fn handle_before_return(&mut self, _retvals: &[ir::Value], _builder: &mut FunctionBuilder) {}
 
-    /// Inserts call to check_load before a load instruction if wasmtime is 
+    /// Inserts call to check_load before a load instruction if wasmtime is
     /// compiled and run with wmemcheck.
-    fn before_load(&mut self, _builder: &mut FunctionBuilder, _val_size: u8, _addr: ir::Value, _offset: u64) {}
+    fn before_load(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _val_size: u8,
+        _addr: ir::Value,
+        _offset: u64,
+    ) {
+    }
 
     /// Inserts call to check_store before a store instruction if wasmtime is
     /// compiled and run with wmemcheck.
-    fn before_store(&mut self, _builder: &mut FunctionBuilder, _val_size: u8, _addr: ir::Value, _offset: u64) {}
+    fn before_store(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _val_size: u8,
+        _addr: ir::Value,
+        _offset: u64,
+    ) {
+    }
 
     /// Inserts call to update_stack_pointer when stack pointer is updated if
     /// wasmtime is compiled and run with wmemcheck.
-    fn update_global(&mut self, _builder: &mut FunctionBuilder, _global_index: u32, _value: ir::Value) {}
+    fn update_global(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _global_index: u32,
+        _value: ir::Value,
+    ) {
+    }
 
     /// Inserts calls to update_mem_size after memory.grow if wasmtime is
     /// compiled and run with wmemcheck.
-    fn before_memory_grow(&mut self, _builder: &mut FunctionBuilder, _num_bytes: ir::Value, _mem_index: MemoryIndex) {}
+    fn before_memory_grow(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _num_bytes: ir::Value,
+        _mem_index: MemoryIndex,
+    ) {
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

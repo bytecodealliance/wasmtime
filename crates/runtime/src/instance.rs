@@ -15,8 +15,6 @@ use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo,
     SendSyncPtr, Store, VMFunctionBody, VMSharedSignatureIndex, WasmFault,
 };
-#[cfg(feature = "wmemcheck")]
-use wmemcheck::Wmemcheck;
 use anyhow::Error;
 use anyhow::Result;
 use sptr::Strict;
@@ -31,10 +29,11 @@ use std::{mem, ptr};
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
+    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, SignatureIndex, TableIndex,
     TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
-    MemoryPlan,
 };
+#[cfg(feature = "wmemcheck")]
+use wmemcheck::Wmemcheck;
 
 mod allocator;
 
@@ -145,9 +144,8 @@ pub struct Instance {
 
     #[cfg(feature = "wmemcheck")]
     pub(crate) wmemcheck_state: Option<Wmemcheck>,
-    // TODO: add support for multiple memories, wmemcheck_state corresponds to 
+    // TODO: add support for multiple memories, wmemcheck_state corresponds to
     // memory 0.
-
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -181,7 +179,7 @@ impl Instance {
 
         #[cfg(not(feature = "wmemcheck"))]
         let _ = memory_plans;
-        
+
         ptr::write(
             ptr,
             Instance {
@@ -201,7 +199,13 @@ impl Instance {
                 #[cfg(feature = "wmemcheck")]
                 wmemcheck_state: {
                     if req.wmemcheck {
-                        let size = memory_plans.iter().next().map(|plan| plan.1.memory.minimum).unwrap_or(0) * 64 * 1024;
+                        let size = memory_plans
+                            .iter()
+                            .next()
+                            .map(|plan| plan.1.memory.minimum)
+                            .unwrap_or(0)
+                            * 64
+                            * 1024;
                         Some(Wmemcheck::new(size as usize))
                     } else {
                         None
@@ -1150,7 +1154,8 @@ impl Instance {
                 GlobalInit::I32Const(x) => {
                     let index = module.global_index(index);
                     if index.index() == 0 {
-                        #[cfg(feature = "wmemcheck")] {
+                        #[cfg(feature = "wmemcheck")]
+                        {
                             if let Some(wmemcheck) = &mut self.wmemcheck_state {
                                 wmemcheck.set_stack_size(x as usize);
                             }

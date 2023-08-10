@@ -2873,16 +2873,11 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) -> WasmResult<Reachability<()>> {
     let mem_op_size = mem_op_size(opcode, result_ty);
-    let (flags, wasm_index, base) = match prepare_addr(
-        memarg,
-        mem_op_size,
-        builder,
-        state,
-        environ,
-    )? {
-        Reachability::Unreachable => return Ok(Reachability::Unreachable),
-        Reachability::Reachable((f, i, b)) => (f, i, b),
-    };
+    let (flags, wasm_index, base) =
+        match prepare_addr(memarg, mem_op_size, builder, state, environ)? {
+            Reachability::Unreachable => return Ok(Reachability::Unreachable),
+            Reachability::Reachable((f, i, b)) => (f, i, b),
+        };
 
     environ.before_load(builder, mem_op_size, wasm_index, memarg.offset);
 
@@ -2911,7 +2906,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     );
 
     environ.before_store(builder, mem_op_size, wasm_index, memarg.offset);
-    
+
     builder
         .ins()
         .Store(opcode, val_ty, flags, Offset32::new(0), val, base);

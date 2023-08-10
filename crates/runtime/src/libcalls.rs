@@ -59,17 +59,17 @@ use crate::table::{Table, TableElementType};
 use crate::vmcontext::VMFuncRef;
 use crate::{Instance, TrapReason};
 #[cfg(feature = "wmemcheck")]
-use wmemcheck::AccessError::{DoubleMalloc, InvalidRead, InvalidWrite, InvalidFree, OutOfBounds};
+use anyhow::bail;
 use anyhow::Result;
+use cfg_if::cfg_if;
 use std::mem;
 use std::ptr::{self, NonNull};
 use std::time::{Duration, Instant};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
-use cfg_if::cfg_if;
 #[cfg(feature = "wmemcheck")]
-use anyhow::bail;
+use wmemcheck::AccessError::{DoubleMalloc, InvalidFree, InvalidRead, InvalidWrite, OutOfBounds};
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
 /// for libcalls.

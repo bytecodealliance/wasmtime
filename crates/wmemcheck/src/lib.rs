@@ -123,7 +123,7 @@ impl Wmemcheck {
         Ok(())
     }
 
-    /// 
+    ///
     pub fn free(&mut self, addr: usize) -> Result<(), AccessError> {
         if !self.mallocs.contains_key(&addr) {
             return Err(AccessError::InvalidFree { addr: addr });
