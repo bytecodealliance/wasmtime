@@ -613,6 +613,8 @@ mod test {
             multi_memory,
             memory64,
             function_references,
+            #[cfg(feature = "component-model")]
+            component_model,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(true));
@@ -625,6 +627,8 @@ mod test {
         assert_eq!(memory64, Some(true));
         assert_eq!(function_references, Some(true));
         assert_eq!(relaxed_simd, Some(true));
+        #[cfg(feature = "component-model")]
+        assert_eq!(component_model, Some(true));
 
         Ok(())
     }
@@ -644,6 +648,8 @@ mod test {
             multi_memory,
             memory64,
             function_references,
+            #[cfg(feature = "component-model")]
+            component_model,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(false));
@@ -656,6 +662,8 @@ mod test {
         assert_eq!(memory64, Some(false));
         assert_eq!(function_references, Some(false));
         assert_eq!(relaxed_simd, Some(false));
+        #[cfg(feature = "component-model")]
+        assert_eq!(component_model, Some(false));
 
         Ok(())
     }
@@ -678,6 +686,8 @@ mod test {
             multi_memory,
             memory64,
             function_references,
+            #[cfg(feature = "component-model")]
+            component_model,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(false));
@@ -690,6 +700,8 @@ mod test {
         assert_eq!(memory64, Some(true));
         assert_eq!(function_references, None);
         assert_eq!(relaxed_simd, None);
+        #[cfg(feature = "component-model")]
+        assert_eq!(component_model, None);
 
         Ok(())
     }
