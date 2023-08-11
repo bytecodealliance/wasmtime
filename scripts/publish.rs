@@ -52,6 +52,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-jit-debug",
     "wasmtime-fiber",
     "wasmtime-environ",
+    "wasmtime-wmemcheck",
     "wasmtime-runtime",
     "wasmtime-cranelift-shared",
     "wasmtime-cranelift",
@@ -59,7 +60,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cache",
     "winch-codegen",
     "wasmtime-winch",
-    "wasmtime-wmemcheck",
     "wasmtime",
     // wasi-common/wiggle
     "wiggle",
