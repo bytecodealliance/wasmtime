@@ -66,6 +66,9 @@ Unreleased.
   instead of returning an error.
   [#6776](https://github.com/bytecodealliance/wasmtime/pull/6776)
 
+* Optimized the cranlift compilation on aarch64
+  [#6804](https://github.com/bytecodealliance/wasmtime/pull/6804) 
+
 ### Changed
 
 * Options to the `wasmtime` CLI for Wasmtime itself must now come before the
