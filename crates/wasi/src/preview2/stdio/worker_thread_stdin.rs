@@ -78,6 +78,7 @@ fn create() -> GlobalStdin {
 }
 
 /// Only public interface is the [`HostInputStream`] impl.
+#[derive(Clone)]
 pub struct Stdin;
 impl Stdin {
     // Private! Only required internally.
