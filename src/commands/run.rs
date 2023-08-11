@@ -23,8 +23,8 @@ use wasmtime_wasi_nn::WasiNnCtx;
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
 
-#[cfg(feature = "wasi-http")]
-use wasmtime_wasi_http::WasiHttpCtx;
+// #[cfg(feature = "wasi-http")]
+// use wasmtime_wasi_http::WasiHttpCtx;
 
 fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
     let mut parts = s.splitn(2, '=');
@@ -664,8 +664,8 @@ struct Host {
     wasi_nn: Option<Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
-    #[cfg(feature = "wasi-http")]
-    wasi_http: Option<Arc<WasiHttpCtx>>,
+    // #[cfg(feature = "wasi-http")]
+    // wasi_http: Option<Arc<WasiHttpCtx>>,
     limits: StoreLimits,
     guest_profiler: Option<Arc<GuestProfiler>>,
 }
