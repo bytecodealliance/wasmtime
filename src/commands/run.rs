@@ -759,19 +759,16 @@ fn populate_with_wasi(
     }
 
     if wasi_modules.wasi_http {
-        #[cfg(not(feature = "wasi-http"))]
-        {
-            bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
-        }
-        #[cfg(feature = "wasi-http")]
-        {
-            wasmtime_wasi_http::add_to_linker(linker, |host| {
-                // See documentation for wasi-crypto for why this is needed.
-                Arc::get_mut(host.wasi_http.as_mut().unwrap())
-                    .expect("wasi-http is not implemented with multi-threading support")
-            })?;
-            store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
-        }
+        // TODO: this should be re-enabled before merging
+        // #[cfg(not(feature = "wasi-http"))]
+        // {
+        bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
+        // }
+        // #[cfg(feature = "wasi-http")]
+        // {
+        //     wasmtime_wasi_http::add_to_linker(linker)?;
+        //     store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
+        // }
     }
 
     Ok(())
