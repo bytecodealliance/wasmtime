@@ -810,7 +810,7 @@ impl<'a, T> std::ops::Deref for GuestSlice<'a, T> {
 
     fn deref(&self) -> &Self::Target {
         // SAFETY: The presence of `GuestSlice` indicates that this is an
-        // unshared memory meaning concurrent acceses will not happen.
+        // unshared memory meaning concurrent accesses will not happen.
         // Furthermore the validity of the slice has already been established
         // and a runtime borrow has been recorded to prevent conflicting views.
         // This all adds up to the ability to return a safe slice from this

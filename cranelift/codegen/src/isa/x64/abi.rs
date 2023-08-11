@@ -351,6 +351,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn gen_ret(
         _setup_frame: bool,
         _isa_flags: &x64_settings::Flags,
+        _call_conv: isa::CallConv,
         rets: Vec<RetPair>,
         stack_bytes_to_pop: u32,
     ) -> Self::I {
@@ -411,14 +412,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // Only ever used for I64s and vectors; if that changes, see if the
         // ExtKind below needs to be changed.
         assert!(ty == I64 || ty.is_vector());
-        let simm32 = offset as u32;
-        let mem = Amode::imm_reg(simm32, base);
+        let mem = Amode::imm_reg(offset, base);
         Inst::load(ty, mem, into_reg, ExtKind::None)
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I {
-        let simm32 = offset as u32;
-        let mem = Amode::imm_reg(simm32, base);
+        let mem = Amode::imm_reg(offset, base);
         Inst::store(ty, from_reg, mem)
     }
 
@@ -574,7 +573,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     insts.push(Inst::store(
                         types::I64,
                         r_reg.into(),
-                        Amode::imm_reg(cur_offset, regs::rsp()),
+                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
                     ));
                     cur_offset += 8;
                 }
@@ -583,7 +582,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     insts.push(Inst::store(
                         types::I8X16,
                         r_reg.into(),
-                        Amode::imm_reg(cur_offset, regs::rsp()),
+                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
                     ));
                     cur_offset += 16;
                 }
@@ -625,7 +624,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             match rreg.class() {
                 RegClass::Int => {
                     insts.push(Inst::mov64_m_r(
-                        Amode::imm_reg(cur_offset, regs::rsp()),
+                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
                         Writable::from_reg(rreg.into()),
                     ));
                     cur_offset += 8;
@@ -634,7 +633,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     cur_offset = align_to(cur_offset, 16);
                     insts.push(Inst::load(
                         types::I8X16,
-                        Amode::imm_reg(cur_offset, regs::rsp()),
+                        Amode::imm_reg(cur_offset.try_into().unwrap(), regs::rsp()),
                         Writable::from_reg(rreg.into()),
                         ExtKind::None,
                     ));
@@ -917,9 +916,8 @@ impl From<StackAMode> for SyntheticAmode {
             StackAMode::FPOffset(off, _ty) => {
                 let off = i32::try_from(off)
                     .expect("Offset in FPOffset is greater than 2GB; should hit impl limit first");
-                let simm32 = off as u32;
                 SyntheticAmode::Real(Amode::ImmReg {
-                    simm32,
+                    simm32: off,
                     base: regs::rbp(),
                     flags: MemFlags::trusted(),
                 })
@@ -928,15 +926,13 @@ impl From<StackAMode> for SyntheticAmode {
                 let off = i32::try_from(off).expect(
                     "Offset in NominalSPOffset is greater than 2GB; should hit impl limit first",
                 );
-                let simm32 = off as u32;
-                SyntheticAmode::nominal_sp_offset(simm32)
+                SyntheticAmode::nominal_sp_offset(off)
             }
             StackAMode::SPOffset(off, _ty) => {
                 let off = i32::try_from(off)
                     .expect("Offset in SPOffset is greater than 2GB; should hit impl limit first");
-                let simm32 = off as u32;
                 SyntheticAmode::Real(Amode::ImmReg {
-                    simm32,
+                    simm32: off,
                     base: regs::rsp(),
                     flags: MemFlags::trusted(),
                 })

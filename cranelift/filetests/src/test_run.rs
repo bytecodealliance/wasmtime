@@ -73,23 +73,40 @@ fn is_isa_compatible(
     // we can't natively support on the host.
     let requested_flags = requested.isa_flags();
     for req_value in requested_flags {
-        if let Some(requested) = req_value.as_bool() {
-            let available_in_host = host
-                .isa_flags()
-                .iter()
-                .find(|val| val.name == req_value.name)
-                .and_then(|val| val.as_bool())
-                .unwrap_or(false);
+        let requested = match req_value.as_bool() {
+            Some(requested) => requested,
+            None => unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind()),
+        };
+        let available_in_host = host
+            .isa_flags()
+            .iter()
+            .find(|val| val.name == req_value.name)
+            .and_then(|val| val.as_bool())
+            .unwrap_or(false);
 
-            if requested && !available_in_host {
-                return Err(format!(
-                    "skipped {}: host does not support ISA flag {}",
-                    file_path, req_value.name
-                ));
-            }
-        } else {
-            unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind());
+        if !requested || available_in_host {
+            continue;
         }
+
+        // The AArch64 feature `sign_return_address` is supported on all AArch64
+        // hosts, regardless of whether `cranelift-native` infers it or not. The
+        // instructions emitted with this feature enabled are interpreted as
+        // "hint" noop instructions on CPUs which don't support address
+        // authentication.
+        //
+        // Note that at this time `cranelift-native` will only enable
+        // `sign_return_address` for macOS (notably not Linux) because of a
+        // historical bug in libunwind which causes pointer address signing,
+        // when run on hardware that supports it, so segfault during unwinding.
+        if req_value.name == "sign_return_address" && matches!(host_arch, Architecture::Aarch64(_))
+        {
+            continue;
+        }
+
+        return Err(format!(
+            "skipped {}: host does not support ISA flag {}",
+            file_path, req_value.name
+        ));
     }
 
     Ok(())

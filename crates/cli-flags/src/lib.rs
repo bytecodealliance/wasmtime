@@ -60,10 +60,6 @@ pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
         "enables support for the WASI common APIs, see https://github.com/WebAssembly/WASI",
     ),
     (
-        "experimental-wasi-crypto",
-        "enables support for the WASI cryptography APIs (experimental), see https://github.com/WebAssembly/wasi-crypto",
-    ),
-    (
         "experimental-wasi-nn",
         "enables support for the WASI neural network API (experimental), see https://github.com/WebAssembly/wasi-nn",
     ),
@@ -521,7 +517,6 @@ fn parse_wasi_modules(modules: &str) -> Result<WasiModules> {
             let mut set = |module: &str, enable: bool| match module {
                 "" => Ok(()),
                 "wasi-common" => Ok(wasi_modules.wasi_common = enable),
-                "experimental-wasi-crypto" => Ok(wasi_modules.wasi_crypto = enable),
                 "experimental-wasi-nn" => Ok(wasi_modules.wasi_nn = enable),
                 "experimental-wasi-threads" => Ok(wasi_modules.wasi_threads = enable),
                 "experimental-wasi-http" => Ok(wasi_modules.wasi_http = enable),
@@ -551,9 +546,6 @@ pub struct WasiModules {
     /// parts once the implementation allows for it (e.g. wasi-fs, wasi-clocks, etc.).
     pub wasi_common: bool,
 
-    /// Enable the experimental wasi-crypto implementation.
-    pub wasi_crypto: bool,
-
     /// Enable the experimental wasi-nn implementation.
     pub wasi_nn: bool,
 
@@ -568,7 +560,6 @@ impl Default for WasiModules {
     fn default() -> Self {
         Self {
             wasi_common: true,
-            wasi_crypto: false,
             wasi_nn: false,
             wasi_threads: false,
             wasi_http: false,
@@ -582,7 +573,6 @@ impl WasiModules {
         Self {
             wasi_common: false,
             wasi_nn: false,
-            wasi_crypto: false,
             wasi_threads: false,
             wasi_http: false,
         }
@@ -623,6 +613,8 @@ mod test {
             multi_memory,
             memory64,
             function_references,
+            #[cfg(feature = "component-model")]
+            component_model,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(true));
@@ -635,6 +627,8 @@ mod test {
         assert_eq!(memory64, Some(true));
         assert_eq!(function_references, Some(true));
         assert_eq!(relaxed_simd, Some(true));
+        #[cfg(feature = "component-model")]
+        assert_eq!(component_model, Some(true));
 
         Ok(())
     }
@@ -654,6 +648,8 @@ mod test {
             multi_memory,
             memory64,
             function_references,
+            #[cfg(feature = "component-model")]
+            component_model,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(false));
@@ -666,6 +662,8 @@ mod test {
         assert_eq!(memory64, Some(false));
         assert_eq!(function_references, Some(false));
         assert_eq!(relaxed_simd, Some(false));
+        #[cfg(feature = "component-model")]
+        assert_eq!(component_model, Some(false));
 
         Ok(())
     }
@@ -688,6 +686,8 @@ mod test {
             multi_memory,
             memory64,
             function_references,
+            #[cfg(feature = "component-model")]
+            component_model,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(false));
@@ -700,6 +700,8 @@ mod test {
         assert_eq!(memory64, Some(true));
         assert_eq!(function_references, None);
         assert_eq!(relaxed_simd, None);
+        #[cfg(feature = "component-model")]
+        assert_eq!(component_model, None);
 
         Ok(())
     }
@@ -750,7 +752,6 @@ mod test {
             options.wasi_modules.unwrap(),
             WasiModules {
                 wasi_common: true,
-                wasi_crypto: false,
                 wasi_nn: false,
                 wasi_threads: false,
                 wasi_http: false,
@@ -765,7 +766,6 @@ mod test {
             options.wasi_modules.unwrap(),
             WasiModules {
                 wasi_common: true,
-                wasi_crypto: false,
                 wasi_nn: false,
                 wasi_threads: false,
                 wasi_http: false
@@ -784,7 +784,6 @@ mod test {
             options.wasi_modules.unwrap(),
             WasiModules {
                 wasi_common: false,
-                wasi_crypto: false,
                 wasi_nn: true,
                 wasi_threads: false,
                 wasi_http: false,
@@ -800,7 +799,6 @@ mod test {
             options.wasi_modules.unwrap(),
             WasiModules {
                 wasi_common: false,
-                wasi_crypto: false,
                 wasi_nn: false,
                 wasi_threads: false,
                 wasi_http: false,

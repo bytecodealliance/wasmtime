@@ -443,6 +443,7 @@ impl ABIMachineSpec for S390xMachineDeps {
     fn gen_ret(
         _setup_frame: bool,
         _isa_flags: &s390x_settings::Flags,
+        _call_conv: isa::CallConv,
         rets: Vec<RetPair>,
         stack_bytes_to_pop: u32,
     ) -> Inst {

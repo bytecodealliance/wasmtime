@@ -119,3 +119,20 @@ fn deserialize_from_serialized() -> Result<()> {
     assert!(buffer1 == buffer2);
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn detect_precompiled() -> Result<()> {
+    let engine = Engine::default();
+    let buffer = serialize(
+        &engine,
+        "(module (func (export \"run\") (result i32) i32.const 42))",
+    )?;
+    assert_eq!(engine.detect_precompiled(&[]), None);
+    assert_eq!(engine.detect_precompiled(&buffer[..5]), None);
+    assert_eq!(
+        engine.detect_precompiled(&buffer),
+        Some(Precompiled::Module)
+    );
+    Ok(())
+}

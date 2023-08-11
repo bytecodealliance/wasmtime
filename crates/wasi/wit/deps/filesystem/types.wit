@@ -1,5 +1,3 @@
-package wasi:filesystem
-
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
 /// significant overhead.
@@ -19,7 +17,7 @@ package wasi:filesystem
 /// `..` and symbolic link steps, reaches a directory outside of the base
 /// directory, or reaches a symlink to an absolute or rooted path in the
 /// underlying filesystem, the function fails with `error-code::not-permitted`.
-interface filesystem {
+interface types {
     use wasi:io/streams.{input-stream, output-stream}
     use wasi:clocks/wall-clock.{datetime}
 
@@ -96,10 +94,6 @@ interface filesystem {
     ///
     /// Note: This was called `filestat` in earlier versions of WASI.
     record descriptor-stat {
-        /// Device ID of device containing the file.
-        device: device,
-        /// File serial number.
-        inode: inode,
         /// File type.
         %type: descriptor-type,
         /// Number of hard links to the file.
@@ -160,14 +154,6 @@ interface filesystem {
     /// Number of hard links to an inode.
     type link-count = u64
 
-    /// Identifier for a device containing a file system. Can be used in
-    /// combination with `inode` to uniquely identify a file or directory in
-    /// the filesystem.
-    type device = u64
-
-    /// Filesystem object serial number that is unique within its file system.
-    type inode = u64
-
     /// When setting a timestamp, this gives the value to set it to.
     variant new-timestamp {
         /// Leave the timestamp set to its previous value.
@@ -181,14 +167,6 @@ interface filesystem {
 
     /// A directory entry.
     record directory-entry {
-        /// The serial number of the object referred to by this directory entry.
-        /// May be none if the inode value is not known.
-        ///
-        /// When this is none, libc implementations might do an extra `stat-at`
-        /// call to retrieve the inode number to fill their `d_ino` fields, so
-        /// implementations which can set this to a non-none value should do so.
-        inode: option<inode>,
-
         /// The type of the file referred to by this directory entry.
         %type: descriptor-type,
 
@@ -306,21 +284,34 @@ interface filesystem {
     /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
     type descriptor = u32
 
-    /// Return a stream for reading from a file.
+    /// A 128-bit hash value, split into parts because wasm doesn't have a
+    /// 128-bit integer type.
+    record metadata-hash-value {
+       /// 64 bits of a 128-bit hash value.
+       lower: u64,
+       /// Another 64 bits of a 128-bit hash value.
+       upper: u64,
+    }
+
+    /// Return a stream for reading from a file, if available.
+    ///
+    /// May fail with an error-code describing why the file cannot be read.
     ///
     /// Multiple read, write, and append streams may be active on the same open
     /// file and they do not interfere with each other.
     ///
-    /// Note: This allows using `wasi:io/streams.read`, which is similar to `read` in POSIX.
+    /// Note: This allows using `read-stream`, which is similar to `read` in POSIX.
     read-via-stream: func(
         this: descriptor,
         /// The offset within the file at which to start reading.
         offset: filesize,
     ) -> result<input-stream, error-code>
 
-    /// Return a stream for writing to a file.
+    /// Return a stream for writing to a file, if available.
     ///
-    /// Note: This allows using `wasi:io/streams.write`, which is similar to `write` in
+    /// May fail with an error-code describing why the file cannot be written.
+    ///
+    /// Note: This allows using `write-stream`, which is similar to `write` in
     /// POSIX.
     write-via-stream: func(
         this: descriptor,
@@ -328,9 +319,11 @@ interface filesystem {
         offset: filesize,
     ) -> result<output-stream, error-code>
 
-    /// Return a stream for appending to a file.
+    /// Return a stream for appending to a file, if available.
     ///
-    /// Note: This allows using `wasi:io/streams.write`, which is similar to `write` with
+    /// May fail with an error-code describing why the file cannot be appended.
+    ///
+    /// Note: This allows using `write-stream`, which is similar to `write` with
     /// `O_APPEND` in in POSIX.
     append-via-stream: func(
         this: descriptor,
@@ -464,14 +457,20 @@ interface filesystem {
 
     /// Return the attributes of an open file or directory.
     ///
-    /// Note: This is similar to `fstat` in POSIX.
+    /// Note: This is similar to `fstat` in POSIX, except that it does not return
+    /// device and inode information. For testing whether two descriptors refer to
+    /// the same underlying filesystem object, use `is-same-object`. To obtain
+    /// additional data that can be used do determine whether a file has been
+    /// modified, use `metadata-hash`.
     ///
     /// Note: This was called `fd_filestat_get` in earlier versions of WASI.
     stat: func(this: descriptor) -> result<descriptor-stat, error-code>
 
     /// Return the attributes of a file or directory.
     ///
-    /// Note: This is similar to `fstatat` in POSIX.
+    /// Note: This is similar to `fstatat` in POSIX, except that it does not
+    /// return device and inode information. See the `stat` description for a
+    /// discussion of alternatives.
     ///
     /// Note: This was called `path_filestat_get` in earlier versions of WASI.
     stat-at: func(
@@ -779,4 +778,47 @@ interface filesystem {
     /// Dispose of the specified `directory-entry-stream`, after which it may no longer
     /// be used.
     drop-directory-entry-stream: func(this: directory-entry-stream)
+
+    /// Test whether two descriptors refer to the same filesystem object.
+    ///
+    /// In POSIX, this corresponds to testing whether the two descriptors have the
+    /// same device (`st_dev`) and inode (`st_ino` or `d_ino`) numbers.
+    /// wasi-filesystem does not expose device and inode numbers, so this function
+    /// may be used instead.
+    is-same-object: func(this: descriptor, other: descriptor) -> bool
+
+    /// Return a hash of the metadata associated with a filesystem object referred
+    /// to by a descriptor.
+    ///
+    /// This returns a hash of the last-modification timestamp and file size, and
+    /// may also include the inode number, device number, birth timestamp, and
+    /// other metadata fields that may change when the file is modified or
+    /// replaced. It may also include a secret value chosen by the
+    /// implementation and not otherwise exposed.
+    ///
+    /// Implementations are encourated to provide the following properties:
+    ///
+    ///  - If the file is not modified or replaced, the computed hash value should
+    ///    usually not change.
+    ///  - If the object is modified or replaced, the computed hash value should
+    ///    usually change.
+    ///  - The inputs to the hash should not be easily computable from the
+    ///    computed hash.
+    ///
+    /// However, none of these is required.
+    metadata-hash: func(
+        this: descriptor,
+    ) -> result<metadata-hash-value, error-code>
+
+    /// Return a hash of the metadata associated with a filesystem object referred
+    /// to by a directory descriptor and a relative path.
+    ///
+    /// This performs the same hash computation as `metadata-hash`.
+    metadata-hash-at: func(
+        this: descriptor,
+        /// Flags determining the method of how the path is resolved.
+        path-flags: path-flags,
+        /// The relative path of the file or directory to inspect.
+        path: string,
+    ) -> result<metadata-hash-value, error-code>
 }

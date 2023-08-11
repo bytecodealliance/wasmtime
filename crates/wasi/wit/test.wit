@@ -3,8 +3,8 @@ world test-reactor {
 
   import wasi:cli-base/environment
   import wasi:io/streams
-  import wasi:cli-base/preopens
-  import wasi:filesystem/filesystem
+  import wasi:filesystem/types
+  import wasi:filesystem/preopens
   import wasi:cli-base/exit
 
   export add-strings: func(s: list<string>) -> u32
@@ -14,7 +14,7 @@ world test-reactor {
 
   export write-strings-to: func(o: output-stream) -> result
 
-  use wasi:filesystem/filesystem.{descriptor-stat}
+  use wasi:filesystem/types.{descriptor-stat}
   export pass-an-imported-record: func(d: descriptor-stat) -> string
 }
 

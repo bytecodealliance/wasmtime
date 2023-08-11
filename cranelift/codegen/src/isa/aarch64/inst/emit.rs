@@ -1219,17 +1219,17 @@ impl MachInstEmit for Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 match &mem {
-                    &PairAMode::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset { reg, simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_pair(0b1010100100, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPreIndexed(simm7) => {
+                    &PairAMode::SPPreIndexed { simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100110, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPostIndexed(simm7) => {
+                    &PairAMode::SPPostIndexed { simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100010, simm7, reg, rt, rt2));
@@ -1252,17 +1252,17 @@ impl MachInstEmit for Inst {
                 }
 
                 match &mem {
-                    &PairAMode::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset { reg, simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_pair(0b1010100101, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPreIndexed(simm7) => {
+                    &PairAMode::SPPreIndexed { simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100111, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPostIndexed(simm7) => {
+                    &PairAMode::SPPostIndexed { simm7 } => {
                         assert_eq!(simm7.scale_ty, I64);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_pair(0b1010100011, simm7, reg, rt, rt2));
@@ -1298,17 +1298,17 @@ impl MachInstEmit for Inst {
                 };
 
                 match &mem {
-                    &PairAMode::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset { reg, simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_vec_pair(opc, 0b10, true, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPreIndexed(simm7) => {
+                    &PairAMode::SPPreIndexed { simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b11, true, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPostIndexed(simm7) => {
+                    &PairAMode::SPPostIndexed { simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b01, true, simm7, reg, rt, rt2));
@@ -1344,17 +1344,17 @@ impl MachInstEmit for Inst {
                 };
 
                 match &mem {
-                    &PairAMode::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset { reg, simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = allocs.next(reg);
                         sink.put4(enc_ldst_vec_pair(opc, 0b10, false, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPreIndexed(simm7) => {
+                    &PairAMode::SPPreIndexed { simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b11, false, simm7, reg, rt, rt2));
                     }
-                    &PairAMode::SPPostIndexed(simm7) => {
+                    &PairAMode::SPPostIndexed { simm7 } => {
                         assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
                         let reg = stack_reg();
                         sink.put4(enc_ldst_vec_pair(opc, 0b01, false, simm7, reg, rt, rt2));
@@ -3139,35 +3139,38 @@ impl MachInstEmit for Inst {
                 stack_bytes_to_pop,
                 ..
             } => {
-                let key = match key {
-                    APIKey::A => 0b0,
-                    APIKey::B => 0b1,
+                if stack_bytes_to_pop != 0 {
+                    // The requirement that `stack_bytes_to_pop` fit in an
+                    // `Imm12` isn't fundamental, but lifting it is left for
+                    // future PRs.
+                    let imm12 = Imm12::maybe_from_u64(u64::from(stack_bytes_to_pop))
+                        .expect("stack bytes to pop must fit in Imm12");
+                    Inst::AluRRImm12 {
+                        alu_op: ALUOp::Add,
+                        size: OperandSize::Size64,
+                        rd: writable_stack_reg(),
+                        rn: stack_reg(),
+                        imm12,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+
+                let (op2, is_hint) = match key {
+                    APIKey::AZ => (0b100, true),
+                    APIKey::ASP => (0b101, is_hint),
+                    APIKey::BZ => (0b110, true),
+                    APIKey::BSP => (0b111, is_hint),
                 };
 
                 if is_hint {
-                    sink.put4(0xd50323bf | key << 6); // autiasp / autibsp
+                    sink.put4(key.enc_auti_hint());
                     Inst::Ret {
                         rets: vec![],
-                        stack_bytes_to_pop,
+                        stack_bytes_to_pop: 0,
                     }
                     .emit(&[], sink, emit_info, state);
                 } else {
-                    if stack_bytes_to_pop != 0 {
-                        // The requirement that `stack_bytes_to_pop` fit in an
-                        // `Imm12` isn't fundamental, but lifting it is left for
-                        // future PRs.
-                        let imm12 = Imm12::maybe_from_u64(u64::from(stack_bytes_to_pop))
-                            .expect("stack bytes to pop must fit in Imm12");
-                        Inst::AluRRImm12 {
-                            alu_op: ALUOp::Add,
-                            size: OperandSize::Size64,
-                            rd: writable_stack_reg(),
-                            rn: stack_reg(),
-                            imm12,
-                        }
-                        .emit(&[], sink, emit_info, state);
-                    }
-                    sink.put4(0xd65f0bff | key << 10); // retaa / retab
+                    sink.put4(0xd65f0bff | (op2 << 9)); // reta{key}
                 }
             }
             &Inst::Call { ref info } => {
@@ -3208,15 +3211,7 @@ impl MachInstEmit for Inst {
                 ref callee,
                 ref info,
             } => {
-                emit_return_call_common_sequence(
-                    &mut allocs,
-                    sink,
-                    emit_info,
-                    state,
-                    info.new_stack_arg_size,
-                    info.old_stack_arg_size,
-                    &info.uses,
-                );
+                emit_return_call_common_sequence(&mut allocs, sink, emit_info, state, info);
 
                 // Note: this is not `Inst::Jump { .. }.emit(..)` because we
                 // have different metadata in this case: we don't have a label
@@ -3233,15 +3228,7 @@ impl MachInstEmit for Inst {
             &Inst::ReturnCallInd { callee, ref info } => {
                 let callee = allocs.next(callee);
 
-                emit_return_call_common_sequence(
-                    &mut allocs,
-                    sink,
-                    emit_info,
-                    state,
-                    info.new_stack_arg_size,
-                    info.old_stack_arg_size,
-                    &info.uses,
-                );
+                emit_return_call_common_sequence(&mut allocs, sink, emit_info, state, info);
 
                 Inst::IndirectBr {
                     rn: callee,
@@ -3556,13 +3543,15 @@ impl MachInstEmit for Inst {
                     add.emit(&[], sink, emit_info, state);
                 }
             }
-            &Inst::Pacisp { key } => {
-                let key = match key {
-                    APIKey::A => 0b0,
-                    APIKey::B => 0b1,
+            &Inst::Paci { key } => {
+                let (crm, op2) = match key {
+                    APIKey::AZ => (0b0011, 0b000),
+                    APIKey::ASP => (0b0011, 0b001),
+                    APIKey::BZ => (0b0011, 0b010),
+                    APIKey::BSP => (0b0011, 0b011),
                 };
 
-                sink.put4(0xd503233f | key << 6);
+                sink.put4(0xd503211f | (crm << 8) | (op2 << 5));
             }
             &Inst::Xpaclri => sink.put4(0xd50320ff),
             &Inst::Bti { targets } => {
@@ -3590,7 +3579,7 @@ impl MachInstEmit for Inst {
                         dest: BranchTarget::Label(jump_around_label),
                     };
                     jmp.emit(&[], sink, emit_info, state);
-                    sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
+                    sink.emit_island(&mut state.ctrl_plane);
                     sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
             }
@@ -3768,18 +3757,16 @@ fn emit_return_call_common_sequence(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    new_stack_arg_size: u32,
-    old_stack_arg_size: u32,
-    uses: &CallArgList,
+    info: &ReturnCallInfo,
 ) {
-    for u in uses {
+    for u in info.uses.iter() {
         let _ = allocs.next(u.vreg);
     }
 
     // We are emitting a dynamic number of instructions and might need an
     // island. We emit four instructions regardless of how many stack arguments
     // we have, and then two instructions per word of stack argument space.
-    let new_stack_words = new_stack_arg_size / 8;
+    let new_stack_words = info.new_stack_arg_size / 8;
     let insts = 4 + 2 * new_stack_words;
     let size_of_inst = 4;
     let space_needed = insts * size_of_inst;
@@ -3789,7 +3776,7 @@ fn emit_return_call_common_sequence(
             dest: BranchTarget::Label(jump_around_label),
         };
         jmp.emit(&[], sink, emit_info, state);
-        sink.emit_island(space_needed + 4, &mut state.ctrl_plane);
+        sink.emit_island(&mut state.ctrl_plane);
         sink.bind_label(jump_around_label, &mut state.ctrl_plane);
     }
 
@@ -3820,7 +3807,7 @@ fn emit_return_call_common_sequence(
     // actual jump happens outside this helper function.
 
     assert_eq!(
-        new_stack_arg_size % 8,
+        info.new_stack_arg_size % 8,
         0,
         "size of new stack arguments must be 8-byte aligned"
     );
@@ -3830,7 +3817,8 @@ fn emit_return_call_common_sequence(
     // arguments as well as accounting for the two words we pushed onto the
     // stack upon entry to this function (the return address and old frame
     // pointer).
-    let fp_to_callee_sp = i64::from(old_stack_arg_size) - i64::from(new_stack_arg_size) + 16;
+    let fp_to_callee_sp =
+        i64::from(info.old_stack_arg_size) - i64::from(info.new_stack_arg_size) + 16;
 
     let tmp1 = regs::writable_spilltmp_reg();
     let tmp2 = regs::writable_tmp2_reg();
@@ -3849,10 +3837,10 @@ fn emit_return_call_common_sequence(
     Inst::LoadP64 {
         rt: tmp1,
         rt2: writable_link_reg(),
-        mem: PairAMode::SignedOffset(
-            regs::fp_reg(),
-            SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
-        ),
+        mem: PairAMode::SignedOffset {
+            reg: regs::fp_reg(),
+            simm7: SImm7Scaled::maybe_from_i64(0, types::I64).unwrap(),
+        },
         flags: MemFlags::trusted(),
     }
     .emit(&[], sink, emit_info, state);
@@ -3910,10 +3898,14 @@ fn emit_return_call_common_sequence(
     }
     .emit(&[], sink, emit_info, state);
 
-    state.virtual_sp_offset -= i64::from(new_stack_arg_size);
+    state.virtual_sp_offset -= i64::from(info.new_stack_arg_size);
     trace!(
         "return_call[_ind] adjusts virtual sp offset by {} -> {}",
-        new_stack_arg_size,
+        info.new_stack_arg_size,
         state.virtual_sp_offset
     );
+
+    if let Some(key) = info.key {
+        sink.put4(key.enc_auti_hint());
+    }
 }

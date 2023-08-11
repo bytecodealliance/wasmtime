@@ -1,5 +1,4 @@
-use crate::preview2::bindings::cli_base::{environment, preopens, stderr, stdin, stdout};
-use crate::preview2::bindings::filesystem::filesystem;
+use crate::preview2::bindings::cli_base::{environment, stderr, stdin, stdout};
 use crate::preview2::bindings::io::streams;
 use crate::preview2::WasiView;
 
@@ -9,12 +8,6 @@ impl<T: WasiView> environment::Host for T {
     }
     fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
         Ok(self.ctx().args.clone())
-    }
-}
-
-impl<T: WasiView> preopens::Host for T {
-    fn get_directories(&mut self) -> Result<Vec<(filesystem::Descriptor, String)>, anyhow::Error> {
-        Ok(self.ctx().preopens.clone())
     }
 }
 

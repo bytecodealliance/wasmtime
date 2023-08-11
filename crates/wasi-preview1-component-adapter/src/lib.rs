@@ -2,7 +2,7 @@
 
 use crate::bindings::wasi::cli_base::exit;
 use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
-use crate::bindings::wasi::filesystem::filesystem;
+use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams;
 use crate::bindings::wasi::poll::poll;
 use crate::bindings::wasi::random::random;
@@ -380,21 +380,20 @@ pub unsafe extern "C" fn clock_time_get(
         get_allocation_state(),
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
-        State::with(|state| {
-            match id {
-                CLOCKID_MONOTONIC => {
-                    *time = monotonic_clock::now();
-                }
-                CLOCKID_REALTIME => {
-                    let res = wall_clock::now();
-                    *time = Timestamp::from(res.seconds)
-                        .checked_mul(1_000_000_000)
-                        .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
-                        .ok_or(ERRNO_OVERFLOW)?;
-                }
-                _ => unreachable!(),
+        State::with(|state| match id {
+            CLOCKID_MONOTONIC => {
+                *time = monotonic_clock::now();
+                Ok(())
             }
-            Ok(())
+            CLOCKID_REALTIME => {
+                let res = wall_clock::now();
+                *time = Timestamp::from(res.seconds)
+                    .checked_mul(1_000_000_000)
+                    .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
+                    .ok_or(ERRNO_OVERFLOW)?;
+                Ok(())
+            }
+            _ => Err(ERRNO_BADF),
         })
     } else {
         *time = Timestamp::from(0u64);
@@ -642,10 +641,11 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
                 ..
             }) => {
                 let stat = filesystem::stat(file.fd)?;
+                let metadata_hash = filesystem::metadata_hash(file.fd)?;
                 let filetype = stat.type_.into();
                 *buf = Filestat {
-                    dev: stat.device,
-                    ino: stat.inode,
+                    dev: 1,
+                    ino: metadata_hash.lower,
                     filetype,
                     nlink: stat.link_count,
                     size: stat.size,
@@ -960,8 +960,6 @@ pub unsafe extern "C" fn fd_readdir(
         // for it.
         let ds = state.descriptors();
         let dir = ds.get_dir(fd)?;
-        let stat = filesystem::stat(dir.fd)?;
-        let dot_inode = stat.inode;
 
         let mut iter;
         match stream {
@@ -975,7 +973,7 @@ pub unsafe extern "C" fn fd_readdir(
                     state,
                     cookie,
                     use_cache: true,
-                    dot_inode,
+                    dir_descriptor: dir.fd,
                 }
             }
 
@@ -990,7 +988,7 @@ pub unsafe extern "C" fn fd_readdir(
                     cookie: wasi::DIRCOOKIE_START,
                     use_cache: false,
                     stream: DirectoryEntryStream(filesystem::read_directory(dir.fd)?),
-                    dot_inode,
+                    dir_descriptor: dir.fd,
                 };
 
                 // Skip to the entry that is requested by the `cookie`
@@ -1069,7 +1067,7 @@ pub unsafe extern "C" fn fd_readdir(
         use_cache: bool,
         cookie: Dircookie,
         stream: DirectoryEntryStream,
-        dot_inode: wasi::Inode,
+        dir_descriptor: filesystem::Descriptor,
     }
 
     impl<'a> Iterator for DirectoryEntryIterator<'a> {
@@ -1086,9 +1084,13 @@ pub unsafe extern "C" fn fd_readdir(
             // Preview2 excludes them, so re-add them.
             match current_cookie {
                 0 => {
+                    let metadata_hash = match filesystem::metadata_hash(self.dir_descriptor) {
+                        Ok(h) => h,
+                        Err(e) => return Some(Err(e.into())),
+                    };
                     let dirent = wasi::Dirent {
                         d_next: self.cookie,
-                        d_ino: self.dot_inode,
+                        d_ino: metadata_hash.lower,
                         d_type: wasi::FILETYPE_DIRECTORY,
                         d_namlen: 1,
                     };
@@ -1128,11 +1130,18 @@ pub unsafe extern "C" fn fd_readdir(
                 Err(e) => return Some(Err(e.into())),
             };
 
-            let filesystem::DirectoryEntry { inode, type_, name } = entry;
+            let filesystem::DirectoryEntry { type_, name } = entry;
+            let d_ino = filesystem::metadata_hash_at(
+                self.dir_descriptor,
+                filesystem::PathFlags::empty(),
+                &name,
+            )
+            .map(|h| h.lower)
+            .unwrap_or(0);
             let name = ManuallyDrop::new(name);
             let dirent = wasi::Dirent {
                 d_next: self.cookie,
-                d_ino: inode.unwrap_or(0),
+                d_ino,
                 d_namlen: u32::try_from(name.len()).trapping_unwrap(),
                 d_type: type_.into(),
             };
@@ -1331,10 +1340,11 @@ pub unsafe extern "C" fn path_filestat_get(
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
         let stat = filesystem::stat_at(file.fd, at_flags, path)?;
+        let metadata_hash = filesystem::metadata_hash_at(file.fd, at_flags, path)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
-            dev: stat.device,
-            ino: stat.inode,
+            dev: 1,
+            ino: metadata_hash.lower,
             filetype,
             nlink: stat.link_count,
             size: stat.size,

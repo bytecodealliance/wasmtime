@@ -46,9 +46,9 @@
 ;;   b.hi label3 ; b label1
 ;; block1:
 ;;   ldr x9, [x2]
+;;   add x9, x9, x0
 ;;   movz x10, #65535, LSL #16
-;;   add x10, x10, x0
-;;   str w1, [x10, x9]
+;;   str w1, [x9, x10]
 ;;   b label2
 ;; block2:
 ;;   ret
@@ -62,9 +62,9 @@
 ;;   b.hi label3 ; b label1
 ;; block1:
 ;;   ldr x9, [x1]
-;;   movz x8, #65535, LSL #16
-;;   add x8, x8, x0
-;;   ldr w0, [x8, x9]
+;;   add x9, x9, x0
+;;   movz x10, #65535, LSL #16
+;;   ldr w0, [x9, x10]
 ;;   b label2
 ;; block2:
 ;;   ret

@@ -473,6 +473,7 @@ impl Inst {
 
             Inst::VecAluRR { vstate, .. } |
             Inst::VecAluRRR { vstate, .. } |
+            Inst::VecAluRRRR { vstate, .. } |
             Inst::VecAluRImm5 { vstate, .. } |
             Inst::VecAluRRImm5 { vstate, .. } |
             Inst::VecAluRRRImm5 { vstate, .. } |
@@ -1189,7 +1190,7 @@ impl MachInstEmit for Inst {
                 // we need to emit a jump table here to support that jump.
                 let distance = (targets.len() * 2 * Inst::INSTRUCTION_SIZE as usize) as u32;
                 if sink.island_needed(distance) {
-                    sink.emit_island(distance, &mut state.ctrl_plane);
+                    sink.emit_island(&mut state.ctrl_plane);
                 }
 
                 // Emit the jumps back to back
@@ -2909,6 +2910,25 @@ impl MachInstEmit for Inst {
 
                 sink.put4(encode_valu_rrr_imm(op, vd, imm, vs2, mask));
             }
+            &Inst::VecAluRRRR {
+                op,
+                vd,
+                vd_src,
+                vs1,
+                vs2,
+                ref mask,
+                ..
+            } => {
+                let vs1 = allocs.next(vs1);
+                let vs2 = allocs.next(vs2);
+                let vd_src = allocs.next(vd_src);
+                let vd = allocs.next_writable(vd);
+                let mask = mask.with_allocs(&mut allocs);
+
+                debug_assert_eq!(vd.to_reg(), vd_src);
+
+                sink.put4(encode_valu_rrrr(op, vd, vs1, vs2, mask));
+            }
             &Inst::VecAluRRR {
                 op,
                 vd,
@@ -3132,7 +3152,7 @@ fn emit_return_call_common_sequence(
             dest: BranchTarget::Label(jump_around_label),
         }
         .emit(&[], sink, emit_info, state);
-        sink.emit_island(space_needed + 4, &mut state.ctrl_plane);
+        sink.emit_island(&mut state.ctrl_plane);
         sink.bind_label(jump_around_label, &mut state.ctrl_plane);
     }
 
