@@ -1,11 +1,13 @@
 use super::{
     abi::X64ABI,
     address::Address,
-    asm::{Assembler, Operand},
+    asm::Assembler,
     regs::{self, rbp, rsp},
 };
+
+use crate::abi::ABI;
 use crate::masm::{
-    CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind, ShiftKind,
+    CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm, RemKind, ShiftKind,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -28,29 +30,6 @@ pub(crate) struct MacroAssembler {
     flags: x64_settings::Flags,
 }
 
-// Conversions between generic masm arguments and x64 operands.
-
-impl From<RegImm> for Operand {
-    fn from(rimm: RegImm) -> Self {
-        match rimm {
-            RegImm::Reg(r) => r.into(),
-            RegImm::Imm(imm) => Operand::Imm(imm),
-        }
-    }
-}
-
-impl From<Reg> for Operand {
-    fn from(reg: Reg) -> Self {
-        Operand::Reg(reg)
-    }
-}
-
-impl From<Address> for Operand {
-    fn from(addr: Address) -> Self {
-        Operand::Mem(addr)
-    }
-}
-
 impl Masm for MacroAssembler {
     type Address = Address;
     type Ptr = u8;
@@ -67,8 +46,8 @@ impl Masm for MacroAssembler {
 
     fn push(&mut self, reg: Reg) -> u32 {
         self.asm.push_r(reg);
-        self.increment_sp(<Self::ABI as abi::ABI>::word_bytes());
-
+        let increment = <Self::ABI as ABI>::word_bytes();
+        self.increment_sp(increment);
         self.sp_offset
     }
 
@@ -117,10 +96,14 @@ impl Masm for MacroAssembler {
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
-        let src: Operand = src.into();
-        let dst: Operand = dst.into();
-
-        self.asm.mov(src, dst, size);
+        match src {
+            RegImm::Imm(imm) => match imm {
+                I::I32(v) => self.asm.mov_im(v as u64, &dst, size),
+                I::I64(v) => self.asm.mov_im(v, &dst, size),
+                _ => unreachable!(),
+            },
+            RegImm::Reg(reg) => self.asm.mov_rm(reg, &dst, size),
+        }
     }
 
     fn pop(&mut self, dst: Reg) {
@@ -145,9 +128,7 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
-        let src = src.into();
-        let dst = dst.into();
-        self.asm.mov(src, dst, size);
+        self.asm.mov_mr(&src, dst, size);
     }
 
     fn sp_offset(&self) -> u32 {
@@ -159,88 +140,135 @@ impl Masm for MacroAssembler {
     }
 
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
-        let src: Operand = src.into();
-        let dst: Operand = dst.into();
-
-        self.asm.mov(src, dst, size);
+        match (src, dst) {
+            (RegImm::Reg(src), RegImm::Reg(dst)) => self.asm.mov_rr(src, dst, size),
+            (RegImm::Imm(imm), RegImm::Reg(dst)) => match imm {
+                I::I32(v) => self.asm.mov_ir(v as u64, dst, size),
+                I::I64(v) => self.asm.mov_ir(v, dst, size),
+                _ => unreachable!(),
+            },
+            _ => Self::handle_invalid_operand_combination(src, dst),
+        }
     }
 
     fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        let (src, dst): (Operand, Operand) = if dst == lhs {
-            (rhs.into(), dst.into())
-        } else {
-            panic!(
-                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-                dst, lhs
-            );
-        };
+        Self::ensure_two_argument_form(&dst, &lhs);
+        match (rhs, dst) {
+            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+                if let Some(v) = imm.to_i32() {
+                    self.asm.add_ir(v, reg, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(&imm, scratch, size);
+                    self.asm.add_rr(scratch, reg, size);
+                }
+            }
 
-        self.asm.add(src, dst, size);
+            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+                self.asm.add_rr(src, dst, size);
+            }
+            _ => Self::handle_invalid_operand_combination(rhs, dst),
+        }
     }
 
     fn sub(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        let (src, dst): (Operand, Operand) = if dst == lhs {
-            (rhs.into(), dst.into())
-        } else {
-            panic!(
-                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-                dst, lhs
-            );
-        };
+        Self::ensure_two_argument_form(&dst, &lhs);
+        match (rhs, dst) {
+            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+                if let Some(v) = imm.to_i32() {
+                    self.asm.sub_ir(v, reg, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(&imm, scratch, size);
+                    self.asm.sub_rr(scratch, reg, size);
+                }
+            }
 
-        self.asm.sub(src, dst, size);
+            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+                self.asm.sub_rr(src, dst, size);
+            }
+            _ => Self::handle_invalid_operand_combination(rhs, dst),
+        }
     }
 
     fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        let (src, dst): (Operand, Operand) = if dst == lhs {
-            (rhs.into(), dst.into())
-        } else {
-            panic!(
-                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-                dst, lhs
-            );
-        };
+        Self::ensure_two_argument_form(&dst, &lhs);
+        match (rhs, dst) {
+            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+                if let Some(v) = imm.to_i32() {
+                    self.asm.mul_ir(v, reg, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(&imm, scratch, size);
+                    self.asm.mul_rr(scratch, reg, size);
+                }
+            }
 
-        self.asm.mul(src, dst, size);
+            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+                self.asm.mul_rr(src, dst, size);
+            }
+            _ => Self::handle_invalid_operand_combination(rhs, dst),
+        }
     }
 
     fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        let (src, dst): (Operand, Operand) = if dst == lhs {
-            (rhs.into(), dst.into())
-        } else {
-            panic!(
-                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-                dst, lhs
-            );
-        };
+        Self::ensure_two_argument_form(&dst, &lhs);
+        match (rhs, dst) {
+            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+                if let Some(v) = imm.to_i32() {
+                    self.asm.and_ir(v, reg, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(&imm, scratch, size);
+                    self.asm.and_rr(scratch, reg, size);
+                }
+            }
 
-        self.asm.and(src, dst, size);
+            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+                self.asm.and_rr(src, dst, size);
+            }
+            _ => Self::handle_invalid_operand_combination(rhs, dst),
+        }
     }
 
     fn or(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        let (src, dst): (Operand, Operand) = if dst == lhs {
-            (rhs.into(), dst.into())
-        } else {
-            panic!(
-                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-                dst, lhs
-            );
-        };
+        Self::ensure_two_argument_form(&dst, &lhs);
+        match (rhs, dst) {
+            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+                if let Some(v) = imm.to_i32() {
+                    self.asm.or_ir(v, reg, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(&imm, scratch, size);
+                    self.asm.or_rr(scratch, reg, size);
+                }
+            }
 
-        self.asm.or(src, dst, size);
+            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+                self.asm.or_rr(src, dst, size);
+            }
+            _ => Self::handle_invalid_operand_combination(rhs, dst),
+        }
     }
 
     fn xor(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        let (src, dst): (Operand, Operand) = if dst == lhs {
-            (rhs.into(), dst.into())
-        } else {
-            panic!(
-                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-                dst, lhs
-            );
-        };
+        Self::ensure_two_argument_form(&dst, &lhs);
+        match (rhs, dst) {
+            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+                if let Some(v) = imm.to_i32() {
+                    self.asm.xor_ir(v, reg, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(&imm, scratch, size);
+                    self.asm.xor_rr(scratch, reg, size);
+                }
+            }
 
-        self.asm.xor(src, dst, size);
+            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+                self.asm.xor_rr(src, dst, size);
+            }
+            _ => Self::handle_invalid_operand_combination(rhs, dst),
+        }
     }
 
     fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize) {
@@ -341,9 +369,25 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset)
     }
 
-    fn cmp_with_set(&mut self, src: RegImm, dst: RegImm, kind: CmpKind, size: OperandSize) {
-        let dst = dst.into();
-        self.asm.cmp(src.into(), dst, size);
+    fn cmp(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
+        match src {
+            RegImm::Imm(imm) => {
+                if let Some(v) = imm.to_i32() {
+                    self.asm.cmp_ir(v, dst, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(&imm, scratch, size);
+                    self.asm.cmp_rr(scratch, dst, size);
+                }
+            }
+            RegImm::Reg(src) => {
+                self.asm.cmp_rr(src, dst, size);
+            }
+        }
+    }
+
+    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: CmpKind, size: OperandSize) {
+        self.cmp(src, dst, size);
         self.asm.setcc(kind, dst);
     }
 
@@ -412,10 +456,10 @@ impl Masm for MacroAssembler {
                 if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
                     self.asm.test_rr(*rrhs, *rlhs, size);
                 } else {
-                    self.asm.cmp(lhs.into(), rhs.into(), size);
+                    self.cmp(lhs, rhs.get_reg().unwrap(), size);
                 }
             }
-            _ => self.asm.cmp(lhs.into(), rhs.into(), size),
+            _ => self.cmp(lhs, rhs.get_reg().unwrap(), size),
         }
         self.asm.jmp_if(kind, taken);
     }
@@ -456,7 +500,8 @@ impl Masm for MacroAssembler {
 
             // x -= (x >> 1) & m1;
             self.asm.shift_ir(1u8, dst, ShiftKind::ShrU, size);
-            self.asm.and(RegImm::imm(masks[0]).into(), dst.into(), size);
+            let lhs = dst.into();
+            self.and(lhs, lhs, RegImm::i64(masks[0]), size);
             self.asm.sub_rr(dst, tmp, size);
 
             // x = (x & m2) + ((x >> 2) & m2);
@@ -464,20 +509,22 @@ impl Masm for MacroAssembler {
             // Load `0x3333...` into the scratch reg once, allowing us to use
             // `and_rr` and avoid inadvertently loading it twice as with `and`
             let scratch = regs::scratch();
-            self.asm.load_constant(&masks[1], scratch, size);
+            self.load_constant(&I::i64(masks[1]), scratch, size);
             self.asm.and_rr(scratch, dst.into(), size);
             self.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
             self.asm.and_rr(scratch, tmp, size);
             self.asm.add_rr(dst, tmp, size);
 
             // x = (x + (x >> 4)) & m4;
-            self.asm.mov(tmp.into(), dst.into(), size);
+            self.asm.mov_rr(tmp.into(), dst.into(), size);
             self.asm.shift_ir(4u8, dst, ShiftKind::ShrU, size);
             self.asm.add_rr(tmp, dst, size);
-            self.asm.and(RegImm::imm(masks[2]).into(), dst.into(), size);
+            let lhs = dst.into();
+            self.and(lhs, lhs, RegImm::i64(masks[2]), size);
 
             // (x * h01) >> shift_amt
-            self.asm.mul(RegImm::imm(masks[3]).into(), dst.into(), size);
+            let lhs = dst.into();
+            self.mul(lhs, lhs, RegImm::i64(masks[3]), size);
             self.asm.shift_ir(shift_amt, dst, ShiftKind::ShrU, size);
 
             context.stack.push(Val::reg(dst));
@@ -512,5 +559,26 @@ impl MacroAssembler {
             bytes
         );
         self.sp_offset -= bytes;
+    }
+
+    fn load_constant(&mut self, constant: &I, dst: Reg, size: OperandSize) {
+        match constant {
+            I::I32(v) => self.asm.mov_ir(*v as u64, dst, size),
+            I::I64(v) => self.asm.mov_ir(*v, dst, size),
+            _ => panic!(),
+        }
+    }
+
+    fn handle_invalid_operand_combination<T>(src: RegImm, dst: RegImm) -> T {
+        panic!("Invalid operand combination; src={:?}, dst={:?}", src, dst);
+    }
+
+    fn ensure_two_argument_form(dst: &RegImm, lhs: &RegImm) {
+        assert!(
+            dst == lhs,
+            "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+            dst,
+            lhs
+        );
     }
 }

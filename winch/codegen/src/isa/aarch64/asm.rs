@@ -13,20 +13,6 @@ use cranelift_codegen::{
     Writable,
 };
 
-/// An Aarch64 instruction operand.
-#[derive(Debug)]
-pub(crate) enum Operand {
-    /// Register.
-    Reg(Reg),
-    /// Memory address.
-    Mem(Address),
-    /// 64-bit signed immediate.
-    Imm(i64),
-}
-
-// Conversions between winch-codegen aarch64 types and cranelift-codegen
-// aarch64 types.
-
 impl From<OperandSize> for inst::OperandSize {
     fn from(size: OperandSize) -> Self {
         match size {
@@ -149,25 +135,6 @@ impl Assembler {
         });
     }
 
-    /// Move instruction combinations.
-    pub fn mov(&mut self, src: Operand, dst: Operand, size: OperandSize) {
-        match &(src, dst) {
-            (Operand::Imm(imm), Operand::Reg(rd)) => {
-                let scratch = regs::scratch();
-                self.load_constant(*imm as u64, scratch);
-                self.mov_rr(scratch, *rd, size);
-            }
-            (Operand::Reg(src), Operand::Reg(rd)) => {
-                self.mov_rr(*src, *rd, size);
-            }
-
-            (src, dst) => panic!(
-                "Invalid combination for mov: src = {:?}, dst = {:?}",
-                src, dst
-            ),
-        }
-    }
-
     /// Register to register move.
     pub fn mov_rr(&mut self, rm: Reg, rd: Reg, size: OperandSize) {
         let writable_rd = Writable::from_reg(rd.into());
@@ -178,20 +145,9 @@ impl Assembler {
         });
     }
 
-    /// Add instruction combinations.
-    pub fn add(&mut self, opm: Operand, opn: Operand, opd: Operand, size: OperandSize) {
-        match &(opm, opn, opd) {
-            (Operand::Imm(imm), Operand::Reg(rn), Operand::Reg(rd)) => {
-                self.add_ir(*imm as u64, *rn, *rd, size);
-            }
-            (Operand::Reg(rm), Operand::Reg(rn), Operand::Reg(rd)) => {
-                self.emit_alu_rrr_extend(ALUOp::Add, *rm, *rn, *rd, size);
-            }
-            (rm, rn, rd) => panic!(
-                "Invalid combination for add: rm = {:?}, rn = {:?}, rd = {:?}",
-                rm, rn, rd
-            ),
-        }
+    /// Add with three registers.
+    pub fn add_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);
     }
 
     /// Add immediate and register.
@@ -206,20 +162,9 @@ impl Assembler {
         }
     }
 
-    /// Sub instruction combinations.
-    pub fn sub(&mut self, opm: Operand, opn: Operand, opd: Operand, size: OperandSize) {
-        match &(opm, opn, opd) {
-            (Operand::Imm(imm), Operand::Reg(rn), Operand::Reg(rd)) => {
-                self.sub_ir(*imm as u64, *rn, *rd, size);
-            }
-            (Operand::Reg(rm), Operand::Reg(rn), Operand::Reg(rd)) => {
-                self.emit_alu_rrr_extend(ALUOp::Sub, *rm, *rn, *rd, size);
-            }
-            (rm, rn, rd) => panic!(
-                "Invalid combination for sub: rm = {:?}, rn = {:?}, rd = {:?}",
-                rm, rn, rd
-            ),
-        }
+    /// Substract with three registers.
+    pub fn sub_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrr_extend(ALUOp::Sub, rm, rn, rd, size);
     }
 
     /// Subtract immediate and register.
@@ -234,23 +179,12 @@ impl Assembler {
         }
     }
 
-    /// Mul instruction combinations.
-    pub fn mul(&mut self, opm: Operand, opn: Operand, opd: Operand, size: OperandSize) {
-        match &(opm, opn, opd) {
-            (Operand::Imm(imm), Operand::Reg(rn), Operand::Reg(rd)) => {
-                self.mul_ir(*imm as u64, *rn, *rd, size);
-            }
-            (Operand::Reg(rm), Operand::Reg(rn), Operand::Reg(rd)) => {
-                self.emit_alu_rrrr(ALUOp3::MAdd, *rm, *rn, *rd, regs::zero(), size);
-            }
-            (rm, rn, rd) => panic!(
-                "Invalid combination for sub: rm = {:?}, rn = {:?}, rd = {:?}",
-                rm, rn, rd
-            ),
-        }
+    /// Multiply with three registers.
+    pub fn mul_rrr(&mut self, rm: Reg, rn: Reg, rd: Reg, size: OperandSize) {
+        self.emit_alu_rrrr(ALUOp3::MAdd, rm, rn, rd, regs::zero(), size);
     }
 
-    /// Mul immediate and register.
+    /// Multiply immediate and register.
     pub fn mul_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
         let scratch = regs::scratch();
         self.load_constant(imm, scratch);

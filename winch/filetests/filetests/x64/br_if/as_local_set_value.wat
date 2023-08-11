@@ -16,9 +16,10 @@
 ;;   10:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
 ;;   14:	 48c7c011000000       	mov	rax, 0x11
 ;;   1b:	 85c9                 	test	ecx, ecx
-;;   1d:	 0f850b000000         	jne	0x2e
+;;   1d:	 0f850e000000         	jne	0x31
 ;;   23:	 8944240c             	mov	dword ptr [rsp + 0xc], eax
-;;   27:	 48c7c0ffffffff       	mov	rax, 0xffffffffffffffff
-;;   2e:	 4883c410             	add	rsp, 0x10
-;;   32:	 5d                   	pop	rbp
-;;   33:	 c3                   	ret	
+;;   27:	 48b8ffffffff00000000 	
+;; 				movabs	rax, 0xffffffff
+;;   31:	 4883c410             	add	rsp, 0x10
+;;   35:	 5d                   	pop	rbp
+;;   36:	 c3                   	ret	

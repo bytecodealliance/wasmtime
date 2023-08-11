@@ -97,8 +97,56 @@ impl OperandSize {
 pub(crate) enum RegImm {
     /// A register.
     Reg(Reg),
-    /// 64-bit signed immediate.
-    Imm(i64),
+    /// A tagged immediate argument.
+    Imm(Imm),
+}
+
+/// An tagged representation of an immediate.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Imm {
+    /// I32 immediate.
+    I32(u32),
+    /// I64 immediate.
+    I64(u64),
+    /// F32 immediate.
+    F32(u32),
+    /// F64 immediate.
+    F64(u64),
+}
+
+impl Imm {
+    /// Create a new I64 immediate.
+    pub fn i64(val: i64) -> Self {
+        Self::I64(val as u64)
+    }
+
+    /// Create a new I32 immediate.
+    pub fn i32(val: i32) -> Self {
+        Self::I32(val as u32)
+    }
+
+    /// Create a new F32 immediate.
+    // Temporary until support for f32.const is added.
+    #[allow(dead_code)]
+    pub fn f32(bits: u32) -> Self {
+        Self::F32(bits)
+    }
+
+    /// Create a new F64 immediate.
+    // Temporary until support for f64.const is added.
+    #[allow(dead_code)]
+    pub fn f64(bits: u64) -> Self {
+        Self::F64(bits)
+    }
+
+    /// Convert the immediate to i32, if possible.
+    pub fn to_i32(&self) -> Option<i32> {
+        match self {
+            Self::I32(v) => Some(*v as i32),
+            Self::I64(v) => i32::try_from(*v as i64).ok(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -115,9 +163,37 @@ impl RegImm {
         RegImm::Reg(r)
     }
 
-    /// Immediate constructor.
-    pub fn imm(imm: i64) -> Self {
-        RegImm::Imm(imm)
+    /// I64 immediate constructor.
+    pub fn i64(val: i64) -> Self {
+        RegImm::Imm(Imm::i64(val))
+    }
+
+    /// I32 immediate constructor.
+    pub fn i32(val: i32) -> Self {
+        RegImm::Imm(Imm::i32(val))
+    }
+
+    /// F32 immediate, stored using its bits representation.
+    // Temporary until support for f32.const is added.
+    #[allow(dead_code)]
+    pub fn f32(bits: u32) -> Self {
+        RegImm::Imm(Imm::f32(bits))
+    }
+
+    /// F64 immediate, stored using its bits representation.
+    // Temporary until support for f64.const is added.
+    #[allow(dead_code)]
+    pub fn f64(bits: u64) -> Self {
+        RegImm::Imm(Imm::f64(bits))
+    }
+
+    /// Get the underlying register of the operand,
+    /// if it is one.
+    pub fn get_reg(&self) -> Option<Reg> {
+        match self {
+            Self::Reg(r) => Some(*r),
+            _ => None,
+        }
     }
 }
 
@@ -250,8 +326,11 @@ pub(crate) trait MacroAssembler {
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
 
     /// Compare src and dst and put the result in dst.
+    fn cmp(&mut self, src: RegImm, dest: Reg, size: OperandSize);
+
+    /// Compare src and dst and put the result in dst.
     /// This function will potentially emit a series of instructions.
-    fn cmp_with_set(&mut self, src: RegImm, dst: RegImm, kind: CmpKind, size: OperandSize);
+    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: CmpKind, size: OperandSize);
 
     /// Count the number of leading zeroes in src and put the result in dst.
     /// In x64, this will emit multiple instructions if the `has_lzcnt` flag is
@@ -294,7 +373,7 @@ pub(crate) trait MacroAssembler {
             assert!(mem.start % 4 == 0);
             let start = align_to(mem.start, word_size);
             let addr: Self::Address = self.local_address(&LocalSlot::i32(start));
-            self.store(RegImm::imm(0), addr, OperandSize::S32);
+            self.store(RegImm::i32(0), addr, OperandSize::S32);
             // Ensure that the new start of the range, is word-size aligned.
             assert!(start % word_size == 0);
             start
@@ -306,7 +385,7 @@ pub(crate) trait MacroAssembler {
         if slots == 1 {
             let slot = LocalSlot::i64(start + word_size);
             let addr: Self::Address = self.local_address(&slot);
-            self.store(RegImm::imm(0), addr, OperandSize::S64);
+            self.store(RegImm::i64(0), addr, OperandSize::S64);
         } else {
             // TODO
             // Add an upper bound to this generation;

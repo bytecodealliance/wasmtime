@@ -15,10 +15,11 @@
 ;;    c:	 89742410             	mov	dword ptr [rsp + 0x10], esi
 ;;   10:	 8954240c             	mov	dword ptr [rsp + 0xc], edx
 ;;   14:	 4c89742404           	mov	qword ptr [rsp + 4], r14
-;;   19:	 48c7c0ffffffff       	mov	rax, 0xffffffffffffffff
-;;   20:	 4883c418             	add	rsp, 0x18
-;;   24:	 5d                   	pop	rbp
-;;   25:	 c3                   	ret	
+;;   19:	 48b8ffffffff00000000 	
+;; 				movabs	rax, 0xffffffff
+;;   23:	 4883c418             	add	rsp, 0x18
+;;   27:	 5d                   	pop	rbp
+;;   28:	 c3                   	ret	
 ;;
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp
