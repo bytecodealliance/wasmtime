@@ -1485,6 +1485,7 @@ impl Config {
     /// Enables memory error checking for wasm programs.
     ///
     /// This option is disabled by default.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn wmemcheck(&mut self, enable: bool) -> &mut Self {
         self.wmemcheck = enable;
         self.compiler_config.wmemcheck = enable;
