@@ -182,7 +182,7 @@ Ok, this program needs some command-line arguments. So let's give it some:
 ```
 $ echo hello world > test.txt
 $ wasmtime demo.wasm test.txt /tmp/somewhere.txt
-error opening input test.txt: failed to find a pre-opened file descriptor through which "test.txt" could be opened
+error opening input test.txt: No such file or directory
 ```
 
 Aha, now we're seeing the sandboxing in action. This program is attempting to
@@ -217,7 +217,7 @@ directory to the WebAssembly program. So providing a full path doesn't work:
 
 ```
 $ wasmtime --dir=$PWD --dir=/tmp demo.wasm test.txt /tmp/somewhere.txt
-error opening input test.txt: Capabilities insufficient
+error opening input test.txt: No such file or directory
 ```
 
 So, we always have to use `.` to refer to the current directory.
@@ -227,11 +227,11 @@ out of the sandbox? Let's see:
 
 ```
 $ wasmtime --dir=. --dir=/tmp demo.wasm test.txt /tmp/../etc/passwd
-error opening output /tmp/../etc/passwd: Capabilities insufficient
+error opening output /tmp/../etc/passwd: Operation not permitted
 ```
 
 The sandbox says no. And note that this is the capabilities system saying no
-here ("Capabilities insufficient"), rather than Unix access controls
+here ("Operation not permitted"), rather than Unix access controls
 ("Permission denied"). Even if the user running `wasmtime` had write access to
 `/etc/passwd`, WASI programs don't have the capability to access files outside
 of the directories they've been granted. This is true when resolving symbolic
