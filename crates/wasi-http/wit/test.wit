@@ -1,0 +1,28 @@
+// only used as part of `test-programs`
+world test-reactor {
+
+  import wasi:cli-base/environment
+  import wasi:io/streams
+  import wasi:filesystem/types
+  import wasi:filesystem/preopens
+  import wasi:cli-base/exit
+
+  export add-strings: func(s: list<string>) -> u32
+  export get-strings: func() -> list<string>
+
+  use wasi:io/streams.{output-stream}
+
+  export write-strings-to: func(o: output-stream) -> result
+
+  use wasi:filesystem/types.{descriptor-stat}
+  export pass-an-imported-record: func(d: descriptor-stat) -> string
+}
+
+world test-command {
+  import wasi:poll/poll
+  import wasi:io/streams
+  import wasi:cli-base/environment
+  import wasi:cli-base/stdin
+  import wasi:cli-base/stdout
+  import wasi:cli-base/stderr
+}

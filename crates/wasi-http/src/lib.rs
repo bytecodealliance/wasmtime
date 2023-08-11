@@ -5,8 +5,7 @@ use core::fmt::Formatter;
 use std::fmt::{self, Display};
 
 wasmtime::component::bindgen!({
-    path: "wasi-http/wit",
-    world: "proxy",
+    world: "wasi:preview/proxy",
     with: {
         "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
         "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,

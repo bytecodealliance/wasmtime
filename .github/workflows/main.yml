@@ -454,6 +454,11 @@ jobs:
         RUST_BACKTRACE: 1
       if: matrix.target == '' && matrix.os != 'windows-latest' && needs.determine.outputs.test-capi
 
+    # Ensure WIT definitions are in sync
+    - run: |
+        cp -TRv 'crates/wasi/wit/' 'crates/wasi-http/wit/'
+        git diff --exit-code --diff-filter=AM $GITHUB_SHA -- 'crates/wasi-http/wit/'
+
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
       env:
