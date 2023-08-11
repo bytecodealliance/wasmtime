@@ -217,7 +217,6 @@ directory to the WebAssembly program. So providing a full path doesn't work:
 
 ```
 $ wasmtime --dir=$PWD --dir=/tmp demo.wasm test.txt /tmp/somewhere.txt
-$ cat /tmp/somewhere.txt
 error opening input test.txt: Capabilities insufficient
 ```
 
