@@ -44,3 +44,26 @@
 (rule (simplify (bitselect ty @ (multi_lane _ _) (ugt _ x y) y x)) (umin ty x y))
 (rule (simplify (bitselect ty @ (multi_lane _ _) (uge _ x y) y x)) (umin ty x y))
 
+
+;; Remove extends before selects if possible
+;; These extends aren't necessary because the select will always check the full value
+
+;; fcmp
+(rule (simplify (select sty (uextend _ (fcmp fty cc x y)) lhs rhs))
+      (select sty (fcmp fty cc x y) lhs rhs))
+(rule (simplify (select sty (sextend _ (fcmp fty cc x y)) lhs rhs))
+      (select sty (fcmp fty cc x y) lhs rhs))
+
+;; icmp
+(rule (simplify (select sty (uextend _ (icmp ity cc x y)) lhs rhs))
+      (select sty (icmp ity cc x y) lhs rhs))
+(rule (simplify (select sty (sextend _ (icmp ity cc x y)) lhs rhs))
+      (select sty (icmp ity cc x y) lhs rhs))
+
+;; bmask
+(rule (simplify (select sty (uextend _ (bmask ity x)) lhs rhs))
+      (select sty (bmask ity x) lhs rhs))
+(rule (simplify (select sty (sextend _ (bmask ity x)) lhs rhs))
+      (select sty (bmask ity x) lhs rhs))
+(rule (simplify (select sty (ireduce _ (bmask ity x)) lhs rhs))
+      (select sty (bmask ity x) lhs rhs))
