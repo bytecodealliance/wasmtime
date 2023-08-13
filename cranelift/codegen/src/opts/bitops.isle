@@ -108,3 +108,8 @@
 ;; (bmask (bmask x)) == (bmask x)
 (rule (simplify (bmask ty (bmask _ x)))
       (bmask ty x))
+
+
+;; (bswap (bswap x)) == x
+(rule (simplify (bswap ty (bswap ty x)))
+      (subsume x))
