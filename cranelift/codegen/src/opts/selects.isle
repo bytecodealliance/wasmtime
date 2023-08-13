@@ -67,3 +67,27 @@
       (select sty (bmask ity x) lhs rhs))
 (rule (simplify (select sty (ireduce _ (bmask ity x)) lhs rhs))
       (select sty (bmask ity x) lhs rhs))
+
+
+;; `select+{i,f}cmp` rewrites
+
+;; select+fcmp can be simplified to just fcmp when the select is on a constant
+;; that would be equal to the values returned by fcmp (-1 and 0)
+
+;; fcmp
+(rule (simplify (select $I8 (fcmp fty cc x y) (iconst ty selected) (iconst ty (u64_from_imm64 0))))
+      (if-let -1 (i64_sextend_imm64 ty selected))
+      (fcmp fty cc x y))
+
+(rule (simplify (select (ty_int_ref_16_to_64 ty) (fcmp fty cc x y) (iconst ty selected) (iconst ty (u64_from_imm64 0))))
+      (if-let -1 (i64_sextend_imm64 ty selected))
+      (sextend ty (fcmp fty cc x y)))
+
+;; icmp
+(rule (simplify (select $I8 (icmp ity cc x y) (iconst ty selected) (iconst ty (u64_from_imm64 0))))
+      (if-let -1 (i64_sextend_imm64 ty selected))
+      (icmp ity cc x y))
+
+(rule (simplify (select (ty_int_ref_16_to_64 ty) (icmp ity cc x y) (iconst ty selected) (iconst ty (u64_from_imm64 0))))
+      (if-let -1 (i64_sextend_imm64 ty selected))
+      (sextend ty (icmp ity cc x y)))

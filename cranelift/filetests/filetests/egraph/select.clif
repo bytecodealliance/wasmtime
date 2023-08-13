@@ -240,3 +240,54 @@ block0(v0: i32, v1: i32):
 ; check:     v2 = bmask.i32 v0
 ; nextln:    v5 = select v2, v0, v1
 ; check:     return v5
+
+
+
+function %fcmp_select_neg_1_i8(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp.f64 lt v0, v1
+    v3 = iconst.i8 0
+    v4 = iconst.i8 -1
+    v5 = select v2, v4, v3
+    return v5
+}
+; check: v6 = fcmp lt v0, v1
+; check: return v6
+
+
+function %fcmp_select_neg_1_i64(f64, f64) -> i64 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp.f64 lt v0, v1
+    v3 = iconst.i64 0
+    v4 = iconst.i64 -1
+    v5 = select v2, v4, v3
+    return v5
+}
+; check: v6 = fcmp lt v0, v1
+; nextln: v7 = sextend.i64 v6
+; check: return v7
+
+
+function %icmp_select_neg_1_i8(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+    v2 = icmp.i64 slt v0, v1
+    v3 = iconst.i8 0
+    v4 = iconst.i8 -1
+    v5 = select v2, v4, v3
+    return v5
+}
+; check: v6 = icmp slt v0, v1
+; check: return v6
+
+
+function %icmp_select_neg_1_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = icmp.i64 slt v0, v1
+    v3 = iconst.i64 0
+    v4 = iconst.i64 -1
+    v5 = select v2, v4, v3
+    return v5
+}
+; check: v6 = icmp slt v0, v1
+; nextln: v7 = sextend.i64 v6
+; check: return v7
