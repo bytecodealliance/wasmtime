@@ -104,3 +104,7 @@
 (rule (simplify (sshr ty (bor ty (ineg ty x) x) (iconst ty (u64_from_imm64 shift_amt))))
       (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
       (bmask ty x))
+
+;; (bmask (bmask x)) == (bmask x)
+(rule (simplify (bmask ty (bmask _ x)))
+      (bmask ty x))
