@@ -8,6 +8,13 @@ Unreleased.
 
 ### Changed
 
+* Options to the `wasmtime` CLI for Wasmtime itself must now come before the
+  WebAssembly module. For example `wasmtime run foo.wasm --disable-cache` now
+  must be specified as `wasmtime run --disable-cache foo.wasm`. Any
+  argument/option after the WebAssembly module is now interpreted as an argument
+  to the wasm module itself.
+  [#6737](https://github.com/bytecodealliance/wasmtime/pull/6737)
+
 --------------------------------------------------------------------------------
 
 ## 12.0.0
@@ -67,13 +74,6 @@ Unreleased.
   [#6776](https://github.com/bytecodealliance/wasmtime/pull/6776)
 
 ### Changed
-
-* Options to the `wasmtime` CLI for Wasmtime itself must now come before the
-  WebAssembly module. For example `wasmtime run foo.wasm --disable-cache` now
-  must be specified as `wasmtime run --disable-cache foo.wasm`. Any
-  argument/option after the WebAssembly module is now interpreted as an argument
-  to the wasm module itself.
-  [#6737](https://github.com/bytecodealliance/wasmtime/pull/6737)
 
 * Empty types are no longer allowed in the component model.
   [#6777](https://github.com/bytecodealliance/wasmtime/pull/6777)
