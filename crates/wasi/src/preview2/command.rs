@@ -6,7 +6,6 @@ wasmtime::component::bindgen!({
     async: true,
     trappable_error_type: {
         "wasi:filesystem/types"::"error-code": Error,
-        "wasi:io/streams"::"stream-error": Error,
     },
     with: {
        "wasi:filesystem/types": crate::preview2::bindings::filesystem::types,
@@ -61,7 +60,6 @@ pub mod sync {
         async: false,
         trappable_error_type: {
             "wasi:filesystem/types"::"error-code": Error,
-            "wasi:io/streams"::"stream-error": Error,
         },
         with: {
            "wasi:filesystem/types": crate::preview2::bindings::sync_io::filesystem::types,

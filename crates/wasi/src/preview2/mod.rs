@@ -37,7 +37,9 @@ pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, TablePollableExt};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
-pub use self::stream::{HostInputStream, HostOutputStream, StreamState, TableStreamExt};
+pub use self::stream::{
+    HostInputStream, HostOutputStream, StreamRuntimeError, StreamState, TableStreamExt,
+};
 pub use self::table::{OccupiedEntry, Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
@@ -54,7 +56,6 @@ pub mod bindings {
             ",
                 tracing: true,
                 trappable_error_type: {
-                    "wasi:io/streams"::"stream-error": Error,
                     "wasi:filesystem/types"::"error-code": Error,
                 },
                 with: {
@@ -63,22 +64,6 @@ pub mod bindings {
             });
         }
         pub use self::_internal::wasi::{filesystem, io, poll};
-
-        impl From<super::io::streams::StreamError> for io::streams::StreamError {
-            fn from(other: super::io::streams::StreamError) -> Self {
-                let super::io::streams::StreamError { dummy } = other;
-                Self { dummy }
-            }
-        }
-
-        impl From<super::io::streams::Error> for io::streams::Error {
-            fn from(other: super::io::streams::Error) -> Self {
-                match other.downcast() {
-                    Ok(se) => io::streams::Error::from(io::streams::StreamError::from(se)),
-                    Err(e) => io::streams::Error::trap(e),
-                }
-            }
-        }
     }
 
     pub(crate) mod _internal_clocks {
@@ -105,7 +90,6 @@ pub mod bindings {
             tracing: true,
             async: true,
             trappable_error_type: {
-                "wasi:io/streams"::"stream-error": Error,
                 "wasi:filesystem/types"::"error-code": Error,
             },
             with: {
@@ -137,7 +121,6 @@ pub mod bindings {
         tracing: true,
         trappable_error_type: {
             "wasi:filesystem/types"::"error-code": Error,
-            "wasi:io/streams"::"stream-error": Error,
         },
         with: {
             "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
