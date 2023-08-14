@@ -1,10 +1,13 @@
-use crate::preview2::bindings::cli::{stderr, stdin, stdout};
+use crate::preview2::bindings::cli::{
+    stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
+    terminal_stdout,
+};
 use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
 use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::preview2::filesystem::TableReaddirExt;
-use crate::preview2::{bindings, TableError, WasiView};
+use crate::preview2::{bindings, IsATTY, TableError, WasiView};
 use anyhow::{anyhow, bail, Context};
 use std::borrow::Borrow;
 use std::cell::Cell;
@@ -36,9 +39,18 @@ struct File {
 
 #[derive(Clone, Debug)]
 enum Descriptor {
-    Stdin(streams::InputStream),
-    Stdout(streams::OutputStream),
-    Stderr(streams::OutputStream),
+    Stdin {
+        input_stream: streams::InputStream,
+        isatty: IsATTY,
+    },
+    Stdout {
+        output_stream: streams::OutputStream,
+        isatty: IsATTY,
+    },
+    Stderr {
+        output_stream: streams::OutputStream,
+        isatty: IsATTY,
+    },
     PreopenDirectory((filesystem::Descriptor, String)),
     File(File),
 }
@@ -71,30 +83,78 @@ impl DerefMut for Descriptors {
 impl Descriptors {
     /// Initializes [Self] using `preopens`
     fn new(
-        preopens: &mut (impl preopens::Host + stdin::Host + stdout::Host + stderr::Host + ?Sized),
+        host: &mut (impl preopens::Host
+                  + stdin::Host
+                  + stdout::Host
+                  + stderr::Host
+                  + terminal_stdin::Host
+                  + terminal_stdout::Host
+                  + terminal_stderr::Host
+                  + terminal_input::Host
+                  + terminal_output::Host
+                  + ?Sized),
     ) -> Result<Self, types::Error> {
-        let stdin = preopens
-            .get_stdin()
-            .context("failed to call `get-stdin`")
-            .map_err(types::Error::trap)?;
-        let stdout = preopens
-            .get_stdout()
-            .context("failed to call `get-stdout`")
-            .map_err(types::Error::trap)?;
-        let stderr = preopens
-            .get_stderr()
-            .context("failed to call `get-stderr`")
-            .map_err(types::Error::trap)?;
-        let directories = preopens
+        let mut descriptors = Self::default();
+        descriptors.push(Descriptor::Stdin {
+            input_stream: host
+                .get_stdin()
+                .context("failed to call `get-stdin`")
+                .map_err(types::Error::trap)?,
+            isatty: if let Some(term_in) = host
+                .get_terminal_stdin()
+                .context("failed to call `get-terminal-stdin`")
+                .map_err(types::Error::trap)?
+            {
+                host.drop_terminal_input(term_in)
+                    .context("failed to call `drop-terminal-input`")
+                    .map_err(types::Error::trap)?;
+                IsATTY::TTY
+            } else {
+                IsATTY::None
+            },
+        })?;
+        descriptors.push(Descriptor::Stdout {
+            output_stream: host
+                .get_stdout()
+                .context("failed to call `get-stdout`")
+                .map_err(types::Error::trap)?,
+            isatty: if let Some(term_out) = host
+                .get_terminal_stdout()
+                .context("failed to call `get-terminal-stdout`")
+                .map_err(types::Error::trap)?
+            {
+                host.drop_terminal_output(term_out)
+                    .context("failed to call `drop-terminal-output`")
+                    .map_err(types::Error::trap)?;
+                IsATTY::TTY
+            } else {
+                IsATTY::None
+            },
+        })?;
+        descriptors.push(Descriptor::Stderr {
+            output_stream: host
+                .get_stderr()
+                .context("failed to call `get-stderr`")
+                .map_err(types::Error::trap)?,
+            isatty: if let Some(term_out) = host
+                .get_terminal_stderr()
+                .context("failed to call `get-terminal-stderr`")
+                .map_err(types::Error::trap)?
+            {
+                host.drop_terminal_output(term_out)
+                    .context("failed to call `drop-terminal-output`")
+                    .map_err(types::Error::trap)?;
+                IsATTY::TTY
+            } else {
+                IsATTY::None
+            },
+        })?;
+
+        for dir in host
             .get_directories()
             .context("failed to call `get-directories`")
-            .map_err(types::Error::trap)?;
-
-        let mut descriptors = Self::default();
-        descriptors.push(Descriptor::Stdin(stdin))?;
-        descriptors.push(Descriptor::Stdout(stdout))?;
-        descriptors.push(Descriptor::Stderr(stderr))?;
-        for dir in directories {
+            .map_err(types::Error::trap)?
+        {
             descriptors.push(Descriptor::PreopenDirectory(dir))?;
         }
         Ok(descriptors)
@@ -232,7 +292,9 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
             Some(Descriptor::File(file @ File { fd, .. })) if self.view.table().is_file(*fd) => {
                 Ok(file)
             }
-            Some(Descriptor::Stdin(..) | Descriptor::Stdout(..) | Descriptor::Stderr(..)) => {
+            Some(
+                Descriptor::Stdin { .. } | Descriptor::Stdout { .. } | Descriptor::Stderr { .. },
+            ) => {
                 // NOTE: legacy implementation returns SPIPE here
                 Err(types::Errno::Spipe.into())
             }
@@ -245,8 +307,10 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
         match self.get_descriptor(fd)? {
             Descriptor::File(File { fd, .. }) => Ok(*fd),
             Descriptor::PreopenDirectory((fd, _)) => Ok(*fd),
-            Descriptor::Stdin(stream) => Ok(*stream),
-            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => Ok(*stream),
+            Descriptor::Stdin { input_stream, .. } => Ok(*input_stream),
+            Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
+                Ok(*output_stream)
+            }
         }
     }
 
@@ -270,7 +334,16 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
 }
 
 trait WasiPreview1ViewExt:
-    WasiPreview1View + preopens::Host + stdin::Host + stdout::Host + stderr::Host
+    WasiPreview1View
+    + preopens::Host
+    + stdin::Host
+    + stdout::Host
+    + stderr::Host
+    + terminal_input::Host
+    + terminal_output::Host
+    + terminal_stdin::Host
+    + terminal_stdout::Host
+    + terminal_stderr::Host
 {
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`Transaction`] on success
@@ -449,6 +522,15 @@ impl TryFrom<filesystem::DescriptorType> for types::Filetype {
             }
             filesystem::DescriptorType::SymbolicLink => Ok(types::Filetype::SymbolicLink),
             filesystem::DescriptorType::Unknown => Ok(types::Filetype::Unknown),
+        }
+    }
+}
+
+impl From<IsATTY> for types::Filetype {
+    fn from(isatty: IsATTY) -> Self {
+        match isatty {
+            IsATTY::TTY => types::Filetype::CharacterDevice,
+            IsATTY::None => types::Filetype::Unknown,
         }
     }
 }
@@ -806,11 +888,13 @@ impl<
             .ok_or(types::Errno::Badf)?
             .clone();
         match desc {
-            Descriptor::Stdin(stream) => streams::Host::drop_input_stream(self, stream)
-                .await
-                .context("failed to call `drop-input-stream`"),
-            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => {
-                streams::Host::drop_output_stream(self, stream)
+            Descriptor::Stdin { input_stream, .. } => {
+                streams::Host::drop_input_stream(self, input_stream)
+                    .await
+                    .context("failed to call `drop-input-stream`")
+            }
+            Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
+                streams::Host::drop_output_stream(self, output_stream)
                     .await
                     .context("failed to call `drop-output-stream`")
             }
@@ -839,19 +923,19 @@ impl<
     #[instrument(skip(self))]
     async fn fd_fdstat_get(&mut self, fd: types::Fd) -> Result<types::Fdstat, types::Error> {
         let (fd, blocking, append) = match self.transact()?.get_descriptor(fd)? {
-            Descriptor::Stdin(..) => {
+            Descriptor::Stdin { isatty, .. } => {
                 let fs_rights_base = types::Rights::FD_READ;
                 return Ok(types::Fdstat {
-                    fs_filetype: types::Filetype::CharacterDevice,
+                    fs_filetype: (*isatty).into(),
                     fs_flags: types::Fdflags::empty(),
                     fs_rights_base,
                     fs_rights_inheriting: fs_rights_base,
                 });
             }
-            Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
+            Descriptor::Stdout { isatty, .. } | Descriptor::Stderr { isatty, .. } => {
                 let fs_rights_base = types::Rights::FD_WRITE;
                 return Ok(types::Fdstat {
-                    fs_filetype: types::Filetype::CharacterDevice,
+                    fs_filetype: (*isatty).into(),
                     fs_flags: types::Fdflags::empty(),
                     fs_rights_base,
                     fs_rights_inheriting: fs_rights_base,
@@ -996,18 +1080,18 @@ impl<
     async fn fd_filestat_get(&mut self, fd: types::Fd) -> Result<types::Filestat, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
         match desc {
-            Descriptor::Stdin(..) | Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
-                Ok(types::Filestat {
-                    dev: 0,
-                    ino: 0,
-                    filetype: types::Filetype::CharacterDevice,
-                    nlink: 0,
-                    size: 0,
-                    atim: 0,
-                    mtim: 0,
-                    ctim: 0,
-                })
-            }
+            Descriptor::Stdin { isatty, .. }
+            | Descriptor::Stdout { isatty, .. }
+            | Descriptor::Stderr { isatty, .. } => Ok(types::Filestat {
+                dev: 0,
+                ino: 0,
+                filetype: isatty.into(),
+                nlink: 0,
+                size: 0,
+                atim: 0,
+                mtim: 0,
+                ctim: 0,
+            }),
             Descriptor::PreopenDirectory((fd, _)) | Descriptor::File(File { fd, .. }) => {
                 let filesystem::DescriptorStat {
                     type_,
@@ -1129,14 +1213,17 @@ impl<
 
                 (buf, read, state)
             }
-            Descriptor::Stdin(stream) => {
+            Descriptor::Stdin { input_stream, .. } => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
                 };
-                let (read, state) =
-                    streams::Host::read(self, stream, buf.len().try_into().unwrap_or(u64::MAX))
-                        .await
-                        .map_err(|_| types::Errno::Io)?;
+                let (read, state) = streams::Host::read(
+                    self,
+                    input_stream,
+                    buf.len().try_into().unwrap_or(u64::MAX),
+                )
+                .await
+                .map_err(|_| types::Errno::Io)?;
                 (buf, read, state)
             }
             _ => return Err(types::Errno::Badf.into()),
@@ -1184,7 +1271,7 @@ impl<
 
                 (buf, read, state)
             }
-            Descriptor::Stdin(..) => {
+            Descriptor::Stdin { .. } => {
                 // NOTE: legacy implementation returns SPIPE here
                 return Err(types::Errno::Spipe.into());
             }
@@ -1249,11 +1336,11 @@ impl<
                 }
                 n
             }
-            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => {
+            Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                let (n, _stat) = streams::Host::blocking_write(self, stream, buf)
+                let (n, _stat) = streams::Host::blocking_write(self, output_stream, buf)
                     .await
                     .map_err(|_| types::Errno::Io)?;
                 n
@@ -1291,7 +1378,7 @@ impl<
                 }
                 .map_err(|_| types::Errno::Io)?
             }
-            Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
+            Descriptor::Stdout { .. } | Descriptor::Stderr { .. } => {
                 // NOTE: legacy implementation returns SPIPE here
                 return Err(types::Errno::Spipe.into());
             }

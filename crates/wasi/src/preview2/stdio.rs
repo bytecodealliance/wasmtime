@@ -27,6 +27,7 @@ pub fn stderr() -> Stderr {
     AsyncWriteStream::new(tokio::io::stderr())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IsATTY {
     TTY,
     None,
