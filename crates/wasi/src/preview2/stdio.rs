@@ -4,7 +4,10 @@ use crate::preview2::bindings::cli::{
 };
 use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe::AsyncWriteStream;
-use crate::preview2::WasiView;
+use crate::preview2::{HostOutputStream, StreamState, WasiView};
+use anyhow::Error;
+use bytes::Bytes;
+use is_terminal::IsTerminal;
 
 #[cfg(unix)]
 mod unix;
@@ -16,15 +19,44 @@ mod worker_thread_stdin;
 #[cfg(windows)]
 pub use self::worker_thread_stdin::{stdin, Stdin};
 
-pub type Stdout = AsyncWriteStream;
+pub struct Stdout(AsyncWriteStream);
 
 pub fn stdout() -> Stdout {
-    AsyncWriteStream::new(tokio::io::stdout())
+    Stdout(AsyncWriteStream::new(tokio::io::stdout()))
 }
-pub type Stderr = AsyncWriteStream;
+impl IsTerminal for Stdout {
+    fn is_terminal(&self) -> bool {
+        std::io::stdout().is_terminal()
+    }
+}
+#[async_trait::async_trait]
+impl HostOutputStream for Stdout {
+    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
+        self.0.write(bytes)
+    }
+    async fn ready(&mut self) -> Result<(), Error> {
+        self.0.ready().await
+    }
+}
+
+pub struct Stderr(AsyncWriteStream);
 
 pub fn stderr() -> Stderr {
-    AsyncWriteStream::new(tokio::io::stderr())
+    Stderr(AsyncWriteStream::new(tokio::io::stderr()))
+}
+impl IsTerminal for Stderr {
+    fn is_terminal(&self) -> bool {
+        std::io::stderr().is_terminal()
+    }
+}
+#[async_trait::async_trait]
+impl HostOutputStream for Stderr {
+    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
+        self.0.write(bytes)
+    }
+    async fn ready(&mut self) -> Result<(), Error> {
+        self.0.ready().await
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

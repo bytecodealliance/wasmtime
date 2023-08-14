@@ -3734,6 +3734,7 @@ dependencies = [
  "fs-set-times",
  "futures",
  "io-extras",
+ "is-terminal",
  "libc",
  "once_cell",
  "rustix 0.38.4",

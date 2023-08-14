@@ -88,15 +88,36 @@ impl WasiCtxBuilder {
     }
 
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.stdin(stdio::stdin(), IsATTY::TTY)
+        use is_terminal::IsTerminal;
+        let inherited = stdio::stdin();
+        let isatty = if inherited.is_terminal() {
+            IsATTY::TTY
+        } else {
+            IsATTY::None
+        };
+        self.stdin(inherited, isatty)
     }
 
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.stdout(stdio::stdout(), IsATTY::TTY)
+        use is_terminal::IsTerminal;
+        let inherited = stdio::stdout();
+        let isatty = if inherited.is_terminal() {
+            IsATTY::TTY
+        } else {
+            IsATTY::None
+        };
+        self.stdout(inherited, isatty)
     }
 
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.stderr(stdio::stderr(), IsATTY::TTY)
+        use is_terminal::IsTerminal;
+        let inherited = stdio::stderr();
+        let isatty = if inherited.is_terminal() {
+            IsATTY::TTY
+        } else {
+            IsATTY::None
+        };
+        self.stderr(inherited, isatty)
     }
 
     pub fn inherit_stdio(&mut self) -> &mut Self {
