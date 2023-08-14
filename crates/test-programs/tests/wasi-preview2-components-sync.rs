@@ -181,9 +181,8 @@ fn interesting_paths() {
     run("interesting_paths", false).unwrap()
 }
 #[test_log::test]
-fn isatty() {
-    // Inherit stdio, test asserts that each isatty
-    run("isatty", true).unwrap()
+fn regular_file_isatty() {
+    run("regular_file_isatty", false).unwrap()
 }
 #[test_log::test]
 fn nofollow_errors() {
@@ -275,6 +274,14 @@ fn sched_yield() {
 #[test_log::test]
 fn stdio() {
     run("stdio", false).unwrap()
+}
+#[test_log::test]
+fn stdio_isatty() {
+    // If the test process is setup such that stdio is a terminal:
+    if test_programs::stdio_is_terminal() {
+        // Inherit stdio, test asserts each is a tty:
+        run("stdio_isatty", true).unwrap()
+    }
 }
 #[test_log::test]
 fn stdio_not_isatty() {

@@ -2648,6 +2648,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper",
+ "is-terminal",
  "lazy_static",
  "tempfile",
  "test-log",

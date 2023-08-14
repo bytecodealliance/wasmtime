@@ -195,7 +195,7 @@ system-interface = { version = "0.26.0", features = ["cap_std_impls"] }
 io-lifetimes = { version = "2.0.2", default-features = false }
 io-extras = "0.18.0"
 rustix = "0.38.4"
-
+is-terminal = "0.4.0"
 # wit-bindgen:
 wit-bindgen = { version = "0.9.0", default-features = false }
 

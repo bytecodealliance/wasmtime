@@ -195,9 +195,8 @@ async fn interesting_paths() {
     run("interesting_paths", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn isatty() {
-    // Inherit stdio: test asserts stdio isatty
-    run("isatty", true).await.unwrap()
+async fn regular_file_isatty() {
+    run("regular_file_isatty", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn nofollow_errors() {
@@ -297,6 +296,14 @@ async fn sched_yield() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdio() {
     run("stdio", false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn stdio_isatty() {
+    // If the test process is setup such that stdio is a terminal:
+    if test_programs::stdio_is_terminal() {
+        // Inherit stdio, test asserts each is a tty:
+        run("stdio_isatty", true).await.unwrap()
+    }
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdio_not_isatty() {

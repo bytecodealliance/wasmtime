@@ -160,8 +160,8 @@ fn interesting_paths() {
     run("interesting_paths", true).unwrap()
 }
 #[test_log::test]
-fn isatty() {
-    run("isatty", true).unwrap()
+fn regular_file_isatty() {
+    run("regular_file_isatty", true).unwrap()
 }
 #[test_log::test]
 fn nofollow_errors() {
@@ -252,6 +252,13 @@ fn sched_yield() {
 #[test_log::test]
 fn stdio() {
     run("stdio", true).unwrap()
+}
+#[test_log::test]
+fn stdio_isatty() {
+    if test_programs::stdio_is_terminal() {
+        // Inherit stdio, which is a terminal in the test runner's environment:
+        run("stdio_isatty", true).unwrap()
+    }
 }
 #[test_log::test]
 fn stdio_not_isatty() {

@@ -1,24 +1,6 @@
 use std::{env, process};
 use wasi_tests::open_scratch_directory;
 
-unsafe fn test_stdio_isatty() {
-    assert_eq!(
-        libc::isatty(libc::STDIN_FILENO as std::os::raw::c_int),
-        1,
-        "stdin is a tty"
-    );
-    assert_eq!(
-        libc::isatty(libc::STDOUT_FILENO as std::os::raw::c_int),
-        1,
-        "stdout is a tty"
-    );
-    assert_eq!(
-        libc::isatty(libc::STDERR_FILENO as std::os::raw::c_int),
-        1,
-        "stderr is a tty"
-    );
-}
-
 unsafe fn test_file_isatty(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory and test if it's a tty.
     let file_fd =
@@ -57,5 +39,4 @@ fn main() {
 
     // Run the tests.
     unsafe { test_file_isatty(dir_fd) }
-    unsafe { test_stdio_isatty() }
 }
