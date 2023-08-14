@@ -108,9 +108,9 @@ impl Descriptors {
                 host.drop_terminal_input(term_in)
                     .context("failed to call `drop-terminal-input`")
                     .map_err(types::Error::trap)?;
-                IsATTY::TTY
+                IsATTY::Yes
             } else {
-                IsATTY::None
+                IsATTY::No
             },
         })?;
         descriptors.push(Descriptor::Stdout {
@@ -126,9 +126,9 @@ impl Descriptors {
                 host.drop_terminal_output(term_out)
                     .context("failed to call `drop-terminal-output`")
                     .map_err(types::Error::trap)?;
-                IsATTY::TTY
+                IsATTY::Yes
             } else {
-                IsATTY::None
+                IsATTY::No
             },
         })?;
         descriptors.push(Descriptor::Stderr {
@@ -144,9 +144,9 @@ impl Descriptors {
                 host.drop_terminal_output(term_out)
                     .context("failed to call `drop-terminal-output`")
                     .map_err(types::Error::trap)?;
-                IsATTY::TTY
+                IsATTY::Yes
             } else {
-                IsATTY::None
+                IsATTY::No
             },
         })?;
 
@@ -529,8 +529,8 @@ impl TryFrom<filesystem::DescriptorType> for types::Filetype {
 impl From<IsATTY> for types::Filetype {
     fn from(isatty: IsATTY) -> Self {
         match isatty {
-            IsATTY::TTY => types::Filetype::CharacterDevice,
-            IsATTY::None => types::Filetype::Unknown,
+            IsATTY::Yes => types::Filetype::CharacterDevice,
+            IsATTY::No => types::Filetype::Unknown,
         }
     }
 }

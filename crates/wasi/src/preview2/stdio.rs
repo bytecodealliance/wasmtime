@@ -61,8 +61,8 @@ impl HostOutputStream for Stderr {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IsATTY {
-    TTY,
-    None,
+    Yes,
+    No,
 }
 
 pub(crate) struct StdioInput {
@@ -110,7 +110,7 @@ impl<T: WasiView> terminal_output::Host for T {
 }
 impl<T: WasiView> terminal_stdin::Host for T {
     fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<terminal_input::TerminalInput>> {
-        if let IsATTY::TTY = self.ctx().stdin.isatty {
+        if let IsATTY::Yes = self.ctx().stdin.isatty {
             Ok(Some(self.table_mut().push(Box::new(HostTerminalInput))?))
         } else {
             Ok(None)
@@ -119,7 +119,7 @@ impl<T: WasiView> terminal_stdin::Host for T {
 }
 impl<T: WasiView> terminal_stdout::Host for T {
     fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<terminal_output::TerminalOutput>> {
-        if let IsATTY::TTY = self.ctx().stdout.isatty {
+        if let IsATTY::Yes = self.ctx().stdout.isatty {
             Ok(Some(self.table_mut().push(Box::new(HostTerminalOutput))?))
         } else {
             Ok(None)
@@ -128,7 +128,7 @@ impl<T: WasiView> terminal_stdout::Host for T {
 }
 impl<T: WasiView> terminal_stderr::Host for T {
     fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<terminal_output::TerminalOutput>> {
-        if let IsATTY::TTY = self.ctx().stderr.isatty {
+        if let IsATTY::Yes = self.ctx().stderr.isatty {
             Ok(Some(self.table_mut().push(Box::new(HostTerminalOutput))?))
         } else {
             Ok(None)

@@ -57,9 +57,9 @@ impl WasiCtxBuilder {
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
         Self {
-            stdin: (Box::new(pipe::ClosedInputStream), IsATTY::None),
-            stdout: (Box::new(pipe::SinkOutputStream), IsATTY::None),
-            stderr: (Box::new(pipe::SinkOutputStream), IsATTY::None),
+            stdin: (Box::new(pipe::ClosedInputStream), IsATTY::No),
+            stdout: (Box::new(pipe::SinkOutputStream), IsATTY::No),
+            stderr: (Box::new(pipe::SinkOutputStream), IsATTY::No),
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
@@ -91,9 +91,9 @@ impl WasiCtxBuilder {
         use is_terminal::IsTerminal;
         let inherited = stdio::stdin();
         let isatty = if inherited.is_terminal() {
-            IsATTY::TTY
+            IsATTY::Yes
         } else {
-            IsATTY::None
+            IsATTY::No
         };
         self.stdin(inherited, isatty)
     }
@@ -102,9 +102,9 @@ impl WasiCtxBuilder {
         use is_terminal::IsTerminal;
         let inherited = stdio::stdout();
         let isatty = if inherited.is_terminal() {
-            IsATTY::TTY
+            IsATTY::Yes
         } else {
-            IsATTY::None
+            IsATTY::No
         };
         self.stdout(inherited, isatty)
     }
@@ -113,9 +113,9 @@ impl WasiCtxBuilder {
         use is_terminal::IsTerminal;
         let inherited = stdio::stderr();
         let isatty = if inherited.is_terminal() {
-            IsATTY::TTY
+            IsATTY::Yes
         } else {
-            IsATTY::None
+            IsATTY::No
         };
         self.stderr(inherited, isatty)
     }
