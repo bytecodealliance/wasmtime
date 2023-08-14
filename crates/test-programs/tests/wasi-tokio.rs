@@ -260,6 +260,11 @@ async fn stdio() {
     run("stdio", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn stdio_not_isatty() {
+    // Don't inherit stdio, test asserts each is not tty:
+    run("stdio_not_isatty", false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn symlink_create() {
     run("symlink_create", true).await.unwrap()
 }

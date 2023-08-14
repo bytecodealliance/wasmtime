@@ -182,7 +182,8 @@ fn interesting_paths() {
 }
 #[test_log::test]
 fn isatty() {
-    run("isatty", false).unwrap()
+    // Inherit stdio, test asserts that each isatty
+    run("isatty", true).unwrap()
 }
 #[test_log::test]
 fn nofollow_errors() {
@@ -274,6 +275,11 @@ fn sched_yield() {
 #[test_log::test]
 fn stdio() {
     run("stdio", false).unwrap()
+}
+#[test_log::test]
+fn stdio_not_isatty() {
+    // Don't inherit stdio, test asserts not isatty:
+    run("stdio_not_isatty", false).unwrap()
 }
 #[test_log::test]
 fn symlink_create() {

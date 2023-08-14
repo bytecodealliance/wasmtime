@@ -196,7 +196,8 @@ async fn interesting_paths() {
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn isatty() {
-    run("isatty", false).await.unwrap()
+    // Inherit stdio: test asserts stdio isatty
+    run("isatty", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn nofollow_errors() {
@@ -296,6 +297,11 @@ async fn sched_yield() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdio() {
     run("stdio", false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn stdio_not_isatty() {
+    // Don't inherit stdio, test asserts each is not tty:
+    run("stdio_not_isatty", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn symlink_create() {

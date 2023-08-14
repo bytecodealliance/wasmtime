@@ -254,6 +254,12 @@ fn stdio() {
     run("stdio", true).unwrap()
 }
 #[test_log::test]
+fn stdio_not_isatty() {
+    // Don't inherit stdio, test asserts each is not tty:
+    run("stdio_not_isatty", false).unwrap()
+}
+
+#[test_log::test]
 fn symlink_create() {
     run("symlink_create", true).unwrap()
 }
