@@ -264,11 +264,11 @@ macro_rules! bitop {
 impl DataValueExt for DataValue {
     fn int(n: i128, ty: Type) -> ValueResult<Self> {
         if ty.is_vector() {
-            let bytes = ty.bytes();
-            if bytes == 8 || bytes == 16 { // check to prevent panic in read_from_slice_ne()
-                Ok(DataValue::read_from_slice_ne(&n.to_ne_bytes(), ty))
-            } else {
-                Err(ValueError::InvalidType(ValueTypeClass::Vector, ty))
+            match ty.bytes() {
+                8 | 16 => { // read_from_slice_ne() panics on anything other than 8 and 16
+                    Ok(DataValue::read_from_slice_ne(&n.to_ne_bytes(), ty))
+                }
+                _ => Err(ValueError::InvalidType(ValueTypeClass::Vector, ty))
             }
         } else if ty.is_int() {
             DataValue::from_integer(n, ty).map_err(|_| ValueError::InvalidValue(ty))
