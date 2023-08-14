@@ -123,7 +123,7 @@ edition = "2021"
 rust-version = "1.66.0"
 
 [workspace.dependencies]
-wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "13.0.0" }
+wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=13.0.0" }
 wasmtime = { path = "crates/wasmtime", version = "13.0.0", default-features = false }
 wasmtime-cache = { path = "crates/cache", version = "=13.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=13.0.0" }
