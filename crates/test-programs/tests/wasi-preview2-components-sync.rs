@@ -44,8 +44,8 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
             builder.inherit_stdio();
         } else {
             builder
-                .stdout(stdout.clone(), IsATTY::None)
-                .stderr(stderr.clone(), IsATTY::None);
+                .stdout(stdout.clone(), IsATTY::No)
+                .stderr(stderr.clone(), IsATTY::No);
         }
         builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);

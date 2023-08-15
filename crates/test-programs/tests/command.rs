@@ -179,7 +179,7 @@ async fn stdin() -> Result<()> {
     let wasi = WasiCtxBuilder::new()
         .stdin(
             MemoryInputPipe::new("So rested he by the Tumtum tree".into()),
-            IsATTY::None,
+            IsATTY::No,
         )
         .build(&mut table)?;
 
@@ -199,7 +199,7 @@ async fn poll_stdin() -> Result<()> {
     let wasi = WasiCtxBuilder::new()
         .stdin(
             MemoryInputPipe::new("So rested he by the Tumtum tree".into()),
-            IsATTY::None,
+            IsATTY::No,
         )
         .build(&mut table)?;
 
@@ -468,7 +468,7 @@ async fn stream_pollable_lifetimes() -> Result<()> {
         let mut table = Table::new();
         let wasi = WasiCtxBuilder::new()
             .args(&["correct"])
-            .stdin(MemoryInputPipe::new(" ".into()), IsATTY::None)
+            .stdin(MemoryInputPipe::new(" ".into()), IsATTY::No)
             .build(&mut table)?;
 
         let (mut store, command) = instantiate(
@@ -488,7 +488,7 @@ async fn stream_pollable_lifetimes() -> Result<()> {
         let mut table = Table::new();
         let wasi = WasiCtxBuilder::new()
             .args(&["trap"])
-            .stdin(MemoryInputPipe::new(" ".into()), IsATTY::None)
+            .stdin(MemoryInputPipe::new(" ".into()), IsATTY::No)
             .build(&mut table)?;
 
         let (mut store, command) = instantiate(

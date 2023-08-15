@@ -122,15 +122,15 @@ pub enum StreamType {
 }
 
 pub enum IsATTY {
-    TTY,
-    None,
+    Yes,
+    No,
 }
 
 impl IsATTY {
     pub fn filetype(&self) -> wasi::Filetype {
         match self {
-            IsATTY::TTY => wasi::FILETYPE_CHARACTER_DEVICE,
-            IsATTY::None => wasi::FILETYPE_UNKNOWN,
+            IsATTY::Yes => wasi::FILETYPE_CHARACTER_DEVICE,
+            IsATTY::No => wasi::FILETYPE_UNKNOWN,
         }
     }
 }
@@ -163,26 +163,26 @@ impl Descriptors {
         let stdin_isatty = match terminal_stdin::get_terminal_stdin() {
             Some(t) => {
                 terminal_input::drop_terminal_input(t);
-                IsATTY::TTY
+                IsATTY::Yes
             }
-            None => IsATTY::None,
+            None => IsATTY::No,
         };
         let stdout = stdout::get_stdout();
         let stdout_isatty = match terminal_stdout::get_terminal_stdout() {
             Some(t) => {
                 terminal_output::drop_terminal_output(t);
-                IsATTY::TTY
+                IsATTY::Yes
             }
-            None => IsATTY::None,
+            None => IsATTY::No,
         };
         let stderr = stderr::get_stderr();
         unsafe { set_stderr_stream(stderr) };
         let stderr_isatty = match terminal_stderr::get_terminal_stderr() {
             Some(t) => {
                 terminal_output::drop_terminal_output(t);
-                IsATTY::TTY
+                IsATTY::Yes
             }
-            None => IsATTY::None,
+            None => IsATTY::No,
         };
 
         d.push(Descriptor::Streams(Streams {
