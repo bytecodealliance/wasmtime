@@ -52,6 +52,7 @@
 (rule (simplify (select ty (ineg _ c) lhs rhs)) (select ty c lhs rhs))
 (rule (simplify (select ty (bmask _ c) lhs rhs)) (select ty c lhs rhs))
 (rule (simplify (select ty (bswap _ c) lhs rhs)) (select ty c lhs rhs))
+(rule (simplify (select ty (bitrev _ c) lhs rhs)) (select ty c lhs rhs))
 
 ;; `(select c -1 0)` can be rewritten to `bmask`
 (rule (simplify (select ty c (iconst ty selected) (iconst ty (u64_from_imm64 0))))

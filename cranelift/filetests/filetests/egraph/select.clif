@@ -199,6 +199,17 @@ block0(v0: i16, v1: f32, v2: f32):
 ; check:    v5 = select v0, v1, v2
 ; check:    return v5
 
+function %select_bitrev(i16, f32, f32) -> f32 {
+block0(v0: i16, v1: f32, v2: f32):
+    v3 = bitrev.i16 v0
+    v4 = select v3, v1, v2
+    return v4
+}
+
+; check: block0(v0: i16, v1: f32, v2: f32):
+; check:    v5 = select v0, v1, v2
+; check:    return v5
+
 
 
 function %select_to_bmask(i64) -> i8 {
@@ -210,15 +221,3 @@ block0(v0: i64):
 }
 ; check: v6 = bmask.i8 v0
 ; check: return v6
-
-function %icmp_select_neg_1_i64(i64, i64) -> i64 {
-block0(v0: i64, v1: i64):
-    v2 = icmp.i64 slt v0, v1
-    v3 = iconst.i64 0
-    v4 = iconst.i64 -1
-    v5 = select v2, v4, v3
-    return v5
-}
-; check: v2 = icmp slt v0, v1
-; nextln: v7 = sextend.i64 v2
-; check: return v7

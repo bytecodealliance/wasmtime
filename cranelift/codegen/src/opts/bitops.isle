@@ -116,6 +116,7 @@
 (rule (simplify (bmask ty (uextend _ x))) (bmask ty x))
 (rule (simplify (bmask ty (ineg _ x))) (bmask ty x))
 (rule (simplify (bmask ty (bswap _ x))) (bmask ty x))
+(rule (simplify (bmask ty (bitrev _ x))) (bmask ty x))
 
 ;; (sextend (bmask x)) can be replaced with (bmask x) since bmask
 ;; supports any size of output type, regardless of input.
