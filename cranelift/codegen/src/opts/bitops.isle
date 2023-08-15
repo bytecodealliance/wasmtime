@@ -105,11 +105,33 @@
       (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
       (bmask ty x))
 
+
 ;; (bmask (bmask x)) == (bmask x)
-(rule (simplify (bmask ty (bmask _ x)))
-      (bmask ty x))
+;; The inner bmask can have a different type than the outer bmask.
+(rule (simplify (bmask ty (bmask _ x))) (bmask ty x))
+
+;; (bmask (op x)) can be replaced with (bmask x)
+;; if op is an operation that preserves "truthiness"
+(rule (simplify (bmask ty (sextend _ x))) (bmask ty x))
+(rule (simplify (bmask ty (uextend _ x))) (bmask ty x))
+(rule (simplify (bmask ty (ineg _ x))) (bmask ty x))
+(rule (simplify (bmask ty (bswap _ x))) (bmask ty x))
+
+;; (sextend (bmask x)) can be replaced with (bmask x) since bmask
+;; supports any size of output type, regardless of input.
+;; Same with `ireduce`
+(rule (simplify (sextend ty (bmask _ x))) (bmask ty x))
+(rule (simplify (ireduce ty (bmask _ x))) (bmask ty x))
+
+;; (bmask (icmp x)) can be replaced with (icmp x) or (sextend (icmp x))
+;; depending on the output type.
+(rule (simplify (bmask $I8 cmp @ (icmp cmp_ty cc x y))) cmp)
+(rule (simplify (bmask (ty_int_ref_16_to_64 ty) cmp @ (icmp cmp_ty cc x y))) (sextend ty cmp))
+
+;; the same applies to `fcmp`
+(rule (simplify (bmask $I8 cmp @ (fcmp cmp_ty cc x y))) cmp)
+(rule (simplify (bmask (ty_int_ref_16_to_64 ty) cmp @ (fcmp cmp_ty cc x y))) (sextend ty cmp))
 
 
 ;; (bswap (bswap x)) == x
-(rule (simplify (bswap ty (bswap ty x)))
-      (subsume x))
+(rule (simplify (bswap ty (bswap ty x))) (subsume x))

@@ -190,6 +190,112 @@ block0(v0: i16):
 ; check: v3 = bmask.i64 v0
 ; check: return v3
 
+function %bmask_sextend(i16) -> i64 {
+block0(v0: i16):
+    v1 = sextend.i32 v0
+    v2 = bmask.i64 v1
+    return v2
+}
+
+; check: v3 = bmask.i64 v0
+; check: return v3
+
+function %bmask_uextend(i16) -> i64 {
+block0(v0: i16):
+    v1 = uextend.i32 v0
+    v2 = bmask.i64 v1
+    return v2
+}
+
+; check: v3 = bmask.i64 v0
+; check: return v3
+
+function %bmask_ineg(i16) -> i64 {
+block0(v0: i16):
+    v1 = ineg.i16 v0
+    v2 = bmask.i64 v1
+    return v2
+}
+
+; check: v3 = bmask.i64 v0
+; check: return v3
+
+function %bmask_bswap(i16) -> i64 {
+block0(v0: i16):
+    v1 = bswap.i16 v0
+    v2 = bmask.i64 v1
+    return v2
+}
+
+; check: v3 = bmask.i64 v0
+; check: return v3
+
+function %sextend_bmask(i16) -> i64 {
+block0(v0: i16):
+    v1 = bmask.i32 v0
+    v2 = sextend.i64 v1
+    return v2
+}
+
+; check: v3 = bmask.i64 v0
+; check: return v3
+
+function %ireduce_bmask(i16) -> i8 {
+block0(v0: i16):
+    v1 = bmask.i32 v0
+    v2 = ireduce.i8 v1
+    return v2
+}
+
+; check: v3 = bmask.i8 v0
+; check: return v3
+
+
+function %icmp_i8_bmask(i8, i64, i64) -> i8 {
+block0(v0: i8, v1: i64, v2: i64):
+    v3 = icmp slt v1, v2
+    v4 = bmask.i8 v3
+    return v4
+}
+
+; check: v3 = icmp slt v1, v2
+; check: return v3
+
+
+function %icmp_i16_bmask(i16, i64, i64) -> i16 {
+block0(v0: i16, v1: i64, v2: i64):
+    v3 = icmp slt v1, v2
+    v4 = bmask.i16 v3
+    return v4
+}
+
+; check: v3 = icmp slt v1, v2
+; check: v5 = sextend.i16 v3
+; check: return v5
+
+
+function %fcmp_i8_bmask(i8, f64, f64) -> i8 {
+block0(v0: i8, v1: f64, v2: f64):
+    v3 = fcmp uno v1, v2
+    v4 = bmask.i8 v3
+    return v4
+}
+
+; check: v3 = fcmp uno v1, v2
+; check: return v3
+
+
+function %fcmp_i16_bmask(i16, f64, f64) -> i16 {
+block0(v0: i16, v1: f64, v2: f64):
+    v3 = fcmp uno v1, v2
+    v4 = bmask.i16 v3
+    return v4
+}
+
+; check: v3 = fcmp uno v1, v2
+; check: v5 = sextend.i16 v3
+; check: return v5
+
 
 function %double_bswap(i64) -> i64 {
 block0(v0: i64):
