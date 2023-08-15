@@ -1,16 +1,11 @@
-use super::{
-    abi::Aarch64ABI,
-    address::Address,
-    asm::{Assembler, Operand},
-    regs,
-};
+use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
     codegen::CodeGenContext,
     isa::reg::Reg,
     masm::{
-        CalleeKind, CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind,
-        ShiftKind,
+        CalleeKind, CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm,
+        RemKind, ShiftKind,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -21,29 +16,6 @@ pub(crate) struct MacroAssembler {
     asm: Assembler,
     /// Stack pointer offset.
     sp_offset: u32,
-}
-
-// Conversions between generic masm arguments and aarch64 operands.
-
-impl From<RegImm> for Operand {
-    fn from(rimm: RegImm) -> Self {
-        match rimm {
-            RegImm::Reg(r) => r.into(),
-            RegImm::Imm(imm) => Operand::Imm(imm),
-        }
-    }
-}
-
-impl From<Reg> for Operand {
-    fn from(reg: Reg) -> Self {
-        Operand::Reg(reg)
-    }
-}
-
-impl From<Address> for Operand {
-    fn from(addr: Address) -> Self {
-        Operand::Mem(addr)
-    }
 }
 
 impl MacroAssembler {
@@ -135,9 +107,14 @@ impl Masm for MacroAssembler {
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
         let src = match src {
-            RegImm::Imm(imm) => {
+            RegImm::Imm(v) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => unreachable!(),
+                };
                 let scratch = regs::scratch();
-                self.asm.load_constant(imm as u64, scratch);
+                self.asm.load_constant(imm, scratch);
                 scratch
             }
             RegImm::Reg(reg) => reg,
@@ -171,19 +148,80 @@ impl Masm for MacroAssembler {
     }
 
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
-        self.asm.mov(src.into(), dst.into(), size);
+        match (src, dst) {
+            (RegImm::Imm(v), RegImm::Reg(rd)) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => panic!(),
+                };
+
+                let scratch = regs::scratch();
+                self.asm.load_constant(imm as u64, scratch);
+                self.asm.mov_rr(scratch, rd, size);
+            }
+            (RegImm::Reg(rs), RegImm::Reg(rd)) => {
+                self.asm.mov_rr(rs, rd, size);
+            }
+            _ => Self::handle_invalid_two_form_operand_combination(src, dst),
+        }
     }
 
     fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        self.asm.add(rhs.into(), lhs.into(), dst.into(), size);
+        match (rhs, lhs, dst) {
+            (RegImm::Imm(v), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => unreachable!(),
+                };
+
+                self.asm.add_ir(imm, rn, rd, size);
+            }
+
+            (RegImm::Reg(rm), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+                self.asm.add_rrr(rm, rn, rd, size);
+            }
+            _ => Self::handle_invalid_three_form_operand_combination(dst, lhs, rhs),
+        }
     }
 
     fn sub(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        self.asm.sub(rhs.into(), lhs.into(), dst.into(), size);
+        match (rhs, lhs, dst) {
+            (RegImm::Imm(v), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => unreachable!(),
+                };
+
+                self.asm.sub_ir(imm, rn, rd, size);
+            }
+
+            (RegImm::Reg(rm), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+                self.asm.sub_rrr(rm, rn, rd, size);
+            }
+            _ => Self::handle_invalid_three_form_operand_combination(dst, lhs, rhs),
+        }
     }
 
     fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
-        self.asm.mul(rhs.into(), lhs.into(), dst.into(), size);
+        match (rhs, lhs, dst) {
+            (RegImm::Imm(v), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+                let imm = match v {
+                    I::I32(v) => v as u64,
+                    I::I64(v) => v,
+                    _ => unreachable!(),
+                };
+
+                self.asm.mul_ir(imm, rn, rd, size);
+            }
+
+            (RegImm::Reg(rm), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+                self.asm.mul_rrr(rm, rn, rd, size);
+            }
+            _ => Self::handle_invalid_three_form_operand_combination(dst, lhs, rhs),
+        }
     }
 
     fn and(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
@@ -231,7 +269,11 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn cmp_with_set(&mut self, _src: RegImm, _dst: RegImm, _kind: CmpKind, _size: OperandSize) {
+    fn cmp_with_set(&mut self, _src: RegImm, _dst: Reg, _kind: CmpKind, _size: OperandSize) {
+        todo!()
+    }
+
+    fn cmp(&mut self, _src: RegImm, _dest: Reg, _size: OperandSize) {
         todo!()
     }
 
@@ -289,5 +331,16 @@ impl MacroAssembler {
         let sp = regs::sp();
         let shadow_sp = regs::shadow_sp();
         self.asm.mov_rr(sp, shadow_sp, OperandSize::S64);
+    }
+
+    fn handle_invalid_two_form_operand_combination(src: RegImm, dst: RegImm) {
+        panic!("Invalid operand combination; src={:?}, dst={:?}", src, dst);
+    }
+
+    fn handle_invalid_three_form_operand_combination(dst: RegImm, lhs: RegImm, rhs: RegImm) {
+        panic!(
+            "Invalid operand combination; dst={:?}, lhs={:?}, rhs={:?}",
+            dst, lhs, rhs
+        );
     }
 }

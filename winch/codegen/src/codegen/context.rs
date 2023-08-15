@@ -119,8 +119,8 @@ impl<'a> CodeGenContext<'a> {
     ) {
         match src {
             Val::Reg(src) => masm.mov(RegImm::reg(*src), RegImm::reg(dst), size),
-            Val::I32(imm) => masm.mov(RegImm::imm((*imm).into()), RegImm::reg(dst), size),
-            Val::I64(imm) => masm.mov(RegImm::imm(*imm), RegImm::reg(dst), size),
+            Val::I32(imm) => masm.mov(RegImm::i32((*imm).into()), RegImm::reg(dst), size),
+            Val::I64(imm) => masm.mov(RegImm::i64(*imm), RegImm::reg(dst), size),
             Val::Local(index) => {
                 let slot = self
                     .frame
@@ -161,12 +161,7 @@ impl<'a> CodeGenContext<'a> {
                 .pop_i32_const()
                 .expect("i32 const value at stack top");
             let reg = self.pop_to_reg(masm, None, OperandSize::S32);
-            emit(
-                masm,
-                RegImm::reg(reg),
-                RegImm::imm(val as i64),
-                OperandSize::S32,
-            );
+            emit(masm, RegImm::reg(reg), RegImm::i32(val), OperandSize::S32);
             self.stack.push(Val::reg(reg));
         } else {
             let src = self.pop_to_reg(masm, None, OperandSize::S32);
@@ -190,7 +185,7 @@ impl<'a> CodeGenContext<'a> {
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
             let reg = self.pop_to_reg(masm, None, OperandSize::S64);
-            emit(masm, RegImm::reg(reg), RegImm::imm(val), OperandSize::S64);
+            emit(masm, RegImm::reg(reg), RegImm::i64(val), OperandSize::S64);
             self.stack.push(Val::reg(reg));
         } else {
             let src = self.pop_to_reg(masm, None, OperandSize::S64);
