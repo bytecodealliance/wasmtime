@@ -3771,10 +3771,17 @@ name = "wasmtime-wasi-nn"
 version = "13.0.0"
 dependencies = [
  "anyhow",
+ "hyper",
  "openvino",
+ "serde",
+ "serde_json",
  "thiserror",
  "walkdir",
+ "wasmtime",
+ "wasmtime-wasi",
  "wiggle",
+ "wit-bindgen",
+ "wit-component 0.13.1",
 ]
 
 [[package]]

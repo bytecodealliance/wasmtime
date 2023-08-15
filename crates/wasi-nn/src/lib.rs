@@ -2,7 +2,7 @@ mod api;
 mod ctx;
 mod r#impl;
 mod openvino;
-mod triton;
+mod kserve;
 mod witx;
 mod wit;
 
