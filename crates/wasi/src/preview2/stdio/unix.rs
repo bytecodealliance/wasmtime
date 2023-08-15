@@ -65,6 +65,12 @@ pub fn stdin() -> Stdin {
     handle
 }
 
+impl is_terminal::IsTerminal for Stdin {
+    fn is_terminal(&self) -> bool {
+        std::io::stdin().is_terminal()
+    }
+}
+
 #[async_trait::async_trait]
 impl crate::preview2::HostInputStream for Stdin {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {

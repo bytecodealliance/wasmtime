@@ -1,4 +1,7 @@
-use crate::bindings::wasi::cli_base::{stderr, stdin, stdout};
+use crate::bindings::wasi::cli::{
+    stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
+    terminal_stdout,
+};
 use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams::{self, InputStream, OutputStream};
 use crate::bindings::wasi::sockets::tcp;
@@ -32,7 +35,7 @@ impl Drop for Descriptor {
                 match &stream.type_ {
                     StreamType::File(file) => filesystem::drop_descriptor(file.fd),
                     StreamType::Socket(_) => unreachable!(),
-                    StreamType::Stdio => {}
+                    StreamType::Stdio(_) => {}
                 }
             }
             Descriptor::Closed(_) => {}
@@ -109,13 +112,27 @@ impl Streams {
 #[allow(dead_code)] // until Socket is implemented
 pub enum StreamType {
     /// Stream is used for implementing stdio.
-    Stdio,
+    Stdio(IsATTY),
 
     /// Streaming data with a file.
     File(File),
 
     /// Streaming data with a socket connection.
     Socket(tcp::TcpSocket),
+}
+
+pub enum IsATTY {
+    Yes,
+    No,
+}
+
+impl IsATTY {
+    pub fn filetype(&self) -> wasi::Filetype {
+        match self {
+            IsATTY::Yes => wasi::FILETYPE_CHARACTER_DEVICE,
+            IsATTY::No => wasi::FILETYPE_UNKNOWN,
+        }
+    }
 }
 
 #[repr(C)]
@@ -143,26 +160,47 @@ impl Descriptors {
         };
 
         let stdin = stdin::get_stdin();
+        let stdin_isatty = match terminal_stdin::get_terminal_stdin() {
+            Some(t) => {
+                terminal_input::drop_terminal_input(t);
+                IsATTY::Yes
+            }
+            None => IsATTY::No,
+        };
         let stdout = stdout::get_stdout();
+        let stdout_isatty = match terminal_stdout::get_terminal_stdout() {
+            Some(t) => {
+                terminal_output::drop_terminal_output(t);
+                IsATTY::Yes
+            }
+            None => IsATTY::No,
+        };
         let stderr = stderr::get_stderr();
         unsafe { set_stderr_stream(stderr) };
+        let stderr_isatty = match terminal_stderr::get_terminal_stderr() {
+            Some(t) => {
+                terminal_output::drop_terminal_output(t);
+                IsATTY::Yes
+            }
+            None => IsATTY::No,
+        };
 
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(Some(stdin)),
             output: Cell::new(None),
-            type_: StreamType::Stdio,
+            type_: StreamType::Stdio(stdin_isatty),
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(Some(stdout)),
-            type_: StreamType::Stdio,
+            type_: StreamType::Stdio(stdout_isatty),
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(Some(stderr)),
-            type_: StreamType::Stdio,
+            type_: StreamType::Stdio(stderr_isatty),
         }))
         .trapping_unwrap();
 

@@ -5,7 +5,7 @@ use wasmtime::{component::Linker, Config, Engine, Store};
 use wasmtime_wasi::preview2::{
     command::{add_to_linker, Command},
     pipe::MemoryOutputPipe,
-    DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 lazy_static::lazy_static! {
@@ -43,7 +43,9 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         if inherit_stdio {
             builder.inherit_stdio();
         } else {
-            builder.stdout(stdout.clone()).stderr(stderr.clone());
+            builder
+                .stdout(stdout.clone(), IsATTY::No)
+                .stderr(stderr.clone(), IsATTY::No);
         }
         builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);
@@ -80,6 +82,7 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         let (command, _instance) =
             Command::instantiate_async(&mut store, &get_component(name), &linker).await?;
         command
+            .wasi_cli_run()
             .call_run(&mut store)
             .await?
             .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
@@ -180,8 +183,8 @@ async fn interesting_paths() {
     run("interesting_paths", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn isatty() {
-    run("isatty", false).await.unwrap()
+async fn regular_file_isatty() {
+    run("regular_file_isatty", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn nofollow_errors() {
@@ -279,6 +282,19 @@ async fn sched_yield() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdio() {
     run("stdio", false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn stdio_isatty() {
+    // If the test process is setup such that stdio is a terminal:
+    if test_programs::stdio_is_terminal() {
+        // Inherit stdio, test asserts each is not tty:
+        run("stdio_isatty", true).await.unwrap()
+    }
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn stdio_not_isatty() {
+    // Don't inherit stdio, test asserts each is not tty:
+    run("stdio_not_isatty", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn symlink_create() {

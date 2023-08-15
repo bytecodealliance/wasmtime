@@ -1,6 +1,6 @@
-package wasi:preview
+package wasi:cli
 
-world command-extended {
+world command {
   import wasi:clocks/wall-clock
   import wasi:clocks/monotonic-clock
   import wasi:clocks/timezone
@@ -18,19 +18,15 @@ world command-extended {
   import wasi:random/insecure-seed
   import wasi:poll/poll
   import wasi:io/streams
-  import wasi:cli-base/environment
-  import wasi:cli-base/exit
-  import wasi:cli-base/stdin
-  import wasi:cli-base/stdout
-  import wasi:cli-base/stderr
-
-  // We should replace all others with `include self.command`
-  // as soon as the unioning of worlds is available:
-  // https://github.com/WebAssembly/component-model/issues/169
-  import wasi:logging/handler
-  import wasi:http/outgoing-handler
-
-  export run: func(
-    args: list<string>,
-  ) -> result
+  import environment
+  import exit
+  import stdin
+  import stdout
+  import stderr
+  import terminal-input
+  import terminal-output
+  import terminal-stdin
+  import terminal-stdout
+  import terminal-stderr
+  export run
 }

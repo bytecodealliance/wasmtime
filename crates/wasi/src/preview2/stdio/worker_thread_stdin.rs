@@ -91,6 +91,12 @@ pub fn stdin() -> Stdin {
     Stdin
 }
 
+impl is_terminal::IsTerminal for Stdin {
+    fn is_terminal(&self) -> bool {
+        std::io::stdin().is_terminal()
+    }
+}
+
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {

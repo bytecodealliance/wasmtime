@@ -36,6 +36,7 @@ pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, TablePollableExt};
 pub use self::random::{thread_rng, Deterministic};
+pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
 pub use self::stream::{HostInputStream, HostOutputStream, StreamState, TableStreamExt};
 pub use self::table::{OccupiedEntry, Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
@@ -122,11 +123,16 @@ pub mod bindings {
               import wasi:random/random
               import wasi:random/insecure
               import wasi:random/insecure-seed
-              import wasi:cli-base/environment
-              import wasi:cli-base/exit
-              import wasi:cli-base/stdin
-              import wasi:cli-base/stdout
-              import wasi:cli-base/stderr
+              import wasi:cli/environment
+              import wasi:cli/exit
+              import wasi:cli/stdin
+              import wasi:cli/stdout
+              import wasi:cli/stderr
+              import wasi:cli/terminal-input
+              import wasi:cli/terminal-output
+              import wasi:cli/terminal-stdin
+              import wasi:cli/terminal-stdout
+              import wasi:cli/terminal-stderr
             ",
         tracing: true,
         trappable_error_type: {
@@ -142,7 +148,7 @@ pub mod bindings {
         });
     }
 
-    pub use self::_internal_rest::wasi::{cli_base, random};
+    pub use self::_internal_rest::wasi::{cli, random};
     pub mod filesystem {
         pub use super::_internal_io::wasi::filesystem::types;
         pub use super::_internal_rest::wasi::filesystem::preopens;
