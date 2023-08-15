@@ -373,7 +373,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 7.2.0
+      QEMU_BUILD_VERSION: 8.0.4
     strategy:
       fail-fast: true
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
