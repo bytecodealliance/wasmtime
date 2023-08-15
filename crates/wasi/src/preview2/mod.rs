@@ -20,11 +20,11 @@ pub mod command;
 mod ctx;
 mod error;
 mod filesystem;
+mod host;
 pub mod pipe;
 mod poll;
 #[cfg(feature = "preview1-on-preview2")]
 pub mod preview1;
-mod preview2;
 mod random;
 mod stdio;
 mod stream;
