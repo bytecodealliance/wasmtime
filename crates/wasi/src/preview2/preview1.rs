@@ -3,7 +3,7 @@ use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
 use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::TableFsExt;
-use crate::preview2::preview2::filesystem::TableReaddirExt;
+use crate::preview2::host::filesystem::TableReaddirExt;
 use crate::preview2::{bindings, TableError, WasiView};
 use anyhow::{anyhow, bail, Context};
 use std::borrow::Borrow;
