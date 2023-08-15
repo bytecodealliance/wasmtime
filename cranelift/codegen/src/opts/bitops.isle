@@ -123,15 +123,5 @@
 (rule (simplify (sextend ty (bmask _ x))) (bmask ty x))
 (rule (simplify (ireduce ty (bmask _ x))) (bmask ty x))
 
-;; (bmask (icmp x)) can be replaced with (icmp x) or (sextend (icmp x))
-;; depending on the output type.
-(rule (simplify (bmask $I8 cmp @ (icmp cmp_ty cc x y))) cmp)
-(rule (simplify (bmask (ty_int_ref_16_to_64 ty) cmp @ (icmp cmp_ty cc x y))) (sextend ty cmp))
-
-;; the same applies to `fcmp`
-(rule (simplify (bmask $I8 cmp @ (fcmp cmp_ty cc x y))) cmp)
-(rule (simplify (bmask (ty_int_ref_16_to_64 ty) cmp @ (fcmp cmp_ty cc x y))) (sextend ty cmp))
-
-
 ;; (bswap (bswap x)) == x
 (rule (simplify (bswap ty (bswap ty x))) (subsume x))
