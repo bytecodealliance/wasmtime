@@ -210,6 +210,17 @@ block0(v0: i16, v1: f32, v2: f32):
 ; check:    v5 = select v0, v1, v2
 ; check:    return v5
 
+function %select_popcnt(i16, f32, f32) -> f32 {
+block0(v0: i16, v1: f32, v2: f32):
+    v3 = popcnt.i16 v0
+    v4 = select v3, v1, v2
+    return v4
+}
+
+; check: block0(v0: i16, v1: f32, v2: f32):
+; check:    v5 = select v0, v1, v2
+; check:    return v5
+
 
 
 function %select_to_bmask(i64) -> i8 {
