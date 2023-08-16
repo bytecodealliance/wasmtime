@@ -644,7 +644,7 @@ fn switch_image_and_non_image() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn instance_too_large() -> Result<()> {
     let mut pool = crate::small_pool_config();
-    pool.core_instance_size(16);
+    pool.max_core_instance_size(16);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
@@ -871,7 +871,7 @@ fn total_component_instances_limit() -> Result<()> {
 #[cfg(feature = "component-model")]
 fn component_instance_size_limit() -> Result<()> {
     let mut pool = crate::small_pool_config();
-    pool.component_instance_size(1);
+    pool.max_component_instance_size(1);
     let mut config = Config::new();
     config.wasm_component_model(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));

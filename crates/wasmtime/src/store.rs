@@ -292,7 +292,7 @@ pub struct StoreOpaque {
     runtime_limits: VMRuntimeLimits,
     instances: Vec<StoreInstance>,
     #[cfg(feature = "component-model")]
-    component_instances: Vec<crate::component::Instance>,
+    num_component_instances: usize,
     signal_handler: Option<Box<SignalHandler<'static>>>,
     externref_activations_table: VMExternRefActivationsTable,
     modules: ModuleRegistry,
@@ -464,7 +464,7 @@ impl<T> Store<T> {
                 runtime_limits: Default::default(),
                 instances: Vec::new(),
                 #[cfg(feature = "component-model")]
-                component_instances: Vec::new(),
+                num_component_instances: 0,
                 signal_handler: None,
                 externref_activations_table: VMExternRefActivationsTable::new(),
                 modules: ModuleRegistry::default(),
@@ -1592,7 +1592,12 @@ at https://bytecodealliance.org/security.
 
     #[cfg(feature = "component-model")]
     pub(crate) fn push_component_instance(&mut self, instance: crate::component::Instance) {
-        self.component_instances.push(instance);
+        // We don't actually need the instance itself right now, but it seems
+        // like something we will almost certainly eventually want to keep
+        // around, so force callers to provide it.
+        let _ = instance;
+
+        self.num_component_instances += 1;
     }
 }
 
@@ -2205,7 +2210,7 @@ impl Drop for StoreOpaque {
 
             #[cfg(feature = "component-model")]
             {
-                for _ in self.component_instances.iter() {
+                for _ in 0..self.num_component_instances {
                     allocator.decrement_component_instance_count();
                 }
             }

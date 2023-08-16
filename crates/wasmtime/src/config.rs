@@ -2027,13 +2027,13 @@ impl PoolingAllocationConfig {
     ///
     /// This provides an upper-bound on the total size of component
     /// metadata-related allocations, along with
-    /// [`PoolingAllocationConfig::component_instance_size`]. The upper bound is
+    /// [`PoolingAllocationConfig::max_component_instance_size`]. The upper bound is
     ///
     /// ```text
-    /// total_component_instances * component_instance_size
+    /// total_component_instances * max_component_instance_size
     /// ```
     ///
-    /// where `component_instance_size` is rounded up to the size and alignment
+    /// where `max_component_instance_size` is rounded up to the size and alignment
     /// of the internal representation of the metadata.
     pub fn total_component_instances(&mut self, count: u32) -> &mut Self {
         self.config.limits.total_component_instances = count;
@@ -2065,12 +2065,12 @@ impl PoolingAllocationConfig {
     /// [`PoolingAllocationConfig::total_component_instances`]. The upper bound is
     ///
     /// ```text
-    /// total_component_instances * component_instance_size
+    /// total_component_instances * max_component_instance_size
     /// ```
     ///
-    /// where `component_instance_size` is rounded up to the size and alignment
+    /// where `max_component_instance_size` is rounded up to the size and alignment
     /// of the internal representation of the metadata.
-    pub fn component_instance_size(&mut self, size: usize) -> &mut Self {
+    pub fn max_component_instance_size(&mut self, size: usize) -> &mut Self {
         self.config.limits.component_instance_size = size;
         self
     }
@@ -2081,7 +2081,7 @@ impl PoolingAllocationConfig {
     /// This method (along with
     /// [`PoolingAllocationConfig::max_memories_per_component`],
     /// [`PoolingAllocationConfig::max_tables_per_component`], and
-    /// [`PoolingAllocationConfig::component_instance_size`]) allows you to cap
+    /// [`PoolingAllocationConfig::max_component_instance_size`]) allows you to cap
     /// the amount of resources a single component allocation consumes.
     ///
     /// If a component will instantiate more core instances than `count`, then
@@ -2097,7 +2097,7 @@ impl PoolingAllocationConfig {
     /// This method (along with
     /// [`PoolingAllocationConfig::max_core_instances_per_component`],
     /// [`PoolingAllocationConfig::max_tables_per_component`], and
-    /// [`PoolingAllocationConfig::component_instance_size`]) allows you to cap
+    /// [`PoolingAllocationConfig::max_component_instance_size`]) allows you to cap
     /// the amount of resources a single component allocation consumes.
     ///
     /// If a component transitively contains more linear memories than `count`,
@@ -2113,7 +2113,7 @@ impl PoolingAllocationConfig {
     /// This method (along with
     /// [`PoolingAllocationConfig::max_core_instances_per_component`],
     /// [`PoolingAllocationConfig::max_memories_per_component`],
-    /// [`PoolingAllocationConfig::component_instance_size`]) allows you to cap
+    /// [`PoolingAllocationConfig::max_component_instance_size`]) allows you to cap
     /// the amount of resources a single component allocation consumes.
     ///
     /// If a component will transitively contains more tables than `count`, then
@@ -2176,13 +2176,13 @@ impl PoolingAllocationConfig {
     ///
     /// This provides an upper-bound on the total size of core instance
     /// metadata-related allocations, along with
-    /// [`PoolingAllocationConfig::core_instance_size`]. The upper bound is
+    /// [`PoolingAllocationConfig::max_core_instance_size`]. The upper bound is
     ///
     /// ```text
-    /// total_core_instances * core_instance_size
+    /// total_core_instances * max_core_instance_size
     /// ```
     ///
-    /// where `core_instance_size` is rounded up to the size and alignment of
+    /// where `max_core_instance_size` is rounded up to the size and alignment of
     /// the internal representation of the metadata.
     pub fn total_core_instances(&mut self, count: u32) -> &mut Self {
         self.config.limits.total_core_instances = count;
@@ -2214,12 +2214,12 @@ impl PoolingAllocationConfig {
     /// [`PoolingAllocationConfig::total_core_instances`]. The upper bound is
     ///
     /// ```text
-    /// total_core_instances * core_instance_size
+    /// total_core_instances * max_core_instance_size
     /// ```
     ///
-    /// where `core_instance_size` is rounded up to the size and alignment of
+    /// where `max_core_instance_size` is rounded up to the size and alignment of
     /// the internal representation of the metadata.
-    pub fn core_instance_size(&mut self, size: usize) -> &mut Self {
+    pub fn max_core_instance_size(&mut self, size: usize) -> &mut Self {
         self.config.limits.core_instance_size = size;
         self
     }

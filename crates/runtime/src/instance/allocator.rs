@@ -163,6 +163,19 @@ pub unsafe trait InstanceAllocatorImpl {
     /// Not all instance allocators will have limits for the maximum number of
     /// concurrent component instances that can be live at the same time, and
     /// these allocators may implement this method with a no-op.
+    //
+    // Note: It would be nice to have an associated type that on construction
+    // does the increment and on drop does the decrement but there are two
+    // problems with this:
+    //
+    // 1. This trait's implementations are always used as trait objects, and
+    //    associated types are not object safe.
+    //
+    // 2. We would want a parameterized `Drop` implementation so that we could
+    //    pass in the `InstaceAllocatorImpl` on drop, but this doesn't exist in
+    //    Rust. Therefore, we would be forced to add reference counting and
+    //    stuff like that to keep a handle on the instance allocator from this
+    //    theoretical type. That's a bummer.
     fn increment_component_instance_count(&self) -> Result<()>;
 
     /// The dual of `increment_component_instance_count`.
@@ -308,23 +321,23 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         let num_defined_tables = module.table_plans.len() - module.num_imported_tables;
         let mut tables = PrimaryMap::with_capacity(num_defined_tables);
 
-        let result = self
-            .allocate_memories(&mut request, &mut memories)
-            .and_then(|()| self.allocate_tables(&mut request, &mut tables));
-        if let Err(e) = result {
-            self.deallocate_memories(&mut memories);
-            self.deallocate_tables(&mut tables);
-            self.decrement_core_instance_count();
-            return Err(e);
-        }
-
-        unsafe {
-            Ok(Instance::new(
+        match (|| {
+            self.allocate_memories(&mut request, &mut memories)?;
+            self.allocate_tables(&mut request, &mut tables)?;
+            Ok(())
+        })() {
+            Ok(_) => Ok(Instance::new(
                 request,
                 memories,
                 tables,
                 &module.memory_plans,
-            ))
+            )),
+            Err(e) => {
+                self.deallocate_memories(&mut memories);
+                self.deallocate_tables(&mut tables);
+                self.decrement_core_instance_count();
+                Err(e)
+            }
         }
     }
 
@@ -392,6 +405,10 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         memories: &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
     ) {
         for (memory_index, (allocation_index, memory)) in mem::take(memories) {
+            // Because deallocating memory is infallible, we don't need to worry
+            // about leaking subsequent memories if the first memory failed to
+            // deallocate. If deallocating memory ever becomes fallible, we will
+            // need to be careful here!
             self.deallocate_memory(memory_index, allocation_index, memory);
         }
     }

@@ -1,5 +1,5 @@
 use super::{
-    index_allocator::{ModuleAffinityIndexAllocator, SlotId},
+    index_allocator::{MemoryInModule, ModuleAffinityIndexAllocator, SlotId},
     MemoryAllocationIndex,
 };
 use crate::{
@@ -17,9 +17,6 @@ use wasmtime_environ::{
 ///
 /// A linear memory is divided into accessible pages and guard pages.
 ///
-/// Each instance index into the pool returns an iterator over the base
-/// addresses of the instance's linear memories.
-///
 /// A diagram for this struct's fields is:
 ///
 /// ```ignore
@@ -35,7 +32,7 @@ use wasmtime_environ::{
 /// +-----------+--------+---+-----------+     +--------+---+-----------+
 /// |           |<------------------+---------------------------------->
 /// \           |                    \
-/// mapping     |     `max_instances * max_memories` memories
+/// mapping     |            `max_total_memories` memories
 ///            /
 ///    initial_memory_offset
 /// ```
@@ -65,6 +62,8 @@ pub struct MemoryPool {
     max_total_memories: usize,
     // The maximum number of memories that a single core module instance may
     // use.
+    //
+    // NB: this is needed for validation but does not affect the pool's size.
     memories_per_instance: usize,
     // How much linear memory, in bytes, to keep resident after resetting for
     // use with the next instance. This much memory will be `memset` to zero
@@ -114,9 +113,8 @@ impl MemoryPool {
             0
         };
 
-        // The entire allocation here is the size of each memory times the
-        // max memories per instance times the number of instances allowed in
-        // this pool, plus guard regions.
+        // The entire allocation here is the size of each memory (with guard
+        // regions) times the total number of memories in the pool.
         //
         // Note, though, that guard regions are required to be after each linear
         // memory. If the `guard_before_linear_memory` setting is specified,
@@ -214,7 +212,7 @@ impl MemoryPool {
                 request
                     .runtime_info
                     .unique_id()
-                    .map(|id| (id, memory_index)),
+                    .map(|id| MemoryInModule(id, memory_index)),
             )
             .map(|slot| MemoryAllocationIndex(u32::try_from(slot.index()).unwrap()))
             .ok_or_else(|| {
@@ -302,6 +300,18 @@ impl MemoryPool {
         // allocated further (the module is being dropped) so this shouldn't hit
         // any sort of infinite loop since this should be the final operation
         // working with `module`.
+        //
+        // TODO: We are given a module id, but key affinity by pair of module id
+        // and defined memory index. We are missing any defined memory index or
+        // count of how many memories the module defines here. Therefore, we
+        // probe up to the maximum number of memories per instance. This is fine
+        // because that maximum is generally relatively small. If this method
+        // somehow ever gets hot because of unnecessary probing, we should
+        // either pass in the actual number of defined memories for the given
+        // module to this method, or keep a side table of all slots that are
+        // associated with a module (not just module and memory). The latter
+        // would require care to make sure that its maintenance wouldn't be too
+        // expensive for normal allocation/free operations.
         for i in 0..self.memories_per_instance {
             use wasmtime_environ::EntityRef;
             let memory_index = DefinedMemoryIndex::new(i);

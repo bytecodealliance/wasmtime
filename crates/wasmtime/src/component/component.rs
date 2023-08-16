@@ -247,6 +247,14 @@ impl Component {
             None => bincode::deserialize(code_memory.wasmtime_info())?,
         };
 
+        // Validate that the component can be used with the current instance
+        // allocator.
+        engine.allocator().validate_component(
+            &info.component,
+            &VMComponentOffsets::new(HostPtr, &info.component),
+            &|module_index| &static_modules[module_index].module,
+        )?;
+
         // Create a signature registration with the `Engine` for all trampolines
         // and core wasm types found within this component, both for the
         // component and for all included core wasm modules.
@@ -257,14 +265,6 @@ impl Component {
         // modules as well as the final component.
         let types = Arc::new(types);
         let code = Arc::new(CodeObject::new(code_memory, signatures, types.into()));
-
-        // Validate that the component can be used with the current instance
-        // allocator.
-        engine.allocator().validate_component(
-            &info.component,
-            &VMComponentOffsets::new(HostPtr, &info.component),
-            &|module_index| &static_modules[module_index].module,
-        )?;
 
         // Convert all information about static core wasm modules into actual
         // `Module` instances by converting each `CompiledModuleInfo`, the

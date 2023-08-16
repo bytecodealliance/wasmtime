@@ -46,11 +46,11 @@ impl PoolingAllocationConfig {
         cfg.memory_pages(self.memory_pages);
         cfg.table_elements(self.table_elements);
 
-        cfg.component_instance_size(self.component_instance_size);
+        cfg.max_component_instance_size(self.component_instance_size);
         cfg.max_memories_per_component(self.max_memories_per_component);
         cfg.max_tables_per_component(self.max_tables_per_component);
 
-        cfg.core_instance_size(self.core_instance_size);
+        cfg.max_core_instance_size(self.core_instance_size);
         cfg.max_memories_per_module(self.max_memories_per_module);
         cfg.max_tables_per_module(self.max_tables_per_module);
 
