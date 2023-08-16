@@ -741,7 +741,7 @@ fn populate_with_wasi(
                 Arc::get_mut(host.wasi_nn.as_mut().unwrap())
                     .expect("wasi-nn is not implemented with multi-threading support")
             })?;
-            store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::new()?));
+            store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::default()));
         }
     }
 

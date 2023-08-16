@@ -1,36 +1,36 @@
 //! Implements the host state for the `wasi-nn` API: [WasiNnCtx].
 
-use crate::backend::{
-    self, Backend, BackendError, BackendExecutionContext, BackendGraph, BackendKind,
-};
+use crate::backend::{self, Backend, BackendError, BackendKind};
 use crate::wit::types::GraphEncoding;
-use std::collections::HashMap;
-use std::hash::Hash;
+use crate::{ExecutionContext, Graph};
+use std::{collections::HashMap, hash::Hash};
 use thiserror::Error;
 use wiggle::GuestError;
 
+type Backends = HashMap<BackendKind, Box<dyn Backend>>;
 type GraphId = u32;
 type GraphExecutionContextId = u32;
 
 /// Capture the state necessary for calling into the backend ML libraries.
 pub struct WasiNnCtx {
-    pub(crate) backends: HashMap<BackendKind, Box<dyn Backend>>,
-    pub(crate) graphs: Table<GraphId, Box<dyn BackendGraph>>,
-    pub(crate) executions: Table<GraphExecutionContextId, Box<dyn BackendExecutionContext>>,
+    pub(crate) backends: Backends,
+    pub(crate) graphs: Table<GraphId, Graph>,
+    pub(crate) executions: Table<GraphExecutionContextId, ExecutionContext>,
 }
 
 impl WasiNnCtx {
     /// Make a new context from the default state.
-    pub fn new() -> WasiNnResult<Self> {
-        let mut backends = HashMap::new();
-        for (kind, backend) in backend::list() {
-            backends.insert(kind, backend);
-        }
-        Ok(Self {
+    pub fn new(backends: Backends) -> Self {
+        Self {
             backends,
             graphs: Table::default(),
             executions: Table::default(),
-        })
+        }
+    }
+}
+impl Default for WasiNnCtx {
+    fn default() -> Self {
+        WasiNnCtx::new(backend::list().into_iter().collect())
     }
 }
 
@@ -59,6 +59,8 @@ pub enum UsageError {
     InvalidExecutionContextHandle,
     #[error("Not enough memory to copy tensor data of size: {0}")]
     NotEnoughMemory(u32),
+    #[error("No graph found with name: {0}")]
+    NotFound(String),
 }
 
 pub(crate) type WasiNnResult<T> = std::result::Result<T, WasiNnError>;
@@ -105,6 +107,6 @@ mod test {
 
     #[test]
     fn instantiate() {
-        WasiNnCtx::new().unwrap();
+        WasiNnCtx::default();
     }
 }

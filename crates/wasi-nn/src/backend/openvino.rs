@@ -2,6 +2,7 @@
 
 use super::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
+use crate::{ExecutionContext, Graph};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
 use std::sync::Arc;
 
@@ -15,11 +16,7 @@ impl Backend for OpenvinoBackend {
         "openvino"
     }
 
-    fn load(
-        &mut self,
-        builders: &[&[u8]],
-        target: ExecutionTarget,
-    ) -> Result<Box<dyn BackendGraph>, BackendError> {
+    fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
         if builders.len() != 2 {
             return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()).into());
         }
@@ -54,8 +51,9 @@ impl Backend for OpenvinoBackend {
 
         let exec_network =
             core.load_network(&cnn_network, map_execution_target_to_string(target))?;
-
-        Ok(Box::new(OpenvinoGraph(Arc::new(cnn_network), exec_network)))
+        let box_: Box<dyn BackendGraph> =
+            Box::new(OpenvinoGraph(Arc::new(cnn_network), exec_network));
+        Ok(box_.into())
     }
 }
 
@@ -65,12 +63,11 @@ unsafe impl Send for OpenvinoGraph {}
 unsafe impl Sync for OpenvinoGraph {}
 
 impl BackendGraph for OpenvinoGraph {
-    fn init_execution_context(&mut self) -> Result<Box<dyn BackendExecutionContext>, BackendError> {
+    fn init_execution_context(&mut self) -> Result<ExecutionContext, BackendError> {
         let infer_request = self.1.create_infer_request()?;
-        Ok(Box::new(OpenvinoExecutionContext(
-            self.0.clone(),
-            infer_request,
-        )))
+        let box_: Box<dyn BackendExecutionContext> =
+            Box::new(OpenvinoExecutionContext(self.0.clone(), infer_request));
+        Ok(box_.into())
     }
 }
 
@@ -145,5 +142,6 @@ fn map_tensor_type_to_precision(tensor_type: TensorType) -> openvino::Precision 
         TensorType::Fp32 => Precision::FP32,
         TensorType::U8 => Precision::U8,
         TensorType::I32 => Precision::I32,
+        TensorType::Bf16 => todo!("not yet supported in `openvino` bindings"),
     }
 }

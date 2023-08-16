@@ -13,7 +13,6 @@
 //!
 //! [`types`]: crate::wit::types
 
-use crate::backend::BackendKind;
 use crate::ctx::{UsageError, WasiNnCtx, WasiNnError, WasiNnResult as Result};
 use wiggle::GuestPtr;
 
@@ -23,7 +22,7 @@ pub use gen::wasi_ephemeral_nn::add_to_linker;
 mod gen {
     use super::*;
     wiggle::from_witx!({
-        witx: ["$WASI_ROOT/phases/ephemeral/witx/wasi_ephemeral_nn.witx"],
+        witx: ["$WASI_ROOT/wasi-nn.witx"],
         errors: { nn_errno => WasiNnError }
     });
 
@@ -59,7 +58,7 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         encoding: gen::types::GraphEncoding,
         target: gen::types::ExecutionTarget,
     ) -> Result<gen::types::Graph> {
-        let graph = if let Some(backend) = self.backends.get_mut(&encoding.into()) {
+        let graph = if let Some(backend) = self.backends.get_mut(&encoding.try_into()?) {
             // Retrieve all of the "builder lists" from the Wasm memory (see
             // $graph_builder_array) as slices for a backend to operate on.
             let mut slices = vec![];
@@ -77,6 +76,10 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         };
         let graph_id = self.graphs.insert(graph);
         Ok(graph_id.into())
+    }
+
+    fn load_by_name<'b>(&mut self, _name: &wiggle::GuestPtr<'b, str>) -> Result<gen::types::Graph> {
+        todo!()
     }
 
     fn init_execution_context(
@@ -140,10 +143,12 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
 
 // Implement some conversion from `witx::types::*` to this crate's version.
 
-impl From<gen::types::GraphEncoding> for BackendKind {
-    fn from(value: gen::types::GraphEncoding) -> Self {
+impl TryFrom<gen::types::GraphEncoding> for crate::backend::BackendKind {
+    type Error = UsageError;
+    fn try_from(value: gen::types::GraphEncoding) -> std::result::Result<Self, Self::Error> {
         match value {
-            gen::types::GraphEncoding::Openvino => BackendKind::OpenVINO,
+            gen::types::GraphEncoding::Openvino => Ok(crate::backend::BackendKind::OpenVINO),
+            _ => Err(UsageError::InvalidEncoding(value.into())),
         }
     }
 }
@@ -160,6 +165,13 @@ impl From<gen::types::GraphEncoding> for crate::wit::types::GraphEncoding {
     fn from(value: gen::types::GraphEncoding) -> Self {
         match value {
             gen::types::GraphEncoding::Openvino => crate::wit::types::GraphEncoding::Openvino,
+            gen::types::GraphEncoding::Onnx => crate::wit::types::GraphEncoding::Onnx,
+            gen::types::GraphEncoding::Tensorflow => crate::wit::types::GraphEncoding::Tensorflow,
+            gen::types::GraphEncoding::Pytorch => crate::wit::types::GraphEncoding::Pytorch,
+            gen::types::GraphEncoding::Tensorflowlite => {
+                crate::wit::types::GraphEncoding::Tensorflowlite
+            }
+            gen::types::GraphEncoding::Autodetect => todo!("autodetect not supported"),
         }
     }
 }
