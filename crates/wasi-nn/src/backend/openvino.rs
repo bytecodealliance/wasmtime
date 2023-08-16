@@ -77,7 +77,7 @@ impl BackendGraph for OpenvinoGraph {
 struct OpenvinoExecutionContext(Arc<openvino::CNNNetwork>, openvino::InferRequest);
 
 impl BackendExecutionContext for OpenvinoExecutionContext {
-    fn set_input<'a>(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
+    fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
         let input_name = self.0.get_input_name(index as usize)?;
 
         // Construct the blob structure. TODO: there must be some good way to
