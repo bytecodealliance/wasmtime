@@ -654,7 +654,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn amode_offset(&mut self, addr: &Amode, offset: u32) -> Amode {
+    fn amode_offset(&mut self, addr: &Amode, offset: i32) -> Amode {
         addr.offset(offset)
     }
 

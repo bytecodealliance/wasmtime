@@ -1,0 +1,74 @@
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 skylake
+target riscv64 has_v
+
+;; These tests test integer fused multiply add/subtract instructions.
+
+function %iadd_imul_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+    v3 = imul v0, v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_imul_i64x2([0 1], [10 10], [20 20]) == [20 30]
+; run: %iadd_imul_i64x2([0 1], [0 0x80000000_00000000], [0 -1]) == [0 0x7FFFFFFF_FFFFFFFF]
+; run: %iadd_imul_i64x2([0 1], [0 0xFFFFFFFF_FFFFFFFF], [0 1]) == [0 0]
+
+function %iadd_imul_splat_i64x2(i64x2, i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64):
+    v3 = splat.i64x2 v2
+    v4 = imul v0, v1
+    v5 = iadd v4, v3
+    return v5
+}
+; run: %iadd_imul_splat_i64x2([0 1], [10 10], 20) == [20 30]
+; run: %iadd_imul_splat_i64x2([0 1], [0 0x80000000_00000000], -1) == [-1 0x7FFFFFFF_FFFFFFFF]
+; run: %iadd_imul_splat_i64x2([0 1], [0 0xFFFFFFFF_FFFFFFFF], 1) == [1 0]
+
+function %iadd_ineg_imul_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+    v3 = imul v0, v1
+    v4 = ineg v3
+    v5 = iadd v2, v4
+    return v5
+}
+; run: %iadd_ineg_imul_i64x2([0 1], [10 10], [20 20]) == [20 10]
+; run: %iadd_ineg_imul_i64x2([0 1], [0 0x80000000_00000000], [0 -1]) == [0 0x7FFFFFFF_FFFFFFFF]
+; run: %iadd_ineg_imul_i64x2([0 1], [0 0xFFFFFFFF_FFFFFFFF], [0 1]) == [0 2]
+
+function %iadd_ineg_imul_splat_i64x2(i64x2, i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64):
+    v3 = splat.i64x2 v2
+    v4 = imul v0, v1
+    v5 = ineg v4
+    v6 = iadd v5, v3
+    return v6
+}
+; run: %iadd_ineg_imul_splat_i64x2([0 1], [10 10], 20) == [20 10]
+; run: %iadd_ineg_imul_splat_i64x2([0 1], [0 0x80000000_00000000], -1) == [-1 0x7FFFFFFF_FFFFFFFF]
+; run: %iadd_ineg_imul_splat_i64x2([0 1], [0 0xFFFFFFFF_FFFFFFFF], 1) == [1 2]
+
+function %isub_imul_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2):
+    v3 = imul v0, v1
+    v4 = isub v2, v3
+    return v4
+}
+; run: %isub_imul_i64x2([0 1], [10 10], [20 20]) == [20 10]
+; run: %isub_imul_i64x2([0 1], [0 0x80000000_00000000], [0 -1]) == [0 0x7FFFFFFF_FFFFFFFF]
+; run: %isub_imul_i64x2([0 1], [0 0xFFFFFFFF_FFFFFFFF], [0 1]) == [0 2]
+
+
+function %isub_imul_splat_i64x2(i64x2, i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64):
+    v3 = splat.i64x2 v2
+    v4 = imul v0, v1
+    v5 = isub v4, v3
+    return v5
+}
+; run: %isub_imul_splat_i64x2([0 1], [10 10], 20) == [-20 -10]
+; run: %isub_imul_splat_i64x2([0 1], [0 0x80000000_00000000], -1) == [1 0x80000000_00000001]
+; run: %isub_imul_splat_i64x2([0 1], [0 0xFFFFFFFF_FFFFFFFF], 1) == [-1 -2]

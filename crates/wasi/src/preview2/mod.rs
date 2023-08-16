@@ -20,11 +20,11 @@ pub mod command;
 mod ctx;
 mod error;
 mod filesystem;
+mod host;
 pub mod pipe;
 mod poll;
 #[cfg(feature = "preview1-on-preview2")]
 pub mod preview1;
-mod preview2;
 mod random;
 mod stdio;
 mod stream;
@@ -36,6 +36,7 @@ pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, TablePollableExt};
 pub use self::random::{thread_rng, Deterministic};
+pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
 pub use self::stream::{HostInputStream, HostOutputStream, StreamState, TableStreamExt};
 pub use self::table::{OccupiedEntry, Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
@@ -49,12 +50,12 @@ pub mod bindings {
                 interfaces: "
               import wasi:poll/poll
               import wasi:io/streams
-              import wasi:filesystem/filesystem
+              import wasi:filesystem/types
             ",
                 tracing: true,
                 trappable_error_type: {
                     "wasi:io/streams"::"stream-error": Error,
-                    "wasi:filesystem/filesystem"::"error-code": Error,
+                    "wasi:filesystem/types"::"error-code": Error,
                 },
                 with: {
                     "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
@@ -99,53 +100,59 @@ pub mod bindings {
             interfaces: "
               import wasi:poll/poll
               import wasi:io/streams
-              import wasi:filesystem/filesystem
+              import wasi:filesystem/types
             ",
             tracing: true,
             async: true,
             trappable_error_type: {
                 "wasi:io/streams"::"stream-error": Error,
-                "wasi:filesystem/filesystem"::"error-code": Error,
+                "wasi:filesystem/types"::"error-code": Error,
             },
             with: {
                 "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
             }
         });
     }
-    pub use self::_internal_io::wasi::{filesystem, io, poll};
+    pub use self::_internal_io::wasi::{io, poll};
 
     pub(crate) mod _internal_rest {
         wasmtime::component::bindgen!({
         path: "wit",
         interfaces: "
-              import wasi:clocks/wall-clock
-              import wasi:clocks/monotonic-clock
-              import wasi:clocks/timezone
+              import wasi:filesystem/preopens
               import wasi:random/random
               import wasi:random/insecure
               import wasi:random/insecure-seed
-              import wasi:cli-base/environment
-              import wasi:cli-base/preopens
-              import wasi:cli-base/exit
-              import wasi:cli-base/stdin
-              import wasi:cli-base/stdout
-              import wasi:cli-base/stderr
+              import wasi:cli/environment
+              import wasi:cli/exit
+              import wasi:cli/stdin
+              import wasi:cli/stdout
+              import wasi:cli/stderr
+              import wasi:cli/terminal-input
+              import wasi:cli/terminal-output
+              import wasi:cli/terminal-stdin
+              import wasi:cli/terminal-stdout
+              import wasi:cli/terminal-stderr
             ",
         tracing: true,
         trappable_error_type: {
-            "wasi:filesystem/filesystem"::"error-code": Error,
+            "wasi:filesystem/types"::"error-code": Error,
             "wasi:io/streams"::"stream-error": Error,
         },
         with: {
             "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
             "wasi:poll/poll": crate::preview2::bindings::poll::poll,
             "wasi:io/streams": crate::preview2::bindings::io::streams,
-            "wasi:filesystem/filesystem": crate::preview2::bindings::filesystem::filesystem
+            "wasi:filesystem/types": crate::preview2::bindings::filesystem::types,
         }
         });
     }
 
-    pub use self::_internal_rest::wasi::*;
+    pub use self::_internal_rest::wasi::{cli, random};
+    pub mod filesystem {
+        pub use super::_internal_io::wasi::filesystem::types;
+        pub use super::_internal_rest::wasi::filesystem::preopens;
+    }
 }
 
 pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =

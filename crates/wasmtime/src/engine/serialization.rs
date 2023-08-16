@@ -21,7 +21,7 @@
 //! other random ELF files, as well as provide better error messages for
 //! using wasmtime artifacts across versions.
 
-use crate::{Engine, ModuleVersionStrategy};
+use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use anyhow::{anyhow, bail, Context, Result};
 use object::write::{Object, StandardSegment};
 use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
@@ -143,6 +143,23 @@ pub fn check_compatible(engine: &Engine, mmap: &MmapVec, expected: ObjectKind) -
         ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
     bincode::deserialize::<Metadata>(data)?.check_compatible(engine)
+}
+
+pub fn detect_precompiled(bytes: &[u8]) -> Option<Precompiled> {
+    let obj = File::parse(bytes).ok()?;
+    match obj.flags() {
+        FileFlags::Elf {
+            os_abi: obj::ELFOSABI_WASMTIME,
+            abi_version: 0,
+            e_flags: obj::EF_WASMTIME_MODULE,
+        } => Some(Precompiled::Module),
+        FileFlags::Elf {
+            os_abi: obj::ELFOSABI_WASMTIME,
+            abi_version: 0,
+            e_flags: obj::EF_WASMTIME_COMPONENT,
+        } => Some(Precompiled::Component),
+        _ => None,
+    }
 }
 
 #[derive(Serialize, Deserialize)]

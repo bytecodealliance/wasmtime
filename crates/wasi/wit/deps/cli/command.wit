@@ -1,8 +1,11 @@
-world reactor {
+package wasi:cli
+
+world command {
   import wasi:clocks/wall-clock
   import wasi:clocks/monotonic-clock
   import wasi:clocks/timezone
-  import wasi:filesystem/filesystem
+  import wasi:filesystem/types
+  import wasi:filesystem/preopens
   import wasi:sockets/instance-network
   import wasi:sockets/ip-name-lookup
   import wasi:sockets/network
@@ -11,14 +14,19 @@ world reactor {
   import wasi:sockets/udp-create-socket
   import wasi:sockets/udp
   import wasi:random/random
+  import wasi:random/insecure
+  import wasi:random/insecure-seed
   import wasi:poll/poll
   import wasi:io/streams
-  import wasi:logging/handler
-  import wasi:http/outgoing-handler
-  import wasi:cli-base/environment
-  import wasi:cli-base/preopens
-  import wasi:cli-base/exit
-  import wasi:cli-base/stdin
-  import wasi:cli-base/stdout
-  import wasi:cli-base/stderr
+  import environment
+  import exit
+  import stdin
+  import stdout
+  import stderr
+  import terminal-input
+  import terminal-output
+  import terminal-stdin
+  import terminal-stdout
+  import terminal-stderr
+  export run
 }

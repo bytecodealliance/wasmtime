@@ -47,9 +47,9 @@
 (decl u32_nonnegative (u32) u32)
 (extern extractor u32_nonnegative u32_nonnegative)
 
-;; Extractor that pulls apart an Offset32 into a u32 with the raw
+;; Extractor that pulls apart an Offset32 into a i32 with the raw
 ;; signed-32-bit twos-complement bits.
-(decl offset32 (u32) Offset32)
+(decl offset32 (i32) Offset32)
 (extern extractor infallible offset32 offset32)
 
 ;; Pure/fallible constructor that tests if one u32 is less than or
@@ -68,7 +68,7 @@
 (extern constructor u8_lt u8_lt)
 
 ;; Get a signed 32-bit immediate in an u32 from an Imm64, if possible.
-(decl simm32 (u32) Imm64)
+(decl simm32 (i32) Imm64)
 (extern extractor simm32 simm32)
 
 ;; Get an unsigned 8-bit immediate in a u8 from an Imm64, if possible.
@@ -91,6 +91,10 @@
 (decl pure u32_as_u64 (u32) u64)
 (extern constructor u32_as_u64 u32_as_u64)
 (convert u32 u64 u32_as_u64)
+
+(decl pure i32_as_i64 (i32) i64)
+(extern constructor i32_as_i64 i32_as_i64)
+(convert i32 i64 i32_as_i64)
 
 (decl pure i64_as_u64 (i64) u64)
 (extern constructor i64_as_u64 i64_as_u64)
@@ -129,7 +133,7 @@
 
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
 ;; as signed values, and fails to match on overflow.
-(decl pure partial s32_add_fallible (u32 u32) u32)
+(decl pure partial s32_add_fallible (i32 i32) i32)
 (extern constructor s32_add_fallible s32_add_fallible)
 
 (decl pure u64_add (u64 u64) u64)
@@ -532,12 +536,12 @@
 (extern extractor ty_dyn128_int ty_dyn128_int)
 
 ;; Convert an `Offset32` to a primitive number.
-(decl pure offset32_to_u32 (Offset32) u32)
-(extern constructor offset32_to_u32 offset32_to_u32)
+(decl pure offset32_to_i32 (Offset32) i32)
+(extern constructor offset32_to_i32 offset32_to_i32)
 
 ;; Convert a number to an `Offset32`
-(decl pure u32_to_offset32 (u32) Offset32)
-(extern constructor u32_to_offset32 u32_to_offset32)
+(decl pure i32_to_offset32 (i32) Offset32)
+(extern constructor i32_to_offset32 i32_to_offset32)
 
 ;; This is a direct import of `IntCC::unsigned`.
 ;; Get the corresponding IntCC with the signed component removed.
@@ -590,5 +594,5 @@
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(convert Offset32 u32 offset32_to_u32)
-(convert u32 Offset32 u32_to_offset32)
+(convert Offset32 i32 offset32_to_i32)
+(convert i32 Offset32 i32_to_offset32)

@@ -1,8 +1,8 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
-use crate::bindings::wasi::cli_base::exit;
+use crate::bindings::wasi::cli::exit;
 use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
-use crate::bindings::wasi::filesystem::filesystem;
+use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams;
 use crate::bindings::wasi::poll::poll;
 use crate::bindings::wasi::random::random;
@@ -25,13 +25,13 @@ compile_error!("only one of the `command` and `reactor` features may be selected
 mod macros;
 
 mod descriptors;
-use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
+use crate::descriptors::{Descriptor, Descriptors, IsATTY, StreamType, Streams};
 
 pub mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen::generate!({
         path: "../wasi/wit",
-        world: "wasi:preview/command",
+        world: "wasi:cli/command",
         std_feature,
         raw_strings,
         // Automatically generated bindings for these functions will allocate
@@ -46,7 +46,7 @@ pub mod bindings {
     #[cfg(feature = "reactor")]
     wit_bindgen::generate!({
         path: "../wasi/wit",
-        world: "wasi:preview/reactor",
+        world: "wasmtime:wasi/preview1-adapter-reactor",
         std_feature,
         raw_strings,
         // Automatically generated bindings for these functions will allocate
@@ -59,7 +59,7 @@ pub mod bindings {
     });
 }
 
-#[no_mangle]
+#[export_name = "wasi:cli/run#run"]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
@@ -564,14 +564,8 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
         Descriptor::Streams(Streams {
             input,
             output,
-            type_: StreamType::Socket(_),
-        })
-        | Descriptor::Streams(Streams {
-            input,
-            output,
-            type_: StreamType::Stdio,
+            type_: StreamType::Stdio(isatty),
         }) => {
-            let fs_filetype = FILETYPE_CHARACTER_DEVICE;
             let fs_flags = 0;
             let mut fs_rights_base = 0;
             if input.get().is_some() {
@@ -582,7 +576,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             }
             let fs_rights_inheriting = fs_rights_base;
             stat.write(Fdstat {
-                fs_filetype,
+                fs_filetype: isatty.filetype(),
                 fs_flags,
                 fs_rights_base,
                 fs_rights_inheriting,
@@ -590,6 +584,11 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             Ok(())
         }
         Descriptor::Closed(_) => Err(ERRNO_BADF),
+        Descriptor::Streams(Streams {
+            input,
+            output,
+            type_: StreamType::Socket(_),
+        }) => unreachable!(),
     })
 }
 
@@ -641,10 +640,11 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
                 ..
             }) => {
                 let stat = filesystem::stat(file.fd)?;
+                let metadata_hash = filesystem::metadata_hash(file.fd)?;
                 let filetype = stat.type_.into();
                 *buf = Filestat {
-                    dev: stat.device,
-                    ino: stat.inode,
+                    dev: 1,
+                    ino: metadata_hash.lower,
                     filetype,
                     nlink: stat.link_count,
                     size: stat.size,
@@ -656,13 +656,13 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
             }
             // Stdio is all zero fields, except for filetype character device
             Descriptor::Streams(Streams {
-                type_: StreamType::Stdio,
+                type_: StreamType::Stdio(isatty),
                 ..
             }) => {
                 *buf = Filestat {
                     dev: 0,
                     ino: 0,
-                    filetype: FILETYPE_CHARACTER_DEVICE,
+                    filetype: isatty.filetype(),
                     nlink: 0,
                     size: 0,
                     atim: 0,
@@ -959,8 +959,6 @@ pub unsafe extern "C" fn fd_readdir(
         // for it.
         let ds = state.descriptors();
         let dir = ds.get_dir(fd)?;
-        let stat = filesystem::stat(dir.fd)?;
-        let dot_inode = stat.inode;
 
         let mut iter;
         match stream {
@@ -974,7 +972,7 @@ pub unsafe extern "C" fn fd_readdir(
                     state,
                     cookie,
                     use_cache: true,
-                    dot_inode,
+                    dir_descriptor: dir.fd,
                 }
             }
 
@@ -989,7 +987,7 @@ pub unsafe extern "C" fn fd_readdir(
                     cookie: wasi::DIRCOOKIE_START,
                     use_cache: false,
                     stream: DirectoryEntryStream(filesystem::read_directory(dir.fd)?),
-                    dot_inode,
+                    dir_descriptor: dir.fd,
                 };
 
                 // Skip to the entry that is requested by the `cookie`
@@ -1068,7 +1066,7 @@ pub unsafe extern "C" fn fd_readdir(
         use_cache: bool,
         cookie: Dircookie,
         stream: DirectoryEntryStream,
-        dot_inode: wasi::Inode,
+        dir_descriptor: filesystem::Descriptor,
     }
 
     impl<'a> Iterator for DirectoryEntryIterator<'a> {
@@ -1085,9 +1083,13 @@ pub unsafe extern "C" fn fd_readdir(
             // Preview2 excludes them, so re-add them.
             match current_cookie {
                 0 => {
+                    let metadata_hash = match filesystem::metadata_hash(self.dir_descriptor) {
+                        Ok(h) => h,
+                        Err(e) => return Some(Err(e.into())),
+                    };
                     let dirent = wasi::Dirent {
                         d_next: self.cookie,
-                        d_ino: self.dot_inode,
+                        d_ino: metadata_hash.lower,
                         d_type: wasi::FILETYPE_DIRECTORY,
                         d_namlen: 1,
                     };
@@ -1127,11 +1129,18 @@ pub unsafe extern "C" fn fd_readdir(
                 Err(e) => return Some(Err(e.into())),
             };
 
-            let filesystem::DirectoryEntry { inode, type_, name } = entry;
+            let filesystem::DirectoryEntry { type_, name } = entry;
+            let d_ino = filesystem::metadata_hash_at(
+                self.dir_descriptor,
+                filesystem::PathFlags::empty(),
+                &name,
+            )
+            .map(|h| h.lower)
+            .unwrap_or(0);
             let name = ManuallyDrop::new(name);
             let dirent = wasi::Dirent {
                 d_next: self.cookie,
-                d_ino: inode.unwrap_or(0),
+                d_ino,
                 d_namlen: u32::try_from(name.len()).trapping_unwrap(),
                 d_type: type_.into(),
             };
@@ -1330,10 +1339,11 @@ pub unsafe extern "C" fn path_filestat_get(
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
         let stat = filesystem::stat_at(file.fd, at_flags, path)?;
+        let metadata_hash = filesystem::metadata_hash_at(file.fd, at_flags, path)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
-            dev: stat.device,
-            ino: stat.inode,
+            dev: 1,
+            ino: metadata_hash.lower,
             filetype,
             nlink: stat.link_count,
             size: stat.size,
@@ -1837,7 +1847,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                                }
                                                */
                             }
-                            StreamType::Stdio => {
+                            StreamType::Stdio(_) => {
                                 error = ERRNO_SUCCESS;
                                 nbytes = 1;
                                 flags = 0;
@@ -1854,7 +1864,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match streams.type_ {
-                            StreamType::File(_) | StreamType::Stdio => {
+                            StreamType::File(_) | StreamType::Stdio(_) => {
                                 error = ERRNO_SUCCESS;
                                 nbytes = 1;
                                 flags = 0;
@@ -2419,7 +2429,7 @@ impl State {
 
     fn get_environment(&self) -> &[StrTuple] {
         if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli-base/environment")]
+            #[link(wasm_import_module = "wasi:cli/environment")]
             extern "C" {
                 #[link_name = "get-environment"]
                 fn get_environment_import(rval: *mut StrTupleList);
@@ -2443,7 +2453,7 @@ impl State {
 
     fn get_args(&self) -> &[WasmStr] {
         if self.args.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli-base/environment")]
+            #[link(wasm_import_module = "wasi:cli/environment")]
             extern "C" {
                 #[link_name = "get-arguments"]
                 fn get_args_import(rval: *mut WasmStrList);

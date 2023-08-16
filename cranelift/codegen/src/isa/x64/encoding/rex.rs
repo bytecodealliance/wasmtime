@@ -455,13 +455,12 @@ impl Imm {
     /// The `evex_scaling` factor provided here is `Some(N)` for EVEX
     /// instructions.  This is taken into account where the `Imm` value
     /// contained is the raw byte offset.
-    fn new(val: u32, evex_scaling: Option<i8>) -> Imm {
+    fn new(val: i32, evex_scaling: Option<i8>) -> Imm {
         if val == 0 {
             return Imm::None;
         }
         match evex_scaling {
             Some(scaling) => {
-                let val = val as i32;
                 if val % i32::from(scaling) == 0 {
                     let scaled = val / i32::from(scaling);
                     if low8_will_sign_extend_to_32(scaled as u32) {
@@ -470,8 +469,10 @@ impl Imm {
                 }
                 Imm::Imm32(val)
             }
-            None if low8_will_sign_extend_to_32(val) => Imm::Imm8(val as i8),
-            None => Imm::Imm32(val as i32),
+            None => match i8::try_from(val) {
+                Ok(val) => Imm::Imm8(val),
+                Err(_) => Imm::Imm32(val),
+            },
         }
     }
 

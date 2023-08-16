@@ -1006,12 +1006,12 @@
 ;; in instructions. These denote a 64-bit value only.
 (type Amode (enum
              ;; Immediate sign-extended and a register
-             (ImmReg (simm32 u32)
+             (ImmReg (simm32 i32)
                      (base Reg)
                      (flags MemFlags))
 
              ;; Sign-extend-32-to-64(simm32) + base + (index << shift)
-             (ImmRegRegShift (simm32 u32)
+             (ImmRegRegShift (simm32 i32)
                              (base Gpr)
                              (index Gpr)
                              (shift u8)
@@ -1087,7 +1087,7 @@
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
-(decl amode_offset (Amode u32) Amode)
+(decl amode_offset (Amode i32) Amode)
 (extern constructor amode_offset amode_offset)
 
 ;; Return a zero offset as an `Offset32`.

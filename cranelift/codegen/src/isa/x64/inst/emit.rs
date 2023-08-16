@@ -985,7 +985,7 @@ pub(crate) fn emit(
                     let inst = Inst::alu_rmi_r(
                         *size,
                         AluRmiROpcode::Add,
-                        RegMemImm::imm(simm32),
+                        RegMemImm::imm(simm32 as u32),
                         Writable::from_reg(dst),
                     );
                     inst.emit(&[], sink, info, state);
@@ -4227,7 +4227,7 @@ fn emit_return_call_common_sequence(
     // The new lowest address (top of stack) -- relative to FP -- for
     // our tail callee. We compute this now so that we can move our
     // stack arguments into place.
-    let callee_sp_relative_to_fp = old_stack_arg_size.wrapping_sub(new_stack_arg_size);
+    let callee_sp_relative_to_fp = i64::from(old_stack_arg_size) - i64::from(new_stack_arg_size);
 
     // Copy over each word, using `tmp` as a temporary register.
     //
@@ -4244,7 +4244,7 @@ fn emit_return_call_common_sequence(
     for i in (0..new_stack_arg_size / 8).rev() {
         Inst::Mov64MR {
             src: SyntheticAmode::Real(Amode::ImmReg {
-                simm32: i * 8,
+                simm32: (i * 8).try_into().unwrap(),
                 base: regs::rsp(),
                 flags: MemFlags::trusted(),
             }),
@@ -4257,7 +4257,9 @@ fn emit_return_call_common_sequence(
             dst: SyntheticAmode::Real(Amode::ImmReg {
                 // Add 2 because we need to skip over the old FP and the
                 // return address.
-                simm32: callee_sp_relative_to_fp.wrapping_add((i + 2) * 8),
+                simm32: (callee_sp_relative_to_fp + i64::from((i + 2) * 8))
+                    .try_into()
+                    .unwrap(),
                 base: fp,
                 flags: MemFlags::trusted(),
             }),
@@ -4272,7 +4274,7 @@ fn emit_return_call_common_sequence(
         addr: SyntheticAmode::Real(Amode::ImmReg {
             // NB: We add a word to `callee_sp_relative_to_fp` here because the
             // callee will push FP, not us.
-            simm32: callee_sp_relative_to_fp.wrapping_add(8),
+            simm32: callee_sp_relative_to_fp.wrapping_add(8).try_into().unwrap(),
             base: fp,
             flags: MemFlags::trusted(),
         }),

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Module, Store};
+use wasmtime::{Module, Precompiled, Store};
 
 #[test]
 fn module_component_mismatch() -> Result<()> {
@@ -117,5 +117,19 @@ fn usable_exported_modules() -> Result<()> {
     let mut core_linker = wasmtime::Linker::new(&engine);
     core_linker.func_wrap("", "", |_: u32| {})?;
     core_linker.instantiate(&mut store, &module)?;
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn detect_precompiled() -> Result<()> {
+    let engine = super::engine();
+    let buffer = Component::new(&engine, "(component)")?.serialize()?;
+    assert_eq!(engine.detect_precompiled(&[]), None);
+    assert_eq!(engine.detect_precompiled(&buffer[..5]), None);
+    assert_eq!(
+        engine.detect_precompiled(&buffer),
+        Some(Precompiled::Component)
+    );
     Ok(())
 }

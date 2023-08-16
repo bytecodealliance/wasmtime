@@ -61,11 +61,6 @@ async = ["wasmtime-fiber"]
 # Enables support for the pooling instance allocator
 pooling-allocator = []
 
-# Enables trap handling using POSIX signals instead of Mach exceptions on MacOS.
-# It is useful for applications that do not bind their own exception ports and
-# need portable signal handling.
-posix-signals-on-macos = []
-
 component-model = [
   "wasmtime-environ/component-model",
   "dep:encoding_rs",

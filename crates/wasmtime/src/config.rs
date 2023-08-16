@@ -112,6 +112,7 @@ pub struct Config {
     pub(crate) force_memory_init_memfd: bool,
     pub(crate) wmemcheck: bool,
     pub(crate) coredump_on_trap: bool,
+    pub(crate) macos_use_mach_ports: bool,
 }
 
 /// User-provided configuration for the compiler.
@@ -205,6 +206,7 @@ impl Config {
             force_memory_init_memfd: false,
             wmemcheck: false,
             coredump_on_trap: false,
+            macos_use_mach_ports: true,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
@@ -1708,8 +1710,41 @@ impl Config {
 
     /// Enables clif output when compiling a WebAssembly module.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub fn emit_clif(&mut self, path: &Path) {
+    pub fn emit_clif(&mut self, path: &Path) -> &mut Self {
         self.compiler_config.clif_dir = Some(path.to_path_buf());
+        self
+    }
+
+    /// Configures whether, when on macOS, Mach ports are used for exception
+    /// handling instead of traditional Unix-based signal handling.
+    ///
+    /// WebAssembly traps in Wasmtime are implemented with native faults, for
+    /// example a `SIGSEGV` will occur when a WebAssembly guest accesses
+    /// out-of-bounds memory. Handling this can be configured to either use Unix
+    /// signals or Mach ports on macOS. By default Mach ports are used.
+    ///
+    /// Mach ports enable Wasmtime to work by default with foreign
+    /// error-handling systems such as breakpad which also use Mach ports to
+    /// handle signals. In this situation Wasmtime will continue to handle guest
+    /// faults gracefully while any non-guest faults will get forwarded to
+    /// process-level handlers such as breakpad. Some more background on this
+    /// can be found in #2456.
+    ///
+    /// A downside of using mach ports, however, is that they don't interact
+    /// well with `fork()`. Forking a Wasmtime process on macOS will produce a
+    /// child process that cannot successfully run WebAssembly. In this
+    /// situation traditional Unix signal handling should be used as that's
+    /// inherited and works across forks.
+    ///
+    /// If your embedding wants to use a custom error handler which leverages
+    /// Mach ports and you additionally wish to `fork()` the process and use
+    /// Wasmtime in the child process that's not currently possible. Please
+    /// reach out to us if you're in this bucket!
+    ///
+    /// This option defaults to `true`, using Mach ports by default.
+    pub fn macos_use_mach_ports(&mut self, mach_ports: bool) -> &mut Self {
+        self.macos_use_mach_ports = mach_ports;
+        self
     }
 }
 

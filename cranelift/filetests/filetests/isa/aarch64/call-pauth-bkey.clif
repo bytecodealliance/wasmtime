@@ -1,0 +1,120 @@
+test compile precise-output
+set unwind_info=false
+target aarch64 sign_return_address sign_return_address_with_bkey has_pauth
+
+function %f1(i64) -> i64 {
+    fn0 = %g(i64) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; VCode:
+;   pacibsp
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name x3, TestCase(%g)+0
+;   blr x3
+;   ldp fp, lr, [sp], #16
+;   retabsp
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pacibsp
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0xc
+;   ldr x3, #0x14
+;   b #0x1c
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   blr x3
+;   ldp x29, x30, [sp], #0x10
+;   retab
+
+function %f2(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iadd.i64 v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   add x0, x0, x1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x0, x0, x1
+;   ret
+
+function %tail_convention(i64) -> i64 tail {
+    fn0 = %g(i64) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; VCode:
+;   pacibz
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   mov x0, x2
+;   load_ext_name x3, TestCase(%g)+0
+;   blr x3
+;   mov x2, x0
+;   ldp fp, lr, [sp], #16
+;   retabz
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pacibz
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0xc
+;   mov x0, x2
+;   ldr x3, #0x18
+;   b #0x20
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   blr x3
+;   mov x2, x0
+;   ldp x29, x30, [sp], #0x10
+;   autibz
+;   ret
+
+function %tail_call(i64) -> i64 tail {
+    fn0 = %g(i64) -> i64 tail
+
+block0(v0: i64):
+    return_call fn0(v0)
+}
+
+; VCode:
+;   pacibz
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name x3, TestCase(%g)+0
+;   return_call_ind x3 old_stack_arg_size:0 new_stack_arg_size:0 x2=x2
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pacibz
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0xc
+;   ldr x3, #0x14
+;   b #0x1c
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   ldp x16, x30, [x29]
+;   add sp, x29, #0x10
+;   mov x29, x16
+;   autibz
+;   br x3
+

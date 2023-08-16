@@ -2305,7 +2305,7 @@
 (rule -1 (lower
        (has_type (ty_vec64 _)
                         (load flags address offset)))
-      (aarch64_fpuload128 (amode $F64 address offset) flags))
+      (aarch64_fpuload64 (amode $F64 address offset) flags))
 (rule -3 (lower
        (has_type (ty_vec128 _)
                         (load flags address offset)))
