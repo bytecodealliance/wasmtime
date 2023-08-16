@@ -17,23 +17,29 @@
 
 use crate::{backend::BackendKind, ctx::UsageError, WasiNnCtx};
 
-pub use gen::types;
-pub use gen_::Ml as ML;
-
 /// Generate the traits and types from the `wasi-nn` WIT specification.
 mod gen_ {
-    wasmtime::component::bindgen!("ml");
+    wasmtime::component::bindgen!("ml" in "spec/wit/wasi-nn.wit");
 }
 use gen_::wasi::nn as gen; // Shortcut to the module containing the types we need.
 
-impl gen::inference::Host for WasiNnCtx {
+// Export the `types` used in this crate as well as `ML::add_to_linker`.
+pub mod types {
+    use super::gen;
+    pub use gen::graph::{ExecutionTarget, Graph, GraphEncoding};
+    pub use gen::inference::GraphExecutionContext;
+    pub use gen::tensor::{Tensor, TensorType};
+}
+pub use gen_::Ml as ML;
+
+impl gen::graph::Host for WasiNnCtx {
     /// Load an opaque sequence of bytes to use for inference.
     fn load(
         &mut self,
-        builders: gen::types::GraphBuilderArray,
-        encoding: gen::types::GraphEncoding,
-        target: gen::types::ExecutionTarget,
-    ) -> wasmtime::Result<Result<gen::types::Graph, gen::types::Error>> {
+        builders: Vec<gen::graph::GraphBuilder>,
+        encoding: gen::graph::GraphEncoding,
+        target: gen::graph::ExecutionTarget,
+    ) -> wasmtime::Result<Result<gen::graph::Graph, gen::errors::Error>> {
         let backend_kind: BackendKind = encoding.try_into()?;
         let graph = if let Some(backend) = self.backends.get_mut(&backend_kind) {
             let slices = builders.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
@@ -45,13 +51,22 @@ impl gen::inference::Host for WasiNnCtx {
         Ok(Ok(graph_id))
     }
 
+    fn load_by_name(
+        &mut self,
+        _name: String,
+    ) -> wasmtime::Result<Result<gen::graph::Graph, gen::errors::Error>> {
+        todo!()
+    }
+}
+
+impl gen::inference::Host for WasiNnCtx {
     /// Create an execution instance of a loaded graph.
     ///
     /// TODO: remove completely?
     fn init_execution_context(
         &mut self,
-        graph_id: gen::types::Graph,
-    ) -> wasmtime::Result<Result<gen::types::GraphExecutionContext, gen::types::Error>> {
+        graph_id: gen::graph::Graph,
+    ) -> wasmtime::Result<Result<gen::inference::GraphExecutionContext, gen::errors::Error>> {
         let exec_context = if let Some(graph) = self.graphs.get_mut(graph_id) {
             graph.init_execution_context()?
         } else {
@@ -65,10 +80,10 @@ impl gen::inference::Host for WasiNnCtx {
     /// Define the inputs to use for inference.
     fn set_input(
         &mut self,
-        exec_context_id: gen::types::GraphExecutionContext,
+        exec_context_id: gen::inference::GraphExecutionContext,
         index: u32,
-        tensor: gen::types::Tensor,
-    ) -> wasmtime::Result<Result<(), gen::types::Error>> {
+        tensor: gen::tensor::Tensor,
+    ) -> wasmtime::Result<Result<(), gen::errors::Error>> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
             exec_context.set_input(index, &tensor)?;
             Ok(Ok(()))
@@ -82,8 +97,8 @@ impl gen::inference::Host for WasiNnCtx {
     /// TODO: refactor to compute(list<tensor>) -> result<list<tensor>, error>
     fn compute(
         &mut self,
-        exec_context_id: gen::types::GraphExecutionContext,
-    ) -> wasmtime::Result<Result<(), gen::types::Error>> {
+        exec_context_id: gen::inference::GraphExecutionContext,
+    ) -> wasmtime::Result<Result<(), gen::errors::Error>> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
             exec_context.compute()?;
             Ok(Ok(()))
@@ -95,9 +110,9 @@ impl gen::inference::Host for WasiNnCtx {
     /// Extract the outputs after inference.
     fn get_output(
         &mut self,
-        exec_context_id: gen::types::GraphExecutionContext,
+        exec_context_id: gen::inference::GraphExecutionContext,
         index: u32,
-    ) -> wasmtime::Result<Result<gen::types::TensorData, gen::types::Error>> {
+    ) -> wasmtime::Result<Result<gen::tensor::TensorData, gen::errors::Error>> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
             // Read the output bytes. TODO: this involves a hard-coded upper
             // limit on the tensor size that is necessary because there is no
@@ -113,11 +128,11 @@ impl gen::inference::Host for WasiNnCtx {
     }
 }
 
-impl TryFrom<gen::types::GraphEncoding> for crate::backend::BackendKind {
+impl TryFrom<gen::graph::GraphEncoding> for crate::backend::BackendKind {
     type Error = UsageError;
-    fn try_from(value: gen::types::GraphEncoding) -> Result<Self, Self::Error> {
+    fn try_from(value: gen::graph::GraphEncoding) -> Result<Self, Self::Error> {
         match value {
-            gen::types::GraphEncoding::Openvino => Ok(crate::backend::BackendKind::OpenVINO),
+            gen::graph::GraphEncoding::Openvino => Ok(crate::backend::BackendKind::OpenVINO),
             _ => Err(UsageError::InvalidEncoding(value.into())),
         }
     }
