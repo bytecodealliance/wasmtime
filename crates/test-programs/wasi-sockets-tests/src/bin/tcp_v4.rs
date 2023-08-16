@@ -34,7 +34,7 @@ fn main() {
     wait(sub);
     tcp::finish_bind(sock).unwrap();
 
-    tcp::start_listen(sock, net).unwrap();
+    tcp::start_listen(sock).unwrap();
     wait(sub);
     tcp::finish_listen(sock).unwrap();
 

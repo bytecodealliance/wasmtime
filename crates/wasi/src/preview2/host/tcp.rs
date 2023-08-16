@@ -196,11 +196,7 @@ impl<T: WasiView> tcp::Host for T {
         Ok((input_stream, output_stream))
     }
 
-    fn start_listen(
-        &mut self,
-        this: tcp::TcpSocket,
-        _network: Network,
-    ) -> Result<(), network::Error> {
+    fn start_listen(&mut self, this: tcp::TcpSocket) -> Result<(), network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
