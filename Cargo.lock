@@ -3773,6 +3773,7 @@ dependencies = [
  "anyhow",
  "openvino",
  "thiserror",
+ "tracing",
  "walkdir",
  "wasmtime",
  "wiggle",

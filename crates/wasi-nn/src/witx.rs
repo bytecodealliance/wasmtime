@@ -41,7 +41,7 @@ mod gen {
             &mut self,
             e: WasiNnError,
         ) -> anyhow::Result<types::NnErrno> {
-            eprintln!("Host error: {:?}", e);
+            tracing::debug!("host error: {:?}", e);
             match e {
                 WasiNnError::BackendError(_) => unimplemented!(),
                 WasiNnError::GuestError(_) => unimplemented!(),
