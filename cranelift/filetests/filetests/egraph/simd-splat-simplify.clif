@@ -1,0 +1,56 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %iadd_splat_into_splat_iadd(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = iadd.i64x2 v2, v3
+  return v4
+  ; check: v5 = iadd v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %isub_splat_into_splat_isub(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = isub.i64x2 v2, v3
+  return v4
+  ; check: v5 = isub v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %imul_splat_into_splat_imul(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = imul.i64x2 v2, v3
+  return v4
+  ; check: v5 = imul v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %ineg_splat_into_splat_ineg(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = splat.i64x2 v0
+  v2 = ineg.i64x2 v1
+  return v2
+  ; check: v3 = ineg v0
+  ; check: v4 = splat.i64x2 v3
+  ; check: return v4
+}
+
+function %iabs_splat_into_splat_iabs(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = splat.i64x2 v0
+  v2 = iabs.i64x2 v1
+  return v2
+  ; check: v3 = iabs v0
+  ; check: v4 = splat.i64x2 v3
+  ; check: return v4
+}

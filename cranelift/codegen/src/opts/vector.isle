@@ -1,8 +1,24 @@
-;; Lift a splat outside of an int-to-float conversion to try to open up
+;; For various ops lift a splat outside of the op to try to open up
 ;; optimization opportunities with scalars.
 ;;
-;; NB: this is also required for correctness at this time due to #6562
+;; NB: for int-to-float conversion op this simplification is also
+;; required for correctness at this time due to #6562
 (rule (simplify (fcvt_from_uint float_vector_ty (splat _ x)))
       (splat float_vector_ty (fcvt_from_uint (lane_type float_vector_ty) x)))
 (rule (simplify (fcvt_from_sint float_vector_ty (splat _ x)))
       (splat float_vector_ty (fcvt_from_sint (lane_type float_vector_ty) x)))
+
+(rule (simplify (iadd ty (splat ty x) (splat ty y)))
+      (splat ty (iadd (lane_type ty) x y)))
+
+(rule (simplify (isub ty (splat ty x) (splat ty y)))
+      (splat ty (isub (lane_type ty) x y)))
+
+(rule (simplify (imul ty (splat ty x) (splat ty y)))
+      (splat ty (imul (lane_type ty) x y)))
+
+(rule (simplify (ineg ty (splat ty x)))
+      (splat ty (ineg (lane_type ty) x)))
+
+(rule (simplify (iabs ty (splat ty x)))
+      (splat ty (iabs (lane_type ty) x)))
