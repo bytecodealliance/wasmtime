@@ -56,11 +56,3 @@ pub enum BackendError {
 pub(crate) enum BackendKind {
     OpenVINO,
 }
-impl From<u8> for BackendKind {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => BackendKind::OpenVINO,
-            _ => panic!("invalid backend"),
-        }
-    }
-}

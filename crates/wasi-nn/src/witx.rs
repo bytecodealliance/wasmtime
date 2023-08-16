@@ -13,6 +13,7 @@
 //!
 //! [`types`]: crate::wit::types
 
+use crate::backend::BackendKind;
 use crate::ctx::{UsageError, WasiNnCtx, WasiNnError, WasiNnResult as Result};
 use wiggle::GuestPtr;
 
@@ -58,8 +59,7 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         encoding: gen::types::GraphEncoding,
         target: gen::types::ExecutionTarget,
     ) -> Result<gen::types::Graph> {
-        let encoding_id: u8 = encoding.into();
-        let graph = if let Some(backend) = self.backends.get_mut(&encoding_id.into()) {
+        let graph = if let Some(backend) = self.backends.get_mut(&encoding.into()) {
             // Retrieve all of the "builder lists" from the Wasm memory (see
             // $graph_builder_array) as slices for a backend to operate on.
             let mut slices = vec![];
@@ -140,6 +140,13 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
 
 // Implement some conversion from `witx::types::*` to this crate's version.
 
+impl From<gen::types::GraphEncoding> for BackendKind {
+    fn from(value: gen::types::GraphEncoding) -> Self {
+        match value {
+            gen::types::GraphEncoding::Openvino => BackendKind::OpenVINO,
+        }
+    }
+}
 impl From<gen::types::ExecutionTarget> for crate::wit::types::ExecutionTarget {
     fn from(value: gen::types::ExecutionTarget) -> Self {
         match value {
