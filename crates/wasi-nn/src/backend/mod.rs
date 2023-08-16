@@ -1,17 +1,25 @@
 //! Define the Rust interface a backend must implement in order to be used by
-//! this crate. the `Box<dyn ...>` types returned by these interfaces allow
+//! this crate. The `Box<dyn ...>` types returned by these interfaces allow
 //! implementations to maintain backend-specific state between calls.
 
-use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor};
+mod openvino;
+
+use self::openvino::OpenvinoBackend;
+use crate::wit::types::{ExecutionTarget, Tensor};
 use thiserror::Error;
 use wiggle::GuestError;
+
+/// Return a list of all available backend frameworks.
+pub(crate) fn list() -> Vec<(BackendKind, Box<dyn Backend>)> {
+    vec![(BackendKind::OpenVINO, Box::new(OpenvinoBackend::default()))]
+}
 
 /// A [Backend] contains the necessary state to load [BackendGraph]s.
 pub(crate) trait Backend: Send + Sync {
     fn name(&self) -> &str;
     fn load(
         &mut self,
-        builders: &GraphBuilderArray<'_>,
+        builders: &[&[u8]],
         target: ExecutionTarget,
     ) -> Result<Box<dyn BackendGraph>, BackendError>;
 }
@@ -25,7 +33,7 @@ pub(crate) trait BackendGraph: Send + Sync {
 /// A [BackendExecutionContext] performs the actual inference; this is the
 /// backing implementation for a [crate::witx::types::GraphExecutionContext].
 pub(crate) trait BackendExecutionContext: Send + Sync {
-    fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError>;
+    fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError>;
     fn compute(&mut self) -> Result<(), BackendError>;
     fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError>;
 }
@@ -39,7 +47,12 @@ pub enum BackendError {
     #[error("Failed while accessing guest module")]
     GuestAccess(#[from] GuestError),
     #[error("The backend expects {0} buffers, passed {1}")]
-    InvalidNumberOfBuilders(u32, u32),
+    InvalidNumberOfBuilders(usize, usize),
     #[error("Not enough memory to copy tensor data of size: {0}")]
     NotEnoughMemory(usize),
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
+pub(crate) enum BackendKind {
+    OpenVINO,
 }

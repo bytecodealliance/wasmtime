@@ -12,11 +12,15 @@ readme = "README.md"
 edition.workspace = true
 
 [dependencies]
-# These dependencies are necessary for the witx-generation macros to work:
+# These dependencies are necessary for the WITX-generation macros to work:
 anyhow = { workspace = true }
 wiggle = { workspace = true }
 
+# This dependency is necessary for the WIT-generation macros to work:
+wasmtime = { workspace = true, features = ["component-model"] }
+
 # These dependencies are necessary for the wasi-nn implementation:
+tracing = { workspace = true }
 openvino = { version = "0.5.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 

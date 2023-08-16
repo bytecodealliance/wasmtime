@@ -730,7 +730,7 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-nn")]
         {
-            wasmtime_wasi_nn::add_to_linker(linker, |host| {
+            wasmtime_wasi_nn::witx::add_to_linker(linker, |host| {
                 // This WASI proposal is currently not protected against
                 // concurrent access--i.e., when wasi-threads is actively
                 // spawning new threads, we cannot (yet) safely allow access and

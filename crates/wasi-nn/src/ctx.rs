@@ -1,31 +1,31 @@
-//! Implements the base structure (i.e. [WasiNnCtx]) that will provide the
-//! implementation of the wasi-nn API.
-use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
-use crate::openvino::OpenvinoBackend;
-use crate::r#impl::UsageError;
-use crate::witx::types::{Graph, GraphEncoding, GraphExecutionContext};
+//! Implements the host state for the `wasi-nn` API: [WasiNnCtx].
+
+use crate::backend::{
+    self, Backend, BackendError, BackendExecutionContext, BackendGraph, BackendKind,
+};
+use crate::wit::types::GraphEncoding;
 use std::collections::HashMap;
 use std::hash::Hash;
 use thiserror::Error;
 use wiggle::GuestError;
 
+type GraphId = u32;
+type GraphExecutionContextId = u32;
+
 /// Capture the state necessary for calling into the backend ML libraries.
 pub struct WasiNnCtx {
-    pub(crate) backends: HashMap<u8, Box<dyn Backend>>,
-    pub(crate) graphs: Table<Graph, Box<dyn BackendGraph>>,
-    pub(crate) executions: Table<GraphExecutionContext, Box<dyn BackendExecutionContext>>,
+    pub(crate) backends: HashMap<BackendKind, Box<dyn Backend>>,
+    pub(crate) graphs: Table<GraphId, Box<dyn BackendGraph>>,
+    pub(crate) executions: Table<GraphExecutionContextId, Box<dyn BackendExecutionContext>>,
 }
 
 impl WasiNnCtx {
     /// Make a new context from the default state.
     pub fn new() -> WasiNnResult<Self> {
         let mut backends = HashMap::new();
-        backends.insert(
-            // This is necessary because Wiggle's variant types do not derive
-            // `Hash` and `Eq`.
-            GraphEncoding::Openvino.into(),
-            Box::new(OpenvinoBackend::default()) as Box<dyn Backend>,
-        );
+        for (kind, backend) in backend::list() {
+            backends.insert(kind, backend);
+        }
         Ok(Self {
             backends,
             graphs: Table::default(),
@@ -43,6 +43,22 @@ pub enum WasiNnError {
     GuestError(#[from] GuestError),
     #[error("usage error")]
     UsageError(#[from] UsageError),
+}
+
+#[derive(Debug, Error)]
+pub enum UsageError {
+    #[error("Invalid context; has the load function been called?")]
+    InvalidContext,
+    #[error("Only OpenVINO's IR is currently supported, passed encoding: {0:?}")]
+    InvalidEncoding(GraphEncoding),
+    #[error("OpenVINO expects only two buffers (i.e. [ir, weights]), passed: {0}")]
+    InvalidNumberOfBuilders(u32),
+    #[error("Invalid graph handle; has it been loaded?")]
+    InvalidGraphHandle,
+    #[error("Invalid execution context handle; has it been initialized?")]
+    InvalidExecutionContextHandle,
+    #[error("Not enough memory to copy tensor data of size: {0}")]
+    NotEnoughMemory(u32),
 }
 
 pub(crate) type WasiNnResult<T> = std::result::Result<T, WasiNnError>;
