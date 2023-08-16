@@ -68,7 +68,7 @@ async fn instantiate_module(module: Module, ctx: Ctx) -> Result<(Store<Ctx>, Fun
     let mut store = Store::new(&ENGINE, ctx);
 
     let instance = linker.instantiate_async(&mut store, &module).await?;
-    let command = instance.get_func(&mut store, "run").unwrap();
+    let command = instance.get_func(&mut store, "wasi:cli/run#run").unwrap();
     Ok((store, command))
 }
 

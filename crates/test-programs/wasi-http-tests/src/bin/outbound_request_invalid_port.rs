@@ -25,7 +25,7 @@ async fn run() -> Result<(), ()> {
     Ok(())
 }
 
-impl wasi_http_tests::bindings::CommandExtended for Component {
+impl wasi_http_tests::bindings::exports::wasi::cli::run::Run for Component {
     fn run() -> Result<(), ()> {
         wasi_http_tests::in_tokio(async { run().await })
     }

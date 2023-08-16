@@ -81,6 +81,7 @@ async fn run(name: &str) -> anyhow::Result<()> {
 
     let (mut store, command) = instantiate_component(component, Ctx { table, wasi, http }).await?;
     command
+        .wasi_cli_run()
         .call_run(&mut store)
         .await
         .map_err(|e| anyhow::anyhow!("wasm failed with {e:?}"))?
