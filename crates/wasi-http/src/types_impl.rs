@@ -8,16 +8,17 @@ use crate::wasi::http::types::{
 use crate::WasiHttpView;
 use anyhow::{anyhow, bail, Context};
 use bytes::Bytes;
-use wasmtime_wasi::preview2::bindings::poll::poll::Pollable;
+use wasmtime_wasi::preview2::{bindings::poll::poll::Pollable, HostPollable, TablePollableExt};
 
+#[async_trait::async_trait]
 impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
-    fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
+    async fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
         self.table_mut()
             .delete_fields(fields)
             .context("[drop_fields] deleting fields")?;
         Ok(())
     }
-    fn new_fields(&mut self, entries: Vec<(String, String)>) -> wasmtime::Result<Fields> {
+    async fn new_fields(&mut self, entries: Vec<(String, String)>) -> wasmtime::Result<Fields> {
         let mut map = ActiveFields::new();
         for (key, value) in entries {
             map.insert(key, vec![value.clone().into_bytes()]);
@@ -29,7 +30,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .context("[new_fields] pushing fields")?;
         Ok(id)
     }
-    fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
+    async fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
         let res = self
             .table_mut()
             .get_fields(fields)
@@ -39,7 +40,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .clone();
         Ok(res)
     }
-    fn fields_set(
+    async fn fields_set(
         &mut self,
         fields: Fields,
         name: String,
@@ -53,14 +54,14 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             Err(_) => bail!("fields not found"),
         }
     }
-    fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
+    async fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
         match self.table_mut().get_fields_mut(fields) {
             Ok(m) => m.remove(&name),
             Err(_) => None,
         };
         Ok(())
     }
-    fn fields_append(
+    async fn fields_append(
         &mut self,
         fields: Fields,
         name: String,
@@ -80,7 +81,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
         };
         Ok(())
     }
-    fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
+    async fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
         let field_map = match self.table().get_fields(fields) {
             Ok(m) => m.iter(),
             Err(_) => bail!("fields not found."),
@@ -91,7 +92,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
         }
         Ok(result)
     }
-    fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields> {
+    async fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields> {
         let table = self.table_mut();
         let m = table
             .get_fields(fields)
@@ -101,7 +102,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .context("[fields_clone] pushing fields")?;
         Ok(id)
     }
-    fn finish_incoming_stream(
+    async fn finish_incoming_stream(
         &mut self,
         stream_id: IncomingStream,
     ) -> wasmtime::Result<Option<Trailers>> {
@@ -116,17 +117,17 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
         }
         bail!("unknown stream!")
     }
-    fn finish_outgoing_stream(
+    async fn finish_outgoing_stream(
         &mut self,
         _s: OutgoingStream,
         _trailers: Option<Trailers>,
     ) -> wasmtime::Result<()> {
         bail!("unimplemented: finish_outgoing_stream")
     }
-    fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
+    async fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
         bail!("unimplemented: drop_incoming_request")
     }
-    fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
+    async fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
         let r = self
             .table_mut()
             .get_request(request)
@@ -148,37 +149,43 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
 
         Ok(())
     }
-    fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
+    async fn incoming_request_method(
+        &mut self,
+        _request: IncomingRequest,
+    ) -> wasmtime::Result<Method> {
         bail!("unimplemented: incoming_request_method")
     }
-    fn incoming_request_path_with_query(
+    async fn incoming_request_path_with_query(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
         bail!("unimplemented: incoming_request_path")
     }
-    fn incoming_request_scheme(
+    async fn incoming_request_scheme(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<Scheme>> {
         bail!("unimplemented: incoming_request_scheme")
     }
-    fn incoming_request_authority(
+    async fn incoming_request_authority(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
         bail!("unimplemented: incoming_request_authority")
     }
-    fn incoming_request_headers(&mut self, _request: IncomingRequest) -> wasmtime::Result<Headers> {
+    async fn incoming_request_headers(
+        &mut self,
+        _request: IncomingRequest,
+    ) -> wasmtime::Result<Headers> {
         bail!("unimplemented: incoming_request_headers")
     }
-    fn incoming_request_consume(
+    async fn incoming_request_consume(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
         bail!("unimplemented: incoming_request_consume")
     }
-    fn new_outgoing_request(
+    async fn new_outgoing_request(
         &mut self,
         method: Method,
         path_with_query: Option<String>,
@@ -198,7 +205,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .context("[new_outgoing_request] pushing request")?;
         Ok(id)
     }
-    fn outgoing_request_write(
+    async fn outgoing_request_write(
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
@@ -225,17 +232,20 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .context("[outgoing_request_write] getting stream")?;
         Ok(Ok(stream.outgoing()))
     }
-    fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
+    async fn drop_response_outparam(
+        &mut self,
+        _response: ResponseOutparam,
+    ) -> wasmtime::Result<()> {
         bail!("unimplemented: drop_response_outparam")
     }
-    fn set_response_outparam(
+    async fn set_response_outparam(
         &mut self,
         _outparam: ResponseOutparam,
         _response: Result<OutgoingResponse, Error>,
     ) -> wasmtime::Result<Result<(), ()>> {
         bail!("unimplemented: set_response_outparam")
     }
-    fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
+    async fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
         let r = self
             .table()
             .get_response(response)
@@ -250,7 +260,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
                 .get_stream(id)
                 .context("[drop_incoming_response] getting stream")?;
             let incoming_id = stream.incoming();
-            if let Some(trailers) = self.finish_incoming_stream(incoming_id)? {
+            if let Some(trailers) = self.finish_incoming_stream(incoming_id).await? {
                 self.table_mut()
                     .delete_fields(trailers)
                     .context("[drop_incoming_response] deleting trailers")
@@ -267,10 +277,13 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .context("[drop_incoming_response] deleting response")?;
         Ok(())
     }
-    fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
+    async fn drop_outgoing_response(
+        &mut self,
+        _response: OutgoingResponse,
+    ) -> wasmtime::Result<()> {
         bail!("unimplemented: drop_outgoing_response")
     }
-    fn incoming_response_status(
+    async fn incoming_response_status(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<StatusCode> {
@@ -280,7 +293,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .context("[incoming_response_status] getting response")?;
         Ok(r.status())
     }
-    fn incoming_response_headers(
+    async fn incoming_response_headers(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Headers> {
@@ -290,7 +303,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .context("[incoming_response_headers] getting response")?;
         Ok(r.headers().unwrap_or(0 as Headers))
     }
-    fn incoming_response_consume(
+    async fn incoming_response_consume(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
@@ -308,20 +321,20 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             })
             .unwrap_or(0 as IncomingStream)))
     }
-    fn new_outgoing_response(
+    async fn new_outgoing_response(
         &mut self,
         _status_code: StatusCode,
         _headers: Headers,
     ) -> wasmtime::Result<OutgoingResponse> {
         bail!("unimplemented: new_outgoing_response")
     }
-    fn outgoing_response_write(
+    async fn outgoing_response_write(
         &mut self,
         _response: OutgoingResponse,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
         bail!("unimplemented: outgoing_response_write")
     }
-    fn drop_future_incoming_response(
+    async fn drop_future_incoming_response(
         &mut self,
         future: FutureIncomingResponse,
     ) -> wasmtime::Result<()> {
@@ -330,7 +343,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .context("[drop_future_incoming_response] deleting future")?;
         Ok(())
     }
-    fn future_incoming_response_get(
+    async fn future_incoming_response_get(
         &mut self,
         future: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>> {
@@ -338,14 +351,51 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
             .table()
             .get_future(future)
             .context("[future_incoming_response_get] getting future")?;
-
-        let response = futures::executor::block_on(self.handle_async(f.request_id, f.options));
-        Ok(Some(response))
+        Ok(match f.pollable_id() {
+            Some(_) => {
+                let result = match f.response_id() {
+                    Some(id) => Ok(id),
+                    None => {
+                        let response = self.handle_async(f.request_id(), f.options()).await;
+                        match response {
+                            Ok(id) => {
+                                let future_mut = self.table_mut().get_future_mut(future)?;
+                                future_mut.set_response_id(id);
+                            }
+                            _ => {}
+                        }
+                        response
+                    }
+                };
+                Some(result)
+            }
+            None => None,
+        })
     }
-    fn listen_to_future_incoming_response(
+    async fn listen_to_future_incoming_response(
         &mut self,
-        _f: FutureIncomingResponse,
+        future: FutureIncomingResponse,
     ) -> wasmtime::Result<Pollable> {
-        bail!("unimplemented: listen_to_future_incoming_response")
+        let f = self
+            .table()
+            .get_future(future)
+            .context("[listen_to_future_incoming_response] getting future")?;
+        Ok(match f.pollable_id() {
+            Some(pollable_id) => pollable_id,
+            None => {
+                let pollable =
+                    HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))));
+                let pollable_id = self
+                    .table_mut()
+                    .push_host_pollable(pollable)
+                    .context("[listen_to_future_incoming_response] pushing host pollable")?;
+                let f = self
+                    .table_mut()
+                    .get_future_mut(future)
+                    .context("[listen_to_future_incoming_response] getting future")?;
+                f.set_pollable_id(pollable_id);
+                pollable_id
+            }
+        })
     }
 }

@@ -9,7 +9,8 @@ wasmtime::component::bindgen!({
     with: {
         "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
         "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
-    }
+    },
+    async: true,
 });
 
 pub mod component_impl;

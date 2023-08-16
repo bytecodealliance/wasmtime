@@ -15,8 +15,9 @@ use tokio::time::timeout;
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
 use wasmtime_wasi::preview2::{StreamState, TableStreamExt};
 
+#[async_trait::async_trait]
 impl<T: WasiHttpView> crate::wasi::http::outgoing_handler::Host for T {
-    fn handle(
+    async fn handle(
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,

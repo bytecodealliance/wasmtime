@@ -185,8 +185,10 @@ impl HttpResponse for ActiveResponse {
 
 #[derive(Clone)]
 pub struct ActiveFuture {
-    pub request_id: OutgoingRequest,
-    pub options: Option<RequestOptions>,
+    request_id: OutgoingRequest,
+    options: Option<RequestOptions>,
+    response_id: Option<u32>,
+    pollable_id: Option<u32>,
 }
 
 impl ActiveFuture {
@@ -194,7 +196,33 @@ impl ActiveFuture {
         Self {
             request_id,
             options,
+            response_id: None,
+            pollable_id: None,
         }
+    }
+
+    pub fn request_id(&self) -> u32 {
+        self.request_id
+    }
+
+    pub fn options(&self) -> Option<RequestOptions> {
+        self.options
+    }
+
+    pub fn response_id(&self) -> Option<u32> {
+        self.response_id
+    }
+
+    pub fn set_response_id(&mut self, response_id: u32) {
+        self.response_id = Some(response_id);
+    }
+
+    pub fn pollable_id(&self) -> Option<u32> {
+        self.pollable_id
+    }
+
+    pub fn set_pollable_id(&mut self, pollable_id: u32) {
+        self.pollable_id = Some(pollable_id);
     }
 }
 
