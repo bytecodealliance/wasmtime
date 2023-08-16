@@ -4,19 +4,20 @@
 //! (though it could be) so by "preview2" here we mean that this can be called
 //! with the component model's canonical ABI.
 //!
-//! The only export from this module is the [`ML`] object, which exposes
-//! [`ML::add_to_linker`]. To implement it, this module proceeds in steps:
+//! This module exports its [`types`] for use throughout the crate and the
+//! [`ML`] object, which exposes [`ML::add_to_linker`]. To implement all of
+//! this, this module proceeds in steps:
 //! 1. generate all of the WIT glue code into a `gen::*` namespace
 //! 2. wire up the `gen::*` glue to the context state, delegating actual
-//!    computation to a `Backend`
-//! 3. wrap up with some conversions, i.e., from `gen::*` types to this crate's
-//!    [`types`].
+//!    computation to a [`Backend`]
+//! 3. convert some types
 //!
 //! [`Backend`]: crate::backend::Backend
-//! [`types`]: crate::types
+//! [`types`]: crate::wit::types
 
 use crate::{backend::BackendKind, ctx::UsageError, WasiNnCtx};
 
+pub use gen::types;
 pub use gen_::Ml as ML;
 
 /// Generate the traits and types from the `wasi-nn` WIT specification.
@@ -69,14 +70,7 @@ impl gen::inference::Host for WasiNnCtx {
         tensor: gen::types::Tensor,
     ) -> wasmtime::Result<Result<(), gen::types::Error>> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
-            let dims = &tensor
-                .dimensions
-                .iter()
-                .map(|d| *d as usize)
-                .collect::<Vec<_>>();
-            let ty = tensor.tensor_type.into();
-            let data = tensor.data.as_slice();
-            exec_context.set_input(index, &crate::types::Tensor { dims, ty, data })?;
+            exec_context.set_input(index, &tensor)?;
             Ok(Ok(()))
         } else {
             Err(UsageError::InvalidGraphHandle.into())
@@ -119,47 +113,12 @@ impl gen::inference::Host for WasiNnCtx {
     }
 }
 
-impl From<gen::types::GraphEncoding> for crate::types::GraphEncoding {
-    fn from(value: gen::types::GraphEncoding) -> Self {
-        match value {
-            gen::types::GraphEncoding::Openvino => crate::types::GraphEncoding::OpenVINO,
-            gen::types::GraphEncoding::Onnx => crate::types::GraphEncoding::ONNX,
-            gen::types::GraphEncoding::Tensorflow => crate::types::GraphEncoding::Tensorflow,
-            gen::types::GraphEncoding::Pytorch => crate::types::GraphEncoding::PyTorch,
-            gen::types::GraphEncoding::Tensorflowlite => {
-                crate::types::GraphEncoding::TensorflowLite
-            }
-        }
-    }
-}
-
 impl TryFrom<gen::types::GraphEncoding> for crate::backend::BackendKind {
     type Error = UsageError;
     fn try_from(value: gen::types::GraphEncoding) -> Result<Self, Self::Error> {
         match value {
             gen::types::GraphEncoding::Openvino => Ok(crate::backend::BackendKind::OpenVINO),
             _ => Err(UsageError::InvalidEncoding(value.into())),
-        }
-    }
-}
-
-impl From<gen::types::ExecutionTarget> for crate::types::ExecutionTarget {
-    fn from(value: gen::types::ExecutionTarget) -> Self {
-        match value {
-            gen::types::ExecutionTarget::Cpu => crate::types::ExecutionTarget::CPU,
-            gen::types::ExecutionTarget::Gpu => crate::types::ExecutionTarget::GPU,
-            gen::types::ExecutionTarget::Tpu => crate::types::ExecutionTarget::TPU,
-        }
-    }
-}
-
-impl From<gen::types::TensorType> for crate::types::TensorType {
-    fn from(value: gen::types::TensorType) -> Self {
-        match value {
-            gen::types::TensorType::Fp16 => crate::types::TensorType::F16,
-            gen::types::TensorType::Fp32 => crate::types::TensorType::F32,
-            gen::types::TensorType::U8 => crate::types::TensorType::U8,
-            gen::types::TensorType::I32 => crate::types::TensorType::I32,
         }
     }
 }

@@ -11,7 +11,7 @@
 //! 3. wrap up with some conversions, i.e., from `gen::*` types to this crate's
 //!    [`types`].
 //!
-//! [`types`]: crate::types
+//! [`types`]: crate::wit::types
 
 use crate::ctx::{UsageError, WasiNnCtx, WasiNnError, WasiNnResult as Result};
 use wiggle::GuestPtr;
@@ -100,17 +100,12 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         tensor: &gen::types::Tensor<'b>,
     ) -> Result<()> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
-            let mut dims = vec![];
-            for d in tensor.dimensions.iter() {
-                dims.push(d?.read()? as usize);
-            }
-            let ty = tensor.type_.into();
-            let data_ = tensor.data
-                .as_slice()?
-                .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
-            let data = data_.as_ref();
-            let dims = &dims;
-            Ok(exec_context.set_input(index, &crate::types::Tensor { dims, ty, data })?)
+            let tensor = crate::wit::types::Tensor {
+                dimensions: tensor.dimensions.to_vec()?,
+                tensor_type: tensor.type_.into(),
+                data: tensor.data.to_vec()?,
+            };
+            Ok(exec_context.set_input(index, &tensor)?)
         } else {
             Err(UsageError::InvalidGraphHandle.into())
         }
@@ -145,29 +140,29 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
 
 // Implement some conversion from `witx::types::*` to this crate's version.
 
-impl From<gen::types::ExecutionTarget> for crate::types::ExecutionTarget {
+impl From<gen::types::ExecutionTarget> for crate::wit::types::ExecutionTarget {
     fn from(value: gen::types::ExecutionTarget) -> Self {
         match value {
-            gen::types::ExecutionTarget::Cpu => crate::types::ExecutionTarget::CPU,
-            gen::types::ExecutionTarget::Gpu => crate::types::ExecutionTarget::GPU,
-            gen::types::ExecutionTarget::Tpu => crate::types::ExecutionTarget::TPU,
+            gen::types::ExecutionTarget::Cpu => crate::wit::types::ExecutionTarget::Cpu,
+            gen::types::ExecutionTarget::Gpu => crate::wit::types::ExecutionTarget::Gpu,
+            gen::types::ExecutionTarget::Tpu => crate::wit::types::ExecutionTarget::Tpu,
         }
     }
 }
-impl From<gen::types::GraphEncoding> for crate::types::GraphEncoding {
+impl From<gen::types::GraphEncoding> for crate::wit::types::GraphEncoding {
     fn from(value: gen::types::GraphEncoding) -> Self {
         match value {
-            gen::types::GraphEncoding::Openvino => crate::types::GraphEncoding::OpenVINO,
+            gen::types::GraphEncoding::Openvino => crate::wit::types::GraphEncoding::Openvino,
         }
     }
 }
-impl From<gen::types::TensorType> for crate::types::TensorType {
+impl From<gen::types::TensorType> for crate::wit::types::TensorType {
     fn from(value: gen::types::TensorType) -> Self {
         match value {
-            gen::types::TensorType::F16 => crate::types::TensorType::F16,
-            gen::types::TensorType::F32 => crate::types::TensorType::F32,
-            gen::types::TensorType::U8 => crate::types::TensorType::U8,
-            gen::types::TensorType::I32 => crate::types::TensorType::I32,
+            gen::types::TensorType::F16 => crate::wit::types::TensorType::Fp16,
+            gen::types::TensorType::F32 => crate::wit::types::TensorType::Fp32,
+            gen::types::TensorType::U8 => crate::wit::types::TensorType::U8,
+            gen::types::TensorType::I32 => crate::wit::types::TensorType::I32,
         }
     }
 }

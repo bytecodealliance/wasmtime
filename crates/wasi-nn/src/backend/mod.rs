@@ -5,7 +5,7 @@
 mod openvino;
 
 use self::openvino::OpenvinoBackend;
-use crate::types::{ExecutionTarget, Tensor};
+use crate::wit::types::{ExecutionTarget, Tensor};
 use thiserror::Error;
 use wiggle::GuestError;
 
@@ -33,7 +33,7 @@ pub(crate) trait BackendGraph: Send + Sync {
 /// A [BackendExecutionContext] performs the actual inference; this is the
 /// backing implementation for a [crate::witx::types::GraphExecutionContext].
 pub(crate) trait BackendExecutionContext: Send + Sync {
-    fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError>;
+    fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError>;
     fn compute(&mut self) -> Result<(), BackendError>;
     fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError>;
 }

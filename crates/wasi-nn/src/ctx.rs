@@ -3,7 +3,7 @@
 use crate::backend::{
     self, Backend, BackendError, BackendExecutionContext, BackendGraph, BackendKind,
 };
-use crate::types::GraphEncoding;
+use crate::wit::types::GraphEncoding;
 use std::collections::HashMap;
 use std::hash::Hash;
 use thiserror::Error;

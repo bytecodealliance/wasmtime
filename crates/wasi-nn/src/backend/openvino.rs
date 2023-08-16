@@ -1,7 +1,7 @@
 //! Implements a `wasi-nn` [`Backend`] using OpenVINO.
 
 use super::{Backend, BackendError, BackendExecutionContext, BackendGraph};
-use crate::types::{ExecutionTarget, Tensor, TensorType};
+use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
 use std::sync::Arc;
 
@@ -77,14 +77,19 @@ impl BackendGraph for OpenvinoGraph {
 struct OpenvinoExecutionContext(Arc<openvino::CNNNetwork>, openvino::InferRequest);
 
 impl BackendExecutionContext for OpenvinoExecutionContext {
-    fn set_input<'a>(&mut self, index: u32, tensor: &Tensor<'a>) -> Result<(), BackendError> {
+    fn set_input<'a>(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
         let input_name = self.0.get_input_name(index as usize)?;
 
         // Construct the blob structure. TODO: there must be some good way to
         // discover the layout here; `desc` should not have to default to NHWC.
-        let precision = map_tensor_type_to_precision(tensor.ty);
-        let desc = TensorDesc::new(Layout::NHWC, tensor.dims, precision);
-        let blob = openvino::Blob::new(&desc, tensor.data)?;
+        let precision = map_tensor_type_to_precision(tensor.tensor_type);
+        let dimensions = tensor
+            .dimensions
+            .iter()
+            .map(|&d| d as usize)
+            .collect::<Vec<_>>();
+        let desc = TensorDesc::new(Layout::NHWC, &dimensions, precision);
+        let blob = openvino::Blob::new(&desc, &tensor.data)?;
 
         // Actually assign the blob to the request.
         self.1.set_blob(&input_name, &blob)?;
@@ -126,9 +131,9 @@ impl From<SetupError> for BackendError {
 /// `ExecutionTarget` enum provided by wasi-nn.
 fn map_execution_target_to_string(target: ExecutionTarget) -> &'static str {
     match target {
-        ExecutionTarget::CPU => "CPU",
-        ExecutionTarget::GPU => "GPU",
-        ExecutionTarget::TPU => unimplemented!("OpenVINO does not support TPU execution targets"),
+        ExecutionTarget::Cpu => "CPU",
+        ExecutionTarget::Gpu => "GPU",
+        ExecutionTarget::Tpu => unimplemented!("OpenVINO does not support TPU execution targets"),
     }
 }
 
@@ -136,8 +141,8 @@ fn map_execution_target_to_string(target: ExecutionTarget) -> &'static str {
 /// wasi-nn.
 fn map_tensor_type_to_precision(tensor_type: TensorType) -> openvino::Precision {
     match tensor_type {
-        TensorType::F16 => Precision::FP16,
-        TensorType::F32 => Precision::FP32,
+        TensorType::Fp16 => Precision::FP16,
+        TensorType::Fp32 => Precision::FP32,
         TensorType::U8 => Precision::U8,
         TensorType::I32 => Precision::I32,
     }
