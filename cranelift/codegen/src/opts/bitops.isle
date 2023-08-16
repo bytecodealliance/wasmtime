@@ -127,3 +127,6 @@
 
 ;; (bswap (bswap x)) == x
 (rule (simplify (bswap ty (bswap ty x))) (subsume x))
+
+;; (bitrev (bitrev x)) == x
+(rule (simplify (bitrev ty (bitrev ty x))) (subsume x))
