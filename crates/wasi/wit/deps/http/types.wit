@@ -1,5 +1,3 @@
-package wasi:http
-
 // The `wasi:http/types` interface is meant to be imported by components to
 // define the HTTP resource types and operations used by the component's
 // imported and exported interfaces.
