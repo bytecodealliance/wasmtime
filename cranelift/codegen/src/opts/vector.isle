@@ -17,6 +17,9 @@
 (rule (simplify (bxor ty (splat ty x) (splat ty y)))
       (splat ty (bxor (lane_type ty) x y)))
 
+(rule (simplify (bnot ty (splat ty x)))
+      (splat ty (bnot (lane_type ty) x)))
+
 (rule (simplify (iadd ty (splat ty x) (splat ty y)))
       (splat ty (iadd (lane_type ty) x y)))
 
