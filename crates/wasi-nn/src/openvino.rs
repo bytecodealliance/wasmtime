@@ -44,6 +44,35 @@ impl Backend for OpenvinoBackend {
             .read()?
             .as_slice()?
             .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+        self.load_from_bytes(&vec![xml.to_vec(), weights.to_vec()], target)
+    }
+
+    fn load_from_bytes(
+        &mut self,
+        model_bytes: &Vec<Vec<u8>>,
+        target: ExecutionTarget,
+    ) -> Result<Box<dyn BackendGraph>, BackendError> {
+        if model_bytes.len() != 2 {
+            return Err(BackendError::InvalidNumberOfBuilders(
+                2,
+                model_bytes.len().try_into().unwrap(),
+            )
+            .into());
+        }
+
+        // Construct the context if none is present; this is done lazily (i.e.
+        // upon actually loading a model) because it may fail to find and load
+        // the OpenVINO libraries. The laziness limits the extent of the error
+        // only to wasi-nn users, not all WASI users.
+        if self.0.is_none() {
+            self.0.replace(openvino::Core::new(None)?);
+        }
+
+        // Read the guest array.
+        let xml = model_bytes[0].as_slice();
+        // .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+        let weights = model_bytes[1].as_slice();
+        // .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
 
         // Construct OpenVINO graph structures: `cnn_network` contains the graph
         // structure, `exec_network` can perform inference.
@@ -51,7 +80,7 @@ impl Backend for OpenvinoBackend {
             .0
             .as_mut()
             .expect("openvino::Core was previously constructed");
-        let mut cnn_network = core.read_network_from_buffer(&xml, &weights)?;
+        let mut cnn_network = core.read_network_from_buffer(xml, weights)?;
 
         // TODO this is a temporary workaround. We need a more eligant way to specify the layout in the long run.
         // However, without this newer versions of OpenVINO will fail due to parameter mismatch.
