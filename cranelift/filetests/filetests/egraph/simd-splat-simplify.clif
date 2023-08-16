@@ -2,6 +2,39 @@ test optimize
 set opt_level=speed
 target x86_64
 
+function %band_splat_into_splat_band(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = band.i64x2 v2, v3
+  return v4
+  ; check: v5 = band v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %bor_splat_into_splat_bor(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = bor.i64x2 v2, v3
+  return v4
+  ; check: v5 = bor v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %bxor_splat_into_splat_bxor(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = bxor.i64x2 v2, v3
+  return v4
+  ; check: v5 = bxor v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
 function %iadd_splat_into_splat_iadd(i64, i64) -> i64x2 {
 block0(v0: i64, v1: i64):
   v2 = splat.i64x2 v0

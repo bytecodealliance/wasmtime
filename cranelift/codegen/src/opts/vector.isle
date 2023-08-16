@@ -8,6 +8,15 @@
 (rule (simplify (fcvt_from_sint float_vector_ty (splat _ x)))
       (splat float_vector_ty (fcvt_from_sint (lane_type float_vector_ty) x)))
 
+(rule (simplify (band ty (splat ty x) (splat ty y)))
+      (splat ty (band (lane_type ty) x y)))
+
+(rule (simplify (bor ty (splat ty x) (splat ty y)))
+      (splat ty (bor (lane_type ty) x y)))
+
+(rule (simplify (bxor ty (splat ty x) (splat ty y)))
+      (splat ty (bxor (lane_type ty) x y)))
+
 (rule (simplify (iadd ty (splat ty x) (splat ty y)))
       (splat ty (iadd (lane_type ty) x y)))
 
