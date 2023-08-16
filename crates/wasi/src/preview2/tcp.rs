@@ -28,10 +28,10 @@ pub(crate) enum HostTcpState {
     /// Listening started via `listen_start`.
     ListenStarted,
 
-    /// The socket is now listening and waiting for an incomming connection.
+    /// The socket is now listening and waiting for an incoming connection.
     Listening(Pin<Box<JoinHandle<()>>>),
 
-    /// Listening heard an incomming connection arrive that is ready to be
+    /// Listening heard an incoming connection arrive that is ready to be
     /// accepted.
     ListenReady(io::Result<()>),
 
@@ -46,10 +46,11 @@ pub(crate) enum HostTcpState {
 }
 
 /// A host TCP socket, plus associated bookkeeping.
-// The inner state is wrapped in an Arc because the same underlying socket is
-// used for implementing the stream types. Also needed for [`spawn_blocking`].
-//
-// [`spawn_blocking`]: Self::spawn_blocking
+///
+/// The inner state is wrapped in an Arc because the same underlying socket is
+/// used for implementing the stream types. Also needed for [`spawn_blocking`].
+///
+/// [`spawn_blocking`]: Self::spawn_blocking
 pub(crate) struct HostTcpSocket {
     /// The part of a `HostTcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
@@ -78,7 +79,10 @@ pub(crate) struct HostTcpSocketInner {
 }
 
 impl HostTcpSocket {
+    /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {
+        // Create a new host socket and set it to non-blocking, which is needed
+        // by our async implementation.
         let tcp_socket = TcpListener::new(family, Blocking::No)?;
 
         // On Unix, pack it up in an `AsyncFd` so we can efficiently poll it.
@@ -97,6 +101,9 @@ impl HostTcpSocket {
         })
     }
 
+    /// Create a `HostTcpSocket` from an existing socket.
+    ///
+    /// The socket must be in non-blocking mode.
     pub fn from_tcp_stream(tcp_socket: cap_std::net::TcpStream) -> io::Result<Self> {
         let fd = rustix::fd::OwnedFd::from(tcp_socket);
         let tcp_socket = TcpListener::from(fd);
@@ -268,20 +275,16 @@ impl TableTcpSocketExt for Table {
     }
 }
 
-pub(crate) fn read_result(
-    r: Result<usize, std::io::Error>,
-) -> Result<(usize, StreamState), std::io::Error> {
+pub(crate) fn read_result(r: io::Result<usize>) -> io::Result<(usize, StreamState)> {
     match r {
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
-        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
+        Err(e) if e.kind() == io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
         Err(e) => Err(e),
     }
 }
 
-pub(crate) fn write_result(
-    r: Result<usize, std::io::Error>,
-) -> Result<(usize, StreamState), std::io::Error> {
+pub(crate) fn write_result(r: io::Result<usize>) -> io::Result<(usize, StreamState)> {
     match r {
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
