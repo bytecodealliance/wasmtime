@@ -157,15 +157,7 @@ fn read_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState),
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
-        Err(e)
-            if matches!(
-                rustix::io::Errno::from_io_error(&e),
-                Some(rustix::io::Errno::IO)
-            ) =>
-        {
-            Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into())
-        }
-        Err(e) => Err(e.into()),
+        Err(e) => Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into()),
     }
 }
 
@@ -173,15 +165,7 @@ fn write_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState)
     match r {
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
-        Err(e)
-            if matches!(
-                rustix::io::Errno::from_io_error(&e),
-                Some(rustix::io::Errno::IO)
-            ) =>
-        {
-            Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into())
-        }
-        Err(e) => Err(e.into()),
+        Err(e) => Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into()),
     }
 }
 
