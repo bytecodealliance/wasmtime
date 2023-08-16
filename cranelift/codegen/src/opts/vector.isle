@@ -37,3 +37,30 @@
 
 (rule (simplify (iabs ty (splat ty x)))
       (splat ty (iabs (lane_type ty) x)))
+
+(rule (simplify (popcnt ty (splat ty x)))
+      (splat ty (popcnt (lane_type ty) x)))
+
+(rule (simplify (smin ty (splat ty x) (splat ty y)))
+      (splat ty (smin (lane_type ty) x y)))
+
+(rule (simplify (umin ty (splat ty x) (splat ty y)))
+      (splat ty (umin (lane_type ty) x y)))
+
+(rule (simplify (smax ty (splat ty x) (splat ty y)))
+      (splat ty (smax (lane_type ty) x y)))
+
+(rule (simplify (umax ty (splat ty x) (splat ty y)))
+      (splat ty (umax (lane_type ty) x y)))
+
+(rule (simplify (sadd_sat ty (splat ty x) (splat ty y)))
+      (splat ty (sadd_sat (lane_type ty) x y)))
+
+(rule (simplify (uadd_sat ty (splat ty x) (splat ty y)))
+      (splat ty (uadd_sat (lane_type ty) x y)))
+
+(rule (simplify (ssub_sat ty (splat ty x) (splat ty y)))
+      (splat ty (ssub_sat (lane_type ty) x y)))
+
+(rule (simplify (usub_sat ty (splat ty x) (splat ty y)))
+      (splat ty (usub_sat (lane_type ty) x y)))
