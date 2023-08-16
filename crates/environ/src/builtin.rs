@@ -51,6 +51,22 @@ macro_rules! foreach_builtin_function {
             out_of_gas(vmctx: vmctx);
             /// Invoked when we reach a new epoch.
             new_epoch(vmctx: vmctx) -> i64;
+            /// Invoked before malloc returns.
+            check_malloc(vmctx: vmctx, addr: i32, len: i32) -> i32;
+            /// Invoked before the free returns.
+            check_free(vmctx: vmctx, addr: i32) -> i32;
+            /// Invoked before a load is executed.
+            check_load(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> i32;
+            /// Invoked before a store is executed.
+            check_store(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> i32;
+            /// Invoked after malloc is called.
+            malloc_start(vmctx: vmctx);
+            /// Invoked after free is called.
+            free_start(vmctx: vmctx);
+            /// Invoked when wasm stack pointer is updated.
+            update_stack_pointer(vmctx: vmctx, value: i32);
+            /// Invoked before memory.grow is called.
+            update_mem_size(vmctx: vmctx, num_bytes: i32);
         }
     };
 }

@@ -511,6 +511,7 @@ impl<T> Store<T> {
                     imports: Default::default(),
                     store: StorePtr::empty(),
                     runtime_info: &shim,
+                    wmemcheck: engine.config().wmemcheck,
                 })
                 .expect("failed to allocate default callee");
 

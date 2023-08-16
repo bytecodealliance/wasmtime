@@ -1,4 +1,4 @@
-use crate::preview2::{bindings::cli_base::exit, I32Exit, WasiView};
+use crate::preview2::{bindings::cli::exit, I32Exit, WasiView};
 
 impl<T: WasiView> exit::Host for T {
     fn exit(&mut self, status: Result<(), ()>) -> anyhow::Result<()> {

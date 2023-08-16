@@ -52,6 +52,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-jit-debug",
     "wasmtime-fiber",
     "wasmtime-environ",
+    "wasmtime-wmemcheck",
     "wasmtime-runtime",
     "wasmtime-cranelift-shared",
     "wasmtime-cranelift",

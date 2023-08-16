@@ -110,6 +110,7 @@ pub struct Config {
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
+    pub(crate) wmemcheck: bool,
     pub(crate) coredump_on_trap: bool,
     pub(crate) macos_use_mach_ports: bool,
 }
@@ -125,6 +126,7 @@ struct CompilerConfig {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<std::path::PathBuf>,
+    wmemcheck: bool,
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -137,6 +139,7 @@ impl CompilerConfig {
             flags: HashSet::new(),
             cache_store: None,
             clif_dir: None,
+            wmemcheck: false,
         }
     }
 
@@ -201,6 +204,7 @@ impl Config {
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
+            wmemcheck: false,
             coredump_on_trap: false,
             macos_use_mach_ports: true,
         };
@@ -1480,6 +1484,16 @@ impl Config {
         self
     }
 
+    /// Enables memory error checking for wasm programs.
+    ///
+    /// This option is disabled by default.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn wmemcheck(&mut self, enable: bool) -> &mut Self {
+        self.wmemcheck = enable;
+        self.compiler_config.wmemcheck = enable;
+        self
+    }
+
     /// Configures the "guaranteed dense image size" for copy-on-write
     /// initialized memories.
     ///
@@ -1538,6 +1552,10 @@ impl Config {
             < self.tunables.dynamic_memory_offset_guard_size
         {
             bail!("static memory guard size cannot be smaller than dynamic memory guard size");
+        }
+        #[cfg(not(feature = "wmemcheck"))]
+        if self.wmemcheck {
+            bail!("wmemcheck (memory checker) was requested but is not enabled in this build");
         }
 
         Ok(())
@@ -1676,6 +1694,7 @@ impl Config {
         }
 
         compiler.set_tunables(self.tunables.clone())?;
+        compiler.wmemcheck(self.compiler_config.wmemcheck);
 
         Ok((self, compiler.build()?))
     }

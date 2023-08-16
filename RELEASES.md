@@ -73,6 +73,9 @@ Unreleased.
   instead of returning an error.
   [#6776](https://github.com/bytecodealliance/wasmtime/pull/6776)
 
+* Optimized the cranelift compilation on aarch64 for large wasm modules.
+  [#6804](https://github.com/bytecodealliance/wasmtime/pull/6804) 
+
 ### Changed
 
 * Empty types are no longer allowed in the component model.

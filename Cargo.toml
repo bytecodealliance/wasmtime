@@ -100,6 +100,7 @@ members = [
   "crates/test-programs/wasi-http-tests",
   "crates/test-programs/command-tests",
   "crates/test-programs/reactor-tests",
+  "crates/wmemcheck",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/winch",
@@ -112,7 +113,7 @@ members = [
 ]
 exclude = [
   'crates/wasi-common/WASI/tools/witx-cli',
-  'docs/rust_wasi_markdown_parser'
+  'docs/rust_wasi_markdown_parser',
 ]
 
 [workspace.package]
@@ -122,6 +123,7 @@ edition = "2021"
 rust-version = "1.66.0"
 
 [workspace.dependencies]
+wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=13.0.0" }
 wasmtime = { path = "crates/wasmtime", version = "13.0.0", default-features = false }
 wasmtime-cache = { path = "crates/cache", version = "=13.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=13.0.0" }
@@ -195,7 +197,7 @@ system-interface = { version = "0.26.0", features = ["cap_std_impls"] }
 io-lifetimes = { version = "2.0.2", default-features = false }
 io-extras = "0.18.0"
 rustix = "0.38.4"
-
+is-terminal = "0.4.0"
 # wit-bindgen:
 wit-bindgen = { version = "0.9.0", default-features = false }
 
@@ -271,6 +273,7 @@ component-model = [
   "wasmtime-cli-flags/component-model"
 ]
 winch = ["wasmtime/winch"]
+wmemcheck = ["wasmtime/wmemcheck"]
 
 [[test]]
 name = "host_segfault"

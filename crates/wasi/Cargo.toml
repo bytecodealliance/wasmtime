@@ -31,6 +31,7 @@ cap-rand = { workspace = true, optional = true }
 cap-fs-ext = { workspace = true, optional = true }
 cap-time-ext = { workspace = true, optional = true }
 fs-set-times = { workspace = true, optional = true }
+is-terminal = { workspace = true, optional = true }
 bitflags = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 system-interface = { workspace = true, optional = true}
@@ -64,6 +65,7 @@ preview2 = [
     'dep:cap-fs-ext',
     'dep:cap-time-ext',
     'dep:fs-set-times',
+    'dep:is-terminal',
     'dep:bitflags',
     'dep:async-trait',
     'dep:system-interface',

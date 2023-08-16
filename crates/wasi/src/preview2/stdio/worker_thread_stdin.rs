@@ -78,6 +78,7 @@ fn create() -> GlobalStdin {
 }
 
 /// Only public interface is the [`HostInputStream`] impl.
+#[derive(Clone)]
 pub struct Stdin;
 impl Stdin {
     // Private! Only required internally.
@@ -88,6 +89,12 @@ impl Stdin {
 
 pub fn stdin() -> Stdin {
     Stdin
+}
+
+impl is_terminal::IsTerminal for Stdin {
+    fn is_terminal(&self) -> bool {
+        std::io::stdin().is_terminal()
+    }
 }
 
 #[async_trait::async_trait]

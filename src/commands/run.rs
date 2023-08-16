@@ -224,6 +224,12 @@ pub struct RunCommand {
     #[clap(long)]
     trap_on_grow_failure: bool,
 
+    /// Enables memory error checking.
+    ///
+    /// See wmemcheck.md for documentation on how to use.
+    #[clap(long)]
+    wmemcheck: bool,
+
     /// The WebAssembly module to run and arguments to pass to it.
     ///
     /// Arguments passed to the wasm module will be configured as WASI CLI
@@ -259,6 +265,8 @@ impl RunCommand {
             }
             None => {}
         }
+
+        config.wmemcheck(self.wmemcheck);
 
         let engine = Engine::new(&config)?;
 
