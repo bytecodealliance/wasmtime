@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 anyhow = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 wit-bindgen = { workspace = true, default-features = false, features = [
     "macros",
 ] }

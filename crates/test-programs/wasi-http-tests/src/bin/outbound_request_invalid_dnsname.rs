@@ -3,7 +3,9 @@ use wasi_http_tests::bindings::wasi::http::types::{Method, Scheme};
 
 struct Component;
 
-fn main() -> Result<(), ()> {
+fn main() {}
+
+async fn run() -> Result<(), ()> {
     let res = wasi_http_tests::request(
         Method::Get,
         Scheme::Http,
@@ -11,7 +13,8 @@ fn main() -> Result<(), ()> {
         "/",
         None,
         None,
-    );
+    )
+    .await;
 
     let error = res.unwrap_err();
     assert_eq!(error.to_string(), "Error::InvalidUrl(\"invalid dnsname\")");
@@ -21,7 +24,7 @@ fn main() -> Result<(), ()> {
 
 impl wasi_http_tests::bindings::CommandExtended for Component {
     fn run() -> Result<(), ()> {
-        main()
+        wasi_http_tests::in_tokio(async { run().await })
     }
 }
 

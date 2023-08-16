@@ -1,6 +1,6 @@
 pub mod bindings {
     wit_bindgen::generate!({
-        path: "../../wasi/wit",
+        path: "../../wasi-http/wit",
         world: "wasi:preview/command-extended",
         macro_call_prefix: "::wasi_http_tests::bindings::",
         macro_export,
@@ -9,6 +9,7 @@ pub mod bindings {
 
 use anyhow::{anyhow, Context, Result};
 use std::fmt;
+use std::sync::OnceLock;
 
 use bindings::wasi::http::{outgoing_handler, types as http_types};
 use bindings::wasi::io::streams;
@@ -41,7 +42,7 @@ impl Response {
     }
 }
 
-pub fn request(
+pub async fn request(
     method: http_types::Method,
     scheme: http_types::Scheme,
     authority: &str,
@@ -73,12 +74,17 @@ pub fn request(
 
     if let Some(body) = body {
         let output_stream_pollable = streams::subscribe_to_output_stream(request_body);
-
-        let mut body_cursor = 0;
-        while body_cursor < body.len() {
-            let (written, _) = streams::write(request_body, &body[body_cursor..])
-                .context("writing request body")?;
-            body_cursor += written as usize;
+        let len = body.len();
+        if len == 0 {
+            let (_written, _status) =
+                streams::write(request_body, &[]).context("writing empty request body")?;
+        } else {
+            let mut body_cursor = 0;
+            while body_cursor < body.len() {
+                let (written, _status) = streams::write(request_body, &body[body_cursor..])
+                    .context("writing request body")?;
+                body_cursor += written as usize;
+            }
         }
 
         // TODO: enable when working as expected
@@ -89,19 +95,23 @@ pub fn request(
 
     let future_response = outgoing_handler::handle(request, None);
 
-    let incoming_response = http_types::future_incoming_response_get(future_response)
-        .ok_or_else(|| anyhow!("incoming response is available immediately"))?
-        // TODO: maybe anything that appears in the Result<_, E> position should impl
-        // Error? anyway, just use its Debug here:
-        .map_err(|e| anyhow!("{e:?}"))?;
+    let incoming_response = match http_types::future_incoming_response_get(future_response) {
+        Some(result) => result,
+        None => {
+            let pollable = http_types::listen_to_future_incoming_response(future_response);
+            let _ = poll::poll_oneoff(&[pollable]);
+            http_types::future_incoming_response_get(future_response)
+                .expect("incoming response available")
+        }
+    }
+    // TODO: maybe anything that appears in the Result<_, E> position should impl
+    // Error? anyway, just use its Debug here:
+    .map_err(|e| anyhow!("{e:?}"))?;
 
     // TODO: The current implementation requires this drop after the request is sent.
     // The ownership semantics are unclear in wasi-http we should clarify exactly what is
     // supposed to happen here.
     streams::drop_output_stream(request_body);
-
-    // TODO: we could create a pollable from the future_response and poll on it here to test that
-    // its available immediately
 
     http_types::drop_outgoing_request(request);
 
@@ -129,9 +139,6 @@ pub fn request(
         body.append(&mut body_chunk);
     }
 
-    // TODO: enable when working as expected
-    // let _ = poll::poll_oneoff(&[input_stream_pollable]);
-
     poll::drop_pollable(input_stream_pollable);
     streams::drop_input_stream(body_stream);
     http_types::drop_incoming_response(incoming_response);
@@ -141,4 +148,25 @@ pub fn request(
         headers,
         body,
     })
+}
+
+static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+
+pub fn in_tokio<F: std::future::Future>(f: F) -> F::Output {
+    match tokio::runtime::Handle::try_current() {
+        Ok(h) => {
+            let _enter = h.enter();
+            h.block_on(f)
+        }
+        Err(_) => {
+            let runtime = RUNTIME.get_or_init(|| {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+            });
+            let _enter = runtime.enter();
+            runtime.block_on(f)
+        }
+    }
 }
