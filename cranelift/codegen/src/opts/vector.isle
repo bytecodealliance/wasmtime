@@ -67,3 +67,23 @@
 
 (rule (simplify (usub_sat ty (splat ty x) (splat ty y)))
       (splat ty (usub_sat (lane_type ty) x y)))
+
+(rule (simplify (avg_round ty (splat ty x) (splat ty y)))
+      (splat ty (avg_round (lane_type ty) x y)))
+
+;; The second operand of shift and rotate ops is
+;; scalar so splat opt applies only to the first
+(rule (simplify (rotl ty (splat ty x) y))
+      (splat ty (rotl ty x y)))
+
+(rule (simplify (rotr ty (splat ty x) y))
+      (splat ty (rotr ty x y)))
+
+(rule (simplify (ishl ty (splat ty x) y))
+      (splat ty (ishl ty x y)))
+
+(rule (simplify (ushr ty (splat ty x) y))
+      (splat ty (ushr ty x y)))
+
+(rule (simplify (sshr ty (splat ty x) y))
+      (splat ty (sshr ty x y)))
