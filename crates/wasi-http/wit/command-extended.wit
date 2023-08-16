@@ -1,8 +1,6 @@
-package wasmtime:wasi
-
-// All of the same imports available in the wasi:cli/command world, but no
-// export required:
-world preview1-adapter-reactor {
+// All of the same imports and exports available in the wasi:cli/command world
+// with addition of HTTP proxy related imports:
+world command-extended {
   import wasi:clocks/wall-clock
   import wasi:clocks/monotonic-clock
   import wasi:clocks/timezone
@@ -30,4 +28,12 @@ world preview1-adapter-reactor {
   import wasi:cli/terminal-stdin
   import wasi:cli/terminal-stdout
   import wasi:cli/terminal-stderr
+
+  export wasi:cli/run
+
+  // We should replace all others with `include self.command`
+  // as soon as the unioning of worlds is available:
+  // https://github.com/WebAssembly/component-model/issues/169
+  import wasi:logging/logging
+  import wasi:http/outgoing-handler
 }
