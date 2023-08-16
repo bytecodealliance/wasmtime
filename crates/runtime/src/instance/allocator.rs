@@ -53,6 +53,9 @@ pub struct InstanceAllocationRequest<'a> {
     /// We use a number of `PhantomPinned` declarations to indicate this to the
     /// compiler. More info on this in `wasmtime/src/store.rs`
     pub store: StorePtr,
+
+    /// Indicates '--wmemcheck' flag.
+    pub wmemcheck: bool,
 }
 
 /// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct
@@ -122,7 +125,15 @@ pub unsafe trait InstanceAllocator {
             return Err(e);
         }
 
-        unsafe { Ok(Instance::new(req, index, memories, tables)) }
+        unsafe {
+            Ok(Instance::new(
+                req,
+                index,
+                memories,
+                tables,
+                &module.memory_plans,
+            ))
+        }
     }
 
     /// Deallocates the provided instance.

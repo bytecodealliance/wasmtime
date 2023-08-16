@@ -1143,6 +1143,7 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
         let config = self.0.config();
         config.tunables.hash(hasher);
         config.features.hash(hasher);
+        config.wmemcheck.hash(hasher);
 
         // Catch accidental bugs of reusing across crate versions.
         config.module_version.hash(hasher);

@@ -127,6 +127,9 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
 
     /// Builds a new [`Compiler`] object from this configuration.
     fn build(&self) -> Result<Box<dyn Compiler>>;
+
+    /// Enables or disables wmemcheck during runtime according to the wmemcheck CLI flag.
+    fn wmemcheck(&mut self, _enable: bool) {}
 }
 
 /// Description of compiler settings returned by [`CompilerBuilder::settings`].

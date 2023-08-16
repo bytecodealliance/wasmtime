@@ -1,0 +1,11 @@
+[package]
+name = "wasmtime-wmemcheck"
+version.workspace = true
+authors.workspace = true
+description = "Memcheck implementation for Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-cranelift/"
+edition.workspace = true
+
+[dependencies]

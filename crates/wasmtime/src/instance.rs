@@ -274,6 +274,7 @@ impl Instance {
                     imports,
                     host_state: Box::new(Instance(instance_to_be)),
                     store: StorePtr::new(store.traitobj()),
+                    wmemcheck: store.engine().config().wmemcheck,
                 })?;
 
         // The instance still has lots of setup, for example
