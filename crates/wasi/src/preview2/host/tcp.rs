@@ -42,6 +42,7 @@ impl<T: WasiView> tcp::Host for T {
         let network = table.get_network(network)?;
         let binder = network.0.tcp_binder(local_address)?;
 
+        // Perform the OS bind call.
         binder.bind_existing_tcp_listener(socket.tcp_socket())?;
 
         set_state(tcp_state, HostTcpState::BindStarted);
@@ -84,7 +85,7 @@ impl<T: WasiView> tcp::Host for T {
         let network = table.get_network(network)?;
         let connecter = network.0.tcp_connecter(remote_address)?;
 
-        // Do a host `connect`. Our socket is non-blocking, so it'll either...
+        // Do an OS `connect`. Our socket is non-blocking, so it'll either...
         match connecter.connect_existing_tcp_listener(socket.tcp_socket()) {
             // succeed immediately,
             Ok(()) => {
@@ -262,7 +263,7 @@ impl<T: WasiView> tcp::Host for T {
             HostTcpState::Listening(Pin::from(Box::new(new_join))),
         );
 
-        // Do the host system call.
+        // Do the OS accept call.
         let (connection, _addr) = socket.tcp_socket().accept_with(Blocking::No)?;
         let tcp_socket = HostTcpSocket::from_tcp_stream(connection)?;
 
@@ -282,8 +283,7 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
         let addr = socket
-            .inner
-            .tcp_socket
+            .tcp_socket()
             .as_socketlike_view::<std::net::TcpStream>()
             .local_addr()?;
         Ok(addr.into())
@@ -293,8 +293,7 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
         let addr = socket
-            .inner
-            .tcp_socket
+            .tcp_socket()
             .as_socketlike_view::<std::net::TcpStream>()
             .peer_addr()?;
         Ok(addr.into())
@@ -498,8 +497,7 @@ impl<T: WasiView> tcp::Host for T {
         };
 
         socket
-            .inner
-            .tcp_socket
+            .tcp_socket()
             .as_socketlike_view::<std::net::TcpStream>()
             .shutdown(how)?;
         Ok(())

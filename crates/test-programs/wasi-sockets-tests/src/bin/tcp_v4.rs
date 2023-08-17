@@ -47,8 +47,13 @@ fn main() {
     wait(client_sub);
     let (client_input, client_output) = tcp::finish_connect(client).unwrap();
 
-    let (n, _status) = streams::write(client_output, first_message).unwrap();
+    let (n, status) = streams::write(client_output, &[]).unwrap();
+    assert_eq!(n, 0);
+    assert_eq!(status, streams::StreamStatus::Open);
+
+    let (n, status) = streams::write(client_output, first_message).unwrap();
     assert_eq!(n, first_message.len() as u64); // Not guaranteed to work but should work in practice.
+    assert_eq!(status, streams::StreamStatus::Open);
 
     streams::drop_input_stream(client_input);
     streams::drop_output_stream(client_output);
@@ -57,7 +62,13 @@ fn main() {
 
     wait(sub);
     let (accepted, input, output) = tcp::accept(sock).unwrap();
-    let (data, _status) = streams::read(input, first_message.len() as u64).unwrap();
+
+    let (empty_data, status) = streams::read(input, 0).unwrap();
+    assert!(empty_data.is_empty());
+    assert_eq!(status, streams::StreamStatus::Open);
+
+    let (data, status) = streams::read(input, first_message.len() as u64).unwrap();
+    assert_eq!(status, streams::StreamStatus::Open);
 
     tcp::drop_tcp_socket(accepted);
     streams::drop_input_stream(input);
@@ -74,8 +85,9 @@ fn main() {
     wait(client_sub);
     let (client_input, client_output) = tcp::finish_connect(client).unwrap();
 
-    let (n, _status) = streams::write(client_output, second_message).unwrap();
+    let (n, status) = streams::write(client_output, second_message).unwrap();
     assert_eq!(n, second_message.len() as u64); // Not guaranteed to work but should work in practice.
+    assert_eq!(status, streams::StreamStatus::Open);
 
     streams::drop_input_stream(client_input);
     streams::drop_output_stream(client_output);
@@ -84,7 +96,8 @@ fn main() {
 
     wait(sub);
     let (accepted, input, output) = tcp::accept(sock).unwrap();
-    let (data, _status) = streams::read(input, second_message.len() as u64).unwrap();
+    let (data, status) = streams::read(input, second_message.len() as u64).unwrap();
+    assert_eq!(status, streams::StreamStatus::Open);
 
     streams::drop_input_stream(input);
     streams::drop_output_stream(output);

@@ -189,6 +189,9 @@ impl HostTcpSocketInner {
 #[async_trait::async_trait]
 impl HostInputStream for Arc<HostTcpSocketInner> {
     fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+        if size == 0 {
+            return Ok((Bytes::new(), StreamState::Open));
+        }
         let mut buf = BytesMut::zeroed(size);
         let r = self
             .tcp_socket()
@@ -228,6 +231,9 @@ impl HostInputStream for Arc<HostTcpSocketInner> {
 #[async_trait::async_trait]
 impl HostOutputStream for Arc<HostTcpSocketInner> {
     fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
+        if buf.is_empty() {
+            return Ok((0, StreamState::Open));
+        }
         let r = self
             .tcp_socket
             .as_socketlike_view::<TcpStream>()
@@ -313,8 +319,15 @@ pub(crate) fn read_result(r: io::Result<usize>) -> io::Result<(usize, StreamStat
 
 pub(crate) fn write_result(r: io::Result<usize>) -> io::Result<(usize, StreamState)> {
     match r {
+        // We special-case zero-write stores ourselves, so if we get a zero
+        // back from a `write`, it means the stream is closed on some
+        // platforms.
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
+        #[cfg(not(windows))]
+        Err(e) if e.raw_os_error() == Some(rustix::io::Errno::PIPE.raw_os_error()) => {
+            Ok((0, StreamState::Closed))
+        }
         Err(e) => Err(e),
     }
 }
