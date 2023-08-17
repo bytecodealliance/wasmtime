@@ -457,7 +457,8 @@ jobs:
     # Ensure wit definitions are in sync: both wasmtime-wasi and wasmtime-wasi-http need their own
     # copy of the wit definitions so publishing works, but we need to ensure they are identical copies.
     - run: |
-        cp -TRv 'crates/wasi/wit/' 'crates/wasi-http/wit/'
+        rm -rf 'crates/wasi-http/wit'
+        cp -rv 'crates/wasi/wit/' 'crates/wasi-http/wit/'
         git diff --exit-code --diff-filter=AM $GITHUB_SHA -- 'crates/wasi-http/wit/'
 
     # Build and test all features
