@@ -927,7 +927,7 @@ fn total_tables_limit() -> Result<()> {
 }
 
 #[tokio::test]
-#[cfg_attr(miri, ignore)]
+#[cfg(not(miri))]
 async fn total_stacks_limit() -> Result<()> {
     use super::async_functions::PollOnce;
 
