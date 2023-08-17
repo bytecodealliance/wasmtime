@@ -134,36 +134,59 @@ interface streams {
     /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
     type output-stream = u32
 
-    /// Perform a non-blocking write of bytes to a stream.
+
+    /// Return values:
+    /// None means: not yet ready for writing
+    /// Ready(u64) means: ready for up to this amount
+    /// Closed means: an error occured during the last write, or the other end
+    /// will no longer be reading. Future writes will trap.
     ///
-    /// This function returns a `u64` and a `stream-status`. The `u64` indicates
-    /// the number of bytes from `buf` that were written, which may be less than
-    /// the length of `buf`. The `stream-status` indicates if further writes to
-    /// the stream are expected to be read.
-    ///
-    /// When the returned `stream-status` is `open`, the `u64` return value may
-    /// be less than the length of `buf`. This indicates that no more bytes may
-    /// be written to the stream promptly. In that case the
-    /// `subscribe-to-output-stream` pollable will indicate when additional bytes
-    /// may be promptly written.
-    ///
-    /// Writing an empty list must return a non-error result with `0` for the
-    /// `u64` return value, and the current `stream-status`.
+    /// when the subscribe-to-output-stream pollable becomes ready, the
+    /// return value of this function is some.
+    variant write-readiness {
+        ready(u64),
+        closed
+    }
+    check-write: func(
+        this: output-stream
+    ) -> option<write-readiness>
+
+
+    /// Precondition: check-write gave Some(Ready(n)) and contents has a
+    /// length of less than n. Otherwise, this function will trap.
+    /// Return values:
+    /// Ready(u64) means: write completed synchronously and stream is still
+    /// open. More input is now accepted up to this amount.
+    /// Pending means: write in progress. Use check-write and pollable to
+    /// wait for this write to succeed or fail.
+    /// Closed means: write failed immediately. future writes will trap.
+    variant write-result {
+        ready(u64),
+        pending,
+        closed
+    }
     write: func(
         this: output-stream,
-        /// Data to write
-        buf: list<u8>
-    ) -> result<tuple<u64, stream-status>>
+        contents: list<u8>
+    ) -> write-result
 
-    /// Blocking write of bytes to a stream.
-    ///
-    /// This is similar to `write`, except that it blocks until at least one
-    /// byte can be written.
+    /// Precondition: None
+    /// If a prior `write` is still pending, this function will block until
+    /// that write is complete before attempting to write.
+    /// Postcondition: check-write is ready or closed.
+    /// Return values:
+    /// ok means: write completed
+    /// err means: stream has closed
+    /// PROBLEM WITH THIS DESIGN: the implementor of this function would have to accept an
+    /// unbounded `contents` size and trap if its over whatever limit they can
+    /// actually handle , which makes them no better off than they
+    /// were before we introduced a way to communicate backressure via
+    /// `check-write`.
+    /// IN PATS OPINION WE GET RID OF THIS ENTIRELY
     blocking-write: func(
         this: output-stream,
-        /// Data to write
-        buf: list<u8>
-    ) -> result<tuple<u64, stream-status>>
+        contents: list<u8>,
+    ) -> result
 
     /// Write multiple zero-bytes to a stream.
     ///
@@ -174,18 +197,14 @@ interface streams {
         this: output-stream,
         /// The number of zero-bytes to write
         len: u64
-    ) -> result<tuple<u64, stream-status>>
+    ) -> write-result
 
     /// Write multiple zero bytes to a stream, with blocking.
-    ///
-    /// This is similar to `write-zeroes`, except that it blocks until at least
-    /// one byte can be written. Equivelant to a call to `blocking-write` with
-    /// a list of zeroes of the given length.
     blocking-write-zeroes: func(
         this: output-stream,
         /// The number of zero bytes to write
         len: u64
-    ) -> result<tuple<u64, stream-status>>
+    ) -> result
 
     /// Read from one stream and write to another.
     ///
