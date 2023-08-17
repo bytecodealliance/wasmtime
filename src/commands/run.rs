@@ -766,7 +766,6 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-http")]
         {
         bail!("wasi-http support will be swapped over to component CLI support soon");
-        //     store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
         // }
     }
 
