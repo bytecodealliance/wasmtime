@@ -130,3 +130,5 @@ component-model = [
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
 ]
+
+wmemcheck = ["wasmtime-runtime/wmemcheck", "wasmtime-cranelift/wmemcheck"]

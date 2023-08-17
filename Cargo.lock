@@ -3496,6 +3496,7 @@ name = "wasmtime-cranelift"
 version = "13.0.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "cranelift-codegen",
  "cranelift-control",
  "cranelift-entity",
@@ -3714,6 +3715,7 @@ dependencies = [
  "wasmtime-fiber",
  "wasmtime-jit-debug",
  "wasmtime-versioned-export-macros",
+ "wasmtime-wmemcheck",
  "windows-sys",
 ]
 
@@ -3795,7 +3797,9 @@ dependencies = [
  "anyhow",
  "openvino",
  "thiserror",
+ "tracing",
  "walkdir",
+ "wasmtime",
  "wiggle",
 ]
 
@@ -3845,6 +3849,10 @@ dependencies = [
  "indexmap 2.0.0",
  "wit-parser",
 ]
+
+[[package]]
+name = "wasmtime-wmemcheck"
+version = "13.0.0"
 
 [[package]]
 name = "wast"

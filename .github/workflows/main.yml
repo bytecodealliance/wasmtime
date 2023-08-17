@@ -266,6 +266,7 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features component-model
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
     - run: cargo check -p wasmtime --no-default-features --features winch
+    - run: cargo check -p wasmtime --no-default-features --features wmemcheck
     - run: cargo check --features component-model
     - run: cargo check -p wasmtime --features incremental-cache
 
@@ -373,7 +374,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 7.2.0
+      QEMU_BUILD_VERSION: 8.0.4
     strategy:
       fail-fast: true
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}

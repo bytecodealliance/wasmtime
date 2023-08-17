@@ -275,6 +275,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     // generate a return instruction that doesn't match the signature.
     if state.reachable {
         if !builder.is_unreachable() {
+            environ.handle_before_return(&state.stack, builder);
             bitcast_wasm_returns(environ, &mut state.stack, builder);
             builder.ins().return_(&state.stack);
         }

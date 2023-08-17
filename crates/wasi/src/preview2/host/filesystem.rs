@@ -209,7 +209,10 @@ impl<T: WasiView> types::Host for T {
             })
             .await;
 
-        let (bytes_read, state) = crate::preview2::filesystem::read_result(r)?;
+        let (bytes_read, state) = match r? {
+            0 => (0, true),
+            n => (n, false),
+        };
 
         buffer.truncate(
             bytes_read
@@ -217,7 +220,7 @@ impl<T: WasiView> types::Host for T {
                 .expect("bytes read into memory as u64 fits in usize"),
         );
 
-        Ok((buffer, state.is_closed()))
+        Ok((buffer, state))
     }
 
     async fn write(

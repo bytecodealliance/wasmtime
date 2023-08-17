@@ -1057,6 +1057,7 @@ mod test {
                         },
                         host_state: Box::new(()),
                         store: StorePtr::empty(),
+                        wmemcheck: false,
                     })
                     .expect("allocation should succeed"),
             );
@@ -1074,6 +1075,7 @@ mod test {
             },
             host_state: Box::new(()),
             store: StorePtr::empty(),
+            wmemcheck: false,
         }) {
             Err(_) => {}
             _ => panic!("unexpected error"),

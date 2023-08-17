@@ -71,6 +71,7 @@ pub(crate) struct Compiler {
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
+    wmemcheck: bool,
 }
 
 impl Drop for Compiler {
@@ -108,6 +109,7 @@ impl Compiler {
         cache_store: Option<Arc<dyn CacheStore>>,
         linkopts: LinkOptions,
         clif_dir: Option<path::PathBuf>,
+        wmemcheck: bool,
     ) -> Compiler {
         Compiler {
             contexts: Default::default(),
@@ -116,6 +118,7 @@ impl Compiler {
             linkopts,
             cache_store,
             clif_dir,
+            wmemcheck,
         }
     }
 }
@@ -147,7 +150,8 @@ impl wasmtime_environ::Compiler for Compiler {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(isa, translation, types, &self.tunables);
+        let mut func_env =
+            FuncEnvironment::new(isa, translation, types, &self.tunables, self.wmemcheck);
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.

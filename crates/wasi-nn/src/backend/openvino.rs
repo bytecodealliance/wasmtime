@@ -1,13 +1,13 @@
-//! Implements the wasi-nn API.
+//! Implements a `wasi-nn` [`Backend`] using OpenVINO.
 
-use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
-use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor, TensorType};
+use super::{Backend, BackendError, BackendExecutionContext, BackendGraph};
+use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
+use crate::{ExecutionContext, Graph};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
 use std::sync::Arc;
 
 #[derive(Default)]
 pub(crate) struct OpenvinoBackend(Option<openvino::Core>);
-
 unsafe impl Send for OpenvinoBackend {}
 unsafe impl Sync for OpenvinoBackend {}
 
@@ -16,11 +16,7 @@ impl Backend for OpenvinoBackend {
         "openvino"
     }
 
-    fn load(
-        &mut self,
-        builders: &GraphBuilderArray<'_>,
-        target: ExecutionTarget,
-    ) -> Result<Box<dyn BackendGraph>, BackendError> {
+    fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
         if builders.len() != 2 {
             return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()).into());
         }
@@ -34,16 +30,8 @@ impl Backend for OpenvinoBackend {
         }
 
         // Read the guest array.
-        let builders = builders.as_ptr();
-        let xml = builders
-            .read()?
-            .as_slice()?
-            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
-        let weights = builders
-            .add(1)?
-            .read()?
-            .as_slice()?
-            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+        let xml = &builders[0];
+        let weights = &builders[1];
 
         // Construct OpenVINO graph structures: `cnn_network` contains the graph
         // structure, `exec_network` can perform inference.
@@ -53,8 +41,9 @@ impl Backend for OpenvinoBackend {
             .expect("openvino::Core was previously constructed");
         let mut cnn_network = core.read_network_from_buffer(&xml, &weights)?;
 
-        // TODO this is a temporary workaround. We need a more eligant way to specify the layout in the long run.
-        // However, without this newer versions of OpenVINO will fail due to parameter mismatch.
+        // TODO: this is a temporary workaround. We need a more elegant way to
+        // specify the layout in the long run. However, without this newer
+        // versions of OpenVINO will fail due to parameter mismatch.
         for i in 0..cnn_network.get_inputs_len()? {
             let name = cnn_network.get_input_name(i)?;
             cnn_network.set_input_layout(&name, Layout::NHWC)?;
@@ -62,8 +51,9 @@ impl Backend for OpenvinoBackend {
 
         let exec_network =
             core.load_network(&cnn_network, map_execution_target_to_string(target))?;
-
-        Ok(Box::new(OpenvinoGraph(Arc::new(cnn_network), exec_network)))
+        let box_: Box<dyn BackendGraph> =
+            Box::new(OpenvinoGraph(Arc::new(cnn_network), exec_network));
+        Ok(box_.into())
     }
 }
 
@@ -73,39 +63,30 @@ unsafe impl Send for OpenvinoGraph {}
 unsafe impl Sync for OpenvinoGraph {}
 
 impl BackendGraph for OpenvinoGraph {
-    fn init_execution_context(&mut self) -> Result<Box<dyn BackendExecutionContext>, BackendError> {
+    fn init_execution_context(&mut self) -> Result<ExecutionContext, BackendError> {
         let infer_request = self.1.create_infer_request()?;
-        Ok(Box::new(OpenvinoExecutionContext(
-            self.0.clone(),
-            infer_request,
-        )))
+        let box_: Box<dyn BackendExecutionContext> =
+            Box::new(OpenvinoExecutionContext(self.0.clone(), infer_request));
+        Ok(box_.into())
     }
 }
 
 struct OpenvinoExecutionContext(Arc<openvino::CNNNetwork>, openvino::InferRequest);
 
 impl BackendExecutionContext for OpenvinoExecutionContext {
-    fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError> {
+    fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
         let input_name = self.0.get_input_name(index as usize)?;
 
-        // Construct the blob structure.
+        // Construct the blob structure. TODO: there must be some good way to
+        // discover the layout here; `desc` should not have to default to NHWC.
+        let precision = map_tensor_type_to_precision(tensor.tensor_type);
         let dimensions = tensor
             .dimensions
-            .as_slice()?
-            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)")
             .iter()
-            .map(|d| *d as usize)
+            .map(|&d| d as usize)
             .collect::<Vec<_>>();
-        let precision = map_tensor_type_to_precision(tensor.type_);
-
-        // TODO There must be some good way to discover the layout here; this
-        // should not have to default to NHWC.
         let desc = TensorDesc::new(Layout::NHWC, &dimensions, precision);
-        let data = tensor
-            .data
-            .as_slice()?
-            .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
-        let blob = openvino::Blob::new(&desc, &data)?;
+        let blob = openvino::Blob::new(&desc, &tensor.data)?;
 
         // Actually assign the blob to the request.
         self.1.set_blob(&input_name, &blob)?;
@@ -157,9 +138,10 @@ fn map_execution_target_to_string(target: ExecutionTarget) -> &'static str {
 /// wasi-nn.
 fn map_tensor_type_to_precision(tensor_type: TensorType) -> openvino::Precision {
     match tensor_type {
-        TensorType::F16 => Precision::FP16,
-        TensorType::F32 => Precision::FP32,
+        TensorType::Fp16 => Precision::FP16,
+        TensorType::Fp32 => Precision::FP32,
         TensorType::U8 => Precision::U8,
         TensorType::I32 => Precision::I32,
+        TensorType::Bf16 => todo!("not yet supported in `openvino` bindings"),
     }
 }
