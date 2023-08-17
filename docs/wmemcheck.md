@@ -17,7 +17,7 @@ If your program executes an invalid operation (load or store to non-allocated
 address, double-free, or an internal error in malloc that allocates the same
 memory twice) you will see an error that looks like a Wasm trap. For example, given the program
 
-```
+```c
 #include <stdlib.h>
 
 int main() {
@@ -30,13 +30,13 @@ int main() {
 
 compiled with WASI-SDK via
 
-```
+```plain
 $ /opt/wasi-sdk/bin/clang -o test.wasm test.c
 ```
 
 you can observe the memory checker working like so:
 
-```
+```plain
 $ wasmtime run --wmemcheck ./test.wasm
 Error: failed to run main module `./test.wasm`
 
