@@ -39,7 +39,8 @@ impl From<io::Error> for network::Error {
 
             // Errors we don't expect to see here.
             io::ErrorKind::Interrupted | io::ErrorKind::ConnectionAborted => {
-                panic!("transient errors should be skipped")
+                // Transient errors should be skipped.
+                return Self::trap(error.into());
             }
 
             // Errors not expected from network APIs.
@@ -49,11 +50,11 @@ impl From<io::Error> for network::Error {
             | io::ErrorKind::BrokenPipe
             | io::ErrorKind::NotFound
             | io::ErrorKind::UnexpectedEof
-            | io::ErrorKind::AlreadyExists => ErrorCode::Unknown,
+            | io::ErrorKind::AlreadyExists => return Self::trap(error.into()),
 
             // Errors that don't correspond to a Rust `io::ErrorKind`.
             io::ErrorKind::Other => match error.raw_os_error() {
-                None => ErrorCode::Unknown,
+                None => return Self::trap(error.into()),
                 Some(libc::ENOBUFS) | Some(libc::ENOMEM) => ErrorCode::OutOfMemory,
                 Some(libc::EOPNOTSUPP) => ErrorCode::NotSupported,
                 Some(libc::ENETUNREACH) | Some(libc::EHOSTUNREACH) | Some(libc::ENETDOWN) => {
@@ -62,9 +63,9 @@ impl From<io::Error> for network::Error {
                 Some(libc::ECONNRESET) => ErrorCode::ConnectionReset,
                 Some(libc::ECONNREFUSED) => ErrorCode::ConnectionRefused,
                 Some(libc::EADDRINUSE) => ErrorCode::AddressInUse,
-                Some(_) => panic!("unknown error {:?}", error),
+                Some(_) => return Self::trap(error.into()),
             },
-            _ => panic!("unknown error {:?}", error),
+            _ => return Self::trap(error.into()),
         }
         .into()
     }

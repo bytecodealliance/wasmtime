@@ -5,7 +5,7 @@ use cap_std::net::{TcpListener, TcpStream};
 use io_lifetimes::AsSocketlike;
 use std::io;
 use std::pin::Pin;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use system_interface::io::IoExt;
 use tokio::sync::watch::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -128,8 +128,22 @@ impl HostTcpSocket {
         self.inner.tcp_socket()
     }
 
+    pub fn notify(&self) {
+        self.inner.notify()
+    }
+
     pub fn clone_inner(&self) -> Arc<HostTcpSocketInner> {
         Arc::clone(&self.inner)
+    }
+
+    /// Acquire a reader lock for `self.tcp_state`.
+    pub fn tcp_state_read_lock(&self) -> RwLockReadGuard<HostTcpState> {
+        self.inner.tcp_state.read().unwrap()
+    }
+
+    /// Acquire a writer lock for `self.tcp_state`.
+    pub fn tcp_state_write_lock(&self) -> RwLockWriteGuard<HostTcpState> {
+        self.inner.tcp_state.write().unwrap()
     }
 }
 
@@ -142,6 +156,19 @@ impl HostTcpSocketInner {
         let tcp_socket = tcp_socket.get_ref();
 
         tcp_socket
+    }
+
+    pub fn notify(&self) {
+        self.sender.send(()).unwrap()
+    }
+
+    pub fn set_state(&self, new_state: HostTcpState) {
+        *self.tcp_state.write().unwrap() = new_state;
+    }
+
+    pub fn set_state_and_notify(&self, new_state: HostTcpState) {
+        self.set_state(new_state);
+        self.notify()
     }
 
     /// Spawn a task on tokio's blocking thread for performing blocking

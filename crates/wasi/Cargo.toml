@@ -51,6 +51,7 @@ libc = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 io-extras = { workspace = true }
 windows-sys = { workspace = true }
+rustix = { workspace = true, features = ["net"], optional = true }
 
 [features]
 default = ["sync", "preview2", "preview1-on-preview2"]
