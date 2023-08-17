@@ -766,7 +766,7 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-http")]
         {
         bail!("wasi-http support will be swapped over to component CLI support soon");
-        // }
+        }
     }
 
     Ok(())
