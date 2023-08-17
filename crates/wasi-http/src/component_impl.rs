@@ -409,7 +409,10 @@ where
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
 
-                let (bytes, status) = io::streams::Host::read(ctx, stream, len).await?;
+                let (bytes, status) = io::streams::Host::read(ctx, stream, len)
+                    .await?
+                    .map_err(|_| anyhow!("read failed"))?;
+
                 let done = match status {
                     io::streams::StreamStatus::Open => 0,
                     io::streams::StreamStatus::Ended => 1,
@@ -462,7 +465,9 @@ where
 
                 let ctx = get_cx(caller.data_mut());
 
-                let (len, status) = io::streams::Host::write(ctx, stream, body.into()).await?;
+                let (len, status) = io::streams::Host::write(ctx, stream, body.into())
+                    .await?
+                    .map_err(|_| anyhow!("write failed"))?;
                 let written: u32 = len.try_into()?;
                 let done: u32 = match status {
                     io::streams::StreamStatus::Open => 0,

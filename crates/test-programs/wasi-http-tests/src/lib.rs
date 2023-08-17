@@ -76,12 +76,14 @@ pub async fn request(
         let output_stream_pollable = streams::subscribe_to_output_stream(request_body);
         let len = body.len();
         if len == 0 {
-            let (_written, _status) =
-                streams::write(request_body, &[]).context("writing empty request body")?;
+            let (_written, _status) = streams::write(request_body, &[])
+                .map_err(|_| anyhow!("request_body stream write failed"))
+                .context("writing empty request body")?;
         } else {
             let mut body_cursor = 0;
             while body_cursor < body.len() {
                 let (written, _status) = streams::write(request_body, &body[body_cursor..])
+                    .map_err(|_| anyhow!("request_body stream write failed"))
                     .context("writing request body")?;
                 body_cursor += written as usize;
             }
@@ -130,7 +132,8 @@ pub async fn request(
     let mut body = Vec::new();
     let mut eof = streams::StreamStatus::Open;
     while eof != streams::StreamStatus::Ended {
-        let (mut body_chunk, stream_status) = streams::read(body_stream, u64::MAX)?;
+        let (mut body_chunk, stream_status) =
+            streams::read(body_stream, u64::MAX).map_err(|_| anyhow!("body_stream read failed"))?;
         eof = if body_chunk.is_empty() {
             streams::StreamStatus::Ended
         } else {
