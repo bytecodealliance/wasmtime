@@ -1,7 +1,6 @@
 use crate::r#struct::{ActiveFields, ActiveFuture, ActiveResponse, HttpResponse, TableHttpExt};
 use crate::wasi::http::types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme};
 pub use crate::{WasiHttpCtx, WasiHttpView};
-#[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use anyhow::Context;
 use bytes::{Bytes, BytesMut};
 use http_body_util::{BodyExt, Empty, Full};
@@ -165,7 +164,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             }
             #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
             return Err(crate::wasi::http::types::Error::UnexpectedError(
-                "unsupported architecture for SSL",
+                "unsupported architecture for SSL".to_string(),
             ));
         } else {
             let t = timeout(
