@@ -39,6 +39,7 @@ impl SimpleIndexAllocator {
     }
 
     #[cfg(test)]
+    #[allow(unused)]
     pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
         self.0.testing_freelist()
     }
@@ -288,6 +289,7 @@ impl ModuleAffinityIndexAllocator {
     /// For testing only, we want to be able to assert what is on the
     /// single freelist, for the policies that keep just one.
     #[cfg(test)]
+    #[allow(unused)]
     pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
         let inner = self.0.lock().unwrap();
         inner
@@ -424,6 +426,7 @@ impl List {
     }
 
     #[cfg(test)]
+    #[allow(unused)]
     fn iter<'a>(
         &'a self,
         states: &'a [SlotState],
