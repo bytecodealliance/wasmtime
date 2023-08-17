@@ -2,6 +2,33 @@ use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
 use crate::preview2::{Table, TableError};
 use anyhow::Error;
 use bytes::Bytes;
+use std::fmt;
+
+/// An error which should be reported to Wasm as a runtime error, rather than
+/// an error which should trap Wasm execution. The definition for runtime
+/// stream errors is the empty type, so the contents of this error will only
+/// be available via a `tracing`::event` at `Level::DEBUG`.
+pub struct StreamRuntimeError(anyhow::Error);
+impl From<anyhow::Error> for StreamRuntimeError {
+    fn from(e: anyhow::Error) -> Self {
+        StreamRuntimeError(e)
+    }
+}
+impl fmt::Debug for StreamRuntimeError {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "Stream runtime error: {:?}", self.0)
+    }
+}
+impl fmt::Display for StreamRuntimeError {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmt, "Stream runtime error")
+    }
+}
+impl std::error::Error for StreamRuntimeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StreamState {
@@ -22,10 +49,14 @@ pub trait HostInputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes
     /// read and a flag indicating whether the end of the stream was reached.
     /// Important: this read must be non-blocking!
+    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
+    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error>;
 
     /// Read bytes from a stream and discard them. Important: this method must
     /// be non-blocking!
+    /// Returning an Error which downcasts to a StreamRuntimeError will be
+    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn skip(&mut self, nelem: usize) -> Result<(usize, StreamState), Error> {
         let mut nread = 0;
         let mut state = StreamState::Open;
@@ -42,6 +73,7 @@ pub trait HostInputStream: Send + Sync {
 
     /// Check for read readiness: this method blocks until the stream is ready
     /// for reading.
+    /// Returning an error will trap execution.
     async fn ready(&mut self) -> Result<(), Error>;
 }
 
@@ -51,10 +83,14 @@ pub trait HostInputStream: Send + Sync {
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
     /// Important: this write must be non-blocking!
+    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
+    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error>;
 
     /// Transfer bytes directly from an input stream to an output stream.
     /// Important: this splice must be non-blocking!
+    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
+    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn splice(
         &mut self,
         src: &mut dyn HostInputStream,
@@ -77,6 +113,8 @@ pub trait HostOutputStream: Send + Sync {
 
     /// Repeatedly write a byte to a stream. Important: this write must be
     /// non-blocking!
+    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
+    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn write_zeroes(&mut self, nelem: usize) -> Result<(usize, StreamState), Error> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
@@ -87,6 +125,7 @@ pub trait HostOutputStream: Send + Sync {
 
     /// Check for write readiness: this method blocks until the stream is
     /// ready for writing.
+    /// Returning an error will trap execution.
     async fn ready(&mut self) -> Result<(), Error>;
 }
 

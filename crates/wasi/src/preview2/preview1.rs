@@ -431,6 +431,14 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
+fn stream_res<A>(r: anyhow::Result<Result<A, ()>>) -> Result<A, types::Error> {
+    match r {
+        Ok(Ok(a)) => Ok(a),
+        Ok(Err(_)) => Err(types::Errno::Io.into()),
+        Err(trap) => Err(types::Error::trap(trap)),
+    }
+}
+
 fn systimespec(set: bool, ts: types::Timestamp, now: bool) -> Result<filesystem::NewTimestamp> {
     if set && now {
         Err(types::Errno::Inval.into())
@@ -1201,11 +1209,10 @@ impl<
                 })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
                 let (read, state) = if blocking {
-                    streams::Host::blocking_read(self, stream, max).await
+                    stream_res(streams::Host::blocking_read(self, stream, max).await)?
                 } else {
-                    streams::Host::read(self, stream, max).await
-                }
-                .map_err(|_| types::Errno::Io)?;
+                    stream_res(streams::Host::read(self, stream, max).await)?
+                };
 
                 let n = read.len().try_into()?;
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
@@ -1217,13 +1224,14 @@ impl<
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
                 };
-                let (read, state) = streams::Host::read(
-                    self,
-                    input_stream,
-                    buf.len().try_into().unwrap_or(u64::MAX),
-                )
-                .await
-                .map_err(|_| types::Errno::Io)?;
+                let (read, state) = stream_res(
+                    streams::Host::read(
+                        self,
+                        input_stream,
+                        buf.len().try_into().unwrap_or(u64::MAX),
+                    )
+                    .await,
+                )?;
                 (buf, read, state)
             }
             _ => return Err(types::Errno::Badf.into()),
@@ -1263,11 +1271,10 @@ impl<
                 })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
                 let (read, state) = if blocking {
-                    streams::Host::blocking_read(self, stream, max).await
+                    stream_res(streams::Host::blocking_read(self, stream, max).await)?
                 } else {
-                    streams::Host::read(self, stream, max).await
-                }
-                .map_err(|_| types::Errno::Io)?;
+                    stream_res(streams::Host::read(self, stream, max).await)?
+                };
 
                 (buf, read, state)
             }
@@ -1325,11 +1332,10 @@ impl<
                     (stream, position)
                 };
                 let (n, _stat) = if blocking {
-                    streams::Host::blocking_write(self, stream, buf).await
+                    stream_res(streams::Host::blocking_write(self, stream, buf).await)?
                 } else {
-                    streams::Host::write(self, stream, buf).await
-                }
-                .map_err(|_| types::Errno::Io)?;
+                    stream_res(streams::Host::write(self, stream, buf).await)?
+                };
                 if !append {
                     let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
                     position.store(pos, Ordering::Relaxed);
@@ -1340,9 +1346,8 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                let (n, _stat) = streams::Host::blocking_write(self, output_stream, buf)
-                    .await
-                    .map_err(|_| types::Errno::Io)?;
+                let (n, _stat) =
+                    stream_res(streams::Host::blocking_write(self, output_stream, buf).await)?;
                 n
             }
             _ => return Err(types::Errno::Badf.into()),
@@ -1372,11 +1377,10 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 if blocking {
-                    streams::Host::blocking_write(self, stream, buf).await
+                    stream_res(streams::Host::blocking_write(self, stream, buf).await)?
                 } else {
-                    streams::Host::write(self, stream, buf).await
+                    stream_res(streams::Host::write(self, stream, buf).await)?
                 }
-                .map_err(|_| types::Errno::Io)?
             }
             Descriptor::Stdout { .. } | Descriptor::Stderr { .. } => {
                 // NOTE: legacy implementation returns SPIPE here
