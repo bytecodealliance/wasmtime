@@ -762,7 +762,7 @@ fn populate_with_wasi(
         #[cfg(not(feature = "wasi-http"))]
         {
         bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
-        // }
+        }
         // #[cfg(feature = "wasi-http")]
         // {
         //     wasmtime_wasi_http::add_to_linker(linker)?;
