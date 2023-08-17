@@ -761,11 +761,11 @@ fn populate_with_wasi(
     if wasi_modules.wasi_http {
         #[cfg(not(feature = "wasi-http"))]
         {
-        bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
+            bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
         }
         #[cfg(feature = "wasi-http")]
         {
-        bail!("wasi-http support will be swapped over to component CLI support soon");
+            bail!("wasi-http support will be swapped over to component CLI support soon");
         }
     }
 
