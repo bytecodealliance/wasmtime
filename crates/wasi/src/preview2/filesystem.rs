@@ -1,5 +1,10 @@
-use crate::preview2::{StreamRuntimeError, StreamState, Table, TableError};
+use crate::preview2::{
+    AbortOnDropJoinHandle, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
+    Table, TableError,
+};
+use anyhow::{anyhow, Context};
 use bytes::{Bytes, BytesMut};
+use futures::future::{maybe_done, MaybeDone};
 use std::sync::Arc;
 
 bitflags::bitflags! {
@@ -159,15 +164,7 @@ fn read_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState),
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
-        Err(e) => Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into()),
-    }
-}
-
-fn write_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState), anyhow::Error> {
-    match r {
-        Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n, StreamState::Open)),
-        Err(e) => Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into()),
+        Err(e) => Err(StreamRuntimeError::from(anyhow!(e)).into()),
     }
 }
 
@@ -180,35 +177,103 @@ pub(crate) enum FileOutputMode {
 pub(crate) struct FileOutputStream {
     file: Arc<cap_std::fs::File>,
     mode: FileOutputMode,
+    // Allows join future to be awaited in a cancellable manner. Gone variant indicates
+    // no task is currently outstanding.
+    task: MaybeDone<AbortOnDropJoinHandle<Result<(), std::io::Error>>>,
+    closed: bool,
 }
 impl FileOutputStream {
     pub fn write_at(file: Arc<cap_std::fs::File>, position: u64) -> Self {
         Self {
             file,
             mode: FileOutputMode::Position(position),
+            task: MaybeDone::Gone,
+            closed: false,
         }
     }
     pub fn append(file: Arc<cap_std::fs::File>) -> Self {
         Self {
             file,
             mode: FileOutputMode::Append,
+            task: MaybeDone::Gone,
+            closed: false,
         }
     }
-    /// Write bytes. On success, returns the number of bytes written.
-    pub async fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
+}
+
+// FIXME: configurable? determine from how much space left in file?
+const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
+
+#[async_trait::async_trait]
+impl HostOutputStream for FileOutputStream {
+    fn write(&mut self, buf: Bytes) -> Result<(), OutputStreamError> {
         use system_interface::fs::FileIoExt;
+
+        if self.closed {
+            return Err(OutputStreamError::Closed);
+        }
+        if !matches!(self.task, MaybeDone::Gone) {
+            // a write is pending - this call was not permitted
+            return Err(OutputStreamError::Trap(anyhow!(
+                "write not permitted: FileOutputStream write pending"
+            )));
+        }
         let f = Arc::clone(&self.file);
         let m = self.mode;
-        let r = tokio::task::spawn_blocking(move || match m {
-            FileOutputMode::Position(p) => f.write_at(buf.as_ref(), p),
-            FileOutputMode::Append => f.append(buf.as_ref()),
-        })
-        .await
-        .unwrap();
-        let (n, state) = write_result(r)?;
-        if let FileOutputMode::Position(ref mut position) = self.mode {
-            *position += n as u64;
+        self.task = maybe_done(AbortOnDropJoinHandle::from(tokio::task::spawn_blocking(
+            move || match m {
+                FileOutputMode::Position(mut p) => {
+                    let mut buf = buf;
+                    while !buf.is_empty() {
+                        let nwritten = f.write_at(buf.as_ref(), p)?;
+                        // afterwards buf contains [nwritten, len):
+                        let _ = buf.split_to(nwritten);
+                        p += nwritten as u64;
+                    }
+                    Ok(())
+                }
+                FileOutputMode::Append => {
+                    let mut buf = buf;
+                    while !buf.is_empty() {
+                        let nwritten = f.append(buf.as_ref())?;
+                        let _ = buf.split_to(nwritten);
+                    }
+                    Ok(())
+                }
+            },
+        )));
+        Ok(())
+    }
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        if self.closed {
+            return Err(OutputStreamError::Closed);
         }
-        Ok((n, state))
+        // Only userland buffering of file writes is in the blocking task.
+        Ok(())
+    }
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        if self.closed {
+            return Err(OutputStreamError::Closed);
+        }
+        // If there is no outstanding task, accept more input:
+        if matches!(self.task, MaybeDone::Gone) {
+            return Ok(FILE_WRITE_CAPACITY);
+        }
+        // Wait for outstanding task:
+        std::pin::Pin::new(&mut self.task).await;
+
+        // Mark task as finished, and handle output:
+        match std::pin::Pin::new(&mut self.task)
+            .take_output()
+            .expect("just awaited for MaybeDone completion")
+            .context("join of FileOutputStream worker task")
+            .map_err(OutputStreamError::Trap)?
+        {
+            Ok(()) => Ok(FILE_WRITE_CAPACITY),
+            Err(e) => {
+                self.closed = true;
+                Err(OutputStreamError::LastOperationFailed(e.into()))
+            }
+        }
     }
 }

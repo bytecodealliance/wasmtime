@@ -15,6 +15,52 @@ fn wait(sub: poll::Pollable) {
     }
 }
 
+struct DropPollable {
+    pollable: poll::Pollable,
+}
+
+impl Drop for DropPollable {
+    fn drop(&mut self) {
+        poll::drop_pollable(self.pollable);
+    }
+}
+
+fn write(output: streams::OutputStream, mut bytes: &[u8]) -> (usize, streams::StreamStatus) {
+    let total = bytes.len();
+    let mut written = 0;
+
+    let s = DropPollable {
+        pollable: streams::subscribe_to_output_stream(output),
+    };
+
+    while !bytes.is_empty() {
+        poll::poll_oneoff(&[s.pollable]);
+
+        let permit = match streams::check_write(output) {
+            Ok(n) => n,
+            Err(_) => return (written, streams::StreamStatus::Ended),
+        };
+
+        let len = bytes.len().min(permit as usize);
+        let (chunk, rest) = bytes.split_at(len);
+
+        match streams::write(output, chunk) {
+            Ok(()) => {}
+            Err(_) => return (written, streams::StreamStatus::Ended),
+        }
+
+        match streams::blocking_flush(output) {
+            Ok(()) => {}
+            Err(_) => return (written, streams::StreamStatus::Ended),
+        }
+
+        bytes = rest;
+        written += len;
+    }
+
+    (total, streams::StreamStatus::Open)
+}
+
 fn main() {
     let first_message = b"Hello, world!";
     let second_message = b"Greetings, planet!";
@@ -47,12 +93,12 @@ fn main() {
     wait(client_sub);
     let (client_input, client_output) = tcp::finish_connect(client).unwrap();
 
-    let (n, status) = streams::write(client_output, &[]).unwrap();
+    let (n, status) = write(client_output, &[]);
     assert_eq!(n, 0);
     assert_eq!(status, streams::StreamStatus::Open);
 
-    let (n, status) = streams::write(client_output, first_message).unwrap();
-    assert_eq!(n, first_message.len() as u64); // Not guaranteed to work but should work in practice.
+    let (n, status) = write(client_output, first_message);
+    assert_eq!(n, first_message.len());
     assert_eq!(status, streams::StreamStatus::Open);
 
     streams::drop_input_stream(client_input);
@@ -67,7 +113,7 @@ fn main() {
     assert!(empty_data.is_empty());
     assert_eq!(status, streams::StreamStatus::Open);
 
-    let (data, status) = streams::read(input, first_message.len() as u64).unwrap();
+    let (data, status) = streams::blocking_read(input, first_message.len() as u64).unwrap();
     assert_eq!(status, streams::StreamStatus::Open);
 
     tcp::drop_tcp_socket(accepted);
@@ -85,8 +131,8 @@ fn main() {
     wait(client_sub);
     let (client_input, client_output) = tcp::finish_connect(client).unwrap();
 
-    let (n, status) = streams::write(client_output, second_message).unwrap();
-    assert_eq!(n, second_message.len() as u64); // Not guaranteed to work but should work in practice.
+    let (n, status) = write(client_output, second_message);
+    assert_eq!(n, second_message.len());
     assert_eq!(status, streams::StreamStatus::Open);
 
     streams::drop_input_stream(client_input);

@@ -7,7 +7,7 @@ pub mod bindings {
     });
 }
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -42,6 +42,16 @@ impl Response {
     }
 }
 
+struct DropPollable {
+    pollable: poll::Pollable,
+}
+
+impl Drop for DropPollable {
+    fn drop(&mut self) {
+        poll::drop_pollable(self.pollable);
+    }
+}
+
 pub async fn request(
     method: http_types::Method,
     scheme: http_types::Scheme,
@@ -72,27 +82,39 @@ pub async fn request(
     let request_body = http_types::outgoing_request_write(request)
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
-    if let Some(body) = body {
-        let output_stream_pollable = streams::subscribe_to_output_stream(request_body);
-        let len = body.len();
-        if len == 0 {
-            let (_written, _status) = streams::write(request_body, &[])
-                .map_err(|_| anyhow!("request_body stream write failed"))
-                .context("writing empty request body")?;
-        } else {
-            let mut body_cursor = 0;
-            while body_cursor < body.len() {
-                let (written, _status) = streams::write(request_body, &body[body_cursor..])
-                    .map_err(|_| anyhow!("request_body stream write failed"))
-                    .context("writing request body")?;
-                body_cursor += written as usize;
+    if let Some(mut buf) = body {
+        let sub = DropPollable {
+            pollable: streams::subscribe_to_output_stream(request_body),
+        };
+        while !buf.is_empty() {
+            poll::poll_oneoff(&[sub.pollable]);
+
+            let permit = match streams::check_write(request_body) {
+                Ok(n) => usize::try_from(n)?,
+                Err(_) => anyhow::bail!("output stream error"),
+            };
+
+            let len = buf.len().min(permit);
+            let (chunk, rest) = buf.split_at(len);
+            buf = rest;
+
+            match streams::write(request_body, chunk) {
+                Err(_) => anyhow::bail!("output stream error"),
+                _ => {}
             }
         }
 
-        // TODO: enable when working as expected
-        // let _ = poll::poll_oneoff(&[output_stream_pollable]);
+        match streams::flush(request_body) {
+            Err(_) => anyhow::bail!("output stream error"),
+            _ => {}
+        }
 
-        poll::drop_pollable(output_stream_pollable);
+        poll::poll_oneoff(&[sub.pollable]);
+
+        match streams::check_write(request_body) {
+            Ok(_) => {}
+            Err(_) => anyhow::bail!("output stream error"),
+        };
     }
 
     let future_response = outgoing_handler::handle(request, None);

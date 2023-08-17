@@ -372,14 +372,16 @@ impl TableHttpExt for Table {
         let (_, write_stream) = tokio::io::split(a);
         let (read_stream, _) = tokio::io::split(b);
         let input_stream = AsyncReadStream::new(read_stream);
-        let mut output_stream = AsyncWriteStream::new(write_stream);
+        // TODO: more informed budget here
+        let mut output_stream = AsyncWriteStream::new(4096, write_stream);
 
         let mut cursor = 0;
         while cursor < content.len() {
-            let (written, _) = output_stream
-                .write(content.slice(cursor..content.len()))
-                .map_err(|_| TableError::NotPresent)?;
-            cursor += written;
+            // let (written, _) = output_stream
+            //     .write(content.slice(cursor..content.len()))
+            //     .map_err(|_| TableError::NotPresent)?;
+            // cursor += written;
+            todo!()
         }
 
         let input_stream = Box::new(input_stream);

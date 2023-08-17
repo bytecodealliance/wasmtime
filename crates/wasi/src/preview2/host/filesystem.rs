@@ -777,10 +777,7 @@ impl<T: WasiView> types::Host for T {
         fd: types::Descriptor,
         offset: types::Filesize,
     ) -> Result<streams::OutputStream, types::Error> {
-        use crate::preview2::{
-            filesystem::FileOutputStream,
-            stream::{InternalOutputStream, InternalTableStreamExt},
-        };
+        use crate::preview2::{filesystem::FileOutputStream, TableStreamExt};
 
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
@@ -796,9 +793,7 @@ impl<T: WasiView> types::Host for T {
         let writer = FileOutputStream::write_at(clone, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self
-            .table_mut()
-            .push_internal_output_stream(InternalOutputStream::File(writer))?;
+        let index = self.table_mut().push_output_stream(Box::new(writer))?;
 
         Ok(index)
     }
@@ -807,10 +802,7 @@ impl<T: WasiView> types::Host for T {
         &mut self,
         fd: types::Descriptor,
     ) -> Result<streams::OutputStream, types::Error> {
-        use crate::preview2::{
-            filesystem::FileOutputStream,
-            stream::{InternalOutputStream, InternalTableStreamExt},
-        };
+        use crate::preview2::{filesystem::FileOutputStream, TableStreamExt};
 
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
@@ -825,9 +817,7 @@ impl<T: WasiView> types::Host for T {
         let appender = FileOutputStream::append(clone);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self
-            .table_mut()
-            .push_internal_output_stream(InternalOutputStream::File(appender))?;
+        let index = self.table_mut().push_output_stream(Box::new(appender))?;
 
         Ok(index)
     }

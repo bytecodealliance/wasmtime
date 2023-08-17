@@ -5,7 +5,9 @@ use crate::bindings::wasi::cli::{
 use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams::{self, InputStream, OutputStream};
 use crate::bindings::wasi::sockets::tcp;
-use crate::{set_stderr_stream, BumpArena, File, ImportAlloc, TrappingUnwrap, WasmStr};
+use crate::{
+    set_stderr_stream, BlockingMode, BumpArena, File, ImportAlloc, TrappingUnwrap, WasmStr,
+};
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
 use wasi::{Errno, Fd};
@@ -232,7 +234,7 @@ impl Descriptors {
                     descriptor_type: filesystem::get_type(preopen.descriptor).trapping_unwrap(),
                     position: Cell::new(0),
                     append: false,
-                    blocking: false,
+                    blocking_mode: BlockingMode::Blocking,
                 }),
             }))
             .trapping_unwrap();

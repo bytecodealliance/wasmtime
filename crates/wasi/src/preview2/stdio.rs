@@ -4,8 +4,7 @@ use crate::preview2::bindings::cli::{
 };
 use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe::AsyncWriteStream;
-use crate::preview2::{HostOutputStream, StreamState, WasiView};
-use anyhow::Error;
+use crate::preview2::{HostOutputStream, OutputStreamError, WasiView};
 use bytes::Bytes;
 use is_terminal::IsTerminal;
 
@@ -22,7 +21,7 @@ pub use self::worker_thread_stdin::{stdin, Stdin};
 pub struct Stdout(AsyncWriteStream);
 
 pub fn stdout() -> Stdout {
-    Stdout(AsyncWriteStream::new(tokio::io::stdout()))
+    Stdout(AsyncWriteStream::new(2048, tokio::io::stdout()))
 }
 impl IsTerminal for Stdout {
     fn is_terminal(&self) -> bool {
@@ -31,18 +30,21 @@ impl IsTerminal for Stdout {
 }
 #[async_trait::async_trait]
 impl HostOutputStream for Stdout {
-    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
         self.0.write(bytes)
     }
-    async fn ready(&mut self) -> Result<(), Error> {
-        self.0.ready().await
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        self.0.flush()
+    }
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        self.0.write_ready().await
     }
 }
 
 pub struct Stderr(AsyncWriteStream);
 
 pub fn stderr() -> Stderr {
-    Stderr(AsyncWriteStream::new(tokio::io::stderr()))
+    Stderr(AsyncWriteStream::new(2048, tokio::io::stderr()))
 }
 impl IsTerminal for Stderr {
     fn is_terminal(&self) -> bool {
@@ -51,11 +53,14 @@ impl IsTerminal for Stderr {
 }
 #[async_trait::async_trait]
 impl HostOutputStream for Stderr {
-    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
         self.0.write(bytes)
     }
-    async fn ready(&mut self) -> Result<(), Error> {
-        self.0.ready().await
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        self.0.flush()
+    }
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        self.0.write_ready().await
     }
 }
 

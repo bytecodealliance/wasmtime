@@ -25,7 +25,7 @@ compile_error!("only one of the `command` and `reactor` features may be selected
 mod macros;
 
 mod descriptors;
-use crate::descriptors::{Descriptor, Descriptors, IsATTY, StreamType, Streams};
+use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 
 pub mod bindings {
     #[cfg(feature = "command")]
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                     if file.append {
                         fs_flags |= FDFLAGS_APPEND;
                     }
-                    if !file.blocking {
+                    if matches!(file.blocking_mode, BlockingMode::NonBlocking) {
                         fs_flags |= FDFLAGS_NONBLOCK;
                     }
                     let fs_rights_inheriting = fs_rights_base;
@@ -611,7 +611,11 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
             _ => Err(wasi::ERRNO_BADF)?,
         };
         file.append = flags & FDFLAGS_APPEND == FDFLAGS_APPEND;
-        file.blocking = !(flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK);
+        file.blocking_mode = if flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK {
+            BlockingMode::NonBlocking
+        } else {
+            BlockingMode::Blocking
+        };
         Ok(())
     })
 }
@@ -875,23 +879,17 @@ pub unsafe extern "C" fn fd_read(
     State::with(|state| {
         match state.descriptors().get(fd)? {
             Descriptor::Streams(streams) => {
-                let blocking = if let StreamType::File(file) = &streams.type_ {
-                    file.blocking
+                let blocking_mode = if let StreamType::File(file) = &streams.type_ {
+                    file.blocking_mode
                 } else {
-                    false
+                    BlockingMode::Blocking
                 };
 
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
                 let (data, stream_stat) = state
                     .import_alloc
-                    .with_buffer(ptr, len, || {
-                        if blocking {
-                            streams::blocking_read(wasi_stream, read_len)
-                        } else {
-                            streams::read(wasi_stream, read_len)
-                        }
-                    })
+                    .with_buffer(ptr, len, || blocking_mode.read(wasi_stream, read_len))
                     .map_err(|_| ERRNO_IO)?;
 
                 assert_eq!(data.as_ptr(), ptr);
@@ -1268,18 +1266,13 @@ pub unsafe extern "C" fn fd_write(
                 Descriptor::Streams(streams) => {
                     let wasi_stream = streams.get_write_stream()?;
 
-                    let (bytes, _stream_stat) = if let StreamType::File(file) = &streams.type_ {
-                        if file.blocking {
-                            streams::blocking_write(wasi_stream, bytes)
-                        } else {
-                            streams::write(wasi_stream, bytes)
-                        }
+                    let nbytes = if let StreamType::File(file) = &streams.type_ {
+                        file.blocking_mode.write(state, wasi_stream, bytes)?
                     } else {
                         // Use blocking writes on non-file streams (stdout, stderr, as sockets
                         // aren't currently used).
-                        streams::blocking_write(wasi_stream, bytes)
-                    }
-                    .map_err(|_| ERRNO_IO)?;
+                        BlockingMode::Blocking.write(state, wasi_stream, bytes)?
+                    };
 
                     // If this is a file, keep the current-position pointer up to date.
                     if let StreamType::File(file) = &streams.type_ {
@@ -1287,12 +1280,11 @@ pub unsafe extern "C" fn fd_write(
                         // we should set the position to the new end of the file, but
                         // we don't have an API to do that atomically.
                         if !file.append {
-                            file.position
-                                .set(file.position.get() + filesystem::Filesize::from(bytes));
+                            file.position.set(file.position.get() + nbytes as u64);
                         }
                     }
 
-                    *nwritten = bytes as usize;
+                    *nwritten = nbytes;
                     Ok(())
                 }
                 Descriptor::Closed(_) => Err(ERRNO_BADF),
@@ -1454,7 +1446,11 @@ pub unsafe extern "C" fn path_open(
                 descriptor_type,
                 position: Cell::new(0),
                 append,
-                blocking: (fdflags & wasi::FDFLAGS_NONBLOCK) == 0,
+                blocking_mode: if fdflags & wasi::FDFLAGS_NONBLOCK == 0 {
+                    BlockingMode::Blocking
+                } else {
+                    BlockingMode::NonBlocking
+                },
             }),
         });
 
@@ -1633,6 +1629,44 @@ impl From<network::ErrorCode> for Errno {
             _ => unreachable!(),
         }
     }
+}
+
+fn host_poll_oneoff_single(state: &State, pollable: poll::Pollable) {
+    #[link(wasm_import_module = "wasi:poll/poll")]
+    extern "C" {
+        #[link_name = "poll-oneoff"]
+        fn poll_oneoff_import(pollables: *const Pollable, len: usize, rval: *mut BoolList);
+    }
+
+    let mut subs = [pollable];
+
+    let pollables = Pollables {
+        pointer: subs.as_mut_ptr(),
+        index: 0,
+        length: 1,
+    };
+
+    let mut ready_list = BoolList {
+        base: std::ptr::null(),
+        len: 0,
+    };
+
+    let mut results = [false; 1];
+
+    unsafe {
+        state
+            .import_alloc
+            .with_buffer(results.as_mut_ptr() as *mut _, 1, || {
+                poll_oneoff_import(
+                    pollables.pointer,
+                    pollables.length,
+                    &mut ready_list as *mut _,
+                );
+            })
+    }
+
+    assert_eq!(ready_list.len, 1);
+    assert_eq!(ready_list.base, results.as_ptr());
 }
 
 /// Concurrently poll for the occurrence of a set of events.
@@ -2127,6 +2161,84 @@ impl From<filesystem::DescriptorType> for wasi::Filetype {
     }
 }
 
+struct DropPollable {
+    pollable: poll::Pollable,
+}
+
+impl Drop for DropPollable {
+    fn drop(&mut self) {
+        poll::drop_pollable(self.pollable)
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum BlockingMode {
+    NonBlocking,
+    Blocking,
+}
+
+impl BlockingMode {
+    // note: these methods must take self, not &self, to avoid rustc creating a constant
+    // out of a BlockingMode literal that it places in .romem, creating a data section and
+    // breaking our fragile linking scheme
+    fn read(
+        self,
+        input_stream: streams::InputStream,
+        read_len: u64,
+    ) -> Result<(Vec<u8>, streams::StreamStatus), ()> {
+        match self {
+            BlockingMode::NonBlocking => streams::read(input_stream, read_len),
+            BlockingMode::Blocking => streams::blocking_read(input_stream, read_len),
+        }
+    }
+    fn write(
+        self,
+        state: &State,
+        output_stream: streams::OutputStream,
+        bytes: &[u8],
+    ) -> Result<usize, Errno> {
+        let s = DropPollable {
+            pollable: streams::subscribe_to_output_stream(output_stream),
+        };
+
+        if matches!(self, BlockingMode::Blocking) {
+            host_poll_oneoff_single(state, s.pollable);
+        }
+
+        let permit = match streams::check_write(output_stream) {
+            Ok(n) => n,
+            Err(streams::WriteError::Closed) => 0,
+            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+        };
+
+        let len = bytes.len().min(permit as usize);
+        if len == 0 {
+            return Ok(0);
+        }
+
+        match streams::write(output_stream, &bytes[..len]) {
+            Ok(_) => {}
+            Err(streams::WriteError::Closed) => return Ok(0),
+            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+        }
+
+        match streams::flush(output_stream) {
+            Ok(_) => {}
+            Err(streams::WriteError::Closed) => return Ok(0),
+            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+        }
+
+        host_poll_oneoff_single(state, s.pollable);
+        match streams::check_write(output_stream) {
+            Ok(_) => Ok(len),
+
+            // TODO: should this be `Ok(len)`?
+            Err(streams::WriteError::Closed) => Ok(0),
+            Err(streams::WriteError::LastOperationFailed) => Err(ERRNO_IO),
+        }
+    }
+}
+
 #[repr(C)]
 pub struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
@@ -2142,9 +2254,9 @@ pub struct File {
     append: bool,
 
     /// In blocking mode, read and write calls dispatch to blocking_read and
-    /// blocking_write on the underlying streams. When false, read and write
-    /// dispatch to stream's plain read and write.
-    blocking: bool,
+    /// blocking_check_write on the underlying streams. When false, read and write
+    /// dispatch to stream's plain read and check_write.
+    blocking_mode: BlockingMode,
 }
 
 impl File {
