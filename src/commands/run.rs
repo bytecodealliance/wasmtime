@@ -763,7 +763,7 @@ fn populate_with_wasi(
         {
         bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
         }
-        // #[cfg(feature = "wasi-http")]
+        #[cfg(feature = "wasi-http")]
         // {
         //     wasmtime_wasi_http::add_to_linker(linker)?;
         //     store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
