@@ -62,16 +62,16 @@
 ;; The second operand of shift and rotate ops is
 ;; scalar so splat opt applies only to the first
 (rule (simplify (rotl ty (splat ty x) y))
-      (splat ty (rotl ty x y)))
+      (splat ty (rotl (lane_type ty) x y)))
 
 (rule (simplify (rotr ty (splat ty x) y))
-      (splat ty (rotr ty x y)))
+      (splat ty (rotr (lane_type ty) x y)))
 
 (rule (simplify (ishl ty (splat ty x) y))
-      (splat ty (ishl ty x y)))
+      (splat ty (ishl (lane_type ty) x y)))
 
 (rule (simplify (ushr ty (splat ty x) y))
-      (splat ty (ushr ty x y)))
+      (splat ty (ushr (lane_type ty) x y)))
 
 (rule (simplify (sshr ty (splat ty x) y))
-      (splat ty (sshr ty x y)))
+      (splat ty (sshr (lane_type ty) x y)))
