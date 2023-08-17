@@ -1929,7 +1929,7 @@ impl PoolingAllocationConfig {
     /// If this setting is set to infinity, however, then cold slots are
     /// prioritized to be allocated from. This means that the set of slots used
     /// over the lifetime of a program will approach
-    /// [`PoolingAllocationConfig::instance_count`], or the maximum number of
+    /// [`PoolingAllocationConfig::total_memories`], or the maximum number of
     /// slots in the pooling allocator.
     ///
     /// Wasmtime does not aggressively decommit all resources associated with a
@@ -2192,10 +2192,10 @@ impl PoolingAllocationConfig {
     /// The maximum size, in bytes, allocated for a core instance's `VMContext`
     /// metadata.
     ///
-    /// The [`Instance`] type has a static size but its `VMContext` metadata is
-    /// dynamically sized depending on the module being instantiated. This size
-    /// limit loosely correlates to the size of the Wasm module, taking into
-    /// account factors such as:
+    /// The [`Instance`][crate::Instance] type has a static size but its
+    /// `VMContext` metadata is dynamically sized depending on the module being
+    /// instantiated. This size limit loosely correlates to the size of the Wasm
+    /// module, taking into account factors such as:
     ///
     /// * number of functions
     /// * number of globals
