@@ -834,6 +834,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-metadata]]
+version = "0.10.2"
+when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasm-mutate]]
 version = "0.2.30"
 when = "2023-07-26"
@@ -841,9 +848,23 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-mutate]]
+version = "0.2.31"
+when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasm-smith]]
 version = "0.12.13"
 when = "2023-07-26"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wasm-smith]]
+version = "0.12.14"
+when = "2023-08-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -862,9 +883,23 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasmparser]]
+version = "0.111.0"
+when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasmprinter]]
 version = "0.2.62"
 when = "2023-07-26"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wasmprinter]]
+version = "0.2.63"
+when = "2023-08-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1020,9 +1055,23 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wast]]
+version = "63.0.0"
+when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wat]]
 version = "1.0.69"
 when = "2023-07-26"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wat]]
+version = "1.0.70"
+when = "2023-08-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1184,9 +1233,23 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wit-component]]
+version = "0.13.2"
+when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wit-parser]]
 version = "0.9.2"
 when = "2023-07-26"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-parser]]
+version = "0.10.0"
+when = "2023-08-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
