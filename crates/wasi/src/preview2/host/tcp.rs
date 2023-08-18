@@ -520,10 +520,31 @@ impl<T: WasiView> tcp::Host for T {
         // doesn't block.
         let dropped = table.delete_tcp_socket(this)?;
 
-        // On non-Unix platforms, do a `shutdown` to wake up any `poll` calls
-        // that are waiting.
+        // If we might have an `event::poll` waiting on the socket, wake it up.
         #[cfg(not(unix))]
-        rustix::net::shutdown(&dropped.inner.tcp_socket, rustix::net::Shutdown::ReadWrite).unwrap();
+        {
+            let tcp_state = dropped.tcp_state_read_lock();
+            match &*tcp_state {
+                HostTcpState::Default
+                | HostTcpState::BindStarted
+                | HostTcpState::Bound
+                | HostTcpState::ListenStarted
+                | HostTcpState::ListenReady(_)
+                | HostTcpState::ConnectReady(_) => {}
+
+                HostTcpState::Listening(_)
+                | HostTcpState::Connecting(_)
+                | HostTcpState::Connected => {
+                    match rustix::net::shutdown(
+                        &dropped.inner.tcp_socket,
+                        rustix::net::Shutdown::ReadWrite,
+                    ) {
+                        Ok(()) | Err(Errno::NOTCONN) => {}
+                        Err(err) => Err(err).unwrap(),
+                    }
+                }
+            }
+        }
 
         drop(dropped);
 
