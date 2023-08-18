@@ -1383,6 +1383,21 @@
 (decl pure vconst_all_ones_or_all_zeros () Constant)
 (extern extractor vconst_all_ones_or_all_zeros vconst_all_ones_or_all_zeros)
 
+;; Specializations for floating-pointer compares to generate a `minp*` or a
+;; `maxp*` instruction. These are equivalent to the wasm `f32x4.{pmin,pmax}`
+;; instructions and how they're lowered into CLIF. Note the careful ordering
+;; of all the operands here to ensure that the input CLIF matched is implemented
+;; by the corresponding x64 instruction.
+(rule 2 (lower (has_type $F32X4 (bitselect (bitcast _ (fcmp (FloatCC.LessThan) x y)) x y)))
+        (x64_minps x y))
+(rule 2 (lower (has_type $F64X2 (bitselect (bitcast _ (fcmp (FloatCC.LessThan) x y)) x y)))
+        (x64_minpd x y))
+
+(rule 3 (lower (has_type $F32X4 (bitselect (bitcast _ (fcmp (FloatCC.LessThan) y x)) x y)))
+        (x64_maxps x y))
+(rule 3 (lower (has_type $F64X2 (bitselect (bitcast _ (fcmp (FloatCC.LessThan) y x)) x y)))
+        (x64_maxpd x y))
+
 ;;;; Rules for `x86_blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8X16
@@ -2020,6 +2035,18 @@
 (rule -2 (lower (has_type ty (select c @ (value_type $I128) x y)))
       (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
         (select_icmp cond_result x y)))
+
+;; Specializations for floating-point compares to generate a `mins*` or a
+;; `maxs*` instruction. These are equivalent to the "pseudo-m{in,ax}"
+;; specializations for vectors.
+(rule 2 (lower (has_type $F32 (select (maybe_uextend (fcmp (FloatCC.LessThan) x y)) x y)))
+        (x64_minss x y))
+(rule 2 (lower (has_type $F64 (select (maybe_uextend (fcmp (FloatCC.LessThan) x y)) x y)))
+        (x64_minsd x y))
+(rule 3 (lower (has_type $F32 (select (maybe_uextend (fcmp (FloatCC.LessThan) y x)) x y)))
+        (x64_maxss x y))
+(rule 3 (lower (has_type $F64 (select (maybe_uextend (fcmp (FloatCC.LessThan) y x)) x y)))
+        (x64_maxsd x y))
 
 ;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2676,28 +2703,6 @@
             ;; otherwise.
             (final Xmm (x64_andnpd nan_fraction_mask max_blended_nan_positive)))
         final))
-
-;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type $F32 (fmin_pseudo x y)))
-      (x64_minss y x))
-(rule (lower (has_type $F64 (fmin_pseudo x y)))
-      (x64_minsd y x))
-(rule (lower (has_type $F32X4 (fmin_pseudo x y)))
-      (x64_minps y x))
-(rule (lower (has_type $F64X2 (fmin_pseudo x y)))
-      (x64_minpd y x))
-
-;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type $F32 (fmax_pseudo x y)))
-      (x64_maxss y x))
-(rule (lower (has_type $F64 (fmax_pseudo x y)))
-      (x64_maxsd y x))
-(rule (lower (has_type $F32X4 (fmax_pseudo x y)))
-      (x64_maxps y x))
-(rule (lower (has_type $F64X2 (fmax_pseudo x y)))
-      (x64_maxpd y x))
 
 ;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

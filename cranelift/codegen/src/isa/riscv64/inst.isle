@@ -288,14 +288,6 @@
       (rs1 Reg)
       (rs2 Reg)
       (ty Type))
-    (FloatSelectPseudo
-      (op FloatSelectOP)
-      (rd WritableReg)
-      ;; a integer register
-      (tmp WritableReg)
-      (rs1 Reg)
-      (rs2 Reg)
-      (ty Type))
 
     ;; popcnt  if target doesn't support extension B
     ;; use iteration to implement.
@@ -984,15 +976,6 @@
       (tmp WritableXReg (temp_writable_xreg))
       (tmp2 WritableFReg (temp_writable_freg))
       (_ Unit (emit (MInst.FloatRound op rd tmp tmp2 rs ty))))
-    (writable_reg_to_reg rd)))
-
-(decl gen_float_select_pseudo (FloatSelectOP Reg Reg Type) Reg)
-(rule
-  (gen_float_select_pseudo op x y ty)
-  (let
-    ((rd WritableReg (temp_writable_reg ty))
-      (tmp WritableXReg (temp_writable_xreg))
-      (_ Unit (emit (MInst.FloatSelectPseudo op rd tmp x y ty))))
     (writable_reg_to_reg rd)))
 
 (decl gen_float_select (FloatSelectOP Reg Reg Type) Reg)

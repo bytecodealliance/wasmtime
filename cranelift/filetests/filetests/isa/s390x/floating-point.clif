@@ -282,8 +282,9 @@ block0(v0: f64, v1: f64):
 
 function %fmin_pseudo_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
-  v2 = fmin_pseudo v0, v1
-  return v2
+  v2 = fcmp lt v1, v0
+  v3 = select v2, v1, v0
+  return v3
 }
 
 ; VCode:
@@ -298,8 +299,9 @@ block0(v0: f32, v1: f32):
 
 function %fmin_pseudo_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
-  v2 = fmin_pseudo v0, v1
-  return v2
+  v2 = fcmp lt v1, v0
+  v3 = select v2, v1, v0
+  return v3
 }
 
 ; VCode:
@@ -314,8 +316,9 @@ block0(v0: f64, v1: f64):
 
 function %fmax_pseudo_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
-  v2 = fmax_pseudo v0, v1
-  return v2
+  v2 = fcmp lt v0, v1
+  v3 = select v2, v1, v0
+  return v3
 }
 
 ; VCode:
@@ -330,8 +333,9 @@ block0(v0: f32, v1: f32):
 
 function %fmax_pseudo_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
-  v2 = fmax_pseudo v0, v1
-  return v2
+  v2 = fcmp lt v0, v1
+  v3 = select v2, v1, v0
+  return v3
 }
 
 ; VCode:

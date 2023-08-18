@@ -1300,24 +1300,6 @@
         (max VReg (rv_vfmax_vv x y (unmasked) ty)))
     (rv_vmerge_vvm vec_nan max is_not_nan ty)))
 
-;;;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 0 (lower (has_type (ty_scalar_float ty) (fmin_pseudo x y)))
-  (gen_float_select_pseudo (FloatSelectOP.Min) x y ty))
-
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmin_pseudo x y)))
-  (let ((mask VReg (gen_fcmp_mask ty (FloatCC.LessThan) y x)))
-    (rv_vmerge_vvm x y mask ty)))
-
-;;;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 0 (lower (has_type (ty_scalar_float ty) (fmax_pseudo x y)))
-  (gen_float_select_pseudo (FloatSelectOP.Max) x y ty))
-
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmax_pseudo x y)))
-  (let ((mask VReg (gen_fcmp_mask ty (FloatCC.LessThan) x y)))
-    (rv_vmerge_vvm x y mask ty)))
-
 ;;;;;  Rules for `stack_addr`;;;;;;;;;
 (rule
   (lower (stack_addr ss offset))
