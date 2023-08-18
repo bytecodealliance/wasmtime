@@ -170,24 +170,6 @@ interface streams {
         contents: list<u8>
     ) -> write-result
 
-    /// Precondition: None
-    /// If a prior `write` is still pending, this function will block until
-    /// that write is complete before attempting to write.
-    /// Postcondition: check-write is ready or closed.
-    /// Return values:
-    /// ok means: write completed
-    /// err means: stream has closed
-    /// PROBLEM WITH THIS DESIGN: the implementor of this function would have to accept an
-    /// unbounded `contents` size and trap if its over whatever limit they can
-    /// actually handle , which makes them no better off than they
-    /// were before we introduced a way to communicate backressure via
-    /// `check-write`.
-    /// IN PATS OPINION WE GET RID OF THIS ENTIRELY
-    blocking-write: func(
-        this: output-stream,
-        contents: list<u8>,
-    ) -> result
-
     /// Write multiple zero-bytes to a stream.
     ///
     /// This function returns a `u64` indicating the number of zero-bytes
