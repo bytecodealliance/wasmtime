@@ -237,6 +237,8 @@ impl PoolingInstanceAllocator {
             stacks: StackPool::new(config)?,
             #[cfg(all(feature = "async", windows))]
             stack_size: config.stack_size,
+            #[cfg(all(feature = "async", windows))]
+            live_stacks: AtomicU64::new(0),
         })
     }
 
@@ -501,7 +503,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
                     Ok(stack) => Ok(stack),
                     Err(e) => {
                         self.live_stacks.fetch_sub(1, Ordering::AcqRel);
-                        Err(e)
+                        Err(anyhow::Error::from(e))
                     }
                 }
             } else {
