@@ -38,7 +38,8 @@ pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, Ta
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
 pub use self::stream::{
-    HostInputStream, HostOutputStream, StreamRuntimeError, StreamState, TableStreamExt,
+    FlushResult, HostInputStream, HostOutputStream, StreamRuntimeError, StreamState,
+    TableStreamExt, WriteReadiness,
 };
 pub use self::table::{OccupiedEntry, Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;

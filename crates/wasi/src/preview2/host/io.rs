@@ -4,8 +4,8 @@ use crate::preview2::{
     filesystem::{FileInputStream, FileOutputStream},
     poll::PollableFuture,
     stream::{
-        HostInputStream, HostOutputStream, InternalInputStream, InternalOutputStream,
-        InternalTableStreamExt, StreamRuntimeError, StreamState,
+        FlushResult, HostInputStream, HostOutputStream, InternalInputStream, InternalOutputStream,
+        InternalTableStreamExt, StreamRuntimeError, StreamState, WriteReadiness,
     },
     HostPollable, TablePollableExt, WasiView,
 };
@@ -16,6 +16,24 @@ impl From<StreamState> for streams::StreamStatus {
         match state {
             StreamState::Open => Self::Open,
             StreamState::Closed => Self::Ended,
+        }
+    }
+}
+
+impl From<WriteReadiness> for streams::WriteReadiness {
+    fn from(w: WriteReadiness) -> Self {
+        match w {
+            WriteReadiness::Ready(n) => Self::Ready(n as u64),
+            WriteReadiness::Closed => Self::Closed,
+        }
+    }
+}
+
+impl From<FlushResult> for streams::FlushResult {
+    fn from(r: FlushResult) -> Self {
+        match r {
+            FlushResult::Done => Self::Done,
+            FlushResult::Closed => Self::Closed,
         }
     }
 }
@@ -112,71 +130,6 @@ impl<T: WasiView> streams::Host for T {
         }
     }
 
-    async fn write(
-        &mut self,
-        stream: OutputStream,
-        bytes: Vec<u8>,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_output_stream_mut(stream)? {
-            InternalOutputStream::Host(s) => {
-                let (bytes_written, status) =
-                    match HostOutputStream::write(s.as_mut(), bytes.into()) {
-                        Ok(a) => a,
-                        Err(e) => {
-                            if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                                tracing::debug!("stream runtime error: {e:?}");
-                                return Ok(Err(()));
-                            } else {
-                                return Err(e);
-                            }
-                        }
-                    };
-                Ok(Ok((u64::try_from(bytes_written).unwrap(), status.into())))
-            }
-            InternalOutputStream::File(s) => {
-                let (nwritten, state) = FileOutputStream::write(s, bytes.into()).await?;
-                Ok(Ok((nwritten as u64, state.into())))
-            }
-        }
-    }
-
-    async fn blocking_write(
-        &mut self,
-        stream: OutputStream,
-        bytes: Vec<u8>,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_output_stream_mut(stream)? {
-            InternalOutputStream::Host(s) => {
-                let mut bytes = bytes::Bytes::from(bytes);
-                let mut nwritten: usize = 0;
-                loop {
-                    s.ready().await?;
-                    let (written, state) = match HostOutputStream::write(s.as_mut(), bytes.clone())
-                    {
-                        Ok(a) => a,
-                        Err(e) => {
-                            if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                                tracing::debug!("stream runtime error: {e:?}");
-                                return Ok(Err(()));
-                            } else {
-                                return Err(e);
-                            }
-                        }
-                    };
-                    let _ = bytes.split_to(written);
-                    nwritten += written;
-                    if bytes.is_empty() || state == StreamState::Closed {
-                        return Ok(Ok((nwritten as u64, state.into())));
-                    }
-                }
-            }
-            InternalOutputStream::File(s) => {
-                let (written, state) = FileOutputStream::write(s, bytes.into()).await?;
-                Ok(Ok((written as u64, state.into())))
-            }
-        }
-    }
-
     async fn skip(
         &mut self,
         stream: InputStream,
@@ -256,85 +209,204 @@ impl<T: WasiView> streams::Host for T {
         }
     }
 
+    async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
+        // Ensure that table element is an input-stream:
+        let pollable = match self.table_mut().get_internal_input_stream_mut(stream)? {
+            InternalInputStream::Host(_) => {
+                fn input_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
+                    let stream = stream
+                        .downcast_mut::<InternalInputStream>()
+                        .expect("downcast to InternalInputStream failed");
+                    match *stream {
+                        InternalInputStream::Host(ref mut hs) => hs.ready(),
+                        _ => unreachable!(),
+                    }
+                }
+
+                HostPollable::TableEntry {
+                    index: stream,
+                    make_future: input_stream_ready,
+                }
+            }
+            // Files are always "ready" immediately (because we have no way to actually wait on
+            // readiness in epoll)
+            InternalInputStream::File(_) => {
+                HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
+            }
+        };
+        Ok(self.table_mut().push_host_pollable(pollable)?)
+    }
+
+    /* --------------------------------------------------------------
+     *
+     * OutputStream methods
+     *
+     * -------------------------------------------------------------- */
+
+    async fn check_write(
+        &mut self,
+        stream: OutputStream,
+    ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+        match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(s) => {
+                match futures::future::poll_immediate(HostOutputStream::write_ready(s.as_mut()))
+                    .await
+                {
+                    // FIXME HostOutputStream::ready doesnt yet tell us if stream has errored/closed
+                    // FIXME ready amount is also a made-up size. this size will become the HostOutputStream's
+                    // responsibility to report.
+                    Some(Ok(readiness)) => Ok(Some(readiness.into())),
+                    Some(Err(e)) => Err(e),
+                    None => Ok(None),
+                }
+            }
+            // FIXME: we need to bound this by the size of the file, if its not append. we can pick
+            // a default size for this in wasi ctx and allow the user to override it.
+            InternalOutputStream::File(_) => Ok(Some(streams::WriteReadiness::Ready(32 * 1024))),
+        }
+    }
+    async fn write(
+        &mut self,
+        stream: OutputStream,
+        bytes: Vec<u8>,
+    ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+        match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(s) => {
+                match HostOutputStream::write(s.as_mut(), bytes.into()) {
+                    Ok(Some(readiness)) => Ok(Some(readiness.into())),
+                    Ok(None) => Ok(None),
+                    Err(e) => {
+                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
+                            tracing::debug!("stream runtime error: {e:?}");
+                            return Ok(Some(streams::WriteReadiness::Closed));
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+            InternalOutputStream::File(s) => match FileOutputStream::write(s, bytes.into()).await {
+                Ok((_, StreamState::Open)) => Ok(Some(streams::WriteReadiness::Ready(32 * 1024))),
+                Ok((0, StreamState::Closed)) => Ok(Some(streams::WriteReadiness::Closed)),
+                Ok((_, StreamState::Closed)) => {
+                    todo!("idk how to represent this case of partial success with the current wit")
+                }
+                Err(e) => {
+                    if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
+                        tracing::debug!("stream runtime error: {e:?}");
+                        Ok(Some(streams::WriteReadiness::Closed))
+                    } else {
+                        Err(e)
+                    }
+                }
+            },
+        }
+    }
+
+    async fn subscribe_to_write_ready(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+        // Ensure that table element is an output-stream:
+        let pollable = match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(_) => {
+                fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
+                    let stream = stream
+                        .downcast_mut::<InternalOutputStream>()
+                        .expect("downcast to HostOutputStream failed");
+                    match *stream {
+                        InternalOutputStream::Host(ref mut hs) => Box::pin(async move {
+                            let _ = hs.write_ready().await?;
+                            Ok(())
+                        }),
+                        _ => unreachable!(),
+                    }
+                }
+
+                HostPollable::TableEntry {
+                    index: stream,
+                    make_future: output_stream_ready,
+                }
+            }
+            InternalOutputStream::File(_) => {
+                HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
+            }
+        };
+
+        Ok(self.table_mut().push_host_pollable(pollable)?)
+    }
+
+    async fn blocking_check_write(
+        &mut self,
+        stream: OutputStream,
+    ) -> anyhow::Result<streams::WriteReadiness> {
+        match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(h) => {
+                let _ = h.write_ready().await?;
+            }
+            _ => {}
+        }
+        let check = self.check_write(stream).await?;
+        Ok(check.expect("write is ready because we waited for it"))
+    }
+
     async fn write_zeroes(
         &mut self,
         stream: OutputStream,
         len: u64,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        let s = self.table_mut().get_internal_output_stream_mut(stream)?;
-        let mut bytes = bytes::Bytes::from_static(ZEROS);
-        bytes.truncate((len as usize).min(bytes.len()));
-        let (written, state) = match s {
-            InternalOutputStream::Host(s) => match HostOutputStream::write(s.as_mut(), bytes) {
-                Ok(a) => a,
-                Err(e) => {
-                    if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                        tracing::debug!("stream runtime error: {e:?}");
-                        return Ok(Err(()));
-                    } else {
-                        return Err(e);
-                    }
-                }
-            },
-            InternalOutputStream::File(s) => match FileOutputStream::write(s, bytes).await {
-                Ok(a) => a,
-                Err(e) => {
-                    if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                        tracing::debug!("stream runtime error: {e:?}");
-                        return Ok(Err(()));
-                    } else {
-                        return Err(e);
-                    }
-                }
-            },
-        };
-        Ok(Ok((written as u64, state.into())))
+    ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+        todo!("write_zeroes is not yet implemented")
     }
 
-    async fn blocking_write_zeroes(
+    async fn flush(
         &mut self,
         stream: OutputStream,
-        len: u64,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        let mut remaining = len as usize;
-        let s = self.table_mut().get_internal_output_stream_mut(stream)?;
-        loop {
-            if let InternalOutputStream::Host(s) = s {
-                HostOutputStream::ready(s.as_mut()).await?;
-            }
-            let mut bytes = bytes::Bytes::from_static(ZEROS);
-            bytes.truncate(remaining.min(bytes.len()));
-            let (written, state) = match s {
-                InternalOutputStream::Host(s) => match HostOutputStream::write(s.as_mut(), bytes) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                },
-                InternalOutputStream::File(s) => match FileOutputStream::write(s, bytes).await {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                },
-            };
-            remaining -= written;
-            if remaining == 0 || state == StreamState::Closed {
-                return Ok(Ok((len - remaining as u64, state.into())));
-            }
-        }
+    ) -> anyhow::Result<Option<streams::FlushResult>> {
+        todo!()
+    }
+    async fn check_flush(
+        &mut self,
+        stream: OutputStream,
+    ) -> anyhow::Result<Option<streams::FlushResult>> {
+        todo!()
+    }
+    async fn blocking_check_flush(
+        &mut self,
+        stream: OutputStream,
+    ) -> anyhow::Result<streams::FlushResult> {
+        todo!()
     }
 
+    async fn subscribe_to_flush(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+        // Ensure that table element is an output-stream:
+        let pollable = match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(_) => {
+                fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
+                    let stream = stream
+                        .downcast_mut::<InternalOutputStream>()
+                        .expect("downcast to HostOutputStream failed");
+                    match *stream {
+                        InternalOutputStream::Host(ref mut hs) => Box::pin(async move {
+                            let _ = hs.flush_ready().await?;
+                            Ok(())
+                        }),
+                        _ => unreachable!(),
+                    }
+                }
+
+                HostPollable::TableEntry {
+                    index: stream,
+                    make_future: output_stream_ready,
+                }
+            }
+            InternalOutputStream::File(_) => {
+                HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
+            }
+        };
+        Ok(self.table_mut().push_host_pollable(pollable)?)
+    }
+    /* --------------------------------------------------------------
+     *
+     * Aspirational methods
+     *
+     * -------------------------------------------------------------- */
     async fn splice(
         &mut self,
         _src: InputStream,
@@ -403,69 +475,11 @@ impl<T: WasiView> streams::Host for T {
 
         todo!("stream forward is not implemented")
     }
-
-    async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-        // Ensure that table element is an input-stream:
-        let pollable = match self.table_mut().get_internal_input_stream_mut(stream)? {
-            InternalInputStream::Host(_) => {
-                fn input_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-                    let stream = stream
-                        .downcast_mut::<InternalInputStream>()
-                        .expect("downcast to InternalInputStream failed");
-                    match *stream {
-                        InternalInputStream::Host(ref mut hs) => hs.ready(),
-                        _ => unreachable!(),
-                    }
-                }
-
-                HostPollable::TableEntry {
-                    index: stream,
-                    make_future: input_stream_ready,
-                }
-            }
-            // Files are always "ready" immediately (because we have no way to actually wait on
-            // readiness in epoll)
-            InternalInputStream::File(_) => {
-                HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
-            }
-        };
-        Ok(self.table_mut().push_host_pollable(pollable)?)
-    }
-
-    async fn subscribe_to_output_stream(
-        &mut self,
-        stream: OutputStream,
-    ) -> anyhow::Result<Pollable> {
-        // Ensure that table element is an output-stream:
-        let pollable = match self.table_mut().get_internal_output_stream_mut(stream)? {
-            InternalOutputStream::Host(_) => {
-                fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-                    let stream = stream
-                        .downcast_mut::<InternalOutputStream>()
-                        .expect("downcast to HostOutputStream failed");
-                    match *stream {
-                        InternalOutputStream::Host(ref mut hs) => hs.ready(),
-                        _ => unreachable!(),
-                    }
-                }
-
-                HostPollable::TableEntry {
-                    index: stream,
-                    make_future: output_stream_ready,
-                }
-            }
-            InternalOutputStream::File(_) => {
-                HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
-            }
-        };
-
-        Ok(self.table_mut().push_host_pollable(pollable)?)
-    }
 }
 
 pub mod sync {
     use crate::preview2::{
-        bindings::io::streams::{Host as AsyncHost, StreamStatus as AsyncStreamStatus},
+        bindings::io::streams::{self as async_streams, Host as AsyncHost},
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
         bindings::sync_io::poll::poll::Pollable,
         in_tokio, WasiView,
@@ -473,15 +487,35 @@ pub mod sync {
 
     // same boilerplate everywhere, converting between two identical types with different
     // definition sites. one day wasmtime-wit-bindgen will make all this unnecessary
-    fn xform<A>(r: Result<(A, AsyncStreamStatus), ()>) -> Result<(A, streams::StreamStatus), ()> {
+    fn xform<A>(
+        r: Result<(A, async_streams::StreamStatus), ()>,
+    ) -> Result<(A, streams::StreamStatus), ()> {
         r.map(|(a, b)| (a, b.into()))
     }
 
-    impl From<AsyncStreamStatus> for streams::StreamStatus {
-        fn from(other: AsyncStreamStatus) -> Self {
+    impl From<async_streams::StreamStatus> for streams::StreamStatus {
+        fn from(other: async_streams::StreamStatus) -> Self {
             match other {
-                AsyncStreamStatus::Open => Self::Open,
-                AsyncStreamStatus::Ended => Self::Ended,
+                async_streams::StreamStatus::Open => Self::Open,
+                async_streams::StreamStatus::Ended => Self::Ended,
+            }
+        }
+    }
+
+    impl From<async_streams::WriteReadiness> for streams::WriteReadiness {
+        fn from(other: async_streams::WriteReadiness) -> Self {
+            match other {
+                async_streams::WriteReadiness::Ready(a) => Self::Ready(a),
+                async_streams::WriteReadiness::Closed => Self::Closed,
+            }
+        }
+    }
+
+    impl From<async_streams::FlushResult> for streams::FlushResult {
+        fn from(other: async_streams::FlushResult) -> Self {
+            match other {
+                async_streams::FlushResult::Done => Self::Done,
+                async_streams::FlushResult::Closed => Self::Closed,
             }
         }
     }
@@ -511,22 +545,62 @@ pub mod sync {
             in_tokio(async { AsyncHost::blocking_read(self, stream, len).await }).map(xform)
         }
 
+        fn check_write(
+            &mut self,
+            stream: OutputStream,
+        ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+            in_tokio(async { AsyncHost::check_write(self, stream).await })
+                .map(|r| r.map(|opt| opt.into()))
+        }
         fn write(
             &mut self,
             stream: OutputStream,
             bytes: Vec<u8>,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::write(self, stream, bytes).await }).map(xform)
+        ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+            in_tokio(async { AsyncHost::write(self, stream, bytes).await })
+                .map(|opt| opt.map(|r| r.into()))
         }
-
-        fn blocking_write(
+        fn subscribe_to_write_ready(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+            in_tokio(async { AsyncHost::subscribe_to_write_ready(self, stream).await })
+        }
+        fn write_zeroes(
             &mut self,
             stream: OutputStream,
-            bytes: Vec<u8>,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::blocking_write(self, stream, bytes).await }).map(xform)
+            len: u64,
+        ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+            in_tokio(async { AsyncHost::write_zeroes(self, stream, len).await })
+                .map(|opt| opt.map(|r| r.into()))
+        }
+        fn blocking_check_write(
+            &mut self,
+            stream: OutputStream,
+        ) -> anyhow::Result<streams::WriteReadiness> {
+            in_tokio(async { AsyncHost::blocking_check_write(self, stream).await })
+                .map(|opt| opt.into())
         }
 
+        fn flush(&mut self, stream: OutputStream) -> anyhow::Result<Option<streams::FlushResult>> {
+            in_tokio(async { AsyncHost::flush(self, stream).await })
+                .map(|res| res.map(|opt| opt.into()))
+        }
+        fn check_flush(
+            &mut self,
+            stream: OutputStream,
+        ) -> anyhow::Result<Option<streams::FlushResult>> {
+            in_tokio(async { AsyncHost::check_flush(self, stream).await })
+                .map(|res| res.map(|opt| opt.into()))
+        }
+        fn blocking_check_flush(
+            &mut self,
+            stream: OutputStream,
+        ) -> anyhow::Result<streams::FlushResult> {
+            in_tokio(async { AsyncHost::blocking_check_flush(self, stream).await })
+                .map(|res| res.into())
+        }
+
+        fn subscribe_to_flush(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+            in_tokio(async { AsyncHost::subscribe_to_flush(self, stream).await })
+        }
         fn skip(
             &mut self,
             stream: InputStream,
@@ -541,22 +615,6 @@ pub mod sync {
             len: u64,
         ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
             in_tokio(async { AsyncHost::blocking_skip(self, stream, len).await }).map(xform)
-        }
-
-        fn write_zeroes(
-            &mut self,
-            stream: OutputStream,
-            len: u64,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::write_zeroes(self, stream, len).await }).map(xform)
-        }
-
-        fn blocking_write_zeroes(
-            &mut self,
-            stream: OutputStream,
-            len: u64,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::blocking_write_zeroes(self, stream, len).await }).map(xform)
         }
 
         fn splice(
@@ -587,10 +645,6 @@ pub mod sync {
 
         fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
             in_tokio(async { AsyncHost::subscribe_to_input_stream(self, stream).await })
-        }
-
-        fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-            in_tokio(async { AsyncHost::subscribe_to_output_stream(self, stream).await })
         }
     }
 }

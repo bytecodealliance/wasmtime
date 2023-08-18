@@ -1305,6 +1305,8 @@ impl<
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
+        todo!("fd_write not implemented yet");
+        /*
         let n = match desc {
             Descriptor::File(File {
                 fd,
@@ -1354,6 +1356,7 @@ impl<
         };
         let n = n.try_into()?;
         Ok(n)
+                */
     }
 
     /// Write to a file descriptor, without using and updating the file descriptor's offset.
@@ -1366,6 +1369,8 @@ impl<
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
+        todo!("pwrite not implemented yet");
+        /*
         let (n, _stat) = match desc {
             Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
@@ -1390,6 +1395,7 @@ impl<
         };
         let n = n.try_into()?;
         Ok(n)
+        */
     }
 
     /// Return a description of the given preopened file descriptor.

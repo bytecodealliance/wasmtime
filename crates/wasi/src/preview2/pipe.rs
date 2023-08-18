@@ -7,7 +7,9 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::preview2::{HostInputStream, HostOutputStream, StreamState};
+use crate::preview2::{
+    FlushResult, HostInputStream, HostOutputStream, StreamState, WriteReadiness,
+};
 use anyhow::Error;
 use bytes::Bytes;
 
@@ -74,15 +76,23 @@ impl MemoryOutputPipe {
 
 #[async_trait::async_trait]
 impl HostOutputStream for MemoryOutputPipe {
-    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, anyhow::Error> {
         let mut buf = self.buffer.lock().unwrap();
         buf.extend_from_slice(bytes.as_ref());
-        Ok((bytes.len(), StreamState::Open))
+        // Always ready for writing
+        Ok(Some(WriteReadiness::Ready(64 * 1024)))
     }
-
-    async fn ready(&mut self) -> Result<(), Error> {
+    fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
+        // This stream is always flushed
+        Ok(Some(FlushResult::Done))
+    }
+    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
         // This stream is always ready for writing.
-        Ok(())
+        Ok(WriteReadiness::Ready(64 * 1024))
+    }
+    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
+        // This stream is always flushed
+        Ok(FlushResult::Done)
     }
 }
 
@@ -374,12 +384,21 @@ pub struct SinkOutputStream;
 
 #[async_trait::async_trait]
 impl HostOutputStream for SinkOutputStream {
-    fn write(&mut self, buf: Bytes) -> Result<(usize, StreamState), Error> {
-        Ok((buf.len(), StreamState::Open))
+    fn write(&mut self, buf: Bytes) -> Result<Option<WriteReadiness>, Error> {
+        Ok(Some(WriteReadiness::Ready(64 * 1024))) // made up constant
+    }
+    fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
+        // This stream is always flushed
+        Ok(Some(FlushResult::Done))
     }
 
-    async fn ready(&mut self) -> Result<(), Error> {
-        Ok(())
+    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
+        // This stream is always ready for writing.
+        Ok(WriteReadiness::Ready(64 * 1024))
+    }
+    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
+        // This stream is always flushed
+        Ok(FlushResult::Done)
     }
 }
 
@@ -402,12 +421,18 @@ pub struct ClosedOutputStream;
 
 #[async_trait::async_trait]
 impl HostOutputStream for ClosedOutputStream {
-    fn write(&mut self, _: Bytes) -> Result<(usize, StreamState), Error> {
-        Ok((0, StreamState::Closed))
+    fn write(&mut self, _: Bytes) -> Result<Option<WriteReadiness>, Error> {
+        Ok(Some(WriteReadiness::Closed))
+    }
+    fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
+        Ok(Some(FlushResult::Closed))
     }
 
-    async fn ready(&mut self) -> Result<(), Error> {
-        Ok(())
+    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
+        Ok(WriteReadiness::Closed)
+    }
+    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
+        Ok(FlushResult::Closed)
     }
 }
 

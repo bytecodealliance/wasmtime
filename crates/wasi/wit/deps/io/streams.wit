@@ -137,14 +137,14 @@ interface streams {
 
     /// Return values:
     /// None means: not yet ready for writing
-    /// Ready(u64) means: ready for up to this amount
-    /// Closed means: an error occured during the last write, or the other end
+    /// Some(Ready(n)) means: ready writing up to n bytes
+    /// Some(Closed) means: an error occured during the last write, or the other end
     /// will no longer be reading. Future writes will trap.
     ///
     /// when the subscribe-to-output-stream pollable becomes ready, the
     /// return value of this function is some.
     variant write-readiness {
-        ready(u64),
+        ready(u64), // n always greater than 0
         closed
     }
     check-write: func(
@@ -152,41 +152,92 @@ interface streams {
     ) -> option<write-readiness>
 
 
+
+    /// perform a write. this function never blocks.
+    ///
     /// Precondition: check-write gave Some(Ready(n)) and contents has a
-    /// length of less than n. Otherwise, this function will trap.
-    /// Return values:
-    /// Ready(u64) means: write completed synchronously and stream is still
-    /// open. More input is now accepted up to this amount.
-    /// Pending means: write in progress. Use check-write and pollable to
-    /// wait for this write to succeed or fail.
-    /// Closed means: write failed immediately. future writes will trap.
-    variant write-result {
-        ready(u64),
-        pending,
-        closed
-    }
+    /// length of less than or equal to n. Otherwise, this function will trap.
+    ///
+    /// returns Some(closed) without writing if the stream has closed since
+    /// the last call to check-write provided a Some(Ready(n)).
+    ///
+    /// otherwise, return value is like a call to check-write has occured
+    /// immediately after writing the contents to the stream.
     write: func(
         this: output-stream,
         contents: list<u8>
-    ) -> write-result
+    ) -> option<write-readiness>
 
-    /// Write multiple zero-bytes to a stream.
+
+    /// Create a `pollable` which will resolve once the output-stream
+    /// is ready for more writing, or has closed.
     ///
-    /// This function returns a `u64` indicating the number of zero-bytes
-    /// that were written; it may be less than `len`. Equivelant to a call to
-    /// `write` with a list of zeroes of the given length.
+    /// If the stream is closed, this pollable is always ready immediately.
+    ///
+    /// The created `pollable` is a child resource of the `output-stream`.
+    /// Implementations may trap if the `output-stream` is dropped before
+    /// all derived `pollable`s created with this function are dropped.
+    subscribe-to-write-ready: func(this: output-stream) -> pollable
+
+    /// like check-write, except it blocks until the stream becomes ready or closed.
+    blocking-check-write: func(this: output-stream) -> write-readiness
+
+    /// Write zeroes to a stream.
+    ///
+    /// this should be used precisely like `write` with the exact same
+    /// preconditions (must use check-write first), but instead of
+    /// passing a list of bytes, you simply pass the number of zero-bytes
+    /// that should be written.
     write-zeroes: func(
         this: output-stream,
         /// The number of zero-bytes to write
         len: u64
-    ) -> write-result
+    ) -> option<write-readiness>
 
-    /// Write multiple zero bytes to a stream, with blocking.
-    blocking-write-zeroes: func(
+
+    enum flush-result {
+        done,
+        closed
+    }
+    /// begin an asynchronous flush operation.
+    ///
+    /// this tells the output-stream that the caller intends any buffered
+    /// output to be flushed. the output which is expected to be flushed
+    /// is all that has been passed to `write` prior to this call.
+    ///
+    /// return values are equivelant to calling check-flush immediately
+    /// after the intent to flush is registered:
+    /// returns none if the flush is pending
+    /// returns some(done) if the flush finished immediately (this may happen
+    /// if flushing is not applicable in the implementation)
+    /// returns some(closed) if the stream is closed
+    ///
+    /// you can observe the flushing state with `check-flush` and
+    /// `subscribe-to-flush`.
+    flush: func(
         this: output-stream,
-        /// The number of zero bytes to write
-        len: u64
-    ) -> result
+    ) -> option<flush-result>
+
+    /// returns none while the flush is pending
+    /// returns some(done) when the flush has finished
+    /// returns some(closed) if the stream has closed before the flush finished
+    check-flush: func(
+        this: output-stream,
+    ) -> option<flush-result>
+
+    /// like check-flush, except it blocks until the flush has finished or the
+    /// stream has closed.
+    blocking-check-flush: func(this: output-stream) -> flush-result
+
+    /// get a pollable which becomes ready when the flush has finished
+    /// (check-flush return value becomes some)
+    ///
+    /// The created `pollable` is a child resource of the `output-stream`.
+    /// Implementations may trap if the `output-stream` is dropped before
+    /// all derived `pollable`s created with this function are dropped.
+    subscribe-to-flush: func(
+        this: output-stream,
+    ) -> pollable
 
     /// Read from one stream and write to another.
     ///
@@ -233,16 +284,6 @@ interface streams {
         src: input-stream
     ) -> result<tuple<u64, stream-status>>
 
-    /// Create a `pollable` which will resolve once either the specified stream
-    /// is ready to accept bytes or the `stream-state` has become closed.
-    ///
-    /// Once the stream-state is closed, this pollable is always ready
-    /// immediately.
-    ///
-    /// The created `pollable` is a child resource of the `output-stream`.
-    /// Implementations may trap if the `output-stream` is dropped before
-    /// all derived `pollable`s created with this function are dropped.
-    subscribe-to-output-stream: func(this: output-stream) -> pollable
 
     /// Dispose of the specified `output-stream`, after which it may no longer
     /// be used.

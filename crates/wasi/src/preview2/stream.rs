@@ -77,25 +77,44 @@ pub trait HostInputStream: Send + Sync {
     async fn ready(&mut self) -> Result<(), Error>;
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum WriteReadiness {
+    Ready(usize),
+    Closed,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum FlushResult {
+    Done,
+    Closed,
+}
+
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
     /// Important: this write must be non-blocking!
-    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
-    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error>;
+    /// All errors trap wasm execution.
+    fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, Error>;
+
+    /// All errors trap wasm execution.
+    fn flush(&mut self) -> Result<Option<FlushResult>, Error>;
+
+    /// Check for write readiness: this method blocks until the stream is
+    /// ready for writing.
+    /// Returning an error will trap execution.
+    async fn write_ready(&mut self) -> Result<WriteReadiness, Error>;
+
+    async fn flush_ready(&mut self) -> Result<FlushResult, Error>;
 
     /// Transfer bytes directly from an input stream to an output stream.
     /// Important: this splice must be non-blocking!
     /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn splice(
-        &mut self,
-        src: &mut dyn HostInputStream,
-        nelem: usize,
-    ) -> Result<(usize, StreamState), Error> {
+    fn splice(&mut self, src: &mut dyn HostInputStream, nelem: usize) -> Result<(), Error> {
+        todo!()
+        /*
         let mut nspliced = 0;
         let mut state = StreamState::Open;
 
@@ -109,24 +128,23 @@ pub trait HostOutputStream: Send + Sync {
         }
 
         Ok((nspliced, state))
+        */
     }
 
     /// Repeatedly write a byte to a stream. Important: this write must be
     /// non-blocking!
     /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn write_zeroes(&mut self, nelem: usize) -> Result<(usize, StreamState), Error> {
+    fn write_zeroes(&mut self, nelem: usize) -> Result<(), Error> {
+        todo!()
+        /*
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
         let r = self.write(bs)?;
         Ok(r)
+        */
     }
-
-    /// Check for write readiness: this method blocks until the stream is
-    /// ready for writing.
-    /// Returning an error will trap execution.
-    async fn ready(&mut self) -> Result<(), Error>;
 }
 
 pub(crate) enum InternalInputStream {
