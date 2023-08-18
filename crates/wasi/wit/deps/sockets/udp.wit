@@ -198,8 +198,6 @@ interface udp {
 	/// 	actual data to be sent/received by the application, because the kernel might also use the buffer space
 	/// 	for internal metadata structures.
 	/// 
-	/// Fails when this socket is in the Listening state.
-	/// 
 	/// Equivalent to the SO_RCVBUF and SO_SNDBUF socket options.
 	/// 
 	/// # Typical errors

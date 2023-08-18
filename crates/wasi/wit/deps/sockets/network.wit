@@ -4,12 +4,12 @@ interface network {
     /// An opaque resource that represents access to (a subset of) the network.
 	/// This enables context-based security for networking.
 	/// There is no need for this to map 1:1 to a physical network interface.
-	///
+	/// 
 	/// FYI, In the future this will be replaced by handle types.
     type network = u32
 
 	/// Dispose of the specified `network`, after which it may no longer be used.
-	///
+	/// 
 	/// Note: this function is scheduled to be removed when Resources are natively supported in Wit.
 	drop-network: func(this: network)
 
@@ -153,7 +153,7 @@ interface network {
 
 	enum ip-address-family {
 		/// Similar to `AF_INET` in POSIX.
-		ipv4,
+		ipv4, 
 
 		/// Similar to `AF_INET6` in POSIX.
 		ipv6,
