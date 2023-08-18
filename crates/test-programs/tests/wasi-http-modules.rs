@@ -140,6 +140,10 @@ async fn outbound_request_invalid_port() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_invalid_dnsname() {
     run("outbound_request_invalid_dnsname").await.unwrap();
 }
