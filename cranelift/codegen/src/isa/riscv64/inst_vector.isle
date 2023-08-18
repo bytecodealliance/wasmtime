@@ -217,10 +217,18 @@
   ;; Vector-Vector Opcodes
   (VmaccVV)
   (VnmsacVV)
+  (VfmaccVV)
+  (VfnmaccVV)
+  (VfmsacVV)
+  (VfnmsacVV)
 
   ;; Vector-Scalar Opcodes
   (VmaccVX)
   (VnmsacVX)
+  (VfmaccVF)
+  (VfnmaccVF)
+  (VfmsacVF)
+  (VfnmsacVF)
 ))
 
 ;; Register-Imm ALU Ops
@@ -876,6 +884,70 @@
 (decl rv_vfmul_vf (VReg FReg VecOpMasking VState) VReg)
 (rule (rv_vfmul_vf vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VfmulVF) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfmacc.vv` instruction.
+;;
+;; FP multiply-accumulate, overwrites addend
+;; # vd[i] = +(vs1[i] * vs2[i]) + vd[i]
+(decl rv_vfmacc_vv (VReg VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfmacc_vv vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VfmaccVV) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfmacc.vf` instruction.
+;;
+;; FP multiply-accumulate, overwrites addend
+;; # vd[i] = +(f[rs1] * vs2[i]) + vd[i]
+(decl rv_vfmacc_vf (VReg VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vfmacc_vf vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VfmaccVF) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfnmacc.vv` instruction.
+;;
+;; FP negate-(multiply-accumulate), overwrites subtrahend
+;; # vd[i] = -(vs1[i] * vs2[i]) - vd[i]
+(decl rv_vfnmacc_vv (VReg VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfnmacc_vv vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VfnmaccVV) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfnmacc.vf` instruction.
+;;
+;; FP negate-(multiply-accumulate), overwrites subtrahend
+;; # vd[i] = -(f[rs1] * vs2[i]) - vd[i]
+(decl rv_vfnmacc_vf (VReg VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vfnmacc_vf vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VfnmaccVF) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfmsac.vv` instruction.
+;;
+;; FP multiply-subtract-accumulator, overwrites subtrahend
+;; # vd[i] = +(vs1[i] * vs2[i]) - vd[i]
+(decl rv_vfmsac_vv (VReg VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfmsac_vv vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VfmsacVV) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfmsac.vf` instruction.
+;;
+;; FP multiply-subtract-accumulator, overwrites subtrahend
+;; # vd[i] = +(f[rs1] * vs2[i]) - vd[i]
+(decl rv_vfmsac_vf (VReg VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vfmsac_vf vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VfmsacVF) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfnmsac.vv` instruction.
+;;
+;; FP negate-(multiply-subtract-accumulator), overwrites minuend
+;; # vd[i] = -(vs1[i] * vs2[i]) + vd[i]
+(decl rv_vfnmsac_vv (VReg VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfnmsac_vv vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VfnmsacVV) vd vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfnmsac.vf` instruction.
+;;
+;; FP negate-(multiply-subtract-accumulator), overwrites minuend
+;; # vd[i] = -(f[rs1] * vs2[i]) + vd[i]
+(decl rv_vfnmsac_vf (VReg VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vfnmsac_vf vd vs2 vs1 mask vstate)
+  (vec_alu_rrrr (VecAluOpRRRR.VfnmsacVF) vd vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `vfdiv.vv` instruction.
 (decl rv_vfdiv_vv (VReg VReg VecOpMasking VState) VReg)

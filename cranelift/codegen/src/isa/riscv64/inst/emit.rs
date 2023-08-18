@@ -2927,7 +2927,7 @@ impl MachInstEmit for Inst {
 
                 debug_assert_eq!(vd.to_reg(), vd_src);
 
-                sink.put4(encode_valu_rrrr(op, vd, vs1, vs2, mask));
+                sink.put4(encode_valu_rrrr(op, vd, vs2, vs1, mask));
             }
             &Inst::VecAluRRR {
                 op,

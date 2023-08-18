@@ -1,0 +1,225 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %band_splat_into_splat_band(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = band.i64x2 v2, v3
+  return v4
+  ; check: v5 = band v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %bor_splat_into_splat_bor(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = bor.i64x2 v2, v3
+  return v4
+  ; check: v5 = bor v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %bxor_splat_into_splat_bxor(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = bxor.i64x2 v2, v3
+  return v4
+  ; check: v5 = bxor v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %bnot_splat_into_splat_bnot(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = splat.i64x2 v0
+  v2 = bnot.i64x2 v1
+  return v2
+  ; check: v3 = bnot v0
+  ; check: v4 = splat.i64x2 v3
+  ; check: return v4
+}
+
+function %iadd_splat_into_splat_iadd(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = iadd.i64x2 v2, v3
+  return v4
+  ; check: v5 = iadd v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %isub_splat_into_splat_isub(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = isub.i64x2 v2, v3
+  return v4
+  ; check: v5 = isub v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %imul_splat_into_splat_imul(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = imul.i64x2 v2, v3
+  return v4
+  ; check: v5 = imul v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %smulhi_splat_into_splat_smulhi(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = smulhi.i64x2 v2, v3
+  return v4
+  ; check: v5 = smulhi v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %umulhi_splat_into_splat_umulhi(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = umulhi.i64x2 v2, v3
+  return v4
+  ; check: v5 = umulhi v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %ineg_splat_into_splat_ineg(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = splat.i64x2 v0
+  v2 = ineg.i64x2 v1
+  return v2
+  ; check: v3 = ineg v0
+  ; check: v4 = splat.i64x2 v3
+  ; check: return v4
+}
+
+function %iabs_splat_into_splat_iabs(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = splat.i64x2 v0
+  v2 = iabs.i64x2 v1
+  return v2
+  ; check: v3 = iabs v0
+  ; check: v4 = splat.i64x2 v3
+  ; check: return v4
+}
+
+function %popcnt_splat_into_splat_popcnt(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = splat.i64x2 v0
+  v2 = popcnt.i64x2 v1
+  return v2
+  ; check: v3 = popcnt v0
+  ; check: v4 = splat.i64x2 v3
+  ; check: return v4
+}
+
+function %smin_splat_into_splat_smin(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = smin.i64x2 v2, v3
+  return v4
+  ; check: v5 = smin v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %umin_splat_into_splat_umin(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = umin.i64x2 v2, v3
+  return v4
+  ; check: v5 = umin v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %smax_splat_into_splat_smax(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = smax.i64x2 v2, v3
+  return v4
+  ; check: v5 = smax v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %umax_splat_into_splat_umax(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = splat.i64x2 v1
+  v4 = umax.i64x2 v2, v3
+  return v4
+  ; check: v5 = umax v0, v1
+  ; check: v6 = splat.i64x2 v5
+  ; check: return v6
+}
+
+function %rotl_splat_into_splat_rotl(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = rotl.i64x2 v2, v1
+  return v3
+  ; check: v4 = rotl v0, v1
+  ; check: v5 = splat.i64x2 v4
+  ; check: return v5
+}
+
+function %rotr_splat_into_splat_rotr(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = rotr.i64x2 v2, v1
+  return v3
+  ; check: v4 = rotr v0, v1
+  ; check: v5 = splat.i64x2 v4
+  ; check: return v5
+}
+
+function %ishl_splat_into_splat_ishl(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = ishl.i64x2 v2, v1
+  return v3
+  ; check: v4 = ishl v0, v1
+  ; check: v5 = splat.i64x2 v4
+  ; check: return v5
+}
+
+function %ushr_splat_into_splat_ushr(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = ushr.i64x2 v2, v1
+  return v3
+  ; check: v4 = ushr v0, v1
+  ; check: v5 = splat.i64x2 v4
+  ; check: return v5
+}
+
+function %sshr_splat_into_splat_sshr(i64, i64) -> i64x2 {
+block0(v0: i64, v1: i64):
+  v2 = splat.i64x2 v0
+  v3 = sshr.i64x2 v2, v1
+  return v3
+  ; check: v4 = sshr v0, v1
+  ; check: v5 = splat.i64x2 v4
+  ; check: return v5
+}

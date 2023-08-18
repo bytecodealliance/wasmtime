@@ -1,0 +1,37 @@
+package wasi:logging
+
+/// WASI Logging is a logging API intended to let users emit log messages with
+/// simple priority levels and context values.
+interface logging {
+    /// A log level, describing a kind of message.
+    enum level {
+       /// Describes messages about the values of variables and the flow of
+       /// control within a program.
+       trace,
+
+       /// Describes messages likely to be of interest to someone debugging a
+       /// program.
+       debug,
+
+       /// Describes messages likely to be of interest to someone monitoring a
+       /// program.
+       info,
+
+       /// Describes messages indicating hazardous situations.
+       warn,
+
+       /// Describes messages indicating serious errors.
+       error,
+
+       /// Describes messages indicating fatal errors.
+       critical,
+    }
+
+    /// Emit a log message.
+    ///
+    /// A log message has a `level` describing what kind of message is being
+    /// sent, a context, which is an uninterpreted string meant to help
+    /// consumers group similar messages, and a string containing the message
+    /// text.
+    log: func(level: level, context: string, message: string)
+}

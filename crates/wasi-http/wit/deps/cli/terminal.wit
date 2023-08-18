@@ -1,0 +1,59 @@
+interface terminal-input {
+    /// The input side of a terminal.
+    ///
+    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
+    type terminal-input = u32
+
+    // In the future, this may include functions for disabling echoing,
+    // disabling input buffering so that keyboard events are sent through
+    // immediately, querying supported features, and so on.
+
+    /// Dispose of the specified terminal-input after which it may no longer
+    /// be used.
+    drop-terminal-input: func(this: terminal-input)
+}
+
+interface terminal-output {
+    /// The output side of a terminal.
+    ///
+    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
+    type terminal-output = u32
+
+    // In the future, this may include functions for querying the terminal
+    // size, being notified of terminal size changes, querying supported
+    // features, and so on.
+
+    /// Dispose of the specified terminal-output, after which it may no longer
+    /// be used.
+    drop-terminal-output: func(this: terminal-output)
+}
+
+/// An interface providing an optional `terminal-input` for stdin as a
+/// link-time authority.
+interface terminal-stdin {
+    use terminal-input.{terminal-input}
+
+    /// If stdin is connected to a terminal, return a `terminal-input` handle
+    /// allowing further interaction with it.
+    get-terminal-stdin: func() -> option<terminal-input>
+}
+
+/// An interface providing an optional `terminal-output` for stdout as a
+/// link-time authority.
+interface terminal-stdout {
+    use terminal-output.{terminal-output}
+
+    /// If stdout is connected to a terminal, return a `terminal-output` handle
+    /// allowing further interaction with it.
+    get-terminal-stdout: func() -> option<terminal-output>
+}
+
+/// An interface providing an optional `terminal-output` for stderr as a
+/// link-time authority.
+interface terminal-stderr {
+    use terminal-output.{terminal-output}
+
+    /// If stderr is connected to a terminal, return a `terminal-output` handle
+    /// allowing further interaction with it.
+    get-terminal-stderr: func() -> option<terminal-output>
+}

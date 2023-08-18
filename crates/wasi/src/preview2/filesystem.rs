@@ -1,4 +1,4 @@
-use crate::preview2::{StreamState, Table, TableError};
+use crate::preview2::{StreamRuntimeError, StreamState, Table, TableError};
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 
@@ -152,24 +152,20 @@ impl FileInputStream {
     }
 }
 
-pub(crate) fn read_result(
-    r: Result<usize, std::io::Error>,
-) -> Result<(usize, StreamState), std::io::Error> {
+fn read_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState), anyhow::Error> {
     match r {
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
-        Err(e) => Err(e),
+        Err(e) => Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into()),
     }
 }
 
-pub(crate) fn write_result(
-    r: Result<usize, std::io::Error>,
-) -> Result<(usize, StreamState), std::io::Error> {
+fn write_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState), anyhow::Error> {
     match r {
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
-        Err(e) => Err(e),
+        Err(e) => Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into()),
     }
 }
 
