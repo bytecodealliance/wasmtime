@@ -185,7 +185,7 @@ impl Context {
         self.remove_constant_phis(isa)?;
 
         if opt_level != OptLevel::None {
-            self.egraph_pass()?;
+            self.egraph_pass(isa)?;
         }
 
         Ok(())
@@ -345,7 +345,10 @@ impl Context {
     }
 
     /// Run optimizations via the egraph infrastructure.
-    pub fn egraph_pass(&mut self) -> CodegenResult<()> {
+    pub fn egraph_pass<'a, FOI>(&mut self, fisa: FOI) -> CodegenResult<()>
+    where
+        FOI: Into<FlagsOrIsa<'a>>,
+    {
         let _tt = timing::egraph();
 
         trace!(
@@ -363,6 +366,7 @@ impl Context {
         pass.run();
         log::debug!("egraph stats: {:?}", pass.stats);
         trace!("After egraph optimization:\n{}", self.func.display());
-        Ok(())
+
+        self.verify_if(fisa)
     }
 }
