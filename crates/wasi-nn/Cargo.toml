@@ -15,8 +15,9 @@ edition.workspace = true
 # These dependencies are necessary for the WITX-generation macros to work:
 anyhow = { workspace = true }
 wiggle = { workspace = true }
-
-#wasmtime-wasi = { workspace = true, features = ["tokio"] }
+wit-bindgen = {workspace = true }
+wit-component = { workspace = true }
+wasmtime-wasi = { workspace = true, features = ["tokio"] }
 # This dependency is necessary for the WIT-generation macros to work:
 wasmtime = { workspace = true, features = ["component-model"] }
 

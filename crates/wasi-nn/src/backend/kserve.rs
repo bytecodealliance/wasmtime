@@ -2,9 +2,6 @@
 
 use std::collections::HashMap;
 use std::io::Read;
-use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
-use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor, TensorType};
-
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper::{Method, Request, Response, Uri};
@@ -16,6 +13,9 @@ use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use hyper::body::Buf;
 use wiggle::async_trait_crate::async_trait;
+use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendGraph};
+use crate::{ExecutionContext, Graph};
+use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
 
 
 #[derive(Default)]
@@ -32,18 +32,10 @@ impl Backend for KServeBackend {
 
     fn load(
         &mut self,
-        builders: &GraphBuilderArray<'_>,
+        builders: &[&[u8]],
         target: ExecutionTarget,
-    ) -> Result<Box<dyn BackendGraph>, BackendError> {
+    ) -> Result<Graph, BackendError> {
         return Err(BackendError::UnsupportedOperation("load"));
-    }
-
-    fn load_from_bytes(
-        &mut self,
-        model_bytes: &Vec<Vec<u8>>,
-        target: ExecutionTarget,
-    ) -> Result<Box<dyn BackendGraph>, BackendError> {
-        return Err(BackendError::UnsupportedOperation("load_from_bytes"));
     }
 }
 
@@ -54,7 +46,7 @@ unsafe impl Send for KServeGraph {}
 unsafe impl Sync for KServeGraph {}
 
 impl BackendGraph for KServeGraph {
-    fn init_execution_context(&mut self) -> Result<Box<dyn BackendExecutionContext>, BackendError> {
+    fn init_execution_context(&mut self) -> Result<ExecutionContext, BackendError> {
         return Err(BackendError::UnsupportedOperation("init_execution_context"));
     }
 }
@@ -67,7 +59,7 @@ struct KServeExecutionContext {
 
 #[async_trait]
 impl BackendExecutionContext for KServeExecutionContext {
-    fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError> {
+    fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
         return Err(BackendError::UnsupportedOperation("init_execution_context"));
     }
 
@@ -306,7 +298,7 @@ async fn test_get_server_metadata() {
 
     let server_metadata = kserve_client.get_server_metadata().await;
 
-    eprintln!("{:?}", server_metadata);
+    println!("{:?}", server_metadata);
 }
 
 #[test]

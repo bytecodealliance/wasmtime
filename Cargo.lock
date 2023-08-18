@@ -1437,9 +1437,9 @@ dependencies = [
 
 [[package]]
 name = "http-body-util"
-version = "0.1.0-rc.2"
+version = "0.1.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92445bc9cc14bfa0a3ce56817dc3b5bcc227a168781a356b702410789cec0d10"
+checksum = "08ef12f041acdd397010e5fb6433270c147d3b8b2d0a840cd7fff8e531dca5c8"
 dependencies = [
  "bytes",
  "futures-util",
@@ -3795,12 +3795,20 @@ name = "wasmtime-wasi-nn"
 version = "13.0.0"
 dependencies = [
  "anyhow",
+ "http-body-util",
+ "hyper",
  "openvino",
+ "serde",
+ "serde_json",
  "thiserror",
+ "tokio",
  "tracing",
  "walkdir",
  "wasmtime",
+ "wasmtime-wasi",
  "wiggle",
+ "wit-bindgen",
+ "wit-component 0.13.1",
 ]
 
 [[package]]

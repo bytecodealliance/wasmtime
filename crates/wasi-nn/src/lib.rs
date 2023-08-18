@@ -1,7 +1,5 @@
 mod backend;
 mod ctx;
-// mod r#impl;
-mod kserve;
 
 pub use ctx::WasiNnCtx;
 pub mod wit;

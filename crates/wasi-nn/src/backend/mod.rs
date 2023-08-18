@@ -3,6 +3,8 @@
 //! implementations to maintain backend-specific state between calls.
 
 mod openvino;
+mod kserve;
+
 
 use self::openvino::OpenvinoBackend;
 use crate::wit::types::{ExecutionTarget, Tensor};

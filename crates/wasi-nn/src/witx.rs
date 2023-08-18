@@ -50,6 +50,7 @@ mod gen {
     }
 }
 
+#[wiggle::async_trait]
 /// Wire up the WITX-generated trait to the `wasi-nn` host state.
 impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     fn load<'b>(
@@ -78,7 +79,7 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         Ok(graph_id.into())
     }
 
-    fn load_by_name<'b>(&mut self, _name: &wiggle::GuestPtr<'b, str>) -> Result<gen::types::Graph> {
+    async fn load_by_name<'b>(&mut self, _name: &wiggle::GuestPtr<'b, str>) -> Result<gen::types::Graph> {
         todo!()
     }
 
@@ -114,9 +115,9 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         }
     }
 
-    fn compute(&mut self, exec_context_id: gen::types::GraphExecutionContext) -> Result<()> {
+    async fn compute(&mut self, exec_context_id: gen::types::GraphExecutionContext) -> Result<()> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
-            Ok(exec_context.compute()?)
+            Ok(exec_context.compute().await?)
         } else {
             Err(UsageError::InvalidExecutionContextHandle.into())
         }
