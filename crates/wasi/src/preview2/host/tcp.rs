@@ -306,7 +306,13 @@ impl<T: WasiView> tcp::Host for T {
         // If `SO_DOMAIN` is available, use it.
         //
         // TODO: OpenBSD also supports this; upstream PRs are posted.
-        #[cfg(not(any(apple, windows, target_os = "netbsd", target_os = "openbsd")))]
+        #[cfg(not(any(
+            windows,
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        )))]
         {
             use rustix::net::AddressFamily;
 
@@ -320,7 +326,13 @@ impl<T: WasiView> tcp::Host for T {
         }
 
         // When `SO_DOMAIN` is not available, emulate it.
-        #[cfg(any(apple, windows, target_os = "netbsd", target_os = "openbsd"))]
+        #[cfg(any(
+            windows,
+            target_os = "ios",
+            target_os = "macos",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        ))]
         {
             if let Ok(_) = sockopt::get_ipv6_unicast_hops(socket.tcp_socket()) {
                 return Ok(IpAddressFamily::Ipv6);
