@@ -30,6 +30,10 @@ impl SimpleIndexAllocator {
         SimpleIndexAllocator(ModuleAffinityIndexAllocator::new(capacity, 0))
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn alloc(&self) -> Option<SlotId> {
         self.0.alloc(None)
     }
@@ -161,6 +165,15 @@ impl ModuleAffinityIndexAllocator {
             slot_state: (0..capacity).map(|_| SlotState::UnusedCold).collect(),
             warm: List::default(),
         }))
+    }
+
+    /// Are zero slots in use right now?
+    pub fn is_empty(&self) -> bool {
+        let inner = self.0.lock().unwrap();
+        !inner
+            .slot_state
+            .iter()
+            .any(|s| matches!(s, SlotState::Used(_)))
     }
 
     /// Allocate a new index from this allocator optionally using `id` as an

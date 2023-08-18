@@ -91,6 +91,11 @@ impl TablePool {
         Ok(())
     }
 
+    /// Are there zero slots in use right now?
+    pub fn is_empty(&self) -> bool {
+        self.index_allocator.is_empty()
+    }
+
     /// Get the base pointer of the given table allocation.
     fn get(&self, table_index: TableAllocationIndex) -> *mut u8 {
         assert!(table_index.index() < self.max_total_tables);
@@ -120,20 +125,26 @@ impl TablePool {
                 )
             })?;
 
-        let base = self.get(allocation_index);
+        match (|| {
+            let base = self.get(allocation_index);
 
-        commit_table_pages(
-            base as *mut u8,
-            self.table_elements * mem::size_of::<*mut u8>(),
-        )?;
+            commit_table_pages(
+                base as *mut u8,
+                self.table_elements * mem::size_of::<*mut u8>(),
+            )?;
 
-        let table = Table::new_static(
-            table_plan,
-            unsafe { std::slice::from_raw_parts_mut(base.cast(), self.table_elements) },
-            unsafe { &mut *request.store.get().unwrap() },
-        )?;
-
-        Ok((allocation_index, table))
+            Table::new_static(
+                table_plan,
+                unsafe { std::slice::from_raw_parts_mut(base.cast(), self.table_elements) },
+                unsafe { &mut *request.store.get().unwrap() },
+            )
+        })() {
+            Ok(table) => Ok((allocation_index, table)),
+            Err(e) => {
+                self.index_allocator.free(SlotId(allocation_index.0));
+                Err(e)
+            }
+        }
     }
 
     /// Deallocate a previously-allocated table.

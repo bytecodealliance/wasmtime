@@ -202,8 +202,26 @@ pub struct PoolingInstanceAllocator {
 
     #[cfg(all(feature = "async", unix, not(miri)))]
     stacks: StackPool,
+
     #[cfg(all(feature = "async", windows))]
     stack_size: usize,
+    #[cfg(all(feature = "async", windows))]
+    live_stacks: AtomicU64,
+}
+
+impl Drop for PoolingInstanceAllocator {
+    fn drop(&mut self) {
+        debug_assert_eq!(self.live_component_instances.load(Ordering::Acquire), 0);
+        debug_assert_eq!(self.live_core_instances.load(Ordering::Acquire), 0);
+
+        debug_assert!(self.memories.is_empty());
+        debug_assert!(self.tables.is_empty());
+
+        #[cfg(all(feature = "async", unix, not(miri)))]
+        debug_assert!(self.stacks.is_empty());
+        #[cfg(all(feature = "async", windows))]
+        debug_assert_eq!(self.live_stacks.load(Ordering::Acquire), 0);
+    }
 }
 
 impl PoolingInstanceAllocator {
@@ -467,9 +485,25 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
                 }
 
                 // On windows, we don't use a stack pool as we use the native
-                // fiber implementation
-                let stack = wasmtime_fiber::FiberStack::new(self.stack_size)?;
-                Ok(stack)
+                // fiber implementation. We do still enforce the `total_stacks`
+                // limit, however.
+
+                let old_count = self.live_stacks.fetch_add(1, Ordering::AcqRel);
+                if old_count >= u64::from(self.limits.total_stacks) {
+                    self.live_stacks.fetch_sub(1, Ordering::AcqRel);
+                    bail!(
+                        "maximum concurrent fiber limit of {} reached",
+                        self.limits.total_stacks
+                    );
+                }
+
+                match wasmtime_fiber::FiberStack::new(self.stack_size) {
+                    Ok(stack) => Ok(stack),
+                    Err(e) => {
+                        self.live_stacks.fetch_sub(1, Ordering::AcqRel);
+                        Err(e)
+                    }
+                }
             } else {
                 compile_error!("not implemented");
             }
@@ -485,7 +519,8 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
             } else if #[cfg(unix)] {
                 self.stacks.deallocate(stack);
             } else if #[cfg(windows)] {
-                // A no-op as we don't own the fiber stack on Windows
+                self.live_stacks.fetch_sub(1, Ordering::AcqRel);
+                // A no-op as we don't own the fiber stack on Windows.
                 let _ = stack;
             } else {
                 compile_error!("not implemented");

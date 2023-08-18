@@ -199,6 +199,11 @@ impl MemoryPool {
         Ok(())
     }
 
+    /// Are zero slots in use right now?
+    pub fn is_empty(&self) -> bool {
+        self.index_allocator.is_empty()
+    }
+
     /// Allocate a single memory for the given instance allocation request.
     pub fn allocate(
         &self,
@@ -222,50 +227,56 @@ impl MemoryPool {
                 )
             })?;
 
-        // Double-check that the runtime requirements of the memory are
-        // satisfied by the configuration of this pooling allocator. This
-        // should be returned as an error through `validate_memory_plans`
-        // but double-check here to be sure.
-        match memory_plan.style {
-            MemoryStyle::Static { bound } => {
-                let bound = bound * u64::from(WASM_PAGE_SIZE);
-                assert!(bound <= u64::try_from(self.memory_size).unwrap());
+        match (|| {
+            // Double-check that the runtime requirements of the memory are
+            // satisfied by the configuration of this pooling allocator. This
+            // should be returned as an error through `validate_memory_plans`
+            // but double-check here to be sure.
+            match memory_plan.style {
+                MemoryStyle::Static { bound } => {
+                    let bound = bound * u64::from(WASM_PAGE_SIZE);
+                    assert!(bound <= u64::try_from(self.memory_size).unwrap());
+                }
+                MemoryStyle::Dynamic { .. } => {}
             }
-            MemoryStyle::Dynamic { .. } => {}
+
+            let base_ptr = self.get_base(allocation_index);
+            let base_capacity = self.max_accessible;
+
+            let mut slot = self.take_memory_image_slot(allocation_index);
+            let image = request.runtime_info.memory_image(memory_index)?;
+            let initial_size = memory_plan.memory.minimum * WASM_PAGE_SIZE as u64;
+
+            // If instantiation fails, we can propagate the error
+            // upward and drop the slot. This will cause the Drop
+            // handler to attempt to map the range with PROT_NONE
+            // memory, to reserve the space while releasing any
+            // stale mappings. The next use of this slot will then
+            // create a new slot that will try to map over
+            // this, returning errors as well if the mapping
+            // errors persist. The unmap-on-drop is best effort;
+            // if it fails, then we can still soundly continue
+            // using the rest of the pool and allowing the rest of
+            // the process to continue, because we never perform a
+            // mmap that would leave an open space for someone
+            // else to come in and map something.
+            slot.instantiate(initial_size as usize, image, memory_plan)?;
+
+            Memory::new_static(
+                memory_plan,
+                base_ptr,
+                base_capacity,
+                slot,
+                self.memory_and_guard_size,
+                unsafe { &mut *request.store.get().unwrap() },
+            )
+        })() {
+            Ok(memory) => Ok((allocation_index, memory)),
+            Err(e) => {
+                self.index_allocator.free(SlotId(allocation_index.0));
+                Err(e)
+            }
         }
-
-        let base_ptr = self.get_base(allocation_index);
-        let base_capacity = self.max_accessible;
-
-        let mut slot = self.take_memory_image_slot(allocation_index);
-        let image = request.runtime_info.memory_image(memory_index)?;
-        let initial_size = memory_plan.memory.minimum * WASM_PAGE_SIZE as u64;
-
-        // If instantiation fails, we can propagate the error
-        // upward and drop the slot. This will cause the Drop
-        // handler to attempt to map the range with PROT_NONE
-        // memory, to reserve the space while releasing any
-        // stale mappings. The next use of this slot will then
-        // create a new slot that will try to map over
-        // this, returning errors as well if the mapping
-        // errors persist. The unmap-on-drop is best effort;
-        // if it fails, then we can still soundly continue
-        // using the rest of the pool and allowing the rest of
-        // the process to continue, because we never perform a
-        // mmap that would leave an open space for someone
-        // else to come in and map something.
-        slot.instantiate(initial_size as usize, image, memory_plan)?;
-
-        let memory = Memory::new_static(
-            memory_plan,
-            base_ptr,
-            base_capacity,
-            slot,
-            self.memory_and_guard_size,
-            unsafe { &mut *request.store.get().unwrap() },
-        )?;
-
-        Ok((allocation_index, memory))
     }
 
     /// Deallocate a previously-allocated memory.

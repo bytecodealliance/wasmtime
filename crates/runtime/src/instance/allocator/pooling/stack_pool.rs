@@ -74,6 +74,11 @@ impl StackPool {
         })
     }
 
+    /// Are there zero slots in use right now?
+    pub fn is_empty(&self) -> bool {
+        self.index_allocator.is_empty()
+    }
+
     /// Allocate a new fiber.
     pub fn allocate(&self) -> Result<wasmtime_fiber::FiberStack> {
         if self.stack_size == 0 {
