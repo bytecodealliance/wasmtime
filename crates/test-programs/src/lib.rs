@@ -1,6 +1,9 @@
 ///! This crate exists to build crates for wasm32-wasi in build.rs, and execute
 ///! these wasm programs in harnesses defined under tests/.
 
+#[cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
+pub mod http_server;
+
 /// The wasi-tests binaries use these environment variables to determine their
 /// expected behavior.
 /// Used by all of the tests/ which execute the wasi-tests binaries.

@@ -7,6 +7,7 @@ cargo test \
     --workspace \
     --exclude 'wasmtime-wasi-*' \
     --exclude wasi-tests \
+    --exclude wasi-http-tests \
     --exclude command-tests \
     --exclude reactor-tests \
     $@

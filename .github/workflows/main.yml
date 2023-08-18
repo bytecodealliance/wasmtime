@@ -455,6 +455,12 @@ jobs:
         RUST_BACKTRACE: 1
       if: matrix.target == '' && matrix.os != 'windows-latest' && needs.determine.outputs.test-capi
 
+    # Ensure wit definitions are in sync: both wasmtime-wasi and wasmtime-wasi-http need their own
+    # copy of the wit definitions so publishing works, but we need to ensure they are identical copies.
+    - name: Check that the wasi and wasi-http wit directories agree
+      run: |
+        diff -ru crates/wasi/wit crates/wasi-http/wit
+
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
       env:
