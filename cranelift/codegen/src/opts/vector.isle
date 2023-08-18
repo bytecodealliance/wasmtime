@@ -56,9 +56,6 @@
 (rule (simplify (umax ty (splat ty x) (splat ty y)))
       (splat ty (umax (lane_type ty) x y)))
 
-(rule (simplify (avg_round ty (splat ty x) (splat ty y)))
-      (splat ty (avg_round (lane_type ty) x y)))
-
 ;; The second operand of shift and rotate ops is
 ;; scalar so splat opt applies only to the first
 (rule (simplify (rotl ty (splat ty x) y))
