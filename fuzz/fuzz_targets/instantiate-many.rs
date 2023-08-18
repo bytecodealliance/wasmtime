@@ -41,7 +41,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
 
     let max_instances = match &config.wasmtime.strategy {
         generators::InstanceAllocationStrategy::OnDemand => u.int_in_range(1..=100)?,
-        generators::InstanceAllocationStrategy::Pooling(config) => config.instance_count,
+        generators::InstanceAllocationStrategy::Pooling(config) => config.total_core_instances,
     };
 
     // Front-load with instantiation commands

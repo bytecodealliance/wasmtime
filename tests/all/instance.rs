@@ -42,8 +42,8 @@ fn linear_memory_limits() -> Result<()> {
         return Ok(());
     }
     test(&Engine::default())?;
-    let mut pool = PoolingAllocationConfig::default();
-    pool.instance_memory_pages(65536);
+    let mut pool = crate::small_pool_config();
+    pool.memory_pages(65536);
     test(&Engine::new(Config::new().allocation_strategy(
         InstanceAllocationStrategy::Pooling(pool),
     ))?)?;

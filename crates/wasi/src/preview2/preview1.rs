@@ -1198,7 +1198,7 @@ impl<
                 ..
             }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
 
                 let pos = position.load(Ordering::Relaxed);
@@ -1222,7 +1222,7 @@ impl<
             }
             Descriptor::Stdin { input_stream, .. } => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
                 let (read, state) = stream_res(
                     streams::Host::read(
@@ -1261,7 +1261,7 @@ impl<
         let (mut buf, read, state) = match desc {
             Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
 
                 let stream = self.read_via_stream(fd, offset).await.map_err(|e| {
@@ -1313,7 +1313,7 @@ impl<
                 position,
             }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
                 let (stream, pos) = if append {
                     let stream = self.append_via_stream(fd).await.map_err(|e| {
@@ -1344,7 +1344,7 @@ impl<
             }
             Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
                 let (n, _stat) =
                     stream_res(streams::Host::blocking_write(self, output_stream, buf).await)?;
@@ -1369,7 +1369,7 @@ impl<
         let (n, _stat) = match desc {
             Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
                 let stream = self.write_via_stream(fd, offset).await.map_err(|e| {
                     e.try_into()
