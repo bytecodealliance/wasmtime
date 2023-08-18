@@ -192,8 +192,8 @@ use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
 };
-use crate::timing;
 use crate::trace;
+use crate::{timing, VCodeConstantData};
 use cranelift_control::ControlPlane;
 use cranelift_entity::{entity_impl, PrimaryMap};
 use smallvec::{smallvec, SmallVec};
@@ -573,6 +573,19 @@ impl<I: VCodeInst> MachBuffer<I> {
             });
             assert_eq!(c, c2);
         }
+    }
+
+    /// Similar to [`MachBuffer::register_constants`] but registers a
+    /// single constant metadata. This function is useful in
+    /// situations where not all constants are known at the time of
+    /// emission.
+    pub fn register_constant(&mut self, constant: &VCodeConstant, data: &VCodeConstantData) {
+        let c2 = self.constants.push(MachBufferConstant {
+            upcoming_label: None,
+            align: data.alignment(),
+            size: data.as_slice().len(),
+        });
+        assert_eq!(*constant, c2);
     }
 
     /// Completes constant emission by iterating over `self.used_constants` and

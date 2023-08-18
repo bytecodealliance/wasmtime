@@ -98,7 +98,7 @@ pub(crate) trait ABI {
 
     /// Returns the callee-saved registers for the given
     /// calling convention.
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]>;
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 18]>;
 }
 
 /// ABI-specific representation of a function argument.
@@ -162,20 +162,20 @@ pub(crate) enum ABIResult {
         /// Type of the result.
         ty: Option<WasmType>,
         /// Register to hold the result.
-        reg: Reg,
+        reg: Option<Reg>,
     },
 }
 
 impl ABIResult {
     /// Create a register ABI result.
-    pub fn reg(ty: Option<WasmType>, reg: Reg) -> Self {
+    pub fn reg(ty: Option<WasmType>, reg: Option<Reg>) -> Self {
         Self::Reg { ty, reg }
     }
 
     /// Get the result reg.
-    pub fn result_reg(&self) -> Reg {
+    pub fn result_reg(&self) -> &Option<Reg> {
         match self {
-            Self::Reg { reg, .. } => *reg,
+            Self::Reg { reg, .. } => reg,
         }
     }
 
@@ -186,7 +186,7 @@ impl ABIResult {
         }
     }
 
-    /// Returns result's length.
+    /// Returns the length of the result.
     pub fn len(&self) -> usize {
         if self.is_void() {
             0

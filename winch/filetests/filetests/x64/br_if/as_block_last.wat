@@ -20,8 +20,8 @@
 ;;    c:	 4c89742404           	mov	qword ptr [rsp + 4], r14
 ;;   11:	 e800000000           	call	0x16
 ;;   16:	 e800000000           	call	0x1b
-;;   1b:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
-;;   1f:	 85c9                 	test	ecx, ecx
+;;   1b:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
+;;   1f:	 85c0                 	test	eax, eax
 ;;   21:	 0f8500000000         	jne	0x27
 ;;   27:	 4883c410             	add	rsp, 0x10
 ;;   2b:	 5d                   	pop	rbp

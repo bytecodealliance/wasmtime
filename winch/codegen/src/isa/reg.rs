@@ -8,7 +8,7 @@ use regalloc2::{PReg, RegClass};
 // so that the rest of Winch should only need to operate
 // on top of the concept of `Reg`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct Reg(PReg);
+pub struct Reg(PReg);
 
 impl Reg {
     /// Create a new register from a physical register.
@@ -35,6 +35,22 @@ impl Reg {
     /// Get the physical register representation.
     pub(super) fn inner(&self) -> PReg {
         self.0
+    }
+
+    /// Get the register class.
+    pub fn class(&self) -> RegClass {
+        self.0.class()
+    }
+
+    /// Returns true if the registers is a general purpose
+    /// integer register.
+    pub fn is_int(&self) -> bool {
+        self.class() == RegClass::Int
+    }
+
+    /// Returns true if the registers is a float register.
+    pub fn is_float(&self) -> bool {
+        self.class() == RegClass::Float
     }
 }
 

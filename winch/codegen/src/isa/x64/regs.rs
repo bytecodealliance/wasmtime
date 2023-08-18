@@ -164,11 +164,19 @@ pub(crate) fn xmm15() -> Reg {
 }
 
 const GPR: u32 = 16;
+const FPR: u32 = 16;
 const ALLOCATABLE_GPR: u32 = (1 << GPR) - 1;
+const ALLOCATABLE_FPR: u32 = (1 << FPR) - 1;
+// R11: Is used as the scratch register.
+// R14: Is a pinned register, used as the instance register.
 const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP) | (1 << ENC_R11) | (1 << ENC_R14);
 
 /// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;
+/// Bitmask to represent the available floating point registers.
+// Note: at the time of writing all floating point registers are allocatable,
+// but we might need a scratch register in the future.
+pub(crate) const ALL_FPR: u32 = ALLOCATABLE_FPR;
 
 /// Returns the callee-saved registers according to a particular calling
 /// convention.
@@ -176,16 +184,32 @@ pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;
 /// This function will return the set of registers that need to be saved
 /// according to the system ABI and that are known not to be saved during the
 /// prologue emission.
-pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> {
+pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[Reg; 18]> {
     use CallingConvention::*;
     match call_conv {
         WasmtimeSystemV => {
             smallvec![rbx(), r12(), r13(), r14(), r15(),]
         }
-        // TODO: Once float registers are supported,
-        // account for callee-saved float registers.
         WindowsFastcall => {
-            smallvec![rbx(), rdi(), rsi(), r12(), r13(), r14(), r15(),]
+            smallvec![
+                rbx(),
+                rdi(),
+                rsi(),
+                r12(),
+                r13(),
+                r14(),
+                r15(),
+                xmm6(),
+                xmm7(),
+                xmm8(),
+                xmm9(),
+                xmm10(),
+                xmm11(),
+                xmm12(),
+                xmm13(),
+                xmm14(),
+                xmm15(),
+            ]
         }
         _ => unreachable!(),
     }

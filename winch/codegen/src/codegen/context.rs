@@ -1,3 +1,5 @@
+use wasmtime_environ::WasmType;
+
 use super::ControlStackFrame;
 use crate::{
     abi::{ABIResult, ABI},
@@ -5,7 +7,7 @@ use crate::{
     masm::{MacroAssembler, OperandSize, RegImm},
     reg::Reg,
     regalloc::RegAlloc,
-    stack::{Stack, Val},
+    stack::{Stack, TypedReg, Val},
 };
 use std::ops::RangeBounds;
 
@@ -46,12 +48,22 @@ impl<'a> CodeGenContext<'a> {
         }
     }
 
-    /// Request a specific general purpose register to the register allocator,
+    /// Request a specific register to the register allocator,
     /// spilling if not available.
-    pub fn gpr<M: MacroAssembler>(&mut self, named: Reg, masm: &mut M) -> Reg {
-        self.regalloc.gpr(named, &mut |regalloc| {
+    pub fn reg<M: MacroAssembler>(&mut self, named: Reg, masm: &mut M) -> Reg {
+        self.regalloc.reg(named, |regalloc| {
             Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm)
         })
+    }
+
+    /// Allocate a register for the given WebAssembly type.
+    pub fn reg_for_type<M: MacroAssembler>(&mut self, ty: WasmType, masm: &mut M) -> Reg {
+        use WasmType::*;
+        match ty {
+            I32 | I64 => self.any_gpr(masm),
+            F32 | F64 => self.any_fpr(masm),
+            t => panic!("unsupported type {:?}", t),
+        }
     }
 
     /// Request the next avaiable general purpose register to the register allocator,
@@ -61,9 +73,38 @@ impl<'a> CodeGenContext<'a> {
             .any_gpr(&mut |regalloc| Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm))
     }
 
-    /// Free the given general purpose register.
-    pub fn free_gpr(&mut self, reg: Reg) {
-        self.regalloc.free_gpr(reg);
+    /// Request the next avaiable floating point register to the register allocator,
+    /// spilling if no registers are available.
+    pub fn any_fpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
+        self.regalloc
+            .any_fpr(&mut |regalloc| Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm))
+    }
+
+    /// Executes the provided function, guaranteeing that the
+    /// specified register, if any, remains unallocatable throughout
+    /// the function's execution.
+    pub fn without<T, M, F>(&mut self, reg: &Option<Reg>, masm: &mut M, mut f: F) -> T
+    where
+        M: MacroAssembler,
+        F: FnMut(&mut Self, &mut M) -> T,
+    {
+        if let Some(reg) = reg {
+            self.reg(*reg, masm);
+        }
+
+        let result = f(self, masm);
+
+        if let Some(reg) = reg {
+            self.free_reg(*reg);
+        }
+
+        result
+    }
+
+    /// Free the given register.
+    pub fn free_reg(&mut self, reg: impl Into<Reg>) {
+        let reg: Reg = reg.into();
+        self.regalloc.free(reg);
     }
 
     /// Loads the stack top value into the next available register, if
@@ -78,35 +119,35 @@ impl<'a> CodeGenContext<'a> {
         masm: &mut M,
         named: Option<Reg>,
         size: OperandSize,
-    ) -> Reg {
-        let (in_stack, dst) = if let Some(dst) = named {
-            self.stack
-                .pop_named_reg(dst)
-                .map(|reg| (true, reg))
-                .unwrap_or_else(|| (false, self.gpr(dst, masm)))
+    ) -> TypedReg {
+        let typed_reg = if let Some(dst) = named {
+            self.stack.pop_named_reg(dst)
         } else {
-            self.stack
-                .pop_reg()
-                .map(|reg| (true, reg))
-                .unwrap_or_else(|| (false, self.any_gpr(masm)))
+            self.stack.pop_reg()
         };
 
-        if in_stack {
+        if let Some(dst) = typed_reg {
             return dst;
         }
 
         let val = self.stack.pop().expect("a value at stack top");
-        if val.is_mem() {
-            masm.pop(dst);
+        let reg = if let Some(r) = named {
+            self.reg(r, masm)
         } else {
-            self.move_val_to_reg(&val, dst, masm, size);
+            self.reg_for_type(val.ty(), masm)
+        };
+
+        if val.is_mem() {
+            masm.pop(reg, val.ty().into());
+        } else {
+            self.move_val_to_reg(&val, reg, masm, size);
             // Free the source value if it is a register.
             if val.is_reg() {
-                self.regalloc.free_gpr(val.get_reg());
+                self.free_reg(val.get_reg());
             }
         }
 
-        dst
+        TypedReg::new(val.ty(), reg)
     }
 
     /// Move a stack value to the given register.
@@ -118,19 +159,21 @@ impl<'a> CodeGenContext<'a> {
         size: OperandSize,
     ) {
         match src {
-            Val::Reg(src) => masm.mov(RegImm::reg(*src), RegImm::reg(dst), size),
-            Val::I32(imm) => masm.mov(RegImm::i32((*imm).into()), RegImm::reg(dst), size),
+            Val::Reg(tr) => masm.mov(RegImm::reg(tr.reg), RegImm::reg(dst), size),
+            Val::I32(imm) => masm.mov(RegImm::i32(*imm), RegImm::reg(dst), size),
             Val::I64(imm) => masm.mov(RegImm::i64(*imm), RegImm::reg(dst), size),
-            Val::Local(index) => {
+            Val::F32(imm) => masm.mov(RegImm::f32(imm.bits()), RegImm::reg(dst), size),
+            Val::F64(imm) => masm.mov(RegImm::f64(imm.bits()), RegImm::reg(dst), size),
+            Val::Local(local) => {
                 let slot = self
                     .frame
-                    .get_local(*index)
-                    .unwrap_or_else(|| panic!("valid local at index = {}", index));
+                    .get_local(local.index)
+                    .unwrap_or_else(|| panic!("valid local at index = {}", local.index));
                 let addr = masm.local_address(&slot);
                 masm.load(addr, dst, slot.ty.into());
             }
-            Val::Memory(offset) => {
-                let addr = masm.address_from_sp(*offset);
+            Val::Memory(mem) => {
+                let addr = masm.address_from_sp(mem.slot.offset);
                 masm.load(addr, dst, size);
             }
         }
@@ -142,9 +185,9 @@ impl<'a> CodeGenContext<'a> {
         F: FnMut(&mut M, Reg, OperandSize),
         M: MacroAssembler,
     {
-        let reg = self.pop_to_reg(masm, None, size);
-        emit(masm, reg, size);
-        self.stack.push(Val::reg(reg));
+        let typed_reg = self.pop_to_reg(masm, None, size);
+        emit(masm, typed_reg.reg, size);
+        self.stack.push(typed_reg.into());
     }
 
     /// Prepares arguments for emitting an i32 binary operation.
@@ -160,15 +203,20 @@ impl<'a> CodeGenContext<'a> {
                 .stack
                 .pop_i32_const()
                 .expect("i32 const value at stack top");
-            let reg = self.pop_to_reg(masm, None, OperandSize::S32);
-            emit(masm, RegImm::reg(reg), RegImm::i32(val), OperandSize::S32);
-            self.stack.push(Val::reg(reg));
+            let typed_reg = self.pop_to_reg(masm, None, OperandSize::S32);
+            emit(
+                masm,
+                RegImm::reg(typed_reg.reg),
+                RegImm::i32(val),
+                OperandSize::S32,
+            );
+            self.stack.push(typed_reg.into());
         } else {
             let src = self.pop_to_reg(masm, None, OperandSize::S32);
             let dst = self.pop_to_reg(masm, None, OperandSize::S32);
-            emit(masm, dst.into(), src.into(), OperandSize::S32);
-            self.regalloc.free_gpr(src);
-            self.stack.push(Val::reg(dst));
+            emit(masm, dst.reg.into(), src.reg.into(), OperandSize::S32);
+            self.free_reg(src);
+            self.stack.push(dst.into());
         }
     }
 
@@ -184,15 +232,20 @@ impl<'a> CodeGenContext<'a> {
                 .stack
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
-            let reg = self.pop_to_reg(masm, None, OperandSize::S64);
-            emit(masm, RegImm::reg(reg), RegImm::i64(val), OperandSize::S64);
-            self.stack.push(Val::reg(reg));
+            let typed_reg = self.pop_to_reg(masm, None, OperandSize::S64);
+            emit(
+                masm,
+                RegImm::reg(typed_reg.reg),
+                RegImm::i64(val),
+                OperandSize::S64,
+            );
+            self.stack.push(typed_reg.into());
         } else {
             let src = self.pop_to_reg(masm, None, OperandSize::S64);
             let dst = self.pop_to_reg(masm, None, OperandSize::S64);
-            emit(masm, dst.into(), src.into(), OperandSize::S64);
-            self.regalloc.free_gpr(src);
-            self.stack.push(Val::reg(dst));
+            emit(masm, dst.reg.into(), src.reg.into(), OperandSize::S64);
+            self.free_reg(src);
+            self.stack.push(dst.into());
         }
     }
 
@@ -200,31 +253,29 @@ impl<'a> CodeGenContext<'a> {
     /// range defined by the caller.  This is a specialization of the
     /// spill function; made available for cases in which spilling
     /// locals is not required, like for example for function calls in
-    /// which locals are not reachable by the callee.  It also tracks
-    /// down the number of memory values in the given range.
+    /// which locals are not reachable by the callee.  
     ///
-    /// Returns the number of spilled registers and the number of
-    /// memory values in the given range of the value stack.
-    pub fn spill_regs_and_count_memory_in<M, R>(&mut self, masm: &mut M, range: R) -> (u32, u32)
+    /// Returns the size in bytes of the specified range.
+    pub fn save_live_registers_and_calculate_sizeof<M, R>(&mut self, masm: &mut M, range: R) -> u32
     where
         R: RangeBounds<usize>,
         M: MacroAssembler,
     {
-        let mut spilled: u32 = 0;
-        let mut memory_values = 0;
-        for i in self.stack.inner_mut().range_mut(range) {
-            if i.is_reg() {
-                let reg = i.get_reg();
-                let offset = masm.push(reg);
-                self.regalloc.free_gpr(reg);
-                *i = Val::Memory(offset);
-                spilled += 1;
-            } else if i.is_mem() {
-                memory_values += 1;
+        let mut size = 0u32;
+        for v in self.stack.inner_mut().range_mut(range) {
+            match v {
+                Val::Reg(TypedReg { reg, ty }) => {
+                    let slot = masm.push(*reg, (*ty).into());
+                    self.regalloc.free(*reg);
+                    *v = Val::mem(*ty, slot);
+                    size += slot.size
+                }
+                Val::Memory(mem) => size += mem.slot.size,
+                _ => {}
             }
         }
 
-        (spilled, memory_values)
+        size
     }
 
     /// Drops the last `n` elements of the stack, freeing any
@@ -236,7 +287,7 @@ impl<'a> CodeGenContext<'a> {
 
         self.stack.inner_mut().range(truncate..).for_each(|v| {
             if v.is_reg() {
-                self.regalloc.free_gpr(v.get_reg());
+                self.regalloc.free(v.get_reg().into());
             }
         });
         self.stack.inner_mut().truncate(truncate);
@@ -294,8 +345,9 @@ impl<'a> CodeGenContext<'a> {
             return;
         }
 
-        let reg = self.pop_to_reg(masm, Some(result.result_reg()), OperandSize::S64);
-        self.regalloc.free_gpr(reg);
+        let TypedReg { reg, ty: _ } =
+            self.pop_to_reg(masm, Some(result.result_reg().unwrap()), OperandSize::S64);
+        self.free_reg(reg);
     }
 
     /// Push ABI results in to the value stack. This function is used at the end
@@ -307,25 +359,27 @@ impl<'a> CodeGenContext<'a> {
         }
 
         match result {
-            ABIResult::Reg { reg, .. } => {
-                assert!(self.regalloc.gpr_available(*reg));
-                let result_reg = Val::reg(self.gpr(*reg, masm));
-                self.stack.push(result_reg);
+            r @ ABIResult::Reg { .. } => {
+                let reg = r.result_reg().unwrap();
+                assert!(self.regalloc.reg_available(reg));
+                let typed_reg = TypedReg::i64(self.reg(reg, masm));
+                self.stack.push(typed_reg.into());
             }
         }
     }
 
-    /// Pops the value at the stack top and assigns it to the local at the given
-    /// index, returning the register holding the source value.
-    pub fn set_local<M: MacroAssembler>(&mut self, masm: &mut M, index: u32) -> Reg {
+    /// Pops the value at the stack top and assigns it to the local at
+    /// the given index, returning the typed register holding the
+    /// source value.
+    pub fn set_local<M: MacroAssembler>(&mut self, masm: &mut M, index: u32) -> TypedReg {
         let slot = self
             .frame
             .get_local(index)
-            .unwrap_or_else(|| panic!("valid local at slot = {}", index));
+            .unwrap_or_else(|| panic!("invalid local slot = {}", index));
         let size: OperandSize = slot.ty.into();
         let src = self.pop_to_reg(masm, None, size);
         let addr = masm.local_address(&slot);
-        masm.store(RegImm::reg(src), addr, size);
+        masm.store(RegImm::reg(src.reg), addr, size);
 
         src
     }
@@ -346,16 +400,16 @@ impl<'a> CodeGenContext<'a> {
     ) {
         stack.inner_mut().iter_mut().for_each(|v| match v {
             Val::Reg(r) => {
-                let offset = masm.push(*r);
-                regalloc.free_gpr(*r);
-                *v = Val::Memory(offset);
+                let slot = masm.push(r.reg, r.ty.into());
+                regalloc.free(r.reg);
+                *v = Val::mem(r.ty, slot);
             }
-            Val::Local(index) => {
-                let slot = frame.get_local(*index).expect("valid local at slot");
+            Val::Local(local) => {
+                let slot = frame.get_local(local.index).expect("valid local at slot");
                 let addr = masm.local_address(&slot);
                 masm.load(addr, regalloc.scratch, slot.ty.into());
-                let offset = masm.push(regalloc.scratch);
-                *v = Val::Memory(offset);
+                let stack_slot = masm.push(regalloc.scratch, slot.ty.into());
+                *v = Val::mem(slot.ty, stack_slot);
             }
             _ => {}
         });
