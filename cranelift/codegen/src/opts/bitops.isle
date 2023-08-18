@@ -105,19 +105,26 @@
       (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
       (bmask ty x))
 
+;; Matches any expressions that preserve "truthiness".
+;; i.e. If the input is zero it remains zero, and if it is nonzero it can have
+;; a different value as long as it is still nonzero.
+(decl pure multi truthy (Value) Value)
+(rule (truthy (sextend _ x)) x)
+(rule (truthy (uextend _ x)) x)
+(rule (truthy (bmask _ x)) x)
+(rule (truthy (ineg _ x)) x)
+(rule (truthy (bswap _ x)) x)
+(rule (truthy (bitrev _ x)) x)
+(rule (truthy (popcnt _ x)) x)
+(rule (truthy (rotl _ x _)) x)
+(rule (truthy (rotr _ x _)) x)
+(rule (truthy (select _ x (iconst _ (u64_from_imm64 (u64_nonzero _))) (iconst _ (u64_from_imm64 0)))) x)
 
-;; (bmask (bmask x)) == (bmask x)
-;; The inner bmask can have a different type than the outer bmask.
-(rule (simplify (bmask ty (bmask _ x))) (bmask ty x))
+;; All of these expressions don't care about their input as long as it is truthy.
+;; so we can remove expressions that preserve that property from the input.
+(rule (simplify (bmask ty v)) (if-let x (truthy v)) (bmask ty x))
+(rule (simplify (select ty v lhs rhs)) (if-let c (truthy v)) (select ty c lhs rhs))
 
-;; (bmask (op x)) can be replaced with (bmask x)
-;; if op is an operation that preserves "truthiness"
-(rule (simplify (bmask ty (sextend _ x))) (bmask ty x))
-(rule (simplify (bmask ty (uextend _ x))) (bmask ty x))
-(rule (simplify (bmask ty (ineg _ x))) (bmask ty x))
-(rule (simplify (bmask ty (bswap _ x))) (bmask ty x))
-(rule (simplify (bmask ty (bitrev _ x))) (bmask ty x))
-(rule (simplify (bmask ty (popcnt _ x))) (bmask ty x))
 
 ;; (sextend (bmask x)) can be replaced with (bmask x) since bmask
 ;; supports any size of output type, regardless of input.
