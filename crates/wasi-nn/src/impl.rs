@@ -47,7 +47,8 @@ impl WasiNnCtx {
     }
 }
 
-impl<'a> WasiEphemeralNn for WasiNnCtx {
+#[wiggle::async_trait]
+impl <'a>WasiEphemeralNn for WasiNnCtx {
     fn load<'b>(
         &mut self,
         builders: &GraphBuilderArray<'_>,
@@ -64,7 +65,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         Ok(graph_id)
     }
 
-    fn load_by_name<'b>(&mut self, model_name: &GuestPtr<'_,str>) -> Result<Graph> {
+     async fn load_by_name<'b>(&mut self, model_name: &GuestPtr<'b,str>) -> Result<Graph> {
         let model_name = model_name.as_str().unwrap().unwrap().to_string();
         let maybe_loaded_model = self.loaded_models.get(&model_name);
 
@@ -113,9 +114,10 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         }
     }
 
-    fn compute(&mut self, exec_context_id: GraphExecutionContext) -> Result<()> {
+    // #[wiggle::async_trait]
+    async fn compute(&mut self, exec_context_id: GraphExecutionContext) -> Result<()> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id) {
-            Ok(exec_context.compute()?)
+            Ok(exec_context.compute().await?)
         } else {
             Err(UsageError::InvalidExecutionContextHandle.into())
         }

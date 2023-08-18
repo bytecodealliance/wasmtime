@@ -4,6 +4,7 @@ use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::witx::types::{ExecutionTarget, GraphBuilderArray, Tensor, TensorType};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
 use std::sync::Arc;
+use wiggle::async_trait_crate::async_trait;
 
 #[derive(Default)]
 pub(crate) struct OpenvinoBackend(Option<openvino::Core>);
@@ -113,6 +114,7 @@ impl BackendGraph for OpenvinoGraph {
 
 struct OpenvinoExecutionContext(Arc<openvino::CNNNetwork>, openvino::InferRequest);
 
+#[async_trait]
 impl BackendExecutionContext for OpenvinoExecutionContext {
     fn set_input(&mut self, index: u32, tensor: &Tensor<'_>) -> Result<(), BackendError> {
         let input_name = self.0.get_input_name(index as usize)?;
@@ -141,7 +143,7 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         Ok(())
     }
 
-    fn compute(&mut self) -> Result<(), BackendError> {
+     async fn compute(&mut self) -> Result<(), BackendError> {
         self.1.infer()?;
         Ok(())
     }

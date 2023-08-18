@@ -6,7 +6,8 @@ use anyhow::Result;
 // Generate the traits and types of wasi-nn in several Rust modules (e.g. `types`).
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/wasi-nn.witx"],
-    errors: { nn_errno => WasiNnError }
+    errors: { nn_errno => WasiNnError },
+    async: { wasi_ephemeral_nn::compute, wasi_ephemeral_nn::load_by_name },
 });
 
 use types::NnErrno;
