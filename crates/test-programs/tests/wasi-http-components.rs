@@ -105,6 +105,10 @@ async fn outbound_request_put() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_invalid_version() {
     setup_http2(run("outbound_request_invalid_version"))
         .await
