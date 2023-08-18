@@ -35,3 +35,10 @@ pub fn wasi_tests_environment() -> &'static [(&'static str, &'static str)] {
         ]
     }
 }
+
+pub fn stdio_is_terminal() -> bool {
+    use is_terminal::is_terminal;
+    is_terminal(&std::io::stdin())
+        && is_terminal(&std::io::stdout())
+        && is_terminal(&std::io::stderr())
+}

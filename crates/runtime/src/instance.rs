@@ -29,9 +29,11 @@ use std::{mem, ptr};
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
+    GlobalInit, HostPtr, MemoryIndex, MemoryPlan, Module, PrimaryMap, SignatureIndex, TableIndex,
     TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
 };
+#[cfg(feature = "wmemcheck")]
+use wasmtime_wmemcheck::Wmemcheck;
 
 mod allocator;
 
@@ -140,6 +142,10 @@ pub struct Instance {
     /// seems not too bad.
     vmctx_self_reference: SendSyncPtr<VMContext>,
 
+    #[cfg(feature = "wmemcheck")]
+    pub(crate) wmemcheck_state: Option<Wmemcheck>,
+    // TODO: add support for multiple memories, wmemcheck_state corresponds to
+    // memory 0.
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -157,6 +163,7 @@ impl Instance {
         index: usize,
         memories: PrimaryMap<DefinedMemoryIndex, Memory>,
         tables: PrimaryMap<DefinedTableIndex, Table>,
+        memory_plans: &PrimaryMap<MemoryIndex, MemoryPlan>,
     ) -> InstanceHandle {
         // The allocation must be *at least* the size required of `Instance`.
         let layout = Self::alloc_layout(req.runtime_info.offsets());
@@ -169,6 +176,9 @@ impl Instance {
         let module = req.runtime_info.module();
         let dropped_elements = EntitySet::with_capacity(module.passive_elements.len());
         let dropped_data = EntitySet::with_capacity(module.passive_data_map.len());
+
+        #[cfg(not(feature = "wmemcheck"))]
+        let _ = memory_plans;
 
         ptr::write(
             ptr,
@@ -185,6 +195,21 @@ impl Instance {
                 ),
                 vmctx: VMContext {
                     _marker: std::marker::PhantomPinned,
+                },
+                #[cfg(feature = "wmemcheck")]
+                wmemcheck_state: {
+                    if req.wmemcheck {
+                        let size = memory_plans
+                            .iter()
+                            .next()
+                            .map(|plan| plan.1.memory.minimum)
+                            .unwrap_or(0)
+                            * 64
+                            * 1024;
+                        Some(Wmemcheck::new(size as usize))
+                    } else {
+                        None
+                    }
                 },
             },
         );
@@ -1126,7 +1151,18 @@ impl Instance {
             ptr::write(to, VMGlobalDefinition::new());
 
             match *init {
-                GlobalInit::I32Const(x) => *(*to).as_i32_mut() = x,
+                GlobalInit::I32Const(x) => {
+                    let index = module.global_index(index);
+                    if index.index() == 0 {
+                        #[cfg(feature = "wmemcheck")]
+                        {
+                            if let Some(wmemcheck) = &mut self.wmemcheck_state {
+                                wmemcheck.set_stack_size(x as usize);
+                            }
+                        }
+                    }
+                    *(*to).as_i32_mut() = x;
+                }
                 GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
                 GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
                 GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,

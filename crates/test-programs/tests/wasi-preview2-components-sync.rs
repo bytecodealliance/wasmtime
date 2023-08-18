@@ -5,7 +5,7 @@ use wasmtime::{component::Linker, Config, Engine, Store};
 use wasmtime_wasi::preview2::{
     command::sync::{add_to_linker, Command},
     pipe::MemoryOutputPipe,
-    DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 lazy_static::lazy_static! {
@@ -43,7 +43,9 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         if inherit_stdio {
             builder.inherit_stdio();
         } else {
-            builder.stdout(stdout.clone()).stderr(stderr.clone());
+            builder
+                .stdout(stdout.clone(), IsATTY::No)
+                .stderr(stderr.clone(), IsATTY::No);
         }
         builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);
@@ -79,6 +81,7 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         let mut store = Store::new(&ENGINE, ctx);
         let (command, _instance) = Command::instantiate(&mut store, &get_component(name), &linker)?;
         command
+            .wasi_cli_run()
             .call_run(&mut store)?
             .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
         Ok(())
@@ -178,8 +181,8 @@ fn interesting_paths() {
     run("interesting_paths", false).unwrap()
 }
 #[test_log::test]
-fn isatty() {
-    run("isatty", false).unwrap()
+fn regular_file_isatty() {
+    run("regular_file_isatty", false).unwrap()
 }
 #[test_log::test]
 fn nofollow_errors() {
@@ -271,6 +274,19 @@ fn sched_yield() {
 #[test_log::test]
 fn stdio() {
     run("stdio", false).unwrap()
+}
+#[test_log::test]
+fn stdio_isatty() {
+    // If the test process is setup such that stdio is a terminal:
+    if test_programs::stdio_is_terminal() {
+        // Inherit stdio, test asserts each is a tty:
+        run("stdio_isatty", true).unwrap()
+    }
+}
+#[test_log::test]
+fn stdio_not_isatty() {
+    // Don't inherit stdio, test asserts not isatty:
+    run("stdio_not_isatty", false).unwrap()
 }
 #[test_log::test]
 fn symlink_create() {

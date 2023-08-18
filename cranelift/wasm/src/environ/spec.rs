@@ -648,6 +648,47 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn use_x86_pmaddubsw_for_dot(&self) -> bool {
         false
     }
+
+    /// Inserts code before a function return.
+    fn handle_before_return(&mut self, _retvals: &[ir::Value], _builder: &mut FunctionBuilder) {}
+
+    /// Inserts code before a load.
+    fn before_load(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _val_size: u8,
+        _addr: ir::Value,
+        _offset: u64,
+    ) {
+    }
+
+    /// Inserts code before a store.
+    fn before_store(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _val_size: u8,
+        _addr: ir::Value,
+        _offset: u64,
+    ) {
+    }
+
+    /// Inserts code before updating a global.
+    fn update_global(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _global_index: u32,
+        _value: ir::Value,
+    ) {
+    }
+
+    /// Inserts code before memory.grow.
+    fn before_memory_grow(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _num_bytes: ir::Value,
+        _mem_index: MemoryIndex,
+    ) {
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

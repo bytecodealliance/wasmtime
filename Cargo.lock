@@ -2648,6 +2648,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper",
+ "is-terminal",
  "lazy_static",
  "tempfile",
  "test-log",
@@ -3478,6 +3479,7 @@ name = "wasmtime-cranelift"
 version = "13.0.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "cranelift-codegen",
  "cranelift-control",
  "cranelift-entity",
@@ -3696,6 +3698,7 @@ dependencies = [
  "wasmtime-fiber",
  "wasmtime-jit-debug",
  "wasmtime-versioned-export-macros",
+ "wasmtime-wmemcheck",
  "windows-sys",
 ]
 
@@ -3733,6 +3736,7 @@ dependencies = [
  "fs-set-times",
  "futures",
  "io-extras",
+ "is-terminal",
  "libc",
  "once_cell",
  "rustix 0.38.4",
@@ -3832,6 +3836,10 @@ dependencies = [
  "indexmap 2.0.0",
  "wit-parser",
 ]
+
+[[package]]
+name = "wasmtime-wmemcheck"
+version = "13.0.0"
 
 [[package]]
 name = "wast"

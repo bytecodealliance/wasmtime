@@ -1,5 +1,3 @@
-package wasi:cli-base
-
 interface environment {
   /// Get the POSIX-style environment variables.
   ///
@@ -13,4 +11,8 @@ interface environment {
 
   /// Get the POSIX-style arguments to the program.
   get-arguments: func() -> list<string>
+
+  /// Return a path that programs should use as their initial current working
+  /// directory, interpreting `.` as shorthand for this.
+  initial-cwd: func() -> option<string>
 }

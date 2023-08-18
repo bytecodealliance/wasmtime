@@ -13,6 +13,8 @@ cargo_metadata = "0.15.3"
 wit-component = { workspace = true }
 heck = { workspace = true }
 
+[dependencies]
+is-terminal = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

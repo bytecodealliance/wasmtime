@@ -208,6 +208,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     }
                     debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                     builder.ins().store(flags, val, addr, offset);
+                    environ.update_global(builder, *global_index, val);
                 }
                 GlobalVariable::Custom => {
                     let val = state.pop1();
@@ -588,6 +589,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             };
             {
                 let return_args = state.peekn_mut(return_count);
+                environ.handle_before_return(&return_args, builder);
                 bitcast_wasm_returns(environ, return_args, builder);
                 builder.ins().return_(return_args);
             }
@@ -757,6 +759,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap_index = MemoryIndex::from_u32(*mem);
             let heap = state.get_heap(builder.func, *mem, environ)?;
             let val = state.pop1();
+            environ.before_memory_grow(builder, val, heap_index);
             state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
         }
         Operator::MemorySize { mem, mem_byte: _ } => {
@@ -859,7 +862,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             );
         }
         Operator::V128Load8x8S { memarg } => {
-            let (flags, base) = unwrap_or_return_unreachable_state!(
+            //TODO(#6829): add before_load() and before_store() hooks for SIMD loads and stores.
+            let (flags, _, base) = unwrap_or_return_unreachable_state!(
                 state,
                 prepare_addr(memarg, 8, builder, state, environ)?
             );
@@ -867,7 +871,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(loaded);
         }
         Operator::V128Load8x8U { memarg } => {
-            let (flags, base) = unwrap_or_return_unreachable_state!(
+            let (flags, _, base) = unwrap_or_return_unreachable_state!(
                 state,
                 prepare_addr(memarg, 8, builder, state, environ)?
             );
@@ -875,7 +879,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(loaded);
         }
         Operator::V128Load16x4S { memarg } => {
-            let (flags, base) = unwrap_or_return_unreachable_state!(
+            let (flags, _, base) = unwrap_or_return_unreachable_state!(
                 state,
                 prepare_addr(memarg, 8, builder, state, environ)?
             );
@@ -883,7 +887,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(loaded);
         }
         Operator::V128Load16x4U { memarg } => {
-            let (flags, base) = unwrap_or_return_unreachable_state!(
+            let (flags, _, base) = unwrap_or_return_unreachable_state!(
                 state,
                 prepare_addr(memarg, 8, builder, state, environ)?
             );
@@ -891,7 +895,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(loaded);
         }
         Operator::V128Load32x2S { memarg } => {
-            let (flags, base) = unwrap_or_return_unreachable_state!(
+            let (flags, _, base) = unwrap_or_return_unreachable_state!(
                 state,
                 prepare_addr(memarg, 8, builder, state, environ)?
             );
@@ -899,7 +903,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(loaded);
         }
         Operator::V128Load32x2U { memarg } => {
-            let (flags, base) = unwrap_or_return_unreachable_state!(
+            let (flags, _, base) = unwrap_or_return_unreachable_state!(
                 state,
                 prepare_addr(memarg, 8, builder, state, environ)?
             );
@@ -2631,13 +2635,15 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
 /// heap address if execution reaches that point.
 ///
 /// Returns `None` when the Wasm access will unconditionally trap.
+///
+/// Returns `(flags, wasm_addr, native_addr)`.
 fn prepare_addr<FE>(
     memarg: &MemArg,
     access_size: u8,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
-) -> WasmResult<Reachability<(MemFlags, Value)>>
+) -> WasmResult<Reachability<(MemFlags, Value, Value)>>
 where
     FE: FuncEnvironment + ?Sized,
 {
@@ -2787,7 +2793,7 @@ where
     // vmctx, stack) accesses.
     flags.set_heap();
 
-    Ok(Reachability::Reachable((flags, addr)))
+    Ok(Reachability::Reachable((flags, index, addr)))
 }
 
 fn align_atomic_addr(
@@ -2834,7 +2840,7 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
-) -> WasmResult<Reachability<(MemFlags, Value)>> {
+) -> WasmResult<Reachability<(MemFlags, Value, Value)>> {
     align_atomic_addr(memarg, loaded_bytes, builder, state);
     prepare_addr(memarg, loaded_bytes, builder, state, environ)
 }
@@ -2866,16 +2872,15 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<Reachability<()>> {
-    let (flags, base) = match prepare_addr(
-        memarg,
-        mem_op_size(opcode, result_ty),
-        builder,
-        state,
-        environ,
-    )? {
-        Reachability::Unreachable => return Ok(Reachability::Unreachable),
-        Reachability::Reachable((f, b)) => (f, b),
-    };
+    let mem_op_size = mem_op_size(opcode, result_ty);
+    let (flags, wasm_index, base) =
+        match prepare_addr(memarg, mem_op_size, builder, state, environ)? {
+            Reachability::Unreachable => return Ok(Reachability::Unreachable),
+            Reachability::Reachable((f, i, b)) => (f, i, b),
+        };
+
+    environ.before_load(builder, mem_op_size, wasm_index, memarg.offset);
+
     let (load, dfg) = builder
         .ins()
         .Load(opcode, result_ty, flags, Offset32::new(0), base);
@@ -2893,11 +2898,15 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
 ) -> WasmResult<()> {
     let val = state.pop1();
     let val_ty = builder.func.dfg.value_type(val);
+    let mem_op_size = mem_op_size(opcode, val_ty);
 
-    let (flags, base) = unwrap_or_return_unreachable_state!(
+    let (flags, wasm_index, base) = unwrap_or_return_unreachable_state!(
         state,
-        prepare_addr(memarg, mem_op_size(opcode, val_ty), builder, state, environ)?
+        prepare_addr(memarg, mem_op_size, builder, state, environ)?
     );
+
+    environ.before_store(builder, mem_op_size, wasm_index, memarg.offset);
+
     builder
         .ins()
         .Store(opcode, val_ty, flags, Offset32::new(0), val, base);
@@ -2954,7 +2963,7 @@ fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
         arg2 = builder.ins().ireduce(access_ty, arg2);
     }
 
-    let (flags, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
         state,
         prepare_atomic_addr(
             memarg,
@@ -3011,7 +3020,7 @@ fn translate_atomic_cas<FE: FuncEnvironment + ?Sized>(
         replacement = builder.ins().ireduce(access_ty, replacement);
     }
 
-    let (flags, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
         state,
         prepare_atomic_addr(
             memarg,
@@ -3054,7 +3063,7 @@ fn translate_atomic_load<FE: FuncEnvironment + ?Sized>(
     };
     assert!(w_ty_ok && widened_ty.bytes() >= access_ty.bytes());
 
-    let (flags, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
         state,
         prepare_atomic_addr(
             memarg,
@@ -3103,7 +3112,7 @@ fn translate_atomic_store<FE: FuncEnvironment + ?Sized>(
         data = builder.ins().ireduce(access_ty, data);
     }
 
-    let (flags, addr) = unwrap_or_return_unreachable_state!(
+    let (flags, _, addr) = unwrap_or_return_unreachable_state!(
         state,
         prepare_atomic_addr(
             memarg,

@@ -1,5 +1,5 @@
-use command_tests::wasi::cli_base::environment;
-use command_tests::wasi::cli_base::stdin;
+use command_tests::wasi::cli::environment;
+use command_tests::wasi::cli::stdin;
 use command_tests::wasi::io::streams;
 use command_tests::wasi::poll::poll;
 
