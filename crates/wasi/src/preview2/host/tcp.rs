@@ -11,6 +11,7 @@ use crate::preview2::tcp::{HostTcpSocket, HostTcpSocketInner, HostTcpState, Tabl
 use crate::preview2::{HostPollable, PollableFuture, WasiView};
 use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
 use io_lifetimes::AsSocketlike;
+use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::any::Any;
 use std::mem;
@@ -94,8 +95,7 @@ impl<T: WasiView> tcp::Host for T {
                 return Ok(());
             }
             // continue in progress,
-            Err(err)
-                if err.raw_os_error() == Some(rustix::io::Errno::INPROGRESS.raw_os_error()) => {}
+            Err(err) if err.raw_os_error() == Some(INPROGRESS.raw_os_error()) => {}
             // or fail immediately.
             Err(err) => return Err(err.into()),
         }
@@ -406,7 +406,7 @@ impl<T: WasiView> tcp::Host for T {
         // fall back to the other.
         match sockopt::get_ipv6_unicast_hops(socket.tcp_socket()) {
             Ok(value) => Ok(value),
-            Err(rustix::io::Errno::NOPROTOOPT) => {
+            Err(Errno::NOPROTOOPT) => {
                 let value = sockopt::get_ip_ttl(socket.tcp_socket())?;
                 let value = value.try_into().unwrap();
                 Ok(value)
@@ -427,9 +427,7 @@ impl<T: WasiView> tcp::Host for T {
         // fall back to the other.
         match sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value)) {
             Ok(()) => Ok(()),
-            Err(rustix::io::Errno::NOPROTOOPT) => {
-                Ok(sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?)
-            }
+            Err(Errno::NOPROTOOPT) => Ok(sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?),
             Err(err) => Err(err.into()),
         }
     }
@@ -602,3 +600,13 @@ fn maybe_unwrap_future<F: std::future::Future + std::marker::Unpin>(
         Poll::Pending => None,
     }
 }
+
+// On POSIX, non-blocking TCP socket `connect` uses `EINPROGRESS`.
+// <https://pubs.opengroup.org/onlinepubs/9699919799/functions/connect.html>
+#[cfg(not(windows))]
+const INPROGRESS: Errno = Errno::INPROGRESS;
+
+// On Windows, non-blocking TCP socket `connect` uses `WSAEWOULDBLOCK`.
+// <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
+#[cfg(windows)]
+const INPROGRESS: Errno = Errno::WOULDBLOCK;
