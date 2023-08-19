@@ -282,6 +282,17 @@ block0(v0: i16):
 ; check: v5 = bmask.i64 v0
 ; check: return v5
 
+function %bmask_icmp_ne_zero(i16) -> i64 {
+block0(v0: i16):
+    v1 = iconst.i16 0
+    v2 = icmp ne v0, v1
+    v3 = bmask.i64 v2
+    return v3
+}
+
+; check: v4 = bmask.i64 v0
+; check: return v4
+
 function %sextend_bmask(i16) -> i64 {
 block0(v0: i16):
     v1 = bmask.i32 v0
