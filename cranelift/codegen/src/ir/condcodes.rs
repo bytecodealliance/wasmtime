@@ -12,12 +12,12 @@ use serde::{Deserialize, Serialize};
 
 /// Common traits of condition codes.
 pub trait CondCode: Copy {
-    /// Get the inverse condition code of `self`.
+    /// Get the negated condition code of `self`.
     ///
-    /// The inverse condition code produces the opposite result for all comparisons.
-    /// That is, `cmp CC, x, y` is true if and only if `cmp CC.inverse(), x, y` is false.
+    /// The negated condition code produces the opposite result for all comparisons.
+    /// That is, `cmp CC, x, y` is true if and only if `cmp CC.negate(), x, y` is false.
     #[must_use]
-    fn inverse(self) -> Self;
+    fn negate(self) -> Self;
 
     /// Get the flipped condition code for `self`.
     ///
@@ -58,7 +58,7 @@ pub enum IntCC {
 }
 
 impl CondCode for IntCC {
-    fn inverse(self) -> Self {
+    fn negate(self) -> Self {
         use self::IntCC::*;
         match self {
             Equal => NotEqual,
@@ -254,7 +254,7 @@ impl FloatCC {
 }
 
 impl CondCode for FloatCC {
-    fn inverse(self) -> Self {
+    fn negate(self) -> Self {
         use self::FloatCC::*;
         match self {
             Ordered => Unordered,
@@ -347,12 +347,12 @@ mod tests {
     use std::string::ToString;
 
     #[test]
-    fn int_inverse() {
+    fn int_negate() {
         for r in IntCC::all() {
             let cc = *r;
-            let inv = cc.inverse();
+            let inv = cc.negate();
             assert!(cc != inv);
-            assert_eq!(inv.inverse(), cc);
+            assert_eq!(inv.negate(), cc);
         }
     }
 
@@ -375,12 +375,12 @@ mod tests {
     }
 
     #[test]
-    fn float_inverse() {
+    fn float_negate() {
         for r in FloatCC::all() {
             let cc = *r;
-            let inv = cc.inverse();
+            let inv = cc.negate();
             assert!(cc != inv);
-            assert_eq!(inv.inverse(), cc);
+            assert_eq!(inv.negate(), cc);
         }
     }
 

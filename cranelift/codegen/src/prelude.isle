@@ -305,17 +305,17 @@
 (decl intcc_flip (IntCC) IntCC)
 (extern constructor intcc_flip intcc_flip)
 
-;; Invert an IntCC flag.
-(decl intcc_inverse (IntCC) IntCC)
-(extern constructor intcc_inverse intcc_inverse)
+;; Negate an IntCC flag.
+(decl intcc_negate (IntCC) IntCC)
+(extern constructor intcc_negate intcc_negate)
 
 ;; Flip an FloatCC flag.
 (decl floatcc_flip (FloatCC) FloatCC)
 (extern constructor floatcc_flip floatcc_flip)
 
-;; Invert an FloatCC flag.
-(decl floatcc_inverse (FloatCC) FloatCC)
-(extern constructor floatcc_inverse floatcc_inverse)
+;; Negate an FloatCC flag.
+(decl floatcc_negate (FloatCC) FloatCC)
+(extern constructor floatcc_negate floatcc_negate)
 
 ;; True when this FloatCC involves an unordered comparison.
 (decl pure floatcc_unordered (FloatCC) bool)

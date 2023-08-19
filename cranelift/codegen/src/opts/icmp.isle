@@ -22,7 +22,7 @@
 (rule (simplify (eq ty
                       (uextend _ (icmp ty cc x y))
                       (iconst _ (u64_from_imm64 0))))
-      (subsume (icmp ty (intcc_inverse cc) x y)))
+      (subsume (icmp ty (intcc_negate cc) x y)))
 
 ;; Optimize select-of-uextend-of-icmp to select-of-icmp, because
 ;; select can take an I8 condition too.

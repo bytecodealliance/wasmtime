@@ -2634,7 +2634,7 @@
   (if-let $true (floatcc_unordered cc))
   (let ((then BranchTarget (label_to_br_target (vec_label_get targets 0)))
         (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
-    (emit_side_effect (cond_br (emit_fcmp (floatcc_inverse cc) ty a b) else then))))
+    (emit_side_effect (cond_br (emit_fcmp (floatcc_negate cc) ty a b) else then))))
 
 (rule 1
   (lower_branch (brif (maybe_uextend (fcmp cc a @ (value_type ty) b)) _ _) targets)
