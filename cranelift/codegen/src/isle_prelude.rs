@@ -818,8 +818,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
-            cc.reverse()
+        fn intcc_flip(&mut self, cc: &IntCC) -> IntCC {
+            cc.flip()
         }
 
         #[inline]
@@ -828,8 +828,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn floatcc_reverse(&mut self, cc: &FloatCC) -> FloatCC {
-            cc.reverse()
+        fn floatcc_flip(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.flip()
         }
 
         #[inline]

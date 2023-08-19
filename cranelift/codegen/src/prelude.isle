@@ -301,17 +301,17 @@
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Reverse an IntCC flag.
-(decl intcc_reverse (IntCC) IntCC)
-(extern constructor intcc_reverse intcc_reverse)
+;; Flip an IntCC flag.
+(decl intcc_flip (IntCC) IntCC)
+(extern constructor intcc_flip intcc_flip)
 
 ;; Invert an IntCC flag.
 (decl intcc_inverse (IntCC) IntCC)
 (extern constructor intcc_inverse intcc_inverse)
 
-;; Reverse an FloatCC flag.
-(decl floatcc_reverse (FloatCC) FloatCC)
-(extern constructor floatcc_reverse floatcc_reverse)
+;; Flip an FloatCC flag.
+(decl floatcc_flip (FloatCC) FloatCC)
+(extern constructor floatcc_flip floatcc_flip)
 
 ;; Invert an FloatCC flag.
 (decl floatcc_inverse (FloatCC) FloatCC)

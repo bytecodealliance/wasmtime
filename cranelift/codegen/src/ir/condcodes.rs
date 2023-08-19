@@ -19,12 +19,12 @@ pub trait CondCode: Copy {
     #[must_use]
     fn inverse(self) -> Self;
 
-    /// Get the reversed condition code for `self`.
+    /// Get the flipped condition code for `self`.
     ///
-    /// The reversed condition code produces the same result as swapping `x` and `y` in the
-    /// comparison. That is, `cmp CC, x, y` is the same as `cmp CC.reverse(), y, x`.
+    /// The flipped condition code produces the same result as swapping `x` and `y` in the
+    /// comparison. That is, `cmp CC, x, y` is the same as `cmp CC.flip(), y, x`.
     #[must_use]
-    fn reverse(self) -> Self;
+    fn flip(self) -> Self;
 }
 
 /// Condition code for comparing integers.
@@ -74,7 +74,7 @@ impl CondCode for IntCC {
         }
     }
 
-    fn reverse(self) -> Self {
+    fn flip(self) -> Self {
         use self::IntCC::*;
         match self {
             Equal => Equal,
@@ -273,7 +273,7 @@ impl CondCode for FloatCC {
             UnorderedOrGreaterThanOrEqual => LessThan,
         }
     }
-    fn reverse(self) -> Self {
+    fn flip(self) -> Self {
         use self::FloatCC::*;
         match self {
             Ordered => Ordered,
@@ -357,11 +357,11 @@ mod tests {
     }
 
     #[test]
-    fn int_reverse() {
+    fn int_flip() {
         for r in IntCC::all() {
             let cc = *r;
-            let rev = cc.reverse();
-            assert_eq!(rev.reverse(), cc);
+            let rev = cc.flip();
+            assert_eq!(rev.flip(), cc);
         }
     }
 
@@ -385,11 +385,11 @@ mod tests {
     }
 
     #[test]
-    fn float_reverse() {
+    fn float_flip() {
         for r in FloatCC::all() {
             let cc = *r;
-            let rev = cc.reverse();
-            assert_eq!(rev.reverse(), cc);
+            let rev = cc.flip();
+            assert_eq!(rev.flip(), cc);
         }
     }
 
