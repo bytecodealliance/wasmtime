@@ -283,7 +283,7 @@ impl AsyncWriteStream {
         }
     }
 
-    fn send(&mut self, bytes: Bytes) -> anyhow::Result<(usize, StreamState)> {
+    fn send(&mut self, bytes: Bytes) {
         use tokio::sync::mpsc::error::TrySendError;
 
         debug_assert!(matches!(self.state, Some(WriteState::Ready)));
@@ -292,7 +292,6 @@ impl AsyncWriteStream {
         match self.sender.try_send(bytes) {
             Ok(_) => {
                 self.state = Some(WriteState::Pending);
-                Ok((len, StreamState::Open))
             }
             Err(TrySendError::Full(_)) => {
                 unreachable!("task shouldnt be full when writestate is ready")
@@ -310,30 +309,35 @@ impl Drop for AsyncWriteStream {
 
 #[async_trait::async_trait]
 impl HostOutputStream for AsyncWriteStream {
-    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, anyhow::Error> {
         use tokio::sync::mpsc::error::TryRecvError;
 
         match self.state {
-            Some(WriteState::Ready) => self.send(bytes),
+            Some(WriteState::Ready) => {
+                self.send(bytes);
+                Ok(None)
+            }
             Some(WriteState::Pending) => match self.result_receiver.try_recv() {
                 Ok(Ok(StreamState::Open)) => {
                     self.state = Some(WriteState::Ready);
-                    self.send(bytes)
+                    self.send(bytes);
+                    Ok(None)
                 }
 
                 Ok(Ok(StreamState::Closed)) => {
                     self.state = None;
-                    Ok((0, StreamState::Closed))
+                    Ok(Some(WriteReadiness::Closed))
                 }
 
                 Ok(Err(e)) => {
+                    tracing::debug!("fixme: do something better with this write error {e:?}");
                     self.state = None;
-                    Err(e.into())
+                    Ok(Some(WriteReadiness::Closed))
                 }
 
                 Err(TryRecvError::Empty) => {
                     self.state = Some(WriteState::Pending);
-                    Ok((0, StreamState::Open))
+                    Ok(None)
                 }
 
                 Err(TryRecvError::Disconnected) => {
@@ -344,38 +348,50 @@ impl HostOutputStream for AsyncWriteStream {
                 // Move the error payload out of self.state, because errors are not Copy,
                 // and set self.state to None, because the stream is now closed.
                 if let Some(WriteState::Err(e)) = self.state.take() {
-                    Err(e.into())
+                    tracing::debug!("fixme: do something better with this write error {e:?}");
+                    Ok(Some(WriteReadiness::Closed))
                 } else {
                     unreachable!("self.state shown to be Some(Err(e)) in match clause")
                 }
             }
 
-            None => Ok((0, StreamState::Closed)),
+            None => Ok(Some(WriteReadiness::Closed)),
         }
     }
 
-    async fn ready(&mut self) -> Result<(), Error> {
+    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
         match &self.state {
             Some(WriteState::Pending) => match self.result_receiver.recv().await {
                 Some(Ok(StreamState::Open)) => {
                     self.state = Some(WriteState::Ready);
+                    Ok(WriteReadiness::Ready(64 * 1024)) // FIXME arbitrary limit
                 }
 
                 Some(Ok(StreamState::Closed)) => {
                     self.state = None;
+                    Ok(WriteReadiness::Closed)
                 }
 
                 Some(Err(e)) => {
                     self.state = Some(WriteState::Err(e));
+                    Ok(WriteReadiness::Closed)
                 }
 
                 None => unreachable!("task shouldn't die while pending"),
             },
 
-            Some(WriteState::Ready | WriteState::Err(_)) | None => {}
+            Some(WriteState::Ready) => Ok(WriteReadiness::Ready(64 * 1024)),
+            Some(WriteState::Err(_)) | None => Ok(WriteReadiness::Closed),
         }
+    }
 
-        Ok(())
+    fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
+        // FIXME: havent even attempted to implement flush yet
+        Ok(Some(FlushResult::Done))
+    }
+    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
+        // FIXME: havent even attempted to implement flush yet
+        Ok(FlushResult::Done)
     }
 }
 
