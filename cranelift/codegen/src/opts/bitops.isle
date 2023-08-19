@@ -125,6 +125,7 @@
 ;; so we can remove expressions that preserve that property from the input.
 (rule (simplify (bmask ty v)) (if-let x (truthy v)) (bmask ty x))
 (rule (simplify (select ty v lhs rhs)) (if-let c (truthy v)) (select ty c lhs rhs))
+(rule (simplify (ne ty v zero @ (iconst _ (u64_from_imm64 0)))) (if-let c (truthy v)) (ne ty c zero))
 
 
 ;; (sextend (bmask x)) can be replaced with (bmask x) since bmask
