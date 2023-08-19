@@ -43,7 +43,7 @@ futures = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros"] }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["fs", "net"], optional = true }
+rustix = { workspace = true, features = ["event", "fs", "net"], optional = true }
 
 [target.'cfg(unix)'.dev-dependencies]
 libc = { workspace = true }

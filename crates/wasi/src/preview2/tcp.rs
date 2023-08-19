@@ -4,11 +4,8 @@ use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
 use cap_std::net::{TcpListener, TcpStream};
 use io_lifetimes::AsSocketlike;
 use std::io;
-use std::pin::Pin;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use system_interface::io::IoExt;
-use tokio::sync::watch::{channel, Receiver, Sender};
-use tokio::task::JoinHandle;
 
 /// The state of a TCP socket.
 ///
@@ -29,17 +26,13 @@ pub(crate) enum HostTcpState {
     ListenStarted,
 
     /// The socket is now listening and waiting for an incoming connection.
-    Listening(Pin<Box<JoinHandle<()>>>),
-
-    /// Listening heard an incoming connection arrive that is ready to be
-    /// accepted.
-    ListenReady(io::Result<()>),
+    Listening,
 
     /// An outgoing connection is started via `start_connect`.
-    Connecting(Pin<Box<JoinHandle<()>>>),
+    Connecting,
 
     /// An outgoing connection is ready to be established.
-    ConnectReady(io::Result<()>),
+    ConnectReady,
 
     /// An outgoing connection has been established.
     Connected,
@@ -55,10 +48,6 @@ pub(crate) struct HostTcpSocket {
     /// The part of a `HostTcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
     pub(crate) inner: Arc<HostTcpSocketInner>,
-
-    /// The recieving end of `inner`'s `sender`, used by `subscribe`
-    /// subscriptions to wait for I/O.
-    pub(crate) receiver: Receiver<()>,
 }
 
 /// The inner reference-counted state of a `HostTcpSocket`.
@@ -73,9 +62,6 @@ pub(crate) struct HostTcpSocketInner {
 
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: RwLock<HostTcpState>,
-
-    /// A sender used to send messages when I/O events complete.
-    pub(crate) sender: Sender<()>,
 }
 
 impl HostTcpSocket {
@@ -89,15 +75,11 @@ impl HostTcpSocket {
         #[cfg(unix)]
         let tcp_socket = tokio::io::unix::AsyncFd::new(tcp_socket)?;
 
-        let (sender, receiver) = channel(());
-
         Ok(Self {
             inner: Arc::new(HostTcpSocketInner {
                 tcp_socket,
                 tcp_state: RwLock::new(HostTcpState::Default),
-                sender,
             }),
-            receiver,
         })
     }
 
@@ -112,24 +94,16 @@ impl HostTcpSocket {
         #[cfg(unix)]
         let tcp_socket = tokio::io::unix::AsyncFd::new(tcp_socket)?;
 
-        let (sender, receiver) = channel(());
-
         Ok(Self {
             inner: Arc::new(HostTcpSocketInner {
                 tcp_socket,
                 tcp_state: RwLock::new(HostTcpState::Default),
-                sender,
             }),
-            receiver,
         })
     }
 
     pub fn tcp_socket(&self) -> &cap_std::net::TcpListener {
         self.inner.tcp_socket()
-    }
-
-    pub fn notify(&self) {
-        self.inner.notify()
     }
 
     pub fn clone_inner(&self) -> Arc<HostTcpSocketInner> {
@@ -158,17 +132,8 @@ impl HostTcpSocketInner {
         tcp_socket
     }
 
-    pub fn notify(&self) {
-        self.sender.send(()).unwrap()
-    }
-
     pub fn set_state(&self, new_state: HostTcpState) {
         *self.tcp_state.write().unwrap() = new_state;
-    }
-
-    pub fn set_state_and_notify(&self, new_state: HostTcpState) {
-        self.set_state(new_state);
-        self.notify()
     }
 
     /// Spawn a task on tokio's blocking thread for performing blocking
@@ -215,7 +180,9 @@ impl HostInputStream for Arc<HostTcpSocketInner> {
                 match rustix::event::poll(
                     &mut [rustix::event::PollFd::new(
                         tcp_socket,
-                        rustix::event::PollFlags::IN,
+                        rustix::event::PollFlags::IN
+                            | rustix::event::PollFlags::ERR
+                            | rustix::event::PollFlags::HUP,
                     )],
                     -1,
                 ) {
@@ -255,7 +222,9 @@ impl HostOutputStream for Arc<HostTcpSocketInner> {
                 match rustix::event::poll(
                     &mut [rustix::event::PollFd::new(
                         tcp_socket,
-                        rustix::event::PollFlags::OUT,
+                        rustix::event::PollFlags::OUT
+                            | rustix::event::PollFlags::ERR
+                            | rustix::event::PollFlags::HUP,
                     )],
                     -1,
                 ) {
@@ -264,24 +233,6 @@ impl HostOutputStream for Arc<HostTcpSocketInner> {
                 }
             })
             .await
-        }
-    }
-}
-
-impl Drop for HostTcpSocketInner {
-    fn drop(&mut self) {
-        match &*self.tcp_state.read().unwrap() {
-            HostTcpState::Default
-            | HostTcpState::BindStarted
-            | HostTcpState::Bound
-            | HostTcpState::ListenStarted
-            | HostTcpState::ListenReady(_)
-            | HostTcpState::ConnectReady(_)
-            | HostTcpState::Connected => {}
-            HostTcpState::Listening(join) | HostTcpState::Connecting(join) => {
-                // Abort the tasks so that they don't detach.
-                join.abort();
-            }
         }
     }
 }
