@@ -1,25 +1,38 @@
 //! Implements the wasi-nn API.
 
 use std::collections::HashMap;
-use std::io::Read;
+use std::fmt::Debug;
+use std::io::{Error, ErrorKind, Read};
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::body::{Bytes, Incoming};
-use hyper::{Method, Request, Response, Uri};
+use hyper::{body, Method, Request, Response, StatusCode, Uri};
 use hyper::client::conn::http1::{Connection, SendRequest};
 use hyper::http::uri::Authority;
 use serde::{Deserialize, Serialize};
-use serde_json::Number;
+use serde_json::{json, Number};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use hyper::body::Buf;
+use hyper::header::HeaderName;
+use serde::de::DeserializeOwned;
 use wiggle::async_trait_crate::async_trait;
 use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::{ExecutionContext, Graph};
 use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
 
 
-#[derive(Default)]
-pub(crate) struct KServeBackend();
+const INFERENCE_HEADER_CONTENT_LENGTH: &str = "inference-header-content-length";
+const BINARY_DATA_SIZE: &str = "binary_data_size";
+
+pub(crate) struct KServeBackend {
+    server_url: String,
+}
+
+impl Default for KServeBackend {
+    fn default() -> Self {
+        Self { server_url: String::from("http://localhost:8000") }
+    }
+}
 
 unsafe impl Send for KServeBackend {}
 
@@ -103,7 +116,8 @@ struct KServeClient {
 }
 
 impl KServeClient {
-    //Bulk of the logic will be here.
+    /// Creates a new KServe client.
+    /// TODO: Add support for HTTPS connections.
     pub async fn new(server_url: String) -> Self {
         // Parse the server url
         let url = server_url.parse::<hyper::Uri>().expect("Unable to parse url.");
@@ -152,7 +166,7 @@ impl KServeClient {
         res
     }
 
-    pub async fn get_server_metadata(&mut self) -> KServeServerMetadata {
+    pub async fn get_server_metadata(&mut self) -> Result<KServeServerMetadata, BackendError> {
         let server_metadata_url = build_server_metadata_url(&self.server_url)
             .parse::<hyper::Uri>()
             .expect("Unable to parse url.");
@@ -167,34 +181,167 @@ impl KServeClient {
         let res = self.send_request(req).await;
         // .expect("Unable to receive HTTP response from server.");
 
-
         // asynchronously aggregate the chunks of the body
-        let body = res.collect().await.expect("Unable to collect response form server").aggregate();
+        if res.status() == StatusCode::OK {
+            try_deserialize(res).await
+        } else {
+            Err(BackendError::BackendAccess(anyhow::Error::from(Error::new(ErrorKind::Other, "Unable to retrieve server metadata."))))
+        }
         // let mut s: String = String::new();
         // body.reader().read_to_string(&mut s);
         // println!("{:?}", s);
         // try to parse as json with serde_json
-        let server_metadata: KServeServerMetadata = serde_json::from_reader(body.reader())
-            .expect("Unable to deserialize json response from server.");
-        server_metadata
     }
 
-    // async fn get_model_metadata(&self) -> KServeModelConfig {
-    //
-    //     // Create an HTTP request with an empty body and a HOST header
-    //     let req = Request::builder()
-    //         .uri(self.url.clone())
-    //         .method(Method::GET)
-    //         .header(hyper::header::HOST, self.authority.as_str())
-    //         .header()
-    //         .body(Empty::<Bytes>::new())?;
-    //
-    //     // Await the response...
-    //     let mut res = self.send_request(req);
-    //
-    //     println!("Response status: {:?}", res.status());
-    //
-    // }
+    async fn get_model_metadata(&mut self, model_name: &String) -> Result<KServeModelMetadata, BackendError> {
+        let model_metadata_url = build_model_metadata_url(&self.server_url, model_name);
+
+        let req = Request::builder()
+            .uri(model_metadata_url)
+            .method(Method::GET)
+            .header(hyper::header::HOST, self.authority.as_str())
+            .body(Full::from(""))
+            .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
+
+        let mut res = self.send_request(req).await;
+
+        println!("Response status: {:?}", res.status());
+
+        if res.status() == StatusCode::OK {
+            try_deserialize(res).await
+        } else {
+            Err(BackendError::BackendAccess(anyhow::Error::from(Error::new(ErrorKind::Other, "Unable to retrieve model metadata."))))
+        }
+    }
+
+    async fn inference_request(
+        &mut self,
+        model_name: &String,
+        request: &KServeInferenceRequest) -> Result<KServeInferenceResult, BackendError> {
+        let inference_url = build_inference_url(&self.server_url, model_name);
+        println!("Inference url: {}", inference_url);
+        let json_bytes = serde_json::to_vec(request).expect("Unable to serialize inference request.");
+        // Create an HTTP request with an empty body and a HOST header
+        let req = Request::builder()
+            .uri(inference_url)
+            .method(Method::POST)
+            .header(hyper::header::HOST, self.authority.as_str())
+            .body(Full::<Bytes>::from(json_bytes))
+            .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
+
+        // Await the response...
+        let mut res = self.send_request(req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        println!("Response status: {:?}", res.status());
+
+        if res.status() == StatusCode::OK {
+            try_deserialize(res).await
+        } else {
+            Err(BackendError::BackendAccess(anyhow::Error::from(Error::new(ErrorKind::Other, "Unable to perform inference request."))))
+        }
+    }
+
+    async fn binary_inference_request(
+        &mut self, model_name: &String,
+        request: &KServeBinaryInferenceRequest,
+        tensors: &Vec<Vec<u8>>) -> Result<(KServeBinaryInferenceResult, Vec<Vec<u8>>), BackendError> {
+        let mut tensor_length: usize = 0;
+
+        //Make sure that tensors are the expected length
+        for i in 0..request.inputs.len() {
+            let binary_data_size: usize = request.inputs[i].parameters.as_ref().unwrap().binary_data_size.unwrap() as usize;
+            assert_eq!(tensors[i].len(), binary_data_size);
+            tensor_length += binary_data_size;
+        }
+
+        //TODO: It's not clear from the docs whether outputs can be of mixed binary and json types. If so, we need to handle mixed types.
+        //If not, then we need to make sure that binary_data: true is present for all outputs.
+
+        let inference_url = build_inference_url(&self.server_url, model_name);
+        println!("Inference url: {}", inference_url);
+
+        let json_bytes = serde_json::to_vec(request).expect("Unable to serialize inference request.");
+        let inference_header_length = json_bytes.len();
+        let content_length = tensor_length + inference_header_length;
+        let mut body: Vec<u8> = Vec::with_capacity(content_length);
+        body.extend(&json_bytes);
+        for tensor in tensors {
+            body.extend(tensor);
+        }
+        println!("JSON Header: {}", std::str::from_utf8(json_bytes.as_slice()).unwrap());
+        println!("JSON Header: {}", std::str::from_utf8(body.as_slice()).unwrap());
+        // Create an HTTP request with an empty body and a HOST header
+        let req = Request::builder()
+            .uri(inference_url)
+            .method(Method::POST)
+            .header(hyper::header::HOST, self.authority.as_str())
+            .header(inference_content_length_header(), inference_header_length.to_string())
+            .header(hyper::header::CONTENT_LENGTH, content_length)
+            .header(hyper::header::CONTENT_TYPE, "application/octet-stream")
+            .body(Full::<Bytes>::from(body))
+            .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
+
+        // Await the response...
+        let mut res = self.send_request(req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        println!("Response status: {:?}", res.status());
+
+        let response_inference_content_length_header = res.headers()
+            .get(inference_content_length_header())
+            .unwrap()
+            .to_str()
+            .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
+
+        let response_inference_content_length: usize = response_inference_content_length_header.parse()
+            .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
+
+        if res.status() == StatusCode::OK {
+            let response_bytes = get_body_bytes(res).await?;
+            let response_json_bytes = &response_bytes[..response_inference_content_length];
+            let inference_result: KServeBinaryInferenceResult = serde_json::from_slice(&response_json_bytes)
+                .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
+            let mut start_index = 0;
+            let output_tensors = inference_result.outputs.iter().map(|output_metadata| {
+                let tensor_length = output_metadata.parameters.as_ref().unwrap().binary_data_size.unwrap();
+                let end_index = start_index + tensor_length as usize;
+                let tensor_bytes = (&response_bytes[start_index..end_index]).to_vec();
+                start_index = end_index;
+                tensor_bytes
+            }).collect();
+            Ok((inference_result, output_tensors))
+        } else {
+            Err(BackendError::BackendAccess(anyhow::Error::from(Error::new(ErrorKind::Other, "Unable to retrieve model metadata."))))
+        }
+    }
+
+    async fn inference_request_bytes(&mut self, model_name: &String, request: &KServeBinaryInferenceRequest) -> Result<Vec<u8>, BackendError> {
+        let model_metadata_url = build_inference_url(&self.server_url, model_name);
+        let json_bytes = serde_json::to_vec(request).expect("Unable to serialize inference request.");
+        let inference_header_length = json_bytes.len();
+
+        // Create an HTTP request with an empty body and a HOST header
+        let req = Request::builder()
+            .uri(model_metadata_url)
+            .method(Method::POST)
+            .header(hyper::header::HOST, self.authority.as_str())
+            .header(hyper::header::HeaderName::from_static(INFERENCE_HEADER_CONTENT_LENGTH), inference_header_length.to_string())
+            .body(Full::<Bytes>::from(json_bytes))
+            .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
+
+        // Await the response...
+        let mut res = self.send_request(req).await;
+        assert_eq!(res.status(), StatusCode::OK);
+
+        println!("Response status: {:?}", res.status());
+
+        if res.status() == StatusCode::OK {
+            get_body_bytes(res).await
+        } else {
+            Err(BackendError::BackendAccess(anyhow::Error::from(Error::new(ErrorKind::Other, "Unable to perform inference request"))))
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -204,30 +351,56 @@ struct KServeServerMetadata {
     extensions: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct KServeTensorParameters {
+#[derive(Debug, Serialize, Deserialize, Default)]
+struct KServeBinaryInferenceParameters {
     #[serde(skip_serializing_if = "Option::is_none")]
-    binary_data_size: Option<u32>,
+    binary_data_output: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    binary_data_size: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     binary_data: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct KServeTensor {
+    #[serde(flatten)]
+    metadata: KServeTensorMetadata,
+    data: Vec<KServeTensorElement>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KServeRequestOutput {
+    name: String,
+    parameters: KServeBinaryInferenceParameters,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KServeTensorMetadata {
     name: String,
+    shape: Vec<u32>,
+    datatype: KServeDatatype,
     #[serde(skip_serializing_if = "Option::is_none")]
-    shape: Option<Vec<u32>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    datatype: Option<KServeDatatype>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    parameters: Option<KServeTensorParameters>,
+    parameters: Option<KServeBinaryInferenceParameters>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KServeInferenceRequest {
+    id: String,
+    parameters: KServeParameters,
+    inputs: Vec<KServeTensor>,
+    outputs: Vec<KServeRequestOutput>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KServeInferenceResult {
+    outputs: Vec<KServeTensor>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KServeBinaryInferenceRequest {
     model_name: String,
     inputs: Vec<KServeTensorMetadata>,
-    outputs: Vec<KServeTensorMetadata>,
+    outputs: Vec<KServeRequestOutput>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -236,10 +409,21 @@ pub struct KServeBinaryInferenceResult {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct KServeModelMetadata {
+    //For some weird reason the json here expects name, instead of model_name like in inference request.
+    pub name: String,
+    pub platform: String,
+    pub versions: Option<Vec<String>>,
+    pub inputs: Vec<KServeTensorMetadata>,
+    pub outputs: Vec<KServeTensorMetadata>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KServeModelConfig {
     //For some weird reason the json here expects name, instead of model_name like in inference request.
     pub name: String,
     pub backend: String,
+    pub versions: Option<Vec<String>>,
     pub inputs: Vec<KServeTensorMetadata>,
     pub outputs: Vec<KServeTensorMetadata>,
 }
@@ -263,6 +447,14 @@ pub enum KServeParameterValue {
     Config(KServeModelConfig),
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum KServeTensorElement {
+    Bool(bool),
+    Number(Number),
+    String(String),
+}
+
 type KServeParameters = HashMap<String, KServeParameterValue>;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -283,13 +475,97 @@ pub enum KServeDatatype {
     BF16,
 }
 
+async fn get_body_bytes(response: Response<Incoming>) -> Result<Vec<u8>, BackendError> {
+    response.collect().await
+        .map(|collected| collected.to_bytes().to_vec())
+        .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))
+}
+
+async fn try_deserialize<T: DeserializeOwned>(response: Response<Incoming>) -> Result<T, BackendError> {
+    let body = response.collect().await
+        .map(|collected| collected.aggregate())
+        .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
+
+    serde_json::from_reader(body.reader())
+        .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))
+}
+
 fn build_server_metadata_url(server_url: &String) -> String {
     format!("{}/v2", server_url)
 }
 
-fn build_inference_url(model_name: &String) -> String {
-    format!("/v2/models/{}/infer", model_name)
+fn build_model_metadata_url(server_url: &String, model_name: &String) -> String {
+    format!("{}/v2/models/{}", server_url, model_name)
 }
+
+fn build_model_metadata_url_for_version(server_url: &String, model_name: &String, version: u32) -> String {
+    format!("{}/v2/models/{}/versions/{}", server_url, model_name, version)
+}
+
+fn build_inference_url(server_url: &String, model_name: &String) -> String {
+    format!("{}/v2/models/{}/infer", server_url, model_name)
+}
+
+fn inference_content_length_header() -> HeaderName {
+    hyper::header::HeaderName::from_static(INFERENCE_HEADER_CONTENT_LENGTH)
+}
+
+#[tokio::test]
+async fn test_binary_inference() {
+    let mut kserve_client = KServeClient::new(String::from("http://localhost:8000")).await;
+    let prompt = String::from("captain america, 4k");
+    let input = KServeTensorMetadata {
+        name: String::from("prompt"),
+        shape: vec![1, 1],
+        datatype: KServeDatatype::BYTES,
+        parameters: Some(KServeBinaryInferenceParameters { binary_data_size: Some(prompt.len()), ..Default::default() }),
+    };
+
+    let output = vec![KServeRequestOutput {
+        name: String::from("generated_image"),
+        parameters: KServeBinaryInferenceParameters { binary_data: Some(true), ..Default::default() },
+    }];
+    let inference_request = KServeBinaryInferenceRequest {
+        model_name: "pipeline".to_string(),
+        inputs: vec![input],
+        outputs: output,
+    };
+    let tensors = vec![prompt.as_bytes().to_vec()];
+    let result = kserve_client.binary_inference_request(&String::from("pipeline"), &inference_request, &tensors)
+        .await.expect("Unable to get inference request.");
+
+    println!("{:?}", result);
+}
+
+#[tokio::test]
+async fn test_inference() {
+    println!("Attempting to retrieve server metadata from Triton.");
+    let mut kserve_client = KServeClient::new(String::from("http://localhost:8000")).await;
+    let prompt = String::from("captain america, 4k");
+    let input = KServeTensor {
+        metadata: KServeTensorMetadata {
+            name: String::from("prompt"),
+            shape: vec![1, 1],
+            datatype: KServeDatatype::BYTES,
+            parameters: Option::None,
+        },
+        data: vec![KServeTensorElement::String(prompt)],
+    };
+
+    let output = vec![KServeRequestOutput { name: String::from("generated_image"), parameters: KServeBinaryInferenceParameters::default() }];
+    let inference_request = KServeInferenceRequest {
+        id: String::from("test"),
+        parameters: KServeParameters::new(),
+        inputs: vec![input],
+        outputs: output,
+    };
+
+    let result = kserve_client.inference_request(&String::from("pipeline"), &inference_request)
+        .await.expect("Unable to get inference request.");
+
+    println!("{:?}", result);
+}
+
 
 #[tokio::test]
 async fn test_get_server_metadata() {

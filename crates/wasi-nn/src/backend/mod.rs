@@ -12,10 +12,14 @@ use crate::{ExecutionContext, Graph};
 use thiserror::Error;
 use wiggle::async_trait_crate::async_trait;
 use wiggle::GuestError;
+use crate::backend::kserve::KServeBackend;
 
 /// Return a list of all available backend frameworks.
 pub fn list() -> Vec<(BackendKind, Box<dyn Backend>)> {
-    vec![(BackendKind::OpenVINO, Box::new(OpenvinoBackend::default()))]
+    vec![
+        (BackendKind::OpenVINO, Box::new(OpenvinoBackend::default())),
+        (BackendKind::KServe, Box::new(KServeBackend::default())),
+    ]
 }
 
 /// A [Backend] contains the necessary state to load [BackendGraph]s.
@@ -32,7 +36,6 @@ pub trait BackendGraph: Send + Sync {
 
 /// A [BackendExecutionContext] performs the actual inference; this is the
 /// backing implementation for a [crate::witx::types::GraphExecutionContext].
-
 #[async_trait]
 pub trait BackendExecutionContext: Send + Sync {
     fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError>;
@@ -59,4 +62,5 @@ pub enum BackendError {
 #[derive(Hash, PartialEq, Debug, Eq, Clone, Copy)]
 pub enum BackendKind {
     OpenVINO,
+    KServe,
 }
