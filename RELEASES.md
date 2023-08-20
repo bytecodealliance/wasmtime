@@ -2,7 +2,7 @@
 
 ## 12.0.0
 
-Unreleased.
+Released 2023-08-20.
 
 ### Added
 
