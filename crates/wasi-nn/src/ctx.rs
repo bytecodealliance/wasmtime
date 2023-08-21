@@ -1,6 +1,6 @@
 //! Implements the host state for the `wasi-nn` API: [WasiNnCtx].
 
-use crate::backend::{self, BackendError, BackendKind};
+use crate::backend::{self, BackendError};
 use crate::wit::types::GraphEncoding;
 use crate::{Backend, ExecutionContext, Graph, InMemoryRegistry, Registry};
 use anyhow::anyhow;
@@ -26,7 +26,7 @@ pub fn preload(
         let kind_ = kind.parse()?;
         let backend = backends
             .iter_mut()
-            .find(|b| b.kind() == kind_)
+            .find(|b| b.encoding() == kind_)
             .ok_or(anyhow!("unsupported backend: {}", kind))?
             .as_dir_loadable()
             .ok_or(anyhow!("{} does not support directory loading", kind))?;
@@ -37,7 +37,7 @@ pub fn preload(
 
 /// Capture the state necessary for calling into the backend ML libraries.
 pub struct WasiNnCtx {
-    pub(crate) backends: HashMap<BackendKind, Backend>,
+    pub(crate) backends: HashMap<GraphEncoding, Backend>,
     pub(crate) registry: Registry,
     pub(crate) graphs: Table<GraphId, Graph>,
     pub(crate) executions: Table<GraphExecutionContextId, ExecutionContext>,
@@ -46,7 +46,7 @@ pub struct WasiNnCtx {
 impl WasiNnCtx {
     /// Make a new context from the default state.
     pub fn new(backends: impl IntoIterator<Item = Backend>, registry: Registry) -> Self {
-        let backends = backends.into_iter().map(|b| (b.kind(), b)).collect();
+        let backends = backends.into_iter().map(|b| (b.encoding(), b)).collect();
         Self {
             backends,
             registry,

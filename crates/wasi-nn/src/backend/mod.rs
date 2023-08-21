@@ -5,9 +5,9 @@
 pub mod openvino;
 
 use self::openvino::OpenvinoBackend;
-use crate::wit::types::{ExecutionTarget, Tensor};
+use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
 use crate::{Backend, ExecutionContext, Graph};
-use std::{error::Error, fmt, path::Path, str::FromStr};
+use std::path::Path;
 use thiserror::Error;
 use wiggle::GuestError;
 
@@ -18,8 +18,7 @@ pub fn list() -> Vec<crate::Backend> {
 
 /// A [Backend] contains the necessary state to load [Graph]s.
 pub trait BackendInner: Send + Sync {
-    fn kind(&self) -> BackendKind;
-    fn name(&self) -> &str;
+    fn encoding(&self) -> GraphEncoding;
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError>;
     fn as_dir_loadable<'a>(&'a mut self) -> Option<&'a mut dyn BackendFromDir>;
 }
@@ -62,25 +61,3 @@ pub enum BackendError {
     #[error("Not enough memory to copy tensor data of size: {0}")]
     NotEnoughMemory(usize),
 }
-
-#[derive(Hash, PartialEq, Debug, Eq, Clone, Copy)]
-pub enum BackendKind {
-    OpenVINO,
-}
-impl FromStr for BackendKind {
-    type Err = BackendKindParseError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "openvino" => Ok(BackendKind::OpenVINO),
-            _ => Err(BackendKindParseError(s.into())),
-        }
-    }
-}
-#[derive(Debug)]
-pub struct BackendKindParseError(String);
-impl fmt::Display for BackendKindParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown backend: {}", self.0)
-    }
-}
-impl Error for BackendKindParseError {}

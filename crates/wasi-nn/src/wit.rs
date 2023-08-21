@@ -15,7 +15,8 @@
 //! [`Backend`]: crate::backend::Backend
 //! [`types`]: crate::wit::types
 
-use crate::{backend::BackendKind, ctx::UsageError, WasiNnCtx};
+use crate::{ctx::UsageError, WasiNnCtx};
+use std::{error::Error, fmt, hash::Hash, str::FromStr};
 
 /// Generate the traits and types from the `wasi-nn` WIT specification.
 mod gen_ {
@@ -40,8 +41,7 @@ impl gen::graph::Host for WasiNnCtx {
         encoding: gen::graph::GraphEncoding,
         target: gen::graph::ExecutionTarget,
     ) -> wasmtime::Result<Result<gen::graph::Graph, gen::errors::Error>> {
-        let backend_kind: BackendKind = encoding.try_into()?;
-        let graph = if let Some(backend) = self.backends.get_mut(&backend_kind) {
+        let graph = if let Some(backend) = self.backends.get_mut(&encoding) {
             let slices = builders.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
             backend.load(&slices, target.into())?
         } else {
@@ -137,12 +137,31 @@ impl gen::errors::Host for WasiNnCtx {}
 
 impl gen::tensor::Host for WasiNnCtx {}
 
-impl TryFrom<gen::graph::GraphEncoding> for crate::backend::BackendKind {
-    type Error = UsageError;
-    fn try_from(value: gen::graph::GraphEncoding) -> Result<Self, Self::Error> {
-        match value {
-            gen::graph::GraphEncoding::Openvino => Ok(crate::backend::BackendKind::OpenVINO),
-            _ => Err(UsageError::InvalidEncoding(value.into())),
+impl Hash for gen::graph::GraphEncoding {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+    }
+}
+
+impl FromStr for gen::graph::GraphEncoding {
+    type Err = GraphEncodingParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "openvino" => Ok(gen::graph::GraphEncoding::Openvino),
+            "onnx" => Ok(gen::graph::GraphEncoding::Onnx),
+            "pytorch" => Ok(gen::graph::GraphEncoding::Pytorch),
+            "tensorflow" => Ok(gen::graph::GraphEncoding::Tensorflow),
+            "tensorflowlite" => Ok(gen::graph::GraphEncoding::Tensorflowlite),
+            "autodetect" => Ok(gen::graph::GraphEncoding::Autodetect),
+            _ => Err(GraphEncodingParseError(s.into())),
         }
     }
 }
+#[derive(Debug)]
+pub struct GraphEncodingParseError(String);
+impl fmt::Display for GraphEncodingParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown graph encoding: {}", self.0)
+    }
+}
+impl Error for GraphEncodingParseError {}
