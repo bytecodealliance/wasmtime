@@ -388,22 +388,26 @@ in front of linear memory as well as after linear memory (the same size on both
 ends). This is only used to protect against possible Cranelift bugs and
 otherwise serves no purpose.
 
-At the time of this writing Wasmtime only supports WebAssembly with 32-bit
-memories, so a maximum of 4GB in size. Wasmtime has not implemented the
-memory64 proposal from upstream WebAssembly yet.
-
 The defaults for Wasmtime on 64-bit platforms are:
 
-* 4GB static maximum size (meaning all memories are static)
-* 2GB static guard size (meaning all loads/stores with less than 2GB offset
-  don't need bounds checks)
+* 4GB static maximum size meaning all 32-bit memories are static and 64-bit
+  memories are dynamic.
+* 2GB static guard size meaning all loads/stores with less than 2GB offset
+  don't need bounds checks with 32-bit memories.
 * Guard pages before linear memory are enabled.
 
-Altogether this means that linear memories result in an 8GB virtual address
-space reservation by default in Wasmtime. With the pooling allocator where we
-know that linear memories are contiguous this results in a 6GB reservation per
-memory because the guard region after one memory is the guard region before the
-next.
+Altogether this means that 32-bit linear memories result in an 8GB virtual
+address space reservation by default in Wasmtime. With the pooling allocator
+where we know that linear memories are contiguous this results in a 6GB
+reservation per memory because the guard region after one memory is the guard
+region before the next.
+
+Note that 64-bit memories (the memory64 proposal for WebAssembly) can be
+configured to be static but will never be able to elide bounds checks at this
+time. This configuration is possible through the `static_memory_forced`
+configuration option. Additionally note that support for 64-bit memories in
+Wasmtime is functional but not yet tuned at this time so there's probably still
+some performance work and better defaults to manage.
 
 ## Tables and `externref`
 
