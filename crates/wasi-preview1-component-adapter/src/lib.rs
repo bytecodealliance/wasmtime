@@ -2186,8 +2186,8 @@ pub struct File {
     append: bool,
 
     /// In blocking mode, read and write calls dispatch to blocking_read and
-    /// blocking_write on the underlying streams. When false, read and write
-    /// dispatch to stream's plain read and write.
+    /// blocking_check_write on the underlying streams. When false, read and write
+    /// dispatch to stream's plain read and check_write.
     blocking_mode: BlockingMode,
 }
 
