@@ -121,7 +121,7 @@ exclude = [
 version = "13.0.0"
 authors = ["The Wasmtime Project Developers"]
 edition = "2021"
-rust-version = "1.66.0"
+rust-version = "1.71.0"
 
 [workspace.dependencies]
 wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=13.0.0" }
