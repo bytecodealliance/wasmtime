@@ -8,8 +8,9 @@ target riscv64
 
 function %fmin_p_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
-    v2 = fmin_pseudo v0, v1
-    return v2
+    v2 = fcmp lt v1, v0
+    v3 = select v2, v1, v0
+    return v3
 }
 ; run: %fmin_p_f32(0x1.0, 0x2.0) == 0x1.0
 ; run: %fmin_p_f32(0x1.0p10, 0x1.0p11) == 0x1.0p10
@@ -44,10 +45,11 @@ block0(v0: f32, v1: f32):
 
 function %fmin_is_nan_f32(f32, f32) -> i32 {
 block0(v0: f32, v1: f32):
-    v2 = fmin_pseudo v0, v1
-    v3 = fcmp ne v2, v2
-    v4 = uextend.i32 v3
-    return v4
+    v2 = fcmp lt v1, v0
+    v3 = select v2, v1, v0
+    v4 = fcmp ne v3, v3
+    v5 = uextend.i32 v4
+    return v5
 }
 ; run: %fmin_is_nan_f32(-NaN, 0x0.0) == 1
 ; run: %fmin_is_nan_f32(-NaN:0x0, 0x0.0) == 1
@@ -60,8 +62,9 @@ block0(v0: f32, v1: f32):
 
 function %fmin_p_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
-    v2 = fmin_pseudo v0, v1
-    return v2
+    v2 = fcmp lt v1, v0
+    v3 = select v2, v1, v0
+    return v3
 }
 ; run: %fmin_p_f64(0x1.0, 0x2.0) == 0x1.0
 ; run: %fmin_p_f64(0x1.0p10, 0x1.0p11) == 0x1.0p10
@@ -97,10 +100,11 @@ block0(v0: f64, v1: f64):
 
 function %fmin_is_nan_f64(f64, f64) -> i32 {
 block0(v0: f64, v1: f64):
-    v2 = fmin_pseudo v0, v1
-    v3 = fcmp ne v2, v2
-    v4 = uextend.i32 v3
-    return v4
+    v2 = fcmp lt v1, v0
+    v3 = select v2, v1, v0
+    v4 = fcmp ne v3, v3
+    v5 = uextend.i32 v4
+    return v5
 }
 ; run: %fmin_is_nan_f64(-NaN, 0x0.0) == 1
 ; run: %fmin_is_nan_f64(-NaN:0x0, 0x0.0) == 1

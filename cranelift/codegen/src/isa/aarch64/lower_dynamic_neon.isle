@@ -35,18 +35,6 @@
 (rule -2 (lower (has_type ty @ (dynamic_lane _ _) (fmax x y)))
       (value_reg (vec_rrr (VecALUOp.Fmax) (put_in_reg x) (put_in_reg y) (vector_size ty))))
 
-;;;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -2 (lower (has_type ty @ (dynamic_lane _ _) (fmin_pseudo x y)))
-      (value_reg (bsl ty
-                  (vec_rrr (VecALUOp.Fcmgt) (put_in_reg x) (put_in_reg y)
-                   (vector_size ty)) (put_in_reg y) (put_in_reg x))))
-
-;;;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -2 (lower (has_type ty @ (dynamic_lane _ _) (fmax_pseudo x y)))
-      (value_reg (bsl ty
-                  (vec_rrr (VecALUOp.Fcmgt) (put_in_reg y) (put_in_reg x)
-                   (vector_size ty)) (put_in_reg y) (put_in_reg x))))
-
 ;;;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -2 (lower (has_type (ty_dyn128_int ty) (snarrow x y)))
       (if-let _ (zero_value y))

@@ -1134,6 +1134,13 @@
 (rule (lower (has_type (vr128_ty ty) (bitselect x y z)))
       (vec_select ty y z x))
 
+;; Special-case some float-selection instructions for min/max
+(rule 3 (lower (has_type (ty_vec128 ty) (bitselect (bitcast _ (fcmp (FloatCC.LessThan) x y)) x y)))
+        (fmin_pseudo_reg ty y x))
+(rule 4 (lower (has_type (ty_vec128 ty) (bitselect (bitcast _ (fcmp (FloatCC.LessThan) y x)) x y)))
+        (fmax_pseudo_reg ty y x))
+
+
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1387,20 +1394,6 @@
 ;; Maximum of two registers.
 (rule (lower (has_type ty (fmax x y)))
       (fmax_reg ty x y))
-
-
-;;;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Minimum of two registers.
-(rule (lower (has_type ty (fmin_pseudo x y)))
-      (fmin_pseudo_reg ty x y))
-
-
-;;;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Maximum of two registers.
-(rule (lower (has_type ty (fmax_pseudo x y)))
-      (fmax_pseudo_reg ty x y))
 
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3718,6 +3711,12 @@
 (rule (lower (has_type ty (select val_cond val_true val_false)))
       (select_bool_reg ty (value_nonzero val_cond)
                        (put_in_reg val_true) (put_in_reg val_false)))
+
+;; Special-case some float-selection instructions for min/max
+(rule 1 (lower (has_type (ty_scalar_float ty) (select (maybe_uextend (fcmp (FloatCC.LessThan) x y)) x y)))
+        (fmin_pseudo_reg ty y x))
+(rule 2 (lower (has_type (ty_scalar_float ty) (select (maybe_uextend (fcmp (FloatCC.LessThan) y x)) x y)))
+        (fmax_pseudo_reg ty y x))
 
 
 ;;;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
