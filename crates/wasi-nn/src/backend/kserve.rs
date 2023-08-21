@@ -34,10 +34,6 @@ impl Default for KServeBackend {
     }
 }
 
-unsafe impl Send for KServeBackend {}
-
-unsafe impl Sync for KServeBackend {}
-
 impl Backend for KServeBackend {
     fn name(&self) -> &str {
         "KServe"
@@ -53,10 +49,6 @@ impl Backend for KServeBackend {
 }
 
 struct KServeGraph();
-
-unsafe impl Send for KServeGraph {}
-
-unsafe impl Sync for KServeGraph {}
 
 impl BackendGraph for KServeGraph {
     fn init_execution_context(&mut self) -> Result<ExecutionContext, BackendError> {

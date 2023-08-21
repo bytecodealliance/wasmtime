@@ -80,7 +80,7 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     }
 
     async fn load_by_name<'b>(&mut self, _name: &wiggle::GuestPtr<'b, str>) -> Result<gen::types::Graph> {
-        todo!("need implemented")
+        todo!("needs implemented")
         // let graph = if let Some(backend) = self.backends.get_mut(&encoding.try_into()?) {
         //     // Retrieve all of the "builder lists" from the Wasm memory (see
         //     // $graph_builder_array) as slices for a backend to operate on.
@@ -190,7 +190,7 @@ impl From<gen::types::GraphEncoding> for crate::wit::types::GraphEncoding {
             gen::types::GraphEncoding::Tensorflowlite => {
                 crate::wit::types::GraphEncoding::Tensorflowlite
             }
-            gen::types::GraphEncoding::Autodetect => todo!("autodetect not supported"),
+            gen::types::GraphEncoding::Autodetect => crate::wit::types::GraphEncoding::Autodetect
         }
     }
 }
