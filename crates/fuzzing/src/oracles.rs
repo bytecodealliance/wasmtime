@@ -328,8 +328,11 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
         return None;
     }
 
-    // Also allow failures to instantiate as a result of hitting instance limits
-    if string.contains("maximum concurrent instance limit") {
+    // Also allow failures to instantiate as a result of hitting pooling limits.
+    if string.contains("maximum concurrent instance limit")
+        || string.contains("maximum concurrent memory limit")
+        || string.contains("maximum concurrent table limit")
+    {
         log::debug!("failed to instantiate: {}", string);
         return None;
     }
