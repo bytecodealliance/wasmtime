@@ -2130,8 +2130,11 @@ pub enum BlockingMode {
 }
 
 impl BlockingMode {
+    // note: these methods must take self, not &self, to avoid rustc creating a constant
+    // out of a BlockingMode literal that it places in .romem, creating a data section and
+    // breaking our fragile linking scheme
     fn read(
-        &self,
+        self,
         input_stream: streams::InputStream,
         read_len: u64,
     ) -> Result<(Vec<u8>, streams::StreamStatus), ()> {
@@ -2140,7 +2143,7 @@ impl BlockingMode {
             BlockingMode::Blocking => streams::blocking_read(input_stream, read_len),
         }
     }
-    fn write(&self, output_stream: streams::OutputStream, bytes: &[u8]) -> Result<usize, Errno> {
+    fn write(self, output_stream: streams::OutputStream, bytes: &[u8]) -> Result<usize, Errno> {
         match self {
             BlockingMode::NonBlocking => match streams::check_write(output_stream) {
                 None => Ok(0),
