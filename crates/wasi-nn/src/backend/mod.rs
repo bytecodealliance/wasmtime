@@ -6,18 +6,18 @@ pub mod openvino;
 
 use self::openvino::OpenvinoBackend;
 use crate::wit::types::{ExecutionTarget, Tensor};
-use crate::{ExecutionContext, Graph};
+use crate::{Backend, ExecutionContext, Graph};
 use std::{error::Error, fmt, path::Path, str::FromStr};
 use thiserror::Error;
 use wiggle::GuestError;
 
 /// Return a list of all available backend frameworks.
-pub fn list() -> Vec<Box<dyn Backend>> {
-    vec![Box::new(OpenvinoBackend::default())]
+pub fn list() -> Vec<crate::Backend> {
+    vec![Backend::from(OpenvinoBackend::default())]
 }
 
 /// A [Backend] contains the necessary state to load [Graph]s.
-pub trait Backend: Send + Sync {
+pub trait BackendInner: Send + Sync {
     fn kind(&self) -> BackendKind;
     fn name(&self) -> &str;
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError>;
@@ -27,7 +27,7 @@ pub trait Backend: Send + Sync {
 /// Some [Backend]s support loading a [Graph] from a directory on the
 /// filesystem; this is not a general requirement for backends but is useful for
 /// the Wasmtime CLI.
-pub trait BackendFromDir: Backend {
+pub trait BackendFromDir: BackendInner {
     fn load_from_dir(
         &mut self,
         builders: &Path,

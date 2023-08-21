@@ -1,7 +1,7 @@
 //! Implements a `wasi-nn` [`Backend`] using OpenVINO.
 
 use super::{
-    Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendKind,
+    BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, BackendKind,
 };
 use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
@@ -14,7 +14,7 @@ pub struct OpenvinoBackend(Option<openvino::Core>);
 unsafe impl Send for OpenvinoBackend {}
 unsafe impl Sync for OpenvinoBackend {}
 
-impl Backend for OpenvinoBackend {
+impl BackendInner for OpenvinoBackend {
     fn kind(&self) -> BackendKind {
         BackendKind::OpenVINO
     }
