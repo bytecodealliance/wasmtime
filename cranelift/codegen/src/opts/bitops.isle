@@ -127,7 +127,10 @@
 (rule (simplify (bmask ty v)) (if-let x (truthy v)) (bmask ty x))
 (rule (simplify (select ty v lhs rhs)) (if-let c (truthy v)) (select ty c lhs rhs))
 ;; (ne ty (iconst 0) v) also is canonicalized into this form via another rule
-(rule (simplify (ne ty v zero @ (iconst _ (u64_from_imm64 0)))) (if-let c (truthy v)) (ne ty c zero))
+(rule (simplify (ne cty v zero @ (iconst ty (u64_from_imm64 0))))
+      (if-let c (truthy v))
+      (if-let (value_type ty) c)
+      (ne cty c zero))
 
 
 

@@ -43,19 +43,3 @@
 (rule (simplify (bitselect ty @ (multi_lane _ _) (sge _ x y) y x)) (smin ty x y))
 (rule (simplify (bitselect ty @ (multi_lane _ _) (ugt _ x y) y x)) (umin ty x y))
 (rule (simplify (bitselect ty @ (multi_lane _ _) (uge _ x y) y x)) (umin ty x y))
-
-
-;; Remove extends before selects if possible
-;; These preserve the "truthiness" of their argument, so we should be able to remove them
-(rule (simplify (select ty (uextend _ c) lhs rhs)) (select ty c lhs rhs))
-(rule (simplify (select ty (sextend _ c) lhs rhs)) (select ty c lhs rhs))
-(rule (simplify (select ty (ineg _ c) lhs rhs)) (select ty c lhs rhs))
-(rule (simplify (select ty (bmask _ c) lhs rhs)) (select ty c lhs rhs))
-(rule (simplify (select ty (bswap _ c) lhs rhs)) (select ty c lhs rhs))
-(rule (simplify (select ty (bitrev _ c) lhs rhs)) (select ty c lhs rhs))
-(rule (simplify (select ty (popcnt _ c) lhs rhs)) (select ty c lhs rhs))
-
-;; `(select c -1 0)` can be rewritten to `bmask`
-(rule (simplify (select ty c (iconst ty selected) (iconst ty (u64_from_imm64 0))))
-      (if-let -1 (i64_sextend_imm64 ty selected))
-      (bmask ty c))
