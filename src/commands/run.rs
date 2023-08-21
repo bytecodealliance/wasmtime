@@ -620,26 +620,27 @@ impl RunCommand {
             }
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
-                let component = module.unwrap_component();
-                let instance = linker.instantiate(&mut *store, component)?;
-
                 if self.invoke.is_some() {
                     bail!("using `--invoke` with components is not supported");
                 }
 
-                // TODO: use the actual world
-                let func = instance
-                    .get_typed_func::<(), (Result<(), ()>,)>(&mut *store, "run")
-                    .context("failed to load `run` function")?;
+                let component = module.unwrap_component();
 
-                let result = func
-                    .call(&mut *store, ())
+                let (command, _instance) = preview2::command::sync::Command::instantiate(
+                    &mut *store,
+                    &component,
+                    &linker,
+                )?;
+
+                let result = command
+                    .wasi_cli_run()
+                    .call_run(&mut *store)
                     .context("failed to invoke `run` function")
                     .map_err(|e| self.handle_coredump(e));
 
                 // Translate the `Result<(),()>` produced by wasm into a feigned
                 // explicit exit here with status 1 if `Err(())` is returned.
-                result.and_then(|(wasm_result,)| match wasm_result {
+                result.and_then(|wasm_result| match wasm_result {
                     Ok(()) => Ok(()),
                     Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
                 })
