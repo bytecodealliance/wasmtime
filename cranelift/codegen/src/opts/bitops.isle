@@ -119,18 +119,18 @@
 (rule (truthy (rotl _ x _)) x)
 (rule (truthy (rotr _ x _)) x)
 (rule (truthy (select _ x (iconst _ (u64_from_imm64 (u64_nonzero _))) (iconst _ (u64_from_imm64 0)))) x)
-;; (ne ty (iconst 0) v) also is canonicalized into this form via another rule
+;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
 (rule (truthy (ne _ x (iconst _ (u64_from_imm64 0)))) x)
 
 ;; All of these expressions don't care about their input as long as it is truthy.
 ;; so we can remove expressions that preserve that property from the input.
 (rule (simplify (bmask ty v)) (if-let x (truthy v)) (bmask ty x))
 (rule (simplify (select ty v t f)) (if-let c (truthy v)) (select ty c t f))
-;; (ne ty (iconst 0) v) also is canonicalized into this form via another rule
-(rule (simplify (ne cty v zero @ (iconst ty (u64_from_imm64 0))))
+;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
+(rule (simplify (ne cty v (iconst _ (u64_from_imm64 0))))
       (if-let c (truthy v))
       (if-let (value_type ty) c)
-      (ne cty c zero))
+      (ne cty c (iconst ty (imm64 0))))
 
 
 

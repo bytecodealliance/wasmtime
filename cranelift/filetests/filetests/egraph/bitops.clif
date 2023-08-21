@@ -319,7 +319,7 @@ block0(v0: i16):
 ; check: return v5
 
 
-function %icmp_ne_zero_restricts_arms_with_different_types(i16) -> i8 {
+function %icmp_ne_matches_arms_of_different_types(i16) -> i8 {
 block0(v0: i16):
     v1 = iconst.i64 0
     v2 = uextend.i64 v0
@@ -327,10 +327,9 @@ block0(v0: i16):
     return v3
 }
 
-; check: v2 = uextend.i64 v0
-; check: v1 = iconst.i64 0
-; check: v4 = icmp ne v2, v1
-; check: return v4
+; check: v5 = iconst.i16 0
+; check: v6 = icmp ne v0, v5
+; check: return v6
 
 
 
