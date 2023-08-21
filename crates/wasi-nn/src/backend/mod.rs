@@ -2,7 +2,7 @@
 //! this crate. The `Box<dyn ...>` types returned by these interfaces allow
 //! implementations to maintain backend-specific state between calls.
 
-mod openvino;
+pub mod openvino;
 
 use self::openvino::OpenvinoBackend;
 use crate::wit::types::{ExecutionTarget, Tensor};
@@ -12,12 +12,13 @@ use thiserror::Error;
 use wiggle::GuestError;
 
 /// Return a list of all available backend frameworks.
-pub fn list() -> Vec<(BackendKind, Box<dyn Backend>)> {
-    vec![(BackendKind::OpenVINO, Box::new(OpenvinoBackend::default()))]
+pub fn list() -> Vec<Box<dyn Backend>> {
+    vec![Box::new(OpenvinoBackend::default())]
 }
 
 /// A [Backend] contains the necessary state to load [Graph]s.
 pub trait Backend: Send + Sync {
+    fn kind(&self) -> BackendKind;
     fn name(&self) -> &str;
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError>;
     fn as_dir_loadable<'a>(&'a mut self) -> Option<&'a mut dyn BackendFromDir>;
