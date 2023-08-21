@@ -531,7 +531,7 @@ fn run_cwasm_from_stdin() -> Result<()> {
         .output()?;
     assert!(output.status.success(), "a file as stdin should work");
 
-    // If stdin is a pipe, however, that should fail
+    // If stdin is a pipe, that should also work
     let input = std::fs::read(&cwasm)?;
     let mut child = get_wasmtime_command()?
         .args(args)
@@ -544,9 +544,7 @@ fn run_cwasm_from_stdin() -> Result<()> {
         let _ = stdin.write_all(&input);
     });
     let output = child.wait_with_output()?;
-    if output.status.success() {
-        bail!("wasmtime should fail loading precompiled modules from piped files, but suceeded");
-    }
+    assert!(output.status.success());
     t.join().unwrap();
     Ok(())
 }
@@ -729,5 +727,107 @@ fn wasi_misaligned_pointer() -> Result<()> {
         stderr.contains("Pointer not aligned"),
         "bad stderr: {stderr}",
     );
+    Ok(())
+}
+
+#[test]
+#[ignore] // FIXME(#6811) currently is flaky and may produce no output
+fn hello_with_preview2() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
+    let stdout = run_wasmtime(&[
+        "--disable-cache",
+        "--preview2",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "Hello, world!\n");
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_missing_feature() -> Result<()> {
+    let path = "tests/all/cli_tests/empty-component.wat";
+    let wasm = build_wasm(path)?;
+    let output = get_wasmtime_command()?
+        .arg("--disable-cache")
+        .arg(wasm.path())
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot execute a component without `--wasm-features component-model`"),
+        "bad stderr: {stderr}"
+    );
+
+    // also tests with raw *.wat input
+    let output = get_wasmtime_command()?
+        .arg("--disable-cache")
+        .arg(path)
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot execute a component without `--wasm-features component-model`"),
+        "bad stderr: {stderr}"
+    );
+
+    Ok(())
+}
+
+// If the text format is invalid then the filename should be mentioned in the
+// error message.
+#[test]
+fn bad_text_syntax() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .arg("--disable-cache")
+        .arg("tests/all/cli_tests/bad-syntax.wat")
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--> tests/all/cli_tests/bad-syntax.wat"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn run_basic_component() -> Result<()> {
+    let path = "tests/all/cli_tests/component-basic.wat";
+    let wasm = build_wasm(path)?;
+
+    // Run both the `*.wasm` binary and the text format
+    run_wasmtime(&[
+        "--disable-cache",
+        "--wasm-features=component-model",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    run_wasmtime(&["--disable-cache", "--wasm-features=component-model", path])?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn run_precompiled_component() -> Result<()> {
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("component-basic.cwasm");
+    let stdout = run_wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/component-basic.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+        "--wasm-features=component-model",
+    ])?;
+    assert_eq!(stdout, "");
+    let stdout = run_wasmtime(&[
+        "run",
+        "--wasm-features=component-model",
+        "--allow-precompiled",
+        cwasm.to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "");
+
     Ok(())
 }

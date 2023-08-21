@@ -92,7 +92,9 @@ fn test_setup() -> (Engine, Module) {
     let pool_count = 10;
 
     let mut pool = PoolingAllocationConfig::default();
-    pool.instance_count(pool_count).instance_memory_pages(1);
+    pool.total_memories(pool_count)
+        .total_stacks(pool_count)
+        .total_tables(pool_count);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();

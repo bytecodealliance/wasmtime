@@ -63,7 +63,7 @@ impl WasiHttpView for Ctx {
 async fn instantiate_module(module: Module, ctx: Ctx) -> Result<(Store<Ctx>, Func), anyhow::Error> {
     let mut linker = Linker::new(&ENGINE);
     wasmtime_wasi_http::add_to_linker(&mut linker)?;
-    wasmtime_wasi::preview2::preview1::add_to_linker(&mut linker)?;
+    wasmtime_wasi::preview2::preview1::add_to_linker_async(&mut linker)?;
 
     let mut store = Store::new(&ENGINE, ctx);
 

@@ -10,9 +10,9 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
     AllCallFunc, ComponentTypes, GlobalInitializer, InstantiateModule, StaticModuleIndex,
-    TrampolineIndex, Translator,
+    TrampolineIndex, Translator, VMComponentOffsets,
 };
-use wasmtime_environ::{FunctionLoc, ObjectKind, PrimaryMap, ScopeVec};
+use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap, ScopeVec};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
@@ -246,6 +246,14 @@ impl Component {
             Some(artifacts) => artifacts,
             None => bincode::deserialize(code_memory.wasmtime_info())?,
         };
+
+        // Validate that the component can be used with the current instance
+        // allocator.
+        engine.allocator().validate_component(
+            &info.component,
+            &VMComponentOffsets::new(HostPtr, &info.component),
+            &|module_index| &static_modules[module_index].module,
+        )?;
 
         // Create a signature registration with the `Engine` for all trampolines
         // and core wasm types found within this component, both for the

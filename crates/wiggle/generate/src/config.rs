@@ -1,5 +1,5 @@
 use {
-    proc_macro2::Span,
+    proc_macro2::{Span, TokenStream},
     std::{collections::HashMap, iter::FromIterator, path::PathBuf},
     syn::{
         braced, bracketed,
@@ -61,14 +61,21 @@ impl Parse for ConfigField {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Async(AsyncConf {
-                blocking: false,
+                block_with: None,
                 functions: input.parse()?,
             }))
         } else if lookahead.peek(kw::block_on) {
             input.parse::<kw::block_on>()?;
+            let block_with = if input.peek(syn::token::Bracket) {
+                let content;
+                let _ = bracketed!(content in input);
+                content.parse()?
+            } else {
+                quote::quote!(wiggle::run_in_dummy_executor)
+            };
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Async(AsyncConf {
-                blocking: true,
+                block_with: Some(block_with),
                 functions: input.parse()?,
             }))
         } else if lookahead.peek(kw::wasmtime) {
@@ -381,16 +388,16 @@ impl std::fmt::Debug for UserErrorConfField {
 #[derive(Clone, Default, Debug)]
 /// Modules and funcs that have async signatures
 pub struct AsyncConf {
-    blocking: bool,
+    block_with: Option<TokenStream>,
     functions: AsyncFunctions,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum Asyncness {
     /// Wiggle function is synchronous, wasmtime Func is synchronous
     Sync,
     /// Wiggle function is asynchronous, but wasmtime Func is synchronous
-    Blocking,
+    Blocking { block_with: TokenStream },
     /// Wiggle function and wasmtime Func are asynchronous.
     Async,
 }
@@ -402,10 +409,10 @@ impl Asyncness {
             _ => false,
         }
     }
-    pub fn is_blocking(&self) -> bool {
+    pub fn blocking(&self) -> Option<&TokenStream> {
         match self {
-            Self::Blocking => true,
-            _ => false,
+            Self::Blocking { block_with } => Some(block_with),
+            _ => None,
         }
     }
     pub fn is_sync(&self) -> bool {
@@ -429,10 +436,11 @@ impl Default for AsyncFunctions {
 
 impl AsyncConf {
     pub fn get(&self, module: &str, function: &str) -> Asyncness {
-        let a = if self.blocking {
-            Asyncness::Blocking
-        } else {
-            Asyncness::Async
+        let a = match &self.block_with {
+            Some(block_with) => Asyncness::Blocking {
+                block_with: block_with.clone(),
+            },
+            None => Asyncness::Async,
         };
         match &self.functions {
             AsyncFunctions::Some(fs) => {
@@ -577,54 +585,12 @@ impl Parse for WasmtimeConfig {
 
 impl Parse for WasmtimeConfigField {
     fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(kw::target) {
+        if input.peek(kw::target) {
             input.parse::<kw::target>()?;
             input.parse::<Token![:]>()?;
             Ok(WasmtimeConfigField::Target(input.parse()?))
-
-            // The remainder of this function is the ConfigField impl, wrapped in
-            // WasmtimeConfigField::Core. This is required to get the correct lookahead error.
-        } else if lookahead.peek(kw::witx) {
-            input.parse::<kw::witx>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Witx(
-                WitxConf::Paths(input.parse()?),
-            )))
-        } else if lookahead.peek(kw::witx_literal) {
-            input.parse::<kw::witx_literal>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Witx(
-                WitxConf::Literal(input.parse()?),
-            )))
-        } else if lookahead.peek(kw::errors) {
-            input.parse::<kw::errors>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Error(
-                input.parse()?,
-            )))
-        } else if lookahead.peek(Token![async]) {
-            input.parse::<Token![async]>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Async(AsyncConf {
-                blocking: false,
-                functions: input.parse()?,
-            })))
-        } else if lookahead.peek(kw::block_on) {
-            input.parse::<kw::block_on>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Async(AsyncConf {
-                blocking: true,
-                functions: input.parse()?,
-            })))
-        } else if lookahead.peek(kw::mutable) {
-            input.parse::<kw::mutable>()?;
-            input.parse::<Token![:]>()?;
-            Ok(WasmtimeConfigField::Core(ConfigField::Mutable(
-                input.parse::<syn::LitBool>()?.value,
-            )))
         } else {
-            Err(lookahead.error())
+            Ok(WasmtimeConfigField::Core(input.parse()?))
         }
     }
 }
