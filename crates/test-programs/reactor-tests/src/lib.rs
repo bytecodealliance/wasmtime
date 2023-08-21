@@ -3,6 +3,7 @@ wit_bindgen::generate!("test-reactor" in "../../wasi/wit");
 export_test_reactor!(T);
 
 struct T;
+use wasi::io::streams;
 
 static mut STATE: Vec<String> = Vec::new();
 
@@ -26,7 +27,19 @@ impl TestReactor for T {
     fn write_strings_to(o: OutputStream) -> Result<(), ()> {
         unsafe {
             for s in STATE.iter() {
-                wasi::io::streams::write(o, s.as_bytes()).map_err(|_| ())?;
+                let mut out = s.as_bytes();
+                while !out.is_empty() {
+                    match streams::blocking_check_write(o) {
+                        streams::WriteReadiness::Ready(n) => {
+                            let len = (n as usize).min(out.len());
+                            match streams::write(o, &out[..len]) {
+                                Some(streams::WriteReadiness::Closed) => return Err(()),
+                                _ => out = &out[len..],
+                            }
+                        }
+                        streams::WriteReadiness::Closed => return Err(()),
+                    }
+                }
             }
             Ok(())
         }
