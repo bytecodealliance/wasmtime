@@ -4,7 +4,9 @@
       i32.const 0)
   )
   (core instance $i (instantiate $m))
-  (func (export "run") (result (result))
+  (func $run (result (result))
     (canon lift (core func $i "run")))
 
+  (instance (export (interface "wasi:cli/run"))
+    (export "run" (func $run)))
 )
