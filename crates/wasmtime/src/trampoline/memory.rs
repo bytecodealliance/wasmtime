@@ -7,13 +7,19 @@ use std::convert::TryFrom;
 use std::ops::Range;
 use std::sync::Arc;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, MemoryPlan, MemoryStyle, Module,
-    PrimaryMap, WASM_PAGE_SIZE,
+    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,
+    VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_runtime::{
-    CompiledModuleId, Imports, InstanceAllocationRequest, InstanceAllocator, Memory, MemoryImage,
-    OnDemandInstanceAllocator, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr,
-    Table, VMMemoryDefinition,
+    CompiledModuleId, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl,
+    Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator, RuntimeLinearMemory,
+    RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex, VMMemoryDefinition,
+};
+
+#[cfg(feature = "component-model")]
+use wasmtime_environ::{
+    component::{Component, VMComponentOffsets},
+    StaticModuleIndex,
 };
 
 /// Create a "frankenstein" instance with a single memory.
@@ -64,7 +70,7 @@ pub fn create_memory(
             preallocation,
             ondemand: OnDemandInstanceAllocator::default(),
         }
-        .allocate(request)?;
+        .allocate_module(request)?;
         let instance_id = store.add_instance(handle.clone(), true);
         Ok(instance_id)
     }
@@ -143,48 +149,94 @@ struct SingleMemoryInstance<'a> {
     ondemand: OnDemandInstanceAllocator,
 }
 
-unsafe impl InstanceAllocator for SingleMemoryInstance<'_> {
-    fn allocate_index(&self, req: &InstanceAllocationRequest) -> Result<usize> {
-        self.ondemand.allocate_index(req)
-    }
-
-    fn deallocate_index(&self, index: usize) {
-        self.ondemand.deallocate_index(index)
-    }
-
-    fn allocate_memories(
+unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
+    #[cfg(feature = "component-model")]
+    fn validate_component_impl<'a>(
         &self,
-        index: usize,
-        req: &mut InstanceAllocationRequest,
-        mem: &mut PrimaryMap<DefinedMemoryIndex, Memory>,
+        _component: &Component,
+        _offsets: &VMComponentOffsets<HostPtr>,
+        _get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
     ) -> Result<()> {
-        assert_eq!(req.runtime_info.module().memory_plans.len(), 1);
-        match self.preallocation {
-            Some(shared_memory) => {
-                mem.push(shared_memory.clone().as_memory());
-            }
-            None => {
-                self.ondemand.allocate_memories(index, req, mem)?;
-            }
-        }
+        unreachable!("`SingleMemoryInstance` allocator never used with components")
+    }
+
+    fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
+        anyhow::ensure!(
+            module.memory_plans.len() == 1,
+            "`SingleMemoryInstance` allocator can only be used for modules with a single memory"
+        );
+        self.ondemand.validate_module_impl(module, offsets)?;
         Ok(())
     }
 
-    fn deallocate_memories(&self, index: usize, mems: &mut PrimaryMap<DefinedMemoryIndex, Memory>) {
-        self.ondemand.deallocate_memories(index, mems)
+    fn increment_component_instance_count(&self) -> Result<()> {
+        self.ondemand.increment_component_instance_count()
     }
 
-    fn allocate_tables(
+    fn decrement_component_instance_count(&self) {
+        self.ondemand.decrement_component_instance_count();
+    }
+
+    fn increment_core_instance_count(&self) -> Result<()> {
+        self.ondemand.increment_core_instance_count()
+    }
+
+    fn decrement_core_instance_count(&self) {
+        self.ondemand.decrement_core_instance_count();
+    }
+
+    unsafe fn allocate_memory(
         &self,
-        index: usize,
-        req: &mut InstanceAllocationRequest,
-        tables: &mut PrimaryMap<DefinedTableIndex, Table>,
-    ) -> Result<()> {
-        self.ondemand.allocate_tables(index, req, tables)
+        request: &mut InstanceAllocationRequest,
+        memory_plan: &MemoryPlan,
+        memory_index: DefinedMemoryIndex,
+    ) -> Result<(MemoryAllocationIndex, Memory)> {
+        #[cfg(debug_assertions)]
+        {
+            let module = request.runtime_info.module();
+            let offsets = request.runtime_info.offsets();
+            self.validate_module_impl(module, offsets)
+                .expect("should have already validated the module before allocating memory");
+        }
+
+        match self.preallocation {
+            Some(shared_memory) => Ok((
+                MemoryAllocationIndex::default(),
+                shared_memory.clone().as_memory(),
+            )),
+            None => self
+                .ondemand
+                .allocate_memory(request, memory_plan, memory_index),
+        }
     }
 
-    fn deallocate_tables(&self, index: usize, tables: &mut PrimaryMap<DefinedTableIndex, Table>) {
-        self.ondemand.deallocate_tables(index, tables)
+    unsafe fn deallocate_memory(
+        &self,
+        memory_index: DefinedMemoryIndex,
+        allocation_index: MemoryAllocationIndex,
+        memory: Memory,
+    ) {
+        self.ondemand
+            .deallocate_memory(memory_index, allocation_index, memory)
+    }
+
+    unsafe fn allocate_table(
+        &self,
+        req: &mut InstanceAllocationRequest,
+        table_plan: &wasmtime_environ::TablePlan,
+        table_index: DefinedTableIndex,
+    ) -> Result<(TableAllocationIndex, Table)> {
+        self.ondemand.allocate_table(req, table_plan, table_index)
+    }
+
+    unsafe fn deallocate_table(
+        &self,
+        table_index: DefinedTableIndex,
+        allocation_index: TableAllocationIndex,
+        table: Table,
+    ) {
+        self.ondemand
+            .deallocate_table(table_index, allocation_index, table)
     }
 
     #[cfg(feature = "async")]

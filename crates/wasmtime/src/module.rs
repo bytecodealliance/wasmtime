@@ -581,9 +581,11 @@ impl Module {
             engine.unique_id_allocator(),
         )?;
 
-        // Validate the module can be used with the current allocator
+        // Validate the module can be used with the current instance allocator.
         let offsets = VMOffsets::new(HostPtr, module.module());
-        engine.allocator().validate(module.module(), &offsets)?;
+        engine
+            .allocator()
+            .validate_module(module.module(), &offsets)?;
 
         Ok(Self {
             inner: Arc::new(ModuleInner {

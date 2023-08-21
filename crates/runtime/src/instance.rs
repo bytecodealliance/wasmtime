@@ -67,13 +67,21 @@ pub struct Instance {
     ///
     /// This is where all runtime information about defined linear memories in
     /// this module lives.
-    memories: PrimaryMap<DefinedMemoryIndex, Memory>,
+    ///
+    /// The `MemoryAllocationIndex` was given from our `InstanceAllocator` and
+    /// must be given back to the instance allocator when deallocating each
+    /// memory.
+    memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
 
     /// WebAssembly table data.
     ///
     /// Like memories, this is only for defined tables in the module and
     /// contains all of their runtime state.
-    tables: PrimaryMap<DefinedTableIndex, Table>,
+    ///
+    /// The `TableAllocationIndex` was given from our `InstanceAllocator` and
+    /// must be given back to the instance allocator when deallocating each
+    /// table.
+    tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
 
     /// Stores the dropped passive element segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
@@ -88,13 +96,6 @@ pub struct Instance {
     /// Most of the time from Wasmtime this is `Box::new(())`, a noop
     /// allocation, but some host-defined objects will store their state here.
     host_state: Box<dyn Any + Send + Sync>,
-
-    /// Instance of this instance within its `InstanceAllocator` trait
-    /// implementation.
-    ///
-    /// This is always 0 for the on-demand instance allocator and it's the
-    /// index of the slot in the pooling allocator.
-    index: usize,
 
     /// A pointer to the `vmctx` field at the end of the `Instance`.
     ///
@@ -160,9 +161,8 @@ impl Instance {
     /// allocation was `alloc_size` in bytes.
     unsafe fn new(
         req: InstanceAllocationRequest,
-        index: usize,
-        memories: PrimaryMap<DefinedMemoryIndex, Memory>,
-        tables: PrimaryMap<DefinedTableIndex, Table>,
+        memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
+        tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
         memory_plans: &PrimaryMap<MemoryIndex, MemoryPlan>,
     ) -> InstanceHandle {
         // The allocation must be *at least* the size required of `Instance`.
@@ -184,7 +184,6 @@ impl Instance {
             ptr,
             Instance {
                 runtime_info: req.runtime_info.clone(),
-                index,
                 memories,
                 tables,
                 dropped_elements,
@@ -567,7 +566,7 @@ impl Instance {
         delta: u64,
     ) -> Result<Option<usize>, Error> {
         let store = unsafe { &mut *self.store() };
-        let memory = &mut self.memories[idx];
+        let memory = &mut self.memories[idx].1;
 
         let result = unsafe { memory.grow(delta, Some(store)) };
 
@@ -608,16 +607,17 @@ impl Instance {
         init_value: TableElement,
     ) -> Result<Option<u32>, Error> {
         let store = unsafe { &mut *self.store() };
-        let table = self
+        let table = &mut self
             .tables
             .get_mut(table_index)
-            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()));
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
+            .1;
 
         let result = unsafe { table.grow(delta, init_value, store) };
 
         // Keep the `VMContext` pointers used by compiled Wasm code up to
         // date.
-        let element = self.tables[table_index].vmtable();
+        let element = self.tables[table_index].1.vmtable();
         self.set_table(table_index, element);
 
         result
@@ -806,7 +806,7 @@ impl Instance {
 
     /// Get a locally-defined memory.
     pub fn get_defined_memory(&mut self, index: DefinedMemoryIndex) -> *mut Memory {
-        ptr::addr_of_mut!(self.memories[index])
+        ptr::addr_of_mut!(self.memories[index].1)
     }
 
     /// Do a `memory.copy`
@@ -975,11 +975,11 @@ impl Instance {
         idx: DefinedTableIndex,
         range: impl Iterator<Item = u32>,
     ) -> *mut Table {
-        let elt_ty = self.tables[idx].element_type();
+        let elt_ty = self.tables[idx].1.element_type();
 
         if elt_ty == TableElementType::Func {
             for i in range {
-                let value = match self.tables[idx].get(i) {
+                let value = match self.tables[idx].1.get(i) {
                     Some(value) => value,
                     None => {
                         // Out-of-bounds; caller will handle by likely
@@ -1010,25 +1010,26 @@ impl Instance {
                     .and_then(|func_index| self.get_func_ref(func_index))
                     .unwrap_or(std::ptr::null_mut());
                 self.tables[idx]
+                    .1
                     .set(i, TableElement::FuncRef(func_ref))
                     .expect("Table type should match and index should be in-bounds");
             }
         }
 
-        ptr::addr_of_mut!(self.tables[idx])
+        ptr::addr_of_mut!(self.tables[idx].1)
     }
 
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&mut self, table_index: TableIndex) -> *mut Table {
         self.with_defined_table_index_and_instance(table_index, |idx, instance| {
-            ptr::addr_of_mut!(instance.tables[idx])
+            ptr::addr_of_mut!(instance.tables[idx].1)
         })
     }
 
     /// Get a locally-defined table.
     pub(crate) fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
-        ptr::addr_of_mut!(self.tables[index])
+        ptr::addr_of_mut!(self.tables[index].1)
     }
 
     pub(crate) fn with_defined_table_index_and_instance<R>(
@@ -1110,7 +1111,7 @@ impl Instance {
         // Initialize the defined tables
         let mut ptr = self.vmctx_plus_offset_mut(offsets.vmctx_tables_begin());
         for i in 0..module.table_plans.len() - module.num_imported_tables {
-            ptr::write(ptr, self.tables[DefinedTableIndex::new(i)].vmtable());
+            ptr::write(ptr, self.tables[DefinedTableIndex::new(i)].1.vmtable());
             ptr = ptr.add(1);
         }
 
@@ -1126,12 +1127,13 @@ impl Instance {
             let memory_index = module.memory_index(defined_memory_index);
             if module.memory_plans[memory_index].memory.shared {
                 let def_ptr = self.memories[defined_memory_index]
+                    .1
                     .as_shared_memory()
                     .unwrap()
                     .vmmemory_ptr();
                 ptr::write(ptr, def_ptr.cast_mut());
             } else {
-                ptr::write(owned_ptr, self.memories[defined_memory_index].vmmemory());
+                ptr::write(owned_ptr, self.memories[defined_memory_index].1.vmmemory());
                 ptr::write(ptr, owned_ptr);
                 owned_ptr = owned_ptr.add(1);
             }
@@ -1198,7 +1200,7 @@ impl Instance {
 
     fn wasm_fault(&self, addr: usize) -> Option<WasmFault> {
         let mut fault = None;
-        for (_, memory) in self.memories.iter() {
+        for (_, (_, memory)) in self.memories.iter() {
             let accessible = memory.wasm_accessible();
             if accessible.start <= addr && addr < accessible.end {
                 // All linear memories should be disjoint so assert that no

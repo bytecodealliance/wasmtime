@@ -269,7 +269,7 @@ impl Instance {
             store
                 .engine()
                 .allocator()
-                .allocate(InstanceAllocationRequest {
+                .allocate_module(InstanceAllocationRequest {
                     runtime_info: &module.runtime_info(),
                     imports,
                     host_state: Box::new(Instance(instance_to_be)),

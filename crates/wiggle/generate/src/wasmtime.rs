@@ -142,14 +142,14 @@ fn generate_func(
             }
         }
 
-        Asyncness::Blocking => {
+        Asyncness::Blocking { block_with } => {
             quote! {
                 linker.func_wrap(
                     #module_str,
                     #field_str,
                     move |mut caller: wiggle::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> wiggle::anyhow::Result<#ret_ty> {
                         let result = async { #body };
-                        wiggle::run_in_dummy_executor(result)?
+                        #block_with(result)?
                     },
                 )?;
             }
