@@ -81,6 +81,8 @@ pub(crate) enum OperandSize {
     S32,
     /// 64 bits.
     S64,
+    /// 128 bits.
+    S128,
 }
 
 impl OperandSize {
@@ -89,12 +91,17 @@ impl OperandSize {
         match self {
             OperandSize::S32 => 32,
             OperandSize::S64 => 64,
+            OperandSize::S128 => 128,
         }
     }
 
     /// The number of bytes in the operand.
     pub fn bytes(&self) -> u32 {
-        (self.num_bits() / 8) as u32
+        match self {
+            Self::S32 => 4,
+            Self::S64 => 8,
+            Self::S128 => 16,
+        }
     }
 
     /// The binary logarithm of the number of bits in the operand.
@@ -102,6 +109,7 @@ impl OperandSize {
         match self {
             OperandSize::S32 => 5,
             OperandSize::S64 => 6,
+            OperandSize::S128 => 7,
         }
     }
 }

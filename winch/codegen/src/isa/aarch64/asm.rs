@@ -18,6 +18,7 @@ impl From<OperandSize> for inst::OperandSize {
         match size {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
+            s => panic!("Invalid operand size {:?}", s),
         }
     }
 }
@@ -93,6 +94,8 @@ impl Assembler {
                 mem,
                 flags,
             },
+
+            _ => unreachable!(),
         };
 
         self.emit(inst);
@@ -116,6 +119,7 @@ impl Assembler {
                 mem,
                 flags,
             },
+            _ => unreachable!(),
         };
 
         self.emit(inst);

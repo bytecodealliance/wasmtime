@@ -1,6 +1,7 @@
 use super::regs;
 use crate::abi::{ABIArg, ABIResult, ABISig, ABI};
 use crate::isa::{reg::Reg, CallingConvention};
+use crate::masm::OperandSize;
 use smallvec::SmallVec;
 use wasmtime_environ::{WasmFuncType, WasmType};
 
@@ -112,7 +113,7 @@ impl ABI for Aarch64ABI {
         regs::xreg(9)
     }
 
-    fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[Reg; 18]> {
+    fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
         regs::callee_saved()
     }
 

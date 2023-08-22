@@ -14,7 +14,7 @@ use cranelift_codegen::{
                 self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
                 Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
                 ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
-                WritableXmm, Xmm, XmmMemAligned, CC,
+                WritableXmm, Xmm, XmmMem, CC,
             },
             settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
         },
@@ -90,6 +90,7 @@ impl From<OperandSize> for args::OperandSize {
         match size {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
+            s => panic!("Invalid operand size {:?}", s),
         }
     }
 }
@@ -298,28 +299,34 @@ impl Assembler {
 
     /// Single and double precision floating point load.
     pub fn xmm_mov_mr(&mut self, src: &Address, dst: Reg, size: OperandSize) {
+        use OperandSize::*;
+
         assert!(dst.is_float());
         let op = match size {
-            OperandSize::S32 => SseOpcode::Movss,
-            OperandSize::S64 => SseOpcode::Movsd,
+            S32 => SseOpcode::Movss,
+            S64 => SseOpcode::Movsd,
+            S128 => SseOpcode::Movdqu,
         };
 
         let src =
             Self::to_synthetic_amode(src, &mut self.pool, &mut self.constants, &mut self.buffer);
-        self.emit(Inst::XmmUnaryRmR {
+        self.emit(Inst::XmmUnaryRmRUnaligned {
             op,
-            src: XmmMemAligned::new(RegMem::mem(src)).expect("valid xmm mem aligned"),
+            src: XmmMem::new(RegMem::mem(src)).expect("valid xmm unaligned"),
             dst: dst.into(),
         });
     }
 
     /// Single and double precision floating point store.
     pub fn xmm_mov_rm(&mut self, src: Reg, dst: &Address, size: OperandSize) {
+        use OperandSize::*;
+
         assert!(src.is_float());
 
         let op = match size {
-            OperandSize::S32 => SseOpcode::Movss,
-            OperandSize::S64 => SseOpcode::Movsd,
+            S32 => SseOpcode::Movss,
+            S64 => SseOpcode::Movsd,
+            S128 => SseOpcode::Movdqu,
         };
 
         let dst =

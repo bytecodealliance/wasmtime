@@ -1,6 +1,9 @@
 //! X64 register definition.
 
-use crate::isa::{reg::Reg, CallingConvention};
+use crate::{
+    isa::{reg::Reg, CallingConvention},
+    masm::OperandSize,
+};
 use regalloc2::{PReg, RegClass};
 use smallvec::{smallvec, SmallVec};
 
@@ -184,9 +187,10 @@ pub(crate) const ALL_FPR: u32 = ALLOCATABLE_FPR;
 /// This function will return the set of registers that need to be saved
 /// according to the system ABI and that are known not to be saved during the
 /// prologue emission.
-pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[Reg; 18]> {
+pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
     use CallingConvention::*;
-    match call_conv {
+    use OperandSize::*;
+    let regs: SmallVec<[_; 18]> = match call_conv {
         WasmtimeSystemV => {
             smallvec![rbx(), r12(), r13(), r14(), r15(),]
         }
@@ -212,5 +216,18 @@ pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[Reg; 18]>
             ]
         }
         _ => unreachable!(),
-    }
+    };
+
+    regs.into_iter()
+        .map(|r| {
+            // The fastcall calling convention expects the entirety of the
+            // floating point registers (xmm6-xmm15) to be saved.  See
+            // https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170#callercallee-saved-registers
+            if r.is_int() {
+                (r, S64)
+            } else {
+                (r, S128)
+            }
+        })
+        .collect()
 }

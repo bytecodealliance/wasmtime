@@ -48,7 +48,7 @@ where
     alloc_scratch_reg: Reg,
     /// Registers to be saved as part of the trampoline's prologue
     /// and to be restored as part of the trampoline's epilogue.
-    callee_saved_regs: SmallVec<[Reg; 18]>,
+    callee_saved_regs: SmallVec<[(Reg, OperandSize); 18]>,
     /// The calling convention used by the trampoline,
     /// which is the Wasmtime variant of the system ABI's
     /// calling convention.
@@ -463,9 +463,8 @@ where
     fn prologue_with_callee_saved(&mut self) {
         self.masm.prologue();
         // Save any callee-saved registers.
-        for r in &self.callee_saved_regs {
-            // Account for the entire contents of the register.
-            self.masm.push(*r, OperandSize::S64);
+        for (r, s) in &self.callee_saved_regs {
+            self.masm.push(*r, *s);
         }
     }
 
@@ -475,9 +474,8 @@ where
         // Free the stack space allocated by pushing the trampoline arguments.
         self.masm.free_stack(arg_size);
         // Restore the callee-saved registers.
-        for r in self.callee_saved_regs.iter().rev() {
-            // Restore the entire contents of the register.
-            self.masm.pop(*r, OperandSize::S64);
+        for (r, s) in self.callee_saved_regs.iter().rev() {
+            self.masm.pop(*r, *s);
         }
         self.masm.epilogue(0);
     }

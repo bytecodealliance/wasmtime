@@ -44,6 +44,7 @@
 //! |                               | ----> Space allocated for calls
 //! |                               |
 use crate::isa::{reg::Reg, CallingConvention};
+use crate::masm::OperandSize;
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
 use wasmtime_environ::{WasmFuncType, WasmType};
@@ -98,7 +99,7 @@ pub(crate) trait ABI {
 
     /// Returns the callee-saved registers for the given
     /// calling convention.
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 18]>;
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]>;
 
     /// Returns the size of each argument stack slot per argument type.
     fn stack_arg_slot_size_for_type(ty: WasmType) -> u32;

@@ -534,6 +534,7 @@ impl Masm for MacroAssembler {
                     [0x55555555i64, 0x33333333i64, 0x0f0f0f0fi64, 0x01010101i64],
                     24u8,
                 ),
+                _ => unreachable!(),
             };
             self.asm.mov_rr(src.into(), tmp, size);
 

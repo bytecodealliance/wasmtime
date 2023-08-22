@@ -2,6 +2,7 @@ use super::regs;
 use crate::{
     abi::{ABIArg, ABIResult, ABISig, ABI},
     isa::{reg::Reg, CallingConvention},
+    masm::OperandSize,
 };
 use smallvec::SmallVec;
 use wasmtime_environ::{WasmFuncType, WasmType};
@@ -157,7 +158,7 @@ impl ABI for X64ABI {
         regs::vmctx()
     }
 
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 18]> {
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
         regs::callee_saved(call_conv)
     }
 
