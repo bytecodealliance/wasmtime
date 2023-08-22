@@ -252,9 +252,6 @@ impl<T: WasiView> streams::Host for T {
                 match futures::future::poll_immediate(HostOutputStream::write_ready(s.as_mut()))
                     .await
                 {
-                    // FIXME HostOutputStream::ready doesnt yet tell us if stream has errored/closed
-                    // FIXME ready amount is also a made-up size. this size will become the HostOutputStream's
-                    // responsibility to report.
                     Some(Ok(readiness)) => Ok(Some(readiness.into())),
                     Some(Err(e)) => Err(e),
                     None => Ok(None),
@@ -285,6 +282,7 @@ impl<T: WasiView> streams::Host for T {
                     }
                 }
             }
+            // FIXME: change FileOutputStream::write to align with these new semantics
             InternalOutputStream::File(s) => match FileOutputStream::write(s, bytes.into()).await {
                 Ok((_, StreamState::Open)) => Ok(Some(streams::WriteReadiness::Ready(32 * 1024))),
                 Ok((0, StreamState::Closed)) => Ok(Some(streams::WriteReadiness::Closed)),
@@ -339,12 +337,13 @@ impl<T: WasiView> streams::Host for T {
     ) -> anyhow::Result<streams::WriteReadiness> {
         match self.table_mut().get_internal_output_stream_mut(stream)? {
             InternalOutputStream::Host(h) => {
+                // await until actually ready for writing:
                 let _ = h.write_ready().await?;
             }
             _ => {}
         }
         let check = self.check_write(stream).await?;
-        Ok(check.expect("write is ready because we waited for it"))
+        Ok(check.expect("check_write is ready: write_ready future completed"))
     }
 
     async fn write_zeroes(
@@ -352,26 +351,65 @@ impl<T: WasiView> streams::Host for T {
         stream: OutputStream,
         len: u64,
     ) -> anyhow::Result<Option<streams::WriteReadiness>> {
-        todo!("write_zeroes is not yet implemented")
+        match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(s) => {
+                match HostOutputStream::write_zeroes(s.as_mut(), len as usize) {
+                    Ok(Some(readiness)) => Ok(Some(readiness.into())),
+                    Ok(None) => Ok(None),
+                    Err(e) => {
+                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
+                            tracing::debug!("stream runtime error: {e:?}");
+                            return Ok(Some(streams::WriteReadiness::Closed));
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+            InternalOutputStream::File { .. } => todo!("write_zeroes unimplemented for files"),
+        }
     }
 
     async fn flush(
         &mut self,
         stream: OutputStream,
     ) -> anyhow::Result<Option<streams::FlushResult>> {
-        todo!()
+        match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(s) => match HostOutputStream::flush(s.as_mut())? {
+                Some(result) => Ok(Some(result.into())),
+                None => Ok(None),
+            },
+            _ => todo!("flush unimplemented for files"),
+        }
     }
     async fn check_flush(
         &mut self,
         stream: OutputStream,
     ) -> anyhow::Result<Option<streams::FlushResult>> {
-        todo!()
+        match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(s) => {
+                match futures::future::poll_immediate(HostOutputStream::flush_ready(s.as_mut()))
+                    .await
+                {
+                    Some(Ok(result)) => Ok(Some(result.into())),
+                    Some(Err(e)) => Err(e),
+                    None => Ok(None),
+                }
+            }
+            // FIXME: FileOutputStream needs to impl flush.
+            InternalOutputStream::File(_) => Ok(Some(streams::FlushResult::Done)),
+        }
     }
     async fn blocking_check_flush(
         &mut self,
         stream: OutputStream,
     ) -> anyhow::Result<streams::FlushResult> {
-        todo!()
+        match self.table_mut().get_internal_output_stream_mut(stream)? {
+            InternalOutputStream::Host(s) => {
+                Ok(HostOutputStream::flush_ready(s.as_mut()).await?.into())
+            }
+            _ => todo!("blocking_check_flush unimplemented for files"),
+        }
     }
 
     async fn subscribe_to_flush(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {

@@ -108,42 +108,16 @@ pub trait HostOutputStream: Send + Sync {
 
     async fn flush_ready(&mut self) -> Result<FlushResult, Error>;
 
-    /// Transfer bytes directly from an input stream to an output stream.
-    /// Important: this splice must be non-blocking!
-    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
-    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn splice(&mut self, src: &mut dyn HostInputStream, nelem: usize) -> Result<(), Error> {
-        todo!()
-        /*
-        let mut nspliced = 0;
-        let mut state = StreamState::Open;
-
-        // TODO: handle the case where `bs.len()` is less than `nelem`
-        let (bs, read_state) = src.read(nelem)?;
-        // TODO: handle the case where write returns less than `bs.len()`
-        let (nwritten, _write_state) = self.write(bs)?;
-        nspliced += nwritten;
-        if read_state.is_closed() {
-            state = read_state;
-        }
-
-        Ok((nspliced, state))
-        */
-    }
-
     /// Repeatedly write a byte to a stream. Important: this write must be
     /// non-blocking!
     /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn write_zeroes(&mut self, nelem: usize) -> Result<(), Error> {
-        todo!()
-        /*
+    fn write_zeroes(&mut self, nelem: usize) -> Result<Option<WriteReadiness>, Error> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
         let r = self.write(bs)?;
         Ok(r)
-        */
     }
 }
 
