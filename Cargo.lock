@@ -3436,6 +3436,7 @@ dependencies = [
  "criterion",
  "env_logger 0.10.0",
  "filecheck",
+ "futures",
  "humantime 2.1.0",
  "libc",
  "listenfd",
