@@ -160,6 +160,14 @@ impl ABI for X64ABI {
     fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 18]> {
         regs::callee_saved(call_conv)
     }
+
+    fn stack_arg_slot_size_for_type(ty: WasmType) -> u32 {
+        match ty {
+            WasmType::F64 | WasmType::I32 | WasmType::I64 => Self::word_bytes(),
+            WasmType::F32 => Self::word_bytes() / 2,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl X64ABI {
@@ -183,7 +191,7 @@ impl X64ABI {
 
         let default = || {
             let arg = ABIArg::stack_offset(*stack_offset, *ty);
-            let size = Self::word_bytes();
+            let size = Self::stack_arg_slot_size_for_type(*ty);
             *stack_offset += size;
             arg
         };

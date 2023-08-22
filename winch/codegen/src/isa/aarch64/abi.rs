@@ -115,6 +115,10 @@ impl ABI for Aarch64ABI {
     fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[Reg; 18]> {
         regs::callee_saved()
     }
+
+    fn stack_arg_slot_size_for_type(_ty: WasmType) -> u32 {
+        todo!()
+    }
 }
 
 impl Aarch64ABI {

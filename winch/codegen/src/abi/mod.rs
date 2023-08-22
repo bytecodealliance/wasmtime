@@ -99,6 +99,9 @@ pub(crate) trait ABI {
     /// Returns the callee-saved registers for the given
     /// calling convention.
     fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 18]>;
+
+    /// Returns the size of each argument stack slot per argument type.
+    fn stack_arg_slot_size_for_type(ty: WasmType) -> u32;
 }
 
 /// ABI-specific representation of a function argument.
