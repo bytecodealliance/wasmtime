@@ -359,10 +359,11 @@ impl<'a> CodeGenContext<'a> {
         }
 
         match result {
-            r @ ABIResult::Reg { .. } => {
-                let reg = r.result_reg().unwrap();
+            ABIResult::Reg { ty, reg } => {
+                let reg = reg.unwrap();
+                let ty = ty.unwrap();
                 assert!(self.regalloc.reg_available(reg));
-                let typed_reg = TypedReg::i64(self.reg(reg, masm));
+                let typed_reg = TypedReg::new(ty, self.reg(reg, masm));
                 self.stack.push(typed_reg.into());
             }
         }
