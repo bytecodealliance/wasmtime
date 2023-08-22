@@ -38,8 +38,6 @@ impl From<FlushResult> for streams::FlushResult {
     }
 }
 
-const ZEROS: &[u8] = &[0; 4 * 1024 * 1024];
-
 #[async_trait::async_trait]
 impl<T: WasiView> streams::Host for T {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {

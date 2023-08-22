@@ -12,6 +12,7 @@ use crate::preview2::{
 };
 use anyhow::Error;
 use bytes::Bytes;
+use tokio::sync::mpsc;
 
 #[derive(Debug)]
 pub struct MemoryInputPipe {
@@ -111,7 +112,7 @@ pub fn pipe(size: usize) -> (AsyncReadStream, AsyncWriteStream) {
 pub struct AsyncReadStream {
     state: StreamState,
     buffer: Option<Result<Bytes, std::io::Error>>,
-    receiver: tokio::sync::mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
+    receiver: mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
     pub(crate) join_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -119,7 +120,7 @@ impl AsyncReadStream {
     /// Create a [`AsyncReadStream`]. In order to use the [`HostInputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
     pub fn new<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static>(mut reader: T) -> Self {
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        let (sender, receiver) = mpsc::channel(1);
         let join_handle = crate::preview2::spawn(async move {
             loop {
                 use tokio::io::AsyncReadExt;
@@ -155,7 +156,7 @@ impl Drop for AsyncReadStream {
 #[async_trait::async_trait]
 impl HostInputStream for AsyncReadStream {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        use tokio::sync::mpsc::error::TryRecvError;
+        use mpsc::error::TryRecvError;
 
         match self.buffer.take() {
             Some(Ok(mut bytes)) => {
@@ -229,51 +230,19 @@ enum WriteState {
 /// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
 pub struct AsyncWriteStream {
     state: Option<WriteState>,
-    sender: tokio::sync::mpsc::Sender<Bytes>,
-    result_receiver: tokio::sync::mpsc::Receiver<Result<StreamState, std::io::Error>>,
+    sender: mpsc::Sender<Bytes>,
+    result_receiver: mpsc::Receiver<Result<StreamState, std::io::Error>>,
     join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl AsyncWriteStream {
     /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
-    pub fn new<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(mut writer: T) -> Self {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel::<Bytes>(1);
-        let (result_sender, result_receiver) = tokio::sync::mpsc::channel(1);
+    pub fn new<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(writer: T) -> Self {
+        let (sender, receiver) = mpsc::channel::<Bytes>(1);
+        let (result_sender, result_receiver) = mpsc::channel(1);
 
-        let join_handle = crate::preview2::spawn(async move {
-            'outer: loop {
-                use tokio::io::AsyncWriteExt;
-                match receiver.recv().await {
-                    Some(mut bytes) => {
-                        while !bytes.is_empty() {
-                            match writer.write_buf(&mut bytes).await {
-                                Ok(0) => {
-                                    let _ = result_sender.send(Ok(StreamState::Closed)).await;
-                                    break 'outer;
-                                }
-                                Ok(_) => {
-                                    if bytes.is_empty() {
-                                        match result_sender.send(Ok(StreamState::Open)).await {
-                                            Ok(_) => break,
-                                            Err(_) => break 'outer,
-                                        }
-                                    }
-                                    continue;
-                                }
-                                Err(e) => {
-                                    let _ = result_sender.send(Err(e)).await;
-                                    break 'outer;
-                                }
-                            }
-                        }
-                    }
-
-                    // The other side of the channel hung up, the task can exit now
-                    None => break 'outer,
-                }
-            }
-        });
+        let join_handle = crate::preview2::spawn(Self::worker(writer, receiver, result_sender));
 
         AsyncWriteStream {
             state: Some(WriteState::Ready),
@@ -283,14 +252,51 @@ impl AsyncWriteStream {
         }
     }
 
+    async fn worker<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(
+        mut writer: T,
+        mut receiver: mpsc::Receiver<Bytes>,
+        sender: mpsc::Sender<Result<StreamState, std::io::Error>>,
+    ) {
+        use tokio::io::AsyncWriteExt;
+        loop {
+            match receiver.recv().await {
+                Some(mut bytes) => {
+                    while !bytes.is_empty() {
+                        match writer.write_buf(&mut bytes).await {
+                            Ok(0) => {
+                                let _ = sender.send(Ok(StreamState::Closed)).await;
+                                return;
+                            }
+                            Ok(_) => {
+                                if bytes.is_empty() {
+                                    match sender.send(Ok(StreamState::Open)).await {
+                                        Ok(_) => break,
+                                        Err(_) => return,
+                                    }
+                                }
+                                continue;
+                            }
+                            Err(e) => {
+                                let _ = sender.send(Err(e)).await;
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // The other side of the channel hung up, the task can exit now
+                None => return,
+            }
+        }
+    }
+
     fn send(&mut self, bytes: Bytes) {
-        use tokio::sync::mpsc::error::TrySendError;
+        use mpsc::error::TrySendError;
 
         debug_assert!(matches!(self.state, Some(WriteState::Ready)));
 
-        let len = bytes.len();
         match self.sender.try_send(bytes) {
-            Ok(_) => {
+            Ok(()) => {
                 self.state = Some(WriteState::Pending);
             }
             Err(TrySendError::Full(_)) => {
@@ -400,7 +406,7 @@ pub struct SinkOutputStream;
 
 #[async_trait::async_trait]
 impl HostOutputStream for SinkOutputStream {
-    fn write(&mut self, buf: Bytes) -> Result<Option<WriteReadiness>, Error> {
+    fn write(&mut self, _buf: Bytes) -> Result<Option<WriteReadiness>, Error> {
         Ok(Some(WriteReadiness::Ready(64 * 1024))) // made up constant
     }
     fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
