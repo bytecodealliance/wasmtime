@@ -1513,10 +1513,17 @@ impl<'a> InterfaceGenerator<'a> {
 
                 uwrite!(self.src, "let r = host.{}(", func.name.to_snake_case());
             }
-            FunctionKind::Method(_) | FunctionKind::Static(_) => {
+            FunctionKind::Method(_) => {
                 uwrite!(
                     self.src,
                     "let r = caller.data_mut().{}(",
+                    func.name.to_snake_case()
+                );
+            }
+            FunctionKind::Static(_) => {
+                uwrite!(
+                    self.src,
+                    "let r = T::{}(&mut caller, ",
                     func.name.to_snake_case()
                 );
             }
