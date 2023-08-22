@@ -4,7 +4,7 @@ use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
 use cap_std::net::{TcpListener, TcpStream};
 use io_lifetimes::AsSocketlike;
 use std::io;
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::Arc;
 use system_interface::io::IoExt;
 
 /// The state of a TCP socket.
@@ -50,7 +50,7 @@ pub(crate) struct HostTcpSocket {
     pub(crate) inner: Arc<HostTcpSocketInner>,
 
     /// The current state in the bind/listen/accept/connect progression.
-    pub(crate) tcp_state: RwLock<HostTcpState>,
+    pub(crate) tcp_state: HostTcpState,
 }
 
 /// The inner reference-counted state of a `HostTcpSocket`.
@@ -77,7 +77,7 @@ impl HostTcpSocket {
 
         Ok(Self {
             inner: Arc::new(HostTcpSocketInner { tcp_socket }),
-            tcp_state: RwLock::new(HostTcpState::Default),
+            tcp_state: HostTcpState::Default,
         })
     }
 
@@ -94,7 +94,7 @@ impl HostTcpSocket {
 
         Ok(Self {
             inner: Arc::new(HostTcpSocketInner { tcp_socket }),
-            tcp_state: RwLock::new(HostTcpState::Default),
+            tcp_state: HostTcpState::Default,
         })
     }
 
@@ -104,16 +104,6 @@ impl HostTcpSocket {
 
     pub fn clone_inner(&self) -> Arc<HostTcpSocketInner> {
         Arc::clone(&self.inner)
-    }
-
-    /// Acquire a reader lock for `self.tcp_state`.
-    pub fn tcp_state_read_lock(&self) -> RwLockReadGuard<HostTcpState> {
-        self.tcp_state.read().unwrap()
-    }
-
-    /// Acquire a writer lock for `self.tcp_state`.
-    pub fn tcp_state_write_lock(&self) -> RwLockWriteGuard<HostTcpState> {
-        self.tcp_state.write().unwrap()
     }
 }
 
@@ -234,6 +224,7 @@ pub(crate) trait TableTcpSocketExt {
     fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocket, TableError>;
     fn is_tcp_socket(&self, fd: u32) -> bool;
     fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocket, TableError>;
+    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocket, TableError>;
 }
 
 impl TableTcpSocketExt for Table {
@@ -248,6 +239,9 @@ impl TableTcpSocketExt for Table {
     }
     fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocket, TableError> {
         self.get(fd)
+    }
+    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocket, TableError> {
+        self.get_mut(fd)
     }
 }
 

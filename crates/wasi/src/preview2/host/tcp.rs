@@ -14,7 +14,6 @@ use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::any::Any;
-use std::sync::RwLockWriteGuard;
 #[cfg(unix)]
 use tokio::io::Interest;
 #[cfg(not(unix))]
@@ -27,11 +26,10 @@ impl<T: WasiView> tcp::Host for T {
         network: Network,
         local_address: IpSocketAddress,
     ) -> Result<(), network::Error> {
-        let table = self.table();
+        let table = self.table_mut();
         let socket = table.get_tcp_socket(this)?;
 
-        let tcp_state = socket.tcp_state_write_lock();
-        match &*tcp_state {
+        match socket.tcp_state {
             HostTcpState::Default => {}
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
@@ -42,22 +40,22 @@ impl<T: WasiView> tcp::Host for T {
         // Perform the OS bind call.
         binder.bind_existing_tcp_listener(socket.tcp_socket())?;
 
-        set_state(tcp_state, HostTcpState::BindStarted);
+        let socket = table.get_tcp_socket_mut(this)?;
+        socket.tcp_state = HostTcpState::BindStarted;
 
         Ok(())
     }
 
     fn finish_bind(&mut self, this: tcp::TcpSocket) -> Result<(), network::Error> {
-        let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let table = self.table_mut();
+        let socket = table.get_tcp_socket_mut(this)?;
 
-        let tcp_state = socket.tcp_state_write_lock();
-        match &*tcp_state {
+        match socket.tcp_state {
             HostTcpState::BindStarted => {}
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
 
-        set_state(tcp_state, HostTcpState::Bound);
+        socket.tcp_state = HostTcpState::Bound;
 
         Ok(())
     }
@@ -68,11 +66,10 @@ impl<T: WasiView> tcp::Host for T {
         network: Network,
         remote_address: IpSocketAddress,
     ) -> Result<(), network::Error> {
-        let table = self.table();
+        let table = self.table_mut();
         let socket = table.get_tcp_socket(this)?;
 
-        let tcp_state = socket.tcp_state_write_lock();
-        match &*tcp_state {
+        match socket.tcp_state {
             HostTcpState::Default => {}
             HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
             _ => return Err(ErrorCode::NotInProgress.into()),
@@ -85,7 +82,8 @@ impl<T: WasiView> tcp::Host for T {
         match connecter.connect_existing_tcp_listener(socket.tcp_socket()) {
             // succeed immediately,
             Ok(()) => {
-                set_state(tcp_state, HostTcpState::ConnectReady);
+                let socket = table.get_tcp_socket_mut(this)?;
+                socket.tcp_state = HostTcpState::ConnectReady;
                 return Ok(());
             }
             // continue in progress,
@@ -94,7 +92,8 @@ impl<T: WasiView> tcp::Host for T {
             Err(err) => return Err(err.into()),
         }
 
-        set_state(tcp_state, HostTcpState::Connecting);
+        let socket = table.get_tcp_socket_mut(this)?;
+        socket.tcp_state = HostTcpState::Connecting;
 
         Ok(())
     }
@@ -103,11 +102,10 @@ impl<T: WasiView> tcp::Host for T {
         &mut self,
         this: tcp::TcpSocket,
     ) -> Result<(InputStream, OutputStream), network::Error> {
-        let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let table = self.table_mut();
+        let socket = table.get_tcp_socket_mut(this)?;
 
-        let mut tcp_state = socket.tcp_state_write_lock();
-        match &mut *tcp_state {
+        match socket.tcp_state {
             HostTcpState::ConnectReady => {}
             HostTcpState::Connecting => {
                 // Do a `poll` to test for completion, using a timeout of zero
@@ -133,7 +131,7 @@ impl<T: WasiView> tcp::Host for T {
             _ => return Err(ErrorCode::NotInProgress.into()),
         };
 
-        set_state(tcp_state, HostTcpState::Connected);
+        socket.tcp_state = HostTcpState::Connected;
 
         let input_clone = socket.clone_inner();
         let output_clone = socket.clone_inner();
@@ -147,11 +145,10 @@ impl<T: WasiView> tcp::Host for T {
     }
 
     fn start_listen(&mut self, this: tcp::TcpSocket) -> Result<(), network::Error> {
-        let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let table = self.table_mut();
+        let socket = table.get_tcp_socket_mut(this)?;
 
-        let tcp_state = socket.tcp_state_write_lock();
-        match &*tcp_state {
+        match socket.tcp_state {
             HostTcpState::Bound => {}
             HostTcpState::ListenStarted => return Err(ErrorCode::AlreadyListening.into()),
             HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
@@ -160,23 +157,21 @@ impl<T: WasiView> tcp::Host for T {
 
         socket.tcp_socket().listen(None)?;
 
-        set_state(tcp_state, HostTcpState::ListenStarted);
+        socket.tcp_state = HostTcpState::ListenStarted;
 
         Ok(())
     }
 
     fn finish_listen(&mut self, this: tcp::TcpSocket) -> Result<(), network::Error> {
-        let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let table = self.table_mut();
+        let socket = table.get_tcp_socket_mut(this)?;
 
-        let tcp_state = socket.tcp_state_write_lock();
-
-        match &*tcp_state {
+        match socket.tcp_state {
             HostTcpState::ListenStarted => {}
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
 
-        set_state(tcp_state, HostTcpState::Listening);
+        socket.tcp_state = HostTcpState::Listening;
 
         Ok(())
     }
@@ -188,7 +183,7 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
-        match *socket.tcp_state_read_lock() {
+        match socket.tcp_state {
             HostTcpState::Listening => {}
             HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
             _ => return Err(ErrorCode::NotInProgress.into()),
@@ -295,8 +290,7 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
-        let tcp_state = socket.tcp_state_read_lock();
-        match &*tcp_state {
+        match socket.tcp_state {
             HostTcpState::Listening => {}
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
@@ -410,7 +404,7 @@ impl<T: WasiView> tcp::Host for T {
                 .expect("downcast to HostTcpSocket failed");
 
             // Some states are ready immediately.
-            match *socket.tcp_state_read_lock() {
+            match socket.tcp_state {
                 HostTcpState::BindStarted
                 | HostTcpState::ListenStarted
                 | HostTcpState::ConnectReady => return Box::pin(async { Ok(()) }),
@@ -500,8 +494,7 @@ impl<T: WasiView> tcp::Host for T {
         // If we might have an `event::poll` waiting on the socket, wake it up.
         #[cfg(not(unix))]
         {
-            let tcp_state = dropped.tcp_state_read_lock();
-            match &*tcp_state {
+            match dropped.tcp_state {
                 HostTcpState::Default
                 | HostTcpState::BindStarted
                 | HostTcpState::Bound
@@ -524,12 +517,6 @@ impl<T: WasiView> tcp::Host for T {
 
         Ok(())
     }
-}
-
-/// Set `*tcp_state` to `new_state` and consume `tcp_state`.
-fn set_state(tcp_state: RwLockWriteGuard<HostTcpState>, new_state: HostTcpState) {
-    let mut tcp_state = tcp_state;
-    *tcp_state = new_state;
 }
 
 // On POSIX, non-blocking TCP socket `connect` uses `EINPROGRESS`.
