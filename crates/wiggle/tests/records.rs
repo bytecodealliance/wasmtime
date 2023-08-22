@@ -551,3 +551,34 @@ proptest! {
         e.test()
     }
 }
+
+#[test]
+fn pair_ints_offsets() {
+    assert_eq!(types::PairInts::offset_of_first(), 0);
+    assert_eq!(types::PairInts::offset_of_second(), 4);
+}
+
+#[test]
+fn pair_different_ints_offsets() {
+    assert_eq!(types::PairDifferentInts::offset_of_first(), 0);
+    assert_eq!(types::PairDifferentInts::offset_of_second(), 8);
+    assert_eq!(types::PairDifferentInts::offset_of_third(), 10);
+    assert_eq!(types::PairDifferentInts::offset_of_fourth(), 12);
+}
+
+#[test]
+fn pair_int_ptrs_offsets() {
+    assert_eq!(types::PairIntPtrs::offset_of_first(), 0);
+    assert_eq!(types::PairIntPtrs::offset_of_second(), 4);
+}
+
+#[test]
+fn pair_int_and_ptr_offsets() {
+    assert_eq!(types::PairIntAndPtr::offset_of_first(), 0);
+    assert_eq!(types::PairIntAndPtr::offset_of_second(), 4);
+}
+
+#[test]
+fn pair_record_of_list_offset() {
+    assert_eq!(types::RecordOfList::offset_of_arr(), 0);
+}
