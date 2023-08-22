@@ -873,6 +873,13 @@ impl<'a> InterfaceGenerator<'a> {
             }
         }
 
+        uwrite!(
+            self.src,
+            "fn drop(store: wasmtime::StoreContextMut<'_, Self>, rep: u32,) -> wasmtime::Result<()>
+            where
+                Self: Sized;"
+        );
+
         uwriteln!(self.src, "}}");
     }
 
@@ -1455,7 +1462,18 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "arg{},", i);
         }
         self.src.push_str(") : (");
-        for param in func.params.iter() {
+
+        let maybe_skip = match func.kind {
+            FunctionKind::Method(_) => {
+                self.src
+                    .push_str("wasmtime::component::Resource<T::Resource>, ");
+
+                1
+            }
+            _ => 0,
+        };
+
+        for param in func.params.iter().skip(maybe_skip) {
             // Lift is required to be impled for this type, so we can't use
             // a borrowed type:
             self.print_ty(&param.1, TypeMode::Owned);
@@ -1589,13 +1607,21 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str("(");
 
         match func.kind {
-            FunctionKind::Freestanding | FunctionKind::Method(_) => self.push_str("&mut self, "),
+            FunctionKind::Freestanding => self.push_str("&mut self, "),
+            FunctionKind::Method(_) => {
+                self.push_str("&mut self, self_: wasmtime::component::Resource<Self::Resource>, ")
+            }
             FunctionKind::Static(_) | FunctionKind::Constructor(_) => {
-                self.push_str("mut store: wasmtime::AsContextMut<'_, Self>, ")
+                self.push_str("store: &mut wasmtime::StoreContextMut<'_, Self>, ")
             }
         }
 
-        for (name, param) in func.params.iter() {
+        let maybe_skip = match func.kind {
+            FunctionKind::Method(_) => 1,
+            _ => 0,
+        };
+
+        for (name, param) in func.params.iter().skip(maybe_skip) {
             let name = to_rust_ident(name);
             self.push_str(&name);
             self.push_str(": ");
@@ -1607,7 +1633,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         match func.kind {
             FunctionKind::Constructor(_) => {
-                self.push_str("wasmtime::component::Resource<Self::Resource>")
+                self.push_str("wasmtime::Result<wasmtime::component::Resource<Self::Resource>>")
             }
             _ => {
                 if let Some((r, error_id, error_typename)) =
@@ -1730,16 +1756,42 @@ impl<'a> InterfaceGenerator<'a> {
         };
 
         self.rustdoc(&func.docs);
+
+        let mut resources = Vec::new();
+        let mut args = String::new();
+
+        for (i, param) in func.params.iter().enumerate() {
+            uwrite!(args, "arg{}: ", i);
+            resources.append(&mut self.print_ty_(
+                &mut args,
+                &param.1,
+                TypeMode::AllBorrowed("'_"),
+                resources.len(),
+                true,
+            ));
+            args.push_str(",");
+        }
+
+        let resource_generics = resources
+            .iter()
+            .map(|(arg_name, _resource_name)| format!("{}: 'static", arg_name))
+            .collect::<Vec<String>>()
+            .join(", ");
+
         uwrite!(
             self.src,
-            "pub {async_} fn call_{}<S: wasmtime::AsContextMut>(&self, mut store: S, ",
+            "pub {async_} fn call_{}<",
             func.name.to_snake_case(),
         );
-        for (i, param) in func.params.iter().enumerate() {
-            uwrite!(self.src, "arg{}: ", i);
-            self.print_ty(&param.1, TypeMode::AllBorrowed("'_"));
-            self.push_str(",");
+
+        if !resources.is_empty() {
+            uwrite!(self.src, "{resource_generics}, ");
         }
+
+        uwrite!(self.src, "S: wasmtime::AsContextMut>(&self, mut store: S, ");
+
+        self.push_str(&args);
+
         self.src.push_str(") -> wasmtime::Result<");
         self.print_result_ty(&func.results, TypeMode::Owned);
 
@@ -1771,10 +1823,12 @@ impl<'a> InterfaceGenerator<'a> {
 
         self.src.push_str("let callee = unsafe {\n");
         self.src.push_str("wasmtime::component::TypedFunc::<(");
+        let mut params = String::new();
         for (_, ty) in func.params.iter() {
-            self.print_ty(ty, TypeMode::AllBorrowed("'_"));
-            self.push_str(", ");
+            self.print_ty_(&mut params, ty, TypeMode::AllBorrowed("'_"), 0, true);
+            params.push_str(", ");
         }
+        self.src.push_str(&params);
         self.src.push_str("), (");
         for ty in func.results.iter_types() {
             self.print_ty(ty, TypeMode::Owned);
