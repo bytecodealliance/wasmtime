@@ -1,4 +1,5 @@
 use crate::{isa::reg::Reg, regset::RegSet};
+use regalloc2::RegClass;
 
 /// The register allocator.
 ///
@@ -23,47 +24,23 @@ impl RegAlloc {
         Self { regset, scratch }
     }
 
-    /// Allocate the next available general purpose register,
-    /// spilling if none available.
-    pub fn any_gpr<F>(&mut self, spill: &mut F) -> Reg
+    /// Allocate the next available register for the given class,
+    /// spilling if not available.
+    pub fn reg_for_class<F>(&mut self, class: RegClass, spill: &mut F) -> Reg
     where
         F: FnMut(&mut RegAlloc),
     {
-        self.regset.any_gpr().unwrap_or_else(|| {
+        self.regset.reg_for_class(class).unwrap_or_else(|| {
             spill(self);
-            self.regset.any_gpr().expect("any gpr to be available")
-        })
-    }
-
-    /// Allocate the next available floating point register, spilling
-    /// if none available.
-    pub fn any_fpr<F>(&mut self, spill: &mut F) -> Reg
-    where
-        F: FnMut(&mut RegAlloc),
-    {
-        self.regset.any_fpr().unwrap_or_else(|| {
-            spill(self);
-            self.regset.any_fpr().expect("any fpr to be available")
+            self.regset.reg_for_class(class).unwrap_or_else(|| {
+                panic!("expected register for class {:?}, to be avilable", class)
+            })
         })
     }
 
     /// Returns true if the specified register is allocatable.
     pub fn reg_available(&self, reg: Reg) -> bool {
-        if reg.is_int() {
-            self.gpr_available(reg)
-        } else {
-            self.fpr_available(reg)
-        }
-    }
-
-    /// Checks if a general purpose register is avaiable.
-    pub fn gpr_available(&self, reg: Reg) -> bool {
-        self.regset.named_gpr_available(reg.hw_enc() as u32)
-    }
-
-    /// Checks if a floating point register is avaiable.
-    pub fn fpr_available(&self, reg: Reg) -> bool {
-        self.regset.named_fpr_available(reg.hw_enc() as u32)
+        self.regset.named_reg_available(reg)
     }
 
     /// Request a specific register, spilling if not available.

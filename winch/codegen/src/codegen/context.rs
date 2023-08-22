@@ -1,3 +1,4 @@
+use regalloc2::RegClass;
 use wasmtime_environ::WasmType;
 
 use super::ControlStackFrame;
@@ -60,24 +61,24 @@ impl<'a> CodeGenContext<'a> {
     pub fn reg_for_type<M: MacroAssembler>(&mut self, ty: WasmType, masm: &mut M) -> Reg {
         use WasmType::*;
         match ty {
-            I32 | I64 => self.any_gpr(masm),
-            F32 | F64 => self.any_fpr(masm),
+            I32 | I64 => self.reg_for_class(RegClass::Int, masm),
+            F32 | F64 => self.reg_for_class(RegClass::Float, masm),
             t => panic!("unsupported type {:?}", t),
         }
     }
 
-    /// Request the next avaiable general purpose register to the register allocator,
-    /// spilling if no registers are available.
-    pub fn any_gpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
-        self.regalloc
-            .any_gpr(&mut |regalloc| Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm))
+    /// Request the register allocator to provide the next available
+    /// register of the specified class.
+    pub fn reg_for_class<M: MacroAssembler>(&mut self, class: RegClass, masm: &mut M) -> Reg {
+        self.regalloc.reg_for_class(class, &mut |regalloc| {
+            Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm)
+        })
     }
 
-    /// Request the next avaiable floating point register to the register allocator,
-    /// spilling if no registers are available.
-    pub fn any_fpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
-        self.regalloc
-            .any_fpr(&mut |regalloc| Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm))
+    /// Convenience wrapper around `CodeGenContext::reg_for_class`, to
+    /// request the next available general purpose register.
+    pub fn any_gpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
+        self.reg_for_class(RegClass::Int, masm)
     }
 
     /// Executes the provided function, guaranteeing that the

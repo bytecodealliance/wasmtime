@@ -11,6 +11,11 @@ use regalloc2::{PReg, RegClass};
 pub struct Reg(PReg);
 
 impl Reg {
+    /// Create a register from its encoding and class.
+    pub fn from(class: RegClass, enc: usize) -> Self {
+        Self::new(PReg::new(enc, class))
+    }
+
     /// Create a new register from a physical register.
     pub const fn new(raw: PReg) -> Self {
         Reg(raw)

@@ -1,4 +1,5 @@
 use crate::isa::reg::Reg;
+use regalloc2::RegClass;
 
 /// A bit set to track regiter availability.
 pub(crate) struct RegSet {
@@ -8,91 +9,84 @@ pub(crate) struct RegSet {
     fpr: u32,
 }
 
+use std::ops::{Index, IndexMut};
+
+impl Index<RegClass> for RegSet {
+    type Output = u32;
+
+    fn index(&self, class: RegClass) -> &Self::Output {
+        match class {
+            RegClass::Int => &self.gpr,
+            RegClass::Float => &self.fpr,
+            c => unreachable!("Unexpected register class {:?}", c),
+        }
+    }
+}
+
+impl IndexMut<RegClass> for RegSet {
+    fn index_mut(&mut self, class: RegClass) -> &mut Self::Output {
+        match class {
+            RegClass::Int => &mut self.gpr,
+            RegClass::Float => &mut self.fpr,
+            c => unreachable!("Unexpected register class {:?}", c),
+        }
+    }
+}
+
 impl RegSet {
     /// Create a new register set.
     pub fn new(gpr: u32, fpr: u32) -> Self {
         Self { gpr, fpr }
     }
 
-    /// Request a general purpose register.
-    pub fn any_gpr(&mut self) -> Option<Reg> {
-        self.gpr_available().then(|| {
-            let index = self.gpr.trailing_zeros();
-            self.allocate_gpr(index);
-            Reg::int(index as usize)
-        })
-    }
-
-    /// Request a floating point register.
-    pub fn any_fpr(&mut self) -> Option<Reg> {
-        self.fpr_available().then(|| {
-            let index = self.fpr.trailing_zeros();
-            self.allocate_fpr(index);
-            Reg::float(index as usize)
+    /// Allocate the next available register of the given class,
+    /// returning `None` if there are no more registers available.
+    pub fn reg_for_class(&mut self, class: RegClass) -> Option<Reg> {
+        self.available(class).then(|| {
+            let bitset = self[class];
+            let index = bitset.trailing_zeros();
+            self.allocate(class, index);
+            Reg::from(class, index as usize)
         })
     }
 
     /// Request a specific register.
     pub fn reg(&mut self, reg: Reg) -> Option<Reg> {
         let index = reg.hw_enc();
-        if reg.is_int() {
-            self.named_gpr_available(index as u32).then(|| {
-                self.allocate_gpr(index as u32);
-                Reg::int(index as usize)
-            })
-        } else {
-            self.named_fpr_available(index as u32).then(|| {
-                self.allocate_fpr(index as u32);
-                Reg::float(index as usize)
-            })
-        }
+        self.named_reg_available(reg).then(|| {
+            self.allocate(reg.class(), index.into());
+            reg
+        })
     }
 
     /// Marks the specified register as available, utilizing the
     /// register class to determine the bitset that requires updating.
     pub fn free(&mut self, reg: Reg) {
         let index = reg.hw_enc() as u32;
-        if reg.is_int() {
-            self.gpr |= 1 << index;
-        } else {
-            self.fpr |= 1 << index;
-        }
+        self[reg.class()] |= 1 << index;
     }
 
-    /// Returns true if the given general purpose register
-    /// is available.
-    pub fn named_gpr_available(&self, index: u32) -> bool {
-        let index = 1 << index;
-        (!self.gpr & index) == 0
+    /// Returns true if the specified register is allocatable.
+    pub fn named_reg_available(&self, reg: Reg) -> bool {
+        let bitset = self[reg.class()];
+        let index = 1 << reg.hw_enc();
+        (!bitset & index) == 0
     }
 
-    /// Returns true if the given floating point register is
-    /// available.
-    pub fn named_fpr_available(&self, index: u32) -> bool {
-        let index = 1 << index;
-        (!self.fpr & index) == 0
+    fn available(&self, class: RegClass) -> bool {
+        let bitset = self[class];
+        bitset != 0
     }
 
-    fn gpr_available(&self) -> bool {
-        self.gpr != 0
-    }
-
-    fn fpr_available(&self) -> bool {
-        self.fpr != 0
-    }
-
-    fn allocate_gpr(&mut self, index: u32) {
-        self.gpr &= !(1 << index);
-    }
-
-    fn allocate_fpr(&mut self, index: u32) {
-        self.fpr &= !(1 << index);
+    fn allocate(&mut self, class: RegClass, index: u32) {
+        self[class] &= !(1 << index);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{Reg, RegSet};
+    use regalloc2::RegClass;
 
     const UNIVERSE: u32 = (1 << 16) - 1;
 
@@ -100,12 +94,12 @@ mod tests {
     fn test_any_gpr() {
         let mut set = RegSet::new(UNIVERSE, 0);
         for _ in 0..16 {
-            let gpr = set.any_gpr();
+            let gpr = set.reg_for_class(RegClass::Int);
             assert!(gpr.is_some())
         }
 
-        assert!(!set.gpr_available());
-        assert!(set.any_gpr().is_none())
+        assert!(!set.available(RegClass::Int));
+        assert!(set.reg_for_class(RegClass::Int).is_none())
     }
 
     #[test]
@@ -119,7 +113,7 @@ mod tests {
     #[test]
     fn test_free_reg() {
         let mut set = RegSet::new(UNIVERSE, 0);
-        let gpr = set.any_gpr().unwrap();
+        let gpr = set.reg_for_class(RegClass::Int).unwrap();
         set.free(gpr);
         assert!(set.reg(gpr).is_some());
     }
