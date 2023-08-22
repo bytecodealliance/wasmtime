@@ -170,11 +170,11 @@ pub struct RunCommand {
     ///
     /// Each use of the flag will preload a ML model from the host directory
     /// using the given model encoding. The model will be mapped to the
-    /// directory name: e.g., `--graph openvino:/foo/bar` will preload an
-    /// OpenVINO model named `bar`. Note that which model encodings are
+    /// directory name: e.g., `--wasi-nn-graph openvino:/foo/bar` will preload
+    /// an OpenVINO model named `bar`. Note that which model encodings are
     /// available is dependent on the backends implemented in the
     /// `wasmtime_wasi_nn` crate.
-    #[clap(long = "graph", value_name = "FORMAT::HOST_DIR", value_parser = parse_graphs)]
+    #[clap(long = "wasi-nn-graph", value_name = "FORMAT::HOST_DIR", value_parser = parse_graphs)]
     graphs: Vec<(String, String)>,
 
     /// Load the given WebAssembly module before the main module

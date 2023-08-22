@@ -42,13 +42,13 @@ popd
 cargo run -- run --mapdir fixture::$TMP_DIR \
     --wasi-modules=experimental-wasi-nn $TMP_DIR/wasi-nn-example.wasm
 
-# Build and run another example, this time using Wasmtime's --graph flag to
+# Build and run another example, this time using Wasmtime's graph flag to
 # preload the model.
 pushd $WASMTIME_DIR/crates/wasi-nn/examples/classification-example-named
 cargo build --release --target=wasm32-wasi
 cp target/wasm32-wasi/release/wasi-nn-example-named.wasm $TMP_DIR
 popd
-cargo run -- run --mapdir fixture::$TMP_DIR --graph openvino::$TMP_DIR \
+cargo run -- run --mapdir fixture::$TMP_DIR --wasi-nn-graph openvino::$TMP_DIR \
     --wasi-modules=experimental-wasi-nn $TMP_DIR/wasi-nn-example-named.wasm
 
 # Clean up the temporary directory only if it was not specified (users may want
