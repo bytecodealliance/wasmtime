@@ -566,12 +566,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// them for emission later on.
     pub fn register_constants(&mut self, constants: &VCodeConstants) {
         for (c, val) in constants.iter() {
-            let c2 = self.constants.push(MachBufferConstant {
-                upcoming_label: None,
-                align: val.alignment(),
-                size: val.as_slice().len(),
-            });
-            assert_eq!(c, c2);
+	    self.register_constant(&c, val);
         }
     }
 
