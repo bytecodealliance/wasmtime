@@ -31,4 +31,4 @@ wasmtime = { workspace = true, features = ['component-model'] }
 [target.'cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))'.dependencies]
 tokio-rustls = { version = "0.24.0" }
 rustls = { version = "0.21.0" }
-webpki-roots = { version = "0.23.0" }
+webpki-roots = { version = "0.25.2" }
