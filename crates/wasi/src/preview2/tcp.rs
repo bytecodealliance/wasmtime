@@ -48,6 +48,9 @@ pub(crate) struct HostTcpSocket {
     /// The part of a `HostTcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
     pub(crate) inner: Arc<HostTcpSocketInner>,
+
+    /// The current state in the bind/listen/accept/connect progression.
+    pub(crate) tcp_state: RwLock<HostTcpState>,
 }
 
 /// The inner reference-counted state of a `HostTcpSocket`.
@@ -59,9 +62,6 @@ pub(crate) struct HostTcpSocketInner {
     /// On non-Unix, we can use plain `poll`.
     #[cfg(not(unix))]
     pub(crate) tcp_socket: cap_std::net::TcpListener,
-
-    /// The current state in the bind/listen/accept/connect progression.
-    pub(crate) tcp_state: RwLock<HostTcpState>,
 }
 
 impl HostTcpSocket {
@@ -76,10 +76,8 @@ impl HostTcpSocket {
         let tcp_socket = tokio::io::unix::AsyncFd::new(tcp_socket)?;
 
         Ok(Self {
-            inner: Arc::new(HostTcpSocketInner {
-                tcp_socket,
-                tcp_state: RwLock::new(HostTcpState::Default),
-            }),
+            inner: Arc::new(HostTcpSocketInner { tcp_socket }),
+            tcp_state: RwLock::new(HostTcpState::Default),
         })
     }
 
@@ -95,10 +93,8 @@ impl HostTcpSocket {
         let tcp_socket = tokio::io::unix::AsyncFd::new(tcp_socket)?;
 
         Ok(Self {
-            inner: Arc::new(HostTcpSocketInner {
-                tcp_socket,
-                tcp_state: RwLock::new(HostTcpState::Default),
-            }),
+            inner: Arc::new(HostTcpSocketInner { tcp_socket }),
+            tcp_state: RwLock::new(HostTcpState::Default),
         })
     }
 
@@ -112,12 +108,12 @@ impl HostTcpSocket {
 
     /// Acquire a reader lock for `self.tcp_state`.
     pub fn tcp_state_read_lock(&self) -> RwLockReadGuard<HostTcpState> {
-        self.inner.tcp_state.read().unwrap()
+        self.tcp_state.read().unwrap()
     }
 
     /// Acquire a writer lock for `self.tcp_state`.
     pub fn tcp_state_write_lock(&self) -> RwLockWriteGuard<HostTcpState> {
-        self.inner.tcp_state.write().unwrap()
+        self.tcp_state.write().unwrap()
     }
 }
 
@@ -130,10 +126,6 @@ impl HostTcpSocketInner {
         let tcp_socket = tcp_socket.get_ref();
 
         tcp_socket
-    }
-
-    pub fn set_state(&self, new_state: HostTcpState) {
-        *self.tcp_state.write().unwrap() = new_state;
     }
 
     /// Spawn a task on tokio's blocking thread for performing blocking
