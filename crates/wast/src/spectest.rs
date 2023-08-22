@@ -97,9 +97,11 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         move |_, rep| {
             state.drops.fetch_add(1, SeqCst);
             state.last_drop.store(rep, SeqCst);
+
+            Ok(())
         }
     })?;
-    i.resource::<Resource2>("resource2", |_, _| {})?;
+    i.resource::<Resource2>("resource2", |_, _| Ok(()))?;
     // Currently the embedder API requires redefining the resource destructor
     // here despite this being the same type as before, and fixing that is left
     // for a future refactoring.
