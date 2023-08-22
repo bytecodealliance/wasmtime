@@ -420,12 +420,13 @@ impl<T: WasiView> tcp::Host for T {
                 _ => {}
             }
 
+            // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
             #[cfg(unix)]
             let join = Box::pin(async move {
                 socket
                     .inner
                     .tcp_socket
-                    .ready(Interest::READABLE | Interest::WRITABLE | Interest::ERROR)
+                    .ready(Interest::READABLE | Interest::WRITABLE)
                     .await
                     .unwrap()
                     .retain_ready();

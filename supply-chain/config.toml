@@ -549,7 +549,7 @@ version = "1.8.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.socket2]]
-version = "0.5.3"
+version = "0.4.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.souper-ir]]
@@ -589,7 +589,7 @@ version = "1.2.1"
 criteria = "safe-to-run"
 
 [[exemptions.tokio]]
-version = "1.32.0"
+version = "1.29.1"
 criteria = "safe-to-deploy"
 notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
 
