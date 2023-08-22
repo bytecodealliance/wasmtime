@@ -12,7 +12,9 @@ bitflags::bitflags! {
 
 pub(crate) struct File {
     /// Wrapped in an Arc because the same underlying file is used for
-    /// implementing the stream types. Also needed for [`block`].
+    /// implementing the stream types. Also needed for [`spawn_blocking`].
+    ///
+    /// [`spawn_blocking`]: Self::spawn_blocking
     pub file: Arc<cap_std::fs::File>,
     pub perms: FilePerms,
 }

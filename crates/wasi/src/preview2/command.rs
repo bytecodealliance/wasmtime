@@ -6,10 +6,12 @@ wasmtime::component::bindgen!({
     async: true,
     trappable_error_type: {
         "wasi:filesystem/types"::"error-code": Error,
+        "wasi:sockets/tcp"::"error-code": Error,
     },
     with: {
        "wasi:filesystem/types": crate::preview2::bindings::filesystem::types,
        "wasi:filesystem/preopens": crate::preview2::bindings::filesystem::preopens,
+       "wasi:sockets/tcp": crate::preview2::bindings::sockets::tcp,
        "wasi:clocks/monotonic_clock": crate::preview2::bindings::clocks::monotonic_clock,
        "wasi:poll/poll": crate::preview2::bindings::poll::poll,
        "wasi:io/streams": crate::preview2::bindings::io::streams,
@@ -35,6 +37,7 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::filesystem::types::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::filesystem::preopens::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::sockets::tcp::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::poll::poll::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::io::streams::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::random::random::add_to_linker(l, |t| t)?;
@@ -60,10 +63,12 @@ pub mod sync {
         async: false,
         trappable_error_type: {
             "wasi:filesystem/types"::"error-code": Error,
+            "wasi:sockets/tcp"::"error-code": Error,
         },
         with: {
            "wasi:filesystem/types": crate::preview2::bindings::sync_io::filesystem::types,
            "wasi:filesystem/preopens": crate::preview2::bindings::filesystem::preopens,
+           "wasi:sockets/tcp": crate::preview2::bindings::sockets::tcp,
            "wasi:clocks/monotonic_clock": crate::preview2::bindings::clocks::monotonic_clock,
            "wasi:poll/poll": crate::preview2::bindings::sync_io::poll::poll,
            "wasi:io/streams": crate::preview2::bindings::sync_io::io::streams,
@@ -104,6 +109,7 @@ pub mod sync {
         crate::preview2::bindings::cli::terminal_stdin::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::cli::terminal_stdout::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::cli::terminal_stderr::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::sockets::tcp::add_to_linker(l, |t| t)?;
         Ok(())
     }
 }

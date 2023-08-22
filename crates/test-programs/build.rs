@@ -30,6 +30,7 @@ fn build_and_generate_tests() {
     println!("cargo:rerun-if-changed=./wasi-tests");
     println!("cargo:rerun-if-changed=./command-tests");
     println!("cargo:rerun-if-changed=./reactor-tests");
+    println!("cargo:rerun-if-changed=./wasi-sockets-tests");
     if BUILD_WASI_HTTP_TESTS {
         println!("cargo:rerun-if-changed=./wasi-http-tests");
     } else {
@@ -43,6 +44,7 @@ fn build_and_generate_tests() {
         .arg("--package=wasi-tests")
         .arg("--package=command-tests")
         .arg("--package=reactor-tests")
+        .arg("--package=wasi-sockets-tests")
         .env("CARGO_TARGET_DIR", &out_dir)
         .env("CARGO_PROFILE_DEV_DEBUG", "1")
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
@@ -64,6 +66,14 @@ fn build_and_generate_tests() {
 
     components_rs(&meta, "command-tests", "bin", &command_adapter, &out_dir);
     components_rs(&meta, "reactor-tests", "cdylib", &reactor_adapter, &out_dir);
+
+    components_rs(
+        &meta,
+        "wasi-sockets-tests",
+        "bin",
+        &command_adapter,
+        &out_dir,
+    );
 }
 
 // Creates an `${out_dir}/${package}_modules.rs` file that exposes a `get_module(&str) -> Module`,
