@@ -566,7 +566,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// them for emission later on.
     pub fn register_constants(&mut self, constants: &VCodeConstants) {
         for (c, val) in constants.iter() {
-	    self.register_constant(&c, val);
+            self.register_constant(&c, val);
         }
     }
 

@@ -196,10 +196,10 @@ impl Assembler {
                 SyntheticAmode::real(Amode::imm_reg(*offset as i32, (*base).into()))
             }
             Address::Const(c) => {
-		// Defer the creation of the
-		// `SyntheticAmode::ConstantOffset` addressing mode
-		// until the address is referenced by an actual
-		// instrunction.
+                // Defer the creation of the
+                // `SyntheticAmode::ConstantOffset` addressing mode
+                // until the address is referenced by an actual
+                // instrunction.
                 let constant_data = pool.get(*c);
                 let data = VCodeConstantData::Pool(*c, constant_data.clone());
                 let constant = constants.insert(VCodeConstantData::Pool(*c, constant_data.clone()));
