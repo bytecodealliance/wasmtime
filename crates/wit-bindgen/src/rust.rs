@@ -185,8 +185,13 @@ pub trait RustGenerator<'a> {
                 self.push_str(">");
             }
 
-            TypeDefKind::Handle(_) => todo!("#6722"),
-            TypeDefKind::Resource => todo!("#6722"),
+            TypeDefKind::Handle(Handle::Borrow(ty)) | TypeDefKind::Handle(Handle::Own(ty)) => {
+                //TODO: This needs to handle ResourceAny for guest exports as well.
+                self.push_str("wasmtime::component::Resource<");
+                self.print_tyid(*ty, mode);
+                self.push_str(">");
+            }
+            TypeDefKind::Resource => panic!("unsupported anonymous type reference: resource"),
 
             TypeDefKind::Type(t) => self.print_ty(t, mode),
             TypeDefKind::Unknown => unreachable!(),
@@ -297,8 +302,15 @@ pub trait RustGenerator<'a> {
                         TypeDefKind::Variant(_) => out.push_str("Variant"),
                         TypeDefKind::Enum(_) => out.push_str("Enum"),
                         TypeDefKind::Union(_) => out.push_str("Union"),
-                        TypeDefKind::Handle(_) => todo!("#6722"),
-                        TypeDefKind::Resource => todo!("#6722"),
+                        TypeDefKind::Handle(Handle::Own(ty)) => {
+                            self.write_name(&Type::Id(*ty), out);
+                            out.push_str("Own");
+                        }
+                        TypeDefKind::Handle(Handle::Borrow(ty)) => {
+                            self.write_name(&Type::Id(*ty), out);
+                            out.push_str("Borrow");
+                        }
+                        TypeDefKind::Resource => out.push_str("Resource"),
                         TypeDefKind::Unknown => unreachable!(),
                     },
                 }
