@@ -541,7 +541,6 @@ impl ResourceLimiterAsync for MemoryContext {
     ) -> Result<bool> {
         Ok(true)
     }
-    fn table_grow_failed(&mut self, _e: &anyhow::Error) {}
 }
 
 #[tokio::test]
@@ -724,16 +723,18 @@ impl ResourceLimiter for FailureDetector {
         self.memory_desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: &anyhow::Error) {
+    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
         self.memory_error = Some(err.to_string());
+        Ok(())
     }
     fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> Result<bool> {
         self.table_current = current;
         self.table_desired = desired;
         Ok(true)
     }
-    fn table_grow_failed(&mut self, err: &anyhow::Error) {
+    fn table_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
         self.table_error = Some(err.to_string());
+        Ok(())
     }
 }
 
@@ -826,8 +827,9 @@ impl ResourceLimiterAsync for FailureDetector {
         self.memory_desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: &anyhow::Error) {
+    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
         self.memory_error = Some(err.to_string());
+        Ok(())
     }
 
     async fn table_growing(
@@ -840,8 +842,9 @@ impl ResourceLimiterAsync for FailureDetector {
         self.table_desired = desired;
         Ok(true)
     }
-    fn table_grow_failed(&mut self, err: &anyhow::Error) {
+    fn table_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
         self.table_error = Some(err.to_string());
+        Ok(())
     }
 }
 
