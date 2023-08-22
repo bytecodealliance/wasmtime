@@ -316,7 +316,7 @@ impl Drop for AsyncWriteStream {
 #[async_trait::async_trait]
 impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, anyhow::Error> {
-        use tokio::sync::mpsc::error::TryRecvError;
+        use mpsc::error::TryRecvError;
 
         match self.state {
             Some(WriteState::Ready) => {

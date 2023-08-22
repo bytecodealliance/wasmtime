@@ -398,15 +398,16 @@ impl<T: WasiView> streams::Host for T {
             InternalOutputStream::File(_) => Ok(Some(streams::FlushResult::Done)),
         }
     }
-    async fn blocking_check_flush(
+    async fn blocking_flush(
         &mut self,
         stream: OutputStream,
     ) -> anyhow::Result<streams::FlushResult> {
         match self.table_mut().get_internal_output_stream_mut(stream)? {
             InternalOutputStream::Host(s) => {
+                let _ = HostOutputStream::flush(s.as_mut())?;
                 Ok(HostOutputStream::flush_ready(s.as_mut()).await?.into())
             }
-            _ => todo!("blocking_check_flush unimplemented for files"),
+            _ => todo!("blocking_flush unimplemented for files"),
         }
     }
 
@@ -626,12 +627,8 @@ pub mod sync {
             in_tokio(async { AsyncHost::check_flush(self, stream).await })
                 .map(|res| res.map(|opt| opt.into()))
         }
-        fn blocking_check_flush(
-            &mut self,
-            stream: OutputStream,
-        ) -> anyhow::Result<streams::FlushResult> {
-            in_tokio(async { AsyncHost::blocking_check_flush(self, stream).await })
-                .map(|res| res.into())
+        fn blocking_flush(&mut self, stream: OutputStream) -> anyhow::Result<streams::FlushResult> {
+            in_tokio(async { AsyncHost::blocking_flush(self, stream).await }).map(|res| res.into())
         }
 
         fn subscribe_to_flush(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {

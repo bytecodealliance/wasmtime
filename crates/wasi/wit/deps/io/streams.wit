@@ -194,7 +194,6 @@ interface streams {
         len: u64
     ) -> option<write-readiness>
 
-
     enum flush-result {
         done,
         closed
@@ -225,9 +224,9 @@ interface streams {
         this: output-stream,
     ) -> option<flush-result>
 
-    /// like check-flush, except it blocks until the flush has finished or the
-    /// stream has closed.
-    blocking-check-flush: func(this: output-stream) -> flush-result
+    /// a flush, followed by blocking until the flush has finished, and
+    /// returning the result of a final check-flush.
+    blocking-flush: func(this: output-stream) -> flush-result
 
     /// get a pollable which becomes ready when the flush has finished
     /// (check-flush return value becomes some)
