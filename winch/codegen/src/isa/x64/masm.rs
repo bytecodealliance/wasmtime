@@ -54,7 +54,7 @@ impl Masm for MacroAssembler {
             let bytes = size.bytes();
             self.reserve_stack(bytes);
             self.asm
-                .xmm_mov_rm(reg, &self.address_at_sp(self.sp_offset), size);
+                .xmm_mov_rm(reg, &self.address_from_sp(self.sp_offset), size);
             bytes
         };
 
