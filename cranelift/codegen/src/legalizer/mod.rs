@@ -16,7 +16,7 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::immediates::Imm64;
-use crate::ir::types::{I128, I64};
+use crate::ir::types::{self, I128, I64};
 use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
 use crate::isa::TargetIsa;
 use crate::trace;
@@ -38,7 +38,17 @@ fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> V
             let imm = pos.ins().iconst(I64, imm);
             pos.ins().uextend(I128, imm)
         }
-        _ => pos.ins().iconst(ty.lane_type(), imm),
+        _ => {
+            let bits = imm.bits();
+            let unsigned = match ty.lane_type() {
+                types::I8 => bits as u8 as i64,
+                types::I16 => bits as u16 as i64,
+                types::I32 => bits as u32 as i64,
+                types::I64 => bits,
+                _ => unreachable!(),
+            };
+            pos.ins().iconst(ty.lane_type(), unsigned)
+        }
     }
 }
 
