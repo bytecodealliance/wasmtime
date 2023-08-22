@@ -1590,12 +1590,9 @@ impl<'a> InterfaceGenerator<'a> {
 
         match func.kind {
             FunctionKind::Freestanding | FunctionKind::Method(_) => self.push_str("&mut self, "),
-            _ => {}
-        }
-
-        match func.kind {
-            FunctionKind::Freestanding => {}
-            _ => self.push_str("mut store: wasmtime::AsContextMut<'_, Self>, "),
+            FunctionKind::Static(_) | FunctionKind::Constructor(_) => {
+                self.push_str("mut store: wasmtime::AsContextMut<'_, Self>, ")
+            }
         }
 
         for (name, param) in func.params.iter() {
@@ -1609,7 +1606,9 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(" -> ");
 
         match func.kind {
-            FunctionKind::Constructor(_) => self.push_str("wasmtime::Resource<Self::Resource>"),
+            FunctionKind::Constructor(_) => {
+                self.push_str("wasmtime::component::Resource<Self::Resource>")
+            }
             _ => {
                 if let Some((r, error_id, error_typename)) =
                     self.special_case_trappable_error(&func.results)
