@@ -188,14 +188,11 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
-        let mut tcp_state = socket.tcp_state_write_lock();
-        match &mut *tcp_state {
+        match *socket.tcp_state_read_lock() {
             HostTcpState::Listening => {}
             HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
-
-        set_state(tcp_state, HostTcpState::Listening);
 
         // Do the OS accept call.
         let (connection, _addr) = socket.tcp_socket().accept_with(Blocking::No)?;
