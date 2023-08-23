@@ -178,3 +178,56 @@ fn read(path: &Path) -> anyhow::Result<Vec<u8>> {
     file.read_to_end(&mut buffer)?;
     Ok(buffer)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use std::{mem, slice};
+
+    #[test]
+    fn image_classification_directly_on_backend() -> Result<()> {
+        crate::test_check!();
+
+        // Compute a MobileNet classification using the test artifacts.
+        let mut backend = OpenvinoBackend::default();
+        let graph = backend.load_from_dir(
+            crate::test_check::artifacts_dir().as_path(),
+            ExecutionTarget::Cpu,
+        )?;
+        let mut context = graph.init_execution_context()?;
+        let data = read(
+            crate::test_check::artifacts_dir()
+                .join("tensor.bgr")
+                .as_path(),
+        )?;
+        let tensor = Tensor {
+            dimensions: vec![1, 3, 224, 224],
+            tensor_type: TensorType::Fp32,
+            data,
+        };
+        context.set_input(0, &tensor)?;
+        context.compute()?;
+        let mut destination = vec![0f32; 1001];
+        let destination_ = unsafe {
+            slice::from_raw_parts_mut(
+                destination.as_mut_ptr().cast(),
+                destination.len() * mem::size_of::<f32>(),
+            )
+        };
+        context.get_output(0, destination_)?;
+
+        // Find the top score which should be the entry for "pizza" (see
+        // https://github.com/leferrad/tensorflow-mobilenet/blob/master/imagenet/labels.txt,
+        // e.g.)
+        let (id, score) = destination
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .unwrap();
+        println!("> top match: label #{} = {}", id, score);
+        assert_eq!(id, 964);
+
+        Ok(())
+    }
+}
