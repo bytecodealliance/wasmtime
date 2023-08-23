@@ -242,10 +242,8 @@ pub trait RustGenerator<'a> {
             Handle::Own(t) | Handle::Borrow(t) => *t,
         };
         let ty = &self.resolve().types[resource];
-        let mut ty_def = ty;
-        while let TypeDefKind::Type(Type::Id(id)) = ty_def.kind {
-            ty_def = &self.resolve().types[id];
-        }
+        let def_id = super::resolve_type_definition_id(self.resolve(), resource);
+        let ty_def = &self.resolve().types[def_id];
         let is_host_defined = match ty_def.owner {
             TypeOwner::Interface(i) => self.is_imported_interface(i),
             _ => true,

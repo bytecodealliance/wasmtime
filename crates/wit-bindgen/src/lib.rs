@@ -1283,26 +1283,14 @@ impl<'a> InterfaceGenerator<'a> {
         let info = self.info(id);
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
-
-            let is_resource = match ty {
-                Type::Id(id) => match self.resolve().types[*id].kind {
-                    TypeDefKind::Resource => true,
-                    _ => false,
-                },
-                _ => false,
-            };
-
-            if is_resource {
-                self.push_str(&format!("use "));
-                self.print_ty(ty, mode);
-                self.push_str(&format!(" as {name};\n"));
-            } else {
-                self.push_str(&format!("pub type {}", name));
-                let lt = self.lifetime_for(&info, mode);
-                self.print_generics(lt);
-                self.push_str(" = ");
-                self.print_ty(ty, mode);
-                self.push_str(";\n");
+            self.push_str(&format!("pub type {}", name));
+            let lt = self.lifetime_for(&info, mode);
+            self.print_generics(lt);
+            self.push_str(" = ");
+            self.print_ty(ty, mode);
+            self.push_str(";\n");
+            let def_id = resolve_type_definition_id(self.resolve, id);
+            if !matches!(self.resolve().types[def_id].kind, TypeDefKind::Resource) {
                 self.assert_type(id, &name);
             }
         }
