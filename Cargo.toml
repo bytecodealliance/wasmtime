@@ -167,7 +167,7 @@ wasmtime-runtime = { path = "crates/runtime", version = "=17.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=17.0.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "17.0.0", default-features = false }
 wasmtime-wasi-http = { path = "crates/wasi-http", version = "=17.0.0", default-features = false }
-wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "17.0.0" }
+wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "17.0.0", default-features = false }
 wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "17.0.0" }
 wasmtime-component-util = { path = "crates/component-util", version = "=17.0.0" }
 wasmtime-component-macro = { path = "crates/component-macro", version = "=17.0.0" }

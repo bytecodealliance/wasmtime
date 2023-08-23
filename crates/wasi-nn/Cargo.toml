@@ -20,12 +20,30 @@ anyhow = { workspace = true }
 wiggle = { workspace = true }
 
 # This dependency is necessary for the WIT-generation macros to work:
-wasmtime = { workspace = true, features = ["component-model"] }
+wasmtime = { workspace = true, features = ["component-model", "cranelift"] }
 
 # These dependencies are necessary for the wasi-nn implementation:
 tracing = { workspace = true }
 openvino = { version = "0.5.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 
+# These dependencies are only for the `test-check` feature. They would be better
+# as `dev-dependencies` but then would not be available to integration tests:
+reqwest = { version = "0.11", features = ["blocking"], optional = true }
+
 [build-dependencies]
 walkdir = { workspace = true }
+
+[dev-dependencies]
+wasmtime-wasi = { workspace = true }
+
+[features]
+# When turned on, checks that the system has all the necessary ML frameworks and
+# artifacts to run this crate's tests. If these are not available, the tests
+# will be skipped; set `FORCE_WASINN_TEST_CHECK=1` or `CI=true` to fail if the
+# checks fail.
+test-check = ["dep:reqwest"]
+# We'll enable the `test-check` feature by default so `cargo test` will "just
+# work"; this means we need to carefully turn off `default-features` at the use
+# sites to avoid unwanted dependencies.
+default = ["test-check"]
