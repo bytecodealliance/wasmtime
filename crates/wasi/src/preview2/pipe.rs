@@ -535,6 +535,22 @@ mod test {
     #[cfg(not(target_arch = "riscv64"))]
     const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(10);
 
+    async fn resolves_immediately<F, O>(fut: F) -> O
+    where
+        F: futures::Future<Output = O>,
+    {
+        tokio::time::timeout(REASONABLE_DURATION, fut)
+            .await
+            .expect("operation timed out")
+    }
+
+    async fn never_resolves<F: futures::Future>(fut: F) {
+        tokio::time::timeout(REASONABLE_DURATION, fut)
+            .await
+            .err()
+            .expect("operation should time out");
+    }
+
     pub fn simplex(size: usize) -> (impl AsyncRead, impl AsyncWrite) {
         let (a, b) = tokio::io::duplex(size);
         let (_read_half, write_half) = tokio::io::split(a);
@@ -556,9 +572,8 @@ mod test {
 
             // The reader task hasn't run yet. Call `ready` to await and fill the buffer.
             StreamState::Open => {
-                tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+                resolves_immediately(reader.ready())
                     .await
-                    .expect("the reader should be ready instantly")
                     .expect("ready is ok");
                 let (bs, state) = reader.read(0).unwrap();
                 assert!(bs.is_empty());
@@ -575,9 +590,8 @@ mod test {
         assert_eq!(state, StreamState::Open);
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+            resolves_immediately(reader.ready())
                 .await
-                .expect("the reader should be ready instantly")
                 .expect("ready is ok");
             // Now a read should succeed
             let (bs, state) = reader.read(10).unwrap();
@@ -612,9 +626,8 @@ mod test {
         assert_eq!(state, StreamState::Open);
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+            resolves_immediately(reader.ready())
                 .await
-                .expect("the reader should be ready instantly")
                 .expect("ready is ok");
             // Now a read should succeed
             let (bs, state) = reader.read(123).unwrap();
@@ -632,9 +645,8 @@ mod test {
             StreamState::Closed => {} // Correct!
             StreamState::Open => {
                 // Need to await to give this side time to catch up
-                tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+                resolves_immediately(reader.ready())
                     .await
-                    .expect("the reader should be ready instantly")
                     .expect("ready is ok");
                 // Now a read should show closed
                 let (bs, state) = reader.read(0).unwrap();
@@ -657,9 +669,8 @@ mod test {
         assert_eq!(state, StreamState::Open);
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+            resolves_immediately(reader.ready())
                 .await
-                .expect("the reader should be ready instantly")
                 .expect("ready is ok");
             // Now a read should succeed
             let (bs, state) = reader.read(1).unwrap();
@@ -675,10 +686,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // We can wait on readiness and it will time out:
-        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
-            .await
-            .err()
-            .expect("the reader should time out");
+        never_resolves(reader.ready()).await;
 
         // Still open and empty:
         let (bs, state) = reader.read(1).unwrap();
@@ -690,9 +698,8 @@ mod test {
 
         // Wait readiness (yes we could possibly win the race and read it out faster, leaving that
         // out of the test for simplicity)
-        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+        resolves_immediately(reader.ready())
             .await
-            .expect("the reader should be ready instantly")
             .expect("the ready is ok");
 
         // read the something else back out:
@@ -706,10 +713,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // We can wait on readiness and it will time out:
-        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
-            .await
-            .err()
-            .expect("the reader should time out");
+        never_resolves(reader.ready()).await;
 
         // nothing else in there:
         let (bs, state) = reader.read(1).unwrap();
@@ -721,9 +725,8 @@ mod test {
 
         // Wait readiness (yes we could possibly win the race and read it out faster, leaving that
         // out of the test for simplicity)
-        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+        resolves_immediately(reader.ready())
             .await
-            .expect("the reader should be ready instantly")
             .expect("the ready is ok");
 
         // empty and now closed:
@@ -746,9 +749,8 @@ mod test {
             w
         });
 
-        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+        resolves_immediately(reader.ready())
             .await
-            .expect("the reader should be ready instantly")
             .expect("ready is ok");
 
         // Now we expect the reader task has sent 4k from the stream to the reader.
@@ -758,9 +760,8 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // Allow the crank to turn more:
-        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+        resolves_immediately(reader.ready())
             .await
-            .expect("the reader should be ready instantly")
             .expect("ready is ok");
 
         // Again we expect the reader task has sent 4k from the stream to the reader.
@@ -770,16 +771,14 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // The writer task is now finished - join with it:
-        let w = tokio::time::timeout(REASONABLE_DURATION, writer_task)
-            .await
-            .expect("the join should be ready instantly");
+        let w = resolves_immediately(writer_task).await;
+
         // And close the pipe:
         drop(w);
 
         // Allow the crank to turn more:
-        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
+        resolves_immediately(reader.ready())
             .await
-            .expect("the reader should be ready instantly")
             .expect("ready is ok");
 
         // Now we expect the reader to be empty, and the stream closed:
@@ -806,9 +805,8 @@ mod test {
             _ => panic!("readiness should not be {readiness:?}"),
         }
 
-        let permit = tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+        let permit = resolves_immediately(writer.write_ready())
             .await
-            .expect("the writer should be ready instantly")
             .expect("write_ready does not trap");
         match permit {
             WriteReadiness::Ready(budget) => assert!(budget == 1024 || budget == 2048),
@@ -849,9 +847,8 @@ mod test {
         // The rest of this test should be valid whether or not we check write readiness:
         if n % 2 == 0 {
             // Check write readiness:
-            let permit = tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+            let permit = resolves_immediately(writer.write_ready())
                 .await
-                .expect("the writer should be ready instantly")
                 .expect("write ready does not trap");
 
             match permit {
@@ -876,9 +873,8 @@ mod test {
 
         // Waiting for the flush to complete should always indicate that the channel has been
         // closed.
-        let flush_result = tokio::time::timeout(REASONABLE_DURATION, writer.flush_ready())
+        let flush_result = resolves_immediately(writer.flush_ready())
             .await
-            .expect("flush_ready returns immediately")
             .expect("flush_ready does not trap");
         match flush_result {
             FlushResult::Closed => {
@@ -911,9 +907,8 @@ mod test {
         }
 
         // After the write, still ready for more writing:
-        let readiness = tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+        let readiness = resolves_immediately(writer.write_ready())
             .await
-            .expect("the writer should be ready instantly")
             .expect("write_ready does not trap");
         match readiness {
             WriteReadiness::Ready(budget) => assert!(
@@ -940,9 +935,8 @@ mod test {
             _ => panic!("bad state for readiness: {readiness:?}"),
         }
         // After the write, still ready for more writing:
-        let readiness = tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+        let readiness = resolves_immediately(writer.write_ready())
             .await
-            .expect("the writer should be ready instantly")
             .expect("write_ready does not trap");
         match readiness {
             WriteReadiness::Ready(budget) => assert!(
@@ -974,9 +968,8 @@ mod test {
             // If the worker hasn't picked up the write yet, the buffer will be full. We need to
             // wait for the worker to process the buffer before continuing.
             None => {
-                match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+                match resolves_immediately(writer.write_ready())
                     .await
-                    .expect("the writer should be ready instantly")
                     .expect("write_ready does not trap")
                 {
                     WriteReadiness::Ready(1024) => {}
@@ -1002,10 +995,7 @@ mod test {
 
         // No amount of waiting will resolve the situation, as nothing is emptying the simplex
         // buffer.
-        tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
-            .await
-            .err()
-            .expect("the writer should be not become ready");
+        never_resolves(writer.write_ready()).await;
 
         // There is 2k buffered between the simplex and worker buffers. I should be able to read
         // all of it out:
@@ -1013,15 +1003,11 @@ mod test {
         reader.read_exact(&mut buf).await.unwrap();
 
         // and no more:
-        tokio::time::timeout(REASONABLE_DURATION, reader.read(&mut buf))
-            .await
-            .err()
-            .expect("nothing more buffered in the system");
+        never_resolves(reader.read(&mut buf)).await;
 
         // Now the backpressure should be cleared, and an additional write should be accepted.
-        match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+        match resolves_immediately(writer.write_ready())
             .await
-            .expect("the writer should be ready instantly")
             .expect("ready is ok")
         {
             WriteReadiness::Ready(1024) => {}
@@ -1037,9 +1023,8 @@ mod test {
             // If the worker hasn't picked up the write yet, the buffer will be full. We need to
             // wait for the worker to process the buffer before continuing.
             None => {
-                match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+                match resolves_immediately(writer.write_ready())
                     .await
-                    .expect("the writer should be ready instantly")
                     .expect("write_ready does not trap")
                 {
                     WriteReadiness::Ready(1024) => {}
@@ -1077,9 +1062,8 @@ mod test {
             // wait for the worker to process the buffer before continuing.
             None => match writer.flush().expect("flush does not trap") {
                 Some(FlushResult::Done) => {}
-                None => match tokio::time::timeout(REASONABLE_DURATION, writer.flush_ready())
+                None => match resolves_immediately(writer.flush_ready())
                     .await
-                    .expect("flush_ready completes instantaly")
                     .expect("flush_ready does not trap")
                 {
                     FlushResult::Done => {}
@@ -1103,17 +1087,11 @@ mod test {
             writer.flush().expect("flush does not trap").is_none(),
             "flush should not succeed"
         );
-        tokio::time::timeout(REASONABLE_DURATION, writer.flush_ready())
-            .await
-            .err()
-            .expect("flush_ready does not complete");
+        never_resolves(writer.flush_ready()).await;
 
         // No amount of waiting will resolve the situation, as nothing is emptying the simplex
         // buffer.
-        tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
-            .await
-            .err()
-            .expect("the writer should be not become ready");
+        never_resolves(writer.write_ready()).await;
 
         // There is 2k buffered between the simplex and worker buffers. I should be able to read
         // all of it out:
@@ -1121,15 +1099,11 @@ mod test {
         reader.read_exact(&mut buf).await.unwrap();
 
         // and no more:
-        tokio::time::timeout(REASONABLE_DURATION, reader.read(&mut buf))
-            .await
-            .err()
-            .expect("nothing more buffered in the system");
+        never_resolves(reader.read(&mut buf)).await;
 
         // Now the backpressure should be cleared, and an additional write should be accepted.
-        match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+        match resolves_immediately(writer.write_ready())
             .await
-            .expect("the writer should be ready instantly")
             .expect("ready is ok")
         {
             WriteReadiness::Ready(1024) => {}
@@ -1137,9 +1111,8 @@ mod test {
         }
 
         // The flush should be cleared as well.
-        match tokio::time::timeout(REASONABLE_DURATION, writer.flush_ready())
+        match resolves_immediately(writer.flush_ready())
             .await
-            .expect("the writer should be ready instantly")
             .expect("ready is ok")
         {
             FlushResult::Done => {}
@@ -1155,9 +1128,8 @@ mod test {
             // If the worker hasn't picked up the write yet, the buffer will be full. We need to
             // wait for the worker to process the buffer before continuing.
             None => {
-                match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+                match resolves_immediately(writer.write_ready())
                     .await
-                    .expect("the writer should be ready instantly")
                     .expect("write_ready does not trap")
                 {
                     WriteReadiness::Ready(1024) => {}
