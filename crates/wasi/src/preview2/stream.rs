@@ -267,18 +267,7 @@ mod test {
 
     #[test]
     fn input_stream_in_table() {
-        struct DummyInputStream;
-        #[async_trait::async_trait]
-        impl HostInputStream for DummyInputStream {
-            fn read(&mut self, _size: usize) -> Result<(Bytes, StreamState), Error> {
-                unimplemented!();
-            }
-            async fn ready(&mut self) -> Result<(), Error> {
-                unimplemented!();
-            }
-        }
-
-        let dummy = DummyInputStream;
+        let dummy = crate::preview2::pipe::ClosedInputStream;
         let mut table = Table::new();
         // Put it into the table:
         let ix = table.push_input_stream(Box::new(dummy)).unwrap();
@@ -300,18 +289,7 @@ mod test {
 
     #[test]
     fn output_stream_in_table() {
-        struct DummyOutputStream;
-        #[async_trait::async_trait]
-        impl HostOutputStream for DummyOutputStream {
-            fn write(&mut self, _: Bytes) -> Result<(usize, StreamState), Error> {
-                unimplemented!();
-            }
-            async fn ready(&mut self) -> Result<(), Error> {
-                unimplemented!();
-            }
-        }
-
-        let dummy = DummyOutputStream;
+        let dummy = crate::preview2::pipe::SinkOutputStream;
         let mut table = Table::new();
         // Put it in the table:
         let ix = table.push_output_stream(Box::new(dummy)).unwrap();

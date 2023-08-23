@@ -22,7 +22,7 @@ pub use self::worker_thread_stdin::{stdin, Stdin};
 pub struct Stdout(AsyncWriteStream);
 
 pub fn stdout() -> Stdout {
-    Stdout(AsyncWriteStream::new(tokio::io::stdout()))
+    Stdout(AsyncWriteStream::new(2048, tokio::io::stdout()))
 }
 impl IsTerminal for Stdout {
     fn is_terminal(&self) -> bool {
@@ -48,7 +48,7 @@ impl HostOutputStream for Stdout {
 pub struct Stderr(AsyncWriteStream);
 
 pub fn stderr() -> Stderr {
-    Stderr(AsyncWriteStream::new(tokio::io::stderr()))
+    Stderr(AsyncWriteStream::new(2048, tokio::io::stderr()))
 }
 impl IsTerminal for Stderr {
     fn is_terminal(&self) -> bool {
