@@ -1,5 +1,8 @@
-use crate::wasi::http::types::{Error, Method, RequestOptions, Scheme};
-use crate::{WasiHttpView, WasiHttpViewExt};
+use crate::bindings::{
+    self,
+    http::types::{Error, Host, Method, RequestOptions, Scheme},
+};
+use crate::WasiHttpView;
 use anyhow::anyhow;
 use std::str;
 use std::vec::Vec;
@@ -107,18 +110,10 @@ fn u32_array_to_u8(arr: &[u32]) -> Vec<u8> {
     result
 }
 
-pub fn add_component_to_linker<T>(
+pub fn add_component_to_linker<T: WasiHttpView>(
     linker: &mut wasmtime::Linker<T>,
     get_cx: impl Fn(&mut T) -> &mut T + Send + Sync + Copy + 'static,
-) -> anyhow::Result<()>
-where
-    T: WasiHttpView
-        + WasiHttpViewExt
-        + crate::wasi::http::outgoing_handler::Host
-        + crate::wasi::http::types::Host
-        + io::streams::Host
-        + poll::poll::Host,
-{
+) -> anyhow::Result<()> {
     linker.func_wrap8_async(
         "wasi:http/outgoing-handler",
         "handle",
@@ -154,7 +149,8 @@ where
                     None
                 };
 
-                get_cx(caller.data_mut()).handle(request, options).await
+                let ctx = get_cx(caller.data_mut());
+                bindings::http::outgoing_handler::Host::handle(ctx, request, options).await
             })
         },
     )?;
@@ -231,8 +227,7 @@ where
                 };
 
                 let ctx = get_cx(caller.data_mut());
-                ctx.new_outgoing_request(m, path, Some(s), authority, headers)
-                    .await
+                Host::new_outgoing_request(ctx, m, path, Some(s), authority, headers).await
             })
         },
     )?;
@@ -242,7 +237,7 @@ where
         move |mut caller: Caller<'_, T>, id: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                let result: u32 = ctx.incoming_response_status(id).await?.into();
+                let result: u32 = Host::incoming_response_status(ctx, id).await?.into();
                 Ok(result)
             })
         },
@@ -253,7 +248,7 @@ where
         move |mut caller: Caller<'_, T>, future: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                ctx.drop_future_incoming_response(future).await
+                Host::drop_future_incoming_response(ctx, future).await
             })
         },
     )?;
@@ -263,7 +258,7 @@ where
         move |mut caller: Caller<'_, T>, future: u32, ptr: i32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                let response = ctx.future_incoming_response_get(future).await?;
+                let response = Host::future_incoming_response_get(ctx, future).await?;
 
                 let memory = memory_get(&mut caller)?;
 
@@ -304,7 +299,7 @@ where
         move |mut caller: Caller<'_, T>, future: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                ctx.listen_to_future_incoming_response(future).await
+                Host::listen_to_future_incoming_response(ctx, future).await
             })
         },
     )?;
@@ -314,7 +309,9 @@ where
         move |mut caller: Caller<'_, T>, response: u32, ptr: i32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                let stream = ctx.incoming_response_consume(response).await?.unwrap_or(0);
+                let stream = Host::incoming_response_consume(ctx, response)
+                    .await?
+                    .unwrap_or(0);
 
                 let memory = memory_get(&mut caller).unwrap();
 
@@ -493,7 +490,7 @@ where
         move |mut caller: Caller<'_, T>, ptr: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                ctx.drop_fields(ptr).await
+                Host::drop_fields(ctx, ptr).await
             })
         },
     )?;
@@ -503,8 +500,7 @@ where
         move |mut caller: Caller<'_, T>, request: u32, ptr: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                let stream = ctx
-                    .outgoing_request_write(request)
+                let stream = Host::outgoing_request_write(ctx, request)
                     .await?
                     .map_err(|_| anyhow!("no outgoing stream present"))?;
 
@@ -525,7 +521,7 @@ where
         move |mut caller: Caller<'_, T>, id: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                ctx.drop_outgoing_request(id).await
+                Host::drop_outgoing_request(ctx, id).await
             })
         },
     )?;
@@ -535,7 +531,7 @@ where
         move |mut caller: Caller<'_, T>, id: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                ctx.drop_incoming_response(id).await
+                Host::drop_incoming_response(ctx, id).await
             })
         },
     )?;
@@ -566,7 +562,7 @@ where
                 }
 
                 let ctx = get_cx(caller.data_mut());
-                ctx.new_fields(vec).await
+                Host::new_fields(ctx, vec).await
             })
         },
     )?;
@@ -576,7 +572,7 @@ where
         move |mut caller: Caller<'_, T>, fields: u32, out_ptr: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                let entries = ctx.fields_entries(fields).await?;
+                let entries = Host::fields_entries(ctx, fields).await?;
 
                 let header_len = entries.len();
                 let tuple_ptr =
@@ -616,7 +612,7 @@ where
         move |mut caller: Caller<'_, T>, handle: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                ctx.incoming_response_headers(handle).await
+                Host::incoming_response_headers(ctx, handle).await
             })
         },
     )?;

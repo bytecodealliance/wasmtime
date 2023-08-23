@@ -1,7 +1,7 @@
 //! Implements the base structure (i.e. [WasiHttpCtx]) that will provide the
 //! implementation of the wasi-http API.
 
-use crate::wasi::http::types::{
+use crate::bindings::http::types::{
     IncomingStream, Method, OutgoingRequest, OutgoingStream, RequestOptions, Scheme,
 };
 use bytes::Bytes;

@@ -1,6 +1,8 @@
+use crate::bindings::http::types::{
+    FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme,
+};
 use crate::types::{ActiveFields, ActiveFuture, ActiveResponse, HttpResponse, TableHttpExt};
-use crate::wasi::http::types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme};
-pub use crate::{WasiHttpCtx, WasiHttpView};
+use crate::WasiHttpView;
 use anyhow::Context;
 use bytes::{Bytes, BytesMut};
 use http_body_util::{BodyExt, Empty, Full};
@@ -15,7 +17,7 @@ use tokio_rustls::rustls::{self, OwnedTrustAnchor};
 use wasmtime_wasi::preview2::{StreamState, TableStreamExt};
 
 #[async_trait::async_trait]
-impl<T: WasiHttpView> crate::wasi::http::outgoing_handler::Host for T {
+impl<T: WasiHttpView> crate::bindings::http::outgoing_handler::Host for T {
     async fn handle(
         &mut self,
         request_id: OutgoingRequest,
@@ -48,7 +50,7 @@ pub trait WasiHttpViewExt {
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
-    ) -> wasmtime::Result<FutureIncomingResponse, crate::wasi::http::types::Error>;
+    ) -> wasmtime::Result<FutureIncomingResponse, crate::bindings::http::types::Error>;
 }
 
 #[async_trait::async_trait]
@@ -57,7 +59,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
-    ) -> wasmtime::Result<FutureIncomingResponse, crate::wasi::http::types::Error> {
+    ) -> wasmtime::Result<FutureIncomingResponse, crate::bindings::http::types::Error> {
         let opts = options.unwrap_or(
             // TODO: Configurable defaults here?
             RequestOptions {
@@ -80,17 +82,17 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             .clone();
 
         let method = match request.method() {
-            crate::wasi::http::types::Method::Get => Method::GET,
-            crate::wasi::http::types::Method::Head => Method::HEAD,
-            crate::wasi::http::types::Method::Post => Method::POST,
-            crate::wasi::http::types::Method::Put => Method::PUT,
-            crate::wasi::http::types::Method::Delete => Method::DELETE,
-            crate::wasi::http::types::Method::Connect => Method::CONNECT,
-            crate::wasi::http::types::Method::Options => Method::OPTIONS,
-            crate::wasi::http::types::Method::Trace => Method::TRACE,
-            crate::wasi::http::types::Method::Patch => Method::PATCH,
-            crate::wasi::http::types::Method::Other(s) => {
-                return Err(crate::wasi::http::types::Error::InvalidUrl(format!(
+            crate::bindings::http::types::Method::Get => Method::GET,
+            crate::bindings::http::types::Method::Head => Method::HEAD,
+            crate::bindings::http::types::Method::Post => Method::POST,
+            crate::bindings::http::types::Method::Put => Method::PUT,
+            crate::bindings::http::types::Method::Delete => Method::DELETE,
+            crate::bindings::http::types::Method::Connect => Method::CONNECT,
+            crate::bindings::http::types::Method::Options => Method::OPTIONS,
+            crate::bindings::http::types::Method::Trace => Method::TRACE,
+            crate::bindings::http::types::Method::Patch => Method::PATCH,
+            crate::bindings::http::types::Method::Other(s) => {
+                return Err(crate::bindings::http::types::Error::InvalidUrl(format!(
                     "unknown method {}",
                     s
                 ))
@@ -102,7 +104,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             Scheme::Http => "http://",
             Scheme::Https => "https://",
             Scheme::Other(s) => {
-                return Err(crate::wasi::http::types::Error::InvalidUrl(format!(
+                return Err(crate::bindings::http::types::Error::InvalidUrl(format!(
                     "unsupported scheme {}",
                     s
                 ))
@@ -144,10 +146,9 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 let mut parts = authority.split(":");
                 let host = parts.next().unwrap_or(&authority);
                 let domain = rustls::ServerName::try_from(host)?;
-                let stream = connector
-                    .connect(domain, tcp_stream)
-                    .await
-                    .map_err(|e| crate::wasi::http::types::Error::ProtocolError(e.to_string()))?;
+                let stream = connector.connect(domain, tcp_stream).await.map_err(|e| {
+                    crate::bindings::http::types::Error::ProtocolError(e.to_string())
+                })?;
 
                 let t = timeout(
                     connect_timeout,
@@ -163,7 +164,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 s
             }
             #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
-            return Err(crate::wasi::http::types::Error::UnexpectedError(
+            return Err(crate::bindings::http::types::Error::UnexpectedError(
                 "unsupported architecture for SSL".to_string(),
             ));
         } else {

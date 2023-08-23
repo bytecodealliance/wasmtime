@@ -4,78 +4,72 @@ pub use crate::types::{WasiHttpCtx, WasiHttpView};
 use core::fmt::Formatter;
 use std::fmt::{self, Display};
 
-wasmtime::component::bindgen!({
-    world: "wasi:http/proxy",
-    with: {
-        "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
-        "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
-    },
-    async: true,
-});
-
 pub mod component_impl;
 pub mod http_impl;
+pub mod incoming_handler;
+pub mod proxy;
 pub mod types;
 pub mod types_impl;
 
-pub fn add_to_component_linker<T>(linker: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
-where
-    T: WasiHttpView
-        + WasiHttpViewExt
-        + crate::wasi::http::outgoing_handler::Host
-        + crate::wasi::http::types::Host,
-{
-    crate::wasi::http::outgoing_handler::add_to_linker(linker, |t| t)?;
-    crate::wasi::http::types::add_to_linker(linker, |t| t)?;
-    Ok(())
+pub mod bindings {
+    pub(crate) mod _internal_rest {
+        wasmtime::component::bindgen!({
+            path: "wit",
+            interfaces: "
+                import wasi:http/incoming-handler
+                import wasi:http/outgoing-handler
+                import wasi:http/types
+            ",
+            tracing: true,
+            async: true,
+            with: {
+                "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
+                "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
+            }
+        });
+    }
+
+    pub use self::_internal_rest::wasi::http;
 }
 
-pub fn add_to_linker<T>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()>
-where
-    T: WasiHttpView
-        + WasiHttpViewExt
-        + crate::wasi::http::outgoing_handler::Host
-        + crate::wasi::http::types::Host
-        + wasmtime_wasi::preview2::bindings::io::streams::Host
-        + wasmtime_wasi::preview2::bindings::poll::poll::Host,
-{
+pub fn add_to_linker<T: WasiHttpView>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()> {
     add_component_to_linker::<T>(linker, |t| t)
 }
 
-impl std::error::Error for crate::wasi::http::types::Error {}
+impl std::error::Error for crate::bindings::http::types::Error {}
 
-impl Display for crate::wasi::http::types::Error {
+impl Display for crate::bindings::http::types::Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            crate::wasi::http::types::Error::InvalidUrl(m) => {
+            crate::bindings::http::types::Error::InvalidUrl(m) => {
                 write!(f, "[InvalidUrl] {}", m)
             }
-            crate::wasi::http::types::Error::ProtocolError(m) => {
+            crate::bindings::http::types::Error::ProtocolError(m) => {
                 write!(f, "[ProtocolError] {}", m)
             }
-            crate::wasi::http::types::Error::TimeoutError(m) => {
+            crate::bindings::http::types::Error::TimeoutError(m) => {
                 write!(f, "[TimeoutError] {}", m)
             }
-            crate::wasi::http::types::Error::UnexpectedError(m) => {
+            crate::bindings::http::types::Error::UnexpectedError(m) => {
                 write!(f, "[UnexpectedError] {}", m)
             }
         }
     }
 }
 
-impl From<wasmtime_wasi::preview2::TableError> for crate::wasi::http::types::Error {
+impl From<wasmtime_wasi::preview2::TableError> for crate::bindings::http::types::Error {
     fn from(err: wasmtime_wasi::preview2::TableError) -> Self {
         Self::UnexpectedError(err.to_string())
     }
 }
 
-impl From<anyhow::Error> for crate::wasi::http::types::Error {
+impl From<anyhow::Error> for crate::bindings::http::types::Error {
     fn from(err: anyhow::Error) -> Self {
         Self::UnexpectedError(err.to_string())
     }
 }
 
-impl From<std::io::Error> for crate::wasi::http::types::Error {
+impl From<std::io::Error> for crate::bindings::http::types::Error {
     fn from(err: std::io::Error) -> Self {
         let message = err.to_string();
         match err.kind() {
@@ -92,13 +86,13 @@ impl From<std::io::Error> for crate::wasi::http::types::Error {
     }
 }
 
-impl From<http::Error> for crate::wasi::http::types::Error {
+impl From<http::Error> for crate::bindings::http::types::Error {
     fn from(err: http::Error) -> Self {
         Self::InvalidUrl(err.to_string())
     }
 }
 
-impl From<hyper::Error> for crate::wasi::http::types::Error {
+impl From<hyper::Error> for crate::bindings::http::types::Error {
     fn from(err: hyper::Error) -> Self {
         let message = err.message().to_string();
         if err.is_timeout() {
@@ -118,14 +112,14 @@ impl From<hyper::Error> for crate::wasi::http::types::Error {
     }
 }
 
-impl From<tokio::time::error::Elapsed> for crate::wasi::http::types::Error {
+impl From<tokio::time::error::Elapsed> for crate::bindings::http::types::Error {
     fn from(err: tokio::time::error::Elapsed) -> Self {
         Self::TimeoutError(err.to_string())
     }
 }
 
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
-impl From<rustls::client::InvalidDnsNameError> for crate::wasi::http::types::Error {
+impl From<rustls::client::InvalidDnsNameError> for crate::bindings::http::types::Error {
     fn from(_err: rustls::client::InvalidDnsNameError) -> Self {
         Self::InvalidUrl("invalid dnsname".to_string())
     }

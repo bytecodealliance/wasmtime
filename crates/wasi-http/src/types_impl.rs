@@ -1,17 +1,17 @@
-use crate::http_impl::WasiHttpViewExt;
-use crate::types::{ActiveFields, ActiveRequest, HttpRequest, TableHttpExt};
-use crate::wasi::http::types::{
+use crate::bindings::http::types::{
     Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse,
     IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
+use crate::http_impl::WasiHttpViewExt;
+use crate::types::{ActiveFields, ActiveRequest, HttpRequest, TableHttpExt};
 use crate::WasiHttpView;
 use anyhow::{anyhow, bail, Context};
 use bytes::Bytes;
 use wasmtime_wasi::preview2::{bindings::poll::poll::Pollable, HostPollable, TablePollableExt};
 
 #[async_trait::async_trait]
-impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
+impl<T: WasiHttpView + WasiHttpViewExt> crate::bindings::http::types::Host for T {
     async fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
         self.table_mut()
             .delete_fields(fields)

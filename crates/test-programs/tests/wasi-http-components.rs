@@ -60,7 +60,7 @@ async fn instantiate_component(
 ) -> Result<(Store<Ctx>, Command), anyhow::Error> {
     let mut linker = Linker::new(&ENGINE);
     add_to_linker(&mut linker)?;
-    wasmtime_wasi_http::add_to_component_linker(&mut linker)?;
+    wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
 
     let mut store = Store::new(&ENGINE, ctx);
 
