@@ -1,4 +1,4 @@
-use crate::r#struct::{ActiveFields, ActiveFuture, ActiveResponse, HttpResponse, TableHttpExt};
+use crate::types::{ActiveFields, ActiveFuture, ActiveResponse, HttpResponse, TableHttpExt};
 use crate::wasi::http::types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme};
 pub use crate::{WasiHttpCtx, WasiHttpView};
 use anyhow::Context;
