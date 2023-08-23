@@ -189,7 +189,12 @@ impl Wasmtime {
         let mut gen = InterfaceGenerator::new(self, resolve);
         match item {
             WorldItem::Function(func) => {
-                gen.generate_function_trait_sig(func);
+                // Only generate a trait signature for free functions since
+                // resource-related functions get their trait signatures
+                // during `type_resource`.
+                if let FunctionKind::Freestanding = func.kind {
+                    gen.generate_function_trait_sig(func);
+                }
                 let sig = mem::take(&mut gen.src).into();
                 gen.generate_add_function_to_linker(TypeOwner::World(world), func, "linker");
                 let add_to_linker = gen.src.into();
@@ -562,8 +567,12 @@ impl Wasmtime {
 }
 
 impl Wasmtime {
+    fn has_world_trait(&self, resolve: &Resolve, world: WorldId) -> bool {
+        !self.import_functions.is_empty() || get_world_resources(resolve, world).count() > 0
+    }
+
     fn toplevel_import_trait(&mut self, resolve: &Resolve, world: WorldId) {
-        if self.import_functions.is_empty() {
+        if !self.has_world_trait(resolve, world) {
             return;
         }
 
@@ -589,7 +598,8 @@ impl Wasmtime {
     }
 
     fn toplevel_add_to_linker(&mut self, resolve: &Resolve, world: WorldId) {
-        if self.import_interfaces.is_empty() && self.import_functions.is_empty() {
+        let has_world_trait = self.has_world_trait(resolve, world);
+        if self.import_interfaces.is_empty() && !has_world_trait {
             return;
         }
         let mut interfaces = Vec::new();
@@ -623,10 +633,10 @@ impl Wasmtime {
         for (i, name) in interfaces
             .iter()
             .map(|n| format!("{n}::Host"))
-            .chain(if self.import_functions.is_empty() {
-                None
-            } else {
+            .chain(if has_world_trait {
                 Some(world_trait.clone())
+            } else {
+                None
             })
             .enumerate()
         {
@@ -647,11 +657,11 @@ impl Wasmtime {
         for name in interfaces.iter() {
             uwriteln!(self.src, "{name}::add_to_linker(linker, get)?;");
         }
-        if !self.import_functions.is_empty() {
+        if has_world_trait {
             uwriteln!(self.src, "Self::add_root_to_linker(linker, get)?;");
         }
         uwriteln!(self.src, "Ok(())\n}}");
-        if self.import_functions.is_empty() {
+        if !has_world_trait {
             return;
         }
 
@@ -667,6 +677,19 @@ impl Wasmtime {
                     let mut linker = linker.root();
             ",
         );
+        for name in get_world_resources(resolve, world) {
+            let camel = name.to_upper_camel_case();
+            uwriteln!(
+                self.src,
+                "linker.resource::<{camel}>(
+                    \"{name}\",
+                    move |mut store, rep| -> wasmtime::Result<()> {{
+                        Host{camel}::drop(get(store.data_mut()), wasmtime::component::Resource::new_own(rep))
+                    }},
+                )?;"
+            )
+        }
+
         for f in self.import_functions.iter() {
             self.src.push_str(&f.add_to_linker);
             self.src.push_str("\n");
