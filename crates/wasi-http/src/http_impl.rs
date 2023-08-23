@@ -128,7 +128,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
                 let mut root_cert_store = rustls::RootCertStore::empty();
                 root_cert_store.add_server_trust_anchors(
-                    webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+                    webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
                         OwnedTrustAnchor::from_subject_spki_name_constraints(
                             ta.subject,
                             ta.spki,
