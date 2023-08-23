@@ -55,4 +55,16 @@ world the-world {
 
   import some-world-func: func() -> world-resource
   export some-world-func2: func() -> world-resource
+
+  export uses-resource-transitively
+}
+
+interface transitive-interface-with-resource {
+  resource foo
+}
+
+interface uses-resource-transitively {
+  use transitive-interface-with-resource.{foo}
+
+  handle: func(x: foo)
 }
