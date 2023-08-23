@@ -396,6 +396,12 @@ impl<T> LinkerInstance<'_, T> {
     /// along with the representation of the resource that was just destroyed.
     ///
     /// [`Resource<U>`]: crate::component::Resource
+    ///
+    /// # Errors
+    ///
+    /// The provided `dtor` closure returns an error if something goes wrong
+    /// when a guest calls the `dtor` to drop a `Resource<T>` such as
+    /// a runtime trap or a runtime limit being exceeded.
     pub fn resource<U: 'static>(
         &mut self,
         name: &str,
