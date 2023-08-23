@@ -6,20 +6,22 @@ use crate::{
 };
 use cranelift_codegen::{
     entity::EntityRef,
-    ir::{ExternalName, Opcode, TrapCode, UserExternalNameRef},
+    ir::{ConstantPool, TrapCode},
+    ir::{ExternalName, Opcode, UserExternalNameRef},
     isa::{
         x64::{
             args::{
                 self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
                 Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
-                ShiftKind as CraneliftShiftKind, SyntheticAmode, WritableGpr, CC,
+                ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
+                WritableXmm, Xmm, XmmMem, CC,
             },
             settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
         },
         CallConv,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    Writable,
+    VCodeConstantData, VCodeConstants, Writable,
 };
 
 use super::address::Address;
@@ -43,6 +45,13 @@ impl From<Reg> for WritableGpr {
     fn from(reg: Reg) -> Self {
         let writable = Writable::from_reg(reg.into());
         WritableGpr::from_writable_reg(writable).expect("valid writable gpr")
+    }
+}
+
+impl From<Reg> for WritableXmm {
+    fn from(reg: Reg) -> Self {
+        let writable = Writable::from_reg(reg.into());
+        WritableXmm::from_writable_reg(writable).expect("valid writable xmm")
     }
 }
 
@@ -70,11 +79,18 @@ impl From<Reg> for Imm8Gpr {
     }
 }
 
+impl From<Reg> for Xmm {
+    fn from(reg: Reg) -> Self {
+        Xmm::new(reg.into()).expect("valid Xmm register")
+    }
+}
+
 impl From<OperandSize> for args::OperandSize {
     fn from(size: OperandSize) -> Self {
         match size {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
+            s => panic!("Invalid operand size {:?}", s),
         }
     }
 }
@@ -127,6 +143,10 @@ pub(crate) struct Assembler {
     emit_state: EmitState,
     /// x64 flags.
     isa_flags: x64_settings::Flags,
+    /// Constant pool.
+    pool: ConstantPool,
+    /// Constants that will be emitted separately by the MachBuffer.
+    constants: VCodeConstants,
 }
 
 impl Assembler {
@@ -136,6 +156,8 @@ impl Assembler {
             buffer: MachBuffer::<Inst>::new(),
             emit_state: Default::default(),
             emit_info: EmitInfo::new(shared_flags, isa_flags.clone()),
+            constants: Default::default(),
+            pool: ConstantPool::new(),
             isa_flags,
         }
     }
@@ -146,11 +168,17 @@ impl Assembler {
         &mut self.buffer
     }
 
+    /// Adds a constant to the constant pool and returns its address.
+    pub fn add_constant(&mut self, constant: &[u8]) -> Address {
+        let handle = self.pool.insert(constant.into());
+        Address::constant(handle)
+    }
+
     /// Return the emitted code.
     pub fn finalize(mut self) -> MachBufferFinalized<Final> {
         let stencil = self
             .buffer
-            .finish(&Default::default(), self.emit_state.ctrl_plane_mut());
+            .finish(&self.constants, self.emit_state.ctrl_plane_mut());
         stencil.apply_base_srcloc(Default::default())
     }
 
@@ -158,10 +186,26 @@ impl Assembler {
         inst.emit(&[], &mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
-    fn to_synthetic_amode(addr: &Address) -> SyntheticAmode {
+    fn to_synthetic_amode(
+        addr: &Address,
+        pool: &mut ConstantPool,
+        constants: &mut VCodeConstants,
+        buffer: &mut MachBuffer<Inst>,
+    ) -> SyntheticAmode {
         match addr {
             Address::Offset { base, offset } => {
                 SyntheticAmode::real(Amode::imm_reg(*offset as i32, (*base).into()))
+            }
+            Address::Const(c) => {
+                // Defer the creation of the
+                // `SyntheticAmode::ConstantOffset` addressing mode
+                // until the address is referenced by an actual
+                // instrunction.
+                let constant_data = pool.get(*c);
+                let data = VCodeConstantData::Pool(*c, constant_data.clone());
+                let constant = constants.insert(VCodeConstantData::Pool(*c, constant_data.clone()));
+                buffer.register_constant(&constant, &data);
+                SyntheticAmode::ConstantOffset(constant)
             }
         }
     }
@@ -197,7 +241,9 @@ impl Assembler {
 
     /// Register-to-memory move.
     pub fn mov_rm(&mut self, src: Reg, addr: &Address, size: OperandSize) {
-        let dst = Self::to_synthetic_amode(addr);
+        assert!(addr.is_offset());
+        let dst =
+            Self::to_synthetic_amode(addr, &mut self.pool, &mut self.constants, &mut self.buffer);
         self.emit(Inst::MovRM {
             size: size.into(),
             src: src.into(),
@@ -207,7 +253,9 @@ impl Assembler {
 
     /// Immediate-to-memory move.
     pub fn mov_im(&mut self, src: u64, addr: &Address, size: OperandSize) {
-        let dst = Self::to_synthetic_amode(addr);
+        assert!(addr.is_offset());
+        let dst =
+            Self::to_synthetic_amode(addr, &mut self.pool, &mut self.constants, &mut self.buffer);
         self.emit(Inst::MovImmM {
             size: size.into(),
             simm64: src,
@@ -231,7 +279,8 @@ impl Assembler {
     pub fn mov_mr(&mut self, addr: &Address, dst: Reg, size: OperandSize) {
         use OperandSize::S64;
 
-        let src = Self::to_synthetic_amode(addr);
+        let src =
+            Self::to_synthetic_amode(addr, &mut self.pool, &mut self.constants, &mut self.buffer);
 
         if size == S64 {
             self.emit(Inst::Mov64MR {
@@ -246,6 +295,47 @@ impl Assembler {
                 dst: dst.into(),
             });
         }
+    }
+
+    /// Single and double precision floating point load.
+    pub fn xmm_mov_mr(&mut self, src: &Address, dst: Reg, size: OperandSize) {
+        use OperandSize::*;
+
+        assert!(dst.is_float());
+        let op = match size {
+            S32 => SseOpcode::Movss,
+            S64 => SseOpcode::Movsd,
+            S128 => SseOpcode::Movdqu,
+        };
+
+        let src =
+            Self::to_synthetic_amode(src, &mut self.pool, &mut self.constants, &mut self.buffer);
+        self.emit(Inst::XmmUnaryRmRUnaligned {
+            op,
+            src: XmmMem::new(RegMem::mem(src)).expect("valid xmm unaligned"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Single and double precision floating point store.
+    pub fn xmm_mov_rm(&mut self, src: Reg, dst: &Address, size: OperandSize) {
+        use OperandSize::*;
+
+        assert!(src.is_float());
+
+        let op = match size {
+            S32 => SseOpcode::Movss,
+            S64 => SseOpcode::Movsd,
+            S128 => SseOpcode::Movdqu,
+        };
+
+        let dst =
+            Self::to_synthetic_amode(dst, &mut self.pool, &mut self.constants, &mut self.buffer);
+        self.emit(Inst::XmmMovRM {
+            op,
+            src: src.into(),
+            dst,
+        });
     }
 
     /// Subtract register and register

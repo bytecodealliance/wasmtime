@@ -5,10 +5,10 @@ use super::{
     regs::{self, rbp, rsp},
 };
 
-use crate::abi::ABI;
 use crate::masm::{
     CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm, RemKind, ShiftKind,
 };
+use crate::{abi::ABI, masm::StackSlot};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
     codegen::CodeGenContext,
@@ -44,11 +44,24 @@ impl Masm for MacroAssembler {
             .mov_rr(stack_pointer, frame_pointer, OperandSize::S64);
     }
 
-    fn push(&mut self, reg: Reg) -> u32 {
-        self.asm.push_r(reg);
-        let increment = <Self::ABI as ABI>::word_bytes();
-        self.increment_sp(increment);
-        self.sp_offset
+    fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
+        let bytes = if reg.is_int() {
+            self.asm.push_r(reg);
+            let increment = <Self::ABI as ABI>::word_bytes();
+            self.increment_sp(increment);
+            increment
+        } else {
+            let bytes = size.bytes();
+            self.reserve_stack(bytes);
+            self.asm
+                .xmm_mov_rm(reg, &self.address_from_sp(self.sp_offset), size);
+            bytes
+        };
+
+        StackSlot {
+            offset: self.sp_offset,
+            size: bytes,
+        }
     }
 
     fn reserve_stack(&mut self, bytes: u32) {
@@ -100,15 +113,30 @@ impl Masm for MacroAssembler {
             RegImm::Imm(imm) => match imm {
                 I::I32(v) => self.asm.mov_im(v as u64, &dst, size),
                 I::I64(v) => self.asm.mov_im(v, &dst, size),
-                _ => unreachable!(),
+                // Immediate to memory moves are currently only used
+                // to zero a memory range, which only involves
+                // ints. See [`MacroAssembler::zero_mem_range`].
+                i => panic!("Cannot store immediate {:?}", i),
             },
-            RegImm::Reg(reg) => self.asm.mov_rm(reg, &dst, size),
+            RegImm::Reg(reg) => {
+                if reg.is_int() {
+                    self.asm.mov_rm(reg, &dst, size);
+                } else {
+                    self.asm.xmm_mov_rm(reg, &dst, size);
+                }
+            }
         }
     }
 
-    fn pop(&mut self, dst: Reg) {
-        self.asm.pop_r(dst);
-        self.decrement_sp(<Self::ABI as abi::ABI>::word_bytes());
+    fn pop(&mut self, dst: Reg, size: OperandSize) {
+        if dst.is_int() {
+            self.asm.pop_r(dst);
+            self.decrement_sp(<Self::ABI as abi::ABI>::word_bytes());
+        } else {
+            let addr = self.address_at_sp(self.sp_offset);
+            self.asm.xmm_mov_mr(&addr, dst, size);
+            self.free_stack(size.bytes());
+        }
     }
 
     fn call(
@@ -128,7 +156,11 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
-        self.asm.mov_mr(&src, dst, size);
+        if dst.is_int() {
+            self.asm.mov_mr(&src, dst, size);
+        } else {
+            self.asm.xmm_mov_mr(&src, dst, size);
+        }
     }
 
     fn sp_offset(&self) -> u32 {
@@ -144,8 +176,15 @@ impl Masm for MacroAssembler {
             (RegImm::Reg(src), RegImm::Reg(dst)) => self.asm.mov_rr(src, dst, size),
             (RegImm::Imm(imm), RegImm::Reg(dst)) => match imm {
                 I::I32(v) => self.asm.mov_ir(v as u64, dst, size),
-                I::I64(v) => self.asm.mov_ir(v, dst, size),
-                _ => unreachable!(),
+                I::I64(v) => self.asm.mov_ir(v as u64, dst, size),
+                I::F32(v) => {
+                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    self.asm.xmm_mov_mr(&addr, dst, size);
+                }
+                I::F64(v) => {
+                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    self.asm.xmm_mov_mr(&addr, dst, size);
+                }
             },
             _ => Self::handle_invalid_operand_combination(src, dst),
         }
@@ -279,21 +318,21 @@ impl Masm for MacroAssembler {
                 .stack
                 .pop_i32_const()
                 .expect("i32 const value at stack top");
-            let reg = context.pop_to_reg(self, None, size);
+            let typed_reg = context.pop_to_reg(self, None, size);
 
-            self.asm.shift_ir(val as u8, reg, kind, size);
+            self.asm.shift_ir(val as u8, typed_reg.into(), kind, size);
 
-            context.stack.push(Val::reg(reg));
+            context.stack.push(typed_reg.into());
         } else if size == OperandSize::S64 && top.is_i64_const() {
             let val = context
                 .stack
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
-            let reg = context.pop_to_reg(self, None, size);
+            let typed_reg = context.pop_to_reg(self, None, size);
 
-            self.asm.shift_ir(val as u8, reg, kind, size);
+            self.asm.shift_ir(val as u8, typed_reg.into(), kind, size);
 
-            context.stack.push(Val::reg(reg));
+            context.stack.push(typed_reg.into());
         } else {
             // Number of bits to shift must be in the CL register.
             let src = context.pop_to_reg(self, Some(regs::rcx()), size);
@@ -301,53 +340,53 @@ impl Masm for MacroAssembler {
 
             self.asm.shift_rr(src.into(), dst.into(), kind, size);
 
-            context.regalloc.free_gpr(src);
-            context.stack.push(Val::reg(dst));
+            context.free_reg(src);
+            context.stack.push(dst.into());
         }
     }
 
     fn div(&mut self, context: &mut CodeGenContext, kind: DivKind, size: OperandSize) {
         // Allocate rdx:rax.
-        let rdx = context.gpr(regs::rdx(), self);
-        let rax = context.gpr(regs::rax(), self);
+        let rdx = context.reg(regs::rdx(), self);
+        let rax = context.reg(regs::rax(), self);
 
         // Allocate the divisor, which can be any gpr.
         let divisor = context.pop_to_reg(self, None, size);
 
         // Mark rax as allocatable.
-        context.regalloc.free_gpr(rax);
+        context.free_reg(rax);
         // Move the top value to rax.
         let rax = context.pop_to_reg(self, Some(rax), size);
-        self.asm.div(divisor, (rax, rdx), kind, size);
+        self.asm.div(divisor.into(), (rax.into(), rdx), kind, size);
 
         // Free the divisor and rdx.
-        context.free_gpr(divisor);
-        context.free_gpr(rdx);
+        context.free_reg(divisor);
+        context.free_reg(rdx);
 
         // Push the quotient.
-        context.stack.push(Val::reg(rax));
+        context.stack.push(rax.into());
     }
 
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize) {
         // Allocate rdx:rax.
-        let rdx = context.gpr(regs::rdx(), self);
-        let rax = context.gpr(regs::rax(), self);
+        let rdx = context.reg(regs::rdx(), self);
+        let rax = context.reg(regs::rax(), self);
 
         // Allocate the divisor, which can be any gpr.
         let divisor = context.pop_to_reg(self, None, size);
 
         // Mark rax as allocatable.
-        context.regalloc.free_gpr(rax);
+        context.free_reg(rax);
         // Move the top value to rax.
         let rax = context.pop_to_reg(self, Some(rax), size);
-        self.asm.rem(divisor, (rax, rdx), kind, size);
+        self.asm.rem(divisor.reg, (rax.into(), rdx), kind, size);
 
         // Free the divisor and rax.
-        context.free_gpr(divisor);
-        context.free_gpr(rax);
+        context.free_reg(divisor);
+        context.free_reg(rax);
 
         // Push the remainder.
-        context.stack.push(Val::reg(rdx));
+        context.stack.push(Val::reg(rdx, divisor.ty));
     }
 
     fn epilogue(&mut self, locals_size: u32) {
@@ -471,8 +510,8 @@ impl Masm for MacroAssembler {
     fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize) {
         let src = context.pop_to_reg(self, None, size);
         if self.flags.has_popcnt() {
-            self.asm.popcnt(src, size);
-            context.stack.push(Val::reg(src));
+            self.asm.popcnt(src.into(), size);
+            context.stack.push(src.into());
         } else {
             // The fallback functionality here is based on `MacroAssembler::popcnt64` in:
             // https://searchfox.org/mozilla-central/source/js/src/jit/x64/MacroAssembler-x64-inl.h#495
@@ -495,17 +534,18 @@ impl Masm for MacroAssembler {
                     [0x55555555i64, 0x33333333i64, 0x0f0f0f0fi64, 0x01010101i64],
                     24u8,
                 ),
+                _ => unreachable!(),
             };
-            self.asm.mov_rr(src, tmp, size);
+            self.asm.mov_rr(src.into(), tmp, size);
 
             // x -= (x >> 1) & m1;
-            self.asm.shift_ir(1u8, dst, ShiftKind::ShrU, size);
-            let lhs = dst.into();
+            self.asm.shift_ir(1u8, dst.into(), ShiftKind::ShrU, size);
+            let lhs = dst.reg.into();
             self.and(lhs, lhs, RegImm::i64(masks[0]), size);
-            self.asm.sub_rr(dst, tmp, size);
+            self.asm.sub_rr(dst.into(), tmp, size);
 
             // x = (x & m2) + ((x >> 2) & m2);
-            self.asm.mov_rr(tmp, dst, size);
+            self.asm.mov_rr(tmp, dst.into(), size);
             // Load `0x3333...` into the scratch reg once, allowing us to use
             // `and_rr` and avoid inadvertently loading it twice as with `and`
             let scratch = regs::scratch();
@@ -513,22 +553,23 @@ impl Masm for MacroAssembler {
             self.asm.and_rr(scratch, dst.into(), size);
             self.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
             self.asm.and_rr(scratch, tmp, size);
-            self.asm.add_rr(dst, tmp, size);
+            self.asm.add_rr(dst.into(), tmp, size);
 
             // x = (x + (x >> 4)) & m4;
             self.asm.mov_rr(tmp.into(), dst.into(), size);
-            self.asm.shift_ir(4u8, dst, ShiftKind::ShrU, size);
-            self.asm.add_rr(tmp, dst, size);
-            let lhs = dst.into();
+            self.asm.shift_ir(4u8, dst.into(), ShiftKind::ShrU, size);
+            self.asm.add_rr(tmp, dst.into(), size);
+            let lhs = dst.reg.into();
             self.and(lhs, lhs, RegImm::i64(masks[2]), size);
 
             // (x * h01) >> shift_amt
-            let lhs = dst.into();
+            let lhs = dst.reg.into();
             self.mul(lhs, lhs, RegImm::i64(masks[3]), size);
-            self.asm.shift_ir(shift_amt, dst, ShiftKind::ShrU, size);
+            self.asm
+                .shift_ir(shift_amt, dst.into(), ShiftKind::ShrU, size);
 
-            context.stack.push(Val::reg(dst));
-            context.free_gpr(tmp);
+            context.stack.push(dst.into());
+            context.free_reg(tmp);
         }
     }
 

@@ -1,7 +1,7 @@
 use crate::{
     abi::{ABISig, ABI},
     masm::{MacroAssembler, OperandSize},
-    stack::Val,
+    stack::TypedReg,
     CallingConvention,
 };
 use anyhow::Result;
@@ -261,8 +261,8 @@ where
             // and second arguments.
             let stack = &mut self.context.stack;
             let location = stack.len() - (sig.params().len() - 2);
-            stack.insert(location as usize, Val::reg(caller_vmctx));
-            stack.insert(location as usize, Val::reg(callee_vmctx));
+            stack.insert(location as usize, TypedReg::i64(caller_vmctx).into());
+            stack.insert(location as usize, TypedReg::i64(callee_vmctx).into());
             (
                 <M::ABI as ABI>::sig(&sig, &CallingConvention::Default),
                 Some(callee_addr),
@@ -303,6 +303,7 @@ where
     }
 
     fn spill_register_arguments(&mut self) {
+        use WasmType::*;
         self.sig
             .params
             .iter()
@@ -321,8 +322,7 @@ where
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    WasmType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
-                    WasmType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
+                    I32 | I64 | F32 | F64 => self.masm.store(src.into(), addr, ty.into()),
                     _ => panic!("Unsupported type {:?}", ty),
                 }
             });

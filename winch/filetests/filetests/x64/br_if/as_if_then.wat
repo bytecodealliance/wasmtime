@@ -24,8 +24,8 @@
 ;;   14:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   18:	 85c0                 	test	eax, eax
 ;;   1a:	 0f8411000000         	je	0x31
-;;   20:	 8b4c2408             	mov	ecx, dword ptr [rsp + 8]
-;;   24:	 85c9                 	test	ecx, ecx
+;;   20:	 8b442408             	mov	eax, dword ptr [rsp + 8]
+;;   24:	 85c0                 	test	eax, eax
 ;;   26:	 0f850a000000         	jne	0x36
 ;;   2c:	 e905000000           	jmp	0x36
 ;;   31:	 e800000000           	call	0x36

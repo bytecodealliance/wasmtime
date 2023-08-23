@@ -192,8 +192,14 @@ impl ControlStackFrame {
 
                 *original_stack_len = context.stack.len();
                 *original_sp_offset = masm.sp_offset();
-                masm.branch(CmpKind::Eq, top.into(), top.into(), *cont, OperandSize::S32);
-                context.free_gpr(top);
+                masm.branch(
+                    CmpKind::Eq,
+                    top.reg.into(),
+                    top.reg.into(),
+                    *cont,
+                    OperandSize::S32,
+                );
+                context.free_reg(top);
             }
             Block {
                 original_stack_len,

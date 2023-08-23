@@ -22,6 +22,15 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+/// A stack slot.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct StackSlot {
+    /// The location of the slot, relative to the stack pointer.
+    pub offset: u32,
+    /// The size of the slot, in bytes.
+    pub size: u32,
+}
+
 /// Kinds of binary comparison in WebAssembly. The [`masm`] implementation for
 /// each ISA is responsible for emitting the correct sequence of instructions
 /// when lowering to machine code.
@@ -72,6 +81,8 @@ pub(crate) enum OperandSize {
     S32,
     /// 64 bits.
     S64,
+    /// 128 bits.
+    S128,
 }
 
 impl OperandSize {
@@ -80,6 +91,16 @@ impl OperandSize {
         match self {
             OperandSize::S32 => 32,
             OperandSize::S64 => 64,
+            OperandSize::S128 => 128,
+        }
+    }
+
+    /// The number of bytes in the operand.
+    pub fn bytes(&self) -> u32 {
+        match self {
+            Self::S32 => 4,
+            Self::S64 => 8,
+            Self::S128 => 16,
         }
     }
 
@@ -88,6 +109,7 @@ impl OperandSize {
         match self {
             OperandSize::S32 => 5,
             OperandSize::S64 => 6,
+            OperandSize::S128 => 7,
         }
     }
 }
@@ -278,7 +300,7 @@ pub(crate) trait MacroAssembler {
     fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
 
     /// Pop a value from the machine stack into the given register.
-    fn pop(&mut self, dst: Reg);
+    fn pop(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform a move.
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
@@ -342,8 +364,13 @@ pub(crate) trait MacroAssembler {
     /// false.
     fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize);
 
-    /// Push the register to the stack, returning the offset.
-    fn push(&mut self, src: Reg) -> u32;
+    /// Push the register to the stack, returning the stack slot metadata.
+    // NB
+    // The stack alignment should not be assumed after any call to `push`,
+    // unless explicitly aligned otherwise.  Typically, stack alignment is
+    // maintained at call sites and during the execution of
+    // epilogues.
+    fn push(&mut self, src: Reg, size: OperandSize) -> StackSlot;
 
     /// Finalize the assembly and return the result.
     fn finalize(self) -> MachBufferFinalized<Final>;

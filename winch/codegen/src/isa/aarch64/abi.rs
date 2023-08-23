@@ -1,6 +1,7 @@
 use super::regs;
 use crate::abi::{ABIArg, ABIResult, ABISig, ABI};
 use crate::isa::{reg::Reg, CallingConvention};
+use crate::masm::OperandSize;
 use smallvec::SmallVec;
 use wasmtime_environ::{WasmFuncType, WasmType};
 
@@ -84,13 +85,15 @@ impl ABI for Aarch64ABI {
     }
 
     fn result(returns: &[WasmType], _call_conv: &CallingConvention) -> ABIResult {
-        // NOTE temporarily defaulting to x0;
-        let reg = regs::xreg(0);
-
         // This invariant will be lifted once support for multi-value is added.
         assert!(returns.len() <= 1, "multi-value not supported");
 
         let ty = returns.get(0).copied();
+        let reg = ty.map(|ty| match ty {
+            WasmType::I32 | WasmType::I64 => regs::xreg(0),
+            WasmType::F32 | WasmType::F64 => regs::vreg(0),
+            t => panic!("Unsupported return type {:?}", t),
+        });
         ABIResult::reg(ty, reg)
     }
 
@@ -110,8 +113,12 @@ impl ABI for Aarch64ABI {
         regs::xreg(9)
     }
 
-    fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> {
+    fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
         regs::callee_saved()
+    }
+
+    fn stack_arg_slot_size_for_type(_ty: WasmType) -> u32 {
+        todo!()
     }
 }
 
