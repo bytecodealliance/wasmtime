@@ -2860,6 +2860,12 @@ user-id = 6743 # Ed Page (epage)
 start = "2023-03-08"
 end = "2024-07-14"
 
+[[trusted.anyhow]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-10-05"
+end = "2024-08-23"
+
 [[trusted.async-trait]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
