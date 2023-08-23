@@ -12,7 +12,7 @@
 //!    computation to a [`Backend`]
 //! 3. convert some types
 //!
-//! [`Backend`]: crate::backend::Backend
+//! [`Backend`]: crate::Backend
 //! [`types`]: crate::wit::types
 
 use crate::{ctx::UsageError, WasiNnCtx};

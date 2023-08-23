@@ -35,13 +35,13 @@ pub trait BackendFromDir: BackendInner {
 }
 
 /// A [BackendGraph] can create [BackendExecutionContext]s; this is the backing
-/// implementation for a [crate::witx::types::Graph].
+/// implementation for the user-facing graph.
 pub trait BackendGraph: Send + Sync {
     fn init_execution_context(&self) -> Result<ExecutionContext, BackendError>;
 }
 
 /// A [BackendExecutionContext] performs the actual inference; this is the
-/// backing implementation for a [crate::witx::types::GraphExecutionContext].
+/// backing implementation for a user-facing execution context.
 pub trait BackendExecutionContext: Send + Sync {
     fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError>;
     fn compute(&mut self) -> Result<(), BackendError>;
