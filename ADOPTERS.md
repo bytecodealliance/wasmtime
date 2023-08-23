@@ -1,4 +1,4 @@
-# wasmCloud adopters
+# Wasmtime adopters
 
 _If you are using wasmtime in production at your organization, please add your company name to this list.
 The list is in alphabetical order._
