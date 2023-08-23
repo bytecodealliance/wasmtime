@@ -365,6 +365,11 @@ pub(crate) trait MacroAssembler {
     fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize);
 
     /// Push the register to the stack, returning the stack slot metadata.
+    // NB
+    // The stack alignment should not be assumed after any call to `push`,
+    // unless explicitly aligned otherwise.  Typically, stack alignment is
+    // maintained at call sites and during the execution of
+    // epilogues.
     fn push(&mut self, src: Reg, size: OperandSize) -> StackSlot;
 
     /// Finalize the assembly and return the result.
