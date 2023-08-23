@@ -258,7 +258,7 @@ dependencies = [
  "cap-primitives",
  "cap-std",
  "io-lifetimes 2.0.2",
- "windows-sys",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -287,8 +287,6 @@ dependencies = [
  "maybe-owned",
  "rustix 0.38.8",
  "windows-sys 0.48.0",
- "rustix 0.38.8",
- "windows-sys",
  "winx",
 ]
 
@@ -3064,14 +3062,6 @@ dependencies = [
  "object",
  "wasi",
  "wasm-encoder",
- "wit-bindgen",
-]
-
-[[package]]
-name = "wasi-sockets-tests"
-version = "0.0.0"
-dependencies = [
- "anyhow",
  "wit-bindgen",
 ]
 
