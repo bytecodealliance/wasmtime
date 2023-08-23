@@ -1043,10 +1043,7 @@ mod test {
         }
     }
 
-    #[tracing::instrument]
-    async fn backpressure_write_stream_with_flush_aux(n: usize) {
-        tracing::info!("");
-
+    async fn backpressure_write_stream_with_flush_aux(_: usize) {
         // The channel can buffer up to 1k, plus another 1k in the stream, before not
         // accepting more input:
         let (mut reader, writer) = simplex(1024);
