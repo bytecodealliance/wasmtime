@@ -609,6 +609,44 @@ fn run_simple_with_wasi_threads() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "wasi-nn")]
+#[test]
+fn image_classification_with_wasi_nn() -> Result<()> {
+    wasmtime_wasi_nn::test_check!();
+    let wasm =
+        wasmtime_wasi_nn::test_check::cargo_build("crates/wasi-nn/examples/image-classification");
+    let artifacts_dir = wasmtime_wasi_nn::test_check::artifacts_dir();
+    let artifacts_dir = artifacts_dir.display();
+    let stdout = run_wasmtime(&[
+        "run",
+        "--wasi-modules=experimental-wasi-nn",
+        &format!("--mapdir=fixture::{artifacts_dir}"),
+        &format!("{}", wasm.display()),
+    ])?;
+    assert!(stdout.contains("InferenceResult(963"));
+    Ok(())
+}
+
+#[cfg(feature = "wasi-nn")]
+#[test]
+fn image_classification_with_wasi_nn_and_named_models() -> Result<()> {
+    wasmtime_wasi_nn::test_check!();
+    let wasm = wasmtime_wasi_nn::test_check::cargo_build(
+        "crates/wasi-nn/examples/image-classification-named",
+    );
+    let artifacts_dir = wasmtime_wasi_nn::test_check::artifacts_dir();
+    let artifacts_dir = artifacts_dir.display();
+    let stdout = run_wasmtime(&[
+        "run",
+        "--wasi-modules=experimental-wasi-nn",
+        &format!("--mapdir=fixture::{artifacts_dir}"),
+        &format!("--wasi-nn-graph=openvino::{artifacts_dir}"),
+        &format!("{}", wasm.display()),
+    ])?;
+    assert!(stdout.contains("InferenceResult(963"));
+    Ok(())
+}
+
 #[test]
 fn wasm_flags() -> Result<()> {
     // Any argument after the wasm module should be interpreted as for the

@@ -5,6 +5,7 @@ cargo test \
     --features wasi-http \
     --features component-model \
     --features serve \
+    --features wasmtime-wasi-nn/test-check \
     --workspace \
     --exclude test-programs \
     $@
