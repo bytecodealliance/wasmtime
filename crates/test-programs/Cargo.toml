@@ -36,7 +36,9 @@ wasmtime = { workspace = true, features = ['cranelift', 'component-model'] }
 
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
-wasmtime-wasi = { workspace = true, features = ["tokio"] }
+wasmtime-wasi = { workspace = true, default-features = true, features = [
+    "tokio",
+] }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
