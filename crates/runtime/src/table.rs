@@ -361,7 +361,10 @@ impl Table {
         let old_size = self.size();
         let new_size = match old_size.checked_add(delta) {
             Some(s) => s,
-            None => return Ok(None),
+            None => {
+                store.table_grow_failed(format_err!("overflow calculating new table size"))?;
+                return Ok(None);
+            }
         };
 
         if !store.table_growing(old_size, new_size, self.maximum())? {
@@ -370,7 +373,7 @@ impl Table {
 
         if let Some(max) = self.maximum() {
             if new_size > max {
-                store.table_grow_failed(&format_err!("Table maximum size exceeded"));
+                store.table_grow_failed(format_err!("Table maximum size exceeded"))?;
                 return Ok(None);
             }
         }

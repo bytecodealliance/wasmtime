@@ -831,3 +831,58 @@ fn run_precompiled_component() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn memory_growth_failure() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--wasm-features=memory64",
+            "--trap-on-grow-failure",
+            "tests/all/cli_tests/memory-grow-failure.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("forcing a memory growth failure to be a trap"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn table_growth_failure() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--trap-on-grow-failure",
+            "tests/all/cli_tests/table-grow-failure.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("forcing trap when growing table"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn table_growth_failure2() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--trap-on-grow-failure",
+            "tests/all/cli_tests/table-grow-failure2.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("forcing a table growth failure to be a trap"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}

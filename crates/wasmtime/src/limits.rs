@@ -76,10 +76,19 @@ pub trait ResourceLimiter {
     /// Notifies the resource limiter that growing a linear memory, permitted by
     /// the `memory_growing` method, has failed.
     ///
+    /// Note that this method is not called if `memory_growing` returns an
+    /// error.
+    ///
     /// Reasons for failure include: the growth exceeds the `maximum` passed to
     /// `memory_growing`, or the operating system failed to allocate additional
     /// memory. In that case, `error` might be downcastable to a `std::io::Error`.
-    fn memory_grow_failed(&mut self, _error: &anyhow::Error) {}
+    ///
+    /// See the details on the return values for `memory_growing` for what the
+    /// return value of this function indicates.
+    fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+        log::debug!("ignoring memory growth failure error: {error:?}");
+        Ok(())
+    }
 
     /// Notifies the resource limiter that an instance's table has been
     /// requested to grow.
@@ -99,9 +108,17 @@ pub trait ResourceLimiter {
     /// Notifies the resource limiter that growing a linear memory, permitted by
     /// the `table_growing` method, has failed.
     ///
+    /// Note that this method is not called if `table_growing` returns an error.
+    ///
     /// Reasons for failure include: the growth exceeds the `maximum` passed to
     /// `table_growing`. This could expand in the future.
-    fn table_grow_failed(&mut self, _error: &anyhow::Error) {}
+    ///
+    /// See the details on the return values for `memory_growing` for what the
+    /// return value of this function indicates.
+    fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+        log::debug!("ignoring table growth failure error: {error:?}");
+        Ok(())
+    }
 
     /// The maximum number of instances that can be created for a `Store`.
     ///
@@ -160,7 +177,10 @@ pub trait ResourceLimiterAsync {
     ) -> Result<bool>;
 
     /// Identical to [`ResourceLimiter::memory_grow_failed`]
-    fn memory_grow_failed(&mut self, _error: &anyhow::Error) {}
+    fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+        log::debug!("ignoring memory growth failure error: {error:?}");
+        Ok(())
+    }
 
     /// Asynchronous version of [`ResourceLimiter::table_growing`]
     async fn table_growing(
@@ -171,7 +191,10 @@ pub trait ResourceLimiterAsync {
     ) -> Result<bool>;
 
     /// Identical to [`ResourceLimiter::table_grow_failed`]
-    fn table_grow_failed(&mut self, _error: &anyhow::Error) {}
+    fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+        log::debug!("ignoring table growth failure error: {error:?}");
+        Ok(())
+    }
 
     /// Identical to [`ResourceLimiter::instances`]`
     fn instances(&self) -> usize {
@@ -328,6 +351,15 @@ impl ResourceLimiter for StoreLimits {
         }
     }
 
+    fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+        if self.trap_on_grow_failure {
+            Err(error.context("forcing a memory growth failure to be a trap"))
+        } else {
+            log::debug!("ignoring memory growth failure error: {error:?}");
+            Ok(())
+        }
+    }
+
     fn table_growing(&mut self, _current: u32, desired: u32, maximum: Option<u32>) -> Result<bool> {
         let allow = match self.table_elements {
             Some(limit) if desired > limit => false,
@@ -340,6 +372,15 @@ impl ResourceLimiter for StoreLimits {
             bail!("forcing trap when growing table to {desired} elements")
         } else {
             Ok(allow)
+        }
+    }
+
+    fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
+        if self.trap_on_grow_failure {
+            Err(error.context("forcing a table growth failure to be a trap"))
+        } else {
+            log::debug!("ignoring table growth failure error: {error:?}");
+            Ok(())
         }
     }
 

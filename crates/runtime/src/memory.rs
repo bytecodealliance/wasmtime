@@ -116,7 +116,7 @@ pub trait RuntimeLinearMemory: Send + Sync {
                     // to report the growth failure to but the error should not
                     // be dropped
                     // (https://github.com/bytecodealliance/wasmtime/issues/4240).
-                    store.memory_grow_failed(&format_err!("Memory maximum size exceeded"));
+                    store.memory_grow_failed(format_err!("Memory maximum size exceeded"))?;
                 }
                 return Ok(None);
             }
@@ -130,7 +130,7 @@ pub trait RuntimeLinearMemory: Send + Sync {
                 // dropped
                 // (https://github.com/bytecodealliance/wasmtime/issues/4240).
                 if let Some(store) = store {
-                    store.memory_grow_failed(&e);
+                    store.memory_grow_failed(e)?;
                 }
                 Ok(None)
             }
