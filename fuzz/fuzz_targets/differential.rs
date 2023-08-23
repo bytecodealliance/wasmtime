@@ -62,7 +62,7 @@ fuzz_target!(|data: &[u8]| {
 
     // Errors in `run` have to do with not enough input in `data`, which we
     // ignore here since it doesn't affect how we'd like to fuzz.
-    drop(execute_one(&data));
+    let _ = execute_one(&data);
 });
 
 fn execute_one(data: &[u8]) -> Result<()> {

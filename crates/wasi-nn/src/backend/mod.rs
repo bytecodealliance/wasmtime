@@ -9,6 +9,7 @@ use self::openvino::OpenvinoBackend;
 use crate::backend::kserve::KServeBackend;
 use crate::wit::types::{ExecutionTarget, Tensor};
 use crate::{ExecutionContext, Graph};
+use std::{error::Error, fmt, path::Path, str::FromStr};
 use thiserror::Error;
 use wiggle::async_trait_crate::async_trait;
 use wiggle::GuestError;
@@ -21,16 +22,28 @@ pub fn list() -> Vec<(BackendKind, Box<dyn Backend>)> {
     ]
 }
 
-/// A [Backend] contains the necessary state to load [BackendGraph]s.
+/// A [Backend] contains the necessary state to load [Graph]s.
 pub trait Backend: Send + Sync {
     fn name(&self) -> &str;
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError>;
+    fn as_dir_loadable<'a>(&'a mut self) -> Option<&'a mut dyn BackendFromDir>;
+}
+
+/// Some [Backend]s support loading a [Graph] from a directory on the
+/// filesystem; this is not a general requirement for backends but is useful for
+/// the Wasmtime CLI.
+pub trait BackendFromDir: Backend {
+    fn load_from_dir(
+        &mut self,
+        builders: &Path,
+        target: ExecutionTarget,
+    ) -> Result<Graph, BackendError>;
 }
 
 /// A [BackendGraph] can create [BackendExecutionContext]s; this is the backing
 /// implementation for a [crate::witx::types::Graph].
 pub trait BackendGraph: Send + Sync {
-    fn init_execution_context(&mut self) -> Result<ExecutionContext, BackendError>;
+    fn init_execution_context(&self) -> Result<ExecutionContext, BackendError>;
 }
 
 /// A [BackendExecutionContext] performs the actual inference; this is the
@@ -63,3 +76,20 @@ pub enum BackendKind {
     OpenVINO,
     KServe,
 }
+impl FromStr for BackendKind {
+    type Err = BackendKindParseError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "openvino" => Ok(BackendKind::OpenVINO),
+            _ => Err(BackendKindParseError(s.into())),
+        }
+    }
+}
+#[derive(Debug)]
+pub struct BackendKindParseError(String);
+impl fmt::Display for BackendKindParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown backend: {}", self.0)
+    }
+}
+impl Error for BackendKindParseError {}

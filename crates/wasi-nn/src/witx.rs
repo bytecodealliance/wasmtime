@@ -79,29 +79,14 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         Ok(graph_id.into())
     }
 
-    async fn load_by_name<'b>(
-        &mut self,
-        _name: &wiggle::GuestPtr<'b, str>,
-    ) -> Result<gen::types::Graph> {
-        todo!("needs implemented")
-        // let graph = if let Some(backend) = self.backends.get_mut(&encoding.try_into()?) {
-        //     // Retrieve all of the "builder lists" from the Wasm memory (see
-        //     // $graph_builder_array) as slices for a backend to operate on.
-        //     let mut slices = vec![];
-        //     for builder in builders.iter() {
-        //         let slice = builder?
-        //             .read()?
-        //             .as_slice()?
-        //             .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
-        //         slices.push(slice);
-        //     }
-        //     let slice_refs = slices.iter().map(|s| s.as_ref()).collect::<Vec<_>>();
-        //     backend.load(&slice_refs, target.into())?
-        // } else {
-        //     return Err(UsageError::InvalidEncoding(encoding.into()).into());
-        // };
-        // let graph_id = self.graphs.insert(graph);
-        // Ok(graph_id.into())
+    async fn load_by_name<'b>(&mut self, name: &GuestPtr<'b, str>) -> Result<gen::types::Graph> {
+        let name = name.as_str()?.unwrap();
+        if let Some(graph) = self.registry.get_mut(&name) {
+            let graph_id = self.graphs.insert(graph.clone().into());
+            Ok(graph_id.into())
+        } else {
+            return Err(UsageError::NotFound(name.to_string()).into());
+        }
     }
 
     fn init_execution_context(

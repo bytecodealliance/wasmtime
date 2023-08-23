@@ -204,3 +204,211 @@ block0(v0: i8x16, v1: i8x16, v2: i8x16):
 ;   addi sp, sp, 0x10
 ;   ret
 
+
+
+function %bitselect_icmp_i64x2(i64x2, i64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2, v2: i64x2, v3: i64x2):
+    v4 = icmp eq v0, v1
+    v5 = bitselect v4, v2, v3
+    return v5
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v5,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v7,64(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmseq.vv v0,v1,v3 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v12,v7,v5,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x82, 0x0f, 0x02
+;   addi t6, s0, 0x40
+;   .byte 0x87, 0x83, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0x80, 0x11, 0x62
+;   .byte 0x57, 0x86, 0x72, 0x5c
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x06, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %bitselect_fcmp_i64x2(f64x2, f64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: f64x2, v1: f64x2, v2: i64x2, v3: i64x2):
+    v4 = fcmp le v0, v1
+    v5 = bitselect v4, v2, v3
+    return v5
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v5,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v7,64(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmfle.vv v0,v1,v3 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v12,v7,v5,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x82, 0x0f, 0x02
+;   addi t6, s0, 0x40
+;   .byte 0x87, 0x83, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0x90, 0x11, 0x66
+;   .byte 0x57, 0x86, 0x72, 0x5c
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x06, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %bitselect_fcmp_f64x2(f64x2, f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2, v3: f64x2):
+    v4 = fcmp le v0, v1
+    v5 = bitcast.f64x2 v4
+    v6 = bitselect v5, v2, v3
+    return v6
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v5,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v7,64(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmfle.vv v0,v1,v3 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v12,v7,v5,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x82, 0x0f, 0x02
+;   addi t6, s0, 0x40
+;   .byte 0x87, 0x83, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0x90, 0x11, 0x66
+;   .byte 0x57, 0x86, 0x72, 0x5c
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x06, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %bitselect_icmp_f64x2(i64x2, i64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: i64x2, v1: i64x2, v2: f64x2, v3: f64x2):
+    v4 = icmp eq v0, v1
+    v5 = bitcast.f64x2 v4
+    v6 = bitselect v5, v2, v3
+    return v6
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v5,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v7,64(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmseq.vv v0,v1,v3 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v12,v7,v5,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x82, 0x0f, 0x02
+;   addi t6, s0, 0x40
+;   .byte 0x87, 0x83, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0x80, 0x11, 0x62
+;   .byte 0x57, 0x86, 0x72, 0x5c
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x06, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

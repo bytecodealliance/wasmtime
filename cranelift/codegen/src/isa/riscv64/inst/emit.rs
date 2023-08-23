@@ -458,7 +458,6 @@ impl Inst {
             | Inst::DummyUse { .. }
             | Inst::FloatRound { .. }
             | Inst::FloatSelect { .. }
-            | Inst::FloatSelectPseudo { .. }
             | Inst::Popcnt { .. }
             | Inst::Rev8 { .. }
             | Inst::Cltz { .. }
@@ -2240,53 +2239,6 @@ impl MachInstEmit for Inst {
                 // here select origin x.
                 sink.bind_label(label_x, &mut state.ctrl_plane);
                 Inst::gen_move(rd, rs, ty).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
-            &Inst::FloatSelectPseudo {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => {
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
-                let tmp = allocs.next_writable(tmp);
-                let rd = allocs.next_writable(rd);
-                let label_rs2 = sink.get_label();
-                let label_jump_over = sink.get_label();
-                let lt_op = if ty == F32 {
-                    FpuOPRRR::FltS
-                } else {
-                    FpuOPRRR::FltD
-                };
-                Inst::FpuRRR {
-                    alu_op: lt_op,
-                    frm: None,
-                    rd: tmp,
-                    rs1: if op == FloatSelectOP::Max { rs1 } else { rs2 },
-                    rs2: if op == FloatSelectOP::Max { rs2 } else { rs1 },
-                }
-                .emit(&[], sink, emit_info, state);
-                Inst::CondBr {
-                    taken: BranchTarget::Label(label_rs2),
-                    not_taken: BranchTarget::zero(),
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // here select rs1 as result.
-                Inst::gen_move(rd, rs1, ty).emit(&[], sink, emit_info, state);
-                Inst::Jal {
-                    dest: BranchTarget::Label(label_jump_over),
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_rs2, &mut state.ctrl_plane);
-                Inst::gen_move(rd, rs2, ty).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
 

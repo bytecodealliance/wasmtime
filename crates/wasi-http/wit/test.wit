@@ -26,3 +26,16 @@ world test-command {
   import wasi:cli/stdout
   import wasi:cli/stderr
 }
+
+world test-command-with-sockets {
+  import wasi:poll/poll
+  import wasi:io/streams
+  import wasi:cli/environment
+  import wasi:cli/stdin
+  import wasi:cli/stdout
+  import wasi:cli/stderr
+  import wasi:sockets/tcp
+  import wasi:sockets/tcp-create-socket
+  import wasi:sockets/network
+  import wasi:sockets/instance-network
+}

@@ -415,24 +415,6 @@
 (rule (lower (has_type (ty_scalar_float ty) (fmax rn rm)))
       (fpu_rrr (FPUOp2.Max) rn rm (scalar_size ty)))
 
-;;;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule -1 (lower (has_type ty @ (multi_lane _ _) (fmin_pseudo rm rn)))
-      (bsl ty (vec_rrr (VecALUOp.Fcmgt) rm rn (vector_size ty)) rn rm))
-
-(rule (lower (has_type (ty_scalar_float ty) (fmin_pseudo rm rn)))
-      (with_flags (fpu_cmp (scalar_size ty) rm rn)
-                  (fpu_csel ty (Cond.Gt) rn rm)))
-
-;;;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule -1 (lower (has_type ty @ (multi_lane _ _) (fmax_pseudo rm rn)))
-      (bsl ty (vec_rrr (VecALUOp.Fcmgt) rn rm (vector_size ty)) rn rm))
-
-(rule (lower (has_type (ty_scalar_float ty) (fmax_pseudo rm rn)))
-      (with_flags (fpu_cmp (scalar_size ty) rn rm)
-                  (fpu_csel ty (Cond.Gt) rn rm)))
-
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type ty @ (multi_lane _ _) (sqrt x)))

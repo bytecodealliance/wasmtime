@@ -75,9 +75,11 @@ impl Config {
             // One single-page memory
             pooling.total_memories = config.max_memories as u32;
             pooling.memory_pages = 10;
+            pooling.max_memories_per_module = config.max_memories as u32;
 
             pooling.total_tables = config.max_tables as u32;
             pooling.table_elements = 1_000;
+            pooling.max_tables_per_module = config.max_tables as u32;
 
             pooling.core_instance_size = 1_000_000;
         }

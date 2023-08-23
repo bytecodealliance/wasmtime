@@ -51,6 +51,14 @@ fn parse_map_dirs(s: &str) -> Result<(String, String)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
+fn parse_graphs(s: &str) -> Result<(String, String)> {
+    let parts: Vec<&str> = s.split("::").collect();
+    if parts.len() != 2 {
+        bail!("must contain exactly one double colon ('::')");
+    }
+    Ok((parts[0].into(), parts[1].into()))
+}
+
 fn parse_dur(s: &str) -> Result<Duration> {
     // assume an integer without a unit specified is a number of seconds ...
     if let Ok(val) = s.parse() {
@@ -157,6 +165,17 @@ pub struct RunCommand {
     /// Grant access to a guest directory mapped as a host directory
     #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)]
     map_dirs: Vec<(String, String)>,
+
+    /// Pre-load machine learning graphs (i.e., models) for use by wasi-nn.
+    ///
+    /// Each use of the flag will preload a ML model from the host directory
+    /// using the given model encoding. The model will be mapped to the
+    /// directory name: e.g., `--wasi-nn-graph openvino:/foo/bar` will preload
+    /// an OpenVINO model named `bar`. Note that which model encodings are
+    /// available is dependent on the backends implemented in the
+    /// `wasmtime_wasi_nn` crate.
+    #[clap(long = "wasi-nn-graph", value_name = "FORMAT::HOST_DIR", value_parser = parse_graphs)]
+    graphs: Vec<(String, String)>,
 
     /// Load the given WebAssembly module before the main module
     #[clap(
@@ -620,26 +639,27 @@ impl RunCommand {
             }
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
-                let component = module.unwrap_component();
-                let instance = linker.instantiate(&mut *store, component)?;
-
                 if self.invoke.is_some() {
                     bail!("using `--invoke` with components is not supported");
                 }
 
-                // TODO: use the actual world
-                let func = instance
-                    .get_typed_func::<(), (Result<(), ()>,)>(&mut *store, "run")
-                    .context("failed to load `run` function")?;
+                let component = module.unwrap_component();
 
-                let result = func
-                    .call(&mut *store, ())
+                let (command, _instance) = preview2::command::sync::Command::instantiate(
+                    &mut *store,
+                    &component,
+                    &linker,
+                )?;
+
+                let result = command
+                    .wasi_cli_run()
+                    .call_run(&mut *store)
                     .context("failed to invoke `run` function")
                     .map_err(|e| self.handle_coredump(e));
 
                 // Translate the `Result<(),()>` produced by wasm into a feigned
                 // explicit exit here with status 1 if `Err(())` is returned.
-                result.and_then(|(wasm_result,)| match wasm_result {
+                result.and_then(|wasm_result| match wasm_result {
                     Ok(()) => Ok(()),
                     Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
                 })
@@ -921,7 +941,8 @@ impl RunCommand {
                         })?;
                     }
                 }
-                store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::default()));
+                let (backends, registry) = wasmtime_wasi_nn::preload(&self.graphs)?;
+                store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::new(backends, registry)));
             }
         }
 
