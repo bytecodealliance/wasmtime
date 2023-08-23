@@ -1,6 +1,6 @@
 //! Implements the wasi-nn API.
 
-use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendGraph};
+use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph};
 use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use http_body_util::{BodyExt, Empty, Full};
@@ -43,12 +43,16 @@ impl Backend for KServeBackend {
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
         return Err(BackendError::UnsupportedOperation("load"));
     }
+
+    fn as_dir_loadable<'a>(&'a mut self) -> Option<&'a mut dyn BackendFromDir> {
+        None
+    }
 }
 
 struct KServeGraph();
 
 impl BackendGraph for KServeGraph {
-    fn init_execution_context(&mut self) -> Result<ExecutionContext, BackendError> {
+    fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
         return Err(BackendError::UnsupportedOperation("init_execution_context"));
     }
 }
