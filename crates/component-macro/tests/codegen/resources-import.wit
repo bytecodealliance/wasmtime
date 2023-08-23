@@ -38,6 +38,9 @@ interface resources {
   record-own-arg: func(x: nested-own)
   record-borrow-arg: func(x: nested-borrow)
   record-result: func() -> nested-own
+
+  type some-handle = borrow<bar>
+  func-with-handle-typedef: func(x: some-handle)
 }
 
 world the-world {

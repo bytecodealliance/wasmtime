@@ -798,10 +798,19 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Type(t) => self.type_alias(id, name, t, &ty.docs),
             TypeDefKind::Future(_) => todo!("generate for future"),
             TypeDefKind::Stream(_) => todo!("generate for stream"),
-            TypeDefKind::Handle(_handle) => {}
+            TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
         }
+    }
+
+    fn type_handle(&mut self, id: TypeId, name: &str, handle: &Handle, docs: &Docs) {
+        self.rustdoc(docs);
+        let name = name.to_upper_camel_case();
+        uwriteln!(self.src, "pub type {name} = ");
+        self.print_handle(handle);
+        self.push_str(";\n");
+        self.assert_type(id, &name);
     }
 
     fn type_resource(&mut self, id: TypeId, _name: &str, resource: &TypeDef, docs: &Docs) {
