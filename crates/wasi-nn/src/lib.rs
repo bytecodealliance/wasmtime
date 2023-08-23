@@ -1,7 +1,7 @@
-pub mod backend;
 mod ctx;
 mod registry;
 
+pub mod backend;
 pub use ctx::{preload, WasiNnCtx};
 pub use registry::{GraphRegistry, InMemoryRegistry};
 pub mod wit;
