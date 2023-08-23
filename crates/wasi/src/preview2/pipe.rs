@@ -329,13 +329,19 @@ impl Worker {
             while let Some(work) = self.pop_in_worker() {
                 tracing::debug!("worker popped: {work:?}");
                 match work {
-                    WriteMessage::Write(mut bytes) => match writer.write_buf(&mut bytes).await {
-                        Ok(0) | Err(_) => {
-                            self.die_in_worker();
-                            return;
+                    WriteMessage::Write(mut bytes) => {
+                        let len = bytes.len();
+                        match writer.write_all_buf(&mut bytes).await {
+                            Err(_) => {
+                                self.die_in_worker();
+                                return;
+                            }
+                            Ok(_) => {
+                                self.state.lock().unwrap().write_budget += len;
+                                self.write_ready_changed.notify_waiters();
+                            }
                         }
-                        Ok(_) => {}
-                    },
+                    }
                     WriteMessage::Flush => match writer.flush().await {
                         Ok(()) => self.finish_flush_in_worker(),
                         Err(_) => {
@@ -353,11 +359,7 @@ impl Worker {
         let mut state = self.state.lock().unwrap();
         let item = state.items.pop_front();
         match &item {
-            Some(WriteMessage::Write(bytes)) => {
-                state.write_budget += bytes.len();
-                drop(state);
-                self.write_ready_changed.notify_waiters();
-            }
+            Some(WriteMessage::Write(_)) => drop(state),
             Some(WriteMessage::Flush) => state.flush_state = FlushState::InProgress,
             _ => {}
         }
@@ -823,7 +825,6 @@ mod test {
     #[tracing::instrument]
     async fn closed_write_stream_(n: usize) {
         let (reader, writer) = simplex(1);
-        drop(reader);
         let mut writer = AsyncWriteStream::new(1024, writer);
 
         // Without checking write readiness, perform a nonblocking write: this should succeed
@@ -837,6 +838,10 @@ mod test {
             ),
             _ => panic!("invalid readiness: {readiness:?}"),
         }
+
+        // Now let's make sure that the worker will pick up on the fact that the future writes will
+        // fail.
+        drop(reader);
 
         // The rest of this test should be valid whether or not we check write readiness:
         if n % 2 == 0 {
@@ -952,49 +957,56 @@ mod test {
         assert_eq!(read2_buf.as_slice(), chunk2.deref());
     }
 
-    /*
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn backpressure_write_stream() {
-        // Stream can buffer up to 1k, plus one write chunk, before not
+        // The channel can buffer up to 1k, plus another 1k in the stream, before not
         // accepting more input:
         let (mut reader, writer) = simplex(1024);
-        let mut writer = AsyncWriteStream::new(writer);
+        let mut writer = AsyncWriteStream::new(1024, writer);
+
+        let chunk = Bytes::from_static(&[0; 1024]);
 
         // Write enough to fill the simplex buffer:
-        let chunk = Bytes::from_static(&[0; 1024]);
-        let (len, state) = writer.write(chunk.clone()).unwrap();
+        match writer.write(chunk.clone()).expect("write does not trap") {
+            Some(WriteReadiness::Ready(1024)) => {}
 
-        assert_eq!(len, chunk.len());
-        assert_eq!(state, StreamState::Open);
+            // If the worker hasn't picked up the write yet, the buffer will be full. We need to
+            // wait for the worker to process the buffer before continuing.
+            None => {
+                match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+                    .await
+                    .expect("the writer should be ready instantly")
+                    .expect("write_ready does not trap")
+                {
+                    WriteReadiness::Ready(1024) => {}
+                    a => panic!("writer should be ready for more input: {a:?}"),
+                }
+            }
+            Some(a) => panic!("invalid write readiness: {a:?}"),
+        }
 
-        // turn the crank and it should be ready for writing again:
-        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
-            .await
-            .expect("the writer should be ready instantly")
-            .expect("ready is ok");
-
-        // Now fill the buffer between here and the writer task:
-        let (len, state) = writer.write(chunk.clone()).unwrap();
-        assert_eq!(len, chunk.len());
-        assert_eq!(state, StreamState::Open);
+        // Now fill the buffer between here and the writer task. This should always indicate
+        // back-pressure because now both buffers (simplex and worker) are full.
+        match writer.write(chunk.clone()).expect("write does not trap") {
+            None => {}
+            Some(a) => panic!("expected backpressure: {a:?}"),
+        }
 
         // Try shoving even more down there, and it shouldnt accept more input:
-        let (len, state) = writer.write(chunk.clone()).unwrap();
-        assert_eq!(len, 0);
-        assert_eq!(state, StreamState::Open);
+        writer
+            .write(chunk.clone())
+            .err()
+            .expect("unpermitted write does trap");
 
-        // turn the crank and it should Not become ready for writing until we read something out.
-        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
+        // No amount of waiting will resolve the situation, as nothing is emptying the simplex
+        // buffer.
+        tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
             .await
             .err()
             .expect("the writer should be not become ready");
 
-        // Still not ready from the .write interface either:
-        let (len, state) = writer.write(chunk.clone()).unwrap();
-        assert_eq!(len, 0);
-        assert_eq!(state, StreamState::Open);
-
-        // There is 2k in the buffer. I should be able to read all of it out:
+        // There is 2k buffered between the simplex and worker buffers. I should be able to read
+        // all of it out:
         let mut buf = [0; 2048];
         reader.read_exact(&mut buf).await.unwrap();
 
@@ -1005,17 +1017,35 @@ mod test {
             .expect("nothing more buffered in the system");
 
         // Now the backpressure should be cleared, and an additional write should be accepted.
-
-        // immediately ready for writing:
-        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
+        match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
             .await
             .expect("the writer should be ready instantly")
-            .expect("ready is ok");
+            .expect("ready is ok")
+        {
+            WriteReadiness::Ready(1024) => {}
+            a => panic!("invalid write readiness: {a:?}"),
+        }
 
         // and the write succeeds:
-        let (len, state) = writer.write(chunk.clone()).unwrap();
-        assert_eq!(len, chunk.len());
-        assert_eq!(state, StreamState::Open);
+        match writer.write(chunk.clone()).expect("write does not trap") {
+            // There's a race here on how fast the worker consumes the input, so we might see that
+            // either it's consumed everything, or that the buffer is currently full.
+            Some(WriteReadiness::Ready(1024)) => {}
+
+            // If the worker hasn't picked up the write yet, the buffer will be full. We need to
+            // wait for the worker to process the buffer before continuing.
+            None => {
+                match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+                    .await
+                    .expect("the writer should be ready instantly")
+                    .expect("write_ready does not trap")
+                {
+                    WriteReadiness::Ready(1024) => {}
+                    a => panic!("writer should be ready for more input: {a:?}"),
+                }
+            }
+
+            Some(a) => panic!("invalid write readiness: {a:?}"),
+        }
     }
-    */
 }
