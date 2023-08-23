@@ -3,6 +3,13 @@
 version = 3
 
 [[package]]
+name = "image-classification-named"
+version = "0.0.0"
+dependencies = [
+ "wasi-nn",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -64,11 +71,4 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03d01b90f0cca3f19682e90e1bc3f5e3e441031e19e56ce7dbf034f3b3597552"
 dependencies = [
  "thiserror",
-]
-
-[[package]]
-name = "wasi-nn-example-named"
-version = "0.0.0"
-dependencies = [
- "wasi-nn",
 ]
