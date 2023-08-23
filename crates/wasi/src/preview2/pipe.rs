@@ -830,7 +830,13 @@ mod test {
         // because we will buffer up the write.
         let chunk = Bytes::from_static(&[0; 1]);
         let readiness = writer.write(chunk.clone()).expect("write does not trap");
-        assert!(matches!(readiness, Some(WriteReadiness::Ready(1023))));
+        match readiness {
+            Some(WriteReadiness::Ready(budget)) => assert!(
+                budget == 1023 || budget == 1024,
+                "unexpected budget: {budget}"
+            ),
+            _ => panic!("invalid readiness: {readiness:?}"),
+        }
 
         // The rest of this test should be valid whether or not we check write readiness:
         if n % 2 == 0 {
@@ -841,7 +847,10 @@ mod test {
                 .expect("write ready does not trap");
 
             match permit {
-                WriteReadiness::Ready(budget) => assert!(budget >= 1023),
+                WriteReadiness::Ready(budget) => assert!(
+                    budget == 1023 || budget == 1024,
+                    "unexpected budget: {budget}"
+                ),
                 WriteReadiness::Closed => {
                     tracing::debug!("discovered stream closed waiting for write_ready");
                     return;
@@ -876,26 +885,37 @@ mod test {
         }
     }
 
-    /*
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn multiple_chunks_write_stream() {
         use std::ops::Deref;
 
         let (mut reader, writer) = simplex(1024);
-        let mut writer = AsyncWriteStream::new(writer);
+        let mut writer = AsyncWriteStream::new(1024, writer);
 
         // Write a chunk:
         let chunk = Bytes::from_static(&[123; 1]);
-        let (len, state) = writer.write(chunk.clone()).unwrap();
+        let readiness = writer.write(chunk.clone()).expect("write does not trap");
 
-        assert_eq!(len, chunk.len());
-        assert_eq!(state, StreamState::Open);
+        match readiness {
+            Some(WriteReadiness::Ready(budget)) => assert!(
+                budget == 1023 || budget == 1024,
+                "unexpected budget: {budget}"
+            ),
+            _ => panic!("bad state for readiness: {readiness:?}"),
+        }
 
         // After the write, still ready for more writing:
-        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
+        let readiness = tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
             .await
             .expect("the writer should be ready instantly")
-            .expect("ready is ok");
+            .expect("write_ready does not trap");
+        match readiness {
+            WriteReadiness::Ready(budget) => assert!(
+                budget == 1024 || budget == 1023,
+                "unexpected budget: {budget}"
+            ),
+            _ => panic!("bad state for readiness: {readiness:?}"),
+        }
 
         let mut read_buf = vec![0; chunk.len()];
         let read_len = reader.read_exact(&mut read_buf).await.unwrap();
@@ -904,15 +924,27 @@ mod test {
 
         // Write a second, different chunk:
         let chunk2 = Bytes::from_static(&[45; 1]);
-        let (len, state) = writer.write(chunk2.clone()).unwrap();
-        assert_eq!(len, chunk2.len());
-        assert_eq!(state, StreamState::Open);
+        let readiness = writer.write(chunk2.clone()).expect("write does not trap");
 
+        match readiness {
+            Some(WriteReadiness::Ready(budget)) => assert!(
+                budget == 1024 || budget == 1023,
+                "unexpected budget: {budget}"
+            ),
+            _ => panic!("bad state for readiness: {readiness:?}"),
+        }
         // After the write, still ready for more writing:
-        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
+        let readiness = tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
             .await
             .expect("the writer should be ready instantly")
-            .expect("ready is ok");
+            .expect("write_ready does not trap");
+        match readiness {
+            WriteReadiness::Ready(budget) => assert!(
+                budget == 1024 || budget == 1023,
+                "unexpected budget: {budget}"
+            ),
+            _ => panic!("bad state for readiness: {readiness:?}"),
+        }
 
         let mut read2_buf = vec![0; chunk2.len()];
         let read2_len = reader.read_exact(&mut read2_buf).await.unwrap();
@@ -920,6 +952,7 @@ mod test {
         assert_eq!(read2_buf.as_slice(), chunk2.deref());
     }
 
+    /*
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn backpressure_write_stream() {
         // Stream can buffer up to 1k, plus one write chunk, before not
