@@ -56,6 +56,12 @@ impl WasiNnCtx {
     }
 }
 
+impl Default for WasiNnCtx {
+    fn default() -> Self {
+        Self::new(backend::list(), Registry::from(InMemoryRegistry::new()))
+    }
+}
+
 /// Possible errors while interacting with [WasiNnCtx].
 #[derive(Debug, Error)]
 pub enum WasiNnError {
