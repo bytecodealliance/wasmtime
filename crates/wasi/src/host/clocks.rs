@@ -101,3 +101,15 @@ impl Subscribe for Deadline {
         }
     }
 }
+
+impl<T: WasiView> timezone::Host for T {
+    fn display(&mut self, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
+        let duration = std::time::Duration::new(when.seconds, when.nanoseconds);
+        Ok(self.ctx().timezone.display(duration))
+    }
+
+    fn utc_offset(&mut self, when: Datetime) -> anyhow::Result<i32> {
+        let duration = std::time::Duration::new(when.seconds, when.nanoseconds);
+        Ok(self.ctx().timezone.utc_offset(duration))
+    }
+}
