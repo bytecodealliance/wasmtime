@@ -29,10 +29,10 @@
 ;;   23:	 0f8400000000         	je	0x29
 ;;   29:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   2d:	 85c0                 	test	eax, eax
-;;   2f:	 0f840c000000         	je	0x41
-;;   35:	 48c7c007000000       	mov	rax, 7
-;;   3c:	 e907000000           	jmp	0x48
-;;   41:	 48c7c008000000       	mov	rax, 8
-;;   48:	 4883c410             	add	rsp, 0x10
-;;   4c:	 5d                   	pop	rbp
-;;   4d:	 c3                   	ret	
+;;   2f:	 0f840a000000         	je	0x3f
+;;   35:	 b807000000           	mov	eax, 7
+;;   3a:	 e905000000           	jmp	0x44
+;;   3f:	 b808000000           	mov	eax, 8
+;;   44:	 4883c410             	add	rsp, 0x10
+;;   48:	 5d                   	pop	rbp
+;;   49:	 c3                   	ret	

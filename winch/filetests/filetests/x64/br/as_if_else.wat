@@ -19,8 +19,8 @@
 ;;   18:	 85c0                 	test	eax, eax
 ;;   1a:	 0f8409000000         	je	0x29
 ;;   20:	 8b442408             	mov	eax, dword ptr [rsp + 8]
-;;   24:	 e907000000           	jmp	0x30
-;;   29:	 48c7c004000000       	mov	rax, 4
-;;   30:	 4883c410             	add	rsp, 0x10
-;;   34:	 5d                   	pop	rbp
-;;   35:	 c3                   	ret	
+;;   24:	 e905000000           	jmp	0x2e
+;;   29:	 b804000000           	mov	eax, 4
+;;   2e:	 4883c410             	add	rsp, 0x10
+;;   32:	 5d                   	pop	rbp
+;;   33:	 c3                   	ret	

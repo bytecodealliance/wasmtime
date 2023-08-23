@@ -30,7 +30,7 @@
 ;;   2f:	 39c1                 	cmp	ecx, eax
 ;;   31:	 b900000000           	mov	ecx, 0
 ;;   36:	 400f95c1             	setne	cl
-;;   3a:	 4889c8               	mov	rax, rcx
-;;   3d:	 4883c410             	add	rsp, 0x10
-;;   41:	 5d                   	pop	rbp
-;;   42:	 c3                   	ret	
+;;   3a:	 89c8                 	mov	eax, ecx
+;;   3c:	 4883c410             	add	rsp, 0x10
+;;   40:	 5d                   	pop	rbp
+;;   41:	 c3                   	ret	

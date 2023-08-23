@@ -31,30 +31,28 @@
 ;;   10:	 4c893424             	mov	qword ptr [rsp], r14
 ;;   14:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   18:	 85c0                 	test	eax, eax
-;;   1a:	 0f8411000000         	je	0x31
+;;   1a:	 0f840f000000         	je	0x2f
 ;;   20:	 e800000000           	call	0x25
-;;   25:	 48c7c003000000       	mov	rax, 3
-;;   2c:	 e90f000000           	jmp	0x40
-;;   31:	 e800000000           	call	0x36
-;;   36:	 48b8fdffffff00000000 	
-;; 				movabs	rax, 0xfffffffd
-;;   40:	 8b4c2408             	mov	ecx, dword ptr [rsp + 8]
-;;   44:	 50                   	push	rax
-;;   45:	 85c9                 	test	ecx, ecx
-;;   47:	 0f8419000000         	je	0x66
-;;   4d:	 4883ec08             	sub	rsp, 8
-;;   51:	 e800000000           	call	0x56
-;;   56:	 4883c408             	add	rsp, 8
-;;   5a:	 48c7c004000000       	mov	rax, 4
-;;   61:	 e917000000           	jmp	0x7d
-;;   66:	 4883ec08             	sub	rsp, 8
-;;   6a:	 e800000000           	call	0x6f
-;;   6f:	 4883c408             	add	rsp, 8
-;;   73:	 48b8fbffffff00000000 	
-;; 				movabs	rax, 0xfffffffb
-;;   7d:	 59                   	pop	rcx
-;;   7e:	 0fafc8               	imul	ecx, eax
-;;   81:	 4889c8               	mov	rax, rcx
-;;   84:	 4883c410             	add	rsp, 0x10
-;;   88:	 5d                   	pop	rbp
-;;   89:	 c3                   	ret	
+;;   25:	 b803000000           	mov	eax, 3
+;;   2a:	 e90a000000           	jmp	0x39
+;;   2f:	 e800000000           	call	0x34
+;;   34:	 b8fdffffff           	mov	eax, 0xfffffffd
+;;   39:	 8b4c2408             	mov	ecx, dword ptr [rsp + 8]
+;;   3d:	 50                   	push	rax
+;;   3e:	 85c9                 	test	ecx, ecx
+;;   40:	 0f8417000000         	je	0x5d
+;;   46:	 4883ec08             	sub	rsp, 8
+;;   4a:	 e800000000           	call	0x4f
+;;   4f:	 4883c408             	add	rsp, 8
+;;   53:	 b804000000           	mov	eax, 4
+;;   58:	 e912000000           	jmp	0x6f
+;;   5d:	 4883ec08             	sub	rsp, 8
+;;   61:	 e800000000           	call	0x66
+;;   66:	 4883c408             	add	rsp, 8
+;;   6a:	 b8fbffffff           	mov	eax, 0xfffffffb
+;;   6f:	 59                   	pop	rcx
+;;   70:	 0fafc8               	imul	ecx, eax
+;;   73:	 89c8                 	mov	eax, ecx
+;;   75:	 4883c410             	add	rsp, 0x10
+;;   79:	 5d                   	pop	rbp
+;;   7a:	 c3                   	ret	

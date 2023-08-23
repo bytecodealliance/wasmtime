@@ -29,20 +29,20 @@
 ;;    c:	 4c89742404           	mov	qword ptr [rsp + 4], r14
 ;;   11:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   15:	 85c0                 	test	eax, eax
-;;   17:	 0f8411000000         	je	0x2e
+;;   17:	 0f840f000000         	je	0x2c
 ;;   1d:	 e800000000           	call	0x22
-;;   22:	 48c7c001000000       	mov	rax, 1
-;;   29:	 e90c000000           	jmp	0x3a
-;;   2e:	 e800000000           	call	0x33
-;;   33:	 48c7c000000000       	mov	rax, 0
-;;   3a:	 50                   	push	rax
-;;   3b:	 59                   	pop	rcx
-;;   3c:	 48c7c002000000       	mov	rax, 2
-;;   43:	 85c9                 	test	ecx, ecx
-;;   45:	 0f850c000000         	jne	0x57
-;;   4b:	 50                   	push	rax
-;;   4c:	 48c7c003000000       	mov	rax, 3
-;;   53:	 4883c408             	add	rsp, 8
-;;   57:	 4883c410             	add	rsp, 0x10
-;;   5b:	 5d                   	pop	rbp
-;;   5c:	 c3                   	ret	
+;;   22:	 b801000000           	mov	eax, 1
+;;   27:	 e90a000000           	jmp	0x36
+;;   2c:	 e800000000           	call	0x31
+;;   31:	 b800000000           	mov	eax, 0
+;;   36:	 50                   	push	rax
+;;   37:	 59                   	pop	rcx
+;;   38:	 b802000000           	mov	eax, 2
+;;   3d:	 85c9                 	test	ecx, ecx
+;;   3f:	 0f850a000000         	jne	0x4f
+;;   45:	 50                   	push	rax
+;;   46:	 b803000000           	mov	eax, 3
+;;   4b:	 4883c408             	add	rsp, 8
+;;   4f:	 4883c410             	add	rsp, 0x10
+;;   53:	 5d                   	pop	rbp
+;;   54:	 c3                   	ret	
