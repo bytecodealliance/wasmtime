@@ -1822,10 +1822,20 @@ criteria = "safe-to-deploy"
 version = "0.21.0"
 notes = "no unsafe code, ambient capabilities only used in tests"
 
+[[audits.rustls]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.21.0 -> 0.21.6"
+
 [[audits.rustls-webpki]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.100.1"
+
+[[audits.rustls-webpki]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.100.1 -> 0.101.4"
 
 [[audits.sct]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -2757,6 +2767,11 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.22.4 -> 0.23.0"
+
+[[audits.webpki-roots]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.23.0 -> 0.25.2"
 
 [[audits.winx]]
 who = "Dan Gohman <dev@sunfishcode.online>"
