@@ -47,6 +47,7 @@ struct Wasmtime {
     sizes: SizeAlign,
     interface_names: HashMap<InterfaceId, InterfaceName>,
     with_name_counter: usize,
+    interface_last_seen_as_import: HashMap<InterfaceId, bool>,
 }
 
 struct ImportInterface {
@@ -196,6 +197,7 @@ impl Wasmtime {
                     .push(ImportFunction { sig, add_to_linker });
             }
             WorldItem::Interface(id) => {
+                gen.gen.interface_last_seen_as_import.insert(*id, true);
                 if gen.gen.name_interface(resolve, *id, name) {
                     return;
                 }
@@ -265,6 +267,7 @@ impl Wasmtime {
             }
             WorldItem::Type(_) => unreachable!(),
             WorldItem::Interface(id) => {
+                gen.gen.interface_last_seen_as_import.insert(*id, false);
                 gen.gen.name_interface(resolve, *id, name);
                 gen.current_interface = Some((*id, name, true));
                 gen.types(*id);
@@ -1757,40 +1760,17 @@ impl<'a> InterfaceGenerator<'a> {
 
         self.rustdoc(&func.docs);
 
-        let mut resources = Vec::new();
-        let mut args = String::new();
-
-        for (i, param) in func.params.iter().enumerate() {
-            uwrite!(args, "arg{}: ", i);
-            resources.append(&mut self.print_ty_(
-                &mut args,
-                &param.1,
-                TypeMode::AllBorrowed("'_"),
-                resources.len(),
-                true,
-            ));
-            args.push_str(",");
-        }
-
-        let resource_generics = resources
-            .iter()
-            .map(|(arg_name, _resource_name)| format!("{}: 'static", arg_name))
-            .collect::<Vec<String>>()
-            .join(", ");
-
         uwrite!(
             self.src,
-            "pub {async_} fn call_{}<",
+            "pub {async_} fn call_{}<S: wasmtime::AsContextMut>(&self, mut store: S, ",
             func.name.to_snake_case(),
         );
 
-        if !resources.is_empty() {
-            uwrite!(self.src, "{resource_generics}, ");
+        for (i, param) in func.params.iter().enumerate() {
+            uwrite!(self.src, "arg{}: ", i);
+            self.print_ty(&param.1, TypeMode::AllBorrowed("'_"));
+            self.push_str(",");
         }
-
-        uwrite!(self.src, "S: wasmtime::AsContextMut>(&self, mut store: S, ");
-
-        self.push_str(&args);
 
         self.src.push_str(") -> wasmtime::Result<");
         self.print_result_ty(&func.results, TypeMode::Owned);
@@ -1823,12 +1803,10 @@ impl<'a> InterfaceGenerator<'a> {
 
         self.src.push_str("let callee = unsafe {\n");
         self.src.push_str("wasmtime::component::TypedFunc::<(");
-        let mut params = String::new();
         for (_, ty) in func.params.iter() {
-            self.print_ty_(&mut params, ty, TypeMode::AllBorrowed("'_"), 0, true);
-            params.push_str(", ");
+            self.print_ty(ty, TypeMode::AllBorrowed("'_"));
+            self.push_str(", ");
         }
-        self.src.push_str(&params);
         self.src.push_str("), (");
         for ty in func.results.iter_types() {
             self.print_ty(ty, TypeMode::Owned);
@@ -1972,6 +1950,10 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
 
     fn info(&self, ty: TypeId) -> TypeInfo {
         self.gen.types.get(ty)
+    }
+
+    fn is_imported_interface(&self, interface: InterfaceId) -> bool {
+        self.gen.interface_last_seen_as_import[&interface]
     }
 }
 
