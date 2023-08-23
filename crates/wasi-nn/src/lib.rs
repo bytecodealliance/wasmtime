@@ -1,26 +1,26 @@
 mod backend;
 mod ctx;
+mod registry;
 
-pub use ctx::WasiNnCtx;
+pub use ctx::{preload, WasiNnCtx};
+pub use registry::{GraphRegistry, InMemoryRegistry};
 pub mod wit;
 pub mod witx;
 
+use std::sync::Arc;
+
 /// A backend-defined graph (i.e., ML model).
-pub struct Graph(Box<dyn backend::BackendGraph>);
+#[derive(Clone)]
+pub struct Graph(Arc<dyn backend::BackendGraph>);
 impl From<Box<dyn backend::BackendGraph>> for Graph {
     fn from(value: Box<dyn backend::BackendGraph>) -> Self {
-        Self(value)
+        Self(value.into())
     }
 }
 impl std::ops::Deref for Graph {
     type Target = dyn backend::BackendGraph;
     fn deref(&self) -> &Self::Target {
         self.0.as_ref()
-    }
-}
-impl std::ops::DerefMut for Graph {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.as_mut()
     }
 }
 

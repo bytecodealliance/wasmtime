@@ -21,6 +21,7 @@ mod ctx;
 mod error;
 mod filesystem;
 mod host;
+mod network;
 pub mod pipe;
 mod poll;
 #[cfg(feature = "preview1-on-preview2")]
@@ -29,6 +30,7 @@ mod random;
 mod stdio;
 mod stream;
 mod table;
+mod tcp;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
@@ -117,10 +119,14 @@ pub mod bindings {
               import wasi:cli/terminal-stdin
               import wasi:cli/terminal-stdout
               import wasi:cli/terminal-stderr
+              import wasi:sockets/tcp
+              import wasi:sockets/tcp-create-socket
+              import wasi:sockets/instance-network
             ",
         tracing: true,
         trappable_error_type: {
             "wasi:filesystem/types"::"error-code": Error,
+            "wasi:sockets/network"::"error-code": Error,
         },
         with: {
             "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
@@ -131,7 +137,7 @@ pub mod bindings {
         });
     }
 
-    pub use self::_internal_rest::wasi::{cli, random};
+    pub use self::_internal_rest::wasi::{cli, random, sockets};
     pub mod filesystem {
         pub use super::_internal_io::wasi::filesystem::types;
         pub use super::_internal_rest::wasi::filesystem::preopens;

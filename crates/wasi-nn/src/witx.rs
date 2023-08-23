@@ -78,8 +78,14 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         Ok(graph_id.into())
     }
 
-    fn load_by_name<'b>(&mut self, _name: &wiggle::GuestPtr<'b, str>) -> Result<gen::types::Graph> {
-        todo!()
+    fn load_by_name<'b>(&mut self, name: &wiggle::GuestPtr<'b, str>) -> Result<gen::types::Graph> {
+        let name = name.as_str()?.unwrap();
+        if let Some(graph) = self.registry.get_mut(&name) {
+            let graph_id = self.graphs.insert(graph.clone().into());
+            Ok(graph_id.into())
+        } else {
+            return Err(UsageError::NotFound(name.to_string()).into());
+        }
     }
 
     fn init_execution_context(

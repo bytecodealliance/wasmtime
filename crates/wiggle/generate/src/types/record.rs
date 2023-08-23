@@ -2,7 +2,7 @@ use crate::lifetimes::{anon_lifetime, LifetimeExt};
 use crate::names;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use witx::Layout;
 
 pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenStream {
@@ -32,6 +32,17 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
             },
         };
         quote!(pub #name: #type_)
+    });
+
+    let member_offsets = s.member_layout().into_iter().map(|ml| {
+        let name = names::struct_member(&ml.member.name);
+        let offset = ml.offset as u32;
+        let method_name = format_ident!("offset_of_{}", name);
+        quote! {
+            pub const fn #method_name () -> u32 {
+                #offset
+            }
+        }
     });
 
     let member_reads = s.member_layout().into_iter().map(|ml| {
@@ -84,6 +95,10 @@ pub(super) fn define_struct(name: &witx::Id, s: &witx::RecordDatatype) -> TokenS
         #[derive(Clone, Debug #extra_derive)]
         pub struct #ident #struct_lifetime {
             #(#member_decls),*
+        }
+
+        impl #struct_lifetime #ident #struct_lifetime {
+            #(#member_offsets)*
         }
 
         impl<'a> wiggle::GuestType<'a> for #ident #struct_lifetime {

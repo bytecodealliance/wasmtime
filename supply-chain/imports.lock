@@ -288,6 +288,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-net-ext]]
+version = "2.0.0"
+when = "2023-06-30"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-primitives]]
 version = "2.0.0"
 when = "2023-06-30"
@@ -617,6 +624,13 @@ user-name = "Andrew Gallant"
 [[publisher.rustix]]
 version = "0.38.4"
 when = "2023-07-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.rustix]]
+version = "0.38.8"
+when = "2023-08-10"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
