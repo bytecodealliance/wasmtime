@@ -1,6 +1,6 @@
 use crate::component_impl::add_component_to_linker;
 pub use crate::http_impl::WasiHttpViewExt;
-pub use crate::r#struct::{WasiHttpCtx, WasiHttpView};
+pub use crate::types::{WasiHttpCtx, WasiHttpView};
 use core::fmt::Formatter;
 use std::fmt::{self, Display};
 
@@ -15,7 +15,7 @@ wasmtime::component::bindgen!({
 
 pub mod component_impl;
 pub mod http_impl;
-pub mod r#struct;
+pub mod types;
 pub mod types_impl;
 
 pub fn add_to_component_linker<T>(linker: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>

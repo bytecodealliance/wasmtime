@@ -1,5 +1,5 @@
 use crate::http_impl::WasiHttpViewExt;
-use crate::r#struct::{ActiveFields, ActiveRequest, HttpRequest, TableHttpExt};
+use crate::types::{ActiveFields, ActiveRequest, HttpRequest, TableHttpExt};
 use crate::wasi::http::types::{
     Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse,
     IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream, ResponseOutparam,
