@@ -32,7 +32,7 @@ pub mod runtime;
 pub mod sockets;
 mod view;
 
-pub use self::clocks::{HostMonotonicClock, HostWallClock};
+pub use self::clocks::{HostMonotonicClock, HostTimezone, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FilePerms, OpenMode};

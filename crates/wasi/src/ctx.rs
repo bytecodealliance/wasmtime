@@ -1,5 +1,5 @@
 use crate::cli::{StdinStream, StdoutStream, WasiCliCtx};
-use crate::clocks::{HostMonotonicClock, HostWallClock, WasiClocksCtx};
+use crate::clocks::{HostMonotonicClock, HostTimezone, HostWallClock, WasiClocksCtx};
 use crate::filesystem::{Dir, WasiFilesystemCtx};
 use crate::random::WasiRandomCtx;
 use crate::sockets::{SocketAddrCheck, SocketAddrUse, WasiSocketsCtx};
@@ -363,6 +363,14 @@ impl WasiCtxBuilder {
     /// By default the host's monotonic clock is used.
     pub fn monotonic_clock(&mut self, clock: impl HostMonotonicClock + 'static) -> &mut Self {
         self.clocks.monotonic_clock = Box::new(clock);
+        self
+    }
+
+    /// Configures `wasi:clocks/timezone` to use the `clock` specified.
+    ///
+    /// By default the host's timezone is used.
+    pub fn timezone(&mut self, clock: impl HostTimezone + 'static) -> &mut Self {
+        self.clocks.timezone = Box::new(clock);
         self
     }
 

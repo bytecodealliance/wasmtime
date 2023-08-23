@@ -25,7 +25,7 @@ wit_bindgen::generate!({
         "../wasi-tls/wit/deps/tls",
     ],
     world: "wasmtime:test/test",
-    features: ["cli-exit-with-code", "tls"],
+    features: ["cli-exit-with-code", "tls", "clocks-timezone"],
     generate_all,
 });
 
@@ -48,6 +48,7 @@ pub mod proxy {
             "wasi:clocks/monotonic-clock@0.2.6": crate::wasi::clocks::monotonic_clock,
             "wasi:clocks/wall-clock@0.2.6": crate::wasi::clocks::wall_clock,
         },
+        features: ["clocks-timezone"],
     });
 }
 

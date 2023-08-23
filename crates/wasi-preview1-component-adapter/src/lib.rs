@@ -67,6 +67,7 @@ pub mod bindings {
             "poll",
             "[method]outgoing-datagram-stream.send",
         ],
+        features: ["clocks-timezone"],
         generate_all,
         disable_custom_section_link_helpers: true,
     });
@@ -90,6 +91,7 @@ pub mod bindings {
         ],
         generate_all,
         disable_custom_section_link_helpers: true,
+        features: ["clocks-timezone"],
     });
 
     #[cfg(feature = "proxy")]
@@ -111,6 +113,7 @@ pub mod bindings {
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         skip: ["poll", "[method]outgoing-datagram-stream.send"],
+        features: ["clocks-timezone"],
         generate_all,
         disable_custom_section_link_helpers: true,
     });
