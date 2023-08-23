@@ -523,8 +523,17 @@ mod test {
     use super::*;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-    // 10ms was enough for every CI platform except linux riscv64:
+    #[cfg(target_arch = "riscv64")]
+    const TEST_ITERATIONS: usize = 10;
+
+    #[cfg(target_arch = "riscv64")]
     const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(100);
+
+    #[cfg(not(target_arch = "riscv64"))]
+    const TEST_ITERATIONS: usize = 100;
+
+    #[cfg(not(target_arch = "riscv64"))]
+    const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(10);
 
     pub fn simplex(size: usize) -> (impl AsyncRead, impl AsyncWrite) {
         let (a, b) = tokio::io::duplex(size);
@@ -818,7 +827,7 @@ mod test {
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn closed_write_stream() {
         // Run many times because the test is nondeterministic:
-        for n in 0..1000 {
+        for n in 0..TEST_ITERATIONS {
             closed_write_stream_(n).await
         }
     }
@@ -827,21 +836,15 @@ mod test {
         let (reader, writer) = simplex(1);
         let mut writer = AsyncWriteStream::new(1024, writer);
 
-        // Without checking write readiness, perform a nonblocking write: this should succeed
-        // because we will buffer up the write.
-        let chunk = Bytes::from_static(&[0; 1]);
-        let readiness = writer.write(chunk.clone()).expect("write does not trap");
-        match readiness {
-            Some(WriteReadiness::Ready(budget)) => assert!(
-                budget == 1023 || budget == 1024,
-                "unexpected budget: {budget}"
-            ),
-            _ => panic!("invalid readiness: {readiness:?}"),
-        }
-
-        // Now let's make sure that the worker will pick up on the fact that the future writes will
-        // fail.
+        // Drop the reader to allow the worker to transition to the closed state eventually.
         drop(reader);
+
+        // Write some data to the stream to ensure we have data that cannot be flushed.
+        let chunk = Bytes::from_static(&[0; 1]);
+        match writer.write(chunk.clone()).expect("write does not trap") {
+            Some(WriteReadiness::Ready(1023) | WriteReadiness::Closed) => {}
+            a => panic!("invalid write result: {a:?}"),
+        }
 
         // The rest of this test should be valid whether or not we check write readiness:
         if n % 2 == 0 {
@@ -852,13 +855,10 @@ mod test {
                 .expect("write ready does not trap");
 
             match permit {
-                WriteReadiness::Ready(budget) => assert!(
-                    budget == 1023 || budget == 1024,
-                    "unexpected budget: {budget}"
-                ),
+                WriteReadiness::Ready(1023) => {}
+                WriteReadiness::Ready(budget) => panic!("unexpected budget: {budget}"),
                 WriteReadiness::Closed => {
                     tracing::debug!("discovered stream closed waiting for write_ready");
-                    return;
                 }
             }
         }
@@ -869,19 +869,20 @@ mod test {
         match flush_result {
             Some(FlushResult::Closed) => {
                 tracing::debug!("discovered stream closed trying to flush");
-                return;
             }
+            Some(FlushResult::Done) => panic!("flush should never succeed"),
             _ => {}
         }
 
-        let flush_result = writer
-            .flush_ready()
+        // Waiting for the flush to complete should always indicate that the channel has been
+        // closed.
+        let flush_result = tokio::time::timeout(REASONABLE_DURATION, writer.flush_ready())
             .await
+            .expect("flush_ready returns immediately")
             .expect("flush_ready does not trap");
         match flush_result {
             FlushResult::Closed => {
                 tracing::debug!("discovered stream closed after flush_ready");
-                return;
             }
             _ => {
                 tracing::error!("");
@@ -982,6 +983,7 @@ mod test {
                     a => panic!("writer should be ready for more input: {a:?}"),
                 }
             }
+
             Some(a) => panic!("invalid write readiness: {a:?}"),
         }
 
@@ -1023,6 +1025,124 @@ mod test {
             .expect("ready is ok")
         {
             WriteReadiness::Ready(1024) => {}
+            a => panic!("invalid write readiness: {a:?}"),
+        }
+
+        // and the write succeeds:
+        match writer.write(chunk.clone()).expect("write does not trap") {
+            // There's a race here on how fast the worker consumes the input, so we might see that
+            // either it's consumed everything, or that the buffer is currently full.
+            Some(WriteReadiness::Ready(1024)) => {}
+
+            // If the worker hasn't picked up the write yet, the buffer will be full. We need to
+            // wait for the worker to process the buffer before continuing.
+            None => {
+                match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+                    .await
+                    .expect("the writer should be ready instantly")
+                    .expect("write_ready does not trap")
+                {
+                    WriteReadiness::Ready(1024) => {}
+                    a => panic!("writer should be ready for more input: {a:?}"),
+                }
+            }
+
+            Some(a) => panic!("invalid write readiness: {a:?}"),
+        }
+    }
+
+    #[test_log::test(tokio::test(flavor = "multi_thread"))]
+    async fn backpressure_write_stream_with_flush() {
+        for n in 0..TEST_ITERATIONS {
+            backpressure_write_stream_with_flush_aux(n).await;
+        }
+    }
+
+    #[tracing::instrument]
+    async fn backpressure_write_stream_with_flush_aux(n: usize) {
+        tracing::info!("");
+
+        // The channel can buffer up to 1k, plus another 1k in the stream, before not
+        // accepting more input:
+        let (mut reader, writer) = simplex(1024);
+        let mut writer = AsyncWriteStream::new(1024, writer);
+
+        let chunk = Bytes::from_static(&[0; 1024]);
+
+        // Write enough to fill the simplex buffer:
+        match writer.write(chunk.clone()).expect("write does not trap") {
+            Some(WriteReadiness::Ready(1024)) => {}
+
+            // If the worker hasn't picked up the write yet, the buffer will be full. We need to
+            // wait for the worker to process the buffer before continuing.
+            None => match writer.flush().expect("flush does not trap") {
+                Some(FlushResult::Done) => {}
+                None => match tokio::time::timeout(REASONABLE_DURATION, writer.flush_ready())
+                    .await
+                    .expect("flush_ready completes instantaly")
+                    .expect("flush_ready does not trap")
+                {
+                    FlushResult::Done => {}
+                    a => panic!("invalid flush_ready result: {a:?}"),
+                },
+                a => panic!("invalid flush result: {a:?}"),
+            },
+
+            Some(a) => panic!("invalid write readiness: {a:?}"),
+        }
+
+        // Now fill the buffer between here and the writer task. This should always indicate
+        // back-pressure because now both buffers (simplex and worker) are full.
+        match writer.write(chunk.clone()).expect("write does not trap") {
+            None => {}
+            Some(a) => panic!("expected backpressure: {a:?}"),
+        }
+
+        // Flushing the buffer should not succeed.
+        assert!(
+            writer.flush().expect("flush does not trap").is_none(),
+            "flush should not succeed"
+        );
+        tokio::time::timeout(REASONABLE_DURATION, writer.flush_ready())
+            .await
+            .err()
+            .expect("flush_ready does not complete");
+
+        // No amount of waiting will resolve the situation, as nothing is emptying the simplex
+        // buffer.
+        tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+            .await
+            .err()
+            .expect("the writer should be not become ready");
+
+        // There is 2k buffered between the simplex and worker buffers. I should be able to read
+        // all of it out:
+        let mut buf = [0; 2048];
+        reader.read_exact(&mut buf).await.unwrap();
+
+        // and no more:
+        tokio::time::timeout(REASONABLE_DURATION, reader.read(&mut buf))
+            .await
+            .err()
+            .expect("nothing more buffered in the system");
+
+        // Now the backpressure should be cleared, and an additional write should be accepted.
+        match tokio::time::timeout(REASONABLE_DURATION, writer.write_ready())
+            .await
+            .expect("the writer should be ready instantly")
+            .expect("ready is ok")
+        {
+            WriteReadiness::Ready(1024) => {}
+            a => panic!("invalid write readiness: {a:?}"),
+        }
+
+        // The flush should be cleared as well.
+        match tokio::time::timeout(REASONABLE_DURATION, writer.flush_ready())
+            .await
+            .expect("the writer should be ready instantly")
+            .expect("ready is ok")
+        {
+            FlushResult::Done => {}
             a => panic!("invalid write readiness: {a:?}"),
         }
 
