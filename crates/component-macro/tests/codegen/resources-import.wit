@@ -45,4 +45,14 @@ interface resources {
 
 world the-world {
   import resources
+
+  resource world-resource {
+    constructor()
+
+    foo: func()
+    static-foo: static func()
+  }
+
+  import some-world-func: func() -> world-resource
+  export some-world-func2: func() -> world-resource
 }

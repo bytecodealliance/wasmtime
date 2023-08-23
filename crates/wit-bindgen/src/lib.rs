@@ -571,7 +571,16 @@ impl Wasmtime {
         if self.opts.async_ {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
-        uwriteln!(self.src, "pub trait {world_camel}Imports {{");
+        uwrite!(self.src, "pub trait {world_camel}Imports");
+        for (i, resource) in get_world_resources(resolve, world).enumerate() {
+            if i == 0 {
+                uwrite!(self.src, ": ");
+            } else {
+                uwrite!(self.src, " + ");
+            }
+            uwrite!(self.src, "Host{}", resource.to_upper_camel_case());
+        }
+        uwriteln!(self.src, " {{");
         for f in self.import_functions.iter() {
             self.src.push_str(&f.sig);
             self.src.push_str("\n");
@@ -829,19 +838,25 @@ impl<'a> InterfaceGenerator<'a> {
 
         uwriteln!(self.src, "pub trait Host{camel} {{");
 
-        let interface = match resource.owner {
-            TypeOwner::World(_) => {
-                todo!()
-            }
-            TypeOwner::Interface(interface) => interface,
+        let functions = match resource.owner {
+            TypeOwner::World(id) => self.resolve.worlds[id]
+                .imports
+                .values()
+                .filter_map(|item| match item {
+                    WorldItem::Function(f) => Some(f),
+                    _ => None,
+                })
+                .collect(),
+            TypeOwner::Interface(id) => self.resolve.interfaces[id]
+                .functions
+                .values()
+                .collect::<Vec<_>>(),
             TypeOwner::None => {
                 panic!("A resource must be owned by a world or interface");
             }
         };
 
-        let iface = &self.resolve.interfaces[interface];
-
-        for (_, func) in &iface.functions {
+        for func in functions {
             match func.kind {
                 FunctionKind::Method(resource)
                 | FunctionKind::Static(resource)
@@ -1944,6 +1959,25 @@ fn get_resources<'a>(resolve: &'a Resolve, id: InterfaceId) -> impl Iterator<Ite
         .iter()
         .filter_map(move |(name, ty)| match resolve.types[*ty].kind {
             TypeDefKind::Resource => Some(name.as_str()),
+            _ => None,
+        })
+}
+
+fn get_world_resources<'a>(
+    resolve: &'a Resolve,
+    id: WorldId,
+) -> impl Iterator<Item = &'a str> + 'a {
+    resolve.worlds[id]
+        .imports
+        .iter()
+        .filter_map(move |(name, item)| match item {
+            WorldItem::Type(id) => match resolve.types[*id].kind {
+                TypeDefKind::Resource => Some(match name {
+                    WorldKey::Name(s) => s.as_str(),
+                    WorldKey::Interface(_) => unreachable!(),
+                }),
+                _ => None,
+            },
             _ => None,
         })
 }
