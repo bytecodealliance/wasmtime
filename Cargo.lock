@@ -3817,6 +3817,7 @@ name = "wasmtime-wasi-nn"
 version = "13.0.0"
 dependencies = [
  "anyhow",
+ "byteorder",
  "http-body-util",
  "hyper",
  "openvino",

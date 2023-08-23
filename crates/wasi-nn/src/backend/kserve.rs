@@ -15,10 +15,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Number};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io::{Error, ErrorKind, Read};
+use std::io::{Cursor, Error, ErrorKind, Read};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
+use wasmtime::component::__internal::wasmtime_environ::object::BigEndian;
 use wiggle::async_trait_crate::async_trait;
+use byteorder::{LittleEndian, ReadBytesExt};
 
 const INFERENCE_HEADER_CONTENT_LENGTH: &str = "inference-header-content-length";
 const BINARY_DATA_SIZE: &str = "binary_data_size";
@@ -59,14 +61,29 @@ impl BackendGraph for KServeGraph {
 
 struct KServeExecutionContext {
     client: KServeClient,
-    inputs: Vec<KServeTensorMetadata>,
-    outputs: Vec<KServeTensorMetadata>,
+    input_mapping: HashMap<u32, String>,
+    inputs: Vec<KServeTensor>,
+    outputs: Vec<KServeTensor>,
 }
 
 #[async_trait]
 impl BackendExecutionContext for KServeExecutionContext {
     fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
-        return Err(BackendError::UnsupportedOperation("init_execution_context"));
+        let datatype = map_tensor_type_to_datatype(tensor.tensor_type);
+        let data = read_tensor_element(tensor);
+
+        let kserver_tensor = KServeTensor {
+            metadata: KServeTensorMetadata {
+                name: self.input_mapping[&index].clone(),
+                shape: tensor.dimensions.to_vec(),
+                datatype,
+                parameters: None,
+            },
+            data,
+        };
+        self.inputs.push(kserver_tensor);
+        // return Err(BackendError::UnsupportedOperation("init_execution_context"));;
+        Ok(())
     }
 
     async fn compute(&mut self) -> Result<(), BackendError> {
@@ -85,6 +102,47 @@ impl BackendExecutionContext for KServeExecutionContext {
         // // Copy the tensor data into the destination buffer.
         // destination[..blob_size].copy_from_slice(blob.buffer()?);
         // Ok(blob_size as u32)
+    }
+}
+
+fn read_tensor_element(tensor: &Tensor) -> Vec<KServeTensorElement> {
+    let mut cursor = Cursor::new(tensor.data.as_slice().to_vec());
+
+    let mut data = Vec::with_capacity(tensor.data.len() / map_tensor_type_to_size(tensor.tensor_type));
+
+    while cursor.has_remaining() {
+        data.push(match tensor.tensor_type {
+            TensorType::U8 => KServeTensorElement::Number(Number::from(cursor.read_u8().unwrap())),
+            TensorType::Bf16 => panic!("bf16 is not supported for kserve backend."),
+            TensorType::Fp16 => panic!("bf16 is not supported for kserve backend."),
+            TensorType::I32 => KServeTensorElement::Number(Number::from(cursor.read_i32::<LittleEndian>().unwrap())),
+            TensorType::Fp32 => KServeTensorElement::Number(Number::from_f64(cursor.read_f32::<LittleEndian>().unwrap() as f64).unwrap()),
+            TensorType::Bytes => panic!("bytes are not yet supported for kserve backend.")
+        });
+    }
+
+    data
+}
+
+fn map_tensor_type_to_size(tensor_type: TensorType) -> usize {
+    match tensor_type {
+        TensorType::U8 => 1,
+        TensorType::Bf16 => 2,
+        TensorType::Fp16 => 2,
+        TensorType::I32 => 4,
+        TensorType::Fp32 => 4,
+        TensorType::Bytes => 0,
+    }
+}
+
+fn map_tensor_type_to_datatype(tensor_type: TensorType) -> KServeDatatype {
+    match tensor_type {
+        TensorType::U8 => KServeDatatype::UINT8,
+        TensorType::Bf16 => KServeDatatype::BF16,
+        TensorType::Fp16 => KServeDatatype::FP16,
+        TensorType::I32 => KServeDatatype::INT32,
+        TensorType::Fp32 => KServeDatatype::FP32,
+        TensorType::Bytes => KServeDatatype::BYTES,
     }
 }
 

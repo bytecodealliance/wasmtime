@@ -15,7 +15,7 @@ edition.workspace = true
 # These dependencies are necessary for the WITX-generation macros to work:
 anyhow = { workspace = true }
 wiggle = { workspace = true }
-wit-bindgen = {workspace = true }
+wit-bindgen = { workspace = true }
 wit-component = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["tokio"] }
 # This dependency is necessary for the WIT-generation macros to work:
@@ -25,11 +25,13 @@ wasmtime = { workspace = true, features = ["component-model"] }
 tracing = { workspace = true }
 openvino = { version = "0.5.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
-hyper = { version = "1.0.0-rc.3", features = ["full"] }
+hyper = { version = "=1.0.0-rc.3", features = ["full"] }
 http-body-util = "0.1.0-rc.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread", "net"] }
+byteorder = "1.4.3"
+#hyper-util = { git = "https://github.com/hyperium/hyper-util.git" }
 
 [build-dependencies]
 walkdir = { workspace = true }
