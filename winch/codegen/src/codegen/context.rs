@@ -115,12 +115,7 @@ impl<'a> CodeGenContext<'a> {
     /// When a named register is requested and it's not at the top of the
     /// stack a move from register to register might happen, in which case
     /// the source register will be freed.
-    pub fn pop_to_reg<M: MacroAssembler>(
-        &mut self,
-        masm: &mut M,
-        named: Option<Reg>,
-        size: OperandSize,
-    ) -> TypedReg {
+    pub fn pop_to_reg<M: MacroAssembler>(&mut self, masm: &mut M, named: Option<Reg>) -> TypedReg {
         let typed_reg = if let Some(dst) = named {
             self.stack.pop_named_reg(dst)
         } else {
@@ -141,7 +136,7 @@ impl<'a> CodeGenContext<'a> {
         if val.is_mem() {
             masm.pop(reg, val.ty().into());
         } else {
-            self.move_val_to_reg(&val, reg, masm, size);
+            self.move_val_to_reg(&val, reg, masm);
             // Free the source value if it is a register.
             if val.is_reg() {
                 self.free_reg(val.get_reg());
@@ -152,13 +147,8 @@ impl<'a> CodeGenContext<'a> {
     }
 
     /// Move a stack value to the given register.
-    pub fn move_val_to_reg<M: MacroAssembler>(
-        &self,
-        src: &Val,
-        dst: Reg,
-        masm: &mut M,
-        size: OperandSize,
-    ) {
+    pub fn move_val_to_reg<M: MacroAssembler>(&self, src: &Val, dst: Reg, masm: &mut M) {
+        let size: OperandSize = src.ty().into();
         match src {
             Val::Reg(tr) => masm.mov(RegImm::reg(tr.reg), RegImm::reg(dst), size),
             Val::I32(imm) => masm.mov(RegImm::i32(*imm), RegImm::reg(dst), size),
@@ -186,7 +176,7 @@ impl<'a> CodeGenContext<'a> {
         F: FnMut(&mut M, Reg, OperandSize),
         M: MacroAssembler,
     {
-        let typed_reg = self.pop_to_reg(masm, None, size);
+        let typed_reg = self.pop_to_reg(masm, None);
         emit(masm, typed_reg.reg, size);
         self.stack.push(typed_reg.into());
     }
@@ -204,7 +194,7 @@ impl<'a> CodeGenContext<'a> {
                 .stack
                 .pop_i32_const()
                 .expect("i32 const value at stack top");
-            let typed_reg = self.pop_to_reg(masm, None, OperandSize::S32);
+            let typed_reg = self.pop_to_reg(masm, None);
             emit(
                 masm,
                 RegImm::reg(typed_reg.reg),
@@ -213,8 +203,8 @@ impl<'a> CodeGenContext<'a> {
             );
             self.stack.push(typed_reg.into());
         } else {
-            let src = self.pop_to_reg(masm, None, OperandSize::S32);
-            let dst = self.pop_to_reg(masm, None, OperandSize::S32);
+            let src = self.pop_to_reg(masm, None);
+            let dst = self.pop_to_reg(masm, None);
             emit(masm, dst.reg.into(), src.reg.into(), OperandSize::S32);
             self.free_reg(src);
             self.stack.push(dst.into());
@@ -233,7 +223,7 @@ impl<'a> CodeGenContext<'a> {
                 .stack
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
-            let typed_reg = self.pop_to_reg(masm, None, OperandSize::S64);
+            let typed_reg = self.pop_to_reg(masm, None);
             emit(
                 masm,
                 RegImm::reg(typed_reg.reg),
@@ -242,8 +232,8 @@ impl<'a> CodeGenContext<'a> {
             );
             self.stack.push(typed_reg.into());
         } else {
-            let src = self.pop_to_reg(masm, None, OperandSize::S64);
-            let dst = self.pop_to_reg(masm, None, OperandSize::S64);
+            let src = self.pop_to_reg(masm, None);
+            let dst = self.pop_to_reg(masm, None);
             emit(masm, dst.reg.into(), src.reg.into(), OperandSize::S64);
             self.free_reg(src);
             self.stack.push(dst.into());
@@ -346,8 +336,7 @@ impl<'a> CodeGenContext<'a> {
             return;
         }
 
-        let TypedReg { reg, ty: _ } =
-            self.pop_to_reg(masm, Some(result.result_reg().unwrap()), OperandSize::S64);
+        let TypedReg { reg, ty: _ } = self.pop_to_reg(masm, Some(result.result_reg().unwrap()));
         self.free_reg(reg);
     }
 
@@ -379,7 +368,7 @@ impl<'a> CodeGenContext<'a> {
             .get_local(index)
             .unwrap_or_else(|| panic!("invalid local slot = {}", index));
         let size: OperandSize = slot.ty.into();
-        let src = self.pop_to_reg(masm, None, size);
+        let src = self.pop_to_reg(masm, None);
         let addr = masm.local_address(&slot);
         masm.store(RegImm::reg(src.reg), addr, size);
 
