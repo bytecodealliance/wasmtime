@@ -2,17 +2,16 @@
 //! this crate. The `Box<dyn ...>` types returned by these interfaces allow
 //! implementations to maintain backend-specific state between calls.
 
-mod openvino;
 mod kserve;
-
+mod openvino;
 
 use self::openvino::OpenvinoBackend;
+use crate::backend::kserve::KServeBackend;
 use crate::wit::types::{ExecutionTarget, Tensor};
 use crate::{ExecutionContext, Graph};
 use thiserror::Error;
 use wiggle::async_trait_crate::async_trait;
 use wiggle::GuestError;
-use crate::backend::kserve::KServeBackend;
 
 /// Return a list of all available backend frameworks.
 pub fn list() -> Vec<(BackendKind, Box<dyn Backend>)> {

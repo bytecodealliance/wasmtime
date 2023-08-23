@@ -20,10 +20,10 @@ use crate::{backend::BackendKind, ctx::UsageError, WasiNnCtx};
 /// Generate the traits and types from the `wasi-nn` WIT specification.
 mod gen_ {
     wasmtime::component::bindgen!({
-        world: "ml",
-        path: "spec/wit/wasi-nn.wit",
-        async: true,
-        });
+    world: "ml",
+    path: "spec/wit/wasi-nn.wit",
+    async: true,
+    });
 }
 use gen_::wasi::nn as gen; // Shortcut to the module containing the types we need.
 

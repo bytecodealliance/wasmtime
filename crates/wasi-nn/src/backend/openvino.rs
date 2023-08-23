@@ -95,7 +95,7 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         Ok(())
     }
 
-     async fn compute(&mut self) -> Result<(), BackendError> {
+    async fn compute(&mut self) -> Result<(), BackendError> {
         self.1.infer()?;
         Ok(())
     }
