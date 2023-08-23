@@ -16,6 +16,7 @@ pub trait RustGenerator<'a> {
     fn push_str(&mut self, s: &str);
     fn info(&self, ty: TypeId) -> TypeInfo;
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String>;
+    fn is_imported_interface(&self, interface: InterfaceId) -> bool;
 
     /// This determines whether we generate owning types or (where appropriate)
     /// borrowing types.
@@ -29,100 +30,42 @@ pub trait RustGenerator<'a> {
     fn ownership(&self) -> Ownership;
 
     fn print_ty(&mut self, ty: &Type, mode: TypeMode) {
-        let mut out = String::new();
-        self.print_ty_(&mut out, ty, mode, 0, false);
-        self.push_str(&out);
-    }
-
-    fn print_ty_(
-        &self,
-        mut out: &mut String,
-        ty: &Type,
-        mode: TypeMode,
-        resource_index: usize,
-        substitute: bool,
-    ) -> Vec<(String, String)> {
-        let mut resources: Vec<(String, String)> = Vec::new();
-
         match ty {
-            Type::Id(t) => resources.append(&mut self.print_tyid_(
-                &mut out,
-                *t,
-                mode,
-                resource_index,
-                substitute,
-            )),
-            Type::Bool => out.push_str("bool"),
-            Type::U8 => out.push_str("u8"),
-            Type::U16 => out.push_str("u16"),
-            Type::U32 => out.push_str("u32"),
-            Type::U64 => out.push_str("u64"),
-            Type::S8 => out.push_str("i8"),
-            Type::S16 => out.push_str("i16"),
-            Type::S32 => out.push_str("i32"),
-            Type::S64 => out.push_str("i64"),
-            Type::Float32 => out.push_str("f32"),
-            Type::Float64 => out.push_str("f64"),
-            Type::Char => out.push_str("char"),
+            Type::Id(t) => self.print_tyid(*t, mode),
+            Type::Bool => self.push_str("bool"),
+            Type::U8 => self.push_str("u8"),
+            Type::U16 => self.push_str("u16"),
+            Type::U32 => self.push_str("u32"),
+            Type::U64 => self.push_str("u64"),
+            Type::S8 => self.push_str("i8"),
+            Type::S16 => self.push_str("i16"),
+            Type::S32 => self.push_str("i32"),
+            Type::S64 => self.push_str("i64"),
+            Type::Float32 => self.push_str("f32"),
+            Type::Float64 => self.push_str("f64"),
+            Type::Char => self.push_str("char"),
             Type::String => match mode {
                 TypeMode::AllBorrowed(lt) => {
-                    out.push_str("&");
+                    self.push_str("&");
                     if lt != "'_" {
-                        out.push_str(lt);
-                        out.push_str(" ");
+                        self.push_str(lt);
+                        self.push_str(" ");
                     }
-                    out.push_str("str");
+                    self.push_str("str");
                 }
-                TypeMode::Owned => out.push_str("String"),
+                TypeMode::Owned => self.push_str("String"),
             },
         }
-
-        resources
     }
 
     fn print_optional_ty(&mut self, ty: Option<&Type>, mode: TypeMode) {
-        let mut out = String::new();
-        self.print_optional_ty_(&mut out, ty, mode, 0, false);
-        self.push_str(&out);
-    }
-
-    fn print_optional_ty_(
-        &self,
-        mut out: &mut String,
-        ty: Option<&Type>,
-        mode: TypeMode,
-        resource_index: usize,
-        substitute: bool,
-    ) -> Vec<(String, String)> {
-        let mut resources: Vec<(String, String)> = Vec::new();
-
         match ty {
-            Some(ty) => {
-                let mut tmp_res = self.print_ty_(&mut out, ty, mode, resource_index, substitute);
-                resources.append(&mut tmp_res);
-            }
-            None => out.push_str("()"),
+            Some(ty) => self.print_ty(ty, mode),
+            None => self.push_str("()"),
         }
-
-        resources
     }
 
     fn print_tyid(&mut self, id: TypeId, mode: TypeMode) {
-        let mut out = String::new();
-        self.print_tyid_(&mut out, id, mode, 0, false);
-        self.push_str(&out);
-    }
-
-    fn print_tyid_(
-        &self,
-        mut out: &mut String,
-        id: TypeId,
-        mode: TypeMode,
-        resource_index: usize,
-        substitute: bool,
-    ) -> Vec<(String, String)> {
-        let mut resources: Vec<(String, String)> = Vec::new();
-
         let info = self.info(id);
         let lt = self.lifetime_for(&info, mode);
         let ty = &self.resolve().types[id];
@@ -134,10 +77,10 @@ pub trait RustGenerator<'a> {
             // the API level, ownership isn't required.
             if info.has_list && lt.is_none() {
                 if let TypeMode::AllBorrowed(lt) = mode {
-                    out.push_str("&");
+                    self.push_str("&");
                     if lt != "'_" {
-                        out.push_str(lt);
-                        out.push_str(" ");
+                        self.push_str(lt);
+                        self.push_str(" ");
                     }
                 }
             }
@@ -146,22 +89,16 @@ pub trait RustGenerator<'a> {
             } else {
                 self.result_name(id)
             };
-            if let TypeOwner::Interface(id) = ty.owner {
-                if let Some(path) = self.path_to_interface(id) {
-                    out.push_str(&path);
-                    out.push_str("::");
-                }
-            }
-            out.push_str(&name);
+            self.print_type_name_in_interface(ty.owner, &name);
 
             // If the type recursively owns data and it's a
             // variant/record/list, then we need to place the
             // lifetime parameter on the type as well.
             if info.has_list && needs_generics(self.resolve(), &ty.kind) {
-                self.print_generics_(&mut out, lt);
+                self.print_generics(lt);
             }
 
-            return resources;
+            return;
 
             fn needs_generics(resolve: &Resolve, ty: &TypeDefKind) -> bool {
                 match ty {
@@ -189,38 +126,20 @@ pub trait RustGenerator<'a> {
         }
 
         match &ty.kind {
-            TypeDefKind::List(t) => {
-                let mut tmp_res = self.print_list_(&mut out, t, mode, resources.len(), substitute);
-                resources.append(&mut tmp_res);
-            }
+            TypeDefKind::List(t) => self.print_list(t, mode),
 
             TypeDefKind::Option(t) => {
-                out.push_str("Option<");
-                let mut tmp_res = self.print_ty_(&mut out, t, mode, resources.len(), substitute);
-                resources.append(&mut tmp_res);
-                out.push_str(">");
+                self.push_str("Option<");
+                self.print_ty(t, mode);
+                self.push_str(">");
             }
 
             TypeDefKind::Result(r) => {
-                out.push_str("Result<");
-                let mut tmp_res = self.print_optional_ty_(
-                    &mut out,
-                    r.ok.as_ref(),
-                    mode,
-                    resources.len(),
-                    substitute,
-                );
-                resources.append(&mut tmp_res);
-                out.push_str(",");
-                let mut tmp_res = self.print_optional_ty_(
-                    &mut out,
-                    r.err.as_ref(),
-                    mode,
-                    resources.len(),
-                    substitute,
-                );
-                resources.append(&mut tmp_res);
-                out.push_str(">");
+                self.push_str("Result<");
+                self.print_optional_ty(r.ok.as_ref(), mode);
+                self.push_str(",");
+                self.print_optional_ty(r.err.as_ref(), mode);
+                self.push_str(">");
             }
 
             TypeDefKind::Variant(_) => panic!("unsupported anonymous variant"),
@@ -229,14 +148,12 @@ pub trait RustGenerator<'a> {
             // types. Note the trailing comma after each member to
             // appropriately handle 1-tuples.
             TypeDefKind::Tuple(t) => {
-                out.push_str("(");
+                self.push_str("(");
                 for ty in t.types.iter() {
-                    let mut tmp_res =
-                        self.print_ty_(&mut out, ty, mode, resources.len(), substitute);
-                    resources.append(&mut tmp_res);
-                    out.push_str(",");
+                    self.print_ty(ty, mode);
+                    self.push_str(",");
                 }
-                out.push_str(")");
+                self.push_str(")");
             }
             TypeDefKind::Record(_) => {
                 panic!("unsupported anonymous type reference: record")
@@ -251,90 +168,39 @@ pub trait RustGenerator<'a> {
                 panic!("unsupported anonymous type reference: union")
             }
             TypeDefKind::Future(ty) => {
-                out.push_str("Future<");
-                let mut tmp_res = self.print_optional_ty_(
-                    &mut out,
-                    ty.as_ref(),
-                    mode,
-                    resources.len(),
-                    substitute,
-                );
-                resources.append(&mut tmp_res);
-                out.push_str(">");
+                self.push_str("Future<");
+                self.print_optional_ty(ty.as_ref(), mode);
+                self.push_str(">");
             }
             TypeDefKind::Stream(stream) => {
-                out.push_str("Stream<");
-                let mut tmp_res = self.print_optional_ty_(
-                    &mut out,
-                    stream.element.as_ref(),
-                    mode,
-                    resources.len(),
-                    substitute,
-                );
-                resources.append(&mut tmp_res);
-                out.push_str(",");
-                let mut tmp_res = self.print_optional_ty_(
-                    &mut out,
-                    stream.end.as_ref(),
-                    mode,
-                    resources.len(),
-                    substitute,
-                );
-                resources.append(&mut tmp_res);
-                out.push_str(">");
+                self.push_str("Stream<");
+                self.print_optional_ty(stream.element.as_ref(), mode);
+                self.push_str(",");
+                self.print_optional_ty(stream.end.as_ref(), mode);
+                self.push_str(">");
             }
 
-            TypeDefKind::Handle(Handle::Borrow(ty)) | TypeDefKind::Handle(Handle::Own(ty)) => {
-                //TODO: This needs to handle ResourceAny for guest exports as well.
-
-                let name = self.resolve().types[*ty]
-                    .name
-                    .as_ref()
-                    .expect("resources requires a name");
-
-                let arg_name = format!("R{}", resources.len() + resource_index);
-
-                if substitute {
-                    out.push_str("wasmtime::component::Resource<");
-
-                    out.push_str(&arg_name);
-                    resources.push((arg_name, name.to_owned()));
-
-                    out.push_str(">");
-                } else {
-                    let name = "wasmtime::component::ResourceAny";
-                    out.push_str(name);
-                    resources.push((arg_name, name.to_owned()));
-                }
+            TypeDefKind::Handle(handle) => {
+                self.print_handle(handle);
             }
-            TypeDefKind::Resource => panic!("unsupported anonymous type reference: resource"),
+            TypeDefKind::Resource => unreachable!(),
 
-            TypeDefKind::Type(t) => {
-                let mut tmp_res = self.print_ty_(&mut out, t, mode, resources.len(), substitute);
-                resources.append(&mut tmp_res);
-            }
+            TypeDefKind::Type(t) => self.print_ty(t, mode),
             TypeDefKind::Unknown => unreachable!(),
         }
+    }
 
-        resources
+    fn print_type_name_in_interface(&mut self, owner: TypeOwner, name: &str) {
+        if let TypeOwner::Interface(id) = owner {
+            if let Some(path) = self.path_to_interface(id) {
+                self.push_str(&path);
+                self.push_str("::");
+            }
+        }
+        self.push_str(name);
     }
 
     fn print_list(&mut self, ty: &Type, mode: TypeMode) {
-        let mut out = String::new();
-        self.print_list_(&mut out, ty, mode, 0, false);
-        self.push_str(&out);
-    }
-
-    fn print_list_(
-        &self,
-        mut out: &mut String,
-        ty: &Type,
-        mode: TypeMode,
-        resource_index: usize,
-        substitute: bool,
-    ) -> Vec<(String, String)> {
-        let mut resources: Vec<(String, String)> = Vec::new();
-
         let next_mode = if matches!(self.ownership(), Ownership::Owning) {
             TypeMode::Owned
         } else {
@@ -342,45 +208,54 @@ pub trait RustGenerator<'a> {
         };
         match mode {
             TypeMode::AllBorrowed(lt) => {
-                out.push_str("&");
+                self.push_str("&");
                 if lt != "'_" {
-                    out.push_str(lt);
-                    out.push_str(" ");
+                    self.push_str(lt);
+                    self.push_str(" ");
                 }
-                out.push_str("[");
-                let mut tmp_res =
-                    self.print_ty_(&mut out, ty, next_mode, resource_index, substitute);
-                resources.append(&mut tmp_res);
-                out.push_str("]");
+                self.push_str("[");
+                self.print_ty(ty, next_mode);
+                self.push_str("]");
             }
             TypeMode::Owned => {
-                out.push_str("Vec<");
-                let mut tmp_res =
-                    self.print_ty_(&mut out, ty, next_mode, resource_index, substitute);
-                resources.append(&mut tmp_res);
-                out.push_str(">");
+                self.push_str("Vec<");
+                self.print_ty(ty, next_mode);
+                self.push_str(">");
             }
         }
+    }
 
-        resources
+    fn print_handle(&mut self, handle: &Handle) {
+        let resource = match handle {
+            Handle::Own(t) | Handle::Borrow(t) => *t,
+        };
+        let ty = &self.resolve().types[resource];
+        let is_host_defined = match ty.owner {
+            TypeOwner::Interface(i) => self.is_imported_interface(i),
+            _ => true,
+        };
+        if is_host_defined {
+            self.push_str("wasmtime::component::Resource<");
+            self.print_type_name_in_interface(
+                ty.owner,
+                &ty.name.as_ref().unwrap().to_upper_camel_case(),
+            );
+            self.push_str(">");
+        } else {
+            self.push_str("wasmtime::component::ResourceAny");
+        }
     }
 
     fn print_generics(&mut self, lifetime: Option<&str>) {
-        let mut out = String::new();
-        self.print_generics_(&mut out, lifetime);
-        self.push_str(&out);
-    }
-
-    fn print_generics_(&self, out: &mut String, lifetime: Option<&str>) {
         if lifetime.is_none() {
             return;
         }
-        out.push_str("<");
+        self.push_str("<");
         if let Some(lt) = lifetime {
-            out.push_str(lt);
-            out.push_str(",");
+            self.push_str(lt);
+            self.push_str(",");
         }
-        out.push_str(">");
+        self.push_str(">");
     }
 
     fn modes_of(&self, ty: TypeId) -> Vec<(String, TypeMode)> {
@@ -450,15 +325,15 @@ pub trait RustGenerator<'a> {
                         TypeDefKind::Variant(_) => out.push_str("Variant"),
                         TypeDefKind::Enum(_) => out.push_str("Enum"),
                         TypeDefKind::Union(_) => out.push_str("Union"),
-                        TypeDefKind::Handle(Handle::Own(ty)) => {
-                            self.write_name(&Type::Id(*ty), out);
-                            out.push_str("Own");
-                        }
-                        TypeDefKind::Handle(Handle::Borrow(ty)) => {
-                            self.write_name(&Type::Id(*ty), out);
+                        TypeDefKind::Handle(Handle::Borrow(id)) => {
                             out.push_str("Borrow");
+                            self.write_name(&Type::Id(*id), out);
                         }
-                        TypeDefKind::Resource => out.push_str("Resource"),
+                        TypeDefKind::Handle(Handle::Own(id)) => {
+                            out.push_str("Own");
+                            self.write_name(&Type::Id(*id), out);
+                        }
+                        TypeDefKind::Resource => unreachable!(),
                         TypeDefKind::Unknown => unreachable!(),
                     },
                 }

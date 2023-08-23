@@ -38,8 +38,21 @@ interface resources {
   record-own-arg: func(x: nested-own)
   record-borrow-arg: func(x: nested-borrow)
   record-result: func() -> nested-own
+
+  type some-handle = borrow<bar>
+  func-with-handle-typedef: func(x: some-handle)
 }
 
 world the-world {
   import resources
+
+  resource world-resource {
+    constructor()
+
+    foo: func()
+    static-foo: static func()
+  }
+
+  import some-world-func: func() -> world-resource
+  export some-world-func2: func() -> world-resource
 }
