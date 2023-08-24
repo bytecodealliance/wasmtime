@@ -1,26 +1,30 @@
 //! Implements the wasi-nn API.
 
-use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph};
-use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
-use crate::{ExecutionContext, Graph};
-use http_body_util::{BodyExt, Empty, Full};
-use hyper::body::Buf;
-use hyper::body::{Bytes, Incoming};
-use hyper::client::conn::http1::{Connection, SendRequest};
-use hyper::header::HeaderName;
-use hyper::http::uri::Authority;
-use hyper::{body, Method, Request, Response, StatusCode, Uri};
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Number};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::{Cursor, Error, ErrorKind, Read};
+use std::sync::{Arc, Mutex};
+
+use byteorder::{LittleEndian, ReadBytesExt};
+use http_body_util::{BodyExt, Empty, Full};
+use hyper::{body, Method, Request, Response, StatusCode, Uri};
+use hyper::body::{Bytes, Incoming};
+use hyper::body::Buf;
+use hyper::client::conn::http1::{Connection, SendRequest};
+use hyper::header::HeaderName;
+use hyper::http::uri::Authority;
+use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde_json::{json, Number};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
+
 use wasmtime::component::__internal::wasmtime_environ::object::BigEndian;
 use wiggle::async_trait_crate::async_trait;
-use byteorder::{LittleEndian, ReadBytesExt};
+
+use crate::{ExecutionContext, Graph};
+use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph};
+use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
 
 const INFERENCE_HEADER_CONTENT_LENGTH: &str = "inference-header-content-length";
 const BINARY_DATA_SIZE: &str = "binary_data_size";
@@ -62,6 +66,7 @@ impl BackendGraph for KServeGraph {
 struct KServeExecutionContext {
     client: KServeClient,
     input_mapping: HashMap<u32, String>,
+    model_metadata: KServeModelMetadata,
     inputs: Vec<KServeTensor>,
     outputs: Vec<KServeTensor>,
 }
@@ -70,9 +75,9 @@ struct KServeExecutionContext {
 impl BackendExecutionContext for KServeExecutionContext {
     fn set_input(&mut self, index: u32, tensor: &Tensor) -> Result<(), BackendError> {
         let datatype = map_tensor_type_to_datatype(tensor.tensor_type);
-        let data = read_tensor_element(tensor);
+        let data = read_tensor_elements(tensor);
 
-        let kserver_tensor = KServeTensor {
+        let kserve_tensor = KServeTensor {
             metadata: KServeTensorMetadata {
                 name: self.input_mapping[&index].clone(),
                 shape: tensor.dimensions.to_vec(),
@@ -81,12 +86,31 @@ impl BackendExecutionContext for KServeExecutionContext {
             },
             data,
         };
-        self.inputs.push(kserver_tensor);
+
+        self.inputs.push(kserve_tensor);
+
         // return Err(BackendError::UnsupportedOperation("init_execution_context"));;
         Ok(())
     }
 
     async fn compute(&mut self) -> Result<(), BackendError> {
+        let outputs = self.model_metadata.outputs.iter().map(|mm| KServeRequestOutput {
+            name: mm.name.clone(),
+            parameters: KServeBinaryInferenceParameters {
+                binary_data: None,
+                binary_data_output: Some(true),
+                binary_data_size: None,
+            },
+        }).collect();
+
+        let inference_request = KServeInferenceRequest {
+            id: None,
+            parameters: None,
+            inputs: &self.inputs,
+            outputs: &outputs,
+        };
+        let result = self.client.inference_request(&self.model_metadata.name, &inference_request).await?;
+        self.outputs = result.outputs;
         Ok(())
     }
 
@@ -105,7 +129,7 @@ impl BackendExecutionContext for KServeExecutionContext {
     }
 }
 
-fn read_tensor_element(tensor: &Tensor) -> Vec<KServeTensorElement> {
+fn read_tensor_elements(tensor: &Tensor) -> Vec<KServeTensorElement> {
     let mut cursor = Cursor::new(tensor.data.as_slice().to_vec());
 
     let mut data = Vec::with_capacity(tensor.data.len() / map_tensor_type_to_size(tensor.tensor_type));
@@ -117,7 +141,11 @@ fn read_tensor_element(tensor: &Tensor) -> Vec<KServeTensorElement> {
             TensorType::Fp16 => panic!("bf16 is not supported for kserve backend."),
             TensorType::I32 => KServeTensorElement::Number(Number::from(cursor.read_i32::<LittleEndian>().unwrap())),
             TensorType::Fp32 => KServeTensorElement::Number(Number::from_f64(cursor.read_f32::<LittleEndian>().unwrap() as f64).unwrap()),
-            TensorType::Bytes => panic!("bytes are not yet supported for kserve backend.")
+            TensorType::Bytes => unsafe {
+                assert_eq!(tensor.dimensions[0], 1);
+                assert_eq!(tensor.dimensions[1], 1);
+                KServeTensorElement::String(String::from_utf8_unchecked(tensor.data.to_vec()))
+            }
         });
     }
 
@@ -281,7 +309,7 @@ impl KServeClient {
     async fn inference_request(
         &mut self,
         model_name: &String,
-        request: &KServeInferenceRequest,
+        request: &KServeInferenceRequest<'_>,
     ) -> Result<KServeInferenceResult, BackendError> {
         let inference_url = build_inference_url(&self.server_url, model_name);
         println!("Inference url: {}", inference_url);
@@ -431,7 +459,7 @@ impl KServeClient {
             .method(Method::POST)
             .header(hyper::header::HOST, self.authority.as_str())
             .header(
-                hyper::header::HeaderName::from_static(INFERENCE_HEADER_CONTENT_LENGTH),
+                HeaderName::from_static(INFERENCE_HEADER_CONTENT_LENGTH),
                 inference_header_length.to_string(),
             )
             .body(Full::<Bytes>::from(json_bytes))
@@ -492,16 +520,24 @@ pub struct KServeTensorMetadata {
     parameters: Option<KServeBinaryInferenceParameters>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct KServeInferenceRequest {
-    id: String,
-    parameters: KServeParameters,
-    inputs: Vec<KServeTensor>,
-    outputs: Vec<KServeRequestOutput>,
+#[derive(Debug, Serialize)]
+pub struct KServeInferenceRequest<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parameters: Option<KServeParameters>,
+    inputs: &'a Vec<KServeTensor>,
+    outputs: &'a Vec<KServeRequestOutput>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KServeInferenceResult {
+    model_name : String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model_version: Option<u32>,
+    id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parameter: Option<KServeParameters>,
     outputs: Vec<KServeTensor>,
 }
 
@@ -672,7 +708,7 @@ async fn test_inference() {
     println!("Attempting to retrieve server metadata from Triton.");
     let mut kserve_client = KServeClient::new(String::from("http://localhost:8000")).await;
     let prompt = String::from("captain america, 4k");
-    let input = KServeTensor {
+    let input = vec![KServeTensor {
         metadata: KServeTensorMetadata {
             name: String::from("prompt"),
             shape: vec![1, 1],
@@ -680,24 +716,24 @@ async fn test_inference() {
             parameters: Option::None,
         },
         data: vec![KServeTensorElement::String(prompt)],
-    };
+    }];
 
     let output = vec![KServeRequestOutput {
         name: String::from("generated_image"),
         parameters: KServeBinaryInferenceParameters::default(),
     }];
     let inference_request = KServeInferenceRequest {
-        id: String::from("test"),
-        parameters: KServeParameters::new(),
-        inputs: vec![input],
-        outputs: output,
+        id: None,
+        parameters: None,
+        inputs: &input,
+        outputs: &output,
     };
 
     let result = kserve_client
         .inference_request(&String::from("pipeline"), &inference_request)
         .await
         .expect("Unable to get inference request.");
-
+    result.outputs[0].
     println!("{:?}", result);
 }
 
