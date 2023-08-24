@@ -1,5 +1,14 @@
 --------------------------------------------------------------------------------
 
+## 12.0.1
+
+Unreleased
+
+### Fixed
+
+* Optimized the cranelift compilation on aarch64 for large wasm modules.
+  [#6804](https://github.com/bytecodealliance/wasmtime/pull/6804)
+
 ## 12.0.0
 
 Released 2023-08-21.
@@ -55,9 +64,6 @@ Released 2023-08-21.
 * WASI Preview 1 APIs will now trap on misaligned or out-of-bounds pointers
   instead of returning an error.
   [#6776](https://github.com/bytecodealliance/wasmtime/pull/6776)
-
-* Optimized the cranelift compilation on aarch64 for large wasm modules.
-  [#6804](https://github.com/bytecodealliance/wasmtime/pull/6804)
 
 ### Changed
 
