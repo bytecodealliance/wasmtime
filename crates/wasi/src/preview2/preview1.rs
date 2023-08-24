@@ -72,7 +72,7 @@ impl BlockingMode {
         output_stream: streams::OutputStream,
         bytes: &[u8],
     ) -> Result<usize, types::Error> {
-        use streams::{Host, WriteReadiness};
+        use streams::{Host, WriteReadiness, FlushResult};
         let n = match self {
             BlockingMode::Blocking => {
                 match Host::blocking_check_write(host, output_stream)
@@ -102,9 +102,35 @@ impl BlockingMode {
             .await
             .map_err(types::Error::trap)?
         {
-            Some(WriteReadiness::Closed) => Err(types::Errno::Io.into()),
-            _ => Ok(len),
+            Some(WriteReadiness::Closed) => return Err(types::Errno::Io.into()),
+            _ => {}
         }
+
+        match self {
+            BlockingMode::Blocking => {
+                match Host::blocking_flush(host, output_stream)
+                    .await
+                    .map_err(types::Error::trap)?
+                {
+                    FlushResult::Done => {}
+                    FlushResult::Closed => return Err(types::Errno::Io.into()),
+                }
+            }
+
+            // Signal a flush, and only error if it resolves immediately, indicating a closed
+            // stream.
+            BlockingMode::NonBlocking => {
+                match Host::flush(host, output_stream)
+                    .await
+                    .map_err(types::Error::trap)?
+                {
+                    Some(FlushResult::Closed) => return Err(types::Errno::Io.into()),
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(len)
     }
 }
 
