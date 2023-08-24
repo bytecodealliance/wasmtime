@@ -1,4 +1,8 @@
-use crate::preview2::{StreamRuntimeError, StreamState, Table, TableError};
+use crate::preview2::{
+    FlushResult, HostOutputStream, StreamRuntimeError, StreamState, Table, TableError,
+    WriteReadiness,
+};
+use anyhow::{anyhow, Context};
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 
@@ -161,14 +165,6 @@ fn read_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState),
     }
 }
 
-fn write_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState), anyhow::Error> {
-    match r {
-        Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n, StreamState::Open)),
-        Err(e) => Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into()),
-    }
-}
-
 #[derive(Clone, Copy)]
 pub(crate) enum FileOutputMode {
     Position(u64),
@@ -178,35 +174,97 @@ pub(crate) enum FileOutputMode {
 pub(crate) struct FileOutputStream {
     file: Arc<cap_std::fs::File>,
     mode: FileOutputMode,
+    task: Option<tokio::task::JoinHandle<Result<(), std::io::Error>>>,
+    closed: bool,
 }
 impl FileOutputStream {
     pub fn write_at(file: Arc<cap_std::fs::File>, position: u64) -> Self {
         Self {
             file,
             mode: FileOutputMode::Position(position),
+            task: None,
+            closed: false,
         }
     }
     pub fn append(file: Arc<cap_std::fs::File>) -> Self {
         Self {
             file,
             mode: FileOutputMode::Append,
+            task: None,
+            closed: false,
         }
     }
-    /// Write bytes. On success, returns the number of bytes written.
-    pub async fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
+}
+
+#[async_trait::async_trait]
+impl HostOutputStream for FileOutputStream {
+    fn write(&mut self, buf: Bytes) -> anyhow::Result<Option<WriteReadiness>> {
         use system_interface::fs::FileIoExt;
+
+        if self.closed {
+            return Ok(Some(WriteReadiness::Closed));
+        }
+        if self.task.is_some() {
+            // a write is pending - this call was not permitted
+            return Err(anyhow!(
+                "write not permitted: FileOutputStream write pending"
+            ));
+        }
         let f = Arc::clone(&self.file);
         let m = self.mode;
-        let r = tokio::task::spawn_blocking(move || match m {
-            FileOutputMode::Position(p) => f.write_at(buf.as_ref(), p),
-            FileOutputMode::Append => f.append(buf.as_ref()),
-        })
-        .await
-        .unwrap();
-        let (n, state) = write_result(r)?;
-        if let FileOutputMode::Position(ref mut position) = self.mode {
-            *position += n as u64;
+        self.task = Some(tokio::task::spawn_blocking(move || match m {
+            FileOutputMode::Position(p) => {
+                let _ = f.write_at(buf.as_ref(), p)?; // FIXME: make sure writes all
+                Ok(())
+            }
+            FileOutputMode::Append => {
+                let _ = f.append(buf.as_ref())?; // FIXME: make sure writes all
+                Ok(())
+            }
+        }));
+        Ok(None)
+    }
+    fn flush(&mut self) -> anyhow::Result<Option<FlushResult>> {
+        if self.closed {
+            return Ok(Some(FlushResult::Closed));
         }
-        Ok((n, state))
+        if self.task.is_none() {
+            return Ok(Some(FlushResult::Done));
+        }
+        Ok(None)
+    }
+    async fn write_ready(&mut self) -> anyhow::Result<WriteReadiness> {
+        if self.closed {
+            return Ok(WriteReadiness::Closed);
+        }
+        if let Some(t) = self.task.take() {
+            match t.await.context("join of FileOutputStream worker task")? {
+                Ok(()) => Ok(WriteReadiness::Ready(64 * 1024)),
+                Err(e) => {
+                    tracing::debug!("FileOutputStream closed with {e:?}");
+                    self.closed = true;
+                    Ok(WriteReadiness::Closed)
+                }
+            }
+        } else {
+            Ok(WriteReadiness::Ready(64 * 1024))
+        }
+    }
+    async fn flush_ready(&mut self) -> anyhow::Result<FlushResult> {
+        if self.closed {
+            return Ok(FlushResult::Closed);
+        }
+        if let Some(t) = self.task.take() {
+            match t.await.context("join of FileOutputStream worker task")? {
+                Ok(()) => Ok(FlushResult::Done),
+                Err(e) => {
+                    tracing::debug!("FileOutputStream closed with {e:?}");
+                    self.closed = true;
+                    Ok(FlushResult::Closed)
+                }
+            }
+        } else {
+            Ok(FlushResult::Done)
+        }
     }
 }

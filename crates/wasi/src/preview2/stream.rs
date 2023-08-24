@@ -1,4 +1,4 @@
-use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
+use crate::preview2::filesystem::FileInputStream;
 use crate::preview2::{Table, TableError};
 use anyhow::Error;
 use bytes::Bytes;
@@ -126,11 +126,6 @@ pub(crate) enum InternalInputStream {
     File(FileInputStream),
 }
 
-pub(crate) enum InternalOutputStream {
-    Host(Box<dyn HostOutputStream>),
-    File(FileOutputStream),
-}
-
 pub(crate) trait InternalTableStreamExt {
     fn push_internal_input_stream(
         &mut self,
@@ -141,19 +136,6 @@ pub(crate) trait InternalTableStreamExt {
         fd: u32,
     ) -> Result<&mut InternalInputStream, TableError>;
     fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError>;
-
-    fn push_internal_output_stream(
-        &mut self,
-        ostream: InternalOutputStream,
-    ) -> Result<u32, TableError>;
-    fn get_internal_output_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut InternalOutputStream, TableError>;
-    fn delete_internal_output_stream(
-        &mut self,
-        fd: u32,
-    ) -> Result<InternalOutputStream, TableError>;
 }
 impl InternalTableStreamExt for Table {
     fn push_internal_input_stream(
@@ -169,25 +151,6 @@ impl InternalTableStreamExt for Table {
         self.get_mut(fd)
     }
     fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError> {
-        self.delete(fd)
-    }
-
-    fn push_internal_output_stream(
-        &mut self,
-        ostream: InternalOutputStream,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(ostream))
-    }
-    fn get_internal_output_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut InternalOutputStream, TableError> {
-        self.get_mut(fd)
-    }
-    fn delete_internal_output_stream(
-        &mut self,
-        fd: u32,
-    ) -> Result<InternalOutputStream, TableError> {
         self.delete(fd)
     }
 }
@@ -238,26 +201,14 @@ impl TableStreamExt for Table {
         &mut self,
         ostream: Box<dyn HostOutputStream>,
     ) -> Result<u32, TableError> {
-        self.push_internal_output_stream(InternalOutputStream::Host(ostream))
+        self.push(Box::new(ostream))
     }
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError> {
-        match self.get_internal_output_stream_mut(fd)? {
-            InternalOutputStream::Host(ref mut h) => Ok(h.as_mut()),
-            _ => Err(TableError::WrongType),
-        }
+        let boxed: &mut Box<dyn HostOutputStream> = self.get_mut(fd)?;
+        Ok(boxed.as_mut())
     }
     fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError> {
-        let occ = self.entry(fd)?;
-        match occ.get().downcast_ref::<InternalOutputStream>() {
-            Some(InternalOutputStream::Host(_)) => {
-                let any = occ.remove_entry()?;
-                match *any.downcast().expect("downcast checked above") {
-                    InternalOutputStream::Host(h) => Ok(h),
-                    _ => unreachable!("variant checked above"),
-                }
-            }
-            _ => Err(TableError::WrongType),
-        }
+        self.delete(fd)
     }
 }
 
