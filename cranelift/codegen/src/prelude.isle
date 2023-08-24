@@ -301,17 +301,17 @@
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Flip an IntCC flag.
-(decl intcc_flip (IntCC) IntCC)
-(extern constructor intcc_flip intcc_flip)
+;; Swap args of an IntCC flag.
+(decl intcc_swap_args (IntCC) IntCC)
+(extern constructor intcc_swap_args intcc_swap_args)
 
 ;; Negate an IntCC flag.
 (decl intcc_negate (IntCC) IntCC)
 (extern constructor intcc_negate intcc_negate)
 
-;; Flip a FloatCC flag.
-(decl floatcc_flip (FloatCC) FloatCC)
-(extern constructor floatcc_flip floatcc_flip)
+;; Swap args of a FloatCC flag.
+(decl floatcc_swap_args (FloatCC) FloatCC)
+(extern constructor floatcc_swap_args floatcc_swap_args)
 
 ;; Negate a FloatCC flag.
 (decl floatcc_negate (FloatCC) FloatCC)

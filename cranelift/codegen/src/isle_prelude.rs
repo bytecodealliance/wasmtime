@@ -818,8 +818,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn intcc_flip(&mut self, cc: &IntCC) -> IntCC {
-            cc.flip()
+        fn intcc_swap_args(&mut self, cc: &IntCC) -> IntCC {
+            cc.swap_args()
         }
 
         #[inline]
@@ -828,8 +828,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn floatcc_flip(&mut self, cc: &FloatCC) -> FloatCC {
-            cc.flip()
+        fn floatcc_swap_args(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.swap_args()
         }
 
         #[inline]

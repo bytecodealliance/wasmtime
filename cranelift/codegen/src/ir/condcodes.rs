@@ -19,12 +19,12 @@ pub trait CondCode: Copy {
     #[must_use]
     fn negate(self) -> Self;
 
-    /// Get the flipped condition code for `self`.
+    /// Get the swapped args condition code for `self`.
     ///
-    /// The flipped condition code produces the same result as swapping `x` and `y` in the
-    /// comparison. That is, `cmp CC, x, y` is the same as `cmp CC.flip(), y, x`.
+    /// The swapped args condition code produces the same result as swapping `x` and `y` in the
+    /// comparison. That is, `cmp CC, x, y` is the same as `cmp CC.swap_args(), y, x`.
     #[must_use]
-    fn flip(self) -> Self;
+    fn swap_args(self) -> Self;
 }
 
 /// Condition code for comparing integers.
@@ -74,7 +74,7 @@ impl CondCode for IntCC {
         }
     }
 
-    fn flip(self) -> Self {
+    fn swap_args(self) -> Self {
         use self::IntCC::*;
         match self {
             Equal => Equal,
@@ -273,7 +273,7 @@ impl CondCode for FloatCC {
             UnorderedOrGreaterThanOrEqual => LessThan,
         }
     }
-    fn flip(self) -> Self {
+    fn swap_args(self) -> Self {
         use self::FloatCC::*;
         match self {
             Ordered => Ordered,
@@ -357,11 +357,11 @@ mod tests {
     }
 
     #[test]
-    fn int_flip() {
+    fn int_swap_args() {
         for r in IntCC::all() {
             let cc = *r;
-            let rev = cc.flip();
-            assert_eq!(rev.flip(), cc);
+            let rev = cc.swap_args();
+            assert_eq!(rev.swap_args(), cc);
         }
     }
 
@@ -385,11 +385,11 @@ mod tests {
     }
 
     #[test]
-    fn float_flip() {
+    fn float_swap_args() {
         for r in FloatCC::all() {
             let cc = *r;
-            let rev = cc.flip();
-            assert_eq!(rev.flip(), cc);
+            let rev = cc.swap_args();
+            assert_eq!(rev.swap_args(), cc);
         }
     }
 
