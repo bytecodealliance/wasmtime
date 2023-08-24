@@ -10,6 +10,11 @@ pub struct Imm12 {
     pub bits: i16,
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+pub struct Imm32 {
+    pub bits: i32,
+}
+
 impl Imm12 {
     pub(crate) const FALSE: Self = Self { bits: 0 };
     pub(crate) const TRUE: Self = Self { bits: 1 };
@@ -48,6 +53,25 @@ impl Imm12 {
     }
 }
 
+impl Imm32 {
+    pub fn maybe_from_u64(val: u64) -> Option<Imm32> {
+        let sign_bit = 1 << 31;
+        if val == 0 {
+            Some(Imm32 { bits: 0 })
+        } else if (val & sign_bit) != 0 && (val >> 31) == 0xffff_ffff {
+            Some(Imm32 {
+                bits: (val & 0xffff_ffff) as i32,
+            })
+        } else if (val & sign_bit) == 0 && (val >> 32) == 0 {
+            Some(Imm32 {
+                bits: (val & 0xffff_ffff) as i32,
+            })
+        } else {
+            None
+        }
+    }
+}
+
 impl Into<i64> for Imm12 {
     fn into(self) -> i64 {
         self.bits as i64
@@ -55,6 +79,12 @@ impl Into<i64> for Imm12 {
 }
 
 impl Display for Imm12 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{:+}", self.bits)
+    }
+}
+
+impl Display for Imm32 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{:+}", self.bits)
     }

@@ -36,218 +36,8 @@
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd x y)))
   (rv_add x y))
 
-;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 1 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd x (imm12_from_value y))))
-  (alu_rr_imm12 (select_addi ty) x y))
-
-(rule 2 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd (imm12_from_value x) y)))
-  (alu_rr_imm12 (select_addi ty) y x))
-
-;; Special case when one of the operands is uextended
-;; Needs `Zba`
-(rule 3 (lower (has_type $I64 (iadd x (uextend y @ (value_type $I32)))))
-  (if-let $true (has_zba))
-  (rv_adduw y x))
-
-(rule 4 (lower (has_type $I64 (iadd (uextend x @ (value_type $I32)) y)))
-  (if-let $true (has_zba))
-  (rv_adduw x y))
-
-;; Add with const shift. We have a few of these instructions with `Zba`.
-(decl pure partial match_shnadd (Imm64) AluOPRRR)
-(rule (match_shnadd (u64_from_imm64 1)) (AluOPRRR.Sh1add))
-(rule (match_shnadd (u64_from_imm64 2)) (AluOPRRR.Sh2add))
-(rule (match_shnadd (u64_from_imm64 3)) (AluOPRRR.Sh3add))
-
-(rule 3 (lower (has_type $I64 (iadd x (ishl y (maybe_uextend (iconst n))))))
-  (if-let $true (has_zba))
-  (if-let shnadd (match_shnadd n))
-  (alu_rrr shnadd y x))
-
-(rule 4 (lower (has_type $I64 (iadd (ishl x (maybe_uextend (iconst n))) y)))
-  (if-let $true (has_zba))
-  (if-let shnadd (match_shnadd n))
-  (alu_rrr shnadd x y))
-
-
-;; Add with uextended const shift. We have a few of these instructions with `Zba`.
-;;
-;; !!! Important !!!
-;; These rules only work for (ishl (uextend _) _) and not for (uextend (ishl _ _))!
-;; Getting this wrong means a potential misscalculation of the shift amount.
-;; Additionaly we can only ensure that this is correct if the uextend is 32 to 64 bits.
-(decl pure partial match_shnadd_uw (Imm64) AluOPRRR)
-(rule (match_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
-(rule (match_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
-(rule (match_shnadd_uw (u64_from_imm64 3)) (AluOPRRR.Sh3adduw))
-
-(rule 5 (lower (has_type $I64 (iadd x (ishl (uextend y @ (value_type $I32)) (maybe_uextend (iconst n))))))
-  (if-let $true (has_zba))
-  (if-let shnadd_uw (match_shnadd_uw n))
-  (alu_rrr shnadd_uw y x))
-
-(rule 6 (lower (has_type $I64 (iadd (ishl (uextend x @ (value_type $I32)) (maybe_uextend (iconst n))) y)))
-  (if-let $true (has_zba))
-  (if-let shnadd_uw (match_shnadd_uw n))
-  (alu_rrr shnadd_uw x y))
-
-;; I128 cases
-(rule 7 (lower (has_type $I128 (iadd x y)))
-  (let ((low XReg (rv_add (value_regs_get x 0) (value_regs_get y 0)))
-        ;; compute carry.
-        (carry XReg (rv_sltu low (value_regs_get y 0)))
-        ;;
-        (high_tmp XReg (rv_add (value_regs_get x 1) (value_regs_get y 1)))
-        ;; add carry.
-        (high XReg (rv_add high_tmp carry)))
-    (value_regs low high)))
-
-;; SIMD Vectors
-(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (iadd x y)))
-  (rv_vadd_vv x y (unmasked) ty))
-
-(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (splat y))))
-  (rv_vadd_vx x y (unmasked) ty))
-
-(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (splat (sextend y @ (value_type sext_ty))))))
-  (if-let half_ty (ty_half_width ty))
-  (if-let $true (ty_equal (lane_type half_ty) sext_ty))
-  (rv_vwadd_wx x y (unmasked) (vstate_mf2 half_ty)))
-
-(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (splat (uextend y @ (value_type uext_ty))))))
-  (if-let half_ty (ty_half_width ty))
-  (if-let $true (ty_equal (lane_type half_ty) uext_ty))
-  (rv_vwaddu_wx x y (unmasked) (vstate_mf2 half_ty)))
-
-(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (replicated_imm5 y))))
-  (rv_vadd_vi x y (unmasked) ty))
-
-
-(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd (splat x) y)))
-  (rv_vadd_vx y x (unmasked) ty))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register ty) (iadd (splat (sextend x @ (value_type sext_ty))) y)))
-  (if-let half_ty (ty_half_width ty))
-  (if-let $true (ty_equal (lane_type half_ty) sext_ty))
-  (rv_vwadd_wx y x (unmasked) (vstate_mf2 half_ty)))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register ty) (iadd (splat (uextend x @ (value_type uext_ty))) y)))
-  (if-let half_ty (ty_half_width ty))
-  (if-let $true (ty_equal (lane_type half_ty) uext_ty))
-  (rv_vwaddu_wx y x (unmasked) (vstate_mf2 half_ty)))
-
-(rule 14 (lower (has_type (ty_vec_fits_in_register ty) (iadd (replicated_imm5 x) y)))
-  (rv_vadd_vi y x (unmasked) ty))
-
-;; Signed Widening Low Additions
-
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (iadd x (swiden_low y @ (value_type in_ty)))))
-  (rv_vwadd_wv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 12 (lower (has_type (ty_vec_fits_in_register _) (iadd (swiden_low x @ (value_type in_ty)) y)))
-  (rv_vwadd_wv y x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (swiden_low x @ (value_type in_ty))
-                                                            (swiden_low y))))
-  (rv_vwadd_vv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (swiden_low x @ (value_type in_ty))
-                                                            (splat (sextend y @ (value_type sext_ty))))))
-  (if-let $true (ty_equal (lane_type in_ty) sext_ty))
-  (rv_vwadd_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
-                                                            (swiden_low y @ (value_type in_ty)))))
-  (if-let $true (ty_equal (lane_type in_ty) sext_ty))
-  (rv_vwadd_vx y x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-;; Signed Widening High Additions
-;; These are the same as the low additions, but we first slide down the inputs.
-
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (iadd x (swiden_high y @ (value_type in_ty)))))
-  (rv_vwadd_wv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 12 (lower (has_type (ty_vec_fits_in_register _) (iadd (swiden_high x @ (value_type in_ty)) y)))
-  (rv_vwadd_wv y (gen_slidedown_half in_ty x) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (swiden_high x @ (value_type in_ty))
-                                                            (swiden_high y))))
-  (rv_vwadd_vv (gen_slidedown_half in_ty x) (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (swiden_high x @ (value_type in_ty))
-                                                            (splat (sextend y @ (value_type sext_ty))))))
-  (if-let $true (ty_equal (lane_type in_ty) sext_ty))
-  (rv_vwadd_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
-                                                            (swiden_high y @ (value_type in_ty)))))
-  (if-let $true (ty_equal (lane_type in_ty) sext_ty))
-  (rv_vwadd_vx (gen_slidedown_half in_ty y) x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-;; Unsigned Widening Low Additions
-
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (iadd x (uwiden_low y @ (value_type in_ty)))))
-  (rv_vwaddu_wv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 12 (lower (has_type (ty_vec_fits_in_register _) (iadd (uwiden_low x @ (value_type in_ty)) y)))
-  (rv_vwaddu_wv y x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (uwiden_low x @ (value_type in_ty))
-                                                            (uwiden_low y))))
-  (rv_vwaddu_vv x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (uwiden_low x @ (value_type in_ty))
-                                                            (splat (uextend y @ (value_type uext_ty))))))
-  (if-let $true (ty_equal (lane_type in_ty) uext_ty))
-  (rv_vwaddu_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend x @ (value_type uext_ty)))
-                                                            (uwiden_low y @ (value_type in_ty)))))
-  (if-let $true (ty_equal (lane_type in_ty) uext_ty))
-  (rv_vwaddu_vx y x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-;; Unsigned Widening High Additions
-;; These are the same as the low additions, but we first slide down the inputs.
-
-(rule 9 (lower (has_type (ty_vec_fits_in_register _) (iadd x (uwiden_high y @ (value_type in_ty)))))
-  (rv_vwaddu_wv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 12 (lower (has_type (ty_vec_fits_in_register _) (iadd (uwiden_high x @ (value_type in_ty)) y)))
-  (rv_vwaddu_wv y (gen_slidedown_half in_ty x) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (uwiden_high x @ (value_type in_ty))
-                                                            (uwiden_high y))))
-  (rv_vwaddu_vv (gen_slidedown_half in_ty x) (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (uwiden_high x @ (value_type in_ty))
-                                                            (splat (uextend y @ (value_type uext_ty))))))
-  (if-let $true (ty_equal (lane_type in_ty) uext_ty))
-  (rv_vwaddu_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend y @ (value_type uext_ty)))
-                                                            (uwiden_high x @ (value_type in_ty)))))
-  (if-let $true (ty_equal (lane_type in_ty) uext_ty))
-  (rv_vwaddu_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-;; Signed Widening Mixed High/Low Additions
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (swiden_low x @ (value_type in_ty))
-                                                            (swiden_high y))))
-  (rv_vwadd_vv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (swiden_high x @ (value_type in_ty))
-                                                            (swiden_low y))))
-  (rv_vwadd_vv (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-;; Unsigned Widening Mixed High/Low Additions
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (uwiden_low x @ (value_type in_ty))
-                                                            (uwiden_high y))))
-  (rv_vwaddu_vv x (gen_slidedown_half in_ty y) (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
-
-(rule 13 (lower (has_type (ty_vec_fits_in_register _) (iadd (uwiden_high x @ (value_type in_ty))
-                                                            (uwiden_low y))))
-  (rv_vwaddu_vv (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
+(rule 1 (lower (iadd (imm32_from_value x) (imm32_from_value y)))
+  (zk_add x y))
 
 ;; Fused Multiply Accumulate Rules `vmacc`
 ;;
@@ -255,42 +45,42 @@
 ;; register instead of the addition one. The actual pattern matched seems to be
 ;; exactly the same.
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul y z))))
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul y z))))
   (rv_vmacc_vv x y z (unmasked) ty))
 
-(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul y (splat z)))))
+(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul y (splat z)))))
   (rv_vmacc_vx x y z (unmasked) ty))
 
-(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul (splat y) z))))
+(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (imul (splat y) z))))
   (rv_vmacc_vx x z y (unmasked) ty))
 
-(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul x y) z)))
+(rule 13 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul x y) z)))
   (rv_vmacc_vv z x y (unmasked) ty))
 
-(rule 13 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul x (splat y)) z)))
+(rule 14 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul x (splat y)) z)))
   (rv_vmacc_vx z x y (unmasked) ty))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul (splat x) y) z)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register ty) (iadd (imul (splat x) y) z)))
   (rv_vmacc_vx z y x (unmasked) ty))
 
 ;; Fused Multiply Subtract Rules `vnmsac`
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul y z)))))
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul y z)))))
   (rv_vnmsac_vv x y z (unmasked) ty))
 
-(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul y (splat z))))))
+(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul y (splat z))))))
   (rv_vnmsac_vx x y z (unmasked) ty))
 
-(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul (splat y) z)))))
+(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (ineg (imul (splat y) z)))))
   (rv_vnmsac_vx x z y (unmasked) ty))
 
-(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul x y)) z)))
+(rule 13 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul x y)) z)))
   (rv_vnmsac_vv z x y (unmasked) ty))
 
-(rule 13 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul x (splat y))) z)))
+(rule 14 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul x (splat y))) z)))
   (rv_vnmsac_vx z x y (unmasked) ty))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul (splat x) y)) z)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register ty) (iadd (ineg (imul (splat x) y)) z)))
   (rv_vnmsac_vx z y x (unmasked) ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
