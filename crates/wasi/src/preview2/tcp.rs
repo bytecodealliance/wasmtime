@@ -42,9 +42,7 @@ pub(crate) enum HostTcpState {
 /// A host TCP socket, plus associated bookkeeping.
 ///
 /// The inner state is wrapped in an Arc because the same underlying socket is
-/// used for implementing the stream types. Also needed for [`spawn_blocking`].
-///
-/// [`spawn_blocking`]: Self::spawn_blocking
+/// used for implementing the stream types.
 pub(crate) struct HostTcpSocket {
     /// The part of a `HostTcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
@@ -113,20 +111,6 @@ impl HostTcpSocketInner {
         let tcp_socket = &self.tcp_socket;
 
         tcp_socket
-    }
-
-    /// Spawn a task on tokio's blocking thread for performing blocking
-    /// syscalls on the underlying [`cap_std::net::TcpListener`].
-    #[cfg(not(unix))]
-    pub(crate) async fn spawn_blocking<F, R>(self: &Arc<Self>, body: F) -> R
-    where
-        F: FnOnce(&cap_std::net::TcpListener) -> R + Send + 'static,
-        R: Send + 'static,
-    {
-        let s = Arc::clone(self);
-        tokio::task::spawn_blocking(move || body(s.tcp_socket()))
-            .await
-            .unwrap()
     }
 }
 
