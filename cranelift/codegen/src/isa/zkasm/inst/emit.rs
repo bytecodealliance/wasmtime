@@ -500,6 +500,10 @@ impl Inst {
     }
 }
 
+fn put_string(s: &str, sink: &mut MachBuffer<Inst>) {
+    sink.put_data(s.as_bytes());
+}
+
 #[allow(unused)]
 impl MachInstEmit for Inst {
     type State = EmitState;
@@ -636,16 +640,15 @@ impl MachInstEmit for Inst {
                 sink.put4(x); */
             }
             &Inst::Unwind { ref inst } => {
-                println!("Unwind");
-                // todo!()
-                    // sink.add_unwind(inst.clone());
+                put_string(&format!("Unwind\n"), sink);
+                // sink.add_unwind(inst.clone());
             }
             &Inst::DummyUse { reg } => {
                 todo!() // allocs.next(reg);
             }
             &Inst::AddImm32 { rd, src1, src2 } => {
                 let rd = allocs.next(rd.to_reg());
-                println!("{src1} + {src2} => {:?}", rd);
+                put_string(&format!("{src1} + {src2} => {:?}", rd), sink);
             },
             &Inst::AluRRR {
                 alu_op,
@@ -679,9 +682,8 @@ impl MachInstEmit for Inst {
             } => {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
-                println!("{rs:?} {imm12} => {rd:?}: {alu_op:?}");
+                put_string(&format!("{rs:?} {imm12} => {rd:?}: {alu_op:?}\n"), sink);
 
-                // todo!()
                     /* let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
@@ -697,8 +699,7 @@ impl MachInstEmit for Inst {
                 from,
                 flags,
             } => {
-                println!("$ => {rd:?} ; LOAD op={op:?} from={from:?} flags={flags:?}");
-                // todo!()
+                put_string(&format!("$ => {rd:?} ; LOAD op={op:?} from={from:?} flags={flags:?}\n"), sink);
                 /* let from = from.clone().with_allocs(&mut allocs);
                 let rd = allocs.next_writable(rd);
 
@@ -729,14 +730,12 @@ impl MachInstEmit for Inst {
                 let src = allocs.next(src);
                 let stack_offset = to.get_offset_with_state(state);
                 if let Some(base_register) = to.get_base_register() {
-                    println!("{src:?} : MSTORE({base_register:?} + {stack_offset})");
-                    sink.put_data(b"{src:?} : MSTORE({base_register:?} + {stack_offset})\n");
+                    put_string(&format!("{src:?} : MSTORE({base_register:?} + {stack_offset})\n"), sink);
                 } else {
-                    println!("{src:?} : MSTORE({stack_offset})");
-                    sink.put_data(b"{src:?} : MSTORE({stack_offset})\n");
+                    put_string(&format!("{src:?} : MSTORE({stack_offset})\n"), sink);
                 }
-                // todo!()
-                    /* let to = to.clone().with_allocs(&mut allocs);
+                /* let to = to.clone().with_allocs(&mut allocs);
+                let src = allocs.next(src);
 
                 let base = to.get_base_register();
                 let offset = to.get_offset_with_state(state);
@@ -768,8 +767,7 @@ impl MachInstEmit for Inst {
             &Inst::Ret {
                 stack_bytes_to_pop, ..
             } => {
-                println!("ret");
-                // todo!()
+                put_string(&format!("RETURN\n"), sink);
                 /* if stack_bytes_to_pop != 0 {
                     Inst::AdjustSp {
                         amount: i64::from(stack_bytes_to_pop),
@@ -824,8 +822,13 @@ impl MachInstEmit for Inst {
                     .for_each(|i| i.emit(&[], sink, emit_info, state)); */
             }
             &Inst::AdjustSp { amount } => {
-                println!("SP {} => SP", amount);
-                // todo!()
+                let amount = if amount > 0 {
+                    format!("+ {}", amount)
+                } else {
+                    format!("- {}", -amount)
+                };
+                put_string(&format!("SP {amount} => SP\n"), sink);
+
                     /* if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
@@ -903,8 +906,7 @@ impl MachInstEmit for Inst {
                 ); */
             }
             &Inst::CallInd { ref info } => {
-                println!("call {info:?}");
-                // todo!()
+                put_string(&format!("CALL {info:?}\n"), sink);
                 /* let rn = allocs.next(info.rn);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
@@ -981,7 +983,8 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Jal { dest } => {
-                println!("jal {dest:?}");
+                put_string(&format!("JUMP {dest:?}\n"), sink);
+                /* let code: u32 = 0b1101111;
                 match dest {
                     BranchTarget::Label(label) => {
                         // TODO: the following two lines allow eg. optimizing out jump-to-here
@@ -991,7 +994,7 @@ impl MachInstEmit for Inst {
                     }
                     BranchTarget::ResolvedOffset(offset) => {
                         todo!()
-                        /* let offset = offset as i64;
+                        let offset = offset as i64;
                         if offset != 0 {
                             if LabelUse::Jal20.offset_in_range(offset) {
                                 let mut code = code.to_le_bytes();
@@ -1008,9 +1011,9 @@ impl MachInstEmit for Inst {
                             }
                         } else {
                             // CondBr often generate Jal {dest : 0}, means otherwise no jump.
-                        } */
+                        }
                     }
-                }
+                }*/
             }
             &Inst::CondBr {
                 taken,
@@ -1053,8 +1056,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Mov { rd, rm, ty } => {
-                println!("{rm:?} => {rd:?}");
-                // todo!();
+                put_string(&format!("{rm:?} => {rd:?}\n"), sink);
                     /* debug_assert_eq!(rd.to_reg().class(), rm.class());
                 if rd.to_reg() == rm {
                     return;
@@ -2029,7 +2031,7 @@ impl MachInstEmit for Inst {
                 offset,
             } => {
                 let rd = allocs.next_writable(rd);
-                println!("{rd:?} => CALL {name:?}");
+                put_string(&format!("{rd:?} => CALL {name:?}\n"), sink);
                 /* let rd = allocs.next_writable(rd);
                 // get the current pc.
                 Inst::Auipc {
