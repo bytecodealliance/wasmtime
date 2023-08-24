@@ -15,7 +15,17 @@ use regalloc2::{MachineEnv, PReg, RegClass};
 // first argument of function call
 #[inline]
 pub fn a0() -> Reg {
-    x_reg(10)
+    x_reg(1)
+}
+
+#[inline]
+pub fn b0() -> Reg {
+    x_reg(2)
+}
+
+#[inline]
+pub fn c0() -> Reg {
+    x_reg(3)
 }
 
 // second argument of function call

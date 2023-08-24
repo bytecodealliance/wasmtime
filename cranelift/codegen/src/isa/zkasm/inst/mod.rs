@@ -391,8 +391,8 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::LoadConst32 { rd, .. } => collector.reg_def(rd),
         &Inst::LoadConst64 { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
+            collector.reg_fixed_use(rs1, a0());
+            collector.reg_fixed_use(rs2, b0());
             collector.reg_def(rd);
         }
         &Inst::FpuRRR { rd, rs1, rs2, .. } => {
