@@ -61,6 +61,8 @@ impl LoadConstant {
         rd: Writable<Reg>,
         alloc_tmp: &mut F,
     ) -> SmallInstVec<Inst> {
+        todo!()
+        /*
         let mut insts = SmallInstVec::new();
         // get current pc.
         let pc = alloc_tmp(I64);
@@ -82,10 +84,13 @@ impl LoadConstant {
         });
         insts.push(Inst::RawData { data });
         insts
+        */
     }
 
     // load and perform an extra add.
     pub(crate) fn load_constant_and_add(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
+        todo!()
+        /*
         let mut insts = self.load_constant(rd, &mut |_| rd);
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Add,
@@ -94,6 +99,7 @@ impl LoadConstant {
             rs2: rs,
         });
         insts
+        */
     }
 }
 
@@ -179,20 +185,22 @@ impl MachInstEmitState<Inst> for EmitState {
 impl Inst {
     /// construct a "imm - rs".
     pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = Inst::load_constant_u64(rd, imm, &mut |_| rd);
+        todo!()
+        /* let mut insts = Inst::load_constant_u64(rd, imm, &mut |_| rd);
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Sub,
             rd,
             rs1: rd.to_reg(),
             rs2: rs,
         });
-        insts
+        insts */
     }
 
     /// Load int mask.
     /// If ty is int then 0xff in rd.
     pub(crate) fn load_int_mask(rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
+        todo!()
+        /* let mut insts = SmallInstVec::new();
         assert!(ty.is_int() && ty.bits() <= 64);
         match ty {
             I64 => {
@@ -213,7 +221,7 @@ impl Inst {
             }
             _ => unreachable!("ty:{:?}", ty),
         }
-        insts
+        insts */
     }
     ///  inverse all bit
     pub(crate) fn construct_bit_not(rd: Writable<Reg>, rs: Reg) -> Inst {
@@ -261,7 +269,8 @@ impl Inst {
         taken: BranchTarget,
         not_taken: BranchTarget,
     ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
+        todo!()
+        /* let mut insts = SmallInstVec::new();
         let class_op = if ty == F32 {
             FpuOPRR::FclassS
         } else {
@@ -288,7 +297,7 @@ impl Inst {
                 rs2: zero_reg(),
             },
         });
-        insts
+        insts */
     }
     pub(crate) fn emit_fneg(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
         Inst::FpuRRR {
@@ -312,7 +321,8 @@ impl Inst {
         not_taken: BranchTarget,
         ty: Type,
     ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
+        todo!()
+        /* let mut insts = SmallInstVec::new();
         if ty.bits() <= 64 {
             let rs1 = a.only_reg().unwrap();
             let rs2 = b.only_reg().unwrap();
@@ -399,7 +409,7 @@ impl Inst {
                 });
             }
         }
-        insts
+        insts */
     }
 
     /// Returns Some(VState) if this insturction is expecting a specific vector state
@@ -497,7 +507,8 @@ impl MachInstEmit for Inst {
         emit_info: &Self::Info,
         state: &mut EmitState,
     ) {
-        let mut allocs = AllocationConsumer::new(allocs);
+        todo!()
+        /* let mut allocs = AllocationConsumer::new(allocs);
 
         // Check if we need to update the vector state before emitting this instruction
         if let Some(expected) = self.expected_vstate() {
@@ -3060,7 +3071,7 @@ impl MachInstEmit for Inst {
             self,
             end_off - start_off,
             Inst::worst_case_size()
-        );
+        ); */
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
@@ -3087,7 +3098,8 @@ fn emit_return_call_common_sequence(
     old_stack_arg_size: u32,
     uses: &CallArgList,
 ) {
-    for u in uses {
+    todo!()
+    /* for u in uses {
         let _ = allocs.next(u.vreg);
     }
 
@@ -3222,5 +3234,5 @@ fn emit_return_call_common_sequence(
         "return_call[_ind] adjusts virtual sp offset by {} -> {}",
         new_stack_arg_size,
         state.virtual_sp_offset
-    );
+    ); */
 }
