@@ -3088,19 +3088,36 @@
 ;; at runtime plus the immediate offset `i32` provided. The `Type` here is used
 ;; to represent the size of the value being loaded or stored for offset scaling
 ;; if necessary.
+;;
+;; Note that this is broken up into two phases. In the first phase this attempts
+;; to find constants within the `val` provided and fold them in to the `offset`
+;; provided. Afterwards though the `amode_no_more_iconst` helper is used at
+;; which pointer constants are no longer pattern-matched and instead only
+;; various modes are generated. This in theory would not be necessary with
+;; mid-end optimizations that fold constants into load/store immediate offsets
+;; instead, but for now each backend needs to do this.
 (decl amode (Type Value i32) AMode)
+(rule 0 (amode ty val offset)
+        (amode_no_more_iconst ty val offset))
+(rule 1 (amode ty (iadd x (iconst (simm32 y))) offset)
+        (if-let new_offset (s32_add_fallible y offset))
+        (amode_no_more_iconst ty x new_offset))
+(rule 2 (amode ty (iadd (iconst (simm32 x)) y) offset)
+        (if-let new_offset (s32_add_fallible x offset))
+        (amode_no_more_iconst ty y new_offset))
 
+(decl amode_no_more_iconst (Type Value i32) AMode)
 ;; Base case: move the `offset` into a register and add it to `val` via the
 ;; amode
-(rule 0 (amode ty val offset)
+(rule 0 (amode_no_more_iconst ty val offset)
         (AMode.RegReg val (imm $I64 (ImmExtend.Zero) (i64_as_u64 offset))))
 
 ;; Optimize cases where the `offset` provided fits into a immediates of
 ;; various kinds of addressing modes.
-(rule 1 (amode ty val offset)
+(rule 1 (amode_no_more_iconst ty val offset)
         (if-let simm9 (simm9_from_i64 offset))
         (AMode.Unscaled val simm9))
-(rule 2 (amode ty val offset)
+(rule 2 (amode_no_more_iconst ty val offset)
         (if-let uimm12 (uimm12_scaled_from_i64 offset ty))
         (AMode.UnsignedOffset val uimm12))
 
@@ -3111,15 +3128,15 @@
 ;; instructions. Constants on the other hand added to the amode represent only
 ;; a single instruction folded in, so fewer instructions should be generated
 ;; with these higher priority than the rules above.
-(rule 3 (amode ty (iadd x y) offset)
+(rule 3 (amode_no_more_iconst ty (iadd x y) offset)
         (AMode.RegReg (amode_add x offset) y))
-(rule 4 (amode ty (iadd x (uextend y @ (value_type $I32))) offset)
+(rule 4 (amode_no_more_iconst ty (iadd x (uextend y @ (value_type $I32))) offset)
         (AMode.RegExtended (amode_add x offset) y (ExtendOp.UXTW)))
-(rule 4 (amode ty (iadd x (sextend y @ (value_type $I32))) offset)
+(rule 4 (amode_no_more_iconst ty (iadd x (sextend y @ (value_type $I32))) offset)
         (AMode.RegExtended (amode_add x offset) y (ExtendOp.SXTW)))
-(rule 5 (amode ty (iadd (uextend x @ (value_type $I32)) y) offset)
+(rule 5 (amode_no_more_iconst ty (iadd (uextend x @ (value_type $I32)) y) offset)
         (AMode.RegExtended (amode_add y offset) x (ExtendOp.UXTW)))
-(rule 5 (amode ty (iadd (sextend x @ (value_type $I32)) y) offset)
+(rule 5 (amode_no_more_iconst ty (iadd (sextend x @ (value_type $I32)) y) offset)
         (AMode.RegExtended (amode_add y offset) x (ExtendOp.SXTW)))
 
 ;; `RegScaled*` rules where this matches an addition of an "index register" to a
@@ -3129,10 +3146,10 @@
 ;; Note that this can additionally bundle an extending operation but the
 ;; extension must happen before the shift. This will pattern-match the shift
 ;; first and then if that succeeds afterwards try to find an extend.
-(rule 6 (amode ty (iadd x (ishl y (iconst (u64_from_imm64 n)))) offset)
+(rule 6 (amode_no_more_iconst ty (iadd x (ishl y (iconst (u64_from_imm64 n)))) offset)
         (if-let $true (u64_eq (ty_bytes ty) (u64_shl 1 n)))
         (amode_reg_scaled (amode_add x offset) y ty))
-(rule 7 (amode ty (iadd (ishl y (iconst (u64_from_imm64 n))) x) offset)
+(rule 7 (amode_no_more_iconst ty (iadd (ishl y (iconst (u64_from_imm64 n))) x) offset)
         (if-let $true (u64_eq (ty_bytes ty) (u64_shl 1 n)))
         (amode_reg_scaled (amode_add x offset) y ty))
 
@@ -3143,18 +3160,6 @@
         (AMode.RegScaledExtended base index ty (ExtendOp.UXTW)))
 (rule 2 (amode_reg_scaled base (sextend index @ (value_type $I32)) ty)
         (AMode.RegScaledExtended base index ty (ExtendOp.SXTW)))
-
-;; Small optimizations where constants found in `iadd` are folded into the
-;; `offset` immediate.
-;;
-;; NB: this should probably be done by mid-end optimizations rather than here
-;; in the backend, but currently Cranelift doesn't do that.
-(rule 8 (amode ty (iadd x (iconst (simm32 y))) offset)
-        (if-let new_offset (s32_add_fallible y offset))
-        (amode ty x new_offset))
-(rule 9 (amode ty (iadd (iconst (simm32 x)) y) offset)
-        (if-let new_offset (s32_add_fallible x offset))
-        (amode ty y new_offset))
 
 ;; Helper to add a 32-bit signed immediate to the register provided. This will
 ;; select an appropriate `add` instruction to use.
