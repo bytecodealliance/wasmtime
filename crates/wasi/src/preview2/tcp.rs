@@ -1,12 +1,9 @@
-use crate::preview2::{HostInputStream, HostOutputStream, StreamState, Table, TableError};
-use bytes::{Bytes, BytesMut};
+use crate::preview2::{StreamState, Table, TableError};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
-use cap_std::net::{TcpListener, TcpStream};
+use cap_std::net::TcpListener;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
-use io_lifetimes::AsSocketlike;
 use std::io;
 use std::sync::Arc;
-use system_interface::io::IoExt;
 
 /// The state of a TCP socket.
 ///
@@ -111,48 +108,6 @@ impl HostTcpSocketInner {
         let tcp_socket = &self.tcp_socket;
 
         tcp_socket
-    }
-}
-
-#[async_trait::async_trait]
-impl HostInputStream for Arc<HostTcpSocketInner> {
-    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
-        if size == 0 {
-            return Ok((Bytes::new(), StreamState::Open));
-        }
-        let mut buf = BytesMut::zeroed(size);
-        let r = self
-            .tcp_socket()
-            .as_socketlike_view::<TcpStream>()
-            .read(&mut buf);
-        let (n, state) = read_result(r)?;
-        buf.truncate(n);
-        Ok((buf.freeze(), state))
-    }
-
-    async fn ready(&mut self) -> anyhow::Result<()> {
-        self.tcp_socket.readable().await?;
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl HostOutputStream for Arc<HostTcpSocketInner> {
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
-        if buf.is_empty() {
-            return Ok((0, StreamState::Open));
-        }
-        let r = self
-            .tcp_socket
-            .as_socketlike_view::<TcpStream>()
-            .write(buf.as_ref());
-        let (n, state) = write_result(r)?;
-        Ok((n, state))
-    }
-
-    async fn ready(&mut self) -> anyhow::Result<()> {
-        self.tcp_socket.writable().await?;
-        Ok(())
     }
 }
 
