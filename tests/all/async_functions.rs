@@ -360,10 +360,8 @@ async fn fuel_eventually_finishes() {
 
 #[tokio::test]
 async fn async_with_pooling_stacks() {
-    let mut pool = PoolingAllocationConfig::default();
-    pool.instance_count(1)
-        .instance_memory_pages(1)
-        .instance_table_elements(0);
+    let mut pool = crate::small_pool_config();
+    pool.total_stacks(1).memory_pages(1).table_elements(0);
     let mut config = Config::new();
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
@@ -385,11 +383,8 @@ async fn async_with_pooling_stacks() {
 
 #[tokio::test]
 async fn async_host_func_with_pooling_stacks() -> Result<()> {
-    let mut pooling = PoolingAllocationConfig::default();
-    pooling
-        .instance_count(1)
-        .instance_memory_pages(1)
-        .instance_table_elements(0);
+    let mut pooling = crate::small_pool_config();
+    pooling.total_stacks(1).memory_pages(1).table_elements(0);
     let mut config = Config::new();
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling));

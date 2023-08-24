@@ -1,0 +1,33 @@
+package wasmtime:wasi
+
+// All of the same imports available in the wasi:cli/command world, but no
+// export required:
+world preview1-adapter-reactor {
+  import wasi:clocks/wall-clock
+  import wasi:clocks/monotonic-clock
+  import wasi:clocks/timezone
+  import wasi:filesystem/types
+  import wasi:filesystem/preopens
+  import wasi:sockets/instance-network
+  import wasi:sockets/ip-name-lookup
+  import wasi:sockets/network
+  import wasi:sockets/tcp-create-socket
+  import wasi:sockets/tcp
+  import wasi:sockets/udp-create-socket
+  import wasi:sockets/udp
+  import wasi:random/random
+  import wasi:random/insecure
+  import wasi:random/insecure-seed
+  import wasi:poll/poll
+  import wasi:io/streams
+  import wasi:cli/environment
+  import wasi:cli/exit
+  import wasi:cli/stdin
+  import wasi:cli/stdout
+  import wasi:cli/stderr
+  import wasi:cli/terminal-input
+  import wasi:cli/terminal-output
+  import wasi:cli/terminal-stdin
+  import wasi:cli/terminal-stdout
+  import wasi:cli/terminal-stderr
+}

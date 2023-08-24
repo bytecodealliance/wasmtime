@@ -30,6 +30,7 @@ fn build_and_generate_tests() {
     println!("cargo:rerun-if-changed=./wasi-tests");
     println!("cargo:rerun-if-changed=./command-tests");
     println!("cargo:rerun-if-changed=./reactor-tests");
+    println!("cargo:rerun-if-changed=./wasi-sockets-tests");
     if BUILD_WASI_HTTP_TESTS {
         println!("cargo:rerun-if-changed=./wasi-http-tests");
     } else {
@@ -43,6 +44,7 @@ fn build_and_generate_tests() {
         .arg("--package=wasi-tests")
         .arg("--package=command-tests")
         .arg("--package=reactor-tests")
+        .arg("--package=wasi-sockets-tests")
         .env("CARGO_TARGET_DIR", &out_dir)
         .env("CARGO_PROFILE_DEV_DEBUG", "1")
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
@@ -59,18 +61,23 @@ fn build_and_generate_tests() {
 
     if BUILD_WASI_HTTP_TESTS {
         modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
-        // FIXME this is broken at the moment because guest bindgen is embedding the proxy world type,
-        // so wit-component expects the module to contain the proxy's exports. we need a different
-        // world to pass guest bindgen that is just "a command that also can do outbound http"
-        //components_rs(&meta, "wasi-http-tests", "bin", &command_adapter, &out_dir);
+        components_rs(&meta, "wasi-http-tests", "bin", &reactor_adapter, &out_dir);
     }
 
     components_rs(&meta, "command-tests", "bin", &command_adapter, &out_dir);
     components_rs(&meta, "reactor-tests", "cdylib", &reactor_adapter, &out_dir);
+
+    components_rs(
+        &meta,
+        "wasi-sockets-tests",
+        "bin",
+        &command_adapter,
+        &out_dir,
+    );
 }
 
 // Creates an `${out_dir}/${package}_modules.rs` file that exposes a `get_module(&str) -> Module`,
-// and a contains a `use self::{module} as _;` for each module that ensures that the user defines
+// and contains a `use self::{module} as _;` for each module that ensures that the user defines
 // a symbol (ideally a #[test]) corresponding to each module.
 fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_dir: &PathBuf) {
     let modules = targets_in_package(meta, package, kind)

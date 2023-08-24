@@ -48,7 +48,7 @@ where
     alloc_scratch_reg: Reg,
     /// Registers to be saved as part of the trampoline's prologue
     /// and to be restored as part of the trampoline's epilogue.
-    callee_saved_regs: SmallVec<[Reg; 9]>,
+    callee_saved_regs: SmallVec<[(Reg, OperandSize); 18]>,
     /// The calling convention used by the trampoline,
     /// which is the Wasmtime variant of the system ABI's
     /// calling convention.
@@ -146,7 +146,7 @@ where
         let ABIResult::Reg { reg, ty } = &wasm_sig.result;
         if let Some(ty) = ty {
             self.masm.store(
-                RegImm::reg(*reg),
+                RegImm::reg(reg.unwrap()),
                 self.masm.address_at_reg(self.scratch_reg, 0),
                 (*ty).into(),
             );
@@ -369,21 +369,16 @@ where
     /// Performs a spill of the register params.
     fn spill(&mut self, params: &ABIParams) -> (SmallVec<[u32; 6]>, u32) {
         let mut offsets = SmallVec::new();
-        let mut spilled = 0;
+        let mut spill_size = 0;
         params.iter().for_each(|param| {
             if let Some(reg) = param.get_reg() {
-                let offset = self.masm.push(reg);
-                offsets.push(offset);
-                spilled += 1;
+                let slot = self.masm.push(reg, param.ty().into());
+                offsets.push(slot.offset);
+                spill_size += slot.size;
             }
         });
 
-        // The stack size for the spill, calculated
-        // from the number of spilled register times
-        // the size of each push (8 bytes).
-        let size = spilled * <M::ABI as ABI>::word_bytes();
-
-        (offsets, size)
+        (offsets, spill_size)
     }
 
     /// Assigns arguments for the callee, loading them from a register.
@@ -468,8 +463,8 @@ where
     fn prologue_with_callee_saved(&mut self) {
         self.masm.prologue();
         // Save any callee-saved registers.
-        for r in &self.callee_saved_regs {
-            self.masm.push(*r);
+        for (r, s) in &self.callee_saved_regs {
+            self.masm.push(*r, *s);
         }
     }
 
@@ -479,8 +474,8 @@ where
         // Free the stack space allocated by pushing the trampoline arguments.
         self.masm.free_stack(arg_size);
         // Restore the callee-saved registers.
-        for r in self.callee_saved_regs.iter().rev() {
-            self.masm.pop(*r);
+        for (r, s) in self.callee_saved_regs.iter().rev() {
+            self.masm.pop(*r, *s);
         }
         self.masm.epilogue(0);
     }

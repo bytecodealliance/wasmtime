@@ -25,15 +25,15 @@
 ;;    c:	 4c89742404           	mov	qword ptr [rsp + 4], r14
 ;;   11:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   15:	 85c0                 	test	eax, eax
-;;   17:	 0f8411000000         	je	0x2e
+;;   17:	 0f840f000000         	je	0x2c
 ;;   1d:	 e800000000           	call	0x22
-;;   22:	 48c7c00d000000       	mov	rax, 0xd
-;;   29:	 e90c000000           	jmp	0x3a
-;;   2e:	 e800000000           	call	0x33
-;;   33:	 48c7c000000000       	mov	rax, 0
-;;   3a:	 83f800               	cmp	eax, 0
-;;   3d:	 b800000000           	mov	eax, 0
-;;   42:	 400f94c0             	sete	al
-;;   46:	 4883c410             	add	rsp, 0x10
-;;   4a:	 5d                   	pop	rbp
-;;   4b:	 c3                   	ret	
+;;   22:	 b80d000000           	mov	eax, 0xd
+;;   27:	 e90a000000           	jmp	0x36
+;;   2c:	 e800000000           	call	0x31
+;;   31:	 b800000000           	mov	eax, 0
+;;   36:	 83f800               	cmp	eax, 0
+;;   39:	 b800000000           	mov	eax, 0
+;;   3e:	 400f94c0             	sete	al
+;;   42:	 4883c410             	add	rsp, 0x10
+;;   46:	 5d                   	pop	rbp
+;;   47:	 c3                   	ret	

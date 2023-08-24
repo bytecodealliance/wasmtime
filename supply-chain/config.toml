@@ -549,7 +549,7 @@ version = "1.8.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.socket2]]
-version = "0.4.4"
+version = "0.4.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.souper-ir]]

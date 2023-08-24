@@ -15,7 +15,7 @@
 ;;   11:	 b800000000           	mov	eax, 0
 ;;   16:	 31d2                 	xor	edx, edx
 ;;   18:	 f7f1                 	div	ecx
-;;   1a:	 4889d0               	mov	rax, rdx
-;;   1d:	 4883c408             	add	rsp, 8
-;;   21:	 5d                   	pop	rbp
-;;   22:	 c3                   	ret	
+;;   1a:	 89d0                 	mov	eax, edx
+;;   1c:	 4883c408             	add	rsp, 8
+;;   20:	 5d                   	pop	rbp
+;;   21:	 c3                   	ret	

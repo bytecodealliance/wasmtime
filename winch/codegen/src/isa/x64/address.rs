@@ -1,5 +1,7 @@
 //! x64 addressing mode.
 
+use cranelift_codegen::ir::Constant;
+
 use crate::reg::Reg;
 
 /// Memory address representation.
@@ -7,11 +9,26 @@ use crate::reg::Reg;
 pub(crate) enum Address {
     /// Base register with an immediate offset.
     Offset { base: Reg, offset: u32 },
+    /// Address to identify a constant.
+    Const(Constant),
 }
 
 impl Address {
     /// Create an offset.
     pub fn offset(base: Reg, offset: u32) -> Self {
         Self::Offset { base, offset }
+    }
+
+    /// Create an address for a constant.
+    pub fn constant(data: Constant) -> Self {
+        Self::Const(data)
+    }
+
+    /// Check if the address is a made made of a base and offset.
+    pub fn is_offset(&self) -> bool {
+        match self {
+            Self::Offset { .. } => true,
+            _ => false,
+        }
     }
 }

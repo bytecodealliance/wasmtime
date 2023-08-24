@@ -2,6 +2,7 @@ use super::regs;
 use crate::{
     abi::{ABIArg, ABIResult, ABISig, ABI},
     isa::{reg::Reg, CallingConvention},
+    masm::OperandSize,
 };
 use smallvec::SmallVec;
 use wasmtime_environ::{WasmFuncType, WasmType};
@@ -125,13 +126,19 @@ impl ABI for X64ABI {
     }
 
     fn result(returns: &[WasmType], _call_conv: &CallingConvention) -> ABIResult {
-        // The `Default`, `WasmtimeFastcall` and `WasmtimeSystemV use `rax`.
-        // NOTE This should be updated when supporting multi-value.
-        let reg = regs::rax();
         // This invariant will be lifted once support for multi-value is added.
         assert!(returns.len() <= 1, "multi-value not supported");
-
         let ty = returns.get(0).copied();
+        let reg = ty.map(|ty| {
+            match ty {
+                // The `Default`, `WasmtimeFastcall` and `WasmtimeSystemV use `rax` and `xmm0`.
+                // NOTE This should be updated when supporting multi-value.
+                WasmType::I32 | WasmType::I64 => regs::rax(),
+                WasmType::F32 | WasmType::F64 => regs::xmm0(),
+                t => panic!("Unsupported return type {:?}", t),
+            }
+        });
+
         ABIResult::reg(ty, reg)
     }
 
@@ -151,8 +158,16 @@ impl ABI for X64ABI {
         regs::vmctx()
     }
 
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> {
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
         regs::callee_saved(call_conv)
+    }
+
+    fn stack_arg_slot_size_for_type(ty: WasmType) -> u32 {
+        match ty {
+            WasmType::F64 | WasmType::I32 | WasmType::I64 => Self::word_bytes(),
+            WasmType::F32 => Self::word_bytes() / 2,
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -177,7 +192,7 @@ impl X64ABI {
 
         let default = || {
             let arg = ABIArg::stack_offset(*stack_offset, *ty);
-            let size = Self::word_bytes();
+            let size = Self::stack_arg_slot_size_for_type(*ty);
             *stack_offset += size;
             arg
         };

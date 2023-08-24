@@ -455,6 +455,12 @@ jobs:
         RUST_BACKTRACE: 1
       if: matrix.target == '' && matrix.os != 'windows-latest' && needs.determine.outputs.test-capi
 
+    # Ensure wit definitions are in sync: both wasmtime-wasi and wasmtime-wasi-http need their own
+    # copy of the wit definitions so publishing works, but we need to ensure they are identical copies.
+    - name: Check that the wasi and wasi-http wit directories agree
+      run: |
+        diff -ru crates/wasi/wit crates/wasi-http/wit
+
     # Build and test all features
     - run: ./ci/run-tests.sh --locked
       env:
@@ -695,9 +701,9 @@ jobs:
         rustup target add ${{ matrix.target }}
       if: matrix.target != ''
 
-    # Build `wasmtime` and executables. Note that we include `all-arch` so our
-    # release artifacts can be used to compile `.cwasm`s for other targets.
-    - run: $CENTOS cargo build --release --bin wasmtime --features all-arch
+    # Build `wasmtime` and executables. Note that we include some non-default
+    # features so the # release artifacts can be maximally feature-ful.
+    - run: $CENTOS cargo build --release --bin wasmtime --features all-arch,component-model
 
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml

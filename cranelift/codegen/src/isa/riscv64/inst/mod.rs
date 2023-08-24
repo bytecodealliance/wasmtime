@@ -636,13 +636,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(tmp);
             collector.reg_early_def(rd);
         }
-        &Inst::FloatSelectPseudo {
-            rd, tmp, rs1, rs2, ..
-        } => {
-            collector.reg_uses(&[rs1, rs2]);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(rd);
-        }
         &Inst::Popcnt {
             sum, step, rs, tmp, ..
         } => {
@@ -1133,29 +1126,6 @@ impl Inst {
                     rs,
                     int_tmp,
                     f_tmp,
-                    ty
-                )
-            }
-            &Inst::FloatSelectPseudo {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "f{}.{}.pseudo {},{},{}##tmp={} ty={}",
-                    op.op_name(),
-                    if ty == F32 { "s" } else { "d" },
-                    rd,
-                    rs1,
-                    rs2,
-                    tmp,
                     ty
                 )
             }

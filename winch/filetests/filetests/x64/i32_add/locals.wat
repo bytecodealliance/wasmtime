@@ -29,7 +29,7 @@
 ;;   27:	 8b442408             	mov	eax, dword ptr [rsp + 8]
 ;;   2b:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
 ;;   2f:	 01c1                 	add	ecx, eax
-;;   31:	 4889c8               	mov	rax, rcx
-;;   34:	 4883c410             	add	rsp, 0x10
-;;   38:	 5d                   	pop	rbp
-;;   39:	 c3                   	ret	
+;;   31:	 89c8                 	mov	eax, ecx
+;;   33:	 4883c410             	add	rsp, 0x10
+;;   37:	 5d                   	pop	rbp
+;;   38:	 c3                   	ret	

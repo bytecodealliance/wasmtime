@@ -17,7 +17,7 @@
 ;;   18:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   1c:	 31d2                 	xor	edx, edx
 ;;   1e:	 f7f1                 	div	ecx
-;;   20:	 4889d0               	mov	rax, rdx
-;;   23:	 4883c410             	add	rsp, 0x10
-;;   27:	 5d                   	pop	rbp
-;;   28:	 c3                   	ret	
+;;   20:	 89d0                 	mov	eax, edx
+;;   22:	 4883c410             	add	rsp, 0x10
+;;   26:	 5d                   	pop	rbp
+;;   27:	 c3                   	ret	

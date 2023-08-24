@@ -20,7 +20,7 @@
     )
 )]
 
-use anyhow::Error;
+use anyhow::{Error, Result};
 use std::fmt;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -55,8 +55,8 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    OnDemandInstanceAllocator, StorePtr,
+    Instance, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl, InstanceHandle,
+    MemoryAllocationIndex, OnDemandInstanceAllocator, StorePtr, TableAllocationIndex,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
@@ -132,7 +132,9 @@ pub unsafe trait Store {
     ) -> Result<bool, Error>;
     /// Callback invoked to notify the store's resource limiter that a memory
     /// grow operation has failed.
-    fn memory_grow_failed(&mut self, error: &Error);
+    ///
+    /// Note that this is not invoked if `memory_growing` returns an error.
+    fn memory_grow_failed(&mut self, error: Error) -> Result<()>;
     /// Callback invoked to allow the store's resource limiter to reject a
     /// table grow operation.
     fn table_growing(
@@ -143,7 +145,9 @@ pub unsafe trait Store {
     ) -> Result<bool, Error>;
     /// Callback invoked to notify the store's resource limiter that a table
     /// grow operation has failed.
-    fn table_grow_failed(&mut self, error: &Error);
+    ///
+    /// Note that this is not invoked if `table_growing` returns an error.
+    fn table_grow_failed(&mut self, error: Error) -> Result<()>;
     /// Callback invoked whenever fuel runs out by a wasm instance. If an error
     /// is returned that's raised as a trap. Otherwise wasm execution will
     /// continue as normal.

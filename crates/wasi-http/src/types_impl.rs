@@ -1,75 +1,76 @@
-use crate::r#struct::{ActiveRequest, Stream};
+use crate::http_impl::WasiHttpViewExt;
+use crate::types::{ActiveFields, ActiveRequest, HttpRequest, TableHttpExt};
 use crate::wasi::http::types::{
-    Error, Fields, FutureIncomingResponse, Headers, Host, IncomingRequest, IncomingResponse,
+    Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse,
     IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
-use crate::wasi::poll::poll::Pollable;
-use crate::WasiHttp;
-use anyhow::{anyhow, bail};
-use std::collections::{hash_map::Entry, HashMap};
-use tokio::runtime::{Handle, Runtime};
+use crate::WasiHttpView;
+use anyhow::{anyhow, bail, Context};
+use bytes::Bytes;
+use wasmtime_wasi::preview2::{bindings::poll::poll::Pollable, HostPollable, TablePollableExt};
 
-impl Host for WasiHttp {
-    fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
-        self.fields.remove(&fields);
+#[async_trait::async_trait]
+impl<T: WasiHttpView + WasiHttpViewExt> crate::wasi::http::types::Host for T {
+    async fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
+        self.table_mut()
+            .delete_fields(fields)
+            .context("[drop_fields] deleting fields")?;
         Ok(())
     }
-    fn new_fields(&mut self, entries: Vec<(String, String)>) -> wasmtime::Result<Fields> {
-        let mut map = HashMap::new();
-        for item in entries.iter() {
-            let mut vec = std::vec::Vec::new();
-            vec.push(item.1.clone().into_bytes());
-            map.insert(item.0.clone(), vec);
+    async fn new_fields(&mut self, entries: Vec<(String, String)>) -> wasmtime::Result<Fields> {
+        let mut map = ActiveFields::new();
+        for (key, value) in entries {
+            map.insert(key, vec![value.clone().into_bytes()]);
         }
 
-        let id = self.fields_id_base;
-        self.fields_id_base = id + 1;
-        self.fields.insert(id, map);
-
+        let id = self
+            .table_mut()
+            .push_fields(Box::new(map))
+            .context("[new_fields] pushing fields")?;
         Ok(id)
     }
-    fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
+    async fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
         let res = self
-            .fields
-            .get(&fields)
-            .ok_or_else(|| anyhow!("fields not found: {fields}"))?
+            .table_mut()
+            .get_fields(fields)
+            .context("[fields_get] getting fields")?
             .get(&name)
             .ok_or_else(|| anyhow!("key not found: {name}"))?
             .clone();
         Ok(res)
     }
-    fn fields_set(
+    async fn fields_set(
         &mut self,
         fields: Fields,
         name: String,
         value: Vec<Vec<u8>>,
     ) -> wasmtime::Result<()> {
-        match self.fields.get_mut(&fields) {
-            Some(m) => {
+        match self.table_mut().get_fields_mut(fields) {
+            Ok(m) => {
                 m.insert(name, value.clone());
                 Ok(())
             }
-            None => bail!("fields not found"),
+            Err(_) => bail!("fields not found"),
         }
     }
-    fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
-        match self.fields.get_mut(&fields) {
-            Some(m) => m.remove(&name),
-            None => None,
+    async fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
+        match self.table_mut().get_fields_mut(fields) {
+            Ok(m) => m.remove(&name),
+            Err(_) => None,
         };
         Ok(())
     }
-    fn fields_append(
+    async fn fields_append(
         &mut self,
         fields: Fields,
         name: String,
         value: Vec<u8>,
     ) -> wasmtime::Result<()> {
         let m = self
-            .fields
-            .get_mut(&fields)
-            .ok_or_else(|| anyhow!("unknown fields: {fields}"))?;
+            .table_mut()
+            .get_fields_mut(fields)
+            .context("[fields_append] getting mutable fields")?;
         match m.get_mut(&name) {
             Some(v) => v.push(value),
             None => {
@@ -80,10 +81,10 @@ impl Host for WasiHttp {
         };
         Ok(())
     }
-    fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
-        let field_map = match self.fields.get(&fields) {
-            Some(m) => m,
-            None => bail!("fields not found."),
+    async fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
+        let field_map = match self.table().get_fields(fields) {
+            Ok(m) => m.iter(),
+            Err(_) => bail!("fields not found."),
         };
         let mut result = Vec::new();
         for (name, value) in field_map {
@@ -91,76 +92,100 @@ impl Host for WasiHttp {
         }
         Ok(result)
     }
-    fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields> {
-        let id = self.fields_id_base;
-        self.fields_id_base = self.fields_id_base + 1;
-
-        let m = self
-            .fields
-            .get(&fields)
-            .ok_or_else(|| anyhow!("fields not found: {fields}"))?;
-        self.fields.insert(id, m.clone());
+    async fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields> {
+        let table = self.table_mut();
+        let m = table
+            .get_fields(fields)
+            .context("[fields_clone] getting fields")?;
+        let id = table
+            .push_fields(Box::new(m.clone()))
+            .context("[fields_clone] pushing fields")?;
         Ok(id)
     }
-    fn finish_incoming_stream(&mut self, s: IncomingStream) -> wasmtime::Result<Option<Trailers>> {
-        for (_, value) in self.responses.iter() {
-            if value.body == s {
-                return match value.trailers {
-                    0 => Ok(None),
-                    _ => Ok(Some(value.trailers)),
-                };
+    async fn finish_incoming_stream(
+        &mut self,
+        stream_id: IncomingStream,
+    ) -> wasmtime::Result<Option<Trailers>> {
+        for (_, stream) in self.http_ctx().streams.iter() {
+            if stream_id == stream.incoming() {
+                let response = self
+                    .table()
+                    .get_response(stream.parent_id())
+                    .context("[finish_incoming_stream] get trailers from response")?;
+                return Ok(response.trailers());
             }
         }
         bail!("unknown stream!")
     }
-    fn finish_outgoing_stream(
+    async fn finish_outgoing_stream(
         &mut self,
         _s: OutgoingStream,
         _trailers: Option<Trailers>,
     ) -> wasmtime::Result<()> {
         bail!("unimplemented: finish_outgoing_stream")
     }
-    fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
+    async fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
         bail!("unimplemented: drop_incoming_request")
     }
-    fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
-        if let Entry::Occupied(e) = self.requests.entry(request) {
-            let r = e.remove();
-            self.streams.remove(&r.body);
+    async fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
+        let r = self
+            .table_mut()
+            .get_request(request)
+            .context("[drop_outgoing_request] getting fields")?;
+
+        // Cleanup dependent resources
+        let body = r.body();
+        let headers = r.headers();
+        if let Some(b) = body {
+            self.table_mut().delete_stream(b).ok();
         }
+        if let Some(h) = headers {
+            self.table_mut().delete_fields(h).ok();
+        }
+
+        self.table_mut()
+            .delete_request(request)
+            .context("[drop_outgoing_request] deleting request")?;
+
         Ok(())
     }
-    fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
+    async fn incoming_request_method(
+        &mut self,
+        _request: IncomingRequest,
+    ) -> wasmtime::Result<Method> {
         bail!("unimplemented: incoming_request_method")
     }
-    fn incoming_request_path_with_query(
+    async fn incoming_request_path_with_query(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
         bail!("unimplemented: incoming_request_path")
     }
-    fn incoming_request_scheme(
+    async fn incoming_request_scheme(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<Scheme>> {
         bail!("unimplemented: incoming_request_scheme")
     }
-    fn incoming_request_authority(
+    async fn incoming_request_authority(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
         bail!("unimplemented: incoming_request_authority")
     }
-    fn incoming_request_headers(&mut self, _request: IncomingRequest) -> wasmtime::Result<Headers> {
+    async fn incoming_request_headers(
+        &mut self,
+        _request: IncomingRequest,
+    ) -> wasmtime::Result<Headers> {
         bail!("unimplemented: incoming_request_headers")
     }
-    fn incoming_request_consume(
+    async fn incoming_request_consume(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
         bail!("unimplemented: incoming_request_consume")
     }
-    fn new_outgoing_request(
+    async fn new_outgoing_request(
         &mut self,
         method: Method,
         path_with_query: Option<String>,
@@ -168,137 +193,209 @@ impl Host for WasiHttp {
         authority: Option<String>,
         headers: Headers,
     ) -> wasmtime::Result<OutgoingRequest> {
-        let id = self.request_id_base;
-        self.request_id_base = self.request_id_base + 1;
-
-        let mut req = ActiveRequest::new(id);
+        let mut req = ActiveRequest::new();
         req.path_with_query = path_with_query.unwrap_or("".to_string());
         req.authority = authority.unwrap_or("".to_string());
         req.method = method;
-        req.headers = match self.fields.get(&headers) {
-            Some(h) => h.clone(),
-            None => bail!("headers not found."),
-        };
+        req.headers = Some(headers);
         req.scheme = scheme;
-        self.requests.insert(id, req);
+        let id = self
+            .table_mut()
+            .push_request(Box::new(req))
+            .context("[new_outgoing_request] pushing request")?;
         Ok(id)
     }
-    fn outgoing_request_write(
+    async fn outgoing_request_write(
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
         let req = self
-            .requests
-            .get_mut(&request)
-            .ok_or_else(|| anyhow!("unknown request: {request}"))?;
-        if req.body == 0 {
-            req.body = self.streams_id_base;
-            self.streams_id_base = self.streams_id_base + 1;
-            self.streams.insert(req.body, Stream::default());
-        }
-        Ok(Ok(req.body))
+            .table()
+            .get_request(request)
+            .context("[outgoing_request_write] getting request")?;
+        let stream_id = req.body().unwrap_or_else(|| {
+            let (new, stream) = self
+                .table_mut()
+                .push_stream(Bytes::new(), request)
+                .expect("[outgoing_request_write] valid output stream");
+            self.http_ctx_mut().streams.insert(new, stream);
+            let req = self
+                .table_mut()
+                .get_request_mut(request)
+                .expect("[outgoing_request_write] request to be found");
+            req.set_body(new);
+            new
+        });
+        let stream = self
+            .table()
+            .get_stream(stream_id)
+            .context("[outgoing_request_write] getting stream")?;
+        Ok(Ok(stream.outgoing()))
     }
-    fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
+    async fn drop_response_outparam(
+        &mut self,
+        _response: ResponseOutparam,
+    ) -> wasmtime::Result<()> {
         bail!("unimplemented: drop_response_outparam")
     }
-    fn set_response_outparam(
+    async fn set_response_outparam(
         &mut self,
         _outparam: ResponseOutparam,
         _response: Result<OutgoingResponse, Error>,
     ) -> wasmtime::Result<Result<(), ()>> {
         bail!("unimplemented: set_response_outparam")
     }
-    fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
-        if let Entry::Occupied(e) = self.responses.entry(response) {
-            let r = e.remove();
-            self.streams.remove(&r.body);
+    async fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
+        let r = self
+            .table()
+            .get_response(response)
+            .context("[drop_incoming_response] getting response")?;
+
+        // Cleanup dependent resources
+        let body = r.body();
+        let headers = r.headers();
+        if let Some(id) = body {
+            let stream = self
+                .table()
+                .get_stream(id)
+                .context("[drop_incoming_response] getting stream")?;
+            let incoming_id = stream.incoming();
+            if let Some(trailers) = self.finish_incoming_stream(incoming_id).await? {
+                self.table_mut()
+                    .delete_fields(trailers)
+                    .context("[drop_incoming_response] deleting trailers")
+                    .unwrap_or_else(|_| ());
+            }
+            self.table_mut().delete_stream(id).ok();
         }
+        if let Some(h) = headers {
+            self.table_mut().delete_fields(h).ok();
+        }
+
+        self.table_mut()
+            .delete_response(response)
+            .context("[drop_incoming_response] deleting response")?;
         Ok(())
     }
-    fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
+    async fn drop_outgoing_response(
+        &mut self,
+        _response: OutgoingResponse,
+    ) -> wasmtime::Result<()> {
         bail!("unimplemented: drop_outgoing_response")
     }
-    fn incoming_response_status(
+    async fn incoming_response_status(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<StatusCode> {
         let r = self
-            .responses
-            .get(&response)
-            .ok_or_else(|| anyhow!("response not found: {response}"))?;
-        Ok(r.status)
+            .table()
+            .get_response(response)
+            .context("[incoming_response_status] getting response")?;
+        Ok(r.status())
     }
-    fn incoming_response_headers(
+    async fn incoming_response_headers(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Headers> {
         let r = self
-            .responses
-            .get(&response)
-            .ok_or_else(|| anyhow!("response not found: {response}"))?;
-        let id = self.fields_id_base;
-        self.fields_id_base = self.fields_id_base + 1;
-
-        self.fields.insert(id, r.response_headers.clone());
-        Ok(id)
+            .table()
+            .get_response(response)
+            .context("[incoming_response_headers] getting response")?;
+        Ok(r.headers().unwrap_or(0 as Headers))
     }
-    fn incoming_response_consume(
+    async fn incoming_response_consume(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
-        let r = self
-            .responses
-            .get(&response)
-            .ok_or_else(|| anyhow!("response not found: {response}"))?;
-
-        Ok(Ok(r.body))
+        let table = self.table_mut();
+        let r = table
+            .get_response(response)
+            .context("[incoming_response_consume] getting response")?;
+        Ok(Ok(r
+            .body()
+            .map(|id| {
+                table
+                    .get_stream(id)
+                    .map(|stream| stream.incoming())
+                    .expect("[incoming_response_consume] response body stream")
+            })
+            .unwrap_or(0 as IncomingStream)))
     }
-    fn new_outgoing_response(
+    async fn new_outgoing_response(
         &mut self,
         _status_code: StatusCode,
         _headers: Headers,
     ) -> wasmtime::Result<OutgoingResponse> {
         bail!("unimplemented: new_outgoing_response")
     }
-    fn outgoing_response_write(
+    async fn outgoing_response_write(
         &mut self,
         _response: OutgoingResponse,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
         bail!("unimplemented: outgoing_response_write")
     }
-    fn drop_future_incoming_response(
+    async fn drop_future_incoming_response(
         &mut self,
         future: FutureIncomingResponse,
     ) -> wasmtime::Result<()> {
-        self.futures.remove(&future);
+        self.table_mut()
+            .delete_future(future)
+            .context("[drop_future_incoming_response] deleting future")?;
         Ok(())
     }
-    fn future_incoming_response_get(
+    async fn future_incoming_response_get(
         &mut self,
         future: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>> {
         let f = self
-            .futures
-            .get(&future)
-            .ok_or_else(|| anyhow!("future not found: {future}"))?;
-
-        let (handle, _runtime) = match Handle::try_current() {
-            Ok(h) => (h, None),
-            Err(_) => {
-                let rt = Runtime::new().unwrap();
-                let _enter = rt.enter();
-                (rt.handle().clone(), Some(rt))
+            .table()
+            .get_future(future)
+            .context("[future_incoming_response_get] getting future")?;
+        Ok(match f.pollable_id() {
+            Some(_) => {
+                let result = match f.response_id() {
+                    Some(id) => Ok(id),
+                    None => {
+                        let response = self.handle_async(f.request_id(), f.options()).await;
+                        match response {
+                            Ok(id) => {
+                                let future_mut = self.table_mut().get_future_mut(future)?;
+                                future_mut.set_response_id(id);
+                            }
+                            _ => {}
+                        }
+                        response
+                    }
+                };
+                Some(result)
             }
-        };
-        let response = handle
-            .block_on(self.handle_async(f.request_id, f.options))
-            .map_err(|e| Error::UnexpectedError(e.to_string()));
-        Ok(Some(response))
+            None => None,
+        })
     }
-    fn listen_to_future_incoming_response(
+    async fn listen_to_future_incoming_response(
         &mut self,
-        _f: FutureIncomingResponse,
+        future: FutureIncomingResponse,
     ) -> wasmtime::Result<Pollable> {
-        bail!("unimplemented: listen_to_future_incoming_response")
+        let f = self
+            .table()
+            .get_future(future)
+            .context("[listen_to_future_incoming_response] getting future")?;
+        Ok(match f.pollable_id() {
+            Some(pollable_id) => pollable_id,
+            None => {
+                let pollable =
+                    HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))));
+                let pollable_id = self
+                    .table_mut()
+                    .push_host_pollable(pollable)
+                    .context("[listen_to_future_incoming_response] pushing host pollable")?;
+                let f = self
+                    .table_mut()
+                    .get_future_mut(future)
+                    .context("[listen_to_future_incoming_response] getting future")?;
+                f.set_pollable_id(pollable_id);
+                pollable_id
+            }
+        })
     }
 }

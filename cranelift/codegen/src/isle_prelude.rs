@@ -818,23 +818,23 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
-            cc.reverse()
+        fn intcc_swap_args(&mut self, cc: &IntCC) -> IntCC {
+            cc.swap_args()
         }
 
         #[inline]
-        fn intcc_inverse(&mut self, cc: &IntCC) -> IntCC {
-            cc.inverse()
+        fn intcc_complement(&mut self, cc: &IntCC) -> IntCC {
+            cc.complement()
         }
 
         #[inline]
-        fn floatcc_reverse(&mut self, cc: &FloatCC) -> FloatCC {
-            cc.reverse()
+        fn floatcc_swap_args(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.swap_args()
         }
 
         #[inline]
-        fn floatcc_inverse(&mut self, cc: &FloatCC) -> FloatCC {
-            cc.inverse()
+        fn floatcc_complement(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.complement()
         }
 
         fn floatcc_unordered(&mut self, cc: &FloatCC) -> bool {

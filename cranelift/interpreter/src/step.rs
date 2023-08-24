@@ -879,21 +879,11 @@ where
             (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => b,
             (a, b) => a.smin(b)?,
         }),
-        Opcode::FminPseudo => assign(match (arg(0), arg(1)) {
-            (a, b) if a.is_nan()? || b.is_nan()? => a,
-            (a, b) if a.is_zero()? && b.is_zero()? => a,
-            (a, b) => a.smin(b)?,
-        }),
         Opcode::Fmax => assign(match (arg(0), arg(1)) {
             (a, _) if a.is_nan()? => a,
             (_, b) if b.is_nan()? => b,
             (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => b,
             (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => a,
-            (a, b) => a.smax(b)?,
-        }),
-        Opcode::FmaxPseudo => assign(match (arg(0), arg(1)) {
-            (a, b) if a.is_nan()? || b.is_nan()? => a,
-            (a, b) if a.is_zero()? && b.is_zero()? => a,
             (a, b) => a.smax(b)?,
         }),
         Opcode::Ceil => unary(DataValueExt::ceil, arg(0))?,

@@ -104,3 +104,44 @@
 (rule (simplify (sshr ty (bor ty (ineg ty x) x) (iconst ty (u64_from_imm64 shift_amt))))
       (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
       (bmask ty x))
+
+;; Matches any expressions that preserve "truthiness".
+;; i.e. If the input is zero it remains zero, and if it is nonzero it can have
+;; a different value as long as it is still nonzero.
+(decl pure multi truthy (Value) Value)
+(rule (truthy (sextend _ x)) x)
+(rule (truthy (uextend _ x)) x)
+(rule (truthy (bmask _ x)) x)
+(rule (truthy (ineg _ x)) x)
+(rule (truthy (bswap _ x)) x)
+(rule (truthy (bitrev _ x)) x)
+(rule (truthy (popcnt _ x)) x)
+(rule (truthy (rotl _ x _)) x)
+(rule (truthy (rotr _ x _)) x)
+(rule (truthy (select _ x (iconst _ (u64_from_imm64 (u64_nonzero _))) (iconst _ (u64_from_imm64 0)))) x)
+;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
+(rule (truthy (ne _ x (iconst _ (u64_from_imm64 0)))) x)
+
+;; All of these expressions don't care about their input as long as it is truthy.
+;; so we can remove expressions that preserve that property from the input.
+(rule (simplify (bmask ty v)) (if-let x (truthy v)) (bmask ty x))
+(rule (simplify (select ty v t f)) (if-let c (truthy v)) (select ty c t f))
+;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
+(rule (simplify (ne cty v (iconst _ (u64_from_imm64 0))))
+      (if-let c (truthy v))
+      (if-let (value_type ty) c)
+      (ne cty c (iconst ty (imm64 0))))
+
+
+
+;; (sextend (bmask x)) can be replaced with (bmask x) since bmask
+;; supports any size of output type, regardless of input.
+;; Same with `ireduce`
+(rule (simplify (sextend ty (bmask _ x))) (bmask ty x))
+(rule (simplify (ireduce ty (bmask _ x))) (bmask ty x))
+
+;; (bswap (bswap x)) == x
+(rule (simplify (bswap ty (bswap ty x))) (subsume x))
+
+;; (bitrev (bitrev x)) == x
+(rule (simplify (bitrev ty (bitrev ty x))) (subsume x))

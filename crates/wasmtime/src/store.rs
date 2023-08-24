@@ -291,6 +291,8 @@ pub struct StoreOpaque {
     engine: Engine,
     runtime_limits: VMRuntimeLimits,
     instances: Vec<StoreInstance>,
+    #[cfg(feature = "component-model")]
+    num_component_instances: usize,
     signal_handler: Option<Box<SignalHandler<'static>>>,
     externref_activations_table: VMExternRefActivationsTable,
     modules: ModuleRegistry,
@@ -461,6 +463,8 @@ impl<T> Store<T> {
                 engine: engine.clone(),
                 runtime_limits: Default::default(),
                 instances: Vec::new(),
+                #[cfg(feature = "component-model")]
+                num_component_instances: 0,
                 signal_handler: None,
                 externref_activations_table: VMExternRefActivationsTable::new(),
                 modules: ModuleRegistry::default(),
@@ -505,15 +509,21 @@ impl<T> Store<T> {
         inner.default_caller = {
             let module = Arc::new(wasmtime_environ::Module::default());
             let shim = BareModuleInfo::empty(module).into_traitobj();
-            let mut instance = OnDemandInstanceAllocator::default()
-                .allocate(InstanceAllocationRequest {
-                    host_state: Box::new(()),
-                    imports: Default::default(),
-                    store: StorePtr::empty(),
-                    runtime_info: &shim,
-                    wmemcheck: engine.config().wmemcheck,
-                })
-                .expect("failed to allocate default callee");
+            let allocator = OnDemandInstanceAllocator::default();
+            allocator
+                .validate_module(shim.module(), shim.offsets())
+                .unwrap();
+            let mut instance = unsafe {
+                allocator
+                    .allocate_module(InstanceAllocationRequest {
+                        host_state: Box::new(()),
+                        imports: Default::default(),
+                        store: StorePtr::empty(),
+                        runtime_info: &shim,
+                        wmemcheck: engine.config().wmemcheck,
+                    })
+                    .expect("failed to allocate default callee")
+            };
 
             // Note the erasure of the lifetime here into `'static`, so in
             // general usage of this trait object must be strictly bounded to
@@ -1579,6 +1589,16 @@ at https://bytecodealliance.org/security.
     ) {
         (&mut self.component_calls, &mut self.component_host_table)
     }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn push_component_instance(&mut self, instance: crate::component::Instance) {
+        // We don't actually need the instance itself right now, but it seems
+        // like something we will almost certainly eventually want to keep
+        // around, so force callers to provide it.
+        let _ = instance;
+
+        self.num_component_instances += 1;
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -1972,7 +1992,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
-    fn memory_grow_failed(&mut self, error: &anyhow::Error) {
+    fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
                 limiter(&mut self.data).memory_grow_failed(error)
@@ -1981,7 +2001,10 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
             Some(ResourceLimiterInner::Async(ref mut limiter)) => {
                 limiter(&mut self.data).memory_grow_failed(error)
             }
-            None => {}
+            None => {
+                log::debug!("ignoring memory growth failure error: {error:?}");
+                Ok(())
+            }
         }
     }
 
@@ -2019,7 +2042,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
-    fn table_grow_failed(&mut self, error: &anyhow::Error) {
+    fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
                 limiter(&mut self.data).table_grow_failed(error)
@@ -2028,7 +2051,10 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
             Some(ResourceLimiterInner::Async(ref mut limiter)) => {
                 limiter(&mut self.data).table_grow_failed(error)
             }
-            None => {}
+            None => {
+                log::debug!("ignoring table growth failure: {error:?}");
+                Ok(())
+            }
         }
     }
 
@@ -2181,12 +2207,19 @@ impl Drop for StoreOpaque {
             let ondemand = OnDemandInstanceAllocator::default();
             for instance in self.instances.iter_mut() {
                 if instance.ondemand {
-                    ondemand.deallocate(&mut instance.handle);
+                    ondemand.deallocate_module(&mut instance.handle);
                 } else {
-                    allocator.deallocate(&mut instance.handle);
+                    allocator.deallocate_module(&mut instance.handle);
                 }
             }
-            ondemand.deallocate(&mut self.default_caller);
+            ondemand.deallocate_module(&mut self.default_caller);
+
+            #[cfg(feature = "component-model")]
+            {
+                for _ in 0..self.num_component_instances {
+                    allocator.decrement_component_instance_count();
+                }
+            }
 
             // See documentation for these fields on `StoreOpaque` for why they
             // must be dropped in this order.

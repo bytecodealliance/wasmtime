@@ -49,10 +49,10 @@ impl Drop for Descriptor {
 /// identifies what kind of stream they are and possibly supporting
 /// type-specific operations like seeking.
 pub struct Streams {
-    /// The output stream, if present.
+    /// The input stream, if present.
     pub input: Cell<Option<InputStream>>,
 
-    /// The input stream, if present.
+    /// The output stream, if present.
     pub output: Cell<Option<OutputStream>>,
 
     /// Information about the source of the stream.

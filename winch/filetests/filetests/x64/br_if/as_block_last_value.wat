@@ -23,9 +23,9 @@
 ;;   11:	 e800000000           	call	0x16
 ;;   16:	 e800000000           	call	0x1b
 ;;   1b:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
-;;   1f:	 48c7c00b000000       	mov	rax, 0xb
-;;   26:	 85c9                 	test	ecx, ecx
-;;   28:	 0f8500000000         	jne	0x2e
-;;   2e:	 4883c410             	add	rsp, 0x10
-;;   32:	 5d                   	pop	rbp
-;;   33:	 c3                   	ret	
+;;   1f:	 b80b000000           	mov	eax, 0xb
+;;   24:	 85c9                 	test	ecx, ecx
+;;   26:	 0f8500000000         	jne	0x2c
+;;   2c:	 4883c410             	add	rsp, 0x10
+;;   30:	 5d                   	pop	rbp
+;;   31:	 c3                   	ret	

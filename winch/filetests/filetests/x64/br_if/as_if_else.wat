@@ -27,8 +27,8 @@
 ;;   1a:	 0f840a000000         	je	0x2a
 ;;   20:	 e800000000           	call	0x25
 ;;   25:	 e90c000000           	jmp	0x36
-;;   2a:	 8b4c2408             	mov	ecx, dword ptr [rsp + 8]
-;;   2e:	 85c9                 	test	ecx, ecx
+;;   2a:	 8b442408             	mov	eax, dword ptr [rsp + 8]
+;;   2e:	 85c0                 	test	eax, eax
 ;;   30:	 0f8500000000         	jne	0x36
 ;;   36:	 4883c410             	add	rsp, 0x10
 ;;   3a:	 5d                   	pop	rbp

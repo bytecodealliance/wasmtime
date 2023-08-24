@@ -88,10 +88,10 @@ impl<'a> FnCall<'a> {
         let arg_stack_space = callee_sig.stack_bytes;
         let callee_params = &callee_sig.params;
 
-        let (spilled_regs, memory_values) = match callee_params.len() {
+        let call_stack_space = match callee_params.len() {
             0 => {
-                let _ = context.spill_regs_and_count_memory_in(masm, ..);
-                (0, 0)
+                let _ = context.save_live_registers_and_calculate_sizeof(masm, ..);
+                0u32
             }
             _ => {
                 // Here we perform a "spill" of the register entries
@@ -121,16 +121,15 @@ impl<'a> FnCall<'a> {
                 // +------------------+  |
                 assert!(stack.len() >= callee_params.len());
                 let partition = stack.len() - callee_params.len();
-                let _ = context.spill_regs_and_count_memory_in(masm, 0..partition);
-                context.spill_regs_and_count_memory_in(masm, partition..)
+                let _ = context.save_live_registers_and_calculate_sizeof(masm, 0..partition);
+                context.save_live_registers_and_calculate_sizeof(masm, partition..)
             }
         };
 
         Self {
             abi_sig: &callee_sig,
             arg_stack_space,
-            call_stack_space: (spilled_regs * <M::ABI as ABI>::word_bytes())
-                + (memory_values * <M::ABI as ABI>::word_bytes()),
+            call_stack_space,
         }
     }
 
@@ -184,13 +183,13 @@ impl<'a> FnCall<'a> {
                 .next()
                 .unwrap_or_else(|| panic!("expected stack value for function argument"));
             match &arg {
-                &ABIArg::Reg { ty, reg } => {
-                    context.move_val_to_reg(&val, *reg, masm, (*ty).into());
+                &ABIArg::Reg { ty: _, reg } => {
+                    context.move_val_to_reg(&val, *reg, masm);
                 }
                 &ABIArg::Stack { ty, offset } => {
                     let addr = masm.address_at_sp(*offset);
                     let size: OperandSize = (*ty).into();
-                    context.move_val_to_reg(val, scratch, masm, size);
+                    context.move_val_to_reg(val, scratch, masm);
                     masm.store(scratch.into(), addr, size);
                 }
             }

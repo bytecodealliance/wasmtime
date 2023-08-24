@@ -1822,10 +1822,20 @@ criteria = "safe-to-deploy"
 version = "0.21.0"
 notes = "no unsafe code, ambient capabilities only used in tests"
 
+[[audits.rustls]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.21.0 -> 0.21.6"
+
 [[audits.rustls-webpki]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.100.1"
+
+[[audits.rustls-webpki]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.100.1 -> 0.101.4"
 
 [[audits.sct]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -1859,6 +1869,19 @@ notes = """
 This update runs `rustfmt` for the first time in awhile and additionally fixes a
 few minor issues related to Stacked Borrows and running in MIRI. No fundamental
 change to any preexisting unsafe code is happening here.
+"""
+
+[[audits.smallvec]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.8.0 -> 1.11.0"
+notes = """
+The main change is the switch to use `NonNull<T>` internally instead of
+`*mut T`. This seems reasonable, as `Vec` also never stores a null pointer,
+and in particular the new `NonNull::new_unchecked`s look ok.
+
+Most of the rest of the changes are adding some new unstable features which
+aren't enabled by default.
 """
 
 [[audits.socket2]]
@@ -2745,6 +2768,11 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.22.4 -> 0.23.0"
 
+[[audits.webpki-roots]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.23.0 -> 0.25.2"
+
 [[audits.winx]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -2872,6 +2900,12 @@ start = "2019-06-09"
 end = "2024-07-15"
 
 [[trusted.cap-fs-ext]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2020-12-11"
+end = "2024-07-14"
+
+[[trusted.cap-net-ext]]
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-12-11"

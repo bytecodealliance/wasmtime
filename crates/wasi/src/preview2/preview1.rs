@@ -312,7 +312,7 @@ impl WasiPreview1Adapter {
 
 // Any context that needs to support preview 1 will impl this trait. They can
 // construct the needed member with WasiPreview1Adapter::new().
-pub trait WasiPreview1View: Send + Sync + WasiView {
+pub trait WasiPreview1View: WasiView {
     fn adapter(&self) -> &WasiPreview1Adapter;
     fn adapter_mut(&mut self) -> &mut WasiPreview1Adapter;
 }
@@ -487,21 +487,16 @@ trait WasiPreview1ViewExt:
 
 impl<T: WasiPreview1View + preopens::Host> WasiPreview1ViewExt for T {}
 
-pub fn add_to_linker<
-    T: WasiPreview1View
-        + bindings::cli::environment::Host
-        + bindings::cli::exit::Host
-        + bindings::filesystem::types::Host
-        + bindings::filesystem::preopens::Host
-        + bindings::sync_io::poll::poll::Host
-        + bindings::random::random::Host
-        + bindings::io::streams::Host
-        + bindings::clocks::monotonic_clock::Host
-        + bindings::clocks::wall_clock::Host,
->(
+pub fn add_to_linker_async<T: WasiPreview1View>(
     linker: &mut wasmtime::Linker<T>,
 ) -> anyhow::Result<()> {
     wasi_snapshot_preview1::add_to_linker(linker, |t| t)
+}
+
+pub fn add_to_linker_sync<T: WasiPreview1View>(
+    linker: &mut wasmtime::Linker<T>,
+) -> anyhow::Result<()> {
+    sync::add_wasi_snapshot_preview1_to_linker(linker, |t| t)
 }
 
 // Generate the wasi_snapshot_preview1::WasiSnapshotPreview1 trait,
@@ -521,6 +516,32 @@ wiggle::from_witx!({
     },
     errors: { errno => trappable Error },
 });
+
+mod sync {
+    use anyhow::Result;
+    use std::future::Future;
+
+    wiggle::wasmtime_integration!({
+        witx: ["$CARGO_MANIFEST_DIR/witx/wasi_snapshot_preview1.witx"],
+        target: super,
+        block_on[in_tokio]: {
+            wasi_snapshot_preview1::{
+                fd_advise, fd_close, fd_datasync, fd_fdstat_get, fd_filestat_get, fd_filestat_set_size,
+                fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
+                fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
+                path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
+                path_rename, path_symlink, path_unlink_file
+            }
+        },
+        errors: { errno => trappable Error },
+    });
+
+    // Small wrapper around `in_tokio` to add a `Result` layer which is always
+    // `Ok`
+    fn in_tokio<F: Future>(future: F) -> Result<F::Output> {
+        Ok(crate::preview2::in_tokio(future))
+    }
+}
 
 impl wiggle::GuestErrorType for types::Errno {
     fn success() -> Self {
@@ -1296,7 +1317,7 @@ impl<
                 ..
             }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
 
                 let pos = position.load(Ordering::Relaxed);
@@ -1314,7 +1335,7 @@ impl<
             }
             Descriptor::Stdin { input_stream, .. } => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
                 let (read, state) = stream_res(
                     streams::Host::read(
@@ -1355,7 +1376,7 @@ impl<
                 fd, blocking_mode, ..
             }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
 
                 let stream = self.read_via_stream(fd, offset).await.map_err(|e| {
@@ -1401,7 +1422,7 @@ impl<
                 position,
             }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
                 let (stream, pos) = if append {
                     let stream = self.append_via_stream(fd).await.map_err(|e| {
@@ -1428,7 +1449,7 @@ impl<
             }
             Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
                 Ok(BlockingMode::Blocking
                     .write(self, output_stream, &buf)
@@ -1454,7 +1475,7 @@ impl<
                 fd, blocking_mode, ..
             }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
-                    return Ok(0)
+                    return Ok(0);
                 };
                 let stream = self.write_via_stream(fd, offset).await.map_err(|e| {
                     e.try_into()

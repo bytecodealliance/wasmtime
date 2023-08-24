@@ -185,15 +185,21 @@ impl ControlStackFrame {
                 ..
             } => {
                 // Pop the condition value.
-                let top = context.pop_to_reg(masm, None, OperandSize::S32);
+                let top = context.pop_to_reg(masm, None);
 
                 // Unconditionall spill before emitting control flow.
                 context.spill(masm);
 
                 *original_stack_len = context.stack.len();
                 *original_sp_offset = masm.sp_offset();
-                masm.branch(CmpKind::Eq, top.into(), top.into(), *cont, OperandSize::S32);
-                context.free_gpr(top);
+                masm.branch(
+                    CmpKind::Eq,
+                    top.reg.into(),
+                    top.reg.into(),
+                    *cont,
+                    OperandSize::S32,
+                );
+                context.free_reg(top);
             }
             Block {
                 original_stack_len,

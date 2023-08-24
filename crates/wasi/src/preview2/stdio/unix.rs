@@ -9,7 +9,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
-use tokio::io::{AsyncRead, ReadBuf};
+use tokio::io::{AsyncRead, Interest, ReadBuf};
 
 // We need a single global instance of the AsyncFd<Stdin> because creating
 // this instance registers the process's stdin fd with epoll, which will
@@ -128,7 +128,7 @@ impl InnerStdin {
         }
 
         Ok(Self {
-            inner: AsyncFd::new(stdin)?,
+            inner: AsyncFd::with_interest(stdin, Interest::READABLE)?,
         })
     }
 }

@@ -6,6 +6,13 @@
     (field $first s32)
     (field $second s32)))
 
+(typename $pair_different_ints
+  (record
+    (field $first s64)
+    (field $second s16)
+    (field $third s16)
+    (field $fourth s32)))
+
 (typename $pair_int_ptrs
   (record
     (field $first (@witx const_pointer s32))

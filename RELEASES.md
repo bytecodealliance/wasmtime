@@ -8,6 +8,51 @@ Unreleased.
 
 ### Changed
 
+* The pooling allocator was significantly refactored and the
+  `PoolingAllocationConfig` has some minor breaking API changes that reflect
+  those changes.
+
+  Previously, the pooling allocator had `count` slots, and each slot had `N`
+  memories and `M` tables. Every allocated instance would reserve those `N`
+  memories and `M` tables regardless whether it actually needed them all or
+  not. This could lead to some waste and over-allocation when a module used less
+  memories and tables than the pooling allocator's configured maximums.
+
+  After the refactors in this release, the pooling allocator doesn't have
+  one-size-fits-all slots anymore. Instead, memories and tables are in separate
+  pools that can be allocated from independently, and we allocate exactly as
+  many memories and tables as are necessary for the instance being allocated.
+
+  To preserve your old configuration with the new methods you can do the following:
+
+  ```rust
+  let mut config = PoolingAllocationConfig::default();
+
+  // If you used to have this old, no-longer-compiling configuration:
+  config.count(count);
+  config.instance_memories(n);
+  config.instance_tables(m);
+
+  // You can use these equivalent settings for the new config methods:
+  config.total_core_instances(count);
+  config.total_stacks(count); // If using the `async` feature.
+  config.total_memories(count * n);
+  config.max_memories_per_module(n);
+  config.total_tables(count * m);
+  config.max_tables_per_module(m);
+  ```
+
+  There are additionally a variety of methods to limit the maximum amount of
+  resources a single core Wasm or component instance can take from the pool:
+
+  * `PoolingAllocationConfig::max_memories_per_module`
+  * `PoolingAllocationConfig::max_tables_per_module`
+  * `PoolingAllocationConfig::max_memories_per_component`
+  * `PoolingAllocationConfig::max_tables_per_component`
+  * `PoolingAllocationConfig::max_core_instances_per_component`
+
+  These methods do not affect the size of the pre-allocated pool.
+
 * Options to the `wasmtime` CLI for Wasmtime itself must now come before the
   WebAssembly module. For example `wasmtime run foo.wasm --disable-cache` now
   must be specified as `wasmtime run --disable-cache foo.wasm`. Any
@@ -19,7 +64,7 @@ Unreleased.
 
 ## 12.0.0
 
-Unreleased.
+Released 2023-08-21
 
 ### Added
 

@@ -43,21 +43,3 @@
 (rule (simplify (bitselect ty @ (multi_lane _ _) (sge _ x y) y x)) (smin ty x y))
 (rule (simplify (bitselect ty @ (multi_lane _ _) (ugt _ x y) y x)) (umin ty x y))
 (rule (simplify (bitselect ty @ (multi_lane _ _) (uge _ x y) y x)) (umin ty x y))
-
-;; For floats convert fcmp lt into pseudo_min and gt into pseudo_max
-;;
-;; fmax_pseudo docs state:
-;; The behaviour for this operations is defined as  fmax_pseudo(a, b) = (a < b) ? b : a, and the behaviour for zero
-;; or NaN inputs follows from the behaviour of < with such inputs.
-;;
-;; That is exactly the operation that we match here!
-(rule (simplify
-       (select ty (fcmp _ (FloatCC.LessThan) x y) x y))
-      (fmin_pseudo ty x y))
-(rule (simplify
-       (select ty (fcmp _ (FloatCC.GreaterThan) x y) x y))
-      (fmax_pseudo ty x y))
-
-;; TODO: perform this same optimization to `f{min,max}_pseudo` for vectors
-;; with the `bitselect` instruction, but the pattern is a bit more complicated
-;; due to most bitselects-over-floats having bitcasts.
