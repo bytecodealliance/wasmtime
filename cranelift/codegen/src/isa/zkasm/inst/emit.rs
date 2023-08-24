@@ -727,8 +727,14 @@ impl MachInstEmit for Inst {
             }
             &Inst::Store { op, src, flags, to } => {
                 let src = allocs.next(src);
-
-                println!("{src:?} : MSTORE({to:?})");
+                let stack_offset = to.get_offset_with_state(state);
+                if let Some(base_register) = to.get_base_register() {
+                    println!("{src:?} : MSTORE({base_register:?} + {stack_offset})");
+                    sink.put_data(b"{src:?} : MSTORE({base_register:?} + {stack_offset})\n");
+                } else {
+                    println!("{src:?} : MSTORE({stack_offset})");
+                    sink.put_data(b"{src:?} : MSTORE({stack_offset})\n");
+                }
                 // todo!()
                     /* let to = to.clone().with_allocs(&mut allocs);
 
