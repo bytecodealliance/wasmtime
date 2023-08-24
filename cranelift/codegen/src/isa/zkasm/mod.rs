@@ -213,7 +213,7 @@ impl fmt::Display for Riscv64Backend {
 /// Create a new `isa::Builder`.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {
     match triple.architecture {
-        Architecture::Riscv64(..) => {}
+        Architecture::Sparc => {}
         _ => unreachable!(),
     }
     IsaBuilder {
