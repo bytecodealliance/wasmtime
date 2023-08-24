@@ -1034,56 +1034,93 @@
 ;; Converts a `Value` and a static offset into an `Amode` for x64, attempting
 ;; to be as fancy as possible with offsets/registers/shifts/etc to make maximal
 ;; use of the x64 addressing modes.
+;;
+;; This is a bit subtle unfortunately due to a few constraints. This function
+;; was originally written recursively but that can lead to stack overflow
+;; for certain inputs due to the recursion being defined by user-controlled
+;; input. This means that nowadays this function is not recursive and has a
+;; specific structure to handle that.
+;;
+;; Additionally currently in CLIF all loads/stores have an `Offset32` immediate
+;; to go with them, but the wasm lowering to CLIF doesn't use this meaning that
+;; it's frequently 0. Additionally mid-end optimizations do not fold `iconst`
+;; values into this `Offset32`, meaning that it's left up to backends to hunt
+;; for constants for good codegen. That means that one important aspect of this
+;; function is that it searches for constants to fold into the `Offset32` to
+;; avoid unnecessary instructions.
+;;
+;; Note, though, that the "optimal addressing modes" are only guaranteed to be
+;; generated if egraph-based optimizations have run. For example this will only
+;; attempt to find one constant as opposed to many, and that'll only happen
+;; with constant folding from optimizations.
+;;
+;; Finally there's two primary entry points for this function. One is this
+;; function here, `to_amode,` and another is `to_amode_add`. The latter is used
+;; by the lowering of `iadd` in the x64 backend to use the `lea` instruction
+;; where the input is two `Value` operands instead of just one. Most of the
+;; logic here is then deferred through `to_amode_add`.
+;;
+;; In the future if mid-end optimizations fold constants into `Offset32` then
+;; this in theory can "simply" delegate to the `amode_imm_reg` helper, and
+;; below can delegate to `amode_imm_reg_reg_shift`, or something like that.
 (decl to_amode (MemFlags Value Offset32) Amode)
-
-;; Base case, "just put it in a register"
-(rule (to_amode flags base offset)
-      (Amode.ImmReg offset base flags))
-
-;; Slightly-more-fancy case, if the address is the addition of two things then
-;; delegate to the `to_amode_add` helper.
+(rule 0 (to_amode flags base offset)
+        (amode_imm_reg flags base offset))
 (rule 1 (to_amode flags (iadd x y) offset)
-      (to_amode_add flags x y offset))
+        (to_amode_add flags x y offset))
 
 ;; Same as `to_amode`, except that the base address is computed via the addition
 ;; of the two `Value` arguments provided.
+;;
+;; The primary purpose of this is to hunt for constants within the two `Value`
+;; operands provided. Failing that this will defer to `amode_imm_reg` or
+;; `amode_imm_reg_reg_shift` which is the final step in amode lowering and
+;; performs final pattern matches related to shifts to see if that can be
+;; peeled out into the amode.
+;;
+;; In other words this function's job is to find constants and then defer to
+;; `amode_imm_reg*`.
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
 
-;; Base case, "just put things in registers". Note that the shift value of 0
-;; here  means `x + (y << 0)` which is the same as `x + y`.
-(rule (to_amode_add flags x y offset)
-      (Amode.ImmRegRegShift offset x y 0 flags))
-
-;; If the one of the arguments being added is itself a constant shift then
-;; that can be modeled directly so long as the shift is a modestly small amount.
-(rule 1 (to_amode_add flags x (ishl y (iconst (uimm8 shift))) offset)
-      (if (u32_lteq (u8_as_u32 shift) 3))
-      (Amode.ImmRegRegShift offset x y shift flags))
-(rule 2 (to_amode_add flags (ishl y (iconst (uimm8 shift))) x offset)
-      (if (u32_lteq (u8_as_u32 shift) 3))
-      (Amode.ImmRegRegShift offset x y shift flags))
-
-;; Constant extraction rules.
-;;
-;; These rules attempt to find a constant within one of `x` or `y`, or deeper
-;; within them if they have their own adds. These only succeed if the constant
-;; itself can be represented with 32-bits and can be infallibly added to the
-;; offset that we already have.
-;;
-;; Note the recursion here where this rule is defined in terms of itself to
-;; "peel" layers of constants.
+(rule 0 (to_amode_add flags x y offset)
+        (amode_imm_reg_reg_shift flags x y offset))
+(rule 1 (to_amode_add flags x (iconst (simm32 c)) offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg flags x sum))
+(rule 2 (to_amode_add flags (iconst (simm32 c)) x offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg flags x sum))
 (rule 3 (to_amode_add flags (iadd x (iconst (simm32 c))) y offset)
-      (if-let sum (s32_add_fallible offset c))
-      (to_amode_add flags x y sum))
-(rule 4 (to_amode_add flags x (iadd y (iconst (simm32 c))) offset)
-      (if-let sum (s32_add_fallible offset c))
-      (to_amode_add flags x y sum))
-(rule 5 (to_amode_add flags x (iconst (simm32 c)) offset)
-      (if-let sum (s32_add_fallible offset c))
-      (to_amode flags x sum))
-(rule 6 (to_amode_add flags (iconst (simm32 c)) x offset)
-      (if-let sum (s32_add_fallible offset c))
-      (to_amode flags x sum))
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 4 (to_amode_add flags (iadd (iconst (simm32 c)) x) y offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 5 (to_amode_add flags x (iadd y (iconst (simm32 c))) offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 6 (to_amode_add flags x (iadd (iconst (simm32 c)) y) offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+
+;; Final cases of amode lowering. Does not hunt for constants and only attempts
+;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
+;; otherwise falls back on `ImmReg`.
+(decl amode_imm_reg (MemFlags Value Offset32) Amode)
+(rule 0 (amode_imm_reg flags base offset)
+        (Amode.ImmReg offset base flags))
+(rule 1 (amode_imm_reg flags (iadd x y) offset)
+        (amode_imm_reg_reg_shift flags x y offset))
+
+(decl amode_imm_reg_reg_shift (MemFlags Value Value Offset32) Amode)
+(rule 0 (amode_imm_reg_reg_shift flags x y offset)
+        (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
+(rule 1 (amode_imm_reg_reg_shift flags x (ishl y (iconst (uimm8 shift))) offset)
+        (if (u32_lteq (u8_as_u32 shift) 3))
+        (Amode.ImmRegRegShift offset x y shift flags))
+(rule 2 (amode_imm_reg_reg_shift flags (ishl y (iconst (uimm8 shift))) x offset)
+        (if (u32_lteq (u8_as_u32 shift) 3))
+        (Amode.ImmRegRegShift offset x y shift flags))
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
