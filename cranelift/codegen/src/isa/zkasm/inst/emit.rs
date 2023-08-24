@@ -6,6 +6,7 @@ use crate::isa::zkasm::inst::*;
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
+use cranelift_entity::EntityRef;
 use regalloc2::Allocation;
 
 pub struct EmitInfo {
@@ -973,16 +974,16 @@ impl MachInstEmit for Inst {
 
             &Inst::Jal { dest } => {
                 println!("jal {dest:?}");
-                // todo!()
-                /* let code: u32 = 0b1101111;
                 match dest {
-                    BranchTarget::Label(lable) => {
-                        sink.use_label_at_offset(start_off, lable, LabelUse::Jal20);
-                        sink.add_uncond_branch(start_off, start_off + 4, lable);
-                        sink.put4(code);
+                    BranchTarget::Label(label) => {
+                        // TODO: the following two lines allow eg. optimizing out jump-to-here
+                        /* sink.use_label_at_offset(start_off, label, LabelUse::Jal20);
+                        sink.add_uncond_branch(start_off, start_off + 4, label); */
+                        sink.put_data(format!(":JMP(L{})", label.index()).as_bytes());
                     }
                     BranchTarget::ResolvedOffset(offset) => {
-                        let offset = offset as i64;
+                        todo!()
+                        /* let offset = offset as i64;
                         if offset != 0 {
                             if LabelUse::Jal20.offset_in_range(offset) {
                                 let mut code = code.to_le_bytes();
@@ -999,9 +1000,9 @@ impl MachInstEmit for Inst {
                             }
                         } else {
                             // CondBr often generate Jal {dest : 0}, means otherwise no jump.
-                        }
+                        } */
                     }
-                } */
+                }
             }
             &Inst::CondBr {
                 taken,
