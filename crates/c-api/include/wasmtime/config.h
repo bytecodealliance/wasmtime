@@ -300,6 +300,24 @@ WASMTIME_CONFIG_PROP(void, static_memory_guard_size, uint64_t)
 WASMTIME_CONFIG_PROP(void, dynamic_memory_guard_size, uint64_t)
 
 /**
+ * \brief Configures the size, in bytes, of the extra virtual memory space reserved after a “dynamic” memory for growing into.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.dynamic_memory_reserved_for_growth
+ */
+WASMTIME_CONFIG_PROP(void, dynamic_memory_reserved_for_growth, uint64_t)
+
+/**
+ * \brief Configures whether to generate native unwind information (e.g. .eh_frame on Linux).
+ *
+ * This option defaults to true.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.native_unwind_info
+ */
+WASMTIME_CONFIG_PROP(void, native_unwind_info, bool)
+
+/**
  * \brief Enables Wasmtime's cache and loads configuration from the specified
  * path.
  *
