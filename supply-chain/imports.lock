@@ -260,6 +260,13 @@ user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
+[[publisher.backtrace]]
+version = "0.3.69"
+when = "2023-08-22"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
 [[publisher.bstr]]
 version = "1.6.0"
 when = "2023-07-05"
