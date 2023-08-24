@@ -691,7 +691,9 @@ impl MachInstEmit for Inst {
                 from,
                 flags,
             } => {
-                todo!() /* let from = from.clone().with_allocs(&mut allocs);
+                println!("$ => {rd:?} ; LOAD op={op:?} from={from:?} flags={flags:?}");
+                // todo!()
+                /* let from = from.clone().with_allocs(&mut allocs);
                 let rd = allocs.next_writable(rd);
 
                 let base = from.get_base_register();
@@ -753,7 +755,9 @@ impl MachInstEmit for Inst {
             &Inst::Ret {
                 stack_bytes_to_pop, ..
             } => {
-                todo!() /* if stack_bytes_to_pop != 0 {
+                println!("ret");
+                // todo!()
+                /* if stack_bytes_to_pop != 0 {
                     Inst::AdjustSp {
                         amount: i64::from(stack_bytes_to_pop),
                     }
@@ -886,7 +890,9 @@ impl MachInstEmit for Inst {
                 ); */
             }
             &Inst::CallInd { ref info } => {
-                todo!() /* let rn = allocs.next(info.rn);
+                println!("call {info:?}");
+                // todo!()
+                /* let rn = allocs.next(info.rn);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
@@ -962,7 +968,9 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Jal { dest } => {
-                todo!() /* let code: u32 = 0b1101111;
+                println!("jal {dest:?}");
+                // todo!()
+                /* let code: u32 = 0b1101111;
                 match dest {
                     BranchTarget::Label(lable) => {
                         sink.use_label_at_offset(start_off, lable, LabelUse::Jal20);
