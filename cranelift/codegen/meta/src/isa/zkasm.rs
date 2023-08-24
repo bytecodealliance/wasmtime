@@ -26,7 +26,7 @@ macro_rules! define_zvl_ext {
 }
 
 pub(crate) fn define() -> TargetIsa {
-    let mut setting = SettingGroupBuilder::new("riscv64");
+    let mut setting = SettingGroupBuilder::new("zkasm");
 
     let _has_m = setting.add_bool("has_m", "has extension M?", "", false);
     let _has_a = setting.add_bool("has_a", "has extension A?", "", false);
@@ -97,5 +97,5 @@ pub(crate) fn define() -> TargetIsa {
     let (_, zvl32768b) = define_zvl_ext!(setting, 32768, zvl16384b);
     let (_, _zvl65536b) = define_zvl_ext!(setting, 65536, zvl32768b);
 
-    TargetIsa::new("riscv64", setting.build())
+    TargetIsa::new("zkasm", setting.build())
 }
