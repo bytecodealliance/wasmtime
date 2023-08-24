@@ -1189,7 +1189,7 @@ impl MachInstEmit for Inst {
                 // we need to emit a jump table here to support that jump.
                 let distance = (targets.len() * 2 * Inst::INSTRUCTION_SIZE as usize) as u32;
                 if sink.island_needed(distance) {
-                    sink.emit_island(distance, &mut state.ctrl_plane);
+                    sink.emit_island(&mut state.ctrl_plane);
                 }
 
                 // Emit the jumps back to back
@@ -3132,7 +3132,7 @@ fn emit_return_call_common_sequence(
             dest: BranchTarget::Label(jump_around_label),
         }
         .emit(&[], sink, emit_info, state);
-        sink.emit_island(space_needed + 4, &mut state.ctrl_plane);
+        sink.emit_island(&mut state.ctrl_plane);
         sink.bind_label(jump_around_label, &mut state.ctrl_plane);
     }
 
