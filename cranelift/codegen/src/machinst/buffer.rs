@@ -276,6 +276,8 @@ pub struct MachBuffer<I: VCodeInst> {
     /// be related to branches that are chomped. These all get added to
     /// `fixup_records` during island emission.
     pending_fixup_records: SmallVec<[MachLabelFixup<I>; 16]>,
+    /// The nearest upcoming deadline for entries in `pending_fixup_records`.
+    pending_fixup_deadline: CodeOffset,
     /// Fixups that must be performed after all code is emitted.
     fixup_records: BinaryHeap<MachLabelFixup<I>>,
     /// Latest branches, to facilitate in-place editing for better fallthrough
@@ -424,6 +426,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             pending_constants_size: 0,
             pending_traps: SmallVec::new(),
             pending_fixup_records: SmallVec::new(),
+            pending_fixup_deadline: u32::MAX,
             fixup_records: Default::default(),
             latest_branches: SmallVec::new(),
             labels_at_tail: SmallVec::new(),
@@ -674,11 +677,13 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         // Add the fixup, and update the worst-case island size based on a
         // veneer for this label use.
-        self.pending_fixup_records.push(MachLabelFixup {
+        let fixup = MachLabelFixup {
             label,
             offset,
             kind,
-        });
+        };
+        self.pending_fixup_deadline = self.pending_fixup_deadline.min(fixup.deadline());
+        self.pending_fixup_records.push(fixup);
 
         // Post-invariant: no mutations to branches/labels data structures.
     }
@@ -1160,14 +1165,10 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Is an island needed within the next N bytes?
     pub fn island_needed(&self, distance: CodeOffset) -> bool {
-        let mut deadline = u32::MAX;
-        for fixup in self
-            .pending_fixup_records
-            .iter()
-            .chain(self.fixup_records.peek())
-        {
-            deadline = deadline.min(fixup.deadline());
-        }
+        let deadline = match self.fixup_records.peek() {
+            Some(fixup) => fixup.deadline().min(self.pending_fixup_deadline),
+            None => self.pending_fixup_deadline,
+        };
         deadline < u32::MAX && self.worst_case_end_of_island(distance) > deadline
     }
 
@@ -1272,6 +1273,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         for fixup in self.pending_fixup_records.drain(..) {
             self.fixup_records.push(fixup);
         }
+        self.pending_fixup_deadline = u32::MAX;
         while let Some(fixup) = self.fixup_records.peek() {
             trace!("emit_island: fixup {:?}", fixup);
 
