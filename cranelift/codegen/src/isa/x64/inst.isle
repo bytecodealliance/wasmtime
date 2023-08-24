@@ -4554,12 +4554,12 @@
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (icmp_cond_result (x64_cmp size b a) cc)))
 
-;; As a special case, reverse the arguments to the comparison when the LHS is a
+;; As a special case, swap the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
 (rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size a b) (intcc_reverse cc))))
+        (icmp_cond_result (x64_cmp size a b) (intcc_swap_args cc))))
 
 ;; Special case: use the test instruction for comparisons with 0.
 (rule 2 (emit_cmp cc a @ (value_type ty) (u64_from_iconst 0))
@@ -4570,7 +4570,7 @@
 (rule 3 (emit_cmp cc (u64_from_iconst 0) b @ (value_type ty))
       (let ((size OperandSize (raw_operand_size_of_type ty))
             (b Gpr (put_in_reg b)))
-        (icmp_cond_result (x64_test size b b) (intcc_reverse cc))))
+        (icmp_cond_result (x64_test size b b) (intcc_swap_args cc))))
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
