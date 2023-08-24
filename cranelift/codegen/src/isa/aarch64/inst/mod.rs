@@ -1159,6 +1159,7 @@ impl MachInst for Inst {
     }
 
     fn gen_block_start(
+        _block_index: usize,
         is_indirect_branch_target: bool,
         is_forward_edge_cfi_enabled: bool,
     ) -> Option<Self> {

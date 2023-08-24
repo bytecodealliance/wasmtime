@@ -380,6 +380,7 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
     match inst {
         &Inst::Nop0 => {}
         &Inst::Nop4 => {}
+        &Inst::Label { .. } => {}
         &Inst::BrTable {
             index, tmp1, tmp2, ..
         } => {
@@ -850,6 +851,14 @@ impl MachInst for Inst {
         Inst::DummyUse { reg }
     }
 
+    fn gen_block_start(
+        block_index: usize,
+        _is_indirect_branch_target: bool,
+        _is_forward_edge_cfi_enabled: bool,
+    ) -> Option<Self> {
+        Some(Inst::Label { imm: block_index })
+    }
+
     fn canonical_type_for_rc(rc: RegClass) -> Type {
         match rc {
             regalloc2::RegClass::Int => I64,
@@ -1101,6 +1110,9 @@ impl Inst {
             }
             &Inst::Nop4 => {
                 format!("##fixed 4-size nop")
+            }
+            &Inst::Label { imm } => {
+                format!("##label=L{imm}")
             }
             &Inst::StackProbeLoop {
                 guard_size,

@@ -421,6 +421,7 @@ impl Inst {
         match self {
             Inst::Nop0
             | Inst::Nop4
+            | Inst::Label { .. }
             | Inst::BrTable { .. }
             | Inst::Auipc { .. }
             | Inst::Lui { .. }
@@ -549,6 +550,9 @@ impl MachInstEmit for Inst {
                     imm12: Imm12::zero(),
                 };
                 x.emit(&[], sink, emit_info, state) */
+            }
+            &Inst::Label { imm } => {
+                sink.put_data(format!("L{imm}:\n").as_bytes())
             }
             &Inst::RawData { ref data } => {
                 // Right now we only put a u32 or u64 in this instruction.
@@ -983,17 +987,15 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Jal { dest } => {
-                put_string(&format!("JUMP {dest:?}\n"), sink);
-                /* let code: u32 = 0b1101111;
                 match dest {
                     BranchTarget::Label(label) => {
                         // TODO: the following two lines allow eg. optimizing out jump-to-here
                         /* sink.use_label_at_offset(start_off, label, LabelUse::Jal20);
                         sink.add_uncond_branch(start_off, start_off + 4, label); */
-                        sink.put_data(format!(":JMP(L{})", label.index()).as_bytes());
+                        sink.put_data(format!(":JMP(L{})\n", label.index()).as_bytes());
                     }
                     BranchTarget::ResolvedOffset(offset) => {
-                        todo!()
+                        todo!() /*
                         let offset = offset as i64;
                         if offset != 0 {
                             if LabelUse::Jal20.offset_in_range(offset) {
@@ -1011,9 +1013,9 @@ impl MachInstEmit for Inst {
                             }
                         } else {
                             // CondBr often generate Jal {dest : 0}, means otherwise no jump.
-                        }
+                        } */
                     }
-                }*/
+                }
             }
             &Inst::CondBr {
                 taken,

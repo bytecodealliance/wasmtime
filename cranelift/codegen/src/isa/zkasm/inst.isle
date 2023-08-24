@@ -5,6 +5,10 @@
     (Nop0)
     (Nop4)
 
+    ;; Label to output at the beginning of a block
+    (Label
+      (imm usize))
+
     ;; load immediate
     (Lui
       (rd WritableReg)

@@ -185,6 +185,7 @@ pub trait MachInst: Clone + Debug {
     /// block, if any. Note that the return value must not be subject to
     /// register allocation.
     fn gen_block_start(
+        _block_index: usize,
         _is_indirect_branch_target: bool,
         _is_forward_edge_cfi_enabled: bool,
     ) -> Option<Self> {
