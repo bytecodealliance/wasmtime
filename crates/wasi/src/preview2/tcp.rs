@@ -5,6 +5,8 @@ use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::sync::Arc;
 
+use super::{HostInputStream, WriteReadiness, FlushResult, HostOutputStream};
+
 /// The state of a TCP socket.
 ///
 /// This represents the various states a socket can be in during the
@@ -43,15 +45,85 @@ pub(crate) enum HostTcpState {
 pub(crate) struct HostTcpSocket {
     /// The part of a `HostTcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
-    pub(crate) inner: Arc<HostTcpSocketInner>,
+    pub(crate) inner: HostTcpSocketInner,
 
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: HostTcpState,
 }
 
-/// The inner reference-counted state of a `HostTcpSocket`.
 pub(crate) struct HostTcpSocketInner {
-    pub(crate) tcp_socket: tokio::net::TcpStream,
+    stream: Arc<tokio::net::TcpStream>,
+}
+
+impl HostTcpSocketInner {
+    fn new(stream: tokio::net::TcpStream) -> Self {
+        Self {
+            stream: Arc::new(stream),
+        }
+    }
+
+    pub(crate) fn tcp_socket(&self) -> &tokio::net::TcpStream {
+        &self.stream
+    }
+
+    pub(crate) fn clone(&self) -> Self {
+        Self {
+            stream: Arc::clone(&self.stream),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl HostInputStream for HostTcpSocketInner {
+    fn read(&mut self, size: usize) -> Result<(bytes::Bytes, StreamState), anyhow::Error> {
+        let mut buf = bytes::BytesMut::with_capacity(size);
+        let n = self.stream.try_read(&mut buf)?;
+
+        // TODO: is this right? we should be guarding calls to `read` with `ready`, which would
+        // imply that a `0` read means the socket is closed.
+        if n == 0 {
+            Ok((bytes::Bytes::new(), StreamState::Closed))
+        } else {
+            buf.truncate(n);
+            Ok((buf.freeze(), StreamState::Open))
+        }
+    }
+
+    async fn ready(&mut self) -> Result<(), anyhow::Error> {
+        self.stream.readable().await?;
+        Ok(())
+    }
+}
+
+const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
+
+#[async_trait::async_trait]
+impl HostOutputStream for HostTcpSocketInner {
+    fn write(&mut self, mut bytes: bytes::Bytes) -> anyhow::Result<Option<WriteReadiness>> {
+        loop {
+            let n = self.stream.try_write(&bytes)?;
+            if n == bytes.len() {
+                break;
+            }
+
+            let _ = bytes.split_to(n);
+        }
+
+        Ok(Some(WriteReadiness::Ready(SOCKET_READY_SIZE)))
+    }
+
+    fn flush(&mut self) -> anyhow::Result<Option<FlushResult>> {
+        Ok(Some(FlushResult::Done))
+    }
+
+    async fn write_ready(&mut self) -> anyhow::Result<WriteReadiness> {
+        self.stream.writable().await?;
+        Ok(WriteReadiness::Ready(SOCKET_READY_SIZE))
+    }
+
+    async fn flush_ready(&mut self) -> anyhow::Result<FlushResult> {
+        Ok(FlushResult::Done)
+    }
 }
 
 impl HostTcpSocket {
@@ -69,7 +141,7 @@ impl HostTcpSocket {
         };
 
         Ok(Self {
-            inner: Arc::new(HostTcpSocketInner { tcp_socket }),
+            inner: HostTcpSocketInner::new(tcp_socket),
             tcp_state: HostTcpState::Default,
         })
     }
@@ -89,7 +161,7 @@ impl HostTcpSocket {
         };
 
         Ok(Self {
-            inner: Arc::new(HostTcpSocketInner { tcp_socket }),
+            inner: HostTcpSocketInner::new(tcp_socket),
             tcp_state: HostTcpState::Default,
         })
     }
@@ -98,16 +170,8 @@ impl HostTcpSocket {
         self.inner.tcp_socket()
     }
 
-    pub fn clone_inner(&self) -> Arc<HostTcpSocketInner> {
-        Arc::clone(&self.inner)
-    }
-}
-
-impl HostTcpSocketInner {
-    pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        let tcp_socket = &self.tcp_socket;
-
-        tcp_socket
+    pub fn clone_inner(&self) -> HostTcpSocketInner {
+        self.inner.clone()
     }
 }
 
@@ -134,29 +198,5 @@ impl TableTcpSocketExt for Table {
     }
     fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocket, TableError> {
         self.get_mut(fd)
-    }
-}
-
-pub(crate) fn read_result(r: io::Result<usize>) -> io::Result<(usize, StreamState)> {
-    match r {
-        Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n, StreamState::Open)),
-        Err(e) if e.kind() == io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
-        Err(e) => Err(e),
-    }
-}
-
-pub(crate) fn write_result(r: io::Result<usize>) -> io::Result<(usize, StreamState)> {
-    match r {
-        // We special-case zero-write stores ourselves, so if we get a zero
-        // back from a `write`, it means the stream is closed on some
-        // platforms.
-        Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n, StreamState::Open)),
-        #[cfg(not(windows))]
-        Err(e) if e.raw_os_error() == Some(rustix::io::Errno::PIPE.raw_os_error()) => {
-            Ok((0, StreamState::Closed))
-        }
-        Err(e) => Err(e),
     }
 }
