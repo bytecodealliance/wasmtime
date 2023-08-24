@@ -2,7 +2,7 @@
 
 ## 12.0.1
 
-Unreleased
+Released 2023-08-24
 
 ### Fixed
 
