@@ -2014,6 +2014,10 @@ impl MachInstLabelUse for LabelUse {
         }
     }
 
+    fn worst_case_veneer_size() -> CodeOffset {
+        8
+    }
+
     /// Generate a veneer into the buffer, given that this veneer is at `veneer_offset`, and return
     /// an offset and label-use for the veneer's use of the original label.
     fn generate_veneer(

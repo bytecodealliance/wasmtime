@@ -2742,6 +2742,10 @@ impl MachInstLabelUse for LabelUse {
         }
     }
 
+    fn worst_case_veneer_size() -> CodeOffset {
+        0
+    }
+
     fn generate_veneer(self, _: &mut [u8], _: CodeOffset) -> (CodeOffset, LabelUse) {
         match self {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => {
