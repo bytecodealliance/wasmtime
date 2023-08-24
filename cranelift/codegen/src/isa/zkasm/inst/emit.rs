@@ -644,7 +644,8 @@ impl MachInstEmit for Inst {
                 todo!() // allocs.next(reg);
             }
             &Inst::AddImm32 { rd, src1, src2 } => {
-                println!("{src1} + {src2} => {:?}", rd.to_reg());
+                let rd = allocs.next(rd.to_reg());
+                println!("{src1} + {src2} => {:?}", rd);
             },
             &Inst::AluRRR {
                 alu_op,
@@ -725,10 +726,11 @@ impl MachInstEmit for Inst {
                 sink.put4(encode_i_type(op.op_code(), rd, op.funct3(), addr, imm12)); */
             }
             &Inst::Store { op, src, flags, to } => {
+                let src = allocs.next(src);
+
                 println!("{src:?} : MSTORE({to:?})");
                 // todo!()
                     /* let to = to.clone().with_allocs(&mut allocs);
-                let src = allocs.next(src);
 
                 let base = to.get_base_register();
                 let offset = to.get_offset_with_state(state);
