@@ -6,6 +6,7 @@ mod arm64;
 mod riscv64;
 mod s390x;
 pub(crate) mod x86;
+mod zkasm;
 
 /// Represents known ISA target.
 #[derive(PartialEq, Copy, Clone)]
@@ -14,6 +15,7 @@ pub enum Isa {
     Arm64,
     S390x,
     Riscv64,
+    ZkAsm
 }
 
 impl Isa {
@@ -29,6 +31,7 @@ impl Isa {
     pub fn from_arch(arch: &str) -> Option<Self> {
         match arch {
             "aarch64" => Some(Isa::Arm64),
+            "sparc" | "zkasm" => Some(Isa::ZkAsm),
             "s390x" => Some(Isa::S390x),
             x if ["x86_64", "i386", "i586", "i686"].contains(&x) => Some(Isa::X86),
             "riscv64" | "riscv64gc" | "riscv64imac" => Some(Isa::Riscv64),
@@ -38,7 +41,7 @@ impl Isa {
 
     /// Returns all supported isa targets.
     pub fn all() -> &'static [Isa] {
-        &[Isa::X86, Isa::Arm64, Isa::S390x, Isa::Riscv64]
+        &[Isa::X86, Isa::Arm64, Isa::S390x, Isa::Riscv64, Isa::ZkAsm]
     }
 }
 
@@ -50,6 +53,7 @@ impl fmt::Display for Isa {
             Isa::Arm64 => write!(f, "arm64"),
             Isa::S390x => write!(f, "s390x"),
             Isa::Riscv64 => write!(f, "riscv64"),
+            Isa::ZkAsm => write!(f, "zkasm"),
         }
     }
 }
@@ -61,6 +65,7 @@ pub(crate) fn define(isas: &[Isa]) -> Vec<TargetIsa> {
             Isa::Arm64 => arm64::define(),
             Isa::S390x => s390x::define(),
             Isa::Riscv64 => riscv64::define(),
+            Isa::ZkAsm => zkasm::define(),
         })
         .collect()
 }

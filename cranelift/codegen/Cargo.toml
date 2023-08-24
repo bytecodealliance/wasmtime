@@ -73,6 +73,7 @@ x86 = []
 arm64 = []
 s390x = []
 riscv64 = []
+zkasm = []
 # Enable the ISA target for the host machine
 host-arch = []
 
@@ -81,7 +82,8 @@ all-arch = [
     "x86",
     "arm64",
     "s390x",
-    "riscv64"
+    "riscv64",
+    "zkasm"
 ]
 
 # For dependent crates that want to serialize some parts of cranelift

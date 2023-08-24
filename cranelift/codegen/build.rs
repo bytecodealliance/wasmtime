@@ -33,7 +33,7 @@ fn main() {
         .cloned()
         .filter(|isa| {
             let env_key = format!("CARGO_FEATURE_{}", isa.to_string().to_uppercase());
-            env::var(env_key).is_ok()
+            dbg!(env::var(dbg!(env_key)).is_ok())
         })
         .collect::<Vec<_>>();
 
@@ -200,6 +200,8 @@ fn get_isle_compilations(
 
     let src_isa_risc_v =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("riscv64"));
+    let src_isa_zkasm =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("zkasm"));
     // This is a set of ISLE compilation units.
     //
     // The format of each entry is:
@@ -277,6 +279,17 @@ fn get_isle_compilations(
                     src_isa_risc_v.join("inst.isle"),
                     src_isa_risc_v.join("inst_vector.isle"),
                     src_isa_risc_v.join("lower.isle"),
+                ],
+                untracked_inputs: vec![clif_lower_isle.clone()],
+            },
+            IsleCompilation {
+                output: out_dir.join("isle_zkasm.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    prelude_lower_isle.clone(),
+                    src_isa_zkasm.join("inst.isle"),
+                    src_isa_zkasm.join("inst_vector.isle"),
+                    src_isa_zkasm.join("lower.isle"),
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],
             },
