@@ -3579,7 +3579,7 @@ impl MachInstEmit for Inst {
                         dest: BranchTarget::Label(jump_around_label),
                     };
                     jmp.emit(&[], sink, emit_info, state);
-                    sink.emit_island(&mut state.ctrl_plane);
+                    sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
                     sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
             }
@@ -3776,7 +3776,7 @@ fn emit_return_call_common_sequence(
             dest: BranchTarget::Label(jump_around_label),
         };
         jmp.emit(&[], sink, emit_info, state);
-        sink.emit_island(&mut state.ctrl_plane);
+        sink.emit_island(space_needed + 4, &mut state.ctrl_plane);
         sink.bind_label(jump_around_label, &mut state.ctrl_plane);
     }
 

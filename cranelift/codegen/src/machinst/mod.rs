@@ -234,6 +234,8 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
     fn supports_veneer(self) -> bool;
     /// How many bytes are needed for a veneer?
     fn veneer_size(self) -> CodeOffset;
+    /// What's the largest possible veneer that may be generated?
+    fn worst_case_veneer_size() -> CodeOffset;
     /// Generate a veneer. The given code-buffer slice is `self.veneer_size()`
     /// bytes long at offset `veneer_offset` in the buffer. The original
     /// label-use will be patched to refer to this veneer's offset.  A new
