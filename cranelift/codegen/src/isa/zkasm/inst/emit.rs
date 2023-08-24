@@ -631,7 +631,9 @@ impl MachInstEmit for Inst {
                 sink.put4(x); */
             }
             &Inst::Unwind { ref inst } => {
-                todo!() // sink.add_unwind(inst.clone());
+                println!("Unwind");
+                // todo!()
+                    // sink.add_unwind(inst.clone());
             }
             &Inst::DummyUse { reg } => {
                 todo!() // allocs.next(reg);
@@ -666,7 +668,10 @@ impl MachInstEmit for Inst {
                 rs,
                 imm12,
             } => {
-                todo!() /* let rs = allocs.next(rs);
+                println!("{rs:?} + {imm12} => {rd:?}: {alu_op:?}");
+
+                // todo!() 
+                    /* let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
@@ -708,7 +713,9 @@ impl MachInstEmit for Inst {
                 sink.put4(encode_i_type(op.op_code(), rd, op.funct3(), addr, imm12)); */
             }
             &Inst::Store { op, src, flags, to } => {
-                todo!() /* let to = to.clone().with_allocs(&mut allocs);
+                println!("{src:?} : MSTORE({to:?})");
+                // todo!()
+                    /* let to = to.clone().with_allocs(&mut allocs);
                 let src = allocs.next(src);
 
                 let base = to.get_base_register();
@@ -795,7 +802,9 @@ impl MachInstEmit for Inst {
                     .for_each(|i| i.emit(&[], sink, emit_info, state)); */
             }
             &Inst::AdjustSp { amount } => {
-                todo!() /* if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
+                println!("SP - {} => SP", amount);
+                // todo!() 
+                    /* if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
                         rd: writable_stack_reg(),
@@ -1018,7 +1027,9 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Mov { rd, rm, ty } => {
-                todo!() /* debug_assert_eq!(rd.to_reg().class(), rm.class());
+                println!("{rm:?} => {rd:?}");
+                // todo!();
+                    /* debug_assert_eq!(rd.to_reg().class(), rm.class());
                 if rd.to_reg() == rm {
                     return;
                 }
