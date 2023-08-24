@@ -12,12 +12,12 @@ use serde::{Deserialize, Serialize};
 
 /// Common traits of condition codes.
 pub trait CondCode: Copy {
-    /// Get the negated condition code of `self`.
+    /// Get the complemented condition code of `self`.
     ///
-    /// The negated condition code produces the opposite result for all comparisons.
-    /// That is, `cmp CC, x, y` is true if and only if `cmp CC.negate(), x, y` is false.
+    /// The complemented condition code produces the opposite result for all comparisons.
+    /// That is, `cmp CC, x, y` is true if and only if `cmp CC.complement(), x, y` is false.
     #[must_use]
-    fn negate(self) -> Self;
+    fn complement(self) -> Self;
 
     /// Get the swapped args condition code for `self`.
     ///
@@ -58,7 +58,7 @@ pub enum IntCC {
 }
 
 impl CondCode for IntCC {
-    fn negate(self) -> Self {
+    fn complement(self) -> Self {
         use self::IntCC::*;
         match self {
             Equal => NotEqual,
@@ -254,7 +254,7 @@ impl FloatCC {
 }
 
 impl CondCode for FloatCC {
-    fn negate(self) -> Self {
+    fn complement(self) -> Self {
         use self::FloatCC::*;
         match self {
             Ordered => Unordered,
@@ -347,12 +347,12 @@ mod tests {
     use std::string::ToString;
 
     #[test]
-    fn int_negate() {
+    fn int_complement() {
         for r in IntCC::all() {
             let cc = *r;
-            let inv = cc.negate();
+            let inv = cc.complement();
             assert!(cc != inv);
-            assert_eq!(inv.negate(), cc);
+            assert_eq!(inv.complement(), cc);
         }
     }
 
@@ -375,12 +375,12 @@ mod tests {
     }
 
     #[test]
-    fn float_negate() {
+    fn float_complement() {
         for r in FloatCC::all() {
             let cc = *r;
-            let inv = cc.negate();
+            let inv = cc.complement();
             assert!(cc != inv);
-            assert_eq!(inv.negate(), cc);
+            assert_eq!(inv.complement(), cc);
         }
     }
 

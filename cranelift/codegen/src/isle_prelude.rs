@@ -823,8 +823,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn intcc_negate(&mut self, cc: &IntCC) -> IntCC {
-            cc.negate()
+        fn intcc_complement(&mut self, cc: &IntCC) -> IntCC {
+            cc.complement()
         }
 
         #[inline]
@@ -833,8 +833,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn floatcc_negate(&mut self, cc: &FloatCC) -> FloatCC {
-            cc.negate()
+        fn floatcc_complement(&mut self, cc: &FloatCC) -> FloatCC {
+            cc.complement()
         }
 
         fn floatcc_unordered(&mut self, cc: &FloatCC) -> bool {
