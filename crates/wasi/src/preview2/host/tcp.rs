@@ -10,14 +10,12 @@ use crate::preview2::stream::TableStreamExt;
 use crate::preview2::tcp::{HostTcpSocket, HostTcpState, TableTcpSocketExt};
 use crate::preview2::{HostPollable, PollableFuture, WasiView};
 use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
+use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::any::Any;
-#[cfg(unix)]
 use tokio::io::Interest;
-#[cfg(not(unix))]
-use tokio::task::spawn_blocking;
 
 impl<T: WasiView> tcp::Host for T {
     fn start_bind(
@@ -38,7 +36,9 @@ impl<T: WasiView> tcp::Host for T {
         let binder = network.0.tcp_binder(local_address)?;
 
         // Perform the OS bind call.
-        binder.bind_existing_tcp_listener(socket.tcp_socket())?;
+        binder.bind_existing_tcp_listener(
+            &*socket.tcp_socket().as_socketlike_view::<TcpListener>(),
+        )?;
 
         let socket = table.get_tcp_socket_mut(this)?;
         socket.tcp_state = HostTcpState::BindStarted;
@@ -67,19 +67,27 @@ impl<T: WasiView> tcp::Host for T {
         remote_address: IpSocketAddress,
     ) -> Result<(), network::Error> {
         let table = self.table_mut();
-        let socket = table.get_tcp_socket(this)?;
+        let r = {
+            let socket = table.get_tcp_socket(this)?;
 
-        match socket.tcp_state {
-            HostTcpState::Default => {}
-            HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
-            _ => return Err(ErrorCode::NotInProgress.into()),
-        }
+            match socket.tcp_state {
+                HostTcpState::Default => {}
+                HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
+                _ => return Err(ErrorCode::NotInProgress.into()),
+            }
 
-        let network = table.get_network(network)?;
-        let connecter = network.0.tcp_connecter(remote_address)?;
+            let network = table.get_network(network)?;
+            let connecter = network.0.tcp_connecter(remote_address)?;
 
-        // Do an OS `connect`. Our socket is non-blocking, so it'll either...
-        match connecter.connect_existing_tcp_listener(socket.tcp_socket()) {
+            // Do an OS `connect`. Our socket is non-blocking, so it'll either...
+            {
+                let view = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
+                let r = connecter.connect_existing_tcp_listener(view);
+                r
+            }
+        };
+
+        match r {
             // succeed immediately,
             Ok(()) => {
                 let socket = table.get_tcp_socket_mut(this)?;
@@ -155,7 +163,10 @@ impl<T: WasiView> tcp::Host for T {
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
 
-        socket.tcp_socket().listen(None)?;
+        socket
+            .tcp_socket()
+            .as_socketlike_view::<TcpListener>()
+            .listen(None)?;
 
         socket.tcp_state = HostTcpState::ListenStarted;
 
@@ -190,7 +201,10 @@ impl<T: WasiView> tcp::Host for T {
         }
 
         // Do the OS accept call.
-        let (connection, _addr) = socket.tcp_socket().accept_with(Blocking::No)?;
+        let (connection, _addr) = socket
+            .tcp_socket()
+            .as_socketlike_view::<TcpListener>()
+            .accept_with(Blocking::No)?;
         let tcp_socket = HostTcpSocket::from_tcp_stream(connection)?;
 
         let input_clone = tcp_socket.clone_inner();
@@ -412,43 +426,13 @@ impl<T: WasiView> tcp::Host for T {
             }
 
             // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-            #[cfg(unix)]
             let join = Box::pin(async move {
                 socket
                     .inner
                     .tcp_socket
                     .ready(Interest::READABLE | Interest::WRITABLE)
                     .await
-                    .unwrap()
-                    .retain_ready();
-                Ok(())
-            });
-
-            #[cfg(not(unix))]
-            let join = Box::pin(async move {
-                let clone = socket.clone_inner();
-                spawn_blocking(move || loop {
-                    #[cfg(not(windows))]
-                    let poll_flags = rustix::event::PollFlags::IN
-                        | rustix::event::PollFlags::OUT
-                        | rustix::event::PollFlags::ERR
-                        | rustix::event::PollFlags::HUP;
-                    // Windows doesn't appear to support `HUP`, or `ERR`
-                    // combined with `IN`/`OUT`.
-                    #[cfg(windows)]
-                    let poll_flags = rustix::event::PollFlags::IN | rustix::event::PollFlags::OUT;
-                    match rustix::event::poll(
-                        &mut [rustix::event::PollFd::new(&clone.tcp_socket, poll_flags)],
-                        -1,
-                    ) {
-                        Ok(_) => break,
-                        Err(Errno::INTR) => (),
-                        Err(err) => Err(err).unwrap(),
-                    }
-                })
-                .await
-                .unwrap();
-
+                    .unwrap();
                 Ok(())
             });
 

@@ -2,6 +2,7 @@ use crate::preview2::{HostInputStream, HostOutputStream, StreamState, Table, Tab
 use bytes::{Bytes, BytesMut};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
 use cap_std::net::{TcpListener, TcpStream};
+use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use io_lifetimes::AsSocketlike;
 use std::io;
 use std::sync::Arc;
@@ -55,13 +56,7 @@ pub(crate) struct HostTcpSocket {
 
 /// The inner reference-counted state of a `HostTcpSocket`.
 pub(crate) struct HostTcpSocketInner {
-    /// On Unix-family platforms we can use `AsyncFd` for efficient polling.
-    #[cfg(unix)]
-    pub(crate) tcp_socket: tokio::io::unix::AsyncFd<cap_std::net::TcpListener>,
-
-    /// On non-Unix, we can use plain `poll`.
-    #[cfg(not(unix))]
-    pub(crate) tcp_socket: cap_std::net::TcpListener,
+    pub(crate) tcp_socket: tokio::net::TcpStream,
 }
 
 impl HostTcpSocket {
@@ -71,9 +66,12 @@ impl HostTcpSocket {
         // by our async implementation.
         let tcp_socket = TcpListener::new(family, Blocking::No)?;
 
-        // On Unix, pack it up in an `AsyncFd` so we can efficiently poll it.
-        #[cfg(unix)]
-        let tcp_socket = tokio::io::unix::AsyncFd::new(tcp_socket)?;
+        let tcp_socket = unsafe {
+            tokio::net::TcpStream::try_from(std::net::TcpStream::from_raw_socketlike(
+                tcp_socket.into_raw_socketlike(),
+            ))
+            .unwrap()
+        };
 
         Ok(Self {
             inner: Arc::new(HostTcpSocketInner { tcp_socket }),
@@ -88,9 +86,12 @@ impl HostTcpSocket {
         let fd = rustix::fd::OwnedFd::from(tcp_socket);
         let tcp_socket = TcpListener::from(fd);
 
-        // On Unix, pack it up in an `AsyncFd` so we can efficiently poll it.
-        #[cfg(unix)]
-        let tcp_socket = tokio::io::unix::AsyncFd::new(tcp_socket)?;
+        let tcp_socket = unsafe {
+            tokio::net::TcpStream::try_from(std::net::TcpStream::from_raw_socketlike(
+                tcp_socket.into_raw_socketlike(),
+            ))
+            .unwrap()
+        };
 
         Ok(Self {
             inner: Arc::new(HostTcpSocketInner { tcp_socket }),
@@ -98,7 +99,7 @@ impl HostTcpSocket {
         })
     }
 
-    pub fn tcp_socket(&self) -> &cap_std::net::TcpListener {
+    pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
         self.inner.tcp_socket()
     }
 
@@ -108,12 +109,8 @@ impl HostTcpSocket {
 }
 
 impl HostTcpSocketInner {
-    pub fn tcp_socket(&self) -> &cap_std::net::TcpListener {
+    pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
         let tcp_socket = &self.tcp_socket;
-
-        // Unpack the `AsyncFd`.
-        #[cfg(unix)]
-        let tcp_socket = tcp_socket.get_ref();
 
         tcp_socket
     }
@@ -150,30 +147,8 @@ impl HostInputStream for Arc<HostTcpSocketInner> {
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
-        #[cfg(unix)]
-        {
-            self.tcp_socket.readable().await?.retain_ready();
-            Ok(())
-        }
-
-        #[cfg(not(unix))]
-        {
-            self.spawn_blocking(move |tcp_socket| {
-                match rustix::event::poll(
-                    &mut [rustix::event::PollFd::new(
-                        tcp_socket,
-                        rustix::event::PollFlags::IN
-                            | rustix::event::PollFlags::ERR
-                            | rustix::event::PollFlags::HUP,
-                    )],
-                    -1,
-                ) {
-                    Ok(_) => Ok(()),
-                    Err(err) => Err(err.into()),
-                }
-            })
-            .await
-        }
+        self.tcp_socket.readable().await?;
+        Ok(())
     }
 }
 
@@ -192,30 +167,8 @@ impl HostOutputStream for Arc<HostTcpSocketInner> {
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
-        #[cfg(unix)]
-        {
-            self.tcp_socket.writable().await?.retain_ready();
-            Ok(())
-        }
-
-        #[cfg(not(unix))]
-        {
-            self.spawn_blocking(move |tcp_socket| {
-                match rustix::event::poll(
-                    &mut [rustix::event::PollFd::new(
-                        tcp_socket,
-                        rustix::event::PollFlags::OUT
-                            | rustix::event::PollFlags::ERR
-                            | rustix::event::PollFlags::HUP,
-                    )],
-                    -1,
-                ) {
-                    Ok(_) => Ok(()),
-                    Err(err) => Err(err.into()),
-                }
-            })
-            .await
-        }
+        self.tcp_socket.writable().await?;
+        Ok(())
     }
 }
 
