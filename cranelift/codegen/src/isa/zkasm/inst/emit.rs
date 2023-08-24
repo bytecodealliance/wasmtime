@@ -36,6 +36,7 @@ pub(crate) enum LoadConstant {
     U64(u64),
 }
 
+#[allow(unused)]
 impl LoadConstant {
     fn to_le_bytes(self) -> Vec<u8> {
         match self {
@@ -182,6 +183,7 @@ impl MachInstEmitState<Inst> for EmitState {
     }
 }
 
+#[allow(unused)]
 impl Inst {
     /// construct a "imm - rs".
     pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
@@ -496,6 +498,7 @@ impl Inst {
     }
 }
 
+#[allow(unused)]
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
@@ -3103,6 +3106,7 @@ fn alloc_value_regs(orgin: &ValueRegs<Reg>, alloc: &mut AllocationConsumer) -> V
     }
 }
 
+#[allow(unused)]
 fn emit_return_call_common_sequence(
     allocs: &mut AllocationConsumer<'_>,
     sink: &mut MachBuffer<Inst>,
