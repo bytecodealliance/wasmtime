@@ -226,11 +226,25 @@ pub trait RustGenerator<'a> {
     }
 
     fn print_handle(&mut self, handle: &Handle) {
+        // Handles are either printed as `ResourceAny` for any guest-defined
+        // resource or `Resource<T>` for all host-defined resources. This means
+        // that this function needs to determine if `handle` points to a host
+        // or a guest resource which is determined by:
+        //
+        // * For world-owned resources, they're always imported.
+        // * For interface-owned resources, it depends on the how bindings were
+        //   last generated for this interface.
+        //
+        // Additionally type aliases via `use` are "peeled" here to find the
+        // original definition of the resource since that's the one that we
+        // care about for determining whether it's imported or not.
         let resource = match handle {
             Handle::Own(t) | Handle::Borrow(t) => *t,
         };
         let ty = &self.resolve().types[resource];
-        let is_host_defined = match ty.owner {
+        let def_id = super::resolve_type_definition_id(self.resolve(), resource);
+        let ty_def = &self.resolve().types[def_id];
+        let is_host_defined = match ty_def.owner {
             TypeOwner::Interface(i) => self.is_imported_interface(i),
             _ => true,
         };

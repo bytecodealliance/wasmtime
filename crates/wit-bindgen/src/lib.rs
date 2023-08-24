@@ -189,7 +189,12 @@ impl Wasmtime {
         let mut gen = InterfaceGenerator::new(self, resolve);
         match item {
             WorldItem::Function(func) => {
-                gen.generate_function_trait_sig(func);
+                // Only generate a trait signature for free functions since
+                // resource-related functions get their trait signatures
+                // during `type_resource`.
+                if let FunctionKind::Freestanding = func.kind {
+                    gen.generate_function_trait_sig(func);
+                }
                 let sig = mem::take(&mut gen.src).into();
                 gen.generate_add_function_to_linker(TypeOwner::World(world), func, "linker");
                 let add_to_linker = gen.src.into();
@@ -562,8 +567,12 @@ impl Wasmtime {
 }
 
 impl Wasmtime {
+    fn has_world_trait(&self, resolve: &Resolve, world: WorldId) -> bool {
+        !self.import_functions.is_empty() || get_world_resources(resolve, world).count() > 0
+    }
+
     fn toplevel_import_trait(&mut self, resolve: &Resolve, world: WorldId) {
-        if self.import_functions.is_empty() {
+        if !self.has_world_trait(resolve, world) {
             return;
         }
 
@@ -589,7 +598,8 @@ impl Wasmtime {
     }
 
     fn toplevel_add_to_linker(&mut self, resolve: &Resolve, world: WorldId) {
-        if self.import_interfaces.is_empty() && self.import_functions.is_empty() {
+        let has_world_trait = self.has_world_trait(resolve, world);
+        if self.import_interfaces.is_empty() && !has_world_trait {
             return;
         }
         let mut interfaces = Vec::new();
@@ -623,10 +633,10 @@ impl Wasmtime {
         for (i, name) in interfaces
             .iter()
             .map(|n| format!("{n}::Host"))
-            .chain(if self.import_functions.is_empty() {
-                None
-            } else {
+            .chain(if has_world_trait {
                 Some(world_trait.clone())
+            } else {
+                None
             })
             .enumerate()
         {
@@ -647,11 +657,11 @@ impl Wasmtime {
         for name in interfaces.iter() {
             uwriteln!(self.src, "{name}::add_to_linker(linker, get)?;");
         }
-        if !self.import_functions.is_empty() {
+        if has_world_trait {
             uwriteln!(self.src, "Self::add_root_to_linker(linker, get)?;");
         }
         uwriteln!(self.src, "Ok(())\n}}");
-        if self.import_functions.is_empty() {
+        if !has_world_trait {
             return;
         }
 
@@ -667,6 +677,19 @@ impl Wasmtime {
                     let mut linker = linker.root();
             ",
         );
+        for name in get_world_resources(resolve, world) {
+            let camel = name.to_upper_camel_case();
+            uwriteln!(
+                self.src,
+                "linker.resource::<{camel}>(
+                    \"{name}\",
+                    move |mut store, rep| -> wasmtime::Result<()> {{
+                        Host{camel}::drop(get(store.data_mut()), wasmtime::component::Resource::new_own(rep))
+                    }},
+                )?;"
+            )
+        }
+
         for f in self.import_functions.iter() {
             self.src.push_str(&f.add_to_linker);
             self.src.push_str("\n");
@@ -860,16 +883,12 @@ impl<'a> InterfaceGenerator<'a> {
             match func.kind {
                 FunctionKind::Method(resource)
                 | FunctionKind::Static(resource)
-                | FunctionKind::Constructor(resource) => {
-                    // Only generate the function trait signature if the function is part of this resource
-                    if id == resource {
-                        self.generate_resource_trait_sig(func);
-                    }
-                }
-                FunctionKind::Freestanding => {
-                    // Do nothing as free standing functions can't be a part of a resource
-                }
+                | FunctionKind::Constructor(resource)
+                    if id == resource => {}
+                _ => continue,
             }
+
+            self.generate_function_trait_sig(func);
         }
 
         uwrite!(
@@ -1287,26 +1306,14 @@ impl<'a> InterfaceGenerator<'a> {
         let info = self.info(id);
         for (name, mode) in self.modes_of(id) {
             self.rustdoc(docs);
-
-            let is_resource = match ty {
-                Type::Id(id) => match self.resolve().types[*id].kind {
-                    TypeDefKind::Resource => true,
-                    _ => false,
-                },
-                _ => false,
-            };
-
-            if is_resource {
-                self.push_str(&format!("use "));
-                self.print_ty(ty, mode);
-                self.push_str(&format!(" as {name};\n"));
-            } else {
-                self.push_str(&format!("pub type {}", name));
-                let lt = self.lifetime_for(&info, mode);
-                self.print_generics(lt);
-                self.push_str(" = ");
-                self.print_ty(ty, mode);
-                self.push_str(";\n");
+            self.push_str(&format!("pub type {}", name));
+            let lt = self.lifetime_for(&info, mode);
+            self.print_generics(lt);
+            self.push_str(" = ");
+            self.print_ty(ty, mode);
+            self.push_str(";\n");
+            let def_id = resolve_type_definition_id(self.resolve, id);
+            if !matches!(self.resolve().types[def_id].kind, TypeDefKind::Resource) {
                 self.assert_type(id, &name);
             }
         }
@@ -1397,11 +1404,10 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, " {{");
         for (_, func) in iface.functions.iter() {
             match func.kind {
-                FunctionKind::Freestanding => {
-                    self.generate_function_trait_sig(func);
-                }
-                _ => {}
+                FunctionKind::Freestanding => {}
+                _ => continue,
             }
+            self.generate_function_trait_sig(func);
         }
         uwriteln!(self.src, "}}");
 
@@ -1523,42 +1529,25 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         self.src.push_str("let host = get(caller.data_mut());\n");
-        match func.kind {
-            FunctionKind::Freestanding => {
-                let host_trait = match owner {
-                    TypeOwner::World(id) => format!(
-                        "{}Imports",
-                        self.resolve.worlds[id].name.to_upper_camel_case()
-                    ),
-                    _ => "Host".to_string(),
-                };
-                uwrite!(
-                    self.src,
-                    "let r = {host_trait}::{}(host, ",
-                    func.name.to_snake_case()
-                );
-            }
-            FunctionKind::Method(id) | FunctionKind::Static(id) => {
+        let func_name = rust_function_name(func);
+        let host_trait = match func.kind {
+            FunctionKind::Freestanding => match owner {
+                TypeOwner::World(id) => format!(
+                    "{}Imports",
+                    self.resolve.worlds[id].name.to_upper_camel_case()
+                ),
+                _ => "Host".to_string(),
+            },
+            FunctionKind::Method(id) | FunctionKind::Static(id) | FunctionKind::Constructor(id) => {
                 let resource = self.resolve.types[id]
                     .name
                     .as_ref()
                     .unwrap()
                     .to_upper_camel_case();
-                uwrite!(
-                    self.src,
-                    "let r = Host{resource}::{}(host, ",
-                    func.item_name().to_snake_case()
-                );
+                format!("Host{resource}")
             }
-            FunctionKind::Constructor(id) => {
-                let resource = self.resolve.types[id]
-                    .name
-                    .as_ref()
-                    .unwrap()
-                    .to_upper_camel_case();
-                uwrite!(self.src, "let r = Host{resource}::new(host, ",);
-            }
-        }
+        };
+        uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");
 
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{},", i);
@@ -1601,62 +1590,6 @@ impl<'a> InterfaceGenerator<'a> {
         }
     }
 
-    fn generate_resource_trait_sig(&mut self, func: &Function) {
-        self.rustdoc(&func.docs);
-
-        if self.gen.opts.async_ {
-            self.push_str("async ");
-        }
-        self.push_str("fn ");
-
-        match func.kind {
-            FunctionKind::Constructor(_) => self.push_str("new"),
-            _ => self.push_str(&to_rust_ident(func.item_name())),
-        }
-
-        self.push_str("(&mut self, ");
-
-        for (name, param) in func.params.iter() {
-            let name = to_rust_ident(name);
-            self.push_str(&name);
-            self.push_str(": ");
-            self.print_ty(param, TypeMode::Owned);
-            self.push_str(",");
-        }
-        self.push_str(")");
-        self.push_str(" -> ");
-
-        if let Some((r, error_id, error_typename)) =
-            self.special_case_trappable_error(&func.results)
-        {
-            // Functions which have a single result `result<ok,err>` get special
-            // cased to use the host_wasmtime_rust::Error<err>, making it possible
-            // for them to trap or use `?` to propogate their errors
-            self.push_str("Result<");
-            if let Some(ok) = r.ok {
-                self.print_ty(&ok, TypeMode::Owned);
-            } else {
-                self.push_str("()");
-            }
-            self.push_str(",");
-            if let TypeOwner::Interface(id) = self.resolve.types[error_id].owner {
-                if let Some(path) = self.path_to_interface(id) {
-                    self.push_str(&path);
-                    self.push_str("::");
-                }
-            }
-            self.push_str(&error_typename);
-            self.push_str(">");
-        } else {
-            // All other functions get their return values wrapped in an wasmtime::Result.
-            // Returning the anyhow::Error case can be used to trap.
-            self.push_str("wasmtime::Result<");
-            self.print_result_ty(&func.results, TypeMode::Owned);
-            self.push_str(">");
-        }
-        self.push_str(";\n");
-    }
-
     fn generate_function_trait_sig(&mut self, func: &Function) {
         self.rustdoc(&func.docs);
 
@@ -1664,7 +1597,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("async ");
         }
         self.push_str("fn ");
-        self.push_str(&to_rust_ident(&func.name));
+        self.push_str(&rust_function_name(func));
         self.push_str("(&mut self, ");
         for (name, param) in func.params.iter() {
             let name = to_rust_ident(name);
@@ -1950,6 +1883,14 @@ fn resolve_type_definition_id(resolve: &Resolve, mut id: TypeId) -> TypeId {
             TypeDefKind::Type(Type::Id(def_id)) => id = def_id,
             _ => return id,
         }
+    }
+}
+
+fn rust_function_name(func: &Function) -> String {
+    match func.kind {
+        FunctionKind::Method(_) | FunctionKind::Static(_) => to_rust_ident(func.item_name()),
+        FunctionKind::Constructor(_) => "new".to_string(),
+        FunctionKind::Freestanding => to_rust_ident(&func.name),
     }
 }
 
