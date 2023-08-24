@@ -668,9 +668,11 @@ impl MachInstEmit for Inst {
                 rs,
                 imm12,
             } => {
-                println!("{rs:?} + {imm12} => {rd:?}: {alu_op:?}");
+                let rs = allocs.next(rs);
+                let rd = allocs.next_writable(rd);
+                println!("{rs:?} {imm12} => {rd:?}: {alu_op:?}");
 
-                // todo!() 
+                // todo!()
                     /* let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
@@ -802,8 +804,8 @@ impl MachInstEmit for Inst {
                     .for_each(|i| i.emit(&[], sink, emit_info, state)); */
             }
             &Inst::AdjustSp { amount } => {
-                println!("SP - {} => SP", amount);
-                // todo!() 
+                println!("SP {} => SP", amount);
+                // todo!()
                     /* if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
@@ -2002,7 +2004,9 @@ impl MachInstEmit for Inst {
                 ref name,
                 offset,
             } => {
-                todo!() /* let rd = allocs.next_writable(rd);
+                let rd = allocs.next_writable(rd);
+                println!("{rd:?} => CALL {name:?}");
+                /* let rd = allocs.next_writable(rd);
                 // get the current pc.
                 Inst::Auipc {
                     rd: rd,
