@@ -15,7 +15,6 @@ use crate::ir::types::I8;
 use crate::ir::LibCall;
 use crate::ir::Signature;
 use crate::isa::zkasm::settings::Flags as RiscvFlags;
-use crate::isa::unwind::UnwindInst;
 use crate::settings;
 use crate::CodegenError;
 use crate::CodegenResult;
@@ -359,13 +358,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             fp_reg(),
             I64,
         ));
-        if flags.unwind_info() {
-            insts.push(Inst::Unwind {
-                inst: UnwindInst::PushFrameRegs {
-                    offset_upward_to_caller_sp: 16, // FP, LR
-                },
-            });
-        }
         insts.push(Inst::Mov {
             rd: writable_fp_reg(),
             rm: stack_reg(),
@@ -427,20 +419,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // Adjust the stack pointer downward for clobbers and the function fixed
         // frame (spillslots and storage slots).
         let stack_size = fixed_frame_storage_size + clobbered_size;
-        if flags.unwind_info() && setup_frame {
-            // The *unwind* frame (but not the actual frame) starts at the
-            // clobbers, just below the saved FP/LR pair.
-            insts.push(Inst::Unwind {
-                inst: UnwindInst::DefineNewFrame {
-                    offset_downward_to_clobbers: clobbered_size,
-                    offset_upward_to_caller_sp: 16, // FP, LR
-                },
-            });
-        }
         // Store each clobbered register in order at offsets from SP,
         // placing them above the fixed frame slots.
         if stack_size > 0 {
-            // since we use fp, we didn't need use UnwindInst::StackAlloc.
             let mut cur_offset = 8;
             for reg in clobbered_callee_saves {
                 let r_reg = reg.to_reg();
@@ -449,14 +430,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     RegClass::Float => F64,
                     RegClass::Vector => unimplemented!("Vector Clobber Saves"),
                 };
-                if flags.unwind_info() {
-                    insts.push(Inst::Unwind {
-                        inst: UnwindInst::SaveReg {
-                            clobber_offset: clobbered_size - cur_offset,
-                            reg: r_reg,
-                        },
-                    });
-                }
                 insts.push(Self::gen_store_stack(
                     StackAMode::SPOffset(-(cur_offset as i64), ty),
                     real_reg_to_reg(reg.to_reg()),
