@@ -652,7 +652,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::AddImm32 { rd, src1, src2 } => {
                 let rd = allocs.next(rd.to_reg());
-                put_string(&format!("{src1} + {src2} => {:?}", rd), sink);
+                put_string(&format!("{src1} + {src2} => {:?}\n", rd), sink);
             },
             &Inst::AluRRR {
                 alu_op,
@@ -660,7 +660,9 @@ impl MachInstEmit for Inst {
                 rs1,
                 rs2,
             } => {
-                todo!() /* let rs1 = allocs.next(rs1);
+                put_string(&format!("{rs1:?}, {rs2:?} => {:?} : {alu_op:?}\n", rd), sink);
+
+                    /* let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
                 let (rs1, rs2) = if alu_op.reverse_rs() {
@@ -1022,6 +1024,7 @@ impl MachInstEmit for Inst {
                 not_taken,
                 mut kind,
             } => {
+
                 todo!() /* kind.rs1 = allocs.next(kind.rs1);
                 kind.rs2 = allocs.next(kind.rs2);
                 match taken {
@@ -1432,7 +1435,9 @@ impl MachInstEmit for Inst {
                 ref b,
                 ty,
             } => {
-                todo!() /* let a = alloc_value_regs(a, &mut allocs);
+                put_string(&format!("{a:?}, {b:?} => {:?} : CMP\n", rd), sink);
+
+                    /* let a = alloc_value_regs(a, &mut allocs);
                 let b = alloc_value_regs(b, &mut allocs);
                 let rd = allocs.next_writable(rd);
                 let label_true = sink.get_label();
