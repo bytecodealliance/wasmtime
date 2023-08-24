@@ -1266,85 +1266,104 @@ impl<I: VCodeInst> MachBuffer<I> {
             self.get_appended_space(size);
         }
 
-        // Flush the list of pending fixups into the main `BinaryHeap` for all
-        // fixups since these are all committed now and aren't at risk of being
-        // removed as part of branch optimizations.
+        // Either handle all pending fixups because they're ready or move them
+        // onto the `BinaryHeap` tracking all pending fixups if they aren't
+        // ready.
         assert!(self.latest_branches.is_empty());
-        for fixup in self.pending_fixup_records.drain(..) {
-            self.fixup_records.push(fixup);
+        for fixup in mem::take(&mut self.pending_fixup_records) {
+            if self.should_apply_fixup(&fixup, forced_threshold) {
+                self.handle_fixup(fixup, force_veneers, forced_threshold);
+            } else {
+                self.fixup_records.push(fixup);
+            }
         }
         self.pending_fixup_deadline = u32::MAX;
         while let Some(fixup) = self.fixup_records.peek() {
             trace!("emit_island: fixup {:?}", fixup);
 
-            // If this label's offset is not known but there's still room after
-            // our `forced_threshold` to make the veneer then fixups are done
-            // being processed. Fixups are sorted by deadline meaning that this,
-            // and all remaining fixups, can wait until the end of the function
-            // or the next island.
-            let label_offset = self.resolve_label_offset(fixup.label);
-            if label_offset == UNKNOWN_LABEL_OFFSET && fixup.deadline() >= forced_threshold {
+            // If this fixup shouldn't be applied, that means its label isn't
+            // defined yet and there'll be remaining space to apply a veneer if
+            // necessary in the future after this island. In that situation
+            // because `fixup_records` is sorted by deadline this loop can
+            // exit.
+            if !self.should_apply_fixup(fixup, forced_threshold) {
                 break;
             }
-            let MachLabelFixup {
-                label,
-                offset,
-                kind,
-            } = self.fixup_records.pop().unwrap();
-            let start = offset as usize;
-            let end = (offset + kind.patch_size()) as usize;
 
-            if label_offset != UNKNOWN_LABEL_OFFSET {
-                // If the offset of the label for this fixup is known then
-                // we're going to do something here-and-now. We're either going
-                // to patch the original offset because it's an in-bounds jump,
-                // or we're going to generate a veneer, patch the fixup to jump
-                // to the veneer, and then keep going.
-                //
-                // If the label comes after the original fixup, then we should
-                // be guaranteed that the jump is in-bounds. Otherwise there's
-                // a bug somewhere because this method wasn't called soon
-                // enough. All forward-jumps are tracked and should get veneers
-                // before their deadline comes and they're unable to jump
-                // further.
-                //
-                // Otherwise if the label is before the fixup, then that's a
-                // backwards jump. If it's past the maximum negative range
-                // then we'll emit a veneer that to jump forward to which can
-                // then jump backwards.
-                let veneer_required = if label_offset >= offset {
-                    assert!((label_offset - offset) <= kind.max_pos_range());
-                    false
-                } else {
-                    (offset - label_offset) > kind.max_neg_range()
-                };
-                trace!(
-                    " -> label_offset = {}, known, required = {} (pos {} neg {})",
-                    label_offset,
-                    veneer_required,
-                    kind.max_pos_range(),
-                    kind.max_neg_range()
-                );
-
-                if (force_veneers == ForceVeneers::Yes && kind.supports_veneer()) || veneer_required
-                {
-                    self.emit_veneer(label, offset, kind);
-                } else {
-                    let slice = &mut self.data[start..end];
-                    trace!("patching in-range!");
-                    kind.patch(slice, offset, label_offset);
-                }
-            } else {
-                // If the offset of this label is not known at this time then
-                // that means that a veneer is required because after this
-                // island the target can't be in range of the original target.
-                assert!(forced_threshold - offset > kind.max_pos_range());
-                self.emit_veneer(label, offset, kind);
-            }
+            let fixup = self.fixup_records.pop().unwrap();
+            self.handle_fixup(fixup, force_veneers, forced_threshold);
         }
 
         if let Some(loc) = cur_loc {
             self.start_srcloc(loc);
+        }
+    }
+
+    fn should_apply_fixup(&self, fixup: &MachLabelFixup<I>, forced_threshold: CodeOffset) -> bool {
+        let label_offset = self.resolve_label_offset(fixup.label);
+        label_offset != UNKNOWN_LABEL_OFFSET || fixup.deadline() < forced_threshold
+    }
+
+    fn handle_fixup(
+        &mut self,
+        fixup: MachLabelFixup<I>,
+        force_veneers: ForceVeneers,
+        forced_threshold: CodeOffset,
+    ) {
+        let MachLabelFixup {
+            label,
+            offset,
+            kind,
+        } = fixup;
+        let start = offset as usize;
+        let end = (offset + kind.patch_size()) as usize;
+        let label_offset = self.resolve_label_offset(label);
+
+        if label_offset != UNKNOWN_LABEL_OFFSET {
+            // If the offset of the label for this fixup is known then
+            // we're going to do something here-and-now. We're either going
+            // to patch the original offset because it's an in-bounds jump,
+            // or we're going to generate a veneer, patch the fixup to jump
+            // to the veneer, and then keep going.
+            //
+            // If the label comes after the original fixup, then we should
+            // be guaranteed that the jump is in-bounds. Otherwise there's
+            // a bug somewhere because this method wasn't called soon
+            // enough. All forward-jumps are tracked and should get veneers
+            // before their deadline comes and they're unable to jump
+            // further.
+            //
+            // Otherwise if the label is before the fixup, then that's a
+            // backwards jump. If it's past the maximum negative range
+            // then we'll emit a veneer that to jump forward to which can
+            // then jump backwards.
+            let veneer_required = if label_offset >= offset {
+                assert!((label_offset - offset) <= kind.max_pos_range());
+                false
+            } else {
+                (offset - label_offset) > kind.max_neg_range()
+            };
+            trace!(
+                " -> label_offset = {}, known, required = {} (pos {} neg {})",
+                label_offset,
+                veneer_required,
+                kind.max_pos_range(),
+                kind.max_neg_range()
+            );
+
+            if (force_veneers == ForceVeneers::Yes && kind.supports_veneer()) || veneer_required {
+                self.emit_veneer(label, offset, kind);
+            } else {
+                let slice = &mut self.data[start..end];
+                trace!("patching in-range!");
+                kind.patch(slice, offset, label_offset);
+            }
+        } else {
+            // If the offset of this label is not known at this time then
+            // that means that a veneer is required because after this
+            // island the target can't be in range of the original target.
+            assert!(forced_threshold - offset > kind.max_pos_range());
+            self.emit_veneer(label, offset, kind);
         }
     }
 
