@@ -12,7 +12,6 @@ use alloc::vec::Vec;
 use regalloc2::VReg;
 use regalloc2::{MachineEnv, PReg, RegClass};
 
-// first argument of function call
 #[inline]
 pub fn a0() -> Reg {
     x_reg(1)
@@ -21,11 +20,6 @@ pub fn a0() -> Reg {
 #[inline]
 pub fn b0() -> Reg {
     x_reg(2)
-}
-
-#[inline]
-pub fn c0() -> Reg {
-    x_reg(3)
 }
 
 // second argument of function call
@@ -147,33 +141,37 @@ pub fn writable_spilltmp_reg2() -> Writable<Reg> {
 
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 3] = {
-        let x_registers: Vec<PReg> = (5..=7)
-            .chain(10..=17)
-            .chain(28..=29)
+        // Registers are A, B, C, D, E.
+        // TODO(akashin): Remove redundant registers.
+        let x_registers: Vec<PReg> = (1..=15)
             .map(|i| PReg::new(i, RegClass::Int))
             .collect();
 
-        let f_registers: Vec<PReg> = (0..=7)
-            .chain(10..=17)
-            .chain(28..=31)
-            .map(|i| PReg::new(i, RegClass::Float))
-            .collect();
+        let f_registers: Vec<PReg> = Vec::new();
+            // (0..=7)
+            // .chain(10..=17)
+            // .chain(28..=31)
+            // .map(|i| PReg::new(i, RegClass::Float))
+            // .collect();
 
-        let v_registers: Vec<PReg> = (0..=31).map(|i| PReg::new(i, RegClass::Vector)).collect();
+        let v_registers: Vec<PReg> = Vec::new();
+            // (0..=31).map(|i| PReg::new(i, RegClass::Vector)).collect();
 
         [x_registers, f_registers, v_registers]
     };
 
     let non_preferred_regs_by_class: [Vec<PReg>; 3] = {
-        let x_registers: Vec<PReg> = (9..=9)
-            .chain(18..=27)
-            .map(|i| PReg::new(i, RegClass::Int))
-            .collect();
+        let x_registers: Vec<PReg> = Vec::new();
+            // (9..=9)
+            // .chain(18..=27)
+            // .map(|i| PReg::new(i, RegClass::Int))
+            // .collect();
 
-        let f_registers: Vec<PReg> = (8..=9)
-            .chain(18..=27)
-            .map(|i| PReg::new(i, RegClass::Float))
-            .collect();
+        let f_registers: Vec<PReg> = Vec::new();
+            // (8..=9)
+            // .chain(18..=27)
+            // .map(|i| PReg::new(i, RegClass::Float))
+            // .collect();
 
         let v_registers = vec![];
 
