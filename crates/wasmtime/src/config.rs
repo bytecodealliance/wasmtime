@@ -101,7 +101,7 @@ pub struct Config {
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace: bool,
     pub(crate) wasm_backtrace_details_env_used: bool,
-    pub(crate) native_unwind_info: bool,
+    pub(crate) native_unwind_info: Option<bool>,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     pub(crate) async_support: bool,
@@ -194,7 +194,7 @@ impl Config {
             max_wasm_stack: 512 * 1024,
             wasm_backtrace: true,
             wasm_backtrace_details_env_used: false,
-            native_unwind_info: true,
+            native_unwind_info: None,
             features: WasmFeatures::default(),
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
@@ -431,14 +431,13 @@ impl Config {
     /// [`WasmBacktrace`] is controlled by the [`Config::wasm_backtrace`]
     /// option.
     ///
-    /// Note that native unwind information is always generated when targeting
-    /// Windows, since the Windows ABI requires it.
-    ///
-    /// This option defaults to `true`.
+    /// Native unwind information is included:
+    /// - When targeting Windows, since the Windows ABI requires it.
+    /// - By default.
     ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn native_unwind_info(&mut self, enable: bool) -> &mut Self {
-        self.native_unwind_info = enable;
+        self.native_unwind_info = Some(enable);
         self
     }
 
@@ -1627,7 +1626,12 @@ impl Config {
             .insert("probestack_strategy".into(), "inline".into());
 
         let host = target_lexicon::Triple::host();
-        let target = self.compiler_config.target.as_ref().unwrap_or(&host);
+        let target = self
+            .compiler_config
+            .target
+            .as_ref()
+            .unwrap_or(&host)
+            .clone();
 
         // On supported targets, we enable stack probing by default.
         // This is required on Windows because of the way Windows
@@ -1648,15 +1652,21 @@ impl Config {
             );
         }
 
-        if self.native_unwind_info ||
-             // Windows always needs unwind info, since it is part of the ABI.
-             target.operating_system == target_lexicon::OperatingSystem::Windows
-        {
+        if let Some(unwind_requested) = self.native_unwind_info {
+            if !self
+                .compiler_config
+                .ensure_setting_unset_or_given("unwind_info", &unwind_requested.to_string())
+            {
+                bail!("incompatible settings requested for Cranelift and Wasmtime `unwind-info` settings");
+            }
+        }
+
+        if target.operating_system == target_lexicon::OperatingSystem::Windows {
             if !self
                 .compiler_config
                 .ensure_setting_unset_or_given("unwind_info", "true")
             {
-                bail!("compiler option 'unwind_info' must be enabled profiling");
+                bail!("`native_unwind_info` cannot be disabled on Windows");
             }
         }
 
