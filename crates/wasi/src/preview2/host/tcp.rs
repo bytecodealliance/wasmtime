@@ -5,6 +5,7 @@ use crate::preview2::bindings::{
     sockets::tcp::{self, ShutdownType},
 };
 use crate::preview2::network::TableNetworkExt;
+use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
 use crate::preview2::poll::TablePollableExt;
 use crate::preview2::stream::TableStreamExt;
 use crate::preview2::tcp::{HostTcpSocket, HostTcpState, TableTcpSocketExt};
@@ -144,10 +145,12 @@ impl<T: WasiView> tcp::Host for T {
         let input_clone = socket.clone_inner();
         let output_clone = socket.clone_inner();
 
-        let input_stream = self.table_mut().push_input_stream(Box::new(input_clone))?;
+        let input_stream = self
+            .table_mut()
+            .push_input_stream(Box::new(AsyncReadStream::new(input_clone)))?;
         let output_stream = self
             .table_mut()
-            .push_output_stream(Box::new(output_clone))?;
+            .push_output_stream(Box::new(AsyncWriteStream::new(output_clone)))?;
 
         Ok((input_stream, output_stream))
     }
@@ -211,10 +214,12 @@ impl<T: WasiView> tcp::Host for T {
         let output_clone = tcp_socket.clone_inner();
 
         let tcp_socket = self.table_mut().push_tcp_socket(tcp_socket)?;
-        let input_stream = self.table_mut().push_input_stream(Box::new(input_clone))?;
+        let input_stream = self
+            .table_mut()
+            .push_input_stream(Box::new(AsyncReadStream::new(input_clone)))?;
         let output_stream = self
             .table_mut()
-            .push_output_stream(Box::new(output_clone))?;
+            .push_output_stream(Box::new(AsyncWriteStream::new(output_clone)))?;
 
         Ok((tcp_socket, input_stream, output_stream))
     }
