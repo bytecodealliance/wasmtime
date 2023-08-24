@@ -570,7 +570,7 @@ where
         let top =
             self.context
                 .without::<TypedReg, M, _>(result.result_reg(), self.masm, |ctx, masm| {
-                    ctx.pop_to_reg(masm, None, OperandSize::S32)
+                    ctx.pop_to_reg(masm, None)
                 });
         self.context.pop_abi_results(result, self.masm);
         self.context.push_abi_results(result, self.masm);
@@ -632,7 +632,7 @@ where
         let addr = self
             .masm
             .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
-        let typed_reg = self.context.pop_to_reg(self.masm, None, ty.into());
+        let typed_reg = self.context.pop_to_reg(self.masm, None);
         self.context.free_reg(typed_reg.reg);
         self.masm.store(typed_reg.reg.into(), addr, ty.into());
     }

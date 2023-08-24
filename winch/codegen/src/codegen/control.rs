@@ -185,7 +185,7 @@ impl ControlStackFrame {
                 ..
             } => {
                 // Pop the condition value.
-                let top = context.pop_to_reg(masm, None, OperandSize::S32);
+                let top = context.pop_to_reg(masm, None);
 
                 // Unconditionall spill before emitting control flow.
                 context.spill(masm);

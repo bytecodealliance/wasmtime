@@ -318,7 +318,7 @@ impl Masm for MacroAssembler {
                 .stack
                 .pop_i32_const()
                 .expect("i32 const value at stack top");
-            let typed_reg = context.pop_to_reg(self, None, size);
+            let typed_reg = context.pop_to_reg(self, None);
 
             self.asm.shift_ir(val as u8, typed_reg.into(), kind, size);
 
@@ -328,15 +328,15 @@ impl Masm for MacroAssembler {
                 .stack
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
-            let typed_reg = context.pop_to_reg(self, None, size);
+            let typed_reg = context.pop_to_reg(self, None);
 
             self.asm.shift_ir(val as u8, typed_reg.into(), kind, size);
 
             context.stack.push(typed_reg.into());
         } else {
             // Number of bits to shift must be in the CL register.
-            let src = context.pop_to_reg(self, Some(regs::rcx()), size);
-            let dst = context.pop_to_reg(self, None, size);
+            let src = context.pop_to_reg(self, Some(regs::rcx()));
+            let dst = context.pop_to_reg(self, None);
 
             self.asm.shift_rr(src.into(), dst.into(), kind, size);
 
@@ -351,12 +351,12 @@ impl Masm for MacroAssembler {
         let rax = context.reg(regs::rax(), self);
 
         // Allocate the divisor, which can be any gpr.
-        let divisor = context.pop_to_reg(self, None, size);
+        let divisor = context.pop_to_reg(self, None);
 
         // Mark rax as allocatable.
         context.free_reg(rax);
         // Move the top value to rax.
-        let rax = context.pop_to_reg(self, Some(rax), size);
+        let rax = context.pop_to_reg(self, Some(rax));
         self.asm.div(divisor.into(), (rax.into(), rdx), kind, size);
 
         // Free the divisor and rdx.
@@ -373,12 +373,12 @@ impl Masm for MacroAssembler {
         let rax = context.reg(regs::rax(), self);
 
         // Allocate the divisor, which can be any gpr.
-        let divisor = context.pop_to_reg(self, None, size);
+        let divisor = context.pop_to_reg(self, None);
 
         // Mark rax as allocatable.
         context.free_reg(rax);
         // Move the top value to rax.
-        let rax = context.pop_to_reg(self, Some(rax), size);
+        let rax = context.pop_to_reg(self, Some(rax));
         self.asm.rem(divisor.reg, (rax.into(), rdx), kind, size);
 
         // Free the divisor and rax.
@@ -508,7 +508,7 @@ impl Masm for MacroAssembler {
     }
 
     fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize) {
-        let src = context.pop_to_reg(self, None, size);
+        let src = context.pop_to_reg(self, None);
         if self.flags.has_popcnt() {
             self.asm.popcnt(src.into(), size);
             context.stack.push(src.into());

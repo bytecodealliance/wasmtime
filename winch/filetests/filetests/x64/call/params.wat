@@ -117,7 +117,7 @@
 ;;   50:	 01c1                 	add	ecx, eax
 ;;   52:	 8b4520               	mov	eax, dword ptr [rbp + 0x20]
 ;;   55:	 01c1                 	add	ecx, eax
-;;   57:	 4889c8               	mov	rax, rcx
-;;   5a:	 4883c420             	add	rsp, 0x20
-;;   5e:	 5d                   	pop	rbp
-;;   5f:	 c3                   	ret	
+;;   57:	 89c8                 	mov	eax, ecx
+;;   59:	 4883c420             	add	rsp, 0x20
+;;   5d:	 5d                   	pop	rbp
+;;   5e:	 c3                   	ret	

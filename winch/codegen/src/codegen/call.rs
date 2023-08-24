@@ -183,13 +183,13 @@ impl<'a> FnCall<'a> {
                 .next()
                 .unwrap_or_else(|| panic!("expected stack value for function argument"));
             match &arg {
-                &ABIArg::Reg { ty, reg } => {
-                    context.move_val_to_reg(&val, *reg, masm, (*ty).into());
+                &ABIArg::Reg { ty: _, reg } => {
+                    context.move_val_to_reg(&val, *reg, masm);
                 }
                 &ABIArg::Stack { ty, offset } => {
                     let addr = masm.address_at_sp(*offset);
                     let size: OperandSize = (*ty).into();
-                    context.move_val_to_reg(val, scratch, masm, size);
+                    context.move_val_to_reg(val, scratch, masm);
                     masm.store(scratch.into(), addr, size);
                 }
             }

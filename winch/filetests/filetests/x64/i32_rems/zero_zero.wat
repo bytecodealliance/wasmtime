@@ -19,7 +19,7 @@
 ;;   20:	 ba00000000           	mov	edx, 0
 ;;   25:	 e902000000           	jmp	0x2c
 ;;   2a:	 f7f9                 	idiv	ecx
-;;   2c:	 4889d0               	mov	rax, rdx
-;;   2f:	 4883c408             	add	rsp, 8
-;;   33:	 5d                   	pop	rbp
-;;   34:	 c3                   	ret	
+;;   2c:	 89d0                 	mov	eax, edx
+;;   2e:	 4883c408             	add	rsp, 8
+;;   32:	 5d                   	pop	rbp
+;;   33:	 c3                   	ret	

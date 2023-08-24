@@ -34,7 +34,7 @@
 ;;   21:	 85c0                 	test	eax, eax
 ;;   23:	 0f8409000000         	je	0x32
 ;;   29:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
-;;   2d:	 e934000000           	jmp	0x66
+;;   2d:	 e933000000           	jmp	0x65
 ;;   32:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   36:	 83e801               	sub	eax, 1
 ;;   39:	 50                   	push	rax
@@ -51,7 +51,7 @@
 ;;   5c:	 4883c408             	add	rsp, 8
 ;;   60:	 59                   	pop	rcx
 ;;   61:	 01c1                 	add	ecx, eax
-;;   63:	 4889c8               	mov	rax, rcx
-;;   66:	 4883c410             	add	rsp, 0x10
-;;   6a:	 5d                   	pop	rbp
-;;   6b:	 c3                   	ret	
+;;   63:	 89c8                 	mov	eax, ecx
+;;   65:	 4883c410             	add	rsp, 0x10
+;;   69:	 5d                   	pop	rbp
+;;   6a:	 c3                   	ret	
