@@ -2967,7 +2967,7 @@ name = "verify-component-adapter"
 version = "13.0.0"
 dependencies = [
  "anyhow",
- "wasmparser 0.92.0",
+ "wasmparser 0.111.0",
  "wat",
 ]
 
@@ -3273,15 +3273,6 @@ dependencies = [
  "downcast-rs",
  "libm",
  "num-traits",
-]
-
-[[package]]
-name = "wasmparser"
-version = "0.92.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7da34cec2a8c23db906cdf8b26e988d7a7f0d549eb5d51299129647af61a1b37"
-dependencies = [
- "indexmap 1.9.1",
 ]
 
 [[package]]
