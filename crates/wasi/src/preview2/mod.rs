@@ -154,18 +154,42 @@ pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
             .unwrap()
     });
 
-pub(crate) fn spawn<F, G>(f: F) -> tokio::task::JoinHandle<G>
+pub(crate) struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
+impl<T> Drop for AbortOnDropJoinHandle<T> {
+    fn drop(&mut self) {
+        self.0.abort()
+    }
+}
+impl<T> std::ops::Deref for AbortOnDropJoinHandle<T> {
+    type Target = tokio::task::JoinHandle<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<T> std::ops::DerefMut for AbortOnDropJoinHandle<T> {
+    fn deref_mut(&mut self) -> &mut tokio::task::JoinHandle<T> {
+        &mut self.0
+    }
+}
+impl<T> From<tokio::task::JoinHandle<T>> for AbortOnDropJoinHandle<T> {
+    fn from(jh: tokio::task::JoinHandle<T>) -> Self {
+        AbortOnDropJoinHandle(jh)
+    }
+}
+
+pub(crate) fn spawn<F, G>(f: F) -> AbortOnDropJoinHandle<G>
 where
     F: std::future::Future<Output = G> + Send + 'static,
     G: Send + 'static,
 {
-    match tokio::runtime::Handle::try_current() {
+    let j = match tokio::runtime::Handle::try_current() {
         Ok(_) => tokio::task::spawn(f),
         Err(_) => {
             let _enter = RUNTIME.enter();
             tokio::task::spawn(f)
         }
-    }
+    };
+    AbortOnDropJoinHandle(j)
 }
 
 pub(crate) fn in_tokio<F: std::future::Future>(f: F) -> F::Output {

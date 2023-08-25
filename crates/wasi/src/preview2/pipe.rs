@@ -114,7 +114,7 @@ pub struct AsyncReadStream {
     state: StreamState,
     buffer: Option<Result<Bytes, std::io::Error>>,
     receiver: mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
-    pub(crate) join_handle: tokio::task::JoinHandle<()>,
+    pub(crate) join_handle: crate::preview2::AbortOnDropJoinHandle<()>,
 }
 
 impl AsyncReadStream {
@@ -145,12 +145,6 @@ impl AsyncReadStream {
             receiver,
             join_handle,
         }
-    }
-}
-
-impl Drop for AsyncReadStream {
-    fn drop(&mut self) {
-        self.join_handle.abort()
     }
 }
 
@@ -388,7 +382,7 @@ impl Worker {
 /// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
 pub struct AsyncWriteStream {
     worker: Worker,
-    join_handle: tokio::task::JoinHandle<()>,
+    _join_handle: crate::preview2::AbortOnDropJoinHandle<()>,
 }
 
 impl AsyncWriteStream {
@@ -405,14 +399,8 @@ impl AsyncWriteStream {
 
         AsyncWriteStream {
             worker,
-            join_handle,
+            _join_handle: join_handle,
         }
-    }
-}
-
-impl Drop for AsyncWriteStream {
-    fn drop(&mut self) {
-        self.join_handle.abort()
     }
 }
 
