@@ -13,6 +13,12 @@ use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 #[derive(Copy, Clone)]
 pub struct InstanceId(pub(super) usize);
 
+impl InstanceId {
+    pub fn from_index(idx: usize) -> InstanceId {
+        InstanceId(idx)
+    }
+}
+
 pub struct StoreData {
     id: StoreId,
     funcs: Vec<crate::func::FuncData>,

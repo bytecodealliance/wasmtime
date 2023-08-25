@@ -28,13 +28,13 @@ pub struct WasmCoreDump {
     name: String,
     modules: Vec<Module>,
     instances: Vec<Instance>,
-    store_memories: Vec<Memory>,
-    store_globals: Vec<Global>,
+    memories: Vec<Memory>,
+    globals: Vec<Global>,
     backtrace: WasmBacktrace,
 }
 
 impl WasmCoreDump {
-    pub(crate) fn new(store: &StoreOpaque, backtrace: WasmBacktrace) -> WasmCoreDump {
+    pub(crate) fn new(store: &mut StoreOpaque, backtrace: WasmBacktrace) -> WasmCoreDump {
         let modules: Vec<_> = store.modules().all_modules().cloned().collect();
         let instances: Vec<Instance> = store.all_instances().collect();
         let store_memories: Vec<Memory> = store.all_memories().collect();
@@ -44,37 +44,41 @@ impl WasmCoreDump {
             name: String::from("store_name"),
             modules,
             instances,
-            store_memories,
-            store_globals,
+            memories: store_memories,
+            globals: store_globals,
             backtrace,
         }
     }
 
-    /// The stack frames for the CoreDump
+    /// The stack frames for this core dump.
+    ///
+    /// Frames appear in callee to caller order, that is youngest to oldest
+    /// frames.
     pub fn frames(&self) -> &[FrameInfo] {
         self.backtrace.frames()
     }
 
-    /// The names of the modules involved in the CoreDump
+    /// All modules instantiated inside the store when the core dump was
+    /// created.
     pub fn modules(&self) -> &[Module] {
         self.modules.as_ref()
     }
 
-    /// The instances involved in the CoreDump
+    /// All instances within the store when the core dump was created.
     pub fn instances(&self) -> &[Instance] {
         self.instances.as_ref()
     }
 
-    /// The imported globals that belong to the store, rather than a specific
-    /// instance
-    pub fn store_globals(&self) -> &[Global] {
-        self.store_globals.as_ref()
+    /// All globals, instance- or host-defined, within the store when the core
+    /// dump was created.
+    pub fn globals(&self) -> &[Global] {
+        self.globals.as_ref()
     }
 
-    /// The imported memories that belong to the store, rather than a specific
-    /// instance.
-    pub fn store_memories(&self) -> &[Memory] {
-        self.store_memories.as_ref()
+    /// All memories, instance- or host-defined, within the store when the core
+    /// dump was created.
+    pub fn memories(&self) -> &[Memory] {
+        self.memories.as_ref()
     }
 }
 
@@ -92,12 +96,12 @@ impl fmt::Display for WasmCoreDump {
         }
 
         writeln!(f, "memories:")?;
-        for memory in self.store_memories.iter() {
+        for memory in self.memories.iter() {
             writeln!(f, "  {:?}", memory)?;
         }
 
         writeln!(f, "globals:")?;
-        for global in self.store_globals.iter() {
+        for global in self.globals.iter() {
             writeln!(f, "  {:?}", global)?;
         }
 

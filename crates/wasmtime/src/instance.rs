@@ -42,6 +42,15 @@ pub(crate) struct InstanceData {
     exports: Vec<Option<Extern>>,
 }
 
+impl InstanceData {
+    pub fn from_id(id: InstanceId) -> InstanceData {
+        InstanceData {
+            id,
+            exports: vec![],
+        }
+    }
+}
+
 impl Instance {
     /// Creates a new [`Instance`] from the previously compiled [`Module`] and
     /// list of `imports` specified.
@@ -289,7 +298,7 @@ impl Instance {
         // conflicts with the borrow on `store.engine`) but this doesn't
         // matter in practice since initialization isn't even running any
         // code here anyway.
-        let id = store.add_instance(instance_handle.clone(), false);
+        let id = store.add_instance(instance_handle.clone());
 
         // Additionally, before we start doing fallible instantiation, we
         // do one more step which is to insert an `InstanceData`
@@ -329,9 +338,6 @@ impl Instance {
         )?;
 
         Ok((instance, compiled_module.module().start_func))
-    }
-    pub(crate) fn from_stored(stored: Stored<InstanceData>) -> Instance {
-        Instance(stored)
     }
 
     pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {

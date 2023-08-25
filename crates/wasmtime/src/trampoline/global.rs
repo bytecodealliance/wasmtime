@@ -5,8 +5,8 @@ use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 
 #[repr(C)]
 pub struct VMHostGlobalContext {
-    ty: GlobalType,
-    global: VMGlobalDefinition,
+    pub(crate) ty: GlobalType,
+    pub(crate) global: VMGlobalDefinition,
 }
 
 impl Drop for VMHostGlobalContext {
