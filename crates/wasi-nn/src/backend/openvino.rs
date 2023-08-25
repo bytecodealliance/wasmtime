@@ -1,20 +1,20 @@
-//! Implements a `wasi-nn` [`Backend`] using OpenVINO.
+//! Implements a `wasi-nn` [`BackendInner`] using OpenVINO.
 
-use super::{Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph};
-use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
+use super::{BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner};
+use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
 use std::sync::{Arc, Mutex};
 use std::{fs::File, io::Read, path::Path};
 
 #[derive(Default)]
-pub(crate) struct OpenvinoBackend(Option<openvino::Core>);
+pub struct OpenvinoBackend(Option<openvino::Core>);
 unsafe impl Send for OpenvinoBackend {}
 unsafe impl Sync for OpenvinoBackend {}
 
-impl Backend for OpenvinoBackend {
-    fn name(&self) -> &str {
-        "openvino"
+impl BackendInner for OpenvinoBackend {
+    fn encoding(&self) -> GraphEncoding {
+        GraphEncoding::Openvino
     }
 
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
