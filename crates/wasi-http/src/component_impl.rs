@@ -450,7 +450,8 @@ where
         move |mut caller: Caller<'_, T>, stream: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
-                io::streams::Host::subscribe_to_output_stream(ctx, stream).await
+                //io::streams::Host::subscribe_to_output_stream(ctx, stream).await
+                todo!()
             })
         },
     )?;
@@ -459,31 +460,32 @@ where
         "write",
         move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
             Box::new(async move {
-                let memory: Memory = memory_get(&mut caller)?;
-                let body =
-                    string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
-
-                let ctx = get_cx(caller.data_mut());
-
-                let (len, status) = io::streams::Host::write(ctx, stream, body.into())
-                    .await?
-                    .map_err(|_| anyhow!("write failed"))?;
-                let written: u32 = len.try_into()?;
-                let done: u32 = match status {
-                    io::streams::StreamStatus::Open => 0,
-                    io::streams::StreamStatus::Ended => 1,
-                };
-
-                // First == is_err
-                // Second == {ok: is_err = false, tag: is_err = true}
-                // Third == amount of bytes written
-                // Fifth == enum status
-                let result: [u32; 5] = [0, 0, written, 0, done];
-                let raw = u32_array_to_u8(&result);
-
-                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
-
-                Ok(())
+                // let memory: Memory = memory_get(&mut caller)?;
+                // let body =
+                //     string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+                //
+                // let ctx = get_cx(caller.data_mut());
+                //
+                // let (len, status) = io::streams::Host::write(ctx, stream, body.into())
+                //     .await?
+                //     .map_err(|_| anyhow!("write failed"))?;
+                // let written: u32 = len.try_into()?;
+                // let done: u32 = match status {
+                //     io::streams::StreamStatus::Open => 0,
+                //     io::streams::StreamStatus::Ended => 1,
+                // };
+                //
+                // // First == is_err
+                // // Second == {ok: is_err = false, tag: is_err = true}
+                // // Third == amount of bytes written
+                // // Fifth == enum status
+                // let result: [u32; 5] = [0, 0, written, 0, done];
+                // let raw = u32_array_to_u8(&result);
+                //
+                // memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+                //
+                // Ok(())
+                todo!()
             })
         },
     )?;

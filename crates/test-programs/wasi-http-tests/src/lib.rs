@@ -73,26 +73,27 @@ pub async fn request(
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
     if let Some(body) = body {
-        let output_stream_pollable = streams::subscribe_to_output_stream(request_body);
-        let len = body.len();
-        if len == 0 {
-            let (_written, _status) = streams::write(request_body, &[])
-                .map_err(|_| anyhow!("request_body stream write failed"))
-                .context("writing empty request body")?;
-        } else {
-            let mut body_cursor = 0;
-            while body_cursor < body.len() {
-                let (written, _status) = streams::write(request_body, &body[body_cursor..])
-                    .map_err(|_| anyhow!("request_body stream write failed"))
-                    .context("writing request body")?;
-                body_cursor += written as usize;
-            }
-        }
-
-        // TODO: enable when working as expected
-        // let _ = poll::poll_oneoff(&[output_stream_pollable]);
-
-        poll::drop_pollable(output_stream_pollable);
+        // let output_stream_pollable = streams::subscribe_to_output_stream(request_body);
+        // let len = body.len();
+        // if len == 0 {
+        //     let (_written, _status) = streams::write(request_body, &[])
+        //         .map_err(|_| anyhow!("request_body stream write failed"))
+        //         .context("writing empty request body")?;
+        // } else {
+        //     let mut body_cursor = 0;
+        //     while body_cursor < body.len() {
+        //         let (written, _status) = streams::write(request_body, &body[body_cursor..])
+        //             .map_err(|_| anyhow!("request_body stream write failed"))
+        //             .context("writing request body")?;
+        //         body_cursor += written as usize;
+        //     }
+        // }
+        //
+        // // TODO: enable when working as expected
+        // // let _ = poll::poll_oneoff(&[output_stream_pollable]);
+        //
+        // poll::drop_pollable(output_stream_pollable);
+        todo!()
     }
 
     let future_response = outgoing_handler::handle(request, None);
