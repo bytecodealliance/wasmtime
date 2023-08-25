@@ -444,14 +444,49 @@ where
             })
         },
     )?;
+    linker.func_wrap2_async(
+        "wasi:io/streams",
+        "blocking-check-write",
+        move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
+            Box::new(async move {
+                use io::streams::WriteReadiness;
+
+                let memory: Memory = memory_get(&mut caller)?;
+                let ctx = get_cx(caller.data_mut());
+
+                // 0 == outer result tag
+                // 1 == inner result tag
+                // 2 == enum tag
+                // 3 == permit
+                let result: [u32; 4] =
+                    match io::streams::Host::blocking_check_write(ctx, stream).await? {
+                        WriteReadiness::Ready(n) => [0, 0, 0, u32::try_from(n)?],
+                        WriteReadiness::Closed => [0, 0, 1, 0],
+                    };
+
+                let raw = u32_array_to_u8(&result);
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
+        },
+    )?;
     linker.func_wrap1_async(
         "wasi:io/streams",
-        "subscribe-to-output-stream",
+        "blocking-flush",
         move |mut caller: Caller<'_, T>, stream: u32| {
             Box::new(async move {
+                use io::streams::FlushResult;
+
                 let ctx = get_cx(caller.data_mut());
-                //io::streams::Host::subscribe_to_output_stream(ctx, stream).await
-                todo!()
+
+                // 0 == outer result tag
+                // 1 == inner result tag
+                // 2 == enum tag
+                match io::streams::Host::blocking_flush(ctx, stream).await? {
+                    FlushResult::Done => Ok(0),
+                    FlushResult::Closed => Ok(1),
+                }
             })
         },
     )?;
@@ -460,32 +495,28 @@ where
         "write",
         move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
             Box::new(async move {
-                // let memory: Memory = memory_get(&mut caller)?;
-                // let body =
-                //     string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
-                //
-                // let ctx = get_cx(caller.data_mut());
-                //
-                // let (len, status) = io::streams::Host::write(ctx, stream, body.into())
-                //     .await?
-                //     .map_err(|_| anyhow!("write failed"))?;
-                // let written: u32 = len.try_into()?;
-                // let done: u32 = match status {
-                //     io::streams::StreamStatus::Open => 0,
-                //     io::streams::StreamStatus::Ended => 1,
-                // };
-                //
-                // // First == is_err
-                // // Second == {ok: is_err = false, tag: is_err = true}
-                // // Third == amount of bytes written
-                // // Fifth == enum status
-                // let result: [u32; 5] = [0, 0, written, 0, done];
-                // let raw = u32_array_to_u8(&result);
-                //
-                // memory.write(caller.as_context_mut(), ptr as _, &raw)?;
-                //
-                // Ok(())
-                todo!()
+                use io::streams::WriteReadiness;
+
+                let memory: Memory = memory_get(&mut caller)?;
+                let body = slice_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+
+                let ctx = get_cx(caller.data_mut());
+
+                // 0 == outer result tag
+                // 1 == inner result tag
+                // 2 == option tag
+                // 3 == enum tag
+                // 4 == permit
+                let result: [u32; 5] = match io::streams::Host::write(ctx, stream, body).await? {
+                    Some(WriteReadiness::Ready(n)) => [0, 0, 1, 0, u32::try_from(n)?],
+                    Some(WriteReadiness::Closed) => [0, 0, 1, 1, 0],
+                    None => [0, 0, 0, 0, 0],
+                };
+
+                let raw = u32_array_to_u8(&result);
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
             })
         },
     )?;

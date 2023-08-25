@@ -72,28 +72,28 @@ pub async fn request(
     let request_body = http_types::outgoing_request_write(request)
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
-    if let Some(body) = body {
-        // let output_stream_pollable = streams::subscribe_to_output_stream(request_body);
-        // let len = body.len();
-        // if len == 0 {
-        //     let (_written, _status) = streams::write(request_body, &[])
-        //         .map_err(|_| anyhow!("request_body stream write failed"))
-        //         .context("writing empty request body")?;
-        // } else {
-        //     let mut body_cursor = 0;
-        //     while body_cursor < body.len() {
-        //         let (written, _status) = streams::write(request_body, &body[body_cursor..])
-        //             .map_err(|_| anyhow!("request_body stream write failed"))
-        //             .context("writing request body")?;
-        //         body_cursor += written as usize;
-        //     }
-        // }
-        //
-        // // TODO: enable when working as expected
-        // // let _ = poll::poll_oneoff(&[output_stream_pollable]);
-        //
-        // poll::drop_pollable(output_stream_pollable);
-        todo!()
+    if let Some(mut buf) = body {
+        use streams::{FlushResult, WriteReadiness};
+        while !buf.is_empty() {
+            let permit = match streams::blocking_check_write(request_body) {
+                WriteReadiness::Ready(n) => usize::try_from(n)?,
+                WriteReadiness::Closed => anyhow::bail!("output stream is closed"),
+            };
+
+            let len = buf.len().min(permit);
+            let (chunk, rest) = buf.split_at(len);
+            buf = rest;
+
+            match streams::write(request_body, chunk) {
+                Some(WriteReadiness::Closed) => anyhow::bail!("output stream is closed"),
+                _ => {}
+            }
+
+            match streams::blocking_flush(request_body) {
+                FlushResult::Closed => anyhow::bail!("output stream is closed"),
+                FlushResult::Done => {}
+            }
+        }
     }
 
     let future_response = outgoing_handler::handle(request, None);
