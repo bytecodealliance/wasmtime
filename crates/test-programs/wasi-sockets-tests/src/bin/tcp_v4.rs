@@ -1,6 +1,5 @@
 //! A simple TCP testcase, using IPv4.
 
-use core::cmp::min;
 use wasi::io::streams::{self, FlushResult, StreamStatus, WriteReadiness};
 use wasi::poll::poll;
 use wasi::sockets::network::{IpAddressFamily, IpSocketAddress, Ipv4SocketAddress};
@@ -16,54 +15,46 @@ fn wait(sub: poll::Pollable) {
     }
 }
 
-fn write(output: streams::OutputStream, bytes: &[u8]) -> (usize, StreamStatus) {
-    let sub = streams::subscribe_to_write_ready(output);
-    let num_wanted = loop {
-        wait(sub);
-        match streams::check_write(output) {
-            Some(WriteReadiness::Ready(num_wanted)) => break num_wanted,
-            Some(WriteReadiness::Closed) => return (0, StreamStatus::Ended),
-            None => (),
-        }
-    };
-    poll::drop_pollable(sub);
+fn write(output: streams::OutputStream, mut bytes: &[u8]) -> (usize, StreamStatus) {
+    let total = bytes.len();
+    let mut written = 0;
 
-    let num_to_write = min(num_wanted, bytes.len() as u64) as usize;
-    let bytes = &bytes[..num_to_write];
+    let mut permit = None;
 
-    let mut num_written = 0;
-
-    while num_to_write != 0 {
-        let slice_to_write = &bytes[num_written..];
-        let num_written_this_iteration = match streams::write(output, slice_to_write) {
-            Some(WriteReadiness::Ready(num_written)) => num_written as usize,
-            Some(WriteReadiness::Closed) => return (num_written, StreamStatus::Ended),
-            None => {
-                match streams::flush(output) {
-                    Some(FlushResult::Done) => (),
-                    Some(FlushResult::Closed) => return (num_written, StreamStatus::Ended),
-                    None => {
-                        let sub = streams::subscribe_to_flush(output);
-                        loop {
-                            wait(sub);
-                            match streams::check_flush(output) {
-                                Some(FlushResult::Done) => break,
-                                Some(FlushResult::Closed) => {
-                                    return (num_written, StreamStatus::Ended)
-                                }
-                                None => (),
-                            }
-                        }
-                        poll::drop_pollable(sub);
-                    }
+    while !bytes.is_empty() {
+        while permit.is_none() {
+            match streams::blocking_check_write(output) {
+                WriteReadiness::Ready(n) => {
+                    permit = Some(n as usize);
+                    break;
                 }
-                slice_to_write.len()
+                WriteReadiness::Closed => return (written, StreamStatus::Ended),
+            };
+        }
+
+        let len = bytes.len().min(permit.take().unwrap());
+        let (chunk, rest) = bytes.split_at(len);
+        bytes = rest;
+
+        match streams::write(output, chunk) {
+            Some(WriteReadiness::Ready(n)) => {
+                permit = Some(n as usize);
             }
-        };
-        num_written += num_written_this_iteration;
+
+            Some(WriteReadiness::Closed) => return (written, StreamStatus::Ended),
+
+            None => {}
+        }
+
+        match streams::blocking_flush(output) {
+            FlushResult::Done => {}
+            FlushResult::Closed => return (written, StreamStatus::Ended),
+        }
+
+        written += len;
     }
 
-    (num_written, StreamStatus::Open)
+    (total, StreamStatus::Open)
 }
 
 fn main() {
@@ -118,7 +109,7 @@ fn main() {
     assert!(empty_data.is_empty());
     assert_eq!(status, streams::StreamStatus::Open);
 
-    let (data, status) = streams::read(input, first_message.len() as u64).unwrap();
+    let (data, status) = streams::blocking_read(input, first_message.len() as u64).unwrap();
     assert_eq!(status, streams::StreamStatus::Open);
 
     tcp::drop_tcp_socket(accepted);

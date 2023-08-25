@@ -5,7 +5,7 @@ use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::sync::Arc;
 
-use super::{HostInputStream, WriteReadiness, FlushResult, HostOutputStream};
+use super::{FlushResult, HostInputStream, HostOutputStream, WriteReadiness};
 
 /// The state of a TCP socket.
 ///
@@ -76,17 +76,16 @@ impl HostTcpSocketInner {
 #[async_trait::async_trait]
 impl HostInputStream for HostTcpSocketInner {
     fn read(&mut self, size: usize) -> Result<(bytes::Bytes, StreamState), anyhow::Error> {
-        let mut buf = bytes::BytesMut::with_capacity(size);
-        let n = self.stream.try_read(&mut buf)?;
-
-        // TODO: is this right? we should be guarding calls to `read` with `ready`, which would
-        // imply that a `0` read means the socket is closed.
-        if n == 0 {
-            Ok((bytes::Bytes::new(), StreamState::Closed))
-        } else {
-            buf.truncate(n);
-            Ok((buf.freeze(), StreamState::Open))
+        if size == 0 {
+            return Ok((bytes::Bytes::new(), StreamState::Open));
         }
+
+        let mut buf = bytes::BytesMut::with_capacity(size);
+        let n = self.stream.try_read_buf(&mut buf)?;
+
+        // TODO: how do we detect a closed stream?
+        buf.truncate(n);
+        Ok((buf.freeze(), StreamState::Open))
     }
 
     async fn ready(&mut self) -> Result<(), anyhow::Error> {
@@ -100,12 +99,8 @@ const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 #[async_trait::async_trait]
 impl HostOutputStream for HostTcpSocketInner {
     fn write(&mut self, mut bytes: bytes::Bytes) -> anyhow::Result<Option<WriteReadiness>> {
-        loop {
+        while !bytes.is_empty() {
             let n = self.stream.try_write(&bytes)?;
-            if n == bytes.len() {
-                break;
-            }
-
             let _ = bytes.split_to(n);
         }
 
