@@ -120,6 +120,14 @@
       (else (i32.const 0)))
     (return)
   )
+  (func (export "as-drop-operand") (param i32)
+    (drop
+      (if (result i32) (local.get 0)
+        (then (i32.const 1))
+        (else (i32.const 0))
+      )
+    )
+  )
   (func (export "as-br-value") (param i32) (result i32)
     (block (result i32)
       (br 0
@@ -262,3 +270,6 @@
 
 (assert_return (invoke "effects" (i32.const 1)) (i32.const -14))
 (assert_return (invoke "effects" (i32.const 0)) (i32.const -6))
+
+(assert_return (invoke "as-drop-operand" (i32.const 0)))
+(assert_return (invoke "as-drop-operand" (i32.const 1)))

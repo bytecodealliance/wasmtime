@@ -111,6 +111,8 @@ macro_rules! def_unsupported {
     (emit LocalTee $($rest:tt)*) => {};
     (emit GlobalGet $($rest:tt)*) => {};
     (emit GlobalSet $($rest:tt)*) => {};
+    (emit Select $($rest:tt)*) => {};
+    (emit Drop $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -635,6 +637,40 @@ where
         let typed_reg = self.context.pop_to_reg(self.masm, None);
         self.context.free_reg(typed_reg.reg);
         self.masm.store(typed_reg.reg.into(), addr, ty.into());
+    }
+
+    fn visit_drop(&mut self) {
+        self.context.drop_last(1, |regalloc, val| match val {
+            Val::Reg(tr) => regalloc.free(tr.reg.into()),
+            Val::Memory(m) => self.masm.free_stack(m.slot.size),
+            _ => {}
+        });
+    }
+
+    fn visit_select(&mut self) {
+        let cond = self.context.pop_to_reg(self.masm, None);
+        let val2 = self.context.pop_to_reg(self.masm, None);
+        let val1 = self.context.pop_to_reg(self.masm, None);
+        let done = self.masm.get_label();
+        self.masm.branch(
+            CmpKind::Eq,
+            cond.reg.into(),
+            cond.reg.into(),
+            done,
+            OperandSize::S32,
+        );
+        // If the top value is not equal to zero, push val1 to the
+        // stack; we do by overriding the contents of val2, by moving
+        // val1 into it.
+        self.masm
+            .mov(val1.reg.into(), val2.reg.into(), val1.ty.into());
+        // Else, if the condition is equal to zero, push back the
+        // original value of val2 to the stack and free the val1
+        // register.
+        self.masm.bind(done);
+        self.context.stack.push(val2.into());
+        self.context.free_reg(val1.reg);
+        self.context.free_reg(cond);
     }
 
     wasmparser::for_each_operator!(def_unsupported);

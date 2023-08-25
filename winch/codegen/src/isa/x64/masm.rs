@@ -14,7 +14,10 @@ use crate::{
     codegen::CodeGenContext,
     stack::Val,
 };
-use crate::{isa::reg::Reg, masm::CalleeKind};
+use crate::{
+    isa::reg::{Reg, RegClass},
+    masm::CalleeKind,
+};
 use cranelift_codegen::{
     ir::TrapCode, isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized,
     MachLabel,
@@ -173,7 +176,11 @@ impl Masm for MacroAssembler {
 
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
         match (src, dst) {
-            (RegImm::Reg(src), RegImm::Reg(dst)) => self.asm.mov_rr(src, dst, size),
+            rr @ (RegImm::Reg(src), RegImm::Reg(dst)) => match (src.class(), dst.class()) {
+                (RegClass::Int, RegClass::Int) => self.asm.mov_rr(src, dst, size),
+                (RegClass::Float, RegClass::Float) => self.asm.xmm_mov_rr(src, dst, size),
+                _ => Self::handle_invalid_operand_combination(rr.0, rr.1),
+            },
             (RegImm::Imm(imm), RegImm::Reg(dst)) => match imm {
                 I::I32(v) => self.asm.mov_ir(v as u64, dst, size),
                 I::I64(v) => self.asm.mov_ir(v as u64, dst, size),

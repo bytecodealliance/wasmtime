@@ -96,6 +96,10 @@
     (if (result i32) (call $const-i32) (then (i32.const 1)) (else (i32.const 2)))
   )
 
+  (func (export "as-drop-operand")
+    (call $const-i32) (drop)
+  )
+
   (func (export "as-br_if-first") (result i32)
     (block (result i32) (br_if 0 (call $const-i32) (i32.const 2)))
   )
@@ -177,3 +181,4 @@
 (assert_return (invoke "as-test-operand") (i32.const 0))
 (assert_return (invoke "as-compare-left") (i32.const 1))
 (assert_return (invoke "as-compare-right") (i32.const 1))
+(assert_return (invoke "as-drop-operand"))

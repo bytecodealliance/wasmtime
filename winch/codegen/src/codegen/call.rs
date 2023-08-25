@@ -165,7 +165,28 @@ impl<'a> FnCall<'a> {
 
     fn post_call<M: MacroAssembler>(&self, masm: &mut M, context: &mut CodeGenContext, size: u32) {
         masm.free_stack(self.call_stack_space + size);
-        context.drop_last(self.abi_sig.params.len());
+        // Only account for registers given that any memory entries
+        // consumed by the call (assigned to a register or to a stack
+        // slot) were freed by the previous call to
+        // `masm.free_stack`, so we only care about dropping them
+        // here.
+        //
+        // NOTE / TODO there's probably a path to getting rid of
+        // `save_live_registers_and_calculate_sizeof` and
+        // `call_stack_space`, making it a bit more obvious what's
+        // happening here. We could:
+        //
+        // * Modify the `spill` implementation so that it takes a
+        // filtering callback, to control which values the caller is
+        // interested in saving (e.g. save all if no function is provided)
+        // * Rely on the new implementation of `drop_last` to calcuate
+        // the stack memory entries consumed by the call and then free
+        // the calculated stack space.
+        context.drop_last(self.abi_sig.params.len(), |regalloc, v| {
+            if v.is_reg() {
+                regalloc.free(v.get_reg().into());
+            }
+        });
         context.push_abi_results(&self.abi_sig.result, masm);
     }
 

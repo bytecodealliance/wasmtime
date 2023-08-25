@@ -1,10 +1,10 @@
-use regalloc2::RegClass;
 use wasmtime_environ::WasmType;
 
 use super::ControlStackFrame;
 use crate::{
     abi::{ABIResult, ABI},
     frame::Frame,
+    isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm},
     reg::Reg,
     regalloc::RegAlloc,
@@ -269,19 +269,21 @@ impl<'a> CodeGenContext<'a> {
         size
     }
 
-    /// Drops the last `n` elements of the stack, freeing any
-    /// registers located in that region.
-    pub fn drop_last(&mut self, last: usize) {
+    /// Drops the last `n` elements of the stack, calling the provided
+    /// function for each `n` stack value.
+    pub fn drop_last<F>(&mut self, last: usize, mut f: F)
+    where
+        F: FnMut(&mut RegAlloc, &Val),
+    {
         let len = self.stack.len();
         assert!(last <= len);
         let truncate = self.stack.len() - last;
+        let stack_mut = &mut self.stack.inner_mut();
 
-        self.stack.inner_mut().range(truncate..).for_each(|v| {
-            if v.is_reg() {
-                self.regalloc.free(v.get_reg().into());
-            }
-        });
-        self.stack.inner_mut().truncate(truncate);
+        for v in stack_mut.range(truncate..) {
+            f(&mut self.regalloc, v)
+        }
+        stack_mut.truncate(truncate);
     }
 
     /// Pops the stack pointer to ensure that it is correctly placed according to the expectations

@@ -1,4 +1,5 @@
-use regalloc2::{PReg, RegClass};
+use regalloc2::PReg;
+pub use regalloc2::RegClass;
 
 /// A newtype abstraction on top of a physical register.
 //

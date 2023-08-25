@@ -297,6 +297,24 @@ impl Assembler {
         }
     }
 
+    /// Single and double precision floating point
+    /// register-to-register move.
+    pub fn xmm_mov_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        use OperandSize::*;
+
+        let op = match size {
+            S32 => SseOpcode::Movaps,
+            S64 => SseOpcode::Movapd,
+            S128 => SseOpcode::Movdqa,
+        };
+
+        self.emit(Inst::XmmUnaryRmRUnaligned {
+            op,
+            src: XmmMem::new(src.into()).expect("valid xmm unaligned"),
+            dst: dst.into(),
+        });
+    }
+
     /// Single and double precision floating point load.
     pub fn xmm_mov_mr(&mut self, src: &Address, dst: Reg, size: OperandSize) {
         use OperandSize::*;
