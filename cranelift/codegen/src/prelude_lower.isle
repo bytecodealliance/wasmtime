@@ -253,6 +253,11 @@
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
 
+;; Extract a constant `i64` from a value defined by an `iconst`.
+;; The value is sign extended to 64 bits.
+(decl i64_from_iconst (i64) Value)
+(extern extractor i64_from_iconst i64_from_iconst)
+
 ;; Match any zero value for iconst, fconst32, fconst64, vconst and splat.
 (decl pure partial zero_value (Value) Value)
 (extern constructor zero_value zero_value)

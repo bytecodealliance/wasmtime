@@ -307,6 +307,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm12::maybe_from_u64(arg0)
     }
     #[inline]
+    fn imm12_from_i64(&mut self, arg0: i64) -> Option<Imm12> {
+        Imm12::maybe_from_i64(arg0)
+    }
+    #[inline]
     fn imm5_from_u64(&mut self, arg0: u64) -> Option<Imm5> {
         Imm5::maybe_from_i8(i8::try_from(arg0 as i64).ok()?)
     }

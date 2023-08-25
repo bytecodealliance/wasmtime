@@ -13,6 +13,7 @@ pub struct Imm12 {
 impl Imm12 {
     pub(crate) const FALSE: Self = Self { bits: 0 };
     pub(crate) const TRUE: Self = Self { bits: 1 };
+
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
         let sign_bit = 1 << 11;
         if val == 0 {
@@ -29,6 +30,15 @@ impl Imm12 {
             None
         }
     }
+
+    pub fn maybe_from_i64(val: i64) -> Option<Imm12> {
+        if val >= -2048 && val <= 2047 {
+            Some(Imm12 { bits: val as i16 })
+        } else {
+            None
+        }
+    }
+
     #[inline]
     pub fn from_bits(bits: i16) -> Self {
         Self { bits: bits & 0xfff }
