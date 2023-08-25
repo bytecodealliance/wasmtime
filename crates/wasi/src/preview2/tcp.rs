@@ -81,9 +81,16 @@ impl HostInputStream for HostTcpSocketInner {
         }
 
         let mut buf = bytes::BytesMut::with_capacity(size);
-        let n = self.stream.try_read_buf(&mut buf)?;
+        let n = match self.stream.try_read_buf(&mut buf) {
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => 0,
+            Err(_) => {
+                // FIXME: this is a closed stream, but we need to record it for future calls to
+                // ready
+                return Ok((bytes::Bytes::new(), StreamState::Closed));
+            }
+        };
 
-        // TODO: how do we detect a closed stream?
         buf.truncate(n);
         Ok((buf.freeze(), StreamState::Open))
     }
