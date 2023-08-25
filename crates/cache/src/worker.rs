@@ -53,10 +53,7 @@ enum CacheEvent {
 }
 
 impl Worker {
-    pub(super) fn start_new(
-        cache_config: &CacheConfig,
-        init_file_per_thread_logger: Option<&'static str>,
-    ) -> Self {
+    pub(super) fn start_new(cache_config: &CacheConfig) -> Self {
         let queue_size = match cache_config.worker_event_queue_size() {
             num if num <= usize::max_value() as u64 => num as usize,
             _ => usize::max_value(),
@@ -76,7 +73,7 @@ impl Worker {
         // when self is dropped, sender will be dropped, what will cause the channel
         // to hang, and the worker thread to exit -- it happens in the tests
         // non-tests binary has only a static worker, so Rust doesn't drop it
-        thread::spawn(move || worker_thread.run(init_file_per_thread_logger));
+        thread::spawn(move || worker_thread.run());
 
         Self {
             sender: tx,
@@ -192,11 +189,7 @@ macro_rules! unwrap_or_warn {
 }
 
 impl WorkerThread {
-    fn run(self, init_file_per_thread_logger: Option<&'static str>) {
-        if let Some(prefix) = init_file_per_thread_logger {
-            file_per_thread_logger::initialize(prefix);
-        }
-
+    fn run(self) {
         debug!("Cache worker thread started.");
 
         Self::lower_thread_priority();
