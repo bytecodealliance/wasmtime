@@ -177,18 +177,6 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl Inst {
-    /// construct a "imm - rs".
-    pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = Inst::load_constant_u64(rd, imm, &mut |_| rd);
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Sub,
-            rd,
-            rs1: rd.to_reg(),
-            rs2: rs,
-        });
-        insts
-    }
-
     /// Load int mask.
     /// If ty is int then 0xff in rd.
     pub(crate) fn load_int_mask(rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
