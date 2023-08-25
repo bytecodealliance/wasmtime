@@ -175,6 +175,29 @@ pub async fn setup_http1(f: impl Future<Output = anyhow::Result<()>>) -> anyhow:
     result
 }
 
+pub fn setup_http1_sync<F>(f: F) -> anyhow::Result<()>
+where
+    F: FnOnce() -> anyhow::Result<()> + Send + 'static,
+{
+    tracing::debug!("preparing http1 server synchronously");
+    let server = ServerHttp1::new();
+
+    let (tx, rx) = mpsc::channel::<anyhow::Result<()>>();
+    tracing::debug!("running inner function in a dedicated thread");
+    std::thread::spawn(move || {
+        tx.send(f())
+            .expect("value sent from http1 server dedicated thread");
+    });
+    let result = rx
+        .recv()
+        .expect("value received from request dedicated thread");
+
+    if let Err(err) = server.shutdown() {
+        tracing::error!("[host/server] failure {:?}", err);
+    }
+    result
+}
+
 pub async fn setup_http2(f: impl Future<Output = anyhow::Result<()>>) -> anyhow::Result<()> {
     tracing::debug!("preparing http2 server asynchronously");
     let server = ServerHttp2::new();
@@ -184,6 +207,29 @@ pub async fn setup_http2(f: impl Future<Output = anyhow::Result<()>>) -> anyhow:
 
     if let Err(err) = server.shutdown() {
         tracing::error!("[host/server] Failure: {:?}", err);
+    }
+    result
+}
+
+pub fn setup_http2_sync<F>(f: F) -> anyhow::Result<()>
+where
+    F: FnOnce() -> anyhow::Result<()> + Send + 'static,
+{
+    tracing::debug!("preparing http2 server synchronously");
+    let server = ServerHttp2::new();
+
+    let (tx, rx) = mpsc::channel::<anyhow::Result<()>>();
+    tracing::debug!("running inner function in a dedicated thread");
+    std::thread::spawn(move || {
+        tx.send(f())
+            .expect("value sent from http2 server dedicated thread");
+    });
+    let result = rx
+        .recv()
+        .expect("value received from request dedicated thread");
+
+    if let Err(err) = server.shutdown() {
+        tracing::error!("[host/server] failure {:?}", err);
     }
     result
 }
