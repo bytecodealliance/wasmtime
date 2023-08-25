@@ -562,8 +562,14 @@ mod systemv {
                     ArgsSize { size } => {
                         writeln!(w, "                DW_CFA_GNU_args_size ({})", size)?;
                     }
+                    NegateRaState => {
+                        writeln!(w, "                DW_CFA_AARCH64_negate_ra_state")?;
+                    }
                     Nop => {
                         writeln!(w, "                DW_CFA_nop")?;
+                    }
+                    _ => {
+                        writeln!(w, "                DW_CFA_<unknown>")?;
                     }
                 },
             }
