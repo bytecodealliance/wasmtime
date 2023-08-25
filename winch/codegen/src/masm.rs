@@ -305,6 +305,9 @@ pub(crate) trait MacroAssembler {
     /// Perform a move.
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
 
+    /// Perform a conditional move.
+    fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize);
+
     /// Perform add operation.
     fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
 

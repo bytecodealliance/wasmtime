@@ -16,10 +16,9 @@
 ;;   1b:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   1f:	 488b4c2410           	mov	rcx, qword ptr [rsp + 0x10]
 ;;   24:	 488b542418           	mov	rdx, qword ptr [rsp + 0x18]
-;;   29:	 85c0                 	test	eax, eax
-;;   2b:	 0f8403000000         	je	0x34
-;;   31:	 4889d1               	mov	rcx, rdx
-;;   34:	 4889c8               	mov	rax, rcx
-;;   37:	 4883c420             	add	rsp, 0x20
-;;   3b:	 5d                   	pop	rbp
-;;   3c:	 c3                   	ret	
+;;   29:	 83f800               	cmp	eax, 0
+;;   2c:	 480f45ca             	cmovne	rcx, rdx
+;;   30:	 4889c8               	mov	rax, rcx
+;;   33:	 4883c420             	add	rsp, 0x20
+;;   37:	 5d                   	pop	rbp
+;;   38:	 c3                   	ret	

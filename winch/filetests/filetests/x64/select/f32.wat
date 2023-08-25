@@ -16,9 +16,9 @@
 ;;   1d:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   21:	 f30f10442410         	movss	xmm0, dword ptr [rsp + 0x10]
 ;;   27:	 f30f104c2414         	movss	xmm1, dword ptr [rsp + 0x14]
-;;   2d:	 85c0                 	test	eax, eax
-;;   2f:	 0f8403000000         	je	0x38
-;;   35:	 0f28c1               	movaps	xmm0, xmm1
-;;   38:	 4883c418             	add	rsp, 0x18
-;;   3c:	 5d                   	pop	rbp
-;;   3d:	 c3                   	ret	
+;;   2d:	 83f800               	cmp	eax, 0
+;;   30:	 0f8404000000         	je	0x3a
+;;   36:	 f20f10c1             	movsd	xmm0, xmm1
+;;   3a:	 4883c418             	add	rsp, 0x18
+;;   3e:	 5d                   	pop	rbp
+;;   3f:	 c3                   	ret	

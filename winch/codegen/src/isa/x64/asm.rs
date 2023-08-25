@@ -6,15 +6,14 @@ use crate::{
 };
 use cranelift_codegen::{
     entity::EntityRef,
-    ir::{ConstantPool, TrapCode},
-    ir::{ExternalName, Opcode, UserExternalNameRef},
+    ir::{types, ConstantPool, ExternalName, Opcode, TrapCode, UserExternalNameRef},
     isa::{
         x64::{
             args::{
                 self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
                 Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
                 ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
-                WritableXmm, Xmm, XmmMem, CC,
+                WritableXmm, Xmm, XmmMem, XmmMemAligned, CC,
             },
             settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
         },
@@ -297,6 +296,17 @@ impl Assembler {
         }
     }
 
+    /// Integer register conditional move.
+    pub fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize) {
+        self.emit(Inst::Cmove {
+            size: size.into(),
+            cc: cc.into(),
+            consequent: src.into(),
+            alternative: dst.into(),
+            dst: dst.into(),
+        })
+    }
+
     /// Single and double precision floating point
     /// register-to-register move.
     pub fn xmm_mov_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
@@ -354,6 +364,24 @@ impl Assembler {
             src: src.into(),
             dst,
         });
+    }
+
+    /// Floating point register conditional move.
+    pub fn xmm_cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize) {
+        let ty = match size {
+            OperandSize::S32 => types::F32,
+            OperandSize::S64 => types::F64,
+            // Move the entire 128 bits via movdqa.
+            OperandSize::S128 => types::I128,
+        };
+
+        self.emit(Inst::XmmCmove {
+            ty,
+            cc: cc.into(),
+            consequent: XmmMemAligned::new(src.into()).expect("valid XmmMemAligned"),
+            alternative: dst.into(),
+            dst: dst.into(),
+        })
     }
 
     /// Subtract register and register

@@ -197,6 +197,14 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize) {
+        match (src.class(), dst.class()) {
+            (RegClass::Int, RegClass::Int) => self.asm.cmov(src, dst, cc, size),
+            (RegClass::Float, RegClass::Float) => self.asm.xmm_cmov(src, dst, cc, size),
+            _ => Self::handle_invalid_operand_combination(src.into(), dst.into()),
+        }
+    }
+
     fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {
