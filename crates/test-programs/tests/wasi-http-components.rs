@@ -5,7 +5,8 @@ use wasmtime::{
 };
 use wasmtime_wasi::preview2::{
     command::{add_to_linker, Command},
-    Table, WasiCtx, WasiCtxBuilder, WasiView,
+    pipe::MemoryOutputPipe,
+    IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
@@ -69,23 +70,47 @@ async fn instantiate_component(
 }
 
 async fn run(name: &str) -> anyhow::Result<()> {
-    let mut table = Table::new();
-    let component = get_component(name);
+    let stdout = MemoryOutputPipe::new();
+    let stderr = MemoryOutputPipe::new();
+    let r = {
+        let mut table = Table::new();
+        let component = get_component(name);
 
-    // Create our wasi context.
-    let wasi = WasiCtxBuilder::new()
-        .inherit_stdio()
-        .arg(name)
-        .build(&mut table)?;
-    let http = WasiHttpCtx::new();
+        // Create our wasi context.
+        let mut builder = WasiCtxBuilder::new();
+        builder.stdout(stdout.clone(), IsATTY::No);
+        builder.stderr(stderr.clone(), IsATTY::No);
+        builder.arg(name);
+        for (var, val) in test_programs::wasi_tests_environment() {
+            builder.env(var, val);
+        }
+        let wasi = builder.build(&mut table)?;
+        let http = WasiHttpCtx::new();
 
-    let (mut store, command) = instantiate_component(component, Ctx { table, wasi, http }).await?;
-    command
-        .wasi_cli_run()
-        .call_run(&mut store)
-        .await
-        .map_err(|e| anyhow::anyhow!("wasm failed with {e:?}"))?
-        .map_err(|e| anyhow::anyhow!("command returned with failing exit status {e:?}"))
+        let (mut store, command) =
+            instantiate_component(component, Ctx { table, wasi, http }).await?;
+        command
+            .wasi_cli_run()
+            .call_run(&mut store)
+            .await?
+            .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
+        Ok(())
+    };
+    r.map_err(move |trap: anyhow::Error| {
+        let stdout = stdout.try_into_inner().expect("single ref to stdout");
+        if !stdout.is_empty() {
+            println!("[guest] stdout:\n{}\n===", String::from_utf8_lossy(&stdout));
+        }
+        let stderr = stderr.try_into_inner().expect("single ref to stderr");
+        if !stderr.is_empty() {
+            println!("[guest] stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
+        }
+        trap.context(format!(
+            "error while testing wasi-tests {} with http-components",
+            name
+        ))
+    })?;
+    Ok(())
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]

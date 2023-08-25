@@ -16,17 +16,11 @@ async fn run() -> Result<(), ()> {
     )
     .await;
 
-    let error = res.unwrap_err().to_string();
-    if error.ne("Error::ProtocolError(\"invalid HTTP version parsed\")")
-        && error.ne("Error::ProtocolError(\"operation was canceled\")")
-    {
-        panic!(
-            r#"assertion failed: `(left == right)`
-      left: `"{error}"`,
-      right: `"Error::ProtocolError(\"invalid HTTP version parsed\")"`
-            or `"Error::ProtocolError(\"operation was canceled\")"`)"#
-        )
-    }
+    let error = res.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Error::ProtocolError(\"invalid HTTP version parsed\")"
+    );
 
     Ok(())
 }

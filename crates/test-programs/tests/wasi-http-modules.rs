@@ -1,8 +1,9 @@
 #![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
 use wasmtime::{Config, Engine, Func, Linker, Module, Store};
 use wasmtime_wasi::preview2::{
+    pipe::MemoryOutputPipe,
     preview1::{WasiPreview1Adapter, WasiPreview1View},
-    Table, WasiCtx, WasiCtxBuilder, WasiView,
+    IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
@@ -73,32 +74,54 @@ async fn instantiate_module(module: Module, ctx: Ctx) -> Result<(Store<Ctx>, Fun
 }
 
 async fn run(name: &str) -> anyhow::Result<()> {
-    let mut table = Table::new();
-    let module = get_module(name);
+    let stdout = MemoryOutputPipe::new();
+    let stderr = MemoryOutputPipe::new();
+    let r = {
+        let mut table = Table::new();
+        let module = get_module(name);
 
-    // Create our wasi context.
-    let wasi = WasiCtxBuilder::new()
-        .inherit_stdio()
-        .arg(name)
-        .build(&mut table)?;
-    let http = WasiHttpCtx::new();
+        // Create our wasi context.
+        let mut builder = WasiCtxBuilder::new();
+        builder.stdout(stdout.clone(), IsATTY::No);
+        builder.stderr(stderr.clone(), IsATTY::No);
+        builder.arg(name);
+        for (var, val) in test_programs::wasi_tests_environment() {
+            builder.env(var, val);
+        }
+        let wasi = builder.build(&mut table)?;
+        let http = WasiHttpCtx::new();
 
-    let adapter = WasiPreview1Adapter::new();
+        let adapter = WasiPreview1Adapter::new();
 
-    let (mut store, command) = instantiate_module(
-        module,
-        Ctx {
-            table,
-            wasi,
-            http,
-            adapter,
-        },
-    )
-    .await?;
-    command
-        .call_async(&mut store, &[], &mut [wasmtime::Val::null()])
-        .await
-        .map_err(|e| anyhow::anyhow!("command returned with failing exit status {e:?}"))
+        let (mut store, command) = instantiate_module(
+            module,
+            Ctx {
+                table,
+                wasi,
+                http,
+                adapter,
+            },
+        )
+        .await?;
+        command
+            .call_async(&mut store, &[], &mut [wasmtime::Val::null()])
+            .await
+    };
+    r.map_err(move |trap: anyhow::Error| {
+        let stdout = stdout.try_into_inner().expect("single ref to stdout");
+        if !stdout.is_empty() {
+            println!("[guest] stdout:\n{}\n===", String::from_utf8_lossy(&stdout));
+        }
+        let stderr = stderr.try_into_inner().expect("single ref to stderr");
+        if !stderr.is_empty() {
+            println!("[guest] stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
+        }
+        trap.context(format!(
+            "error while testing wasi-tests {} with http-modules",
+            name
+        ))
+    })?;
+    Ok(())
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
