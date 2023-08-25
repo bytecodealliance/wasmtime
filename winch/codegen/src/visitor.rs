@@ -111,6 +111,8 @@ macro_rules! def_unsupported {
     (emit LocalTee $($rest:tt)*) => {};
     (emit GlobalGet $($rest:tt)*) => {};
     (emit GlobalSet $($rest:tt)*) => {};
+    (emit Select $($rest:tt)*) => {};
+    (emit Drop $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -635,6 +637,29 @@ where
         let typed_reg = self.context.pop_to_reg(self.masm, None);
         self.context.free_reg(typed_reg.reg);
         self.masm.store(typed_reg.reg.into(), addr, ty.into());
+    }
+
+    fn visit_drop(&mut self) {
+        self.context.drop_last(1, |regalloc, val| match val {
+            Val::Reg(tr) => regalloc.free(tr.reg.into()),
+            Val::Memory(m) => self.masm.free_stack(m.slot.size),
+            _ => {}
+        });
+    }
+
+    fn visit_select(&mut self) {
+        let cond = self.context.pop_to_reg(self.masm, None);
+        let val2 = self.context.pop_to_reg(self.masm, None);
+        let val1 = self.context.pop_to_reg(self.masm, None);
+        self.masm
+            .cmp(RegImm::i32(0), cond.reg.into(), OperandSize::S32);
+        // Conditionally move val1 to val2 if the the comparision is
+        // not zero.
+        self.masm
+            .cmov(val1.into(), val2.into(), CmpKind::Ne, val1.ty.into());
+        self.context.stack.push(val2.into());
+        self.context.free_reg(val1.reg);
+        self.context.free_reg(cond);
     }
 
     wasmparser::for_each_operator!(def_unsupported);

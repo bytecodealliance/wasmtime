@@ -167,6 +167,10 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn cmov(&mut self, _src: Reg, _dst: Reg, _cc: CmpKind, _size: OperandSize) {
+        todo!()
+    }
+
     fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), RegImm::Reg(rn), RegImm::Reg(rd)) => {

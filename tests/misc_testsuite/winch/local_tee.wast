@@ -43,6 +43,18 @@
     (block (br_if 0 (local.tee 0 (i32.const 1))))
   )
 
+  (func (export "as-br_if-value") (param i32) (result i32)
+    (block (result i32)
+      (drop (br_if 0 (local.tee 0 (i32.const 8)) (i32.const 1))) (i32.const 7)
+    )
+  )
+
+  (func (export "as-br_if-value-cond") (param i32) (result i32)
+    (block (result i32)
+      (drop (br_if 0 (i32.const 6) (local.tee 0 (i32.const 9)))) (i32.const 7)
+    )
+  )
+
   (func (export "as-return-value") (param i32) (result i32)
     (return (local.tee 0 (i32.const 7)))
   )
@@ -121,6 +133,8 @@
 (assert_return (invoke "as-br-value" (i32.const 0)) (i32.const 9))
 
 (assert_return (invoke "as-br_if-cond" (i32.const 0)))
+(assert_return (invoke "as-br_if-value" (i32.const 0)) (i32.const 8))
+(assert_return (invoke "as-br_if-value-cond" (i32.const 0)) (i32.const 6))
 
 (assert_return (invoke "as-return-value" (i32.const 0)) (i32.const 7))
 

@@ -1,5 +1,4 @@
-use crate::isa::reg::Reg;
-use regalloc2::RegClass;
+use crate::isa::reg::{Reg, RegClass};
 
 /// A bit set to track regiter availability.
 pub(crate) struct RegSet {
@@ -85,8 +84,7 @@ impl RegSet {
 
 #[cfg(test)]
 mod tests {
-    use super::{Reg, RegSet};
-    use regalloc2::RegClass;
+    use super::{Reg, RegClass, RegSet};
 
     const UNIVERSE: u32 = (1 << 16) - 1;
 

@@ -151,7 +151,14 @@ where
     /// reachabiliy state when handling an unreachable `end` or `else`.
     fn reset_stack(context: &mut CodeGenContext, masm: &mut M, stack_len: usize, sp_offset: u32) {
         masm.reset_stack_pointer(sp_offset);
-        context.drop_last(context.stack.len() - stack_len);
+        // `CodeGenContext::reset_stack` only gets called when
+        // handling unreachable end or unreachable else, so we only
+        // care about freeing any registers in the provided range.
+        context.drop_last(context.stack.len() - stack_len, |regalloc, val| {
+            if val.is_reg() {
+                regalloc.free(val.get_reg().into())
+            }
+        });
     }
 
     fn emit_body(

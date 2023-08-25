@@ -93,6 +93,11 @@
   (func (export "as-return-value") (result i32)
     (global.get $x) (return)
   )
+
+  (func (export "as-drop-operand")
+    (drop (global.get $x))
+  )
+
   (func (export "as-br-value") (result i32)
     (block (result i32) (br 0 (global.get $x)))
   )
@@ -172,3 +177,4 @@
 (assert_return (invoke "set-8" (f64.const 9)))
 (assert_return (invoke "get-7") (f32.const 8))
 (assert_return (invoke "get-8") (f64.const 9))
+(assert_return (invoke "as-drop-operand"))

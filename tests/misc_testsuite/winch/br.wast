@@ -46,6 +46,17 @@
     (block (br_if 0 (br 0)))
   )
 
+  (func (export "as-br_if-value") (result i32)
+    (block (result i32)
+      (drop (br_if 0 (br 0 (i32.const 8)) (i32.const 1))) (i32.const 7)
+    )
+  )
+  (func (export "as-br_if-value-cond") (result i32)
+    (block (result i32)
+      (drop (br_if 0 (i32.const 6) (br 0 (i32.const 9)))) (i32.const 7)
+    )
+  )
+
   (func (export "as-return-value") (result i64)
     (block (result i64) (return (br 0 (i64.const 7))))
   )
@@ -119,6 +130,50 @@
       )
     )
   )
+
+  (func (export "nested-br-value") (result i32)
+    (i32.add
+      (i32.const 1)
+      (block (result i32)
+        (drop (i32.const 2))
+        (drop
+          (block (result i32)
+            (drop (i32.const 4))
+            (br 0 (br 1 (i32.const 8)))
+          )
+        )
+        (i32.const 16)
+      )
+    )
+  )
+
+  (func (export "nested-br_if-value") (result i32)
+    (i32.add
+      (i32.const 1)
+      (block (result i32)
+        (drop (i32.const 2))
+        (drop
+          (block (result i32)
+            (drop (i32.const 4))
+            (drop (br_if 0 (br 1 (i32.const 8)) (i32.const 1)))
+            (i32.const 32)
+          )
+        )
+        (i32.const 16)
+      )
+    )
+  )
+
+  (func (export "nested-br_if-value-cond") (result i32)
+    (i32.add
+      (i32.const 1)
+      (block (result i32)
+        (drop (i32.const 2))
+        (drop (br_if 0 (i32.const 4) (br 0 (i32.const 8))))
+        (i32.const 16)
+      )
+    )
+  )
 )
 
 (assert_return (invoke "type-i32-value") (i32.const 1))
@@ -132,6 +187,8 @@
 (assert_return (invoke "as-loop-last") (i32.const 5))
 (assert_return (invoke "as-br-value") (i32.const 9))
 (assert_return (invoke "as-br_if-cond"))
+(assert_return (invoke "as-br_if-value") (i32.const 8))
+(assert_return (invoke "as-br_if-value-cond") (i32.const 9))
 (assert_return (invoke "as-return-value") (i64.const 7))
 
 (assert_return (invoke "as-if-cond") (i32.const 2))
@@ -153,4 +210,6 @@
 (assert_return (invoke "as-test-operand") (i32.const 44))
 
 (assert_return (invoke "nested-block-value") (i32.const 9))
-
+(assert_return (invoke "nested-br-value") (i32.const 9))
+(assert_return (invoke "nested-br_if-value") (i32.const 9))
+(assert_return (invoke "nested-br_if-value-cond") (i32.const 9))

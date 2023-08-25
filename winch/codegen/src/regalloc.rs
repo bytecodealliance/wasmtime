@@ -1,5 +1,7 @@
-use crate::{isa::reg::Reg, regset::RegSet};
-use regalloc2::RegClass;
+use crate::{
+    isa::reg::{Reg, RegClass},
+    regset::RegSet,
+};
 
 /// The register allocator.
 ///
