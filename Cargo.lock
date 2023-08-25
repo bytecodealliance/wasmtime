@@ -3416,7 +3416,6 @@ dependencies = [
  "base64",
  "bincode",
  "directories-next",
- "file-per-thread-logger",
  "filetime",
  "log",
  "once_cell",

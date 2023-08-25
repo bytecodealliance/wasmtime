@@ -366,7 +366,7 @@ impl CacheConfig {
 
     fn spawn_worker(&mut self) {
         if self.enabled {
-            self.worker = Some(Worker::start_new(self, None));
+            self.worker = Some(Worker::start_new(self));
         }
     }
 
