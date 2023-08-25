@@ -23,9 +23,7 @@ pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resources::{Resource, ResourceAny};
 pub use self::types::{ResourceType, Type};
-pub use self::values::{
-    Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Union, Val, Variant,
-};
+pub use self::values::{Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Val, Variant};
 pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 
 // These items are expected to be used by an eventual
@@ -35,8 +33,8 @@ pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 pub mod __internal {
     pub use super::func::{
         bad_type_info, format_flags, lower_payload, typecheck_enum, typecheck_flags,
-        typecheck_record, typecheck_union, typecheck_variant, ComponentVariant, LiftContext,
-        LowerContext, MaybeUninitExt, Options,
+        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext,
+        MaybeUninitExt, Options,
     };
     pub use super::matching::InstanceType;
     pub use crate::map_maybe_uninit;

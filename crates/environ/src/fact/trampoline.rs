@@ -18,8 +18,8 @@
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FlatType, InterfaceType, StringEncoding,
     TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
-    TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex,
-    VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::{FixedEncoding as FE, Transcode, Transcoder};
@@ -580,7 +580,6 @@ impl Compiler<'_, '_> {
             InterfaceType::Record(i) => self.types[*i].fields.len(),
             InterfaceType::Tuple(i) => self.types[*i].types.len(),
             InterfaceType::Variant(i) => self.types[*i].cases.len(),
-            InterfaceType::Union(i) => self.types[*i].types.len(),
             InterfaceType::Enum(i) => self.types[*i].names.len(),
 
             // 2 cases to consider for each of these variants.
@@ -617,7 +616,6 @@ impl Compiler<'_, '_> {
                     InterfaceType::Flags(f) => self.translate_flags(*f, src, dst_ty, dst),
                     InterfaceType::Tuple(t) => self.translate_tuple(*t, src, dst_ty, dst),
                     InterfaceType::Variant(v) => self.translate_variant(*v, src, dst_ty, dst),
-                    InterfaceType::Union(u) => self.translate_union(*u, src, dst_ty, dst),
                     InterfaceType::Enum(t) => self.translate_enum(*t, src, dst_ty, dst),
                     InterfaceType::Option(t) => self.translate_option(*t, src, dst_ty, dst),
                     InterfaceType::Result(t) => self.translate_result(*t, src, dst_ty, dst),
@@ -2201,44 +2199,6 @@ impl Compiler<'_, '_> {
             }
         });
         self.convert_variant(src, &src_info, dst, &dst_info, iter);
-    }
-
-    fn translate_union(
-        &mut self,
-        src_ty: TypeUnionIndex,
-        src: &Source<'_>,
-        dst_ty: &InterfaceType,
-        dst: &Destination,
-    ) {
-        let src_ty = &self.types[src_ty];
-        let dst_ty = match dst_ty {
-            InterfaceType::Union(t) => &self.types[*t],
-            _ => panic!("expected an option"),
-        };
-        assert_eq!(src_ty.types.len(), dst_ty.types.len());
-        let src_info = variant_info(self.types, src_ty.types.iter().map(Some));
-        let dst_info = variant_info(self.types, dst_ty.types.iter().map(Some));
-
-        self.convert_variant(
-            src,
-            &src_info,
-            dst,
-            &dst_info,
-            src_ty
-                .types
-                .iter()
-                .zip(dst_ty.types.iter())
-                .enumerate()
-                .map(|(i, (src_ty, dst_ty))| {
-                    let i = u32::try_from(i).unwrap();
-                    VariantCase {
-                        src_i: i,
-                        dst_i: i,
-                        src_ty: Some(src_ty),
-                        dst_ty: Some(dst_ty),
-                    }
-                }),
-        );
     }
 
     fn translate_enum(

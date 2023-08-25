@@ -126,7 +126,6 @@ pub enum Type {
     // least one case.
     Variant(VecInRange<Option<Type>, 1, 200>),
     Enum(u32),
-    Union(VecInRange<Type, 1, 200>),
 
     Option(Box<Type>),
     Result {
@@ -144,7 +143,7 @@ impl Type {
         fuel: &mut u32,
     ) -> arbitrary::Result<Type> {
         *fuel = fuel.saturating_sub(1);
-        let max = if depth == 0 || *fuel == 0 { 12 } else { 21 };
+        let max = if depth == 0 || *fuel == 0 { 12 } else { 20 };
         Ok(match u.int_in_range(0..=max)? {
             0 => Type::Bool,
             1 => Type::S8,
@@ -171,13 +170,12 @@ impl Type {
                 *fuel -= amt;
                 Type::Enum(amt)
             }
-            18 => Type::Union(Type::generate_list(u, depth - 1, fuel)?),
-            19 => Type::Option(Box::new(Type::generate(u, depth - 1, fuel)?)),
-            20 => Type::Result {
+            18 => Type::Option(Box::new(Type::generate(u, depth - 1, fuel)?)),
+            19 => Type::Result {
                 ok: Type::generate_opt(u, depth - 1, fuel)?.map(Box::new),
                 err: Type::generate_opt(u, depth - 1, fuel)?.map(Box::new),
             },
-            21 => {
+            20 => {
                 // Generate 1 flag all the way up to 65 flags which exercises
                 // the 1 to 3 x u32 cases.
                 let amt = u.int_in_range(1..=(*fuel).min(65))?;
@@ -276,7 +274,6 @@ impl Type {
             Type::Record(types) => lower_record(types.iter(), vec),
             Type::Tuple(types) => lower_record(types.0.iter(), vec),
             Type::Variant(types) => lower_variant(types.0.iter().map(|t| t.as_ref()), vec),
-            Type::Union(types) => lower_variant(types.0.iter().map(Some), vec),
             Type::Option(ty) => lower_variant([None, Some(&**ty)].into_iter(), vec),
             Type::Result { ok, err } => {
                 lower_variant([ok.as_deref(), err.as_deref()].into_iter(), vec)
@@ -319,7 +316,6 @@ impl Type {
             Type::Tuple(types) => record_size_and_alignment(types.0.iter()),
 
             Type::Variant(types) => variant_size_and_alignment(types.0.iter().map(|t| t.as_ref())),
-            Type::Union(types) => variant_size_and_alignment(types.0.iter().map(Some)),
 
             Type::Enum(count) => variant_size_and_alignment((0..*count).map(|_| None)),
 
@@ -566,29 +562,6 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
 
             quote!(#name)
         }
-        Type::Union(types) => {
-            let cases = types
-                .0
-                .iter()
-                .enumerate()
-                .map(|(index, ty)| {
-                    let name = format_ident!("U{index}");
-                    let ty = rust_type(ty, name_counter, declarations);
-                    quote!(#name(#ty),)
-                })
-                .collect::<TokenStream>();
-            let name = make_rust_name(name_counter);
-
-            declarations.extend(quote! {
-                #[derive(ComponentType, Lift, Lower, PartialEq, Debug, Clone, Arbitrary)]
-                #[component(union)]
-                enum #name {
-                    #cases
-                }
-            });
-
-            quote!(#name)
-        }
         Type::Enum(count) => {
             let cases = (0..*count)
                 .map(|index| {
@@ -692,7 +665,6 @@ impl<'a> TypesBuilder<'a> {
             | Type::Tuple(_)
             | Type::Variant(_)
             | Type::Enum(_)
-            | Type::Union(_)
             | Type::Option(_)
             | Type::Result { .. }
             | Type::Flags(_) => {
@@ -759,14 +731,6 @@ impl<'a> TypesBuilder<'a> {
                 decl.push_str("(enum");
                 for index in 0..*count {
                     write!(decl, r#" "E{index}""#).unwrap();
-                }
-                decl.push_str(")");
-            }
-            Type::Union(types) => {
-                decl.push_str("(union");
-                for ty in types.iter() {
-                    decl.push_str(" ");
-                    self.write_ref(ty, &mut decl);
                 }
                 decl.push_str(")");
             }

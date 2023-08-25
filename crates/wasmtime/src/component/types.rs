@@ -10,7 +10,7 @@ use std::sync::Arc;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, ResourceIndex, TypeEnumIndex, TypeFlagsIndex,
     TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex,
-    TypeUnionIndex, TypeVariantIndex,
+    TypeVariantIndex,
 };
 use wasmtime_environ::PrimaryMap;
 
@@ -210,29 +210,6 @@ impl Enum {
     }
 }
 
-/// A `union` interface type
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Union(Handle<TypeUnionIndex>);
-
-impl Union {
-    /// Instantiate this type with the specified `discriminant` and `value`.
-    pub fn new_val(&self, discriminant: u32, value: Val) -> Result<Val> {
-        Ok(Val::Union(values::Union::new(self, discriminant, value)?))
-    }
-
-    pub(crate) fn from(index: TypeUnionIndex, ty: &InstanceType<'_>) -> Self {
-        Union(Handle::new(index, ty))
-    }
-
-    /// Retrieve the types of the cases of this `union` in declaration order.
-    pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
-        self.0.types[self.0.index]
-            .types
-            .iter()
-            .map(|ty| Type::from(ty, &self.0.instance()))
-    }
-}
-
 /// An `option` interface type
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct OptionType(Handle<TypeOptionIndex>);
@@ -333,7 +310,6 @@ pub enum Type {
     Tuple(Tuple),
     Variant(Variant),
     Enum(Enum),
-    Union(Union),
     Option(OptionType),
     Result(ResultType),
     Flags(Flags),
@@ -404,19 +380,6 @@ impl Type {
             &handle
         } else {
             panic!("attempted to unwrap a {} as a enum", self.desc())
-        }
-    }
-
-    /// Retrieve the inner [`Union`] of a [`Type::Union`].
-    ///
-    /// # Panics
-    ///
-    /// This will panic if `self` is not a [`Type::Union`].
-    pub fn unwrap_union(&self) -> &Union {
-        if let Type::Union(handle) = self {
-            &handle
-        } else {
-            panic!("attempted to unwrap a {} as a union", self.desc())
         }
     }
 
@@ -522,7 +485,6 @@ impl Type {
             InterfaceType::Tuple(index) => Type::Tuple(Tuple::from(*index, instance)),
             InterfaceType::Variant(index) => Type::Variant(Variant::from(*index, instance)),
             InterfaceType::Enum(index) => Type::Enum(Enum::from(*index, instance)),
-            InterfaceType::Union(index) => Type::Union(Union::from(*index, instance)),
             InterfaceType::Option(index) => Type::Option(OptionType::from(*index, instance)),
             InterfaceType::Result(index) => Type::Result(ResultType::from(*index, instance)),
             InterfaceType::Flags(index) => Type::Flags(Flags::from(*index, instance)),
@@ -551,7 +513,6 @@ impl Type {
             Type::Tuple(_) => "tuple",
             Type::Variant(_) => "variant",
             Type::Enum(_) => "enum",
-            Type::Union(_) => "union",
             Type::Option(_) => "option",
             Type::Result(_) => "result",
             Type::Flags(_) => "flags",

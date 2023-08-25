@@ -100,8 +100,6 @@ indices! {
     pub struct TypeFlagsIndex(u32);
     /// Index pointing to an enum type in the component model.
     pub struct TypeEnumIndex(u32);
-    /// Index pointing to a union type in the component model.
-    pub struct TypeUnionIndex(u32);
     /// Index pointing to an option type in the component model (aka a
     /// `Option<T, E>`)
     pub struct TypeOptionIndex(u32);
@@ -252,7 +250,6 @@ pub struct ComponentTypes {
     tuples: PrimaryMap<TypeTupleIndex, TypeTuple>,
     enums: PrimaryMap<TypeEnumIndex, TypeEnum>,
     flags: PrimaryMap<TypeFlagsIndex, TypeFlags>,
-    unions: PrimaryMap<TypeUnionIndex, TypeUnion>,
     options: PrimaryMap<TypeOptionIndex, TypeOption>,
     results: PrimaryMap<TypeResultIndex, TypeResult>,
     resource_tables: PrimaryMap<TypeResourceTableIndex, TypeResourceTable>,
@@ -293,7 +290,6 @@ impl ComponentTypes {
             InterfaceType::Tuple(i) => &self[*i].abi,
             InterfaceType::Flags(i) => &self[*i].abi,
             InterfaceType::Enum(i) => &self[*i].abi,
-            InterfaceType::Union(i) => &self[*i].abi,
             InterfaceType::Option(i) => &self[*i].abi,
             InterfaceType::Result(i) => &self[*i].abi,
         }
@@ -340,7 +336,6 @@ impl_index! {
     impl Index<TypeTupleIndex> for ComponentTypes { TypeTuple => tuples }
     impl Index<TypeEnumIndex> for ComponentTypes { TypeEnum => enums }
     impl Index<TypeFlagsIndex> for ComponentTypes { TypeFlags => flags }
-    impl Index<TypeUnionIndex> for ComponentTypes { TypeUnion => unions }
     impl Index<TypeOptionIndex> for ComponentTypes { TypeOption => options }
     impl Index<TypeResultIndex> for ComponentTypes { TypeResult => results }
     impl Index<TypeListIndex> for ComponentTypes { TypeList => lists }
@@ -372,7 +367,6 @@ pub struct ComponentTypesBuilder {
     tuples: HashMap<TypeTuple, TypeTupleIndex>,
     enums: HashMap<TypeEnum, TypeEnumIndex>,
     flags: HashMap<TypeFlags, TypeFlagsIndex>,
-    unions: HashMap<TypeUnion, TypeUnionIndex>,
     options: HashMap<TypeOption, TypeOptionIndex>,
     results: HashMap<TypeResult, TypeResultIndex>,
 
@@ -613,9 +607,6 @@ impl ComponentTypesBuilder {
             }
             types::ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
             types::ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
-            types::ComponentDefinedType::Union(e) => {
-                InterfaceType::Union(self.union_type(types, e)?)
-            }
             types::ComponentDefinedType::Option(e) => {
                 InterfaceType::Option(self.option_type(types, e)?)
             }
@@ -734,24 +725,6 @@ impl ComponentTypesBuilder {
         self.add_enum_type(TypeEnum { names, abi, info })
     }
 
-    fn union_type(
-        &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::UnionType,
-    ) -> Result<TypeUnionIndex> {
-        let types = ty
-            .types
-            .iter()
-            .map(|ty| self.valtype(types, ty))
-            .collect::<Result<Box<[_]>>>()?;
-        let (info, abi) = VariantInfo::new(
-            types
-                .iter()
-                .map(|t| Some(self.component_types.canonical_abi(t))),
-        );
-        Ok(self.add_union_type(TypeUnion { types, abi, info }))
-    }
-
     fn option_type(
         &mut self,
         types: types::TypesRef<'_>,
@@ -826,11 +799,6 @@ impl ComponentTypesBuilder {
     /// Interns a new variant type within this type information.
     pub fn add_variant_type(&mut self, ty: TypeVariant) -> TypeVariantIndex {
         intern_and_fill_flat_types!(self, variants, ty)
-    }
-
-    /// Interns a new union type within this type information.
-    pub fn add_union_type(&mut self, ty: TypeUnion) -> TypeUnionIndex {
-        intern_and_fill_flat_types!(self, unions, ty)
     }
 
     /// Interns a new enum type within this type information.
@@ -918,7 +886,6 @@ impl ComponentTypesBuilder {
             InterfaceType::Tuple(i) => &self.type_info.tuples[*i],
             InterfaceType::Flags(i) => &self.type_info.flags[*i],
             InterfaceType::Enum(i) => &self.type_info.enums[*i],
-            InterfaceType::Union(i) => &self.type_info.unions[*i],
             InterfaceType::Option(i) => &self.type_info.options[*i],
             InterfaceType::Result(i) => &self.type_info.results[*i],
         }
@@ -1065,7 +1032,6 @@ pub enum InterfaceType {
     Tuple(TypeTupleIndex),
     Flags(TypeFlagsIndex),
     Enum(TypeEnumIndex),
-    Union(TypeUnionIndex),
     Option(TypeOptionIndex),
     Result(TypeResultIndex),
     Own(TypeResourceTableIndex),
@@ -1511,21 +1477,6 @@ pub struct TypeEnum {
     pub info: VariantInfo,
 }
 
-/// Shape of a "union" type in interface types.
-///
-/// Note that this can be viewed as a specialization of the `variant` interface
-/// type where each type here has a name that's numbered. This is still a
-/// tagged union.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
-pub struct TypeUnion {
-    /// The list of types this is a union over.
-    pub types: Box<[InterfaceType]>,
-    /// Byte information about this type in the canonical ABI.
-    pub abi: CanonicalAbiInfo,
-    /// Byte information about this variant type.
-    pub info: VariantInfo,
-}
-
 /// Shape of an "option" interface type.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TypeOption {
@@ -1715,7 +1666,6 @@ struct TypeInformationCache {
     tuples: PrimaryMap<TypeTupleIndex, TypeInformation>,
     enums: PrimaryMap<TypeEnumIndex, TypeInformation>,
     flags: PrimaryMap<TypeFlagsIndex, TypeInformation>,
-    unions: PrimaryMap<TypeUnionIndex, TypeInformation>,
     options: PrimaryMap<TypeOptionIndex, TypeInformation>,
     results: PrimaryMap<TypeResultIndex, TypeInformation>,
     lists: PrimaryMap<TypeListIndex, TypeInformation>,
@@ -1894,10 +1844,6 @@ impl TypeInformation {
                 .iter()
                 .map(|c| c.ty.as_ref().map(|ty| types.type_information(ty))),
         )
-    }
-
-    fn unions(&mut self, types: &ComponentTypesBuilder, ty: &TypeUnion) {
-        self.build_variant(ty.types.iter().map(|t| Some(types.type_information(t))))
     }
 
     fn results(&mut self, types: &ComponentTypesBuilder, ty: &TypeResult) {

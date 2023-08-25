@@ -1659,34 +1659,6 @@ pub fn typecheck_enum(
     }
 }
 
-/// Verify that the given wasm type is a union with the expected cases in the right order.
-pub fn typecheck_union(
-    ty: &InterfaceType,
-    types: &InstanceType<'_>,
-    expected: &[fn(&InterfaceType, &InstanceType<'_>) -> Result<()>],
-) -> Result<()> {
-    match ty {
-        InterfaceType::Union(index) => {
-            let union_types = &types.types[*index].types;
-
-            if union_types.len() != expected.len() {
-                bail!(
-                    "expected union of {} types, found {} types",
-                    expected.len(),
-                    union_types.len()
-                );
-            }
-
-            for (index, (ty, check)) in union_types.iter().zip(expected).enumerate() {
-                check(ty, types).with_context(|| format!("type mismatch for case {}", index))?;
-            }
-
-            Ok(())
-        }
-        other => bail!("expected `union` found `{}`", desc(other)),
-    }
-}
-
 /// Verify that the given wasm type is a flags type with the expected flags in the right order and with the right
 /// names.
 pub fn typecheck_flags(
@@ -2310,7 +2282,6 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Variant(_) => "variant",
         InterfaceType::Flags(_) => "flags",
         InterfaceType::Enum(_) => "enum",
-        InterfaceType::Union(_) => "union",
         InterfaceType::Own(_) => "owned resource",
         InterfaceType::Borrow(_) => "borrowed resource",
     }
