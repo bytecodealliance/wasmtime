@@ -1854,7 +1854,7 @@
 ;; The reduce operation leaves the result in the lowest lane, we then move it
 ;; into the destination X register.
 (rule (lower (vall_true x @ (value_type (ty_vec_fits_in_register ty))))
-  (if-let one (imm5_from_i8 1))
+  (if-let one (i8_to_imm5 1))
   ;; We don't need to broadcast the immediate into all lanes, only into lane 0.
   ;; I did it this way since it uses one less instruction than with a vmv.s.x.
   (let ((fixed VReg (rv_vmv_vi one ty))
@@ -1912,7 +1912,7 @@
 ;; vrgather will insert a 0 for lanes that are out of bounds, so we can let it load
 ;; negative and out of bounds indexes.
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I8X16) (shuffle x y (vconst_from_immediate mask))))
-  (if-let neg16 (imm5_from_i8 -16))
+  (if-let neg16 (i8_to_imm5 -16))
   (let ((x_mask VReg (gen_constant ty mask))
         (x_lanes VReg (rv_vrgather_vv x x_mask (unmasked) ty))
         (y_mask VReg (rv_vadd_vi x_mask neg16 (unmasked) ty))

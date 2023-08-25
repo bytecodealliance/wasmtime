@@ -315,7 +315,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm5::maybe_from_i8(i8::try_from(arg0 as i64).ok()?)
     }
     #[inline]
-    fn imm5_from_i8(&mut self, arg0: i8) -> Option<Imm5> {
+    fn i8_to_imm5(&mut self, arg0: i8) -> Option<Imm5> {
         Imm5::maybe_from_i8(arg0)
     }
     #[inline]
