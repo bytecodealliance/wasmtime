@@ -32,6 +32,40 @@ impl<T: WasiHttpView> crate::bindings::http::outgoing_handler::Host for T {
     }
 }
 
+#[cfg(feature = "sync")]
+pub mod sync {
+    use crate::bindings::http::outgoing_handler::{
+        Host as AsyncHost, RequestOptions as AsyncRequestOptions,
+    };
+    use crate::bindings::sync::http::types::{
+        FutureIncomingResponse, OutgoingRequest, RequestOptions,
+    };
+    use crate::WasiHttpView;
+    use wasmtime_wasi::preview2::in_tokio;
+
+    // same boilerplate everywhere, converting between two identical types with different
+    // definition sites. one day wasmtime-wit-bindgen will make all this unnecessary
+    impl From<RequestOptions> for AsyncRequestOptions {
+        fn from(other: RequestOptions) -> Self {
+            Self {
+                connect_timeout_ms: other.connect_timeout_ms,
+                first_byte_timeout_ms: other.first_byte_timeout_ms,
+                between_bytes_timeout_ms: other.between_bytes_timeout_ms,
+            }
+        }
+    }
+
+    impl<T: WasiHttpView> crate::bindings::sync::http::outgoing_handler::Host for T {
+        fn handle(
+            &mut self,
+            request_id: OutgoingRequest,
+            options: Option<RequestOptions>,
+        ) -> wasmtime::Result<FutureIncomingResponse> {
+            in_tokio(async { AsyncHost::handle(self, request_id, options.map(|v| v.into())).await })
+        }
+    }
+}
+
 fn port_for_scheme(scheme: &Option<Scheme>) -> &str {
     match scheme {
         Some(s) => match s {
@@ -60,6 +94,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
     ) -> wasmtime::Result<FutureIncomingResponse, crate::bindings::http::types::Error> {
+        tracing::debug!("preparing outgoing request");
         let opts = options.unwrap_or(
             // TODO: Configurable defaults here?
             RequestOptions {
@@ -80,6 +115,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             .get_request(request_id)
             .context("[handle_async] getting request")?
             .clone();
+        tracing::debug!("http request retrieved from table");
 
         let method = match request.method() {
             crate::bindings::http::types::Method::Get => Method::GET,
@@ -119,6 +155,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         };
         let tcp_stream = TcpStream::connect(authority.clone()).await?;
         let mut sender = if scheme == "https://" {
+            tracing::debug!("initiating client connection client with TLS");
             #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
             {
                 //TODO: uncomment this code and make the tls implementation a feature decision.
@@ -158,7 +195,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 let (s, conn) = t?;
                 tokio::task::spawn(async move {
                     if let Err(err) = conn.await {
-                        println!("Connection failed: {:?}", err);
+                        println!("[host/client] Connection failed: {:?}", err);
                     }
                 });
                 s
@@ -168,6 +205,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 "unsupported architecture for SSL".to_string(),
             ));
         } else {
+            tracing::debug!("initiating client connection without TLS");
             let t = timeout(
                 connect_timeout,
                 hyper::client::conn::http1::handshake(tcp_stream),
@@ -176,7 +214,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             let (s, conn) = t?;
             tokio::task::spawn(async move {
                 if let Err(err) = conn.await {
-                    println!("Connection failed: {:?}", err);
+                    println!("[host/client] Connection failed: {:?}", err);
                 }
             });
             s
@@ -184,6 +222,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
 
         let url = scheme.to_owned() + &request.authority() + &request.path_with_query();
 
+        tracing::debug!("request to url {:?}", &url);
         let mut call = Request::builder()
             .method(method)
             .uri(url)
@@ -227,8 +266,11 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             }
             None => Empty::<Bytes>::new().boxed(),
         };
-        let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
+        let request = call.body(body)?;
+        tracing::trace!("hyper request {:?}", request);
+        let t = timeout(first_bytes_timeout, sender.send_request(request)).await?;
         let mut res = t?;
+        tracing::trace!("hyper response {:?}", res);
         response.status = res.status().as_u16();
 
         let mut map = ActiveFields::new();
@@ -246,10 +288,12 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let mut buf: Vec<u8> = Vec::new();
         while let Some(next) = timeout(between_bytes_timeout, res.frame()).await? {
             let frame = next?;
+            tracing::debug!("response body next frame");
             if let Some(chunk) = frame.data_ref() {
                 buf.extend_from_slice(chunk);
             }
             if let Some(trailers) = frame.trailers_ref() {
+                tracing::debug!("response trailers present");
                 let mut map = ActiveFields::new();
                 for (name, value) in trailers.iter() {
                     let key = name.to_string();
@@ -267,6 +311,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                     .push_fields(Box::new(map))
                     .context("[handle_async] pushing response trailers")?;
                 response.set_trailers(trailers);
+                tracing::debug!("http trailers saved to table");
             }
         }
 
@@ -283,6 +328,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             .get_response_mut(response_id)
             .context("[handle_async] getting mutable response")?;
         response.set_body(stream_id);
+        tracing::debug!("http response saved to table with id {:?}", response_id);
 
         self.http_ctx_mut().streams.insert(stream_id, stream);
 

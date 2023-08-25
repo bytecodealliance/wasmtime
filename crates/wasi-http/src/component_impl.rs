@@ -618,3 +618,14 @@ pub fn add_component_to_linker<T: WasiHttpView>(
     )?;
     Ok(())
 }
+
+pub mod sync {
+    use crate::WasiHttpView;
+
+    pub fn add_component_to_linker<T: WasiHttpView>(
+        linker: &mut wasmtime::Linker<T>,
+        get_cx: impl Fn(&mut T) -> &mut T + Send + Sync + Copy + 'static,
+    ) -> anyhow::Result<()> {
+        unimplemented!("linker synchronous version")
+    }
+}
