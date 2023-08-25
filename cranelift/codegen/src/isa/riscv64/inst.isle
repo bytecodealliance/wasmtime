@@ -1549,10 +1549,6 @@
 (decl imm12_and (Imm12 u64) Imm12)
 (extern constructor imm12_and imm12_and)
 
-;; Helper for get negative of Imm12
-(decl neg_imm12 (Imm12) Imm12)
-(extern constructor neg_imm12 neg_imm12)
-
 ;; Imm12 Extractors
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.

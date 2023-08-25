@@ -339,10 +339,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         writable_zero_reg()
     }
     #[inline]
-    fn neg_imm12(&mut self, arg0: Imm12) -> Imm12 {
-        -arg0
-    }
-    #[inline]
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
     }
