@@ -2152,7 +2152,10 @@ impl BlockingMode {
                     let len = (n as usize).min(bytes.len());
                     match streams::write(output_stream, &bytes[..len]) {
                         Some(streams::WriteReadiness::Closed) => Err(ERRNO_IO),
-                        _ => Ok(len),
+                        _ => match streams::blocking_flush(output_stream) {
+                            streams::FlushResult::Done => Ok(len),
+                            streams::FlushResult::Closed => Err(ERRNO_IO),
+                        },
                     }
                 }
             },
@@ -2164,7 +2167,10 @@ impl BlockingMode {
                 let len = (n as usize).min(bytes.len());
                 match streams::write(output_stream, &bytes[..len]) {
                     Some(streams::WriteReadiness::Closed) => Err(ERRNO_IO),
-                    _ => Ok(len),
+                    _ => match streams::blocking_flush(output_stream) {
+                        streams::FlushResult::Done => Ok(len),
+                        streams::FlushResult::Closed => Err(ERRNO_IO),
+                    },
                 }
             }
         }
