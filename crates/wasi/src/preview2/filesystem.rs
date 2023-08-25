@@ -2,7 +2,7 @@ use crate::preview2::{
     FlushResult, HostOutputStream, StreamRuntimeError, StreamState, Table, TableError,
     WriteReadiness,
 };
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 
@@ -163,7 +163,7 @@ fn read_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState),
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
-        Err(e) => Err(StreamRuntimeError::from(anyhow::anyhow!(e)).into()),
+        Err(e) => Err(StreamRuntimeError::from(anyhow!(e)).into()),
     }
 }
 
@@ -208,9 +208,7 @@ impl HostOutputStream for FileOutputStream {
         }
         if self.task.is_some() {
             // a write is pending - this call was not permitted
-            return Err(anyhow!(
-                "write not permitted: FileOutputStream write pending"
-            ));
+            bail!("write not permitted: FileOutputStream write pending")
         }
         let f = Arc::clone(&self.file);
         let m = self.mode;
