@@ -731,34 +731,12 @@ fn wasi_misaligned_pointer() -> Result<()> {
 }
 
 #[test]
-fn hello_with_async() -> Result<()> {
-    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
-    let stdout = run_wasmtime(&["--disable-cache", "--async", wasm.path().to_str().unwrap()])?;
-    assert_eq!(stdout, "Hello, world!\n");
-    Ok(())
-}
-
-#[test]
 #[ignore] // FIXME(#6811) currently is flaky and may produce no output
 fn hello_with_preview2() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
     let stdout = run_wasmtime(&[
         "--disable-cache",
         "--preview2",
-        wasm.path().to_str().unwrap(),
-    ])?;
-    assert_eq!(stdout, "Hello, world!\n");
-    Ok(())
-}
-
-#[test]
-#[ignore] // FIXME(#6811) currently is flaky and may produce no output
-fn hello_with_preview2_and_async() -> Result<()> {
-    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
-    let stdout = run_wasmtime(&[
-        "--disable-cache",
-        "--preview2",
-        "--async",
         wasm.path().to_str().unwrap(),
     ])?;
     assert_eq!(stdout, "Hello, world!\n");
@@ -827,19 +805,6 @@ fn run_basic_component() -> Result<()> {
     ])?;
     run_wasmtime(&["--disable-cache", "--wasm-features=component-model", path])?;
 
-    Ok(())
-}
-
-#[test]
-#[cfg_attr(not(feature = "component-model"), ignore)]
-fn run_basic_component_async() -> Result<()> {
-    let wasm = build_wasm("tests/all/cli_tests/component-basic.wat")?;
-    run_wasmtime(&[
-        "--disable-cache",
-        "--wasm-features=component-model",
-        "--async",
-        wasm.path().to_str().unwrap(),
-    ])?;
     Ok(())
 }
 
