@@ -156,7 +156,7 @@
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwadd_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
                                                             (swiden_low y @ (value_type in_ty)))))
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwadd_vx y x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -179,7 +179,7 @@
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwadd_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
                                                             (swiden_high y @ (value_type in_ty)))))
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwadd_vx (gen_slidedown_half in_ty y) x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -201,7 +201,7 @@
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwaddu_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend x @ (value_type uext_ty)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend x @ (value_type uext_ty)))
                                                             (uwiden_low y @ (value_type in_ty)))))
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwaddu_vx y x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -224,7 +224,7 @@
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwaddu_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend y @ (value_type uext_ty)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend y @ (value_type uext_ty)))
                                                             (uwiden_high x @ (value_type in_ty)))))
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwaddu_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))

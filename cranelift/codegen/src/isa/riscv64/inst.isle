@@ -1574,6 +1574,9 @@
 (decl imm5_from_u64 (Imm5) u64)
 (extern extractor imm5_from_u64 imm5_from_u64)
 
+(decl imm5_from_i64 (Imm5) i64)
+(extern extractor imm5_from_i64 imm5_from_i64)
+
 ;; Construct a Imm5 from an i8
 (decl pure partial i8_to_imm5 (i8) Imm5)
 (extern constructor i8_to_imm5 i8_to_imm5)
@@ -1582,7 +1585,7 @@
 ;; TODO(#6527): Try matching vconst here as well
 (decl replicated_imm5 (Imm5) Value)
 (extractor (replicated_imm5 n)
-  (def_inst (splat (iconst (u64_from_imm64 (imm5_from_u64 n))))))
+  (def_inst (splat (i64_from_iconst (imm5_from_i64 n)))))
 
 ;; UImm5 Helpers
 
