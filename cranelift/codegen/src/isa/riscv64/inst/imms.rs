@@ -188,14 +188,10 @@ impl Inst {
     ///
     /// `value` must be between `imm_min()` and `imm_max()`, or else
     /// this helper returns `None`.
-    pub(crate) fn generate_imm<R>(
-        value: u64,
-        mut handle_imm: impl FnMut(Option<Imm20>, Option<Imm12>) -> R,
-    ) -> Option<R> {
+    pub(crate) fn generate_imm(value: u64) -> Option<(Imm20, Imm12)> {
         if let Some(imm12) = Imm12::maybe_from_u64(value) {
             // can be load using single imm12.
-            let r = handle_imm(None, Some(imm12));
-            return Some(r);
+            return Some((Imm20::from_bits(0), imm12));
         }
         let value = value as i64;
         if !(value >= Self::imm_min() && value <= Self::imm_max()) {
@@ -227,17 +223,9 @@ impl Inst {
         };
         assert!(imm20 >= -(0x7_ffff + 1) && imm20 <= 0x7_ffff);
         assert!(imm20 != 0 || imm12 != 0);
-        Some(handle_imm(
-            if imm20 != 0 {
-                Some(Imm20::from_bits(imm20 as i32))
-            } else {
-                None
-            },
-            if imm12 != 0 {
-                Some(Imm12::from_bits(imm12 as i16))
-            } else {
-                None
-            },
+        Some((
+            Imm20::from_bits(imm20 as i32),
+            Imm12::from_bits(imm12 as i16),
         ))
     }
 }
