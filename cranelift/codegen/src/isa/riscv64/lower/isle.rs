@@ -280,8 +280,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
-    fn generate_imm(&mut self, imm: u64) -> Option<(Imm20, Imm12)> {
-        MInst::generate_imm(imm)
+    fn i64_generate_imm(&mut self, imm: i64) -> Option<(Imm20, Imm12)> {
+        MInst::generate_imm(imm as u64)
     }
 
     #[inline]
