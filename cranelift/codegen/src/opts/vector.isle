@@ -8,16 +8,23 @@
 (rule (simplify (fcvt_from_sint float_vector_ty (splat _ x)))
       (splat float_vector_ty (fcvt_from_sint (lane_type float_vector_ty) x)))
 
+;; Scalar bitwise ops are usually not implemented in the backends for floats, so
+;; disable this transform.
+
 (rule (simplify (band ty (splat ty x) (splat ty y)))
+      (if (ty_vector_not_float ty))
       (splat ty (band (lane_type ty) x y)))
 
 (rule (simplify (bor ty (splat ty x) (splat ty y)))
+      (if (ty_vector_not_float ty))
       (splat ty (bor (lane_type ty) x y)))
 
 (rule (simplify (bxor ty (splat ty x) (splat ty y)))
+      (if (ty_vector_not_float ty))
       (splat ty (bxor (lane_type ty) x y)))
 
 (rule (simplify (bnot ty (splat ty x)))
+      (if (ty_vector_not_float ty))
       (splat ty (bnot (lane_type ty) x)))
 
 (rule (simplify (iadd ty (splat ty x) (splat ty y)))
