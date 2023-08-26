@@ -888,7 +888,7 @@
         (high_part3 XReg (rv_sll (value_regs_get x 1) shamt))
         (high XReg (rv_or high_part2 high_part3))
         ;;
-        (const64 XReg (load_u64_constant 64))
+        (const64 XReg (imm $I64 64))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
@@ -940,7 +940,7 @@
         (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
         (low XReg (rv_or low_part2 low_part3))
         ;;
-        (const64 XReg (load_u64_constant 64))
+        (const64 XReg (imm $I64 64))
         ;;
         (high XReg (rv_srl (value_regs_get x 1) shamt))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
@@ -994,14 +994,14 @@
         (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
         (low XReg (rv_or low_part2 low_part3))
         ;;
-        (const64 XReg (load_u64_constant 64))
+        (const64 XReg (imm $I64 64))
         ;;
         (high XReg (rv_sra (value_regs_get x 1) shamt))
         ;;
-        (const_neg_1 XReg (load_imm12 -1))
+        (const_neg_1 XReg (imm $I64 (i64_as_u64 -1)))
         ;;
         (high_replacement XReg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
-        (const64 XReg (load_u64_constant 64))
+        (const64 XReg (imm $I64 64))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)

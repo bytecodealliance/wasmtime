@@ -170,6 +170,12 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn i64_sextend_u64(&mut self, ty: Type, x: u64) -> i64 {
+            let shift_amt = std::cmp::max(0, 64 - ty.bits());
+            ((x as i64) << shift_amt) >> shift_amt
+        }
+
+        #[inline]
         fn i64_sextend_imm64(&mut self, ty: Type, mut x: Imm64) -> i64 {
             x.sign_extend_from_width(ty.bits());
             x.bits()

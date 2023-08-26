@@ -783,7 +783,7 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    let mut insts = Inst::load_constant_u64(tmp, amount as u64, &mut |_| tmp);
+                    let mut insts = Inst::load_constant_u64(tmp, amount as u64);
                     insts.push(Inst::AluRRR {
                         alu_op: AluOPRRR::Add,
                         rd: writable_stack_reg(),
@@ -1107,7 +1107,7 @@ impl MachInstEmit for Inst {
                 // Check if the index passed in is larger than the number of jumptable
                 // entries that we have. If it is, we fallthrough to a jump into the
                 // default block.
-                Inst::load_constant_u32(tmp2, targets.len() as u64, &mut |_| tmp2)
+                Inst::load_constant_u32(tmp2, targets.len() as u64)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                 Inst::CondBr {
@@ -1902,7 +1902,6 @@ impl MachInstEmit for Inst {
                             // I8
                             (u8::MAX >> 1) as u64
                         },
-                        &mut |_| writable_spilltmp_reg2(),
                     )
                     .into_iter()
                     .for_each(|x| x.emit(&[], sink, emit_info, state));
@@ -2779,14 +2778,10 @@ impl MachInstEmit for Inst {
                 tmp: guard_size_tmp,
             } => {
                 let step = writable_spilltmp_reg();
-                Inst::load_constant_u64(
-                    step,
-                    (guard_size as u64) * (probe_count as u64),
-                    &mut |_| step,
-                )
-                .iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                Inst::load_constant_u64(guard_size_tmp, guard_size as u64, &mut |_| guard_size_tmp)
+                Inst::load_constant_u64(step, (guard_size as u64) * (probe_count as u64))
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                Inst::load_constant_u64(guard_size_tmp, guard_size as u64)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
 

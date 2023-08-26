@@ -195,27 +195,23 @@ impl Inst {
     }
 
     /// Immediates can be loaded using lui and addi instructions.
-    fn load_const_imm<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> Option<SmallInstVec<Inst>> {
+    fn load_const_imm(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
         Inst::generate_imm(value).map(|(imm20, imm12)| {
             let mut insts = SmallVec::new();
 
-            let rs = if imm20.as_u32() != 0 {
-                let rd = if imm12.as_i16() != 0 {
-                    alloc_tmp(I64)
-                } else {
-                    rd
-                };
+            let imm20_is_zero = imm20.as_u32() == 0;
+            let imm12_is_zero = imm12.as_i16() == 0;
+
+            let rs = if !imm20_is_zero {
                 insts.push(Inst::Lui { rd, imm: imm20 });
                 rd.to_reg()
             } else {
                 zero_reg()
             };
 
-            if imm12.as_i16() != 0 {
+            // We also need to emit the addi if the value is 0, otherwise we just
+            // won't produce any instructions.
+            if !imm12_is_zero || (imm20_is_zero && imm12_is_zero) {
                 insts.push(Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Addi,
                     rd,
@@ -228,12 +224,8 @@ impl Inst {
         })
     }
 
-    pub(crate) fn load_constant_u32<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
+    pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value);
         insts.unwrap_or_else(|| {
             smallvec![Inst::LoadConst32 {
                 rd,
@@ -242,12 +234,8 @@ impl Inst {
         })
     }
 
-    pub fn load_constant_u64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
+    pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value);
         insts.unwrap_or_else(|| smallvec![Inst::LoadConst64 { rd, imm: value }])
     }
 
@@ -280,11 +268,7 @@ impl Inst {
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallVec::new();
         let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u32(
-            tmp,
-            const_data as u64,
-            &mut alloc_tmp,
-        ));
+        insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F32),
@@ -302,7 +286,7 @@ impl Inst {
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallInstVec::new();
         let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u64(tmp, const_data, &mut alloc_tmp));
+        insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F64),
