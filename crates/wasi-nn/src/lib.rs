@@ -90,7 +90,7 @@ where
 #[cfg(feature = "test-check")]
 pub mod test_check {
     use anyhow::{anyhow, Context, Result};
-    use std::{env, fs, fs::File, path::Path, path::PathBuf, process::Command};
+    use std::{env, fs, path::Path, path::PathBuf, process::Command};
 
     /// Return the directory in which the test artifacts are stored.
     pub fn artifacts_dir() -> PathBuf {
@@ -160,9 +160,17 @@ pub mod test_check {
 
     /// Retrieve the bytes at the `from` URL and place them in the `to` file.
     fn download(from: &str, to: &Path) -> anyhow::Result<()> {
-        println!("> downloading:\n  {} ->\n  {}", from, to.display());
-        let mut file = File::create(to)?;
-        let _ = reqwest::blocking::get(from)?.copy_to(&mut file)?;
+        let mut curl = Command::new("curl");
+        curl.arg("--location").arg(from).arg("--output").arg(to);
+        println!("> downloading: {:?}", &curl);
+        let result = curl.output().unwrap();
+        if !result.status.success() {
+            panic!(
+                "curl failed: {}\n{}",
+                result.status,
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
         Ok(())
     }
 

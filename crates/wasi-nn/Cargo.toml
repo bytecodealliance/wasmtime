@@ -27,10 +27,6 @@ tracing = { workspace = true }
 openvino = { version = "0.5.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 
-# These dependencies are only for the `test-check` feature. They would be better
-# as `dev-dependencies` but then would not be available to integration tests:
-reqwest = { version = "0.11", features = ["blocking"], optional = true }
-
 [build-dependencies]
 walkdir = { workspace = true }
 
@@ -42,7 +38,7 @@ wasmtime-wasi = { workspace = true }
 # artifacts to run this crate's tests. If these are not available, the tests
 # will be skipped; set `FORCE_WASINN_TEST_CHECK=1` or `CI=true` to fail if the
 # checks fail.
-test-check = ["dep:reqwest"]
+test-check = []
 # We'll enable the `test-check` feature by default so `cargo test` will "just
 # work"; this means we need to carefully turn off `default-features` at the use
 # sites to avoid unwanted dependencies.
