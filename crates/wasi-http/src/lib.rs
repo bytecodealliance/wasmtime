@@ -56,7 +56,7 @@ pub fn add_to_linker<T: WasiHttpView>(linker: &mut wasmtime::Linker<T>) -> anyho
 }
 
 pub mod sync {
-    use crate::r#struct::WasiHttpView;
+    use crate::types::WasiHttpView;
 
     pub fn add_to_linker<T: WasiHttpView>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()> {
         crate::component_impl::sync::add_component_to_linker::<T>(linker, |t| t)

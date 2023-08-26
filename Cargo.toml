@@ -288,7 +288,7 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads"]
-wasi-http = ["dep:wasmtime-wasi-http"]
+wasi-http = ["dep:wasmtime-wasi-http", "wasmtime-wasi-http/sync"]
 pooling-allocator = [
   "wasmtime/pooling-allocator",
   "wasmtime-cli-flags/pooling-allocator",
