@@ -16,8 +16,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
     types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
-    FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload,
-    StructuralType, TypeRef, Validator, ValidatorResources,
+    FuncToValidate, FunctionBody, NameSectionReader, Naming, Operator, Parser, Payload, TypeRef,
+    Validator, ValidatorResources,
 };
 
 /// Object containing the standalone environment information.
@@ -237,20 +237,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.result.module.types.reserve(num);
                 self.types.reserve_wasm_signatures(num);
 
-                for ty in types {
-                    let ty = ty?;
-                    if ty.is_final || ty.supertype_idx.is_some() {
-                        unimplemented!("gc proposal")
-                    }
-                    match ty.structural_type {
-                        StructuralType::Func(wasm_func_ty) => {
-                            let ty = self.convert_func_type(&wasm_func_ty);
-                            self.declare_type_func(ty)?;
-                        }
-                        StructuralType::Array(_) | StructuralType::Struct(_) => {
-                            unimplemented!("gc proposal")
-                        }
-                    }
+                for ty in types.into_iter_err_on_gc_types() {
+                    let ty = self.convert_func_type(&ty?);
+                    self.declare_type_func(ty)?;
                 }
             }
 

@@ -87,17 +87,6 @@ pub fn val(v: &WastVal<'_>, ty: &Type) -> Result<Val> {
             }
             _ => bail!("expected a variant value"),
         },
-        WastVal::Union(idx, payload) => match ty {
-            Type::Union(t) => {
-                let case = match t.types().nth(*idx as usize) {
-                    Some(case) => case,
-                    None => bail!("case {idx} too large"),
-                };
-                let payload = val(payload, &case)?;
-                t.new_val(*idx, payload)?
-            }
-            _ => bail!("expected a union value"),
-        },
         WastVal::Option(v) => match ty {
             Type::Option(t) => {
                 let v = match v {
@@ -260,15 +249,6 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             }
             _ => mismatch(expected, actual),
         },
-        WastVal::Union(idx, e) => match actual {
-            Val::Union(a) => {
-                if a.discriminant() != *idx {
-                    bail!("expected discriminant `{idx}` got `{}`", a.discriminant());
-                }
-                match_val(e, a.payload())
-            }
-            _ => mismatch(expected, actual),
-        },
         WastVal::Option(e) => match actual {
             Val::Option(a) => match (e, a.value()) {
                 (None, None) => Ok(()),
@@ -348,7 +328,6 @@ fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         WastVal::Tuple(..) => "tuple",
         WastVal::Enum(..) => "enum",
         WastVal::Variant(..) => "variant",
-        WastVal::Union(..) => "union",
         WastVal::Option(..) => "option",
         WastVal::Result(..) => "result",
         WastVal::Flags(..) => "flags",
@@ -372,7 +351,6 @@ fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         Val::Tuple(..) => "tuple",
         Val::Enum(..) => "enum",
         Val::Variant(..) => "variant",
-        Val::Union(..) => "union",
         Val::Option(..) => "option",
         Val::Result(..) => "result",
         Val::Flags(..) => "flags",

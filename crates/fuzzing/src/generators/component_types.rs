@@ -78,15 +78,6 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
             let name = input.choose(&names)?;
             en.new_val(name).unwrap()
         }
-        Type::Union(un) => {
-            let mut types = un.types();
-            let discriminant = input.int_in_range(0..=types.len() - 1)?;
-            un.new_val(
-                discriminant.try_into().unwrap(),
-                arbitrary_val(&types.nth(discriminant).unwrap(), input)?,
-            )
-            .unwrap()
-        }
         Type::Option(option) => {
             let discriminant = input.int_in_range(0..=1)?;
             option

@@ -8,19 +8,10 @@ interface variants {
   e1-arg: func(x: e1)
   e1-result: func() -> e1
 
-  union u1 {
-      u32,
-      float32,
-  }
-
-  u1-arg: func(x: u1)
-  u1-result: func() -> u1
-
   record empty {}
 
   variant v1 {
       a,
-      b(u1),
       c(e1),
       d(string),
       e(empty),
@@ -40,7 +31,6 @@ interface variants {
     c: option<u32>,
     d: option<e1>,
     e: option<float32>,
-    f: option<u1>,
     g: option<option<bool>>,
   )
   option-result: func() -> tuple<
@@ -49,7 +39,6 @@ interface variants {
     option<u32>,
     option<e1>,
     option<float32>,
-    option<u1>,
     option<option<bool>>,
   >
 
