@@ -85,8 +85,9 @@ struct OpenvinoGraph(
 unsafe impl Send for OpenvinoGraph {}
 unsafe impl Sync for OpenvinoGraph {}
 
+#[async_trait]
 impl BackendGraph for OpenvinoGraph {
-    fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
+    async fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
         let mut network = self.1.lock().unwrap();
         let infer_request = network.create_infer_request()?;
         let box_: Box<dyn BackendExecutionContext> =

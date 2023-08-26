@@ -61,7 +61,7 @@ impl gen::graph::Host for WasiNnCtx {
         &mut self,
         name: String,
     ) -> wasmtime::Result<Result<gen::graph::Graph, gen::errors::Error>> {
-        if let Some(graph) = self.registry.get_mut(&name) {
+        if let Some(graph) = self.registry.get_mut(&name).await? {
             let graph_id = self.graphs.insert(graph.clone().into());
             Ok(Ok(graph_id))
         } else {
@@ -79,10 +79,9 @@ impl gen::inference::Host for WasiNnCtx {
         &mut self,
         graph_id: gen::graph::Graph,
     ) -> wasmtime::Result<Result<gen::inference::GraphExecutionContext, gen::errors::Error>> {
-        let exec_context = if let Some(graph) = self.graphs.get(graph_id) {
-            graph.init_execution_context()?
-        } else {
-            return Err(UsageError::InvalidGraphHandle.into());
+        let exec_context = match  self.graphs.get_mut(graph_id) {
+            Some(graph) => graph.init_execution_context().await?,
+            None => return Err(UsageError::InvalidGraphHandle.into())
         };
 
         let exec_context_id = self.executions.insert(exec_context);

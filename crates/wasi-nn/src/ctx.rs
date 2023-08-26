@@ -1,12 +1,14 @@
 //! Implements the host state for the `wasi-nn` API: [WasiNnCtx].
 
-use crate::backend::{Backend, BackendError, BackendKind};
+use crate::backend::{Backend, BackendError, BackendKind, build_kserve_registry};
 use crate::wit::types::GraphEncoding;
-use crate::{ExecutionContext, Graph, GraphRegistry, InMemoryRegistry};
+use crate::{backend, ExecutionContext, Graph, GraphRegistry, InMemoryRegistry};
+
 use anyhow::anyhow;
 use std::{collections::HashMap, hash::Hash, path::Path};
 use thiserror::Error;
 use wiggle::GuestError;
+use crate::backend::BackendKind::KServe;
 
 type Backends = HashMap<BackendKind, Box<dyn Backend>>;
 type Registry = Box<dyn GraphRegistry>;
@@ -33,6 +35,13 @@ pub fn preload(
         registry.load(backend, Path::new(path))?;
     }
     Ok((backends, Box::new(registry)))
+}
+
+pub fn kserve_registry() -> anyhow::Result<(Backends, Registry)> {
+    let mut backends: HashMap<_, _> = crate::backend::list().into_iter().collect();
+    let mut registry = build_kserve_registry(&"http://localhost:8000".to_string());
+
+    Ok((backends, registry))
 }
 
 /// Capture the state necessary for calling into the backend ML libraries.
@@ -102,8 +111,8 @@ impl<K, V> Default for Table<K, V> {
 }
 
 impl<K, V> Table<K, V>
-where
-    K: Eq + Hash + From<u32> + Copy,
+    where
+        K: Eq + Hash + From<u32> + Copy,
 {
     pub fn insert(&mut self, value: V) -> K {
         let key = self.use_next_key();

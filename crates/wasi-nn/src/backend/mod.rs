@@ -6,9 +6,9 @@ mod kserve;
 mod openvino;
 
 use self::openvino::OpenvinoBackend;
-use crate::backend::kserve::KServeBackend;
+use crate::backend::kserve::{KServeBackend, KServeClient};
 use crate::wit::types::{ExecutionTarget, Tensor};
-use crate::{ExecutionContext, Graph};
+use crate::{ExecutionContext, Graph, GraphRegistry};
 use std::{error::Error, fmt, path::Path, str::FromStr};
 use thiserror::Error;
 use wiggle::async_trait_crate::async_trait;
@@ -20,6 +20,10 @@ pub fn list() -> Vec<(BackendKind, Box<dyn Backend>)> {
         (BackendKind::OpenVINO, Box::new(OpenvinoBackend::default())),
         (BackendKind::KServe, Box::new(KServeBackend::default())),
     ]
+}
+
+pub fn build_kserve_registry(server_url: &String) -> Box<dyn GraphRegistry> {
+    Box::new(KServeBackend { server_url: server_url.clone(), ..Default::default() })
 }
 
 /// A [Backend] contains the necessary state to load [Graph]s.
@@ -40,10 +44,11 @@ pub trait BackendFromDir: Backend {
     ) -> Result<Graph, BackendError>;
 }
 
+#[async_trait]
 /// A [BackendGraph] can create [BackendExecutionContext]s; this is the backing
 /// implementation for a [crate::witx::types::Graph].
 pub trait BackendGraph: Send + Sync {
-    fn init_execution_context(&self) -> Result<ExecutionContext, BackendError>;
+    async fn init_execution_context(&self) -> Result<ExecutionContext, BackendError>;
 }
 
 /// A [BackendExecutionContext] performs the actual inference; this is the
@@ -76,6 +81,7 @@ pub enum BackendKind {
     OpenVINO,
     KServe,
 }
+
 impl FromStr for BackendKind {
     type Err = BackendKindParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -85,11 +91,14 @@ impl FromStr for BackendKind {
         }
     }
 }
+
 #[derive(Debug)]
 pub struct BackendKindParseError(String);
+
 impl fmt::Display for BackendKindParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "unknown backend: {}", self.0)
     }
 }
+
 impl Error for BackendKindParseError {}

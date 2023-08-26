@@ -16,14 +16,20 @@ use crate::ctx::{UsageError, WasiNnCtx, WasiNnError, WasiNnResult as Result};
 use wiggle::GuestPtr;
 
 pub use gen::wasi_ephemeral_nn::add_to_linker;
+pub use crate::ctx::kserve_registry;
+use crate::witx::gen::types::{Graph, GraphExecutionContext};
 
 /// Generate the traits and types from the `wasi-nn` WITX specification.
 mod gen {
+    use std::io;
+    use std::io::ErrorKind;
+    use wiggle::GuestError;
+    use crate::backend::BackendError;
     use super::*;
     wiggle::from_witx!({
         witx: ["$WASI_ROOT/wasi-nn.witx"],
         errors: { nn_errno => WasiNnError },
-        async: { wasi_ephemeral_nn::compute, wasi_ephemeral_nn::load_by_name },
+        async: { wasi_ephemeral_nn::compute, wasi_ephemeral_nn::load_by_name, wasi_ephemeral_nn::init_execution_context },
     });
 
     /// Additionally, we must let Wiggle know which of our error codes
@@ -41,11 +47,79 @@ mod gen {
             e: WasiNnError,
         ) -> anyhow::Result<types::NnErrno> {
             tracing::debug!("host error: {:?}", e);
-            match e {
-                WasiNnError::BackendError(_) => unimplemented!(),
-                WasiNnError::GuestError(_) => unimplemented!(),
-                WasiNnError::UsageError(_) => unimplemented!(),
-            }
+
+            anyhow::Result::Ok(match e {
+                WasiNnError::BackendError(e) => match e {
+                    BackendError::BackendAccess(d) => {
+                        eprintln!("{}", d.to_string());
+                        gen::types::NnErrno::RuntimeError
+                    }
+                    BackendError::GuestAccess(d) => {
+                        eprintln!("{}", d.to_string());
+                        gen::types::NnErrno::RuntimeError
+                    }
+                    BackendError::InvalidNumberOfBuilders(expected, actual) => {
+                        eprintln!("Expected {} builds received {}", expected, actual);
+                        gen::types::NnErrno::InvalidArgument
+                    }
+                    BackendError::NotEnoughMemory(d) => {
+                        eprintln!("Unable to allocation {} bytes of memory.", d);
+                        gen::types::NnErrno::MissingMemory
+                    }
+                    BackendError::UnsupportedOperation(d) => {
+                        eprintln!("Unsupported operation: {}", d);
+                        gen::types::NnErrno::InvalidArgument
+                    }
+                }
+                WasiNnError::GuestError(e) => match e {
+                    GuestError::InvalidFlagValue(d) => {
+                        eprintln!("Invalid flag value {}", d);
+                        gen::types::NnErrno::InvalidArgument
+                    }
+                    GuestError::InvalidEnumValue(d) => {
+                        eprintln!("Invalid enum value {}", d);
+                        gen::types::NnErrno::InvalidArgument
+                    }
+                    GuestError::PtrOverflow => {
+                        eprintln!("Pointer Overflow");
+                        gen::types::NnErrno::RuntimeError
+                    }
+                    GuestError::PtrOutOfBounds(_) => {
+                        eprintln!("Pointer out of bounds");
+                        gen::types::NnErrno::RuntimeError
+                    }
+                    GuestError::PtrNotAligned(_, _) => {
+                        eprintln!("Pointer not aligned");
+                        gen::types::NnErrno::RuntimeError
+                    }
+                    GuestError::PtrBorrowed(_) => {
+                        eprintln!("Pointer borrowed");
+                        gen::types::NnErrno::RuntimeError
+                    }
+                    GuestError::BorrowCheckerOutOfHandles => {
+                        eprintln!("Borrow checker out of handles");
+                        gen::types::NnErrno::RuntimeError
+                    }
+                    GuestError::SliceLengthsDiffer => {
+                        eprintln!("Slice lengths differe");
+                        gen::types::NnErrno::RuntimeError}
+                    GuestError::InFunc { .. } => {
+                        eprintln!("In func?");
+                        gen::types::NnErrno::RuntimeError
+                    }
+                    GuestError::InvalidUtf8(_) => {
+                        eprintln!("Invalid UTF 8");
+                        gen::types::NnErrno::RuntimeError}
+                    GuestError::TryFromIntError(_) => {
+                        eprintln!("Try from int error.");
+                        gen::types::NnErrno::RuntimeError
+                    }
+                }
+                WasiNnError::UsageError(e) => {
+                    eprintln!("Usage error {:?}", e);
+                    gen::types::NnErrno::RuntimeError
+                }
+            })
         }
     }
 }
@@ -81,7 +155,7 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
 
     async fn load_by_name<'b>(&mut self, name: &GuestPtr<'b, str>) -> Result<gen::types::Graph> {
         let name = name.as_str()?.unwrap();
-        if let Some(graph) = self.registry.get_mut(&name) {
+        if let Some(graph) = self.registry.get_mut(&name).await? {
             let graph_id = self.graphs.insert(graph.clone().into());
             Ok(graph_id.into())
         } else {
@@ -89,14 +163,14 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         }
     }
 
-    fn init_execution_context(
+    async fn init_execution_context(
         &mut self,
         graph_id: gen::types::Graph,
     ) -> Result<gen::types::GraphExecutionContext> {
         let exec_context = if let Some(graph) = self.graphs.get_mut(graph_id.into()) {
-            graph.init_execution_context()?
+            graph.init_execution_context().await?
         } else {
-            return Err(UsageError::InvalidGraphHandle.into());
+            return Err(WasiNnError::UsageError(UsageError::InvalidGraphHandle));
         };
 
         let exec_context_id = self.executions.insert(exec_context);
@@ -159,6 +233,7 @@ impl TryFrom<gen::types::GraphEncoding> for crate::backend::BackendKind {
         }
     }
 }
+
 impl From<gen::types::ExecutionTarget> for crate::wit::types::ExecutionTarget {
     fn from(value: gen::types::ExecutionTarget) -> Self {
         match value {
@@ -168,6 +243,7 @@ impl From<gen::types::ExecutionTarget> for crate::wit::types::ExecutionTarget {
         }
     }
 }
+
 impl From<gen::types::GraphEncoding> for crate::wit::types::GraphEncoding {
     fn from(value: gen::types::GraphEncoding) -> Self {
         match value {
@@ -182,6 +258,7 @@ impl From<gen::types::GraphEncoding> for crate::wit::types::GraphEncoding {
         }
     }
 }
+
 impl From<gen::types::TensorType> for crate::wit::types::TensorType {
     fn from(value: gen::types::TensorType) -> Self {
         match value {
