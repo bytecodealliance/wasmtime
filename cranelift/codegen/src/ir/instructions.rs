@@ -12,7 +12,7 @@ use core::ops::{Deref, DerefMut};
 use core::str::FromStr;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 use crate::bitset::BitSet;
 use crate::entity;

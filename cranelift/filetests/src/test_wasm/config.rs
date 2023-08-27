@@ -4,7 +4,7 @@
 
 use anyhow::{bail, ensure, Result};
 use cranelift_codegen::ir;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

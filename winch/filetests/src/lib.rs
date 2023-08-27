@@ -5,7 +5,7 @@ mod test {
     use super::disasm::disasm;
     use anyhow::Context;
     use cranelift_codegen::settings::{self, Configurable};
-    use serde::{Deserialize, Serialize};
+    use serde_derive::{Deserialize, Serialize};
     use similar::TextDiff;
     use std::str::FromStr;
     use target_lexicon::Triple;

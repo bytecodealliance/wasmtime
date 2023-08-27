@@ -2,7 +2,7 @@ use crate::code::CodeObject;
 use crate::signatures::SignatureCollection;
 use crate::{Engine, Module, ResourcesRequired};
 use anyhow::{bail, Context, Result};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::fs;
 use std::mem;
 use std::path::Path;

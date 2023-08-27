@@ -7,7 +7,7 @@
 
 use crate::cli_tests::get_wasmtime_command;
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
+use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;

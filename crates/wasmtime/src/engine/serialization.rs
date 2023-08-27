@@ -25,7 +25,7 @@ use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use anyhow::{anyhow, bail, Context, Result};
 use object::write::{Object, StandardSegment};
 use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use wasmtime_environ::obj;

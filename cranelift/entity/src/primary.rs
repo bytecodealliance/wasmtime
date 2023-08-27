@@ -10,7 +10,7 @@ use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::slice;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// A primary mapping `K -> V` allocating dense entity references.
 ///

@@ -3,7 +3,7 @@
 use core::fmt::{self, Display, Formatter};
 use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// A trap code describing the reason for a trap.
 ///

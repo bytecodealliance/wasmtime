@@ -1,7 +1,7 @@
 use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, ensure, Result};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]

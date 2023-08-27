@@ -17,7 +17,8 @@ wasmtime-types = { workspace = true }
 wasmparser = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
-serde = { version = "1.0.94", features = ["derive"] }
+serde = "1.0.188"
+serde_derive = "1.0.188"
 log = { workspace = true }
 gimli = { workspace = true, features = ["write"] }
 object = { workspace = true, features = ['write_core'] }

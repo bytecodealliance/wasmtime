@@ -118,7 +118,7 @@ impl std::fmt::Display for CacheKeyHash {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde_derive::Serialize, serde_derive::Deserialize)]
 struct CachedFunc {
     // Note: The version marker must be first to ensure deserialization stops in case of a version
     // mismatch before attempting to deserialize the actual compiled code.
@@ -139,7 +139,7 @@ struct CacheKey<'a> {
     parameters: CompileParameters,
 }
 
-#[derive(Clone, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, Hash, serde_derive::Serialize, serde_derive::Deserialize)]
 struct CompileParameters {
     isa: String,
     triple: String,

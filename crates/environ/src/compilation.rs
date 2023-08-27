@@ -9,7 +9,7 @@ use crate::{
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;
 use std::collections::BTreeMap;

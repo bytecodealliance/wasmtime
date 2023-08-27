@@ -36,7 +36,7 @@ impl Serialize for SettingData {
 }
 
 // Gather together all of the setting data to displays
-#[derive(Serialize)]
+#[derive(serde_derive::Serialize)]
 struct Settings {
     triple: String,
 
