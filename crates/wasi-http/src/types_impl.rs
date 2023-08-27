@@ -359,8 +359,15 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::bindings::http::types::Host for T
                         let response = self.handle_async(f.request_id(), f.options()).await;
                         match response {
                             Ok(id) => {
+                                tracing::debug!(
+                                    "including response id to future incoming response"
+                                );
                                 let future_mut = self.table_mut().get_future_mut(future)?;
                                 future_mut.set_response_id(id);
+                                tracing::trace!(
+                                    "future incoming response details {:?}",
+                                    *future_mut
+                                );
                             }
                             _ => {}
                         }
@@ -383,6 +390,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::bindings::http::types::Host for T
         Ok(match f.pollable_id() {
             Some(pollable_id) => pollable_id,
             None => {
+                tracing::debug!("including pollable id to future incoming response");
                 let pollable =
                     HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))));
                 let pollable_id = self
@@ -394,6 +402,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::bindings::http::types::Host for T
                     .get_future_mut(future)
                     .context("[listen_to_future_incoming_response] getting future")?;
                 f.set_pollable_id(pollable_id);
+                tracing::trace!("future incoming response details {:?}", *f);
                 pollable_id
             }
         })

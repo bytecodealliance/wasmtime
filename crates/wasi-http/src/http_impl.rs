@@ -290,6 +290,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             let frame = next?;
             tracing::debug!("response body next frame");
             if let Some(chunk) = frame.data_ref() {
+                tracing::trace!("response body chunk size {:?}", chunk.len());
                 buf.extend_from_slice(chunk);
             }
             if let Some(trailers) = frame.trailers_ref() {
@@ -319,6 +320,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             .table_mut()
             .push_response(Box::new(response))
             .context("[handle_async] pushing response")?;
+        tracing::trace!("response body {:?}", std::str::from_utf8(&buf[..]).unwrap());
         let (stream_id, stream) = self
             .table_mut()
             .push_stream(Bytes::from(buf), response_id)
