@@ -525,6 +525,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Cls, &[I32], &[I32]),
                 (Opcode::Cls, &[I64], &[I64]),
                 (Opcode::Cls, &[I128], &[I128]),
+                // TODO
+                (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
                 (
@@ -589,6 +591,15 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[],
                     &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
                 ),
+                // TODO
+                (
+                    Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
+                    &([I8X16, I128] | [I16X8, I128] | [I32X4, I128] | [I64X2, I128])
+                ),
+                (
+                    Opcode::Rotr | Opcode::Rotl,
+                    &([I8X16, _] | [I16X8, _] | [I32X4, _] | [I64X2, _])
+                ),
             )
         }
 
@@ -647,6 +658,17 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // https://github.com/bytecodealliance/wasmtime/issues/6104
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
+                // TODO
+                (
+                    Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
+                    &([I8X16, I128] | [I16X8, I128] | [I32X4, I128] | [I64X2, I128])
+                ),
+                (
+                    Opcode::Rotr | Opcode::Rotl,
+                    &([I8X16, _] | [I16X8, _] | [I32X4, _] | [I64X2, _])
+                ),
+                // TODO
+                (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
             )
         }
 
@@ -689,6 +711,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // https://github.com/bytecodealliance/wasmtime/issues/6104
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
+                // TODO
+                (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
             )
         }
 
@@ -737,8 +761,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
                 // TODO
-                (Opcode::SelectSpectreGuard, &[_, _, _], &[F32]),
-                (Opcode::SelectSpectreGuard, &[_, _, _], &[F64]),
+                (Opcode::SelectSpectreGuard, &[_, _, _], &[F32 | F64]),
+                // TODO
+                (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
             )
         }
 
@@ -896,10 +921,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::ScalarToVector),
                 (Opcode::X86Pmaddubsw),
                 (Opcode::X86Cvtt2dq),
-                (Opcode::Bitselect, &[F32, F32, F32], &[F32]),
-                (Opcode::Bitselect, &[F64, F64, F64], &[F64]),
-                (Opcode::Bitselect, &[F32X4, F32X4, F32X4], &[F32X4]),
-                (Opcode::Bitselect, &[F64X2, F64X2, F64X2], &[F64X2]),
                 (Opcode::VanyTrue, &[F32X4], &[I8]),
                 (Opcode::VanyTrue, &[F64X2], &[I8]),
                 (Opcode::VhighBits, &[F32X4], &[I8]),
@@ -952,10 +973,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::VhighBits, &[I64X2], &[I64X2]),
                 (Opcode::VhighBits, &[F32X4], &[I64X2]),
                 (Opcode::VhighBits, &[F64X2], &[I64X2]),
-                (Opcode::Ineg, &[I8X16], &[I8X16]),
-                (Opcode::Ineg, &[I16X8], &[I16X8]),
-                (Opcode::Ineg, &[I32X4], &[I32X4]),
-                (Opcode::Ineg, &[I64X2], &[I64X2]),
                 (Opcode::Umulhi, &[I128, I128], &[I128]),
                 (Opcode::Smulhi, &[I128, I128], &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/6073
@@ -966,106 +983,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::Isplit, &[I64], &[I32, I32]),
                 (Opcode::Isplit, &[I32], &[I16, I16]),
                 (Opcode::Isplit, &[I16], &[I8, I8]),
-                (Opcode::Rotl, &[I8X16, I8], &[I8X16]),
-                (Opcode::Rotl, &[I8X16, I16], &[I8X16]),
-                (Opcode::Rotl, &[I8X16, I32], &[I8X16]),
-                (Opcode::Rotl, &[I8X16, I64], &[I8X16]),
-                (Opcode::Rotl, &[I8X16, I128], &[I8X16]),
-                (Opcode::Rotl, &[I16X8, I8], &[I16X8]),
-                (Opcode::Rotl, &[I16X8, I16], &[I16X8]),
-                (Opcode::Rotl, &[I16X8, I32], &[I16X8]),
-                (Opcode::Rotl, &[I16X8, I64], &[I16X8]),
-                (Opcode::Rotl, &[I16X8, I128], &[I16X8]),
-                (Opcode::Rotl, &[I32X4, I8], &[I32X4]),
-                (Opcode::Rotl, &[I32X4, I16], &[I32X4]),
-                (Opcode::Rotl, &[I32X4, I32], &[I32X4]),
-                (Opcode::Rotl, &[I32X4, I64], &[I32X4]),
-                (Opcode::Rotl, &[I32X4, I128], &[I32X4]),
-                (Opcode::Rotl, &[I64X2, I8], &[I64X2]),
-                (Opcode::Rotl, &[I64X2, I16], &[I64X2]),
-                (Opcode::Rotl, &[I64X2, I32], &[I64X2]),
-                (Opcode::Rotl, &[I64X2, I64], &[I64X2]),
-                (Opcode::Rotl, &[I64X2, I128], &[I64X2]),
-                (Opcode::Rotr, &[I8X16, I8], &[I8X16]),
-                (Opcode::Rotr, &[I8X16, I16], &[I8X16]),
-                (Opcode::Rotr, &[I8X16, I32], &[I8X16]),
-                (Opcode::Rotr, &[I8X16, I64], &[I8X16]),
-                (Opcode::Rotr, &[I8X16, I128], &[I8X16]),
-                (Opcode::Rotr, &[I16X8, I8], &[I16X8]),
-                (Opcode::Rotr, &[I16X8, I16], &[I16X8]),
-                (Opcode::Rotr, &[I16X8, I32], &[I16X8]),
-                (Opcode::Rotr, &[I16X8, I64], &[I16X8]),
-                (Opcode::Rotr, &[I16X8, I128], &[I16X8]),
-                (Opcode::Rotr, &[I32X4, I8], &[I32X4]),
-                (Opcode::Rotr, &[I32X4, I16], &[I32X4]),
-                (Opcode::Rotr, &[I32X4, I32], &[I32X4]),
-                (Opcode::Rotr, &[I32X4, I64], &[I32X4]),
-                (Opcode::Rotr, &[I32X4, I128], &[I32X4]),
-                (Opcode::Rotr, &[I64X2, I8], &[I64X2]),
-                (Opcode::Rotr, &[I64X2, I16], &[I64X2]),
-                (Opcode::Rotr, &[I64X2, I32], &[I64X2]),
-                (Opcode::Rotr, &[I64X2, I64], &[I64X2]),
-                (Opcode::Rotr, &[I64X2, I128], &[I64X2]),
-                (Opcode::Ishl, &[I8X16, I8], &[I8X16]),
-                (Opcode::Ishl, &[I8X16, I16], &[I8X16]),
-                (Opcode::Ishl, &[I8X16, I32], &[I8X16]),
-                (Opcode::Ishl, &[I8X16, I64], &[I8X16]),
-                (Opcode::Ishl, &[I8X16, I128], &[I8X16]),
-                (Opcode::Ishl, &[I16X8, I8], &[I16X8]),
-                (Opcode::Ishl, &[I16X8, I16], &[I16X8]),
-                (Opcode::Ishl, &[I16X8, I32], &[I16X8]),
-                (Opcode::Ishl, &[I16X8, I64], &[I16X8]),
-                (Opcode::Ishl, &[I16X8, I128], &[I16X8]),
-                (Opcode::Ishl, &[I32X4, I8], &[I32X4]),
-                (Opcode::Ishl, &[I32X4, I16], &[I32X4]),
-                (Opcode::Ishl, &[I32X4, I32], &[I32X4]),
-                (Opcode::Ishl, &[I32X4, I64], &[I32X4]),
-                (Opcode::Ishl, &[I32X4, I128], &[I32X4]),
-                (Opcode::Ishl, &[I64X2, I8], &[I64X2]),
-                (Opcode::Ishl, &[I64X2, I16], &[I64X2]),
-                (Opcode::Ishl, &[I64X2, I32], &[I64X2]),
-                (Opcode::Ishl, &[I64X2, I64], &[I64X2]),
-                (Opcode::Ishl, &[I64X2, I128], &[I64X2]),
-                (Opcode::Ushr, &[I8X16, I8], &[I8X16]),
-                (Opcode::Ushr, &[I8X16, I16], &[I8X16]),
-                (Opcode::Ushr, &[I8X16, I32], &[I8X16]),
-                (Opcode::Ushr, &[I8X16, I64], &[I8X16]),
-                (Opcode::Ushr, &[I8X16, I128], &[I8X16]),
-                (Opcode::Ushr, &[I16X8, I8], &[I16X8]),
-                (Opcode::Ushr, &[I16X8, I16], &[I16X8]),
-                (Opcode::Ushr, &[I16X8, I32], &[I16X8]),
-                (Opcode::Ushr, &[I16X8, I64], &[I16X8]),
-                (Opcode::Ushr, &[I16X8, I128], &[I16X8]),
-                (Opcode::Ushr, &[I32X4, I8], &[I32X4]),
-                (Opcode::Ushr, &[I32X4, I16], &[I32X4]),
-                (Opcode::Ushr, &[I32X4, I32], &[I32X4]),
-                (Opcode::Ushr, &[I32X4, I64], &[I32X4]),
-                (Opcode::Ushr, &[I32X4, I128], &[I32X4]),
-                (Opcode::Ushr, &[I64X2, I8], &[I64X2]),
-                (Opcode::Ushr, &[I64X2, I16], &[I64X2]),
-                (Opcode::Ushr, &[I64X2, I32], &[I64X2]),
-                (Opcode::Ushr, &[I64X2, I64], &[I64X2]),
-                (Opcode::Ushr, &[I64X2, I128], &[I64X2]),
-                (Opcode::Sshr, &[I8X16, I8], &[I8X16]),
-                (Opcode::Sshr, &[I8X16, I16], &[I8X16]),
-                (Opcode::Sshr, &[I8X16, I32], &[I8X16]),
-                (Opcode::Sshr, &[I8X16, I64], &[I8X16]),
-                (Opcode::Sshr, &[I8X16, I128], &[I8X16]),
-                (Opcode::Sshr, &[I16X8, I8], &[I16X8]),
-                (Opcode::Sshr, &[I16X8, I16], &[I16X8]),
-                (Opcode::Sshr, &[I16X8, I32], &[I16X8]),
-                (Opcode::Sshr, &[I16X8, I64], &[I16X8]),
-                (Opcode::Sshr, &[I16X8, I128], &[I16X8]),
-                (Opcode::Sshr, &[I32X4, I8], &[I32X4]),
-                (Opcode::Sshr, &[I32X4, I16], &[I32X4]),
-                (Opcode::Sshr, &[I32X4, I32], &[I32X4]),
-                (Opcode::Sshr, &[I32X4, I64], &[I32X4]),
-                (Opcode::Sshr, &[I32X4, I128], &[I32X4]),
-                (Opcode::Sshr, &[I64X2, I8], &[I64X2]),
-                (Opcode::Sshr, &[I64X2, I16], &[I64X2]),
-                (Opcode::Sshr, &[I64X2, I32], &[I64X2]),
-                (Opcode::Sshr, &[I64X2, I64], &[I64X2]),
-                (Opcode::Sshr, &[I64X2, I128], &[I64X2]),
                 (Opcode::Fmin, &[F32X4, F32X4], &[F32X4]),
                 (Opcode::Fmin, &[F64X2, F64X2], &[F64X2]),
                 (Opcode::Fmax, &[F32X4, F32X4], &[F32X4]),
