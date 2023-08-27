@@ -541,15 +541,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Cls, &[I32], &[I32]),
                 (Opcode::Cls, &[I64], &[I64]),
                 (Opcode::Cls, &[I128], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5197
-                (
-                    Opcode::Bitselect,
-                    &([I8, I8, I8]
-                        | [I16, I16, I16]
-                        | [I32, I32, I32]
-                        | [I64, I64, I64]
-                        | [I128, I128, I128])
-                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
                 (

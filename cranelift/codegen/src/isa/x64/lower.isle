@@ -300,7 +300,8 @@
 
 ;; `i128`.
 
-(rule 7 (lower (has_type $I128 (band x y)))
+(decl and_i128 (ValueRegs ValueRegs) ValueRegs)
+(rule (and_i128 x y)
       (let ((x_regs ValueRegs x)
             (x_lo Gpr (value_regs_get_gpr x_regs 0))
             (x_hi Gpr (value_regs_get_gpr x_regs 1))
@@ -309,6 +310,9 @@
             (y_hi Gpr (value_regs_get_gpr y_regs 1)))
         (value_gprs (x64_and $I64 x_lo y_lo)
                     (x64_and $I64 x_hi y_hi))))
+
+(rule 7 (lower (has_type $I128 (band x y)))
+      (and_i128 x y))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
@@ -1397,6 +1401,18 @@
         (x64_maxps x y))
 (rule 3 (lower (has_type $F64X2 (bitselect (bitcast _ (fcmp (FloatCC.LessThan) y x)) x y)))
         (x64_maxpd x y))
+
+;; Scalar rules
+
+(rule 3 (lower (has_type $I128 (bitselect c t f)))
+      (let ((a ValueRegs (and_i128 c t))
+            (b ValueRegs (and_i128 (i128_not c) f)))
+        (or_i128 a b)))
+
+(rule 4 (lower (has_type (ty_int_ref_scalar_64 ty) (bitselect c t f)))
+      (let ((a Gpr (x64_and ty c t))
+            (b Gpr (x64_and ty (x64_not ty c) f)))
+        (x64_or ty a b)))
 
 ;;;; Rules for `x86_blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
