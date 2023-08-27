@@ -1414,6 +1414,12 @@
             (b Gpr (x64_and ty (x64_not ty c) f)))
         (x64_or ty a b)))
 
+(rule 5 (lower (has_type (ty_scalar_float ty) (bitselect c t f)))
+      (let ((a Xmm (sse_and ty c t))
+            (c_neg Xmm (x64_xor_vector ty c (vector_all_ones)))
+            (b Xmm (sse_and ty c_neg f)))
+        (sse_or ty a b)))
+
 ;;;; Rules for `x86_blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8X16
