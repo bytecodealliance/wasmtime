@@ -532,6 +532,45 @@ pub fn add_component_to_linker<T: WasiHttpView>(
             })
         },
     )?;
+    linker.func_wrap3_async(
+        "wasi:io/streams",
+        "blocking-read",
+        move |mut caller: Caller<'_, T>, stream: u32, len: u64, ptr: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-read'] call this={:?} len={:?}",
+                    stream,
+                    len
+                );
+                let result = io::streams::Host::blocking_read(ctx, stream, len).await;
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-read'] return result={:?}",
+                    result
+                );
+                let (bytes, status) = result?.map_err(|_| anyhow!("read failed"))?;
+
+                let done = match status {
+                    io::streams::StreamStatus::Open => 0,
+                    io::streams::StreamStatus::Ended => 1,
+                };
+                let body_len: u32 = bytes.len().try_into()?;
+                let out_ptr = allocate_guest_pointer(&mut caller, body_len).await?;
+
+                // First == is_err
+                // Second == {ok: is_err = false, tag: is_err = true}
+                // Third == bytes length
+                // Fourth == enum status
+                let result: [u32; 4] = [0, out_ptr, body_len, done];
+                let raw = u32_array_to_u8(&result);
+
+                let memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+                Ok(())
+            })
+        },
+    )?;
     linker.func_wrap1_async(
         "wasi:io/streams",
         "subscribe-to-input-stream",
@@ -588,6 +627,47 @@ pub fn add_component_to_linker<T: WasiHttpView>(
                 let result = io::streams::Host::write(ctx, stream, body.into()).await;
                 tracing::trace!(
                     "[module='wasi:io/streams' function='write'] return result={:?}",
+                    result
+                );
+                let (len, status) = result?.map_err(|_| anyhow!("write failed"))?;
+
+                let written: u32 = len.try_into()?;
+                let done: u32 = match status {
+                    io::streams::StreamStatus::Open => 0,
+                    io::streams::StreamStatus::Ended => 1,
+                };
+
+                // First == is_err
+                // Second == {ok: is_err = false, tag: is_err = true}
+                // Third == amount of bytes written
+                // Fifth == enum status
+                let result: [u32; 5] = [0, 0, written, 0, done];
+                let raw = u32_array_to_u8(&result);
+
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap4_async(
+        "wasi:io/streams",
+        "blocking-write",
+        move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
+            Box::new(async move {
+                let memory = memory_get(&mut caller)?;
+                let body =
+                    string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+
+                let ctx = get_cx(caller.data_mut());
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-write'] call stream={:?} body={:?}",
+                    stream,
+                    body
+                );
+                let result = io::streams::Host::blocking_write(ctx, stream, body.into()).await;
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-write'] return result={:?}",
                     result
                 );
                 let (len, status) = result?.map_err(|_| anyhow!("write failed"))?;
@@ -1211,7 +1291,6 @@ pub mod sync {
                   ptr: u32|
                   -> anyhow::Result<()> {
                 let ctx = get_cx(caller.data_mut());
-
                 tracing::trace!(
                     "[module='wasi:io/streams' function='read'] call this={:?} len={:?}",
                     stream,
@@ -1220,6 +1299,48 @@ pub mod sync {
                 let result = io::streams::Host::read(ctx, stream, len);
                 tracing::trace!(
                     "[module='wasi:io/streams' function='read'] return result={:?}",
+                    result
+                );
+                let (bytes, status) = result?.map_err(|_| anyhow!("read failed"))?;
+
+                let done = match status {
+                    io::streams::StreamStatus::Open => 0,
+                    io::streams::StreamStatus::Ended => 1,
+                };
+                let body_len: u32 = bytes.len().try_into()?;
+                let out_ptr = allocate_guest_pointer(&mut caller, body_len)?;
+
+                // First == is_err
+                // Second == {ok: is_err = false, tag: is_err = true}
+                // Third == bytes length
+                // Fourth == enum status
+                let result: [u32; 4] = [0, out_ptr, body_len, done];
+                let raw = u32_array_to_u8(&result);
+
+                let memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+                Ok(())
+            },
+        )?;
+        linker.func_wrap(
+            "wasi:io/streams",
+            "blocking-read",
+            move |mut caller: Caller<'_, T>,
+                  stream: u32,
+                  len: u64,
+                  ptr: u32|
+                  -> anyhow::Result<()> {
+                let ctx = get_cx(caller.data_mut());
+
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-read'] call this={:?} len={:?}",
+                    stream,
+                    len
+                );
+                let result = io::streams::Host::blocking_read(ctx, stream, len);
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-read'] return result={:?}",
                     result
                 );
                 let (bytes, status) = result?.map_err(|_| anyhow!("read failed"))?;
@@ -1303,6 +1424,50 @@ pub mod sync {
                 let result = io::streams::Host::write(ctx, stream, body.into());
                 tracing::trace!(
                     "[module='wasi:io/streams' function='write'] return result={:?}",
+                    result
+                );
+                let (len, status) = result?.map_err(|_| anyhow!("write failed"))?;
+
+                let written: u32 = len.try_into()?;
+                let done: u32 = match status {
+                    io::streams::StreamStatus::Open => 0,
+                    io::streams::StreamStatus::Ended => 1,
+                };
+
+                // First == is_err
+                // Second == {ok: is_err = false, tag: is_err = true}
+                // Third == amount of bytes written
+                // Fifth == enum status
+                let result: [u32; 5] = [0, 0, written, 0, done];
+                let raw = u32_array_to_u8(&result);
+
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            },
+        )?;
+        linker.func_wrap(
+            "wasi:io/streams",
+            "blocking-write",
+            move |mut caller: Caller<'_, T>,
+                  stream: u32,
+                  body_ptr: u32,
+                  body_len: u32,
+                  ptr: u32|
+                  -> anyhow::Result<()> {
+                let memory = memory_get(&mut caller)?;
+                let body =
+                    string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+
+                let ctx = get_cx(caller.data_mut());
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-write'] call stream={:?} body={:?}",
+                    stream,
+                    body
+                );
+                let result = io::streams::Host::blocking_write(ctx, stream, body.into());
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-write'] return result={:?}",
                     result
                 );
                 let (len, status) = result?.map_err(|_| anyhow!("write failed"))?;
