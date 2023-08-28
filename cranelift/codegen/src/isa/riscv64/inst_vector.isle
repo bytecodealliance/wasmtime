@@ -285,6 +285,12 @@
   (VzextVF2)
   (VzextVF4)
   (VzextVF8)
+  (VfcvtxufV)
+  (VfcvtxfV)
+  (VfcvtrtzxufV)
+  (VfcvtrtzxfV)
+  (VfcvtfxuV)
+  (VfcvtfxV)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
@@ -1013,6 +1019,46 @@
 (decl rv_vfsqrt_v (VReg VecOpMasking VState) VReg)
 (rule (rv_vfsqrt_v vs mask vstate)
   (vec_alu_rr (VecAluOpRR.VfsqrtV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.xu.f.v` instruction.
+;; This instruction converts a float to an unsigned integer.
+(decl rv_vfcvt_xu_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_xu_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtxufV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.x.f.v` instruction.
+;; This instruction converts a float to a signed integer.
+(decl rv_vfcvt_x_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_x_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtxfV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.rtz.xu.f.v` instruction.
+;; This instruction converts a float to an unsigned integer
+;; using the Round to Zero (RTZ) rounding mode and ignoring
+;; the currently set FRM rounding mode.
+(decl rv_vfcvt_rtz_xu_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_rtz_xu_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtrtzxufV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.rtz.x.f.v` instruction.
+;; This instruction converts a float to a signed integer.
+;; using the Round to Zero (RTZ) rounding mode and ignoring
+;; the currently set FRM rounding mode.
+(decl rv_vfcvt_rtz_x_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_rtz_x_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtrtzxfV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.f.xu.v` instruction.
+;; This instruction converts a unsigned integer to a float.
+(decl rv_vfcvt_f_xu_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_f_xu_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtfxuV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.x.f.v` instruction.
+;; This instruction converts a signed integer to a float.
+(decl rv_vfcvt_f_x_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_f_x_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtfxV) vs mask vstate))
 
 ;; Helper for emitting the `vslidedown.vx` instruction.
 ;; `vslidedown` moves all elements in the vector down by n elements.
