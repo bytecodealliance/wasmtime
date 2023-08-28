@@ -4,10 +4,10 @@ use crate::preview2::{
     filesystem::FileInputStream,
     poll::PollableFuture,
     stream::{
-        FlushResult, HostInputStream, HostOutputStream, InternalInputStream,
-        InternalTableStreamExt, StreamRuntimeError, StreamState, TableStreamExt, WriteReadiness,
+        HostInputStream, HostOutputStream, InternalInputStream, InternalTableStreamExt,
+        StreamRuntimeError, StreamState, TableStreamExt,
     },
-    HostPollable, TablePollableExt, WasiView,
+    HostPollable, TableError, TablePollableExt, WasiView,
 };
 use std::any::Any;
 
@@ -20,20 +20,20 @@ impl From<StreamState> for streams::StreamStatus {
     }
 }
 
-impl From<WriteReadiness> for streams::WriteReadiness {
-    fn from(w: WriteReadiness) -> Self {
-        match w {
-            WriteReadiness::Ready(n) => Self::Ready(n as u64),
-            WriteReadiness::Closed => Self::Closed,
-        }
+impl From<TableError> for streams::Error {
+    fn from(e: TableError) -> streams::Error {
+        streams::Error::trap(e.into())
     }
 }
-
-impl From<FlushResult> for streams::FlushResult {
-    fn from(r: FlushResult) -> Self {
-        match r {
-            FlushResult::Done => Self::Done,
-            FlushResult::Closed => Self::Closed,
+impl From<anyhow::Error> for streams::Error {
+    fn from(e: anyhow::Error) -> streams::Error {
+        // FIXME StreamRuntimeError should have Closed and LastOperationFailed variants
+        match e.downcast::<StreamRuntimeError>() {
+            Ok(s) => {
+                tracing::debug!("stream runtime error: {s:?}");
+                streams::WriteError::Closed.into()
+            }
+            Err(e) => streams::Error::trap(e),
         }
     }
 }
@@ -241,39 +241,24 @@ impl<T: WasiView> streams::Host for T {
      *
      * -------------------------------------------------------------- */
 
-    async fn check_write(
-        &mut self,
-        stream: OutputStream,
-    ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+    async fn check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        // FIXME StreamRuntimeError to close stream
         match futures::future::poll_immediate(s.write_ready()).await {
-            Some(Ok(readiness)) => Ok(Some(readiness.into())),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
+            Some(Ok(_)) => Ok(todo!()), // FIXME return val of write_ready will change
+            Some(Err(e)) => Err(e.into()),
+            None => Ok(0),
         }
     }
-    async fn write(
-        &mut self,
-        stream: OutputStream,
-        bytes: Vec<u8>,
-    ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+    async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        match HostOutputStream::write(s, bytes.into()) {
-            Ok(Some(readiness)) => Ok(Some(readiness.into())),
-            Ok(None) => Ok(None),
-            Err(e) => {
-                if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                    tracing::debug!("stream runtime error: {e:?}");
-                    return Ok(Some(streams::WriteReadiness::Closed));
-                } else {
-                    return Err(e);
-                }
-            }
-        }
+        let _ = HostOutputStream::write(s, bytes.into())?; // FIXME return val of write will change
+        Ok(())
     }
 
-    async fn subscribe_to_write_ready(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+    async fn subscribe_to_output_stream(
+        &mut self,
+        stream: OutputStream,
+    ) -> anyhow::Result<Pollable> {
         // Ensure that table element is an output-stream:
         let _ = self.table_mut().get_output_stream_mut(stream)?;
 
@@ -295,90 +280,32 @@ impl<T: WasiView> streams::Host for T {
             })?)
     }
 
-    async fn blocking_check_write(
-        &mut self,
-        stream: OutputStream,
-    ) -> anyhow::Result<streams::WriteReadiness> {
+    async fn blocking_check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
         // await until actually ready for writing:
-        // FIXME StreamRuntimeError to close stream
-        Ok(s.write_ready().await?.into())
+        let _ = s.write_ready().await?; // FIXME return val of write_ready will change
+        Ok(todo!())
     }
 
-    async fn write_zeroes(
-        &mut self,
-        stream: OutputStream,
-        len: u64,
-    ) -> anyhow::Result<Option<streams::WriteReadiness>> {
+    async fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        match HostOutputStream::write_zeroes(s, len as usize) {
-            Ok(Some(readiness)) => Ok(Some(readiness.into())),
-            Ok(None) => Ok(None),
-            Err(e) => {
-                if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                    tracing::debug!("stream runtime error: {e:?}");
-                    return Ok(Some(streams::WriteReadiness::Closed));
-                } else {
-                    return Err(e);
-                }
-            }
-        }
+        let _ = HostOutputStream::write_zeroes(s, len as usize)?; // FIXME return val will change
+        Ok(())
     }
 
-    async fn flush(
-        &mut self,
-        stream: OutputStream,
-    ) -> anyhow::Result<Option<streams::FlushResult>> {
+    async fn flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        // FIXME StreamRuntimeError to close stream
-        match HostOutputStream::flush(s)? {
-            Some(result) => Ok(Some(result.into())),
-            None => Ok(None),
-        }
+        let _ = HostOutputStream::flush(s)?; // FIXME return val will change
+        Ok(())
     }
-    async fn check_flush(
-        &mut self,
-        stream: OutputStream,
-    ) -> anyhow::Result<Option<streams::FlushResult>> {
+    async fn blocking_flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        // FIXME StreamRuntimeError to close stream
-        match futures::future::poll_immediate(s.flush_ready()).await {
-            Some(Ok(result)) => Ok(Some(result.into())),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
-        }
-    }
-    async fn blocking_flush(
-        &mut self,
-        stream: OutputStream,
-    ) -> anyhow::Result<streams::FlushResult> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
-        // FIXME StreamRuntimeError to close stream
-        HostOutputStream::flush(s)?;
-        Ok(HostOutputStream::flush_ready(s).await?.into())
+        // FIXME return vals will change
+        let _ = HostOutputStream::flush(s)?;
+        let _ = HostOutputStream::write_ready(s).await?;
+        Ok(())
     }
 
-    async fn subscribe_to_flush(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-        // Ensure that table element is an output-stream:
-        let _ = self.table_mut().get_output_stream_mut(stream)?;
-
-        fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-            let stream = stream
-                .downcast_mut::<Box<dyn HostOutputStream>>()
-                .expect("downcast to HostOutputStream failed");
-            Box::pin(async move {
-                let _ = stream.flush_ready().await?;
-                Ok(())
-            })
-        }
-
-        Ok(self
-            .table_mut()
-            .push_host_pollable(HostPollable::TableEntry {
-                index: stream,
-                make_future: output_stream_ready,
-            })?)
-    }
     /* --------------------------------------------------------------
      *
      * Aspirational methods
@@ -479,20 +406,19 @@ pub mod sync {
         }
     }
 
-    impl From<async_streams::WriteReadiness> for streams::WriteReadiness {
-        fn from(other: async_streams::WriteReadiness) -> Self {
+    impl From<async_streams::WriteError> for streams::WriteError {
+        fn from(other: async_streams::WriteError) -> Self {
             match other {
-                async_streams::WriteReadiness::Ready(a) => Self::Ready(a),
-                async_streams::WriteReadiness::Closed => Self::Closed,
+                async_streams::WriteError::LastOperationFailed => Self::LastOperationFailed,
+                async_streams::WriteError::Closed => Self::Closed,
             }
         }
     }
-
-    impl From<async_streams::FlushResult> for streams::FlushResult {
-        fn from(other: async_streams::FlushResult) -> Self {
-            match other {
-                async_streams::FlushResult::Done => Self::Done,
-                async_streams::FlushResult::Closed => Self::Closed,
+    impl From<async_streams::Error> for streams::Error {
+        fn from(other: async_streams::Error) -> Self {
+            match other.downcast() {
+                Ok(write_error) => streams::Error::from(streams::WriteError::from(write_error)),
+                Err(e) => streams::Error::trap(e),
             }
         }
     }
@@ -522,58 +448,39 @@ pub mod sync {
             in_tokio(async { AsyncHost::blocking_read(self, stream, len).await }).map(xform)
         }
 
-        fn check_write(
-            &mut self,
-            stream: OutputStream,
-        ) -> anyhow::Result<Option<streams::WriteReadiness>> {
-            in_tokio(async { AsyncHost::check_write(self, stream).await })
-                .map(|r| r.map(|opt| opt.into()))
+        fn check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
+            Ok(in_tokio(async {
+                AsyncHost::check_write(self, stream).await
+            })?)
         }
-        fn write(
-            &mut self,
-            stream: OutputStream,
-            bytes: Vec<u8>,
-        ) -> anyhow::Result<Option<streams::WriteReadiness>> {
-            in_tokio(async { AsyncHost::write(self, stream, bytes).await })
-                .map(|opt| opt.map(|r| r.into()))
+        fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<(), streams::Error> {
+            Ok(in_tokio(async {
+                AsyncHost::write(self, stream, bytes).await
+            })?)
         }
-        fn subscribe_to_write_ready(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-            in_tokio(async { AsyncHost::subscribe_to_write_ready(self, stream).await })
+        fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+            in_tokio(async { AsyncHost::subscribe_to_output_stream(self, stream).await })
         }
-        fn write_zeroes(
-            &mut self,
-            stream: OutputStream,
-            len: u64,
-        ) -> anyhow::Result<Option<streams::WriteReadiness>> {
-            in_tokio(async { AsyncHost::write_zeroes(self, stream, len).await })
-                .map(|opt| opt.map(|r| r.into()))
+        fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
+            Ok(in_tokio(async {
+                AsyncHost::write_zeroes(self, stream, len).await
+            })?)
         }
-        fn blocking_check_write(
-            &mut self,
-            stream: OutputStream,
-        ) -> anyhow::Result<streams::WriteReadiness> {
-            in_tokio(async { AsyncHost::blocking_check_write(self, stream).await })
-                .map(|opt| opt.into())
+        fn blocking_check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
+            Ok(in_tokio(async {
+                AsyncHost::blocking_check_write(self, stream).await
+            })?)
         }
 
-        fn flush(&mut self, stream: OutputStream) -> anyhow::Result<Option<streams::FlushResult>> {
-            in_tokio(async { AsyncHost::flush(self, stream).await })
-                .map(|res| res.map(|opt| opt.into()))
+        fn flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
+            Ok(in_tokio(async { AsyncHost::flush(self, stream).await })?)
         }
-        fn check_flush(
-            &mut self,
-            stream: OutputStream,
-        ) -> anyhow::Result<Option<streams::FlushResult>> {
-            in_tokio(async { AsyncHost::check_flush(self, stream).await })
-                .map(|res| res.map(|opt| opt.into()))
-        }
-        fn blocking_flush(&mut self, stream: OutputStream) -> anyhow::Result<streams::FlushResult> {
-            in_tokio(async { AsyncHost::blocking_flush(self, stream).await }).map(|res| res.into())
+        fn blocking_flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
+            Ok(in_tokio(async {
+                AsyncHost::blocking_flush(self, stream).await
+            })?)
         }
 
-        fn subscribe_to_flush(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-            in_tokio(async { AsyncHost::subscribe_to_flush(self, stream).await })
-        }
         fn skip(
             &mut self,
             stream: InputStream,

@@ -134,53 +134,71 @@ interface streams {
     /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
     type output-stream = u32
 
-
-    /// Return values:
-    /// None means: not yet ready for writing
-    /// Some(Ready(n)) means: ready writing up to n bytes
-    /// Some(Closed) means: an error occured during the last write, or the other end
-    /// will no longer be reading. Future writes will trap.
-    ///
-    /// when the subscribe-to-output-stream pollable becomes ready, the
-    /// return value of this function is some.
-    variant write-readiness {
-        ready(u64), // n always greater than 0
+    /// An error for output-stream operations
+    enum write-error {
+        /// The last operation (a write or flush) failed before completion.
+        last-operation-failed,
+        /// The stream is closed: no more input will be accepted by the
+        /// stream. A closed output-stream will return this error on all
+        /// future operations.
         closed
     }
+    /// Check readiness for writing. this function never blocks.
+    ///
+    /// Returns the number of bytes allowed to call write with, or an error.
     check-write: func(
         this: output-stream
-    ) -> option<write-readiness>
+    ) -> result<u64, write-error>
 
+    /// like check-write, except it blocks until the stream becomes ready for
+    /// more 1 or more byte to be written, or an error can be reported.
+    blocking-check-write: func(
+      this: output-stream
+    ) -> result<u64, write-error>
 
 
     /// perform a write. this function never blocks.
     ///
-    /// Precondition: check-write gave Some(Ready(n)) and contents has a
+    /// Precondition: check-write gave permit of Ok(n) and contents has a
     /// length of less than or equal to n. Otherwise, this function will trap.
     ///
-    /// returns Some(closed) without writing if the stream has closed since
-    /// the last call to check-write provided a Some(Ready(n)).
-    ///
-    /// otherwise, return value is like a call to check-write has occured
-    /// immediately after writing the contents to the stream.
+    /// returns Err(closed) without writing if the stream has closed since
+    /// the last call to check-write provided a permit.
     write: func(
         this: output-stream,
         contents: list<u8>
-    ) -> option<write-readiness>
+    ) -> result<_, write-error>
 
+    /// request to flush buffered output. this function never blocks.
+    ///
+    /// this tells the output-stream that the caller intends any buffered
+    /// output to be flushed. the output which is expected to be flushed
+    /// is all that has been passed to `write` prior to this call.
+    ///
+    /// upon calling this function, the output-stream will not accept any
+    /// writes (meaning, check-write will return ok(0)) until the flush has
+    /// completed. The subscribe-to-output-stream pollable will become ready
+    /// when the flush has completed and the stream can accept more writes.
+    flush: func(
+        this: output-stream,
+    ) -> result<_, write-error>
+
+    blocking-flush: func(
+        this: output-stream,
+    ) -> result<_, write-error>
 
     /// Create a `pollable` which will resolve once the output-stream
-    /// is ready for more writing, or has closed.
+    /// is ready for more writing, or an error has occured. When this
+    /// pollable is ready, check-write will return Ok(n) with n>0, or 
+    /// an Err.
     ///
     /// If the stream is closed, this pollable is always ready immediately.
     ///
     /// The created `pollable` is a child resource of the `output-stream`.
     /// Implementations may trap if the `output-stream` is dropped before
     /// all derived `pollable`s created with this function are dropped.
-    subscribe-to-write-ready: func(this: output-stream) -> pollable
+    subscribe-to-output-stream: func(this: output-stream) -> pollable
 
-    /// like check-write, except it blocks until the stream becomes ready or closed.
-    blocking-check-write: func(this: output-stream) -> write-readiness
 
     /// Write zeroes to a stream.
     ///
@@ -192,51 +210,7 @@ interface streams {
         this: output-stream,
         /// The number of zero-bytes to write
         len: u64
-    ) -> option<write-readiness>
-
-    enum flush-result {
-        done,
-        closed
-    }
-    /// begin an asynchronous flush operation.
-    ///
-    /// this tells the output-stream that the caller intends any buffered
-    /// output to be flushed. the output which is expected to be flushed
-    /// is all that has been passed to `write` prior to this call.
-    ///
-    /// return values are equivelant to calling check-flush immediately
-    /// after the intent to flush is registered:
-    /// returns none if the flush is pending
-    /// returns some(done) if the flush finished immediately (this may happen
-    /// if flushing is not applicable in the implementation)
-    /// returns some(closed) if the stream is closed
-    ///
-    /// you can observe the flushing state with `check-flush` and
-    /// `subscribe-to-flush`.
-    flush: func(
-        this: output-stream,
-    ) -> option<flush-result>
-
-    /// returns none while the flush is pending
-    /// returns some(done) when the flush has finished
-    /// returns some(closed) if the stream has closed before the flush finished
-    check-flush: func(
-        this: output-stream,
-    ) -> option<flush-result>
-
-    /// a flush, followed by blocking until the flush has finished, and
-    /// returning the result of a final check-flush.
-    blocking-flush: func(this: output-stream) -> flush-result
-
-    /// get a pollable which becomes ready when the flush has finished
-    /// (check-flush return value becomes some)
-    ///
-    /// The created `pollable` is a child resource of the `output-stream`.
-    /// Implementations may trap if the `output-stream` is dropped before
-    /// all derived `pollable`s created with this function are dropped.
-    subscribe-to-flush: func(
-        this: output-stream,
-    ) -> pollable
+    ) -> result<_, write-error>
 
     /// Read from one stream and write to another.
     ///

@@ -59,6 +59,7 @@ pub mod bindings {
             ",
                 tracing: true,
                 trappable_error_type: {
+                    "wasi:io/streams"::"write-error": Error,
                     "wasi:filesystem/types"::"error-code": Error,
                 },
                 with: {
@@ -93,6 +94,7 @@ pub mod bindings {
             tracing: true,
             async: true,
             trappable_error_type: {
+                "wasi:io/streams"::"write-error": Error,
                 "wasi:filesystem/types"::"error-code": Error,
             },
             with: {
@@ -126,6 +128,7 @@ pub mod bindings {
             ",
         tracing: true,
         trappable_error_type: {
+            "wasi:io/streams"::"write-error": Error,
             "wasi:filesystem/types"::"error-code": Error,
             "wasi:sockets/network"::"error-code": Error,
         },
