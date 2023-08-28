@@ -757,7 +757,9 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtrtzxufV
             | VecAluOpRR::VfcvtrtzxfV
             | VecAluOpRR::VfcvtfxuV
-            | VecAluOpRR::VfcvtfxV => 0b010010,
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => 0b010010,
         }
     }
 
@@ -779,7 +781,9 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtrtzxufV
             | VecAluOpRR::VfcvtrtzxfV
             | VecAluOpRR::VfcvtfxuV
-            | VecAluOpRR::VfcvtfxV => VecOpCategory::OPFVV,
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => VecOpCategory::OPFVV,
             VecAluOpRR::VmvVV => VecOpCategory::OPIVV,
             VecAluOpRR::VmvVX => VecOpCategory::OPIVX,
         }
@@ -806,12 +810,17 @@ impl VecAluOpRR {
             VecAluOpRR::VzextVF2 => 0b00110,
             VecAluOpRR::VsextVF2 => 0b00111,
             // VFUNARY0
+            // single-width converts
             VecAluOpRR::VfcvtxufV => 0b00000,
             VecAluOpRR::VfcvtxfV => 0b00001,
             VecAluOpRR::VfcvtrtzxufV => 0b00110,
             VecAluOpRR::VfcvtrtzxfV => 0b00111,
             VecAluOpRR::VfcvtfxuV => 0b00010,
             VecAluOpRR::VfcvtfxV => 0b00011,
+            // widening converts
+            VecAluOpRR::VfwcvtffV => 0b01100,
+            // narrowing converts
+            VecAluOpRR::VfncvtffW => 0b10100,
             // These don't have a explicit encoding table, but Section 11.16 Vector Integer Move Instruction states:
             // > The first operand specifier (vs2) must contain v0, and any other vector register number in vs2 is reserved.
             VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => 0,
@@ -837,7 +846,9 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtrtzxufV
             | VecAluOpRR::VfcvtrtzxfV
             | VecAluOpRR::VfcvtfxuV
-            | VecAluOpRR::VfcvtfxV => true,
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => true,
             VecAluOpRR::VmvSX
             | VecAluOpRR::VfmvSF
             | VecAluOpRR::VmvVV
@@ -865,7 +876,9 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtrtzxufV
             | VecAluOpRR::VfcvtrtzxfV
             | VecAluOpRR::VfcvtfxuV
-            | VecAluOpRR::VfcvtfxV => RegClass::Vector,
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => RegClass::Vector,
             VecAluOpRR::VmvXS => RegClass::Int,
             VecAluOpRR::VfmvFS => RegClass::Float,
         }
@@ -888,7 +901,9 @@ impl VecAluOpRR {
             | VecAluOpRR::VfcvtrtzxufV
             | VecAluOpRR::VfcvtrtzxfV
             | VecAluOpRR::VfcvtfxuV
-            | VecAluOpRR::VfcvtfxV => RegClass::Vector,
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => RegClass::Vector,
             VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => RegClass::Float,
             VecAluOpRR::VmvSX | VecAluOpRR::VmvVX => RegClass::Int,
         }
@@ -902,7 +917,9 @@ impl VecAluOpRR {
             | VecAluOpRR::VzextVF8
             | VecAluOpRR::VsextVF2
             | VecAluOpRR::VsextVF4
-            | VecAluOpRR::VsextVF8 => true,
+            | VecAluOpRR::VsextVF8
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => true,
             _ => false,
         }
     }
@@ -931,6 +948,8 @@ impl fmt::Display for VecAluOpRR {
             VecAluOpRR::VfcvtrtzxfV => "vfcvt.rtz.x.f.v",
             VecAluOpRR::VfcvtfxuV => "vfcvt.f.xu.v",
             VecAluOpRR::VfcvtfxV => "vfcvt.f.x.v",
+            VecAluOpRR::VfwcvtffV => "vfwcvt.f.f.v",
+            VecAluOpRR::VfncvtffW => "vfncvt.f.f.w",
         })
     }
 }

@@ -291,6 +291,8 @@
   (VfcvtrtzxfV)
   (VfcvtfxuV)
   (VfcvtfxV)
+  (VfwcvtffV)
+  (VfncvtffW)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
@@ -1059,6 +1061,18 @@
 (decl rv_vfcvt_f_x_v (VReg VecOpMasking VState) VReg)
 (rule (rv_vfcvt_f_x_v vs mask vstate)
   (vec_alu_rr (VecAluOpRR.VfcvtfxV) vs mask vstate))
+
+  ;; Helper for emitting the `vfwcvt.f.f.v` instruction.
+;; Convert single-width float to double-width float.
+(decl rv_vfwcvt_f_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfwcvt_f_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfwcvtffV) vs mask vstate))
+
+;; Helper for emitting the `vfncvt.f.f.w` instruction.
+;; Convert double-width float to single-width float.
+(decl rv_vfncvt_f_f_w (VReg VecOpMasking VState) VReg)
+(rule (rv_vfncvt_f_f_w vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfncvtffW) vs mask vstate))
 
 ;; Helper for emitting the `vslidedown.vx` instruction.
 ;; `vslidedown` moves all elements in the vector down by n elements.
