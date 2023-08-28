@@ -670,9 +670,23 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.serde]]
+version = "1.0.188"
+when = "2023-08-26"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
 [[publisher.serde_derive]]
 version = "1.0.171"
 when = "2023-07-10"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.serde_derive]]
+version = "1.0.188"
+when = "2023-08-26"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -700,6 +714,13 @@ user-name = "David Tolnay"
 [[publisher.syn]]
 version = "2.0.25"
 when = "2023-07-09"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.syn]]
+version = "2.0.29"
+when = "2023-08-17"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
