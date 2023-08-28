@@ -1394,12 +1394,15 @@ pub mod sync {
                     "[module='wasi:io/streams' function='subscribe-to-output-stream'] call stream={:?}",
                     stream
                 );
-                let result = io::streams::Host::subscribe_to_output_stream(ctx, stream);
+                let result = io::streams::Host::subscribe_to_output_stream(ctx, stream)?;
+                // TODO: necessary until this PR has been merged:
+                // https://github.com/bytecodealliance/wasmtime/pull/6877
+                let _ = poll::poll::Host::poll_oneoff(ctx, vec![result])?;
                 tracing::trace!(
-                    "[module='wasi:io/streams' function='subscribe-to-output-stream'] return result={:?}",
+                    "[module='wasi:io/streams' function='subscribe-to-output-stream'] return result=Ok({:?})",
                     result
                 );
-                result
+                Ok(result)
             },
         )?;
         linker.func_wrap(
