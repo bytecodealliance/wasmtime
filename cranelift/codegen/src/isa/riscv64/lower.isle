@@ -1644,24 +1644,28 @@
   (gen_fcvt_int $true v $false from to))
 
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_from_sint v @ (value_type from_ty))))
+(rule 0 (lower (has_type (ty_scalar_float to) (fcvt_from_sint v @ (value_type from_ty))))
   (let ((float_op FpuOPRR (int_convert_2_float_op from_ty $true to))
         (value XReg (normalize_fcvt_from_int v from_ty (ExtendOp.Signed))))
     (fpu_rr float_op to value)))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_sint v @ (value_type from_ty))))
+  (rv_vfcvt_f_x_v v (unmasked) from_ty))
+
 ;;;;;  Rules for `fcvt_from_uint`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_from_uint v @ (value_type from_ty))))
+(rule 0 (lower (has_type (ty_scalar_float to) (fcvt_from_uint v @ (value_type from_ty))))
   (let ((float_op FpuOPRR (int_convert_2_float_op from_ty $false to))
         (value XReg (normalize_fcvt_from_int v from_ty (ExtendOp.Zero))))
     (fpu_rr float_op to value)))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_uint v @ (value_type from_ty))))
+  (rv_vfcvt_f_xu_v v (unmasked) from_ty))
+
 ;;;;;  Rules for `symbol_value`;;;;;;;;;
 (rule
    (lower (symbol_value (symbol_value_data name _ offset)))
-   (load_ext_name name offset)
-)
+   (load_ext_name name offset))
+
 ;;;;;  Rules for `bitcast`;;;;;;;;;
 (rule
    (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
