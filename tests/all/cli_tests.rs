@@ -813,7 +813,7 @@ fn run_basic_component() -> Result<()> {
 fn run_wasi_http_module() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/wasi-http.wat")?;
     let stdout = run_wasmtime(&[
-        "--preview2",
+        // "--preview2",
         "--wasi-modules",
         "experimental-wasi-http",
         "--disable-cache",
