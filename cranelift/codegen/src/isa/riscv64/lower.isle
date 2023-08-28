@@ -1629,19 +1629,28 @@
   (gen_fcvt_int $false v $false from to))
 
 ;;;;;  Rules for `fcvt_to_sint`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_to_sint v @ (value_type from))))
+(rule 0 (lower (has_type to (fcvt_to_sint v @ (value_type (ty_scalar_float from)))))
   (gen_fcvt_int $false v $true from to))
 
 ;;;;;  Rules for `fcvt_to_sint_sat`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_to_sint_sat v @ (value_type from))))
+(rule 0 (lower (has_type to (fcvt_to_sint_sat v @ (value_type (ty_scalar_float from)))))
   (gen_fcvt_int $true v $true from to))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_sint_sat v @ (value_type from_ty))))
+  (if-let (imm5_from_u64 zero) (u64_add 0 0))
+  (let ((is_nan VReg (rv_vmfne_vv v v (unmasked) from_ty))
+        (cvt VReg (rv_vfcvt_rtz_x_f_v v (unmasked) from_ty)))
+    (rv_vmerge_vim cvt zero is_nan from_ty)))
+
 ;;;;;  Rules for `fcvt_to_uint_sat`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_to_uint_sat v @ (value_type from))))
+(rule 0 (lower (has_type to (fcvt_to_uint_sat v @ (value_type (ty_scalar_float from)))))
   (gen_fcvt_int $true v $false from to))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_uint_sat v @ (value_type from_ty))))
+  (if-let (imm5_from_u64 zero) (u64_add 0 0))
+  (let ((is_nan VReg (rv_vmfne_vv v v (unmasked) from_ty))
+        (cvt VReg (rv_vfcvt_rtz_xu_f_v v (unmasked) from_ty)))
+    (rv_vmerge_vim cvt zero is_nan from_ty)))
 
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float to) (fcvt_from_sint v @ (value_type from_ty))))
