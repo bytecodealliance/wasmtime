@@ -64,3 +64,11 @@ block0:
     return v11
 }
 ; run
+
+function %bitselect_vconst_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v1: f64x2, v2: f64x2):
+  v0 = vconst.f64x2 0xFF00000000000000FF00000000000000
+  v3 = bitselect v0, v1, v2
+  return v3
+}
+; run: %bitselect_vconst_f64x2(0x11111111111111111111111111111111, 0x00000000000000000000000000000000) == 0x11000000000000001100000000000000

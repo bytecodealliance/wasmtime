@@ -3327,12 +3327,6 @@
       (if-let $true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vdivpd) src1 src2))
 
-;; Helper for creating `blendvp{d,s}` and `pblendvb` instructions.
-(decl x64_blend (Type Xmm XmmMem Xmm) Xmm)
-(rule 1 (x64_blend $F32X4 mask src1 src2) (x64_blendvps src2 src1 mask))
-(rule 1 (x64_blend $F64X2 mask src1 src2) (x64_blendvpd src2 src1 mask))
-(rule 0 (x64_blend (multi_lane _ _) mask src1 src2) (x64_pblendvb src2 src1 mask))
-
 ;; Helper for creating `blendvpd` instructions.
 (decl x64_blendvpd (Xmm XmmMem Xmm) Xmm)
 (rule 0 (x64_blendvpd src1 src2 mask)
