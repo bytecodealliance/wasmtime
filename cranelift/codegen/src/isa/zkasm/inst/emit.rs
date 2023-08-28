@@ -1061,45 +1061,44 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Mov { rd, rm, ty } => {
-                put_string(&format!("{rm:?} => {rd:?}\n"), sink);
-                    /* debug_assert_eq!(rd.to_reg().class(), rm.class());
                 if rd.to_reg() == rm {
                     return;
                 }
 
                 let rm = allocs.next(rm);
                 let rd = allocs.next_writable(rd);
+                put_string(&format!("{rm:?} => {rd:?}\n"), sink);
 
-                match rm.class() {
-                    RegClass::Int => Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Ori,
-                        rd: rd,
-                        rs: rm,
-                        imm12: Imm12::zero(),
-                    },
-                    RegClass::Float => Inst::FpuRRR {
-                        alu_op: if ty == F32 {
-                            FpuOPRRR::FsgnjS
-                        } else {
-                            FpuOPRRR::FsgnjD
-                        },
-                        frm: None,
-                        rd: rd,
-                        rs1: rm,
-                        rs2: rm,
-                    },
-                    RegClass::Vector => Inst::VecAluRRImm5 {
-                        op: VecAluOpRRImm5::VmvrV,
-                        vd: rd,
-                        vs2: rm,
-                        // Imm 0 means copy 1 register.
-                        imm: Imm5::maybe_from_i8(0).unwrap(),
-                        mask: VecOpMasking::Disabled,
-                        // Vstate for this instruction is ignored.
-                        vstate: VState::from_type(ty),
-                    },
-                }
-                .emit(&[], sink, emit_info, state); */
+                // match rm.class() {
+                //     RegClass::Int => Inst::AluRRImm12 {
+                //         alu_op: AluOPRRI::Ori,
+                //         rd: rd,
+                //         rs: rm,
+                //         imm12: Imm12::zero(),
+                //     },
+                //     RegClass::Float => Inst::FpuRRR {
+                //         alu_op: if ty == F32 {
+                //             FpuOPRRR::FsgnjS
+                //         } else {
+                //             FpuOPRRR::FsgnjD
+                //         },
+                //         frm: None,
+                //         rd: rd,
+                //         rs1: rm,
+                //         rs2: rm,
+                //     },
+                //     RegClass::Vector => Inst::VecAluRRImm5 {
+                //         op: VecAluOpRRImm5::VmvrV,
+                //         vd: rd,
+                //         vs2: rm,
+                //         // Imm 0 means copy 1 register.
+                //         imm: Imm5::maybe_from_i8(0).unwrap(),
+                //         mask: VecOpMasking::Disabled,
+                //         // Vstate for this instruction is ignored.
+                //         vstate: VState::from_type(ty),
+                //     },
+                // }
+                // .emit(&[], sink, emit_info, state);
             }
 
             &Inst::MovFromPReg { rd, rm } => {
