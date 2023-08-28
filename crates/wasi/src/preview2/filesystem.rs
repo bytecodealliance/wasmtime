@@ -1,8 +1,7 @@
 use crate::preview2::{
-    FlushResult, HostOutputStream, StreamRuntimeError, StreamState, Table, TableError,
-    WriteReadiness,
+    HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState, Table, TableError,
 };
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, Context};
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 
@@ -198,17 +197,22 @@ impl FileOutputStream {
     }
 }
 
+// FIXME: configurable? determine from how much space left in file?
+const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
+
 #[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<Option<WriteReadiness>> {
+    fn write(&mut self, buf: Bytes) -> Result<(), OutputStreamError> {
         use system_interface::fs::FileIoExt;
 
         if self.closed {
-            return Ok(Some(WriteReadiness::Closed));
+            return Err(OutputStreamError::Closed);
         }
         if self.task.is_some() {
             // a write is pending - this call was not permitted
-            bail!("write not permitted: FileOutputStream write pending")
+            return Err(OutputStreamError::Trap(anyhow!(
+                "write not permitted: FileOutputStream write pending"
+            )));
         }
         let f = Arc::clone(&self.file);
         let m = self.mode;
@@ -222,49 +226,34 @@ impl HostOutputStream for FileOutputStream {
                 Ok(())
             }
         }));
-        Ok(None)
+        Ok(())
     }
-    fn flush(&mut self) -> anyhow::Result<Option<FlushResult>> {
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
         if self.closed {
-            return Ok(Some(FlushResult::Closed));
+            return Err(OutputStreamError::Closed);
         }
-        if self.task.is_none() {
-            return Ok(Some(FlushResult::Done));
-        }
-        Ok(None)
+        // Only userland buffering of file writes is in the blocking task.
+        Ok(())
     }
-    async fn write_ready(&mut self) -> anyhow::Result<WriteReadiness> {
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
         if self.closed {
-            return Ok(WriteReadiness::Closed);
+            return Err(OutputStreamError::Closed);
         }
+        // FIXME cancel safety
         if let Some(t) = self.task.take() {
-            match t.await.context("join of FileOutputStream worker task")? {
-                Ok(()) => Ok(WriteReadiness::Ready(64 * 1024)),
+            match t
+                .await
+                .context("join of FileOutputStream worker task")
+                .map_err(OutputStreamError::Trap)?
+            {
+                Ok(()) => Ok(FILE_WRITE_CAPACITY),
                 Err(e) => {
-                    tracing::debug!("FileOutputStream closed with {e:?}");
                     self.closed = true;
-                    Ok(WriteReadiness::Closed)
+                    Err(OutputStreamError::LastOperationFailed(e.into()))
                 }
             }
         } else {
-            Ok(WriteReadiness::Ready(64 * 1024))
-        }
-    }
-    async fn flush_ready(&mut self) -> anyhow::Result<FlushResult> {
-        if self.closed {
-            return Ok(FlushResult::Closed);
-        }
-        if let Some(t) = self.task.take() {
-            match t.await.context("join of FileOutputStream worker task")? {
-                Ok(()) => Ok(FlushResult::Done),
-                Err(e) => {
-                    tracing::debug!("FileOutputStream closed with {e:?}");
-                    self.closed = true;
-                    Ok(FlushResult::Closed)
-                }
-            }
-        } else {
-            Ok(FlushResult::Done)
+            Ok(FILE_WRITE_CAPACITY)
         }
     }
 }

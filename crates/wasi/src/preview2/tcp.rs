@@ -5,7 +5,7 @@ use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::sync::Arc;
 
-use super::{FlushResult, HostInputStream, HostOutputStream, WriteReadiness};
+use super::{HostInputStream, HostOutputStream, OutputStreamError};
 
 /// The state of a TCP socket.
 ///
@@ -105,26 +105,16 @@ const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
 #[async_trait::async_trait]
 impl HostOutputStream for HostTcpSocketInner {
-    fn write(&mut self, mut bytes: bytes::Bytes) -> anyhow::Result<Option<WriteReadiness>> {
-        while !bytes.is_empty() {
-            let n = self.stream.try_write(&bytes)?;
-            let _ = bytes.split_to(n);
-        }
-
-        Ok(Some(WriteReadiness::Ready(SOCKET_READY_SIZE)))
+    fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), OutputStreamError> {
+        todo!("HostOutputStream for HostTcpSocketInner is placeholder")
     }
 
-    fn flush(&mut self) -> anyhow::Result<Option<FlushResult>> {
-        Ok(Some(FlushResult::Done))
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        todo!("HostOutputStream for HostTcpSocketInner is placeholder")
     }
 
-    async fn write_ready(&mut self) -> anyhow::Result<WriteReadiness> {
-        self.stream.writable().await?;
-        Ok(WriteReadiness::Ready(SOCKET_READY_SIZE))
-    }
-
-    async fn flush_ready(&mut self) -> anyhow::Result<FlushResult> {
-        Ok(FlushResult::Done)
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        todo!("HostOutputStream for HostTcpSocketInner is placeholder")
     }
 }
 

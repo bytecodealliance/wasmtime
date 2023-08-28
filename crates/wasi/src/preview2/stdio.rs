@@ -4,7 +4,7 @@ use crate::preview2::bindings::cli::{
 };
 use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe::AsyncWriteStream;
-use crate::preview2::{FlushResult, HostOutputStream, WasiView, WriteReadiness};
+use crate::preview2::{HostOutputStream, OutputStreamError, WasiView};
 use anyhow::Error;
 use bytes::Bytes;
 use is_terminal::IsTerminal;
@@ -31,17 +31,14 @@ impl IsTerminal for Stdout {
 }
 #[async_trait::async_trait]
 impl HostOutputStream for Stdout {
-    fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
         self.0.write(bytes)
     }
-    fn flush(&mut self) -> Result<Option<FlushResult>, Error> {
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
         self.0.flush()
     }
-    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
         self.0.write_ready().await
-    }
-    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
-        self.0.flush_ready().await
     }
 }
 
@@ -57,17 +54,14 @@ impl IsTerminal for Stderr {
 }
 #[async_trait::async_trait]
 impl HostOutputStream for Stderr {
-    fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
         self.0.write(bytes)
     }
-    fn flush(&mut self) -> Result<Option<FlushResult>, Error> {
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
         self.0.flush()
     }
-    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
         self.0.write_ready().await
-    }
-    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
-        self.0.flush_ready().await
     }
 }
 

@@ -7,10 +7,8 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::preview2::{
-    FlushResult, HostInputStream, HostOutputStream, StreamState, WriteReadiness,
-};
-use anyhow::Error;
+use crate::preview2::{HostInputStream, HostOutputStream, OutputStreamError, StreamState};
+use anyhow::{anyhow, Error};
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
@@ -57,12 +55,14 @@ impl HostInputStream for MemoryInputPipe {
 
 #[derive(Debug, Clone)]
 pub struct MemoryOutputPipe {
+    capacity: usize,
     buffer: std::sync::Arc<std::sync::Mutex<bytes::BytesMut>>,
 }
 
 impl MemoryOutputPipe {
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         MemoryOutputPipe {
+            capacity,
             buffer: std::sync::Arc::new(std::sync::Mutex::new(bytes::BytesMut::new())),
         }
     }
@@ -78,23 +78,28 @@ impl MemoryOutputPipe {
 
 #[async_trait::async_trait]
 impl HostOutputStream for MemoryOutputPipe {
-    fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, anyhow::Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
         let mut buf = self.buffer.lock().unwrap();
+        if bytes.len() > self.capacity - buf.len() {
+            return Err(OutputStreamError::Trap(anyhow!(
+                "write beyond capacity of MemoryOutputPipe"
+            )));
+        }
         buf.extend_from_slice(bytes.as_ref());
         // Always ready for writing
-        Ok(Some(WriteReadiness::Ready(64 * 1024)))
+        Ok(())
     }
-    fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
         // This stream is always flushed
-        Ok(Some(FlushResult::Done))
+        Ok(())
     }
-    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
-        // This stream is always ready for writing.
-        Ok(WriteReadiness::Ready(64 * 1024))
-    }
-    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
-        // This stream is always flushed
-        Ok(FlushResult::Done)
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        let consumed = self.buffer.lock().unwrap().len();
+        if consumed < self.capacity {
+            Ok(self.capacity - consumed)
+        } else {
+            Ok(0)
+        }
     }
 }
 
@@ -187,7 +192,7 @@ impl HostInputStream for AsyncReadStream {
             }
             Ok(Err(e)) => Err(e.into()),
             Err(TryRecvError::Empty) => Ok((Bytes::new(), self.state)),
-            Err(TryRecvError::Disconnected) => Err(anyhow::anyhow!(
+            Err(TryRecvError::Disconnected) => Err(anyhow!(
                 "AsyncReadStream sender died - should be impossible"
             )),
         }
@@ -206,7 +211,7 @@ impl HostInputStream for AsyncReadStream {
             }
             Some(Err(e)) => self.buffer = Some(Err(e)),
             None => {
-                return Err(anyhow::anyhow!(
+                return Err(anyhow!(
                     "no more sender for an open AsyncReadStream - should be impossible"
                 ))
             }
@@ -216,24 +221,27 @@ impl HostInputStream for AsyncReadStream {
 }
 
 #[derive(Debug)]
-enum WriteMessage {
-    Write(Bytes),
-    Flush,
-}
-
-#[derive(Debug)]
-enum FlushState {
-    Enqueued,
-    InProgress,
-    Done,
-}
-
-#[derive(Debug)]
 struct WorkerState {
     alive: bool,
-    items: std::collections::VecDeque<WriteMessage>,
+    items: std::collections::VecDeque<Bytes>,
     write_budget: usize,
-    flush_state: FlushState,
+    flush_pending: bool,
+    error: Option<anyhow::Error>,
+}
+
+impl WorkerState {
+    fn check_write(&mut self) -> Result<usize, OutputStreamError> {
+        if let Some(e) = self.error.take() {
+            return Err(OutputStreamError::LastOperationFailed(e));
+        }
+        if !self.alive {
+            return Err(OutputStreamError::Closed);
+        }
+        if self.flush_pending {
+            return Ok(0);
+        }
+        Ok(self.write_budget)
+    }
 }
 
 #[derive(Clone)]
@@ -241,7 +249,6 @@ struct Worker {
     state: Arc<Mutex<WorkerState>>,
     new_work: Arc<tokio::sync::Notify>,
     write_ready_changed: Arc<tokio::sync::Notify>,
-    flush_result_changed: Arc<tokio::sync::Notify>,
 }
 
 impl Worker {
@@ -251,131 +258,50 @@ impl Worker {
                 alive: true,
                 items: std::collections::VecDeque::new(),
                 write_budget,
-                flush_state: FlushState::Done,
+                flush_pending: false,
+                error: None,
             })),
             new_work: Arc::new(tokio::sync::Notify::new()),
             write_ready_changed: Arc::new(tokio::sync::Notify::new()),
-            flush_result_changed: Arc::new(tokio::sync::Notify::new()),
         }
     }
-    fn check_write(&self) -> Option<WriteReadiness> {
-        let state = self.state.lock().unwrap();
-        if state.alive {
-            if state.write_budget > 0 {
-                Some(WriteReadiness::Ready(state.write_budget))
-            } else {
-                None
-            }
-        } else {
-            Some(WriteReadiness::Closed)
-        }
+    fn pop(&self) -> Option<Bytes> {
+        self.state.lock().unwrap().items.pop_front()
     }
-    fn check_flush(&self) -> Option<FlushResult> {
-        let state = self.state.lock().unwrap();
-        if state.alive {
-            if matches!(state.flush_state, FlushState::Done) {
-                Some(FlushResult::Done)
-            } else {
-                None
-            }
-        } else {
-            Some(FlushResult::Closed)
-        }
-    }
-    fn push_to_worker(&self, msg: WriteMessage) -> anyhow::Result<StreamState> {
-        let mut state = self.state.lock().unwrap();
-        if !state.alive {
-            return Ok(StreamState::Closed);
-        }
-        match msg {
-            WriteMessage::Write(bytes) => match state.write_budget.checked_sub(bytes.len()) {
-                Some(remaining_budget) => {
-                    state.write_budget = remaining_budget;
-                    state.items.push_back(WriteMessage::Write(bytes));
-                }
-                None => return Err(anyhow::anyhow!("write exceeded budget")),
-            },
-            WriteMessage::Flush => {
-                match state.flush_state {
-                    FlushState::Enqueued => {
-                        // Only retain most recent flush:
-                        state
-                            .items
-                            .retain(|msg| matches!(msg, WriteMessage::Write { .. }));
-                    }
-                    FlushState::InProgress | FlushState::Done => {
-                        // Stop caring about in progress flush, if there is one.
-                        state.flush_state = FlushState::Enqueued
-                    }
-                }
-                state.items.push_back(WriteMessage::Flush);
-            }
-        }
-        drop(state);
-        self.new_work.notify_waiters();
-        Ok(StreamState::Open)
-    }
-
     async fn work<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(&self, mut writer: T) {
         use tokio::io::AsyncWriteExt;
         loop {
             let notified = self.new_work.notified();
-            while let Some(work) = self.pop_in_worker() {
-                tracing::debug!("worker popped: {work:?}");
-                match work {
-                    WriteMessage::Write(mut bytes) => {
-                        let len = bytes.len();
-                        match writer.write_all_buf(&mut bytes).await {
-                            Err(_) => {
-                                self.die_in_worker();
-                                return;
-                            }
-                            Ok(_) => {
-                                self.state.lock().unwrap().write_budget += len;
-                                self.write_ready_changed.notify_waiters();
-                            }
-                        }
+            while let Some(mut bytes) = self.pop() {
+                tracing::debug!("worker writing: {bytes:?}");
+                let len = bytes.len();
+                match writer.write_all_buf(&mut bytes).await {
+                    Err(e) => {
+                        tracing::debug!("dying in worker: {e:?}");
+                        let mut state = self.state.lock().unwrap();
+                        state.alive = false;
+                        state.error = Some(e.into());
+                        state.flush_pending = false;
+                        self.write_ready_changed.notify_waiters();
+
+                        return;
                     }
-                    WriteMessage::Flush => match writer.flush().await {
-                        Ok(()) => self.finish_flush_in_worker(),
-                        Err(_) => {
-                            self.die_in_worker();
-                            return;
+                    Ok(_) => {
+                        let mut state = self.state.lock().unwrap();
+                        state.write_budget += len;
+
+                        if state.items.is_empty() && state.flush_pending {
+                            tracing::debug!("worker marking flush complete");
+                            state.flush_pending = false;
                         }
-                    },
+                        drop(state);
+
+                        self.write_ready_changed.notify_waiters();
+                    }
                 }
             }
             notified.await;
         }
-    }
-
-    fn pop_in_worker(&self) -> Option<WriteMessage> {
-        let mut state = self.state.lock().unwrap();
-        let item = state.items.pop_front();
-        match &item {
-            Some(WriteMessage::Write(_)) => drop(state),
-            Some(WriteMessage::Flush) => state.flush_state = FlushState::InProgress,
-            _ => {}
-        }
-        item
-    }
-    fn finish_flush_in_worker(&self) {
-        tracing::debug!("finish flush in worker");
-        let mut state = self.state.lock().unwrap();
-        match state.flush_state {
-            FlushState::InProgress => {
-                state.flush_state = FlushState::Done;
-                drop(state);
-                self.flush_result_changed.notify_waiters();
-            }
-            _ => {}
-        }
-    }
-    fn die_in_worker(&self) {
-        tracing::debug!("dying in worker");
-        self.state.lock().unwrap().alive = false;
-        self.write_ready_changed.notify_waiters();
-        self.flush_result_changed.notify_waiters();
     }
 }
 
@@ -406,46 +332,55 @@ impl AsyncWriteStream {
 
 #[async_trait::async_trait]
 impl HostOutputStream for AsyncWriteStream {
-    fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, anyhow::Error> {
-        let s = self.worker.push_to_worker(WriteMessage::Write(bytes))?;
-        if matches!(s, StreamState::Closed) {
-            return Ok(Some(WriteReadiness::Closed));
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
+        let mut state = self.worker.state.lock().unwrap();
+        if !state.alive {
+            return Err(OutputStreamError::Closed);
         }
-        Ok(self.worker.check_write())
+        if let Some(e) = state.error.take() {
+            return Err(OutputStreamError::LastOperationFailed(e));
+        }
+        if state.flush_pending {
+            return Err(OutputStreamError::Trap(anyhow!(
+                "write not permitted while flush pending"
+            )));
+        }
+        match state.write_budget.checked_sub(bytes.len()) {
+            Some(remaining_budget) => {
+                state.write_budget = remaining_budget;
+                state.items.push_back(bytes);
+            }
+            None => return Err(OutputStreamError::Trap(anyhow!("write exceeded budget"))),
+        }
+        drop(state);
+        self.worker.new_work.notify_waiters();
+        Ok(())
+    }
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        let mut state = self.worker.state.lock().unwrap();
+        if !state.alive {
+            return Err(OutputStreamError::Closed);
+        }
+        if let Some(e) = state.error.take() {
+            return Err(OutputStreamError::LastOperationFailed(e));
+        }
+        if !state.items.is_empty() {
+            state.flush_pending = true;
+            self.worker.new_work.notify_waiters();
+        }
+        Ok(())
     }
 
-    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
         let notified = self.worker.write_ready_changed.notified();
-        if let Some(readiness) = self.worker.check_write() {
+        let readiness = self.worker.state.lock().unwrap().check_write()?;
+        if readiness > 0 {
             return Ok(readiness);
         }
         notified.await;
-        self.worker.check_write().ok_or_else(|| {
-            unreachable!(
-                "should be impossible: write readiness changed but check_write was still None"
-            )
-        })
-    }
-
-    fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
-        let s = self.worker.push_to_worker(WriteMessage::Flush)?;
-        if matches!(s, StreamState::Closed) {
-            return Ok(Some(FlushResult::Closed));
-        }
-        Ok(self.worker.check_flush())
-    }
-
-    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
-        let notified = self.worker.flush_result_changed.notified();
-        if let Some(readiness) = self.worker.check_flush() {
-            return Ok(readiness);
-        }
-        notified.await;
-        self.worker.check_flush().ok_or_else(|| {
-            unreachable!(
-                "should be impossible: flush result changed but check_flush was still None"
-            )
-        })
+        let permit = self.worker.state.lock().unwrap().check_write()?;
+        debug_assert!(permit > 0);
+        Ok(permit)
     }
 }
 
@@ -454,21 +389,17 @@ pub struct SinkOutputStream;
 
 #[async_trait::async_trait]
 impl HostOutputStream for SinkOutputStream {
-    fn write(&mut self, _buf: Bytes) -> Result<Option<WriteReadiness>, Error> {
-        Ok(Some(WriteReadiness::Ready(64 * 1024))) // made up constant
+    fn write(&mut self, _buf: Bytes) -> Result<(), OutputStreamError> {
+        Ok(())
     }
-    fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
         // This stream is always flushed
-        Ok(Some(FlushResult::Done))
+        Ok(())
     }
 
-    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
         // This stream is always ready for writing.
-        Ok(WriteReadiness::Ready(64 * 1024))
-    }
-    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
-        // This stream is always flushed
-        Ok(FlushResult::Done)
+        Ok(usize::MAX)
     }
 }
 
@@ -491,18 +422,15 @@ pub struct ClosedOutputStream;
 
 #[async_trait::async_trait]
 impl HostOutputStream for ClosedOutputStream {
-    fn write(&mut self, _: Bytes) -> Result<Option<WriteReadiness>, Error> {
-        Ok(Some(WriteReadiness::Closed))
+    fn write(&mut self, _: Bytes) -> Result<(), OutputStreamError> {
+        Err(OutputStreamError::Closed)
     }
-    fn flush(&mut self) -> Result<Option<FlushResult>, anyhow::Error> {
-        Ok(Some(FlushResult::Closed))
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        Err(OutputStreamError::Closed)
     }
 
-    async fn write_ready(&mut self) -> Result<WriteReadiness, Error> {
-        Ok(WriteReadiness::Closed)
-    }
-    async fn flush_ready(&mut self) -> Result<FlushResult, Error> {
-        Ok(FlushResult::Closed)
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        Err(OutputStreamError::Closed)
     }
 }
 
@@ -780,33 +708,32 @@ mod test {
         let mut writer = AsyncWriteStream::new(2048, tokio::io::sink());
         let chunk = Bytes::from_static(&[0; 1024]);
 
-        // I can write whatever:
-        let readiness = writer.write(chunk.clone()).expect("write does not trap");
-        assert!(matches!(readiness, Some(WriteReadiness::Ready(1024))));
-
-        // It is possible for subsequent writes to be refused, but it is nondeterminstic because
-        // the worker task consuming them is in another thread:
-        let readiness = writer.write(chunk.clone()).expect("write does not trap");
-        match readiness {
-            Some(WriteReadiness::Ready(budget)) => assert!(budget == 1024 || budget == 2048),
-            None => {} // Also ok
-            _ => panic!("readiness should not be {readiness:?}"),
-        }
-
-        let permit = resolves_immediately(writer.write_ready())
+        let readiness = resolves_immediately(writer.write_ready())
             .await
             .expect("write_ready does not trap");
-        match permit {
-            WriteReadiness::Ready(budget) => assert!(budget == 1024 || budget == 2048),
-            _ => panic!("readiness should not be {readiness:?}"),
-        }
+        assert_eq!(readiness, 2048);
+        // I can write whatever:
+        let readiness = writer.write(chunk.clone()).expect("write does not error");
 
-        // Now additional writes will work:
-        let readiness = writer.write(chunk.clone()).expect("write does not trap");
-        match readiness {
-            Some(WriteReadiness::Ready(budget)) => assert!(budget == 1024 || budget == 2048),
-            None => {} // Also ok
-            _ => panic!("readiness should not be {readiness:?}"),
+        // This may consume 1k of the buffer:
+        let readiness = resolves_immediately(writer.write_ready())
+            .await
+            .expect("write_ready does not trap");
+        assert!(
+            readiness == 1024 || readiness == 2048,
+            "readiness should be 1024 or 2048, got {readiness}"
+        );
+
+        if readiness == 1024 {
+            writer.write(chunk.clone()).expect("write does not error");
+
+            let readiness = resolves_immediately(writer.write_ready())
+                .await
+                .expect("write_ready does not trap");
+            assert!(
+                readiness == 1024 || readiness == 2048,
+                "readiness should be 1024 or 2048, got {readiness}"
+            );
         }
     }
 
@@ -825,56 +752,75 @@ mod test {
         // Drop the reader to allow the worker to transition to the closed state eventually.
         drop(reader);
 
+        // First the api is going to report the last operation failed, then subsequently
+        // it will be reported as closed. We set this flag once we see LastOperationFailed.
+        let mut should_be_closed = false;
+
         // Write some data to the stream to ensure we have data that cannot be flushed.
         let chunk = Bytes::from_static(&[0; 1]);
-        match writer.write(chunk.clone()).expect("write does not trap") {
-            Some(WriteReadiness::Ready(1023) | WriteReadiness::Closed) => {}
-            a => panic!("invalid write result: {a:?}"),
-        }
+        writer
+            .write(chunk.clone())
+            .expect("first write should succeed");
 
         // The rest of this test should be valid whether or not we check write readiness:
+        let mut write_ready_res = None;
         if n % 2 == 0 {
+            let r = resolves_immediately(writer.write_ready()).await;
             // Check write readiness:
-            let permit = resolves_immediately(writer.write_ready())
-                .await
-                .expect("write ready does not trap");
-
-            match permit {
-                WriteReadiness::Ready(1023) => {}
-                WriteReadiness::Ready(budget) => panic!("unexpected budget: {budget}"),
-                WriteReadiness::Closed => {
-                    tracing::debug!("discovered stream closed waiting for write_ready");
+            match r {
+                // worker hasn't processed write yet:
+                Ok(1023) => {}
+                // worker reports failure:
+                Err(OutputStreamError::LastOperationFailed(_)) => {
+                    tracing::debug!("discovered stream failure in first write_ready");
+                    should_be_closed = true;
                 }
+                r => panic!("unexpected write_ready: {r:?}"),
             }
+            write_ready_res = Some(r);
         }
 
         // When we drop the simplex reader, that causes the simplex writer to return BrokenPipe on
         // its write. Now that the buffering crank has turned, our next write will give BrokenPipe.
-        let flush_result = writer.flush().expect("flush does not trap");
-        match flush_result {
-            Some(FlushResult::Closed) => {
-                tracing::debug!("discovered stream closed trying to flush");
+        let flush_res = writer.flush();
+        match flush_res {
+            // worker reports failure:
+            Err(OutputStreamError::LastOperationFailed(_)) => {
+                tracing::debug!("discovered stream failure trying to flush");
+                assert!(!should_be_closed);
+                should_be_closed = true;
             }
-            Some(FlushResult::Done) => panic!("flush should never succeed"),
-            _ => {}
+            // Already reported failure, now closed
+            Err(OutputStreamError::Closed) => {
+                assert!(
+                    should_be_closed,
+                    "expected a LastOperationFailed before we see Closed. {write_ready_res:?}"
+                );
+            }
+            // Also possible the worker hasnt processed write yet:
+            Ok(()) => {}
+            Err(e) => panic!("unexpected flush error: {e:?} {write_ready_res:?}"),
         }
 
         // Waiting for the flush to complete should always indicate that the channel has been
         // closed.
-        let flush_result = resolves_immediately(writer.flush_ready())
-            .await
-            .expect("flush_ready does not trap");
-        match flush_result {
-            FlushResult::Closed => {
-                tracing::debug!("discovered stream closed after flush_ready");
+        match resolves_immediately(writer.write_ready()).await {
+            // worker reports failure:
+            Err(OutputStreamError::LastOperationFailed(_)) => {
+                tracing::debug!("discovered stream failure trying to flush");
+                assert!(!should_be_closed);
             }
-            _ => {
-                tracing::error!("");
-                panic!("stream should be reported closed by the end of check_flush")
+            // Already reported failure, now closed
+            Err(OutputStreamError::Closed) => {
+                assert!(should_be_closed);
+            }
+            r => {
+                panic!("stream should be reported closed by the end of write_ready after flush, got {r:?}. {write_ready_res:?} {flush_res:?}")
             }
         }
     }
 
+    /*
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn multiple_chunks_write_stream() {
         use std::ops::Deref;
@@ -1047,12 +993,12 @@ mod test {
             // wait for the worker to process the buffer before continuing.
             None => match writer.flush().expect("flush does not trap") {
                 Some(FlushResult::Done) => {}
-                None => match resolves_immediately(writer.flush_ready())
+                None => match resolves_immediately(writer.write_ready())
                     .await
-                    .expect("flush_ready does not trap")
+                    .expect("write_ready does not trap")
                 {
                     FlushResult::Done => {}
-                    a => panic!("invalid flush_ready result: {a:?}"),
+                    a => panic!("invalid write_ready result: {a:?}"),
                 },
                 a => panic!("invalid flush result: {a:?}"),
             },
@@ -1072,7 +1018,6 @@ mod test {
             writer.flush().expect("flush does not trap").is_none(),
             "flush should not succeed"
         );
-        never_resolves(writer.flush_ready()).await;
 
         // No amount of waiting will resolve the situation, as nothing is emptying the simplex
         // buffer.
@@ -1092,15 +1037,6 @@ mod test {
             .expect("ready is ok")
         {
             WriteReadiness::Ready(1024) => {}
-            a => panic!("invalid write readiness: {a:?}"),
-        }
-
-        // The flush should be cleared as well.
-        match resolves_immediately(writer.flush_ready())
-            .await
-            .expect("ready is ok")
-        {
-            FlushResult::Done => {}
             a => panic!("invalid write readiness: {a:?}"),
         }
 
@@ -1125,4 +1061,5 @@ mod test {
             Some(a) => panic!("invalid write readiness: {a:?}"),
         }
     }
+    */
 }

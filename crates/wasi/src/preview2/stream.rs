@@ -77,47 +77,55 @@ pub trait HostInputStream: Send + Sync {
     async fn ready(&mut self) -> Result<(), Error>;
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum WriteReadiness {
-    Ready(usize),
+#[derive(Debug)]
+pub enum OutputStreamError {
     Closed,
+    LastOperationFailed(anyhow::Error),
+    Trap(anyhow::Error),
 }
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum FlushResult {
-    Done,
-    Closed,
+impl std::fmt::Display for OutputStreamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OutputStreamError::Closed => write!(f, "closed"),
+            OutputStreamError::LastOperationFailed(e) => write!(f, "last operation failed: {e}"),
+            OutputStreamError::Trap(e) => write!(f, "trap: {e}"),
+        }
+    }
+}
+impl std::error::Error for OutputStreamError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            OutputStreamError::Closed => None,
+            OutputStreamError::LastOperationFailed(e) | OutputStreamError::Trap(e) => {
+                Some(e.as_ref())
+            }
+        }
+    }
 }
 
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
 pub trait HostOutputStream: Send + Sync {
-    /// Write bytes. On success, returns the number of bytes written.
-    /// Important: this write must be non-blocking!
-    /// All errors trap wasm execution.
-    fn write(&mut self, bytes: Bytes) -> Result<Option<WriteReadiness>, Error>;
+    /// FIXME docs
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError>;
 
-    /// All errors trap wasm execution.
-    fn flush(&mut self) -> Result<Option<FlushResult>, Error>;
+    /// FIXME docs
+    fn flush(&mut self) -> Result<(), OutputStreamError>;
 
-    /// Check for write readiness: this method blocks until the stream is
-    /// ready for writing.
-    /// Returning an error will trap execution.
-    async fn write_ready(&mut self) -> Result<WriteReadiness, Error>;
-
-    async fn flush_ready(&mut self) -> Result<FlushResult, Error>;
+    /// FIXME docs
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError>;
 
     /// Repeatedly write a byte to a stream. Important: this write must be
     /// non-blocking!
     /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn write_zeroes(&mut self, nelem: usize) -> Result<Option<WriteReadiness>, Error> {
+    fn write_zeroes(&mut self, nelem: usize) -> Result<(), OutputStreamError> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
-        let r = self.write(bs)?;
-        Ok(r)
+        self.write(bs)?;
+        Ok(())
     }
 }
 

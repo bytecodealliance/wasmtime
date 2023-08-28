@@ -5,7 +5,7 @@ use crate::preview2::{
     poll::PollableFuture,
     stream::{
         HostInputStream, HostOutputStream, InternalInputStream, InternalTableStreamExt,
-        StreamRuntimeError, StreamState, TableStreamExt,
+        OutputStreamError, StreamRuntimeError, StreamState, TableStreamExt,
     },
     HostPollable, TableError, TablePollableExt, WasiView,
 };
@@ -25,15 +25,15 @@ impl From<TableError> for streams::Error {
         streams::Error::trap(e.into())
     }
 }
-impl From<anyhow::Error> for streams::Error {
-    fn from(e: anyhow::Error) -> streams::Error {
-        // FIXME StreamRuntimeError should have Closed and LastOperationFailed variants
-        match e.downcast::<StreamRuntimeError>() {
-            Ok(s) => {
-                tracing::debug!("stream runtime error: {s:?}");
-                streams::WriteError::Closed.into()
+impl From<OutputStreamError> for streams::Error {
+    fn from(e: OutputStreamError) -> streams::Error {
+        match e {
+            OutputStreamError::Closed => streams::WriteError::Closed.into(),
+            OutputStreamError::LastOperationFailed(e) => {
+                tracing::debug!("streams::WriteError::LastOperationFailed: {e:?}");
+                streams::WriteError::LastOperationFailed.into()
             }
-            Err(e) => streams::Error::trap(e),
+            OutputStreamError::Trap(e) => streams::Error::trap(e),
         }
     }
 }
@@ -244,14 +244,14 @@ impl<T: WasiView> streams::Host for T {
     async fn check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
         match futures::future::poll_immediate(s.write_ready()).await {
-            Some(Ok(_)) => Ok(todo!()), // FIXME return val of write_ready will change
+            Some(Ok(permit)) => Ok(permit as u64),
             Some(Err(e)) => Err(e.into()),
             None => Ok(0),
         }
     }
     async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        let _ = HostOutputStream::write(s, bytes.into())?; // FIXME return val of write will change
+        HostOutputStream::write(s, bytes.into())?;
         Ok(())
     }
 
@@ -283,25 +283,24 @@ impl<T: WasiView> streams::Host for T {
     async fn blocking_check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
         // await until actually ready for writing:
-        let _ = s.write_ready().await?; // FIXME return val of write_ready will change
-        Ok(todo!())
+        let permit = s.write_ready().await?;
+        Ok(permit as u64)
     }
 
     async fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        let _ = HostOutputStream::write_zeroes(s, len as usize)?; // FIXME return val will change
+        HostOutputStream::write_zeroes(s, len as usize)?;
         Ok(())
     }
 
     async fn flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        let _ = HostOutputStream::flush(s)?; // FIXME return val will change
+        HostOutputStream::flush(s)?;
         Ok(())
     }
     async fn blocking_flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        // FIXME return vals will change
-        let _ = HostOutputStream::flush(s)?;
+        HostOutputStream::flush(s)?;
         let _ = HostOutputStream::write_ready(s).await?;
         Ok(())
     }
