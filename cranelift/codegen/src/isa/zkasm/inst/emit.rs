@@ -660,11 +660,12 @@ impl MachInstEmit for Inst {
                 rs1,
                 rs2,
             } => {
-                put_string(&format!("{rs1:?}, {rs2:?} => {:?} : {alu_op:?}\n", rd), sink);
-
-                    /* let rs1 = allocs.next(rs1);
+                let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
+                put_string(&format!("{}, {} => {} : {alu_op:?}\n", reg_name(rs1), reg_name(rs2), reg_name(rd.to_reg())), sink);
+
+                /*
                 let (rs1, rs2) = if alu_op.reverse_rs() {
                     (rs2, rs1)
                 } else {
@@ -688,16 +689,14 @@ impl MachInstEmit for Inst {
             } => {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
-                put_string(&format!("{rs:?} {imm12} => {rd:?}: {alu_op:?}\n"), sink);
+                put_string(&format!("{} {imm12} => {}: {alu_op:?}\n", reg_name(rs), reg_name(rd.to_reg())), sink);
 
-                    /* let rs = allocs.next(rs);
-                let rd = allocs.next_writable(rd);
-                let x = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | alu_op.funct3() << 12
-                    | reg_to_gpr_num(rs) << 15
-                    | alu_op.imm12(imm12) << 20;
-                sink.put4(x); */
+                // let x = alu_op.op_code()
+                //     | reg_to_gpr_num(rd.to_reg()) << 7
+                //     | alu_op.funct3() << 12
+                //     | reg_to_gpr_num(rs) << 15
+                //     | alu_op.imm12(imm12) << 20;
+                // sink.put4(x);
             }
             &Inst::Load {
                 rd,
@@ -705,13 +704,11 @@ impl MachInstEmit for Inst {
                 from,
                 flags,
             } => {
-                put_string(&format!("$ => {rd:?} ; LOAD op={op:?} from={from:?} flags={flags:?}\n"), sink);
-                /* let from = from.clone().with_allocs(&mut allocs);
-                let rd = allocs.next_writable(rd);
-
+                let from = from.clone().with_allocs(&mut allocs);
                 let base = from.get_base_register();
                 let offset = from.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+                let rd = allocs.next_writable(rd);
 
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
@@ -723,7 +720,9 @@ impl MachInstEmit for Inst {
                         (tmp.to_reg(), Imm12::zero())
                     }
                 };
+                put_string(&format!("$ => {} : LOAD({} {imm12})\n", reg_name(rd.to_reg()), reg_name(addr)), sink);
 
+                /* 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
@@ -736,9 +735,9 @@ impl MachInstEmit for Inst {
                 let src = allocs.next(src);
                 let stack_offset = to.get_offset_with_state(state);
                 if let Some(base_register) = to.get_base_register() {
-                    put_string(&format!("{src:?} : MSTORE({base_register:?} + {stack_offset})\n"), sink);
+                    put_string(&format!("{} : MSTORE({} + {stack_offset})\n", reg_name(src), reg_name(base_register)), sink);
                 } else {
-                    put_string(&format!("{src:?} : MSTORE({stack_offset})\n"), sink);
+                    put_string(&format!("{} : MSTORE({stack_offset})\n", reg_name(src)), sink);
                 }
                 /* let to = to.clone().with_allocs(&mut allocs);
                 let src = allocs.next(src);
@@ -1067,7 +1066,7 @@ impl MachInstEmit for Inst {
 
                 let rm = allocs.next(rm);
                 let rd = allocs.next_writable(rd);
-                put_string(&format!("{rm:?} => {rd:?}\n"), sink);
+                put_string(&format!("{} => {}\n", reg_name(rm), reg_name(rd.to_reg())), sink);
 
                 // match rm.class() {
                 //     RegClass::Int => Inst::AluRRImm12 {
@@ -2037,7 +2036,7 @@ impl MachInstEmit for Inst {
                 offset,
             } => {
                 let rd = allocs.next_writable(rd);
-                put_string(&format!("{rd:?} => CALL {name:?}\n"), sink);
+                put_string(&format!("{} => CALL {name:?}\n", reg_name(rd.to_reg())), sink);
                 /* let rd = allocs.next_writable(rd);
                 // get the current pc.
                 Inst::Auipc {

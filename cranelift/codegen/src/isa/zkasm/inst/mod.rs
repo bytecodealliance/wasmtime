@@ -1005,9 +1005,9 @@ pub fn reg_name(reg: Reg) -> String {
     match reg.to_real_reg() {
         Some(real) => match real.class() {
             RegClass::Int => match real.hw_enc() {
-                0 => "zero".into(),
+                0 => "0".into(),
                 1 => "ra".into(),
-                2 => "sp".into(),
+                2 => "SP".into(),
                 3 => "gp".into(),
                 4 => "tp".into(),
                 5 => "t0".into(),
