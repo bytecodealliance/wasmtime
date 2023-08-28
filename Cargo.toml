@@ -42,6 +42,7 @@ once_cell = { workspace = true }
 listenfd = "1.0.0"
 wat = { workspace = true }
 serde = { workspace = true }
+serde_derive = { workspace = true }
 serde_json = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true }
@@ -235,7 +236,9 @@ async-trait = "0.1.71"
 heck = "0.4"
 similar = "2.1.0"
 toml = "0.5.9"
-serde = "1.0.94"
+# serde and serde_derive must have the same version
+serde = "1.0.188"
+serde_derive = "1.0.188"
 serde_json = "1.0.80"
 glob = "0.3.0"
 libfuzzer-sys = "0.4.0"
