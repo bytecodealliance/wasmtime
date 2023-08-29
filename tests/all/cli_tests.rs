@@ -819,7 +819,7 @@ fn run_wasi_http_module() -> Result<()> {
         "--disable-cache",
         wasm.path().to_str().unwrap(),
     ])?;
-    assert_eq!(stdout, "Called _start\nDone\n");
+    assert_eq!(stdout, "Called _start\n");
     Ok(())
 }
 

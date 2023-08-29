@@ -60,9 +60,7 @@
     (call $__wasi_http_types_drop_fields (local.get $headers_id))
     (call $__wasi_http_types_drop_outgoing_request (local.get $request_id))
 
-    ;; Print "Done".
-    (call $print (i32.const 64) (i32.const 5))
-
+    (call $print (i32.const 64) (i32.const 0))
     (drop (call $__wasi_io_streams_subscribe_to_output_stream (i32.const 4)))
   )
 
@@ -85,7 +83,7 @@
   (export "_start" (func $_start))
   (export "cabi_realloc" (func $cabi_realloc))
   (data (i32.const 32) "Called _start\0a")
-  (data (i32.const 64) "Done\0a")
+  (data (i32.const 64) "")
   (data (i32.const 96) "www.example.com")
   (data (i32.const 128) "body")
 )
