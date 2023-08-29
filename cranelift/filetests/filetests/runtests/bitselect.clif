@@ -53,3 +53,16 @@ block0(v0: i64, v1: i64, v2: i64):
 ; run: %bitselect_i64(0, 0, 0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFF
 ; run: %bitselect_i64(0x5555555555555555, 0, 0xFFFFFFFFFFFFFFFF) == 0xAAAAAAAAAAAAAAAA
 ; run: %bitselect_i64(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0) == 0xFFFFFFFFFFFFFFFF
+
+function %bitwise_bitselect_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = bnot v0
+    v4 = band v3, v2
+    v5 = band v0, v1
+    v6 = bor v5, v4
+    return v6
+}
+
+; run: %bitwise_bitselect_i64(0, 0, 0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFF
+; run: %bitwise_bitselect_i64(0x5555555555555555, 0, 0xFFFFFFFFFFFFFFFF) == 0xAAAAAAAAAAAAAAAA
+; run: %bitwise_bitselect_i64(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0) == 0xFFFFFFFFFFFFFFFF

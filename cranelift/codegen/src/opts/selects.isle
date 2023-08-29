@@ -43,3 +43,17 @@
 (rule (simplify (bitselect ty @ (multi_lane _ _) (sge _ x y) y x)) (smin ty x y))
 (rule (simplify (bitselect ty @ (multi_lane _ _) (ugt _ x y) y x)) (umin ty x y))
 (rule (simplify (bitselect ty @ (multi_lane _ _) (uge _ x y) y x)) (umin ty x y))
+
+;; (c & x) | (~c & y) -> (bitselect c x y)
+;; These are all the same rule, just with different permutations of the operands
+;;
+;; We currently only match vectors since scalar floats and i128's are not supported
+;; in some backends.
+(rule (simplify (bor (ty_vec128 ty) (band ty c x) (band ty (bnot ty c) y))) (bitselect ty c x y))
+(rule (simplify (bor (ty_vec128 ty) (band ty c x) (band ty y (bnot ty c) ))) (bitselect ty c x y))
+(rule (simplify (bor (ty_vec128 ty) (band ty x c) (band ty (bnot ty c) y))) (bitselect ty c x y))
+(rule (simplify (bor (ty_vec128 ty) (band ty x c) (band ty y (bnot ty c) ))) (bitselect ty c x y))
+(rule (simplify (bor (ty_vec128 ty) (band ty (bnot ty c) y) (band ty c x))) (bitselect ty c x y))
+(rule (simplify (bor (ty_vec128 ty) (band ty (bnot ty c) y) (band ty x c))) (bitselect ty c x y))
+(rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty c x))) (bitselect ty c x y))
+(rule (simplify (bor (ty_vec128 ty) (band ty y (bnot ty c)) (band ty x c))) (bitselect ty c x y))
