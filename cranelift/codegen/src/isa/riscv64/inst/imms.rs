@@ -79,14 +79,6 @@ impl Imm20 {
         }
     }
 
-    pub fn maybe_from_u64(bits: u64) -> Option<Self> {
-        if (bits & 0xF_FFFF) != 0 {
-            None
-        } else {
-            Some(Self::from_bits(bits as i32))
-        }
-    }
-
     #[inline]
     pub fn as_u32(&self) -> u32 {
         (self.bits as u32) & 0xf_ffff

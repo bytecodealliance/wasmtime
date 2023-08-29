@@ -306,11 +306,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
 
     #[inline]
-    fn u64_to_imm20(&mut self, imm: u64) -> Option<Imm20> {
-        Imm20::maybe_from_u64(imm)
-    }
-
-    #[inline]
     fn imm20_is_zero(&mut self, imm: Imm20) -> Option<()> {
         if imm.as_u32() == 0 {
             Some(())

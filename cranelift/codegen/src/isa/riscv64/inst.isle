@@ -1604,9 +1604,6 @@
 
 ;; Imm20
 
-(decl pure partial u64_to_imm20 (u64) Imm20)
-(extern constructor u64_to_imm20 u64_to_imm20)
-
 ;; Extractor that matches if a Imm20 is zero
 (decl pure imm20_is_zero () Imm20)
 (extern extractor imm20_is_zero imm20_is_zero)
