@@ -14,24 +14,24 @@ use regalloc2::{MachineEnv, PReg, RegClass};
 
 #[inline]
 pub fn a0() -> Reg {
-    x_reg(1)
+    x_reg(10)
 }
 
 #[inline]
 pub fn b0() -> Reg {
-    x_reg(2)
+    x_reg(11)
 }
 
 // second argument of function call
 #[inline]
 pub fn a1() -> Reg {
-    x_reg(11)
+    x_reg(5)
 }
 
 // third argument of function call
 #[inline]
 pub fn a2() -> Reg {
-    x_reg(12)
+    x_reg(6)
 }
 
 #[inline]
@@ -142,7 +142,6 @@ pub fn writable_spilltmp_reg2() -> Writable<Reg> {
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 3] = {
         // Registers are A, B, C, D, E.
-        // TODO(akashin): Remove redundant registers.
         let x_registers: Vec<PReg> = (1..=7)
             .map(|i| PReg::new(i, RegClass::Int))
             .collect();

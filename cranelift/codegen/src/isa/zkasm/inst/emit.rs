@@ -916,8 +916,17 @@ impl MachInstEmit for Inst {
                 ); */
             }
             &Inst::CallInd { ref info } => {
-                let rn = allocs.next(info.rn);
-                put_string(&format!("CALL {}, {:?}\n", reg_name(rn), info.uses), sink);
+                // let rn = allocs.next(info.rn);
+                // put_string(&format!("CALL {}, {:?}\n", reg_name(rn), info.uses), sink);
+
+                Inst::Mov {
+                    ty: types::I64,
+                    rd: regs::writable_a0(),
+                    rm: info.uses[0].preg,
+                }
+                .emit(&[], sink, emit_info, state);
+                put_string(&format!("{} : ASSERT\n", reg_name(info.uses[1].preg)), sink);
+
                 /*
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
@@ -2041,8 +2050,8 @@ impl MachInstEmit for Inst {
                 ref name,
                 offset,
             } => {
-                let rd = allocs.next_writable(rd);
-                put_string(&format!("CALL {name:?} => {}\n", reg_name(rd.to_reg())), sink);
+                // let rd = allocs.next_writable(rd);
+                // put_string(&format!("CALL {name:?} => {}\n", reg_name(rd.to_reg())), sink);
 
                 /*
                 // get the current pc.
