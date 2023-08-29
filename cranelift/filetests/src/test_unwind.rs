@@ -1,7 +1,6 @@
 //! Test command for verifying the unwind emitted for each function.
 //!
 //! The `unwind` test command runs each function through the full code generator pipeline.
-#![cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
 
 use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen::{self, ir, isa::unwind::UnwindInfo};
@@ -379,7 +378,6 @@ mod systemv {
         Ok(())
     }
 
-    #[allow(clippy::unneeded_field_pattern)]
     fn dump_cfi_instructions<R: Reader, W: Write>(
         w: &mut W,
         mut insns: gimli::CallFrameInstructionIter<R>,

@@ -1,16 +1,5 @@
 #![deny(trivial_numeric_casts)]
 #![warn(unused_import_braces, unstable_features, unused_extern_crates)]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    warn(
-        clippy::float_arithmetic,
-        clippy::mut_mut,
-        clippy::nonminimal_bool,
-        clippy::map_unwrap_or,
-        clippy::clippy::unicode_not_nfc,
-        clippy::use_self
-    )
-)]
 
 use clap::Parser;
 use std::path::PathBuf;
