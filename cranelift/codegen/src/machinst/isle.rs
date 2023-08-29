@@ -209,6 +209,15 @@ macro_rules! isle_lower_prelude_methods {
             self.lower_ctx.dfg().value_def(val).inst()
         }
 
+        #[inline]
+        fn i64_from_iconst(&mut self, val: Value) -> Option<i64> {
+            let inst = self.def_inst(val)?;
+            let constant = self.lower_ctx.get_constant(inst)? as i64;
+            let ty = self.lower_ctx.output_ty(inst, 0);
+            let shift_amt = std::cmp::max(0, 64 - self.ty_bits(ty));
+            Some((constant << shift_amt) >> shift_amt)
+        }
+
         fn zero_value(&mut self, value: Value) -> Option<Value> {
             let insn = self.def_inst(value);
             if insn.is_some() {

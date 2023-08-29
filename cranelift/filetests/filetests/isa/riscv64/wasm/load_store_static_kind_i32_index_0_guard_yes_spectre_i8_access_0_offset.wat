@@ -64,8 +64,8 @@
 ;;   slli a2,a0,32
 ;;   srli a3,a2,32
 ;;   lui a2,65536
-;;   addi a2,a2,4095
-;;   ugt a4,a3,a2##ty=i64
+;;   addi a4,a2,4095
+;;   ugt a4,a3,a4##ty=i64
 ;;   ld a2,0(a1)
 ;;   add a2,a2,a3
 ;;   li a3,0

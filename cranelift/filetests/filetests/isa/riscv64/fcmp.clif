@@ -14,9 +14,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   li t2,0
-;   fmv.d.x ft2,t2
-;   fle.d t2,ft2,ft2
+;   li t1,0
+;   fmv.d.x ft3,t1
+;   fle.d t2,ft3,ft3
 ;   bne t2,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   j label3
@@ -27,9 +27,9 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv t2, zero
-;   fmv.d.x ft2, t2
-;   fle.d t2, ft2, ft2
+;   mv t1, zero
+;   fmv.d.x ft3, t1
+;   fle.d t2, ft3, ft3
 ; block1: ; offset 0xc
 ;   ret
 
@@ -45,9 +45,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   li t2,0
-;   fmv.d.x ft2,t2
-;   fle.d t2,ft2,ft2
+;   li t1,0
+;   fmv.d.x ft3,t1
+;   fle.d t2,ft3,ft3
 ;   bne t2,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   j label3
@@ -58,9 +58,9 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv t2, zero
-;   fmv.d.x ft2, t2
-;   fle.d t2, ft2, ft2
+;   mv t1, zero
+;   fmv.d.x ft3, t1
+;   fle.d t2, ft3, ft3
 ; block1: ; offset 0xc
 ;   ret
 

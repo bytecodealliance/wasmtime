@@ -96,20 +96,20 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   auipc a1,0; ld a1,12(a1); j 12; .8byte 0x4030000000000000
-;   fmv.d.x ft4,a1
-;   fadd.d ft0,ft0,ft4
+;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0x4030000000000000
+;   fmv.d.x ft5,a0
+;   fadd.d ft0,ft0,ft5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a1, 0
-;   ld a1, 0xc(a1)
+;   auipc a0, 0
+;   ld a0, 0xc(a0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x30, 0x40
-;   fmv.d.x ft4, a1
-;   fadd.d ft0, ft0, ft4
+;   fmv.d.x ft5, a0
+;   fadd.d ft0, ft0, ft5
 ;   ret
 
 function %call_f64(f64) -> f64 tail {

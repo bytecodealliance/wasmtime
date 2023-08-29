@@ -53,15 +53,15 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lui a1,3
-;   addi a1,a1,57
+;   lui t2,3
+;   addi a1,t2,57
 ;   atomic_store.i64 a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a1, 3
-;   addi a1, a1, 0x39
+;   lui t2, 3
+;   addi a1, t2, 0x39
 ;   fence rw, w
 ;   sd a1, 0(a0)
 ;   ret
@@ -117,15 +117,15 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lui a1,3
-;   addi a1,a1,57
+;   lui t2,3
+;   addi a1,t2,57
 ;   atomic_store.i32 a1,(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a1, 3
-;   addi a1, a1, 0x39
+;   lui t2, 3
+;   addi a1, t2, 0x39
 ;   fence rw, w
 ;   sw a1, 0(a0)
 ;   ret

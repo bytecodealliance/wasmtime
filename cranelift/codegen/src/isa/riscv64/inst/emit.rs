@@ -177,18 +177,6 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 impl Inst {
-    /// construct a "imm - rs".
-    pub(crate) fn construct_imm_sub_rs(rd: Writable<Reg>, imm: u64, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = Inst::load_constant_u64(rd, imm, &mut |_| rd);
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Sub,
-            rd,
-            rs1: rd.to_reg(),
-            rs2: rs,
-        });
-        insts
-    }
-
     /// Load int mask.
     /// If ty is int then 0xff in rd.
     pub(crate) fn load_int_mask(rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
@@ -676,7 +664,7 @@ impl MachInstEmit for Inst {
 
                 let base = from.get_base_register();
                 let offset = from.get_offset_with_state(state);
-                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+                let offset_imm12 = Imm12::maybe_from_i64(offset);
 
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
@@ -703,7 +691,7 @@ impl MachInstEmit for Inst {
 
                 let base = to.get_base_register();
                 let offset = to.get_offset_with_state(state);
-                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+                let offset_imm12 = Imm12::maybe_from_i64(offset);
 
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
@@ -785,7 +773,7 @@ impl MachInstEmit for Inst {
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             &Inst::AdjustSp { amount } => {
-                if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
+                if let Some(imm) = Imm12::maybe_from_i64(amount) {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
                         rd: writable_stack_reg(),
@@ -795,7 +783,7 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    let mut insts = Inst::load_constant_u64(tmp, amount as u64, &mut |_| tmp);
+                    let mut insts = Inst::load_constant_u64(tmp, amount as u64);
                     insts.push(Inst::AluRRR {
                         alu_op: AluOPRRR::Add,
                         rd: writable_stack_reg(),
@@ -1119,7 +1107,7 @@ impl MachInstEmit for Inst {
                 // Check if the index passed in is larger than the number of jumptable
                 // entries that we have. If it is, we fallthrough to a jump into the
                 // default block.
-                Inst::load_constant_u32(tmp2, targets.len() as u64, &mut |_| tmp2)
+                Inst::load_constant_u32(tmp2, targets.len() as u64)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                 Inst::CondBr {
@@ -1264,7 +1252,7 @@ impl MachInstEmit for Inst {
 
                 let base = mem.get_base_register();
                 let offset = mem.get_offset_with_state(state);
-                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+                let offset_imm12 = Imm12::maybe_from_i64(offset);
 
                 match (mem, base, offset_imm12) {
                     (_, Some(rs), Some(imm12)) => {
@@ -1914,7 +1902,6 @@ impl MachInstEmit for Inst {
                             // I8
                             (u8::MAX >> 1) as u64
                         },
-                        &mut |_| writable_spilltmp_reg2(),
                     )
                     .into_iter()
                     .for_each(|x| x.emit(&[], sink, emit_info, state));
@@ -2791,14 +2778,10 @@ impl MachInstEmit for Inst {
                 tmp: guard_size_tmp,
             } => {
                 let step = writable_spilltmp_reg();
-                Inst::load_constant_u64(
-                    step,
-                    (guard_size as u64) * (probe_count as u64),
-                    &mut |_| step,
-                )
-                .iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                Inst::load_constant_u64(guard_size_tmp, guard_size as u64, &mut |_| guard_size_tmp)
+                Inst::load_constant_u64(step, (guard_size as u64) * (probe_count as u64))
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                Inst::load_constant_u64(guard_size_tmp, guard_size as u64)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
 
@@ -3205,7 +3188,7 @@ fn emit_return_call_common_sequence(
         alu_op: AluOPRRI::Addi,
         rd: regs::writable_stack_reg(),
         rs: regs::fp_reg(),
-        imm12: Imm12::maybe_from_u64(fp_to_callee_sp as u64).unwrap(),
+        imm12: Imm12::maybe_from_i64(fp_to_callee_sp).unwrap(),
     }
     .emit(&[], sink, emit_info, state);
 

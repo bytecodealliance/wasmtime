@@ -156,7 +156,7 @@
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwadd_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
                                                             (swiden_low y @ (value_type in_ty)))))
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwadd_vx y x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -179,7 +179,7 @@
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwadd_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (sextend x @ (value_type sext_ty)))
                                                             (swiden_high y @ (value_type in_ty)))))
   (if-let $true (ty_equal (lane_type in_ty) sext_ty))
   (rv_vwadd_vx (gen_slidedown_half in_ty y) x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -201,7 +201,7 @@
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwaddu_vx x y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend x @ (value_type uext_ty)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend x @ (value_type uext_ty)))
                                                             (uwiden_low y @ (value_type in_ty)))))
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwaddu_vx y x (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -224,7 +224,7 @@
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwaddu_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
 
-(rule 14 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend y @ (value_type uext_ty)))
+(rule 15 (lower (has_type (ty_vec_fits_in_register _) (iadd (splat (uextend y @ (value_type uext_ty)))
                                                             (uwiden_high x @ (value_type in_ty)))))
   (if-let $true (ty_equal (lane_type in_ty) uext_ty))
   (rv_vwaddu_vx (gen_slidedown_half in_ty x) y (unmasked) (vstate_mf2 (ty_half_lanes in_ty))))
@@ -888,7 +888,7 @@
         (high_part3 XReg (rv_sll (value_regs_get x 1) shamt))
         (high XReg (rv_or high_part2 high_part3))
         ;;
-        (const64 XReg (load_u64_constant 64))
+        (const64 XReg (imm $I64 64))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
@@ -940,7 +940,7 @@
         (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
         (low XReg (rv_or low_part2 low_part3))
         ;;
-        (const64 XReg (load_u64_constant 64))
+        (const64 XReg (imm $I64 64))
         ;;
         (high XReg (rv_srl (value_regs_get x 1) shamt))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
@@ -994,14 +994,14 @@
         (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
         (low XReg (rv_or low_part2 low_part3))
         ;;
-        (const64 XReg (load_u64_constant 64))
+        (const64 XReg (imm $I64 64))
         ;;
         (high XReg (rv_sra (value_regs_get x 1) shamt))
         ;;
-        (const_neg_1 XReg (load_imm12 -1))
+        (const_neg_1 XReg (imm $I64 (i64_as_u64 -1)))
         ;;
         (high_replacement XReg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
-        (const64 XReg (load_u64_constant 64))
+        (const64 XReg (imm $I64 64))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
@@ -1773,7 +1773,7 @@
 ;; If we are inserting from an Imm5 const we can use the immediate
 ;; variant of vmerge.
 (rule 2 (lower (insertlane vec @ (value_type (ty_vec_fits_in_register ty))
-                           (iconst (u64_from_imm64 (imm5_from_u64 imm)))
+                           (i64_from_iconst (imm5_from_i64 imm))
                            (u8_from_uimm8 lane)))
   (let ((mask VReg (gen_vec_mask (u64_shl 1 lane))))
     (rv_vmerge_vim vec imm mask ty)))
@@ -1854,7 +1854,7 @@
 ;; The reduce operation leaves the result in the lowest lane, we then move it
 ;; into the destination X register.
 (rule (lower (vall_true x @ (value_type (ty_vec_fits_in_register ty))))
-  (if-let one (imm5_from_i8 1))
+  (if-let one (i8_to_imm5 1))
   ;; We don't need to broadcast the immediate into all lanes, only into lane 0.
   ;; I did it this way since it uses one less instruction than with a vmv.s.x.
   (let ((fixed VReg (rv_vmv_vi one ty))
@@ -1912,7 +1912,7 @@
 ;; vrgather will insert a 0 for lanes that are out of bounds, so we can let it load
 ;; negative and out of bounds indexes.
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $I8X16) (shuffle x y (vconst_from_immediate mask))))
-  (if-let neg16 (imm5_from_i8 -16))
+  (if-let neg16 (i8_to_imm5 -16))
   (let ((x_mask VReg (gen_constant ty mask))
         (x_lanes VReg (rv_vrgather_vv x x_mask (unmasked) ty))
         (y_mask VReg (rv_vadd_vi x_mask neg16 (unmasked) ty))

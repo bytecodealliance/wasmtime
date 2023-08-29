@@ -807,7 +807,7 @@
 ;; This is just a mnemonic for `vxor.vi vd, vs, -1`
 (decl rv_vnot_v (VReg VecOpMasking VState) VReg)
 (rule (rv_vnot_v vs2 mask vstate)
-  (if-let neg1 (imm5_from_i8 -1))
+  (if-let neg1 (i8_to_imm5 -1))
   (rv_vxor_vi vs2 neg1 mask vstate))
 
 ;; Helper for emitting the `vmax.vv` instruction.
@@ -1505,8 +1505,8 @@
 ;; lanes are set to all zeros.
 (decl gen_expand_mask (Type VReg) VReg)
 (rule (gen_expand_mask ty mask)
-  (if-let zero (imm5_from_i8 0))
-  (if-let neg1 (imm5_from_i8 -1))
+  (if-let zero (i8_to_imm5 0))
+  (if-let neg1 (i8_to_imm5 -1))
   (rv_vmerge_vim (rv_vmv_vi zero ty) neg1 mask ty))
 
 

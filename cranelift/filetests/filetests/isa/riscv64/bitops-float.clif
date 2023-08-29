@@ -22,9 +22,9 @@ block1(v4: f32):
 ; VCode:
 ; block0:
 ;   li a0,0
-;   li t1,0
-;   fmv.w.x fa6,t1
-;   fmv.x.w t4,fa6
+;   li t0,0
+;   fmv.w.x fa7,t0
+;   fmv.x.w t4,fa7
 ;   not t1,t4
 ;   fmv.w.x ft8,t1
 ;   fmv.x.w t3,ft8
@@ -35,7 +35,7 @@ block1(v4: f32):
 ; block1:
 ;   j label3
 ; block2:
-;   fmv.d fa1,fa6
+;   fmv.d fa1,fa7
 ;   j label3
 ; block3:
 ;   ret
@@ -43,9 +43,9 @@ block1(v4: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
-;   mv t1, zero
-;   fmv.w.x fa6, t1
-;   fmv.x.w t4, fa6
+;   mv t0, zero
+;   fmv.w.x fa7, t0
+;   fmv.x.w t4, fa7
 ;   not t1, t4
 ;   fmv.w.x ft8, t1
 ;   fmv.x.w t3, ft8
@@ -67,7 +67,7 @@ block1(v4: f32):
 ; block1: ; offset 0x58
 ;   j 8
 ; block2: ; offset 0x5c
-;   fmv.d fa1, fa6
+;   fmv.d fa1, fa7
 ; block3: ; offset 0x60
 ;   ret
 
