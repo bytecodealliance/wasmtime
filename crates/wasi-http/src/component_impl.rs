@@ -446,23 +446,50 @@ where
     )?;
     linker.func_wrap2_async(
         "wasi:io/streams",
-        "blocking-check-write",
+        "check-write",
         move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
             Box::new(async move {
-                use io::streams::WriteReadiness;
-
                 let memory: Memory = memory_get(&mut caller)?;
                 let ctx = get_cx(caller.data_mut());
 
-                // 0 == outer result tag
-                // 1 == inner result tag
-                // 2 == enum tag
-                // 3 == permit
-                let result: [u32; 4] =
-                    match io::streams::Host::blocking_check_write(ctx, stream).await? {
-                        WriteReadiness::Ready(n) => [0, 0, 0, u32::try_from(n)?],
-                        WriteReadiness::Closed => [0, 0, 1, 0],
-                    };
+                let result = match io::streams::Host::check_write(ctx, stream).await {
+                    // 0 == outer result tag (success)
+                    // 1 == result value (u64 lower 32 bits)
+                    // 2 == result value (u64 upper 32 bits)
+                    Ok(len) => [0, len as u32, (len >> 32) as u32],
+
+                    // 0 == outer result tag (failure)
+                    // 1 == result value (u64 lower 32 bits)
+                    // 2 == result value (unused)
+                    Err(_) => todo!("how do we extract runtime error cases?"),
+                };
+
+                let raw = u32_array_to_u8(&result);
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "wasi:io/streams",
+        "blocking-check-write",
+        move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
+            Box::new(async move {
+                let memory: Memory = memory_get(&mut caller)?;
+                let ctx = get_cx(caller.data_mut());
+
+                let result = match io::streams::Host::blocking_check_write(ctx, stream).await {
+                    // 0 == outer result tag (success)
+                    // 1 == result value (u64 lower 32 bits)
+                    // 2 == result value (u64 upper 32 bits)
+                    Ok(len) => [0, len as u32, (len >> 32) as u32],
+
+                    // 0 == outer result tag (failure)
+                    // 1 == result value (u64 lower 32 bits)
+                    // 2 == result value (unused)
+                    Err(_) => todo!("how do we extract runtime error cases?"),
+                };
 
                 let raw = u32_array_to_u8(&result);
                 memory.write(caller.as_context_mut(), ptr as _, &raw)?;
@@ -476,17 +503,11 @@ where
         "blocking-flush",
         move |mut caller: Caller<'_, T>, stream: u32| {
             Box::new(async move {
-                use io::streams::FlushResult;
-
                 let ctx = get_cx(caller.data_mut());
 
-                // 0 == outer result tag
-                // 1 == inner result tag
-                // 2 == enum tag
-                match io::streams::Host::blocking_flush(ctx, stream).await? {
-                    FlushResult::Done => Ok(0),
-                    FlushResult::Closed => Ok(1),
-                }
+                io::streams::Host::blocking_flush(ctx, stream).await?;
+
+                Ok(0)
             })
         },
     )?;
@@ -495,22 +516,19 @@ where
         "write",
         move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
             Box::new(async move {
-                use io::streams::WriteReadiness;
-
                 let memory: Memory = memory_get(&mut caller)?;
                 let body = slice_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
 
                 let ctx = get_cx(caller.data_mut());
 
-                // 0 == outer result tag
-                // 1 == inner result tag
-                // 2 == option tag
-                // 3 == enum tag
-                // 4 == permit
-                let result: [u32; 5] = match io::streams::Host::write(ctx, stream, body).await? {
-                    Some(WriteReadiness::Ready(n)) => [0, 0, 1, 0, u32::try_from(n)?],
-                    Some(WriteReadiness::Closed) => [0, 0, 1, 1, 0],
-                    None => [0, 0, 0, 0, 0],
+                let result: [u32; 2] = match io::streams::Host::write(ctx, stream, body).await {
+                    // 0 == outer result tag
+                    // 1 == unused
+                    Ok(()) => [0, 0],
+
+                    // 0 == outer result tag
+                    // 1 == inner result tag
+                    Err(_) => todo!("how do we extract runtime error cases?"),
                 };
 
                 let raw = u32_array_to_u8(&result);

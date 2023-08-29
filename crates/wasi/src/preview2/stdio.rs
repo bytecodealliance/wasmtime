@@ -5,7 +5,6 @@ use crate::preview2::bindings::cli::{
 use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe::AsyncWriteStream;
 use crate::preview2::{HostOutputStream, OutputStreamError, WasiView};
-use anyhow::Error;
 use bytes::Bytes;
 use is_terminal::IsTerminal;
 

@@ -72,47 +72,30 @@ impl BlockingMode {
         output_stream: streams::OutputStream,
         bytes: &[u8],
     ) -> Result<usize, types::Error> {
-        use streams::{FlushResult, Host, WriteReadiness};
+        use streams::Host;
+
         let n = match self {
-            BlockingMode::Blocking => {
-                match Host::blocking_check_write(host, output_stream)
-                    .await
-                    .map_err(types::Error::trap)?
-                {
-                    WriteReadiness::Ready(n) => n,
-                    WriteReadiness::Closed => return Err(types::Errno::Io.into()),
-                }
-            }
-            BlockingMode::NonBlocking => {
-                match Host::check_write(host, output_stream)
-                    .await
-                    .map_err(types::Error::trap)?
-                {
-                    Some(WriteReadiness::Ready(n)) => n,
-                    Some(WriteReadiness::Closed) => return Err(types::Errno::Io.into()),
-                    None => 0,
-                }
-            }
+            BlockingMode::Blocking => Host::blocking_check_write(host, output_stream)
+                .await
+                .map_err(|e| types::Error::trap(e.into()))?,
+            BlockingMode::NonBlocking => Host::check_write(host, output_stream)
+                .await
+                .map_err(|e| types::Error::trap(e.into()))?,
         };
         let len = bytes.len().min(n as usize);
+
+        // Either this was a blocking request to write `0` bytes, or it was a request to write `0`
+        // or more bytes to a non-blocking handle.
         if len == 0 {
             return Ok(0);
         }
-        match Host::write(host, output_stream, bytes[..len].to_vec())
+        Host::write(host, output_stream, bytes[..len].to_vec())
             .await
-            .map_err(types::Error::trap)?
-        {
-            Some(WriteReadiness::Closed) => return Err(types::Errno::Io.into()),
-            _ => {}
-        }
+            .map_err(|e| types::Error::trap(e.into()))?;
 
-        match Host::blocking_flush(host, output_stream)
+        Host::flush(host, output_stream)
             .await
-            .map_err(types::Error::trap)?
-        {
-            FlushResult::Done => {}
-            FlushResult::Closed => return Err(types::Errno::Io.into()),
-        }
+            .map_err(|e| types::Error::trap(e.into()))?;
 
         Ok(len)
     }
