@@ -703,7 +703,7 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
 
         Inst::AddImm32 { rd, src1, src2 } => {
             collector.reg_def(*rd);
-        },
+        }
 
         &Inst::VecAluRRRImm5 {
             op,
@@ -1447,10 +1447,10 @@ impl Inst {
                 }
             }
 
-            Inst::AddImm32 { rd, src1, src2 } =>  {
+            Inst::AddImm32 { rd, src1, src2 } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{src1} + {src2} => {rd};")
-            },
+            }
 
             &Inst::FpuRR {
                 frm,

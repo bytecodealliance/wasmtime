@@ -9,9 +9,7 @@ use generated_code::{Context, ExtendOp, MInst};
 use self::generated_code::{VecAluOpRR, VecLmul};
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::zkasm::abi::Riscv64ABICallSite;
-use crate::isa::zkasm::lower::args::{
-    FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
-};
+use crate::isa::zkasm::lower::args::{FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg};
 use crate::isa::zkasm::Riscv64Backend;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};

@@ -232,7 +232,10 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
     }
 
     println!("start:");
-    let start_func = dummy_environ.info.start_func.expect("Must have a start function");
+    let start_func = dummy_environ
+        .info
+        .start_func
+        .expect("Must have a start function");
     println!("  zkPC + 2 => RR");
     // TODO(akashin): Figure out why we need to do -1 here.
     println!("  :JMP(function_{})", start_func.index() - 1);
