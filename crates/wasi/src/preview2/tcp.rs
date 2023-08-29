@@ -56,7 +56,11 @@ pub(crate) struct HostTcpSocketInner {
 }
 
 impl HostTcpSocketInner {
-    fn new(stream: tokio::net::TcpStream) -> Self {
+    fn new(stream: cap_std::net::TcpListener) -> Self {
+        let fd = stream.into_raw_socketlike();
+        let stream = unsafe { std::net::TcpStream::from_raw_socketlike(fd) };
+        let stream = tokio::net::TcpStream::try_from(stream).unwrap();
+
         Self {
             stream: Arc::new(stream),
         }
@@ -103,18 +107,97 @@ impl HostInputStream for HostTcpSocketInner {
 
 const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
+pub(crate) struct TcpWriteStream {
+    stream: HostTcpSocketInner,
+    write_handle: Option<tokio::task::JoinHandle<anyhow::Result<()>>>,
+}
+
+impl TcpWriteStream {
+    pub(crate) fn new(stream: HostTcpSocketInner) -> Self {
+        Self {
+            stream,
+            write_handle: None,
+        }
+    }
+
+    /// Write `bytes` in a background task, remembering the task handle for use in a future call to
+    /// `write_ready`
+    fn background_write(&mut self, mut bytes: bytes::Bytes) {
+        assert!(self.write_handle.is_none());
+
+        let stream = self.stream.clone();
+        self.write_handle.replace(tokio::spawn(async move {
+            while !bytes.is_empty() {
+                stream.tcp_socket().writable().await?;
+                let n = stream.tcp_socket().try_write(&bytes)?;
+                let _ = bytes.split_to(n);
+            }
+
+            Ok(())
+        }));
+    }
+}
+
+impl Drop for TcpWriteStream {
+    fn drop(&mut self) {
+        if let Some(handle) = self.write_handle.take() {
+            handle.abort();
+        }
+    }
+}
+
 #[async_trait::async_trait]
-impl HostOutputStream for HostTcpSocketInner {
+impl HostOutputStream for TcpWriteStream {
     fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), OutputStreamError> {
-        todo!("HostOutputStream for HostTcpSocketInner is placeholder")
+        while !bytes.is_empty() {
+            match self.stream.tcp_socket().try_write(&bytes) {
+                Ok(n) => {
+                    let _ = bytes.split_to(n);
+                }
+
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    // As `try_write` indicated that it would have blocked, we'll perform the write
+                    // in the background to allow us to return immediately.
+                    self.background_write(bytes);
+
+                    return Ok(());
+                }
+
+                Err(e) => return Err(OutputStreamError::LastOperationFailed(e.into())),
+            }
+        }
+
+        Ok(())
     }
 
     fn flush(&mut self) -> Result<(), OutputStreamError> {
-        todo!("HostOutputStream for HostTcpSocketInner is placeholder")
+        // `flush` is a no-op here, as we're not managing any internal buffer. Additionally,
+        // `write_ready` will join the background write task if it's active, so following `flush`
+        // with `write_ready` will have the desired effect.
+        Ok(())
     }
 
     async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
-        todo!("HostOutputStream for HostTcpSocketInner is placeholder")
+        if self.write_handle.is_some() {
+            self.write_handle
+                .as_mut()
+                .unwrap()
+                .await
+                .map_err(|e| OutputStreamError::Trap(e.into()))?
+                .map_err(|e| OutputStreamError::LastOperationFailed(e.into()))?;
+
+            // Only clear out the write handle once the task has exited, to ensure that
+            // `write_ready` remains cancel-safe.
+            self.write_handle = None;
+        }
+
+        self.stream
+            .tcp_socket()
+            .writable()
+            .await
+            .map_err(|e| OutputStreamError::LastOperationFailed(e.into()))?;
+
+        Ok(SOCKET_READY_SIZE)
     }
 }
 
@@ -124,13 +207,6 @@ impl HostTcpSocket {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
         let tcp_socket = TcpListener::new(family, Blocking::No)?;
-
-        let tcp_socket = unsafe {
-            tokio::net::TcpStream::try_from(std::net::TcpStream::from_raw_socketlike(
-                tcp_socket.into_raw_socketlike(),
-            ))
-            .unwrap()
-        };
 
         Ok(Self {
             inner: HostTcpSocketInner::new(tcp_socket),
@@ -142,15 +218,7 @@ impl HostTcpSocket {
     ///
     /// The socket must be in non-blocking mode.
     pub fn from_tcp_stream(tcp_socket: cap_std::net::TcpStream) -> io::Result<Self> {
-        let fd = rustix::fd::OwnedFd::from(tcp_socket);
-        let tcp_socket = TcpListener::from(fd);
-
-        let tcp_socket = unsafe {
-            tokio::net::TcpStream::try_from(std::net::TcpStream::from_raw_socketlike(
-                tcp_socket.into_raw_socketlike(),
-            ))
-            .unwrap()
-        };
+        let tcp_socket = TcpListener::from(rustix::fd::OwnedFd::from(tcp_socket));
 
         Ok(Self {
             inner: HostTcpSocketInner::new(tcp_socket),
@@ -162,8 +230,11 @@ impl HostTcpSocket {
         self.inner.tcp_socket()
     }
 
-    pub fn clone_inner(&self) -> HostTcpSocketInner {
-        self.inner.clone()
+    /// Create the input/output stream pair for a tcp socket.
+    pub fn as_split(&self) -> (Box<impl HostInputStream>, Box<impl HostOutputStream>) {
+        let input = Box::new(self.inner.clone());
+        let output = Box::new(TcpWriteStream::new(self.inner.clone()));
+        (input, output)
     }
 }
 

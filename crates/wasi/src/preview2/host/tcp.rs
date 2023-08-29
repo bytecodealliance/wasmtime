@@ -140,14 +140,9 @@ impl<T: WasiView> tcp::Host for T {
         };
 
         socket.tcp_state = HostTcpState::Connected;
-
-        let input_clone = socket.clone_inner();
-        let output_clone = socket.clone_inner();
-
-        let input_stream = self.table_mut().push_input_stream(Box::new(input_clone))?;
-        let output_stream = self
-            .table_mut()
-            .push_output_stream(Box::new(output_clone))?;
+        let (input, output) = socket.as_split();
+        let input_stream = self.table_mut().push_input_stream(input)?;
+        let output_stream = self.table_mut().push_output_stream(output)?;
 
         Ok((input_stream, output_stream))
     }
@@ -205,16 +200,17 @@ impl<T: WasiView> tcp::Host for T {
             .tcp_socket()
             .as_socketlike_view::<TcpListener>()
             .accept_with(Blocking::No)?;
-        let tcp_socket = HostTcpSocket::from_tcp_stream(connection)?;
 
-        let input_clone = tcp_socket.clone_inner();
-        let output_clone = tcp_socket.clone_inner();
+        let mut tcp_socket = HostTcpSocket::from_tcp_stream(connection)?;
+
+        // Mark the socket as connected so that we can exit early from methods like `start-bind`.
+        tcp_socket.tcp_state = HostTcpState::Connected;
+
+        let (input, output) = tcp_socket.as_split();
 
         let tcp_socket = self.table_mut().push_tcp_socket(tcp_socket)?;
-        let input_stream = self.table_mut().push_input_stream(Box::new(input_clone))?;
-        let output_stream = self
-            .table_mut()
-            .push_output_stream(Box::new(output_clone))?;
+        let input_stream = self.table_mut().push_input_stream(input)?;
+        let output_stream = self.table_mut().push_output_stream(output)?;
 
         Ok((tcp_socket, input_stream, output_stream))
     }
