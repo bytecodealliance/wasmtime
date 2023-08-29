@@ -667,15 +667,11 @@ impl MachInstEmit for Inst {
             } => {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
+                debug_assert_eq!(rs1, a0());
+                debug_assert_eq!(rs2, b0());
                 let rd = allocs.next_writable(rd);
                 put_string(
-                    &format!(
-                        "{}, {} => {} : {}\n",
-                        reg_name(rs1),
-                        reg_name(rs2),
-                        reg_name(rd.to_reg()),
-                        alu_op.op_name()
-                    ),
+                    &format!("$ => {} :{}\n", reg_name(rd.to_reg()), alu_op.op_name()),
                     sink,
                 );
 
@@ -1095,9 +1091,10 @@ impl MachInstEmit for Inst {
             } => {
                 kind.rs1 = allocs.next(kind.rs1);
                 kind.rs2 = allocs.next(kind.rs2);
+                debug_assert_eq!(kind.rs2, zero_reg());
                 match taken {
                     BranchTarget::Label(label) => {
-                        put_string(&format!(":JMP(L{})\n", label.index()), sink);
+                        put_string(&format!("{} :JMPZ(L{})\n", reg_name(kind.rs1), label.index()), sink);
 
                         // let code = kind.emit();
                         // let code_inverse = kind.inverse().emit().to_le_bytes();
@@ -1129,6 +1126,7 @@ impl MachInstEmit for Inst {
                         // }
                     }
                 }
+                // TODO(akashin): Can also merge this as an else in jump.
                 Inst::Jal { dest: not_taken }.emit(&[], sink, emit_info, state);
             }
 
@@ -1509,11 +1507,15 @@ impl MachInstEmit for Inst {
                 ref b,
                 ty,
             } => {
-                put_string(&format!("{a:?}, {b:?} => {:?} : CMP\n", rd), sink);
-
-                /* let a = alloc_value_regs(a, &mut allocs);
+                let a = alloc_value_regs(a, &mut allocs);
                 let b = alloc_value_regs(b, &mut allocs);
                 let rd = allocs.next_writable(rd);
+                put_string(
+                    &format!("{:?}, {:?} => {} :CMP\n", a, b, reg_name(rd.to_reg())),
+                    sink,
+                );
+
+                /*
                 let label_true = sink.get_label();
                 let label_false = sink.get_label();
                 Inst::lower_br_icmp(
