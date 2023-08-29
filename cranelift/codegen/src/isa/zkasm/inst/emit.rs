@@ -652,7 +652,11 @@ impl MachInstEmit for Inst {
             }
             &Inst::AddImm32 { rd, src1, src2 } => {
                 let rd = allocs.next(rd.to_reg());
-                put_string(&format!("{src1} + {src2} => {}\n", reg_name(rd)), sink);
+                // TODO(akashin): Should we have a function for `bits` field?
+                put_string(
+                    &format!("{} + {} => {}\n", src1.bits, src2.bits, reg_name(rd)),
+                    sink,
+                );
             }
             &Inst::AluRRR {
                 alu_op,
@@ -701,7 +705,12 @@ impl MachInstEmit for Inst {
                 match alu_op {
                     AluOPRRI::Addi => {
                         put_string(
-                            &format!("{} + {imm12} => {}\n", reg_name(rs), reg_name(rd.to_reg())),
+                            &format!(
+                                "{} + {} => {}\n",
+                                reg_name(rs),
+                                imm12.bits,
+                                reg_name(rd.to_reg())
+                            ),
                             sink,
                         );
                     }
@@ -739,41 +748,24 @@ impl MachInstEmit for Inst {
                 };
                 put_string(
                     &format!(
-                        "$ => {} :MLOAD({} + {imm12})\n",
+                        "$ => {} :MLOAD({} + {})\n",
                         reg_name(rd.to_reg()),
-                        reg_name(addr)
+                        reg_name(addr),
+                        imm12.bits,
                     ),
                     sink,
                 );
 
-                /*
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
-                    // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
-
-                sink.put4(encode_i_type(op.op_code(), rd, op.funct3(), addr, imm12)); */
+                // let srcloc = state.cur_srcloc();
+                // if !srcloc.is_default() && !flags.notrap() {
+                //     // Register the offset at which the actual load instruction starts.
+                //     sink.add_trap(TrapCode::HeapOutOfBounds);
+                // }
+                //
+                // sink.put4(encode_i_type(op.op_code(), rd, op.funct3(), addr, imm12));
             }
             &Inst::Store { op, src, flags, to } => {
-                let src = allocs.next(src);
-                let stack_offset = to.get_offset_with_state(state);
-                if let Some(base_register) = to.get_base_register() {
-                    put_string(
-                        &format!(
-                            "{} :MSTORE({} + {stack_offset})\n",
-                            reg_name(src),
-                            reg_name(base_register)
-                        ),
-                        sink,
-                    );
-                } else {
-                    put_string(
-                        &format!("{} :MSTORE({stack_offset})\n", reg_name(src)),
-                        sink,
-                    );
-                }
-                /* let to = to.clone().with_allocs(&mut allocs);
+                let to = to.clone().with_allocs(&mut allocs);
                 let src = allocs.next(src);
 
                 let base = to.get_base_register();
@@ -790,14 +782,23 @@ impl MachInstEmit for Inst {
                         (tmp.to_reg(), Imm12::zero())
                     }
                 };
+                put_string(
+                    &format!(
+                        "{} :MSTORE({} + {})\n",
+                        reg_name(src),
+                        reg_name(addr),
+                        imm12.bits
+                    ),
+                    sink,
+                );
 
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
-                    // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
-
-                sink.put4(encode_s_type(op.op_code(), op.funct3(), addr, src, imm12)); */
+                // let srcloc = state.cur_srcloc();
+                // if !srcloc.is_default() && !flags.notrap() {
+                //     // Register the offset at which the actual load instruction starts.
+                //     sink.add_trap(TrapCode::HeapOutOfBounds);
+                // }
+                //
+                // sink.put4(encode_s_type(op.op_code(), op.funct3(), addr, src, imm12));
             }
             &Inst::Args { .. } => {
                 // Nothing: this is a pseudoinstruction that serves
@@ -864,9 +865,9 @@ impl MachInstEmit for Inst {
             }
             &Inst::AdjustSp { amount } => {
                 let amount = if amount > 0 {
-                    format!("+ {}", amount)
+                    format!("- {}", amount)
                 } else {
-                    format!("- {}", -amount)
+                    format!("+ {}", -amount)
                 };
                 put_string(&format!("SP {amount} => SP\n"), sink);
 
