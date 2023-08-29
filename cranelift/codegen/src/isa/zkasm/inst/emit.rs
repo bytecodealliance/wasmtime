@@ -502,6 +502,7 @@ impl Inst {
 }
 
 fn put_string(s: &str, sink: &mut MachBuffer<Inst>) {
+    sink.put_data("  ".as_bytes());
     sink.put_data(s.as_bytes());
 }
 
@@ -552,7 +553,7 @@ impl MachInstEmit for Inst {
                         x.emit(&[], sink, emit_info, state) */
             }
             &Inst::Label { imm } => {
-                put_string(&format!("L{imm}:\n"), sink);
+                sink.put_data(format!("L{imm}:\n").as_bytes());
             }
             &Inst::RawData { ref data } => {
                 // Right now we only put a u32 or u64 in this instruction.
