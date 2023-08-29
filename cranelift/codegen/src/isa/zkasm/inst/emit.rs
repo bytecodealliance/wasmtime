@@ -725,7 +725,7 @@ impl MachInstEmit for Inst {
                         (tmp.to_reg(), Imm12::zero())
                     }
                 };
-                put_string(&format!("$ => {} : LOAD({} + {imm12})\n", reg_name(rd.to_reg()), reg_name(addr)), sink);
+                put_string(&format!("$ => {} :LOAD({} + {imm12})\n", reg_name(rd.to_reg()), reg_name(addr)), sink);
 
                 /* 
                 let srcloc = state.cur_srcloc();
@@ -740,9 +740,9 @@ impl MachInstEmit for Inst {
                 let src = allocs.next(src);
                 let stack_offset = to.get_offset_with_state(state);
                 if let Some(base_register) = to.get_base_register() {
-                    put_string(&format!("{} : MSTORE({} + {stack_offset})\n", reg_name(src), reg_name(base_register)), sink);
+                    put_string(&format!("{} :MSTORE({} + {stack_offset})\n", reg_name(src), reg_name(base_register)), sink);
                 } else {
-                    put_string(&format!("{} : MSTORE({stack_offset})\n", reg_name(src)), sink);
+                    put_string(&format!("{} :MSTORE({stack_offset})\n", reg_name(src)), sink);
                 }
                 /* let to = to.clone().with_allocs(&mut allocs);
                 let src = allocs.next(src);
@@ -927,7 +927,7 @@ impl MachInstEmit for Inst {
                     rm: info.uses[0].preg,
                 }
                 .emit(&[], sink, emit_info, state);
-                put_string(&format!("{} : ASSERT\n", reg_name(info.uses[1].preg)), sink);
+                put_string(&format!("{} :ASSERT\n", reg_name(info.uses[1].preg)), sink);
 
                 /*
                 if let Some(s) = state.take_stack_map() {
