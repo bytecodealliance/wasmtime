@@ -143,7 +143,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 3] = {
         // Registers are A, B, C, D, E.
         // TODO(akashin): Remove redundant registers.
-        let x_registers: Vec<PReg> = (1..=5)
+        let x_registers: Vec<PReg> = (1..=7)
             .map(|i| PReg::new(i, RegClass::Int))
             .collect();
 

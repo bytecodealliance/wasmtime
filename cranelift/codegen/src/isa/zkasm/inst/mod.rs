@@ -1006,12 +1006,20 @@ pub fn reg_name(reg: Reg) -> String {
         Some(real) => match real.class() {
             RegClass::Int => match real.hw_enc() {
                 0 => "0".into(),
-                1 => "ra".into(),
+                1 => "RR".into(),
                 2 => "SP".into(),
+                // TODO(akashin): Do we have a global pointer register in ZK ASM?
+                // https://www.five-embeddev.com/quickref/global_pointer.html
+                // Supposed to be unallocatable.
                 3 => "gp".into(),
+                // TODO(akashin): Do we have a thread pointer register in ZK ASM?
+                // https://groups.google.com/a/groups.riscv.org/g/sw-dev/c/cov47bNy5gY?pli=1
+                // Supposed to be unallocatable.
                 4 => "tp".into(),
-                5 => "t0".into(),
-                6..=7 => format!("t{}", real.hw_enc() - 5),
+                // Temporary registers.
+                5 => "C".into(),
+                6 => "D".into(),
+                7 => "E".into(),
                 8 => "fp".into(),
                 9 => "s1".into(),
                 10..=17 => format!("a{}", real.hw_enc() - 10),

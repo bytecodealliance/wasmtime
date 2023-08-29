@@ -104,8 +104,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // both start and end are included.
         let (x_start, x_end, f_start, f_end) = match (call_conv, args_or_rets) {
             (isa::CallConv::Tail, _) => (9, 29, 0, 31),
-            (_, ArgsOrRets::Args) => (3, 5, 3, 5),
-            (_, ArgsOrRets::Rets) => (3, 5, 3, 5),
+            (_, ArgsOrRets::Args) => (5, 7, 5, 7),
+            (_, ArgsOrRets::Rets) => (5, 7, 5, 7),
         };
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
