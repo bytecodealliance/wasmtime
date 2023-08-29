@@ -6,6 +6,32 @@ Unreleased.
 
 ### Added
 
+* Configuration of mach ports vs signals on macOS is now done through a `Config`
+  instead of at compile time.
+  [#6807](https://github.com/bytecodealliance/wasmtime/pull/6807)
+
+* `Engine::detect_precompiled` can be used to to determine whether some bytes
+  look like a precompiled module or a component.
+  [#6832](https://github.com/bytecodealliance/wasmtime/pull/6832)
+
+* A new feature "wmemcheck" has been added to enable Valgrind-like detection of
+  use-after-free within a WebAssembly guest module.
+  [#6820](https://github.com/bytecodealliance/wasmtime/pull/6820)
+  [#6856](https://github.com/bytecodealliance/wasmtime/pull/6856)
+
+* The `wasmtime` CLI now supports executing components.
+  [#6836](https://github.com/bytecodealliance/wasmtime/pull/6836)
+
+* Support for WASI preview2's TCP sockets interface has been added.
+  [#6837](https://github.com/bytecodealliance/wasmtime/pull/6837)
+
+* Wasmtime's implementation of the wasi-nn proposal now supports named models.
+  [#6854](https://github.com/bytecodealliance/wasmtime/pull/6854)
+
+* The C API now supports configuring `native_unwind_info` and
+  `dynamic_memory_reserved_for_growth`.
+  [#6896](https://github.com/bytecodealliance/wasmtime/pull/6896)
+
 ### Changed
 
 * The pooling allocator was significantly refactored and the
@@ -52,6 +78,7 @@ Unreleased.
   * `PoolingAllocationConfig::max_core_instances_per_component`
 
   These methods do not affect the size of the pre-allocated pool.
+  [#6835](https://github.com/bytecodealliance/wasmtime/pull/6835)
 
 * Options to the `wasmtime` CLI for Wasmtime itself must now come before the
   WebAssembly module. For example `wasmtime run foo.wasm --disable-cache` now
@@ -59,6 +86,24 @@ Unreleased.
   argument/option after the WebAssembly module is now interpreted as an argument
   to the wasm module itself.
   [#6737](https://github.com/bytecodealliance/wasmtime/pull/6737)
+
+* Builder methods for WASI contexts onw use `&mut self` instead of `self`.
+  [#6770](https://github.com/bytecodealliance/wasmtime/pull/6770)
+
+* Native unwinding information is now properly disabled when it is configured to
+  be turned off.
+  [#6547](https://github.com/bytecodealliance/wasmtime/pull/6547)
+
+### Removed
+
+* Wasmtime's experimental implementation of wasi-crypto has been removed. More
+  discussion of this change can be found on
+  [#6732](https://github.com/bytecodealliance/wasmtime/pull/6732)
+  and
+  [#6816](https://github.com/bytecodealliance/wasmtime/pull/6816)
+
+* Support for `union` types in the component model has been removed.
+  [#6913](https://github.com/bytecodealliance/wasmtime/pull/6913)
 
 --------------------------------------------------------------------------------
 
