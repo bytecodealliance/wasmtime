@@ -715,7 +715,29 @@ impl MachInstEmit for Inst {
                             sink,
                         );
                     }
-                    _ => unreachable!(),
+                    AluOPRRI::Slli => {
+                        put_string(
+                            &format!(
+                                "{} << {} => {}\n",
+                                reg_name(rs),
+                                imm12.bits,
+                                reg_name(rd.to_reg())
+                            ),
+                            sink,
+                        );
+                    }
+                    AluOPRRI::Srli => {
+                        put_string(
+                            &format!(
+                                "{} >> {} => {}\n",
+                                reg_name(rs),
+                                imm12.bits,
+                                reg_name(rd.to_reg())
+                            ),
+                            sink,
+                        );
+                    }
+                    _ => unreachable!("Op {:?} is not implemented", alu_op),
                 };
 
                 // let x = alu_op.op_code()
@@ -1071,39 +1093,43 @@ impl MachInstEmit for Inst {
                 not_taken,
                 mut kind,
             } => {
-                todo!() /* kind.rs1 = allocs.next(kind.rs1);
-                        kind.rs2 = allocs.next(kind.rs2);
-                        match taken {
-                            BranchTarget::Label(label) => {
-                                let code = kind.emit();
-                                let code_inverse = kind.inverse().emit().to_le_bytes();
-                                sink.use_label_at_offset(start_off, label, LabelUse::B12);
-                                sink.add_cond_branch(start_off, start_off + 4, label, &code_inverse);
-                                sink.put4(code);
-                            }
-                            BranchTarget::ResolvedOffset(offset) => {
-                                assert!(offset != 0);
-                                if LabelUse::B12.offset_in_range(offset as i64) {
-                                    let code = kind.emit();
-                                    let mut code = code.to_le_bytes();
-                                    LabelUse::B12.patch_raw_offset(&mut code, offset as i64);
-                                    sink.put_data(&code[..])
-                                } else {
-                                    let mut code = kind.emit().to_le_bytes();
-                                    // jump over the condbr , 4 bytes.
-                                    LabelUse::B12.patch_raw_offset(&mut code[..], 4);
-                                    sink.put_data(&code[..]);
-                                    Inst::construct_auipc_and_jalr(
-                                        None,
-                                        writable_spilltmp_reg(),
-                                        offset as i64,
-                                    )
-                                    .into_iter()
-                                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                                }
-                            }
-                        }
-                        Inst::Jal { dest: not_taken }.emit(&[], sink, emit_info, state); */
+                kind.rs1 = allocs.next(kind.rs1);
+                kind.rs2 = allocs.next(kind.rs2);
+                match taken {
+                    BranchTarget::Label(label) => {
+                        put_string(&format!(":JMP(L{})\n", label.index()), sink);
+
+                        // let code = kind.emit();
+                        // let code_inverse = kind.inverse().emit().to_le_bytes();
+                        // sink.use_label_at_offset(start_off, label, LabelUse::B12);
+                        // sink.add_cond_branch(start_off, start_off + 4, label, &code_inverse);
+                        // sink.put4(code);
+                    }
+                    BranchTarget::ResolvedOffset(offset) => {
+                        assert!(offset != 0);
+                        todo!();
+
+                        // if LabelUse::B12.offset_in_range(offset as i64) {
+                        //     let code = kind.emit();
+                        //     let mut code = code.to_le_bytes();
+                        //     LabelUse::B12.patch_raw_offset(&mut code, offset as i64);
+                        //     sink.put_data(&code[..])
+                        // } else {
+                        //     let mut code = kind.emit().to_le_bytes();
+                        //     // jump over the condbr , 4 bytes.
+                        //     LabelUse::B12.patch_raw_offset(&mut code[..], 4);
+                        //     sink.put_data(&code[..]);
+                        //     Inst::construct_auipc_and_jalr(
+                        //         None,
+                        //         writable_spilltmp_reg(),
+                        //         offset as i64,
+                        //     )
+                        //     .into_iter()
+                        //     .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        // }
+                    }
+                }
+                Inst::Jal { dest: not_taken }.emit(&[], sink, emit_info, state);
             }
 
             &Inst::Mov { rd, rm, ty } => {
