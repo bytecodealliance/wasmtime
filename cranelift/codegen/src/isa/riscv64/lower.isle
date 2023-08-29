@@ -1216,7 +1216,7 @@
 ;; `vfncvt...` leaves the upper bits of the register undefined so
 ;; we need to zero them out.
 (rule (lower (has_type (ty_vec_fits_in_register ty @ $F32X4) (fvdemote x)))
-  (if-let (imm5_from_u64 zero) (u64_add 0 0))
+  (if-let zero (i8_to_imm5 0))
   (let ((narrow VReg (rv_vfncvt_f_f_w x (unmasked) (vstate_mf2 ty)))
         (mask VReg (gen_vec_mask 0xC)))
     (rv_vmerge_vim narrow zero mask ty)))
@@ -1637,7 +1637,7 @@
   (gen_fcvt_int $true v $true from to))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_sint_sat v @ (value_type from_ty))))
-  (if-let (imm5_from_u64 zero) (u64_add 0 0))
+  (if-let zero (i8_to_imm5 0))
   (let ((is_nan VReg (rv_vmfne_vv v v (unmasked) from_ty))
         (cvt VReg (rv_vfcvt_rtz_x_f_v v (unmasked) from_ty)))
     (rv_vmerge_vim cvt zero is_nan from_ty)))
@@ -1647,7 +1647,7 @@
   (gen_fcvt_int $true v $false from to))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_uint_sat v @ (value_type from_ty))))
-  (if-let (imm5_from_u64 zero) (u64_add 0 0))
+  (if-let zero (i8_to_imm5 0))
   (let ((is_nan VReg (rv_vmfne_vv v v (unmasked) from_ty))
         (cvt VReg (rv_vfcvt_rtz_xu_f_v v (unmasked) from_ty)))
     (rv_vmerge_vim cvt zero is_nan from_ty)))
