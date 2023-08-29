@@ -231,11 +231,18 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         vprintln!(options.verbose, "");
     }
 
+    println!("start:");
+    let start_func = dummy_environ.info.start_func.expect("Must have a start function");
+    println!("  zkPC + 2 => RR");
+    // TODO(akashin): Figure out why we need to do -1 here.
+    println!("  :JMP(function_{})", start_func.index() - 1);
+    println!("  :JMP(finalizeExecution)");
+
     let num_func_imports = dummy_environ.get_num_func_imports();
     let mut total_module_code_size = 0;
     let mut context = Context::new();
     for (def_index, func) in dummy_environ.info.function_bodies.iter() {
-        println!("; Function {def_index:?}");
+        println!("function_{}:", def_index.index());
         context.func = func.clone();
 
         let mut saved_size = None;
@@ -252,7 +259,10 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
             let code_info = compiled_code.code_info();
 
-            println!("{}", std::str::from_utf8(compiled_code.code_buffer()).unwrap());
+            println!(
+                "{}",
+                std::str::from_utf8(compiled_code.code_buffer()).unwrap()
+            );
 
             if options.print_size {
                 println!(
@@ -308,6 +318,12 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
 
         context.clear();
     }
+
+    let postamble = "finalizeExecution:
+  ${beforeLast()}  :JMPN(finalizeExecution)
+                   :JMP(start)
+";
+    println!("{postamble}");
 
     if !options.check_translation && options.print_size {
         println!("Total module code size: {} bytes", total_module_code_size);
