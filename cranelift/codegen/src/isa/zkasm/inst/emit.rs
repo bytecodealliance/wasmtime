@@ -777,7 +777,9 @@ impl MachInstEmit for Inst {
             &Inst::Ret {
                 stack_bytes_to_pop, ..
             } => {
-                put_string(&format!("RETURN\n"), sink);
+                // put_string(&format!("RETURN\n"), sink);
+                put_string(&format!(":JMP(RR)\n"), sink);
+
                 /* if stack_bytes_to_pop != 0 {
                     Inst::AdjustSp {
                         amount: i64::from(stack_bytes_to_pop),

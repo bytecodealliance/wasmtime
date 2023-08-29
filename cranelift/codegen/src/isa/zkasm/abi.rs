@@ -347,38 +347,38 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // sd   fp,0(sp)     ;; store old fp.
         // mv   fp,sp        ;; set fp to sp.
         let mut insts = SmallVec::new();
-        insts.push(Inst::AdjustSp { amount: -16 });
+        insts.push(Inst::AdjustSp { amount: -1 });
         insts.push(Self::gen_store_stack(
-            StackAMode::SPOffset(8, I64),
+            StackAMode::SPOffset(0, I64),
             link_reg(),
             I64,
         ));
-        insts.push(Self::gen_store_stack(
-            StackAMode::SPOffset(0, I64),
-            fp_reg(),
-            I64,
-        ));
-        insts.push(Inst::Mov {
-            rd: writable_fp_reg(),
-            rm: stack_reg(),
-            ty: I64,
-        });
+        // insts.push(Self::gen_store_stack(
+        //     StackAMode::SPOffset(0, I64),
+        //     fp_reg(),
+        //     I64,
+        // ));
+        // insts.push(Inst::Mov {
+        //     rd: writable_fp_reg(),
+        //     rm: stack_reg(),
+        //     ty: I64,
+        // });
         insts
     }
     /// reverse of gen_prologue_frame_setup.
     fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(8, I64),
+            StackAMode::SPOffset(0, I64),
             writable_link_reg(),
             I64,
         ));
-        insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(0, I64),
-            writable_fp_reg(),
-            I64,
-        ));
-        insts.push(Inst::AdjustSp { amount: 16 });
+        // insts.push(Self::gen_load_stack(
+        //     StackAMode::SPOffset(0, I64),
+        //     writable_fp_reg(),
+        //     I64,
+        // ));
+        insts.push(Inst::AdjustSp { amount: 1 });
         insts
     }
 
