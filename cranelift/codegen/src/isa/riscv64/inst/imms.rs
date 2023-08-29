@@ -15,20 +15,7 @@ impl Imm12 {
     pub(crate) const TRUE: Self = Self { bits: 1 };
 
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
-        let sign_bit = 1 << 11;
-        if val == 0 {
-            Some(Imm12 { bits: 0 })
-        } else if (val & sign_bit) != 0 && (val >> 12) == 0xffff_ffff_ffff_f {
-            Some(Imm12 {
-                bits: (val & 0xffff) as i16,
-            })
-        } else if (val & sign_bit) == 0 && (val >> 12) == 0 {
-            Some(Imm12 {
-                bits: (val & 0xffff) as i16,
-            })
-        } else {
-            None
-        }
+        Self::maybe_from_i64(val as i64)
     }
 
     pub fn maybe_from_i64(val: i64) -> Option<Imm12> {

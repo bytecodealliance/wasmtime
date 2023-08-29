@@ -357,7 +357,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     #[inline]
     fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {
-        Imm12::maybe_from_u64(val as u64).unwrap()
+        Imm12::maybe_from_i64(val).unwrap()
     }
 
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
@@ -383,14 +383,14 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
 
     fn imm12_const(&mut self, val: i32) -> Imm12 {
-        if let Some(res) = Imm12::maybe_from_u64(val as u64) {
+        if let Some(res) = Imm12::maybe_from_i64(val as i64) {
             res
         } else {
             panic!("Unable to make an Imm12 value from {}", val)
         }
     }
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
-        Imm12::maybe_from_u64((val + add) as u64).unwrap()
+        Imm12::maybe_from_i64((val + add) as i64).unwrap()
     }
 
     //

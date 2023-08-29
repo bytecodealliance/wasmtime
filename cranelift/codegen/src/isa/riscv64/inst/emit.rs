@@ -664,7 +664,7 @@ impl MachInstEmit for Inst {
 
                 let base = from.get_base_register();
                 let offset = from.get_offset_with_state(state);
-                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+                let offset_imm12 = Imm12::maybe_from_i64(offset);
 
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
@@ -691,7 +691,7 @@ impl MachInstEmit for Inst {
 
                 let base = to.get_base_register();
                 let offset = to.get_offset_with_state(state);
-                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+                let offset_imm12 = Imm12::maybe_from_i64(offset);
 
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
@@ -773,7 +773,7 @@ impl MachInstEmit for Inst {
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
             &Inst::AdjustSp { amount } => {
-                if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
+                if let Some(imm) = Imm12::maybe_from_i64(amount) {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
                         rd: writable_stack_reg(),
@@ -1252,7 +1252,7 @@ impl MachInstEmit for Inst {
 
                 let base = mem.get_base_register();
                 let offset = mem.get_offset_with_state(state);
-                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+                let offset_imm12 = Imm12::maybe_from_i64(offset);
 
                 match (mem, base, offset_imm12) {
                     (_, Some(rs), Some(imm12)) => {
@@ -3188,7 +3188,7 @@ fn emit_return_call_common_sequence(
         alu_op: AluOPRRI::Addi,
         rd: regs::writable_stack_reg(),
         rs: regs::fp_reg(),
-        imm12: Imm12::maybe_from_u64(fp_to_callee_sp as u64).unwrap(),
+        imm12: Imm12::maybe_from_i64(fp_to_callee_sp).unwrap(),
     }
     .emit(&[], sink, emit_info, state);
 
