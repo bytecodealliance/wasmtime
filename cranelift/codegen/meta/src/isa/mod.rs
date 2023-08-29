@@ -15,7 +15,7 @@ pub enum Isa {
     Arm64,
     S390x,
     Riscv64,
-    ZkAsm
+    ZkAsm,
 }
 
 impl Isa {
