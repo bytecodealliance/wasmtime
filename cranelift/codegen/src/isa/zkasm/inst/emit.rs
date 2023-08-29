@@ -663,7 +663,7 @@ impl MachInstEmit for Inst {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
                 let rd = allocs.next_writable(rd);
-                put_string(&format!("{}, {} => {} : {alu_op:?}\n", reg_name(rs1), reg_name(rs2), reg_name(rd.to_reg())), sink);
+                put_string(&format!("{}, {} => {} : {}\n", reg_name(rs1), reg_name(rs2), reg_name(rd.to_reg()), alu_op.op_name()), sink);
 
                 /*
                 let (rs1, rs2) = if alu_op.reverse_rs() {
@@ -689,7 +689,12 @@ impl MachInstEmit for Inst {
             } => {
                 let rs = allocs.next(rs);
                 let rd = allocs.next_writable(rd);
-                put_string(&format!("{} {imm12} => {}: {alu_op:?}\n", reg_name(rs), reg_name(rd.to_reg())), sink);
+                match alu_op {
+                    AluOPRRI::Addi => {
+                        put_string(&format!("{} + {imm12} => {}\n", reg_name(rs), reg_name(rd.to_reg())), sink);
+                    },
+                    _ => unreachable!(),
+                };
 
                 // let x = alu_op.op_code()
                 //     | reg_to_gpr_num(rd.to_reg()) << 7

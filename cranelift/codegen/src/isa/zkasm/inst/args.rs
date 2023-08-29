@@ -775,7 +775,7 @@ impl FpuOPRRR {
 impl AluOPRRR {
     pub(crate) const fn op_name(self) -> &'static str {
         match self {
-            Self::Add => "add",
+            Self::Add => "ADD",
             Self::Sub => "sub",
             Self::Sll => "sll",
             Self::Slt => "slt",
@@ -1112,7 +1112,7 @@ impl AluOPRRI {
 
     pub(crate) fn op_name(self) -> &'static str {
         match self {
-            Self::Addi => "addi",
+            Self::Addi => "ADD",
             Self::Slti => "slti",
             Self::SltiU => "sltiu",
             Self::Xori => "xori",
