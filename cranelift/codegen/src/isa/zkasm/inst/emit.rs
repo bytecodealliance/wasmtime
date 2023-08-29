@@ -725,7 +725,7 @@ impl MachInstEmit for Inst {
                         (tmp.to_reg(), Imm12::zero())
                     }
                 };
-                put_string(&format!("$ => {} :LOAD({} + {imm12})\n", reg_name(rd.to_reg()), reg_name(addr)), sink);
+                put_string(&format!("$ => {} :MLOAD({} + {imm12})\n", reg_name(rd.to_reg()), reg_name(addr)), sink);
 
                 /* 
                 let srcloc = state.cur_srcloc();
