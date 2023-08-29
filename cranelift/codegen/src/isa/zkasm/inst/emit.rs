@@ -552,7 +552,7 @@ impl MachInstEmit for Inst {
                 x.emit(&[], sink, emit_info, state) */
             }
             &Inst::Label { imm } => {
-                sink.put_data(format!("L{imm}:\n").as_bytes())
+                put_string(&format!("L{imm}:\n"), sink);
             }
             &Inst::RawData { ref data } => {
                 // Right now we only put a u32 or u64 in this instruction.
@@ -652,7 +652,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::AddImm32 { rd, src1, src2 } => {
                 let rd = allocs.next(rd.to_reg());
-                put_string(&format!("{src1} + {src2} => {:?}\n", rd), sink);
+                put_string(&format!("{src1} + {src2} => {}\n", reg_name(rd)), sink);
             },
             &Inst::AluRRR {
                 alu_op,
@@ -993,7 +993,7 @@ impl MachInstEmit for Inst {
                         // TODO: the following two lines allow eg. optimizing out jump-to-here
                         /* sink.use_label_at_offset(start_off, label, LabelUse::Jal20);
                         sink.add_uncond_branch(start_off, start_off + 4, label); */
-                        sink.put_data(format!(":JMP(L{})\n", label.index()).as_bytes());
+                        put_string(&format!(":JMP(L{})\n", label.index()), sink);
                     }
                     BranchTarget::ResolvedOffset(offset) => {
                         todo!() /*
@@ -2036,7 +2036,7 @@ impl MachInstEmit for Inst {
                 offset,
             } => {
                 let rd = allocs.next_writable(rd);
-                put_string(&format!("{} => CALL {name:?}\n", reg_name(rd.to_reg())), sink);
+                put_string(&format!("CALL {name:?} => {}\n", reg_name(rd.to_reg())), sink);
                 /* let rd = allocs.next_writable(rd);
                 // get the current pc.
                 Inst::Auipc {
