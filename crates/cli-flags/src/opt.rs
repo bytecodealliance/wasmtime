@@ -62,7 +62,7 @@ macro_rules! wasmtime_option_group {
                                 $crate::opt::WasmtimeOptionValue::parse(s)?
                             ))
                         },
-                        requires_val: <$payload as $crate::opt::WasmtimeOptionValue>::REQUIRES_VAL,
+                        val_help: <$payload as $crate::opt::WasmtimeOptionValue>::VAL_HELP,
                         docs: concat!($($doc, "\n",)*),
                     },
                  )+
@@ -75,7 +75,7 @@ macro_rules! wasmtime_option_group {
                                 val.map(|v| v.to_string()),
                             ))
                         },
-                        requires_val: false,
+                        val_help: "=val",
                         docs: concat!($($prefixed_doc, "\n",)*),
                     },
                  )?
@@ -147,22 +147,16 @@ where
         if val == "help" {
             let mut max = 0;
             for d in options {
-                let extra_len = if d.requires_val { 0 } else { 2 };
-                max = max.max(d.name.display_string().len() + extra_len);
+                max = max.max(d.name.display_string().len() + d.val_help.len());
             }
             println!("Available {arg_long} options:\n");
             for d in options {
-                let extra_len = if d.requires_val { 0 } else { 2 };
                 print!(
                     "  -{arg_short} {:>1$}",
                     d.name.display_string(),
-                    max - extra_len
+                    max - d.val_help.len()
                 );
-                if d.requires_val {
-                    print!("=val");
-                } else {
-                    print!("[=val]");
-                }
+                print!("{}", d.val_help);
                 print!(" --");
                 if val == "help" {
                     for line in d.docs.lines().map(|s| s.trim()) {
@@ -186,13 +180,11 @@ where
         if val == "help-long" {
             println!("Available {arg_long} options:\n");
             for d in options {
-                print!("  -{arg_short} {}", d.name.display_string(),);
-                if d.requires_val {
-                    print!("=val");
-                } else {
-                    print!("[=val]");
-                }
-                print!(" --");
+                println!(
+                    "  -{arg_short} {}{} --",
+                    d.name.display_string(),
+                    d.val_help
+                );
                 println!();
                 for line in d.docs.lines().map(|s| s.trim()) {
                     let line = line.trim();
@@ -262,7 +254,7 @@ pub struct OptionDesc<T> {
     pub name: OptName,
     pub docs: &'static str,
     pub parse: fn(&str, Option<&str>) -> Result<T>,
-    pub requires_val: bool,
+    pub val_help: &'static str,
 }
 
 pub enum OptName {
@@ -286,15 +278,15 @@ impl OptName {
 /// A helper trait for all types of options that can be parsed. This is what
 /// actually parses the `=val` in `key=val`
 pub trait WasmtimeOptionValue: Sized {
-    /// Whether or not `val` must be `Some`
-    const REQUIRES_VAL: bool;
+    /// Help text for the value to be specified.
+    const VAL_HELP: &'static str;
 
     /// Parses the provided value, if given, returning an error on failure.
     fn parse(val: Option<&str>) -> Result<Self>;
 }
 
 impl WasmtimeOptionValue for String {
-    const REQUIRES_VAL: bool = true;
+    const VAL_HELP: &'static str = "=val";
     fn parse(val: Option<&str>) -> Result<Self> {
         match val {
             Some(val) => Ok(val.to_string()),
@@ -304,7 +296,7 @@ impl WasmtimeOptionValue for String {
 }
 
 impl WasmtimeOptionValue for u32 {
-    const REQUIRES_VAL: bool = true;
+    const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
         Ok(val.parse()?)
@@ -312,7 +304,7 @@ impl WasmtimeOptionValue for u32 {
 }
 
 impl WasmtimeOptionValue for u64 {
-    const REQUIRES_VAL: bool = true;
+    const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
         Ok(val.parse()?)
@@ -320,7 +312,7 @@ impl WasmtimeOptionValue for u64 {
 }
 
 impl WasmtimeOptionValue for usize {
-    const REQUIRES_VAL: bool = true;
+    const VAL_HELP: &'static str = "=N";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
         Ok(val.parse()?)
@@ -328,7 +320,7 @@ impl WasmtimeOptionValue for usize {
 }
 
 impl WasmtimeOptionValue for bool {
-    const REQUIRES_VAL: bool = false;
+    const VAL_HELP: &'static str = "[=y|n]";
     fn parse(val: Option<&str>) -> Result<Self> {
         match val {
             None | Some("y") | Some("yes") | Some("true") => Ok(true),
@@ -339,7 +331,7 @@ impl WasmtimeOptionValue for bool {
 }
 
 impl WasmtimeOptionValue for Duration {
-    const REQUIRES_VAL: bool = true;
+    const VAL_HELP: &'static str = "=N|Ns|Nms|..";
     fn parse(val: Option<&str>) -> Result<Duration> {
         let s = String::parse(val)?;
         // assume an integer without a unit specified is a number of seconds ...
@@ -353,7 +345,7 @@ impl WasmtimeOptionValue for Duration {
 }
 
 impl WasmtimeOptionValue for wasmtime::OptLevel {
-    const REQUIRES_VAL: bool = true;
+    const VAL_HELP: &'static str = "=0|1|2|s";
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "0" => Ok(wasmtime::OptLevel::None),
@@ -369,7 +361,7 @@ impl WasmtimeOptionValue for wasmtime::OptLevel {
 }
 
 impl WasmtimeOptionValue for wasmtime::Strategy {
-    const REQUIRES_VAL: bool = true;
+    const VAL_HELP: &'static str = "=winch|cranelift";
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "cranelift" => Ok(wasmtime::Strategy::Cranelift),
@@ -383,7 +375,7 @@ impl WasmtimeOptionValue for wasmtime::Strategy {
 }
 
 impl WasmtimeOptionValue for WasiNnGraph {
-    const REQUIRES_VAL: bool = true;
+    const VAL_HELP: &'static str = "=<format>::<dir>";
     fn parse(val: Option<&str>) -> Result<Self> {
         let val = String::parse(val)?;
         let mut parts = val.splitn(2, "::");
