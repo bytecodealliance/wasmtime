@@ -2,40 +2,6 @@
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "std", deny(unstable_features))]
-#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
-#![cfg_attr(feature="cargo-clippy", allow(
-// Produces only a false positive:
-                clippy::while_let_loop,
-// Produces many false positives, but did produce some valid lints, now fixed:
-                clippy::needless_lifetimes,
-// Generated code makes some style transgressions, but readability doesn't suffer much:
-                clippy::many_single_char_names,
-                clippy::identity_op,
-                clippy::needless_borrow,
-                clippy::cast_lossless,
-                clippy::unreadable_literal,
-                clippy::assign_op_pattern,
-                clippy::empty_line_after_outer_attr,
-// Hard to avoid in generated code:
-                clippy::cognitive_complexity,
-                clippy::too_many_arguments,
-// Code generator doesn't have a way to collapse identical arms:
-                clippy::match_same_arms,
-// These are relatively minor style issues, but would be easy to fix:
-                clippy::new_without_default,
-                clippy::should_implement_trait,
-                clippy::len_without_is_empty))]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    warn(
-        clippy::float_arithmetic,
-        clippy::mut_mut,
-        clippy::nonminimal_bool,
-        clippy::map_unwrap_or,
-        clippy::unicode_not_nfc,
-        clippy::use_self
-    )
-)]
 #![no_std]
 // Various bits and pieces of this crate might only be used for one platform or
 // another, but it's not really too useful to learn about that all the time. On

@@ -798,7 +798,6 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
     let mut operand_seqs = UniqueSeqTable::new();
 
     // Preload table with constraints for typical binops.
-    #[allow(clippy::useless_vec)]
     operand_seqs.add(&vec!["Same".to_string(); 3]);
 
     fmt.comment("Table of opcode constraints.");

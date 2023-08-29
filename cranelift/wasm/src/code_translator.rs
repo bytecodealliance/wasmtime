@@ -114,11 +114,6 @@ macro_rules! unwrap_or_return_unreachable_state {
     };
 }
 
-// Clippy warns about "align: _" but its important to document that the flags field is ignored
-#[cfg_attr(
-    feature = "cargo-clippy",
-    allow(clippy::unneeded_field_pattern, clippy::cognitive_complexity)
-)]
 /// Translates wasm operators into Cranelift IR instructions.
 pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     validator: &mut FuncValidator<impl WasmModuleResources>,
@@ -2513,8 +2508,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
     Ok(())
 }
 
-// Clippy warns us of some fields we are deliberately ignoring
-#[cfg_attr(feature = "cargo-clippy", allow(clippy::unneeded_field_pattern))]
 /// Deals with a Wasm instruction located in an unreachable portion of the code. Most of them
 /// are dropped but special ones like `End` or `Else` signal the potential end of the unreachable
 /// portion so the translation state must be updated accordingly.

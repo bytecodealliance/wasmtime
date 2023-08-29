@@ -684,7 +684,6 @@ impl WorkerThread {
                             stats_path
                         );
                         // .into() called for the SystemTimeStub if cfg(test)
-                        #[allow(clippy::identity_conversion)]
                         vec.push(CacheEntry::Recognized {
                             path: mod_path.to_path_buf(),
                             mtime: stats_mtime.into(),
@@ -702,7 +701,6 @@ impl WorkerThread {
                             mod_path
                         );
                         // .into() called for the SystemTimeStub if cfg(test)
-                        #[allow(clippy::identity_conversion)]
                         vec.push(CacheEntry::Recognized {
                             path: mod_path.to_path_buf(),
                             mtime: mod_mtime.into(),
