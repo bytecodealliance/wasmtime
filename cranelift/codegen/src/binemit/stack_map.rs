@@ -67,7 +67,10 @@ const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 /// live GC references in these slots. We record the `IncomingArg`s in the
 /// callee's stack map.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Deserialize, serde_derive::Serialize)
+)]
 pub struct StackMap {
     bitmap: Vec<BitSet<Num>>,
     mapped_words: u32,

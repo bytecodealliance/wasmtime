@@ -5,7 +5,7 @@ use crate::ir::{GlobalValue, Type};
 use core::fmt;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Information about a table declaration.
 #[derive(Clone, PartialEq, Hash)]

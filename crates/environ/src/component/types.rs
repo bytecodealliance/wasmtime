@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
 use indexmap::{IndexMap, IndexSet};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;

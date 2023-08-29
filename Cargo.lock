@@ -599,6 +599,7 @@ dependencies = [
  "log",
  "regalloc2",
  "serde",
+ "serde_derive",
  "sha2",
  "similar",
  "smallvec",
@@ -629,6 +630,7 @@ name = "cranelift-entity"
 version = "0.100.0"
 dependencies = [
  "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -652,6 +654,7 @@ dependencies = [
  "log",
  "num_cpus",
  "serde",
+ "serde_derive",
  "similar",
  "target-lexicon",
  "thiserror",
@@ -737,6 +740,7 @@ dependencies = [
  "cranelift-control",
  "hashbrown 0.14.0",
  "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -831,6 +835,7 @@ dependencies = [
  "itertools",
  "log",
  "serde",
+ "serde_derive",
  "smallvec",
  "target-lexicon",
  "wasmparser 0.112.0",
@@ -3334,6 +3339,7 @@ dependencies = [
  "psm",
  "rayon",
  "serde",
+ "serde_derive",
  "serde_json",
  "target-lexicon",
  "tempfile",
@@ -3416,6 +3422,7 @@ dependencies = [
  "pretty_env_logger 0.5.0",
  "rustix 0.38.8",
  "serde",
+ "serde_derive",
  "sha2",
  "tempfile",
  "toml",
@@ -3556,6 +3563,7 @@ dependencies = [
  "log",
  "object",
  "serde",
+ "serde_derive",
  "target-lexicon",
  "thiserror",
  "wasm-encoder 0.32.0",
@@ -3587,6 +3595,7 @@ dependencies = [
  "anyhow",
  "capstone",
  "serde",
+ "serde_derive",
  "serde_json",
  "target-lexicon",
  "wasmprinter",
@@ -3677,6 +3686,7 @@ dependencies = [
  "rustc-demangle",
  "rustix 0.38.8",
  "serde",
+ "serde_derive",
  "target-lexicon",
  "wasmtime-environ",
  "wasmtime-jit-debug",
@@ -3739,6 +3749,7 @@ version = "13.0.0"
 dependencies = [
  "cranelift-entity",
  "serde",
+ "serde_derive",
  "thiserror",
  "wasmparser 0.112.0",
 ]
@@ -4034,6 +4045,7 @@ dependencies = [
  "capstone",
  "cranelift-codegen",
  "serde",
+ "serde_derive",
  "similar",
  "target-lexicon",
  "toml",

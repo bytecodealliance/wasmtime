@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 use core::mem;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// A small list of entity references allocated from a pool.
 ///

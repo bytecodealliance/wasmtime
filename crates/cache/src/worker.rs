@@ -7,7 +7,7 @@
 
 use super::{fs_write_atomic, CacheConfig};
 use log::{debug, info, trace, warn};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashMap;
 use std::ffi::OsStr;

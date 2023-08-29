@@ -4,7 +4,7 @@ use crate::HashMap;
 use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Value location range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

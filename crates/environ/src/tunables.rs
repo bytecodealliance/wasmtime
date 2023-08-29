@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone, Hash, Serialize, Deserialize)]

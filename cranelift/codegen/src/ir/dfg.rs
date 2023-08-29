@@ -20,7 +20,7 @@ use core::u16;
 
 use alloc::collections::BTreeMap;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 /// Storage for instructions within the DFG.

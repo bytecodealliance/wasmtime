@@ -502,7 +502,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.line(
         r#"#[cfg_attr(
             feature = "enable-serde",
-            derive(serde::Serialize, serde::Deserialize)
+            derive(serde_derive::Serialize, serde_derive::Deserialize)
         )]"#,
     );
 

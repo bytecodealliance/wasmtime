@@ -3,7 +3,7 @@
 use crate::{ModuleTranslation, PrimaryMap, Tunables, WasmHeapType, WASM_PAGE_SIZE};
 use cranelift_entity::{packed_option::ReservedValue, EntityRef};
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;

@@ -5,7 +5,7 @@
 
 use core::fmt;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// A source location.
 ///

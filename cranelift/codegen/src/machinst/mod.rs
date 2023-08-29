@@ -61,7 +61,7 @@ use smallvec::{smallvec, SmallVec};
 use std::string::String;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 #[macro_use]
 pub mod isle;
