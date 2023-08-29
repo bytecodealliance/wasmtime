@@ -14,7 +14,7 @@ Unreleased.
   look like a precompiled module or a component.
   [#6832](https://github.com/bytecodealliance/wasmtime/pull/6832)
 
-* A new feature "wmemcheck" has been added to enable valgrind-like detection of
+* A new feature "wmemcheck" has been added to enable Valgrind-like detection of
   use-after-free within a WebAssembly guest module.
   [#6820](https://github.com/bytecodealliance/wasmtime/pull/6820)
   [#6856](https://github.com/bytecodealliance/wasmtime/pull/6856)
