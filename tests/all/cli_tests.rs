@@ -76,7 +76,7 @@ fn run_wasmtime_simple() -> Result<()> {
         "run",
         "--invoke",
         "simple",
-        "--disable-cache",
+        "-Ccache=n",
         wasm.path().to_str().unwrap(),
         "4",
     ])?;
@@ -90,7 +90,7 @@ fn run_wasmtime_simple_fail_no_args() -> Result<()> {
     assert!(
         run_wasmtime(&[
             "run",
-            "--disable-cache",
+            "-Ccache=n",
             "--invoke",
             "simple",
             wasm.path().to_str().unwrap(),
@@ -105,12 +105,12 @@ fn run_wasmtime_simple_fail_no_args() -> Result<()> {
 fn run_coredump_smoketest() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/coredump_smoketest.wat")?;
     let coredump_file = NamedTempFile::new()?;
-    let coredump_arg = format!("--coredump-on-trap={}", coredump_file.path().display());
+    let coredump_arg = format!("-Dcoredump={}", coredump_file.path().display());
     let err = run_wasmtime(&[
         "run",
         "--invoke",
         "a",
-        "--disable-cache",
+        "-Ccache=n",
         &coredump_arg,
         wasm.path().to_str().unwrap(),
     ])
@@ -130,7 +130,7 @@ fn run_wasmtime_simple_wat() -> Result<()> {
         "run",
         "--invoke",
         "simple",
-        "--disable-cache",
+        "-Ccache=n",
         wasm.path().to_str().unwrap(),
         "4",
     ])?;
@@ -139,7 +139,7 @@ fn run_wasmtime_simple_wat() -> Result<()> {
             "run",
             "--invoke",
             "get_f32",
-            "--disable-cache",
+            "-Ccache=n",
             wasm.path().to_str().unwrap(),
         ])?,
         "100\n"
@@ -149,7 +149,7 @@ fn run_wasmtime_simple_wat() -> Result<()> {
             "run",
             "--invoke",
             "get_f64",
-            "--disable-cache",
+            "-Ccache=n",
             wasm.path().to_str().unwrap(),
         ])?,
         "100\n"
@@ -161,8 +161,7 @@ fn run_wasmtime_simple_wat() -> Result<()> {
 #[test]
 fn run_wasmtime_unreachable_wat() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/unreachable.wat")?;
-    let output =
-        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "-Ccache=n"], None)?;
 
     assert_ne!(output.stderr, b"");
     assert_eq!(output.stdout, b"");
@@ -185,7 +184,7 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
-    let stdout = run_wasmtime(&["--disable-cache", wasm.path().to_str().unwrap()])?;
+    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -194,7 +193,7 @@ fn hello_wasi_snapshot0() -> Result<()> {
 #[test]
 fn hello_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
-    let stdout = run_wasmtime(&["--disable-cache", wasm.path().to_str().unwrap()])?;
+    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -205,9 +204,8 @@ fn timeout_in_start() -> Result<()> {
     let output = run_wasmtime_for_output(
         &[
             "run",
-            "--wasm-timeout",
-            "1ms",
-            "--disable-cache",
+            "-Wtimeout=1ms",
+            "-Ccache=n",
             wasm.path().to_str().unwrap(),
         ],
         None,
@@ -229,9 +227,8 @@ fn timeout_in_invoke() -> Result<()> {
     let output = run_wasmtime_for_output(
         &[
             "run",
-            "--wasm-timeout",
-            "1ms",
-            "--disable-cache",
+            "-Wtimeout=1ms",
+            "-Ccache=n",
             wasm.path().to_str().unwrap(),
         ],
         None,
@@ -251,8 +248,7 @@ fn timeout_in_invoke() -> Result<()> {
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot0.wat")?;
-    let output =
-        run_wasmtime_for_output(&["--disable-cache", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -261,8 +257,7 @@ fn exit2_wasi_snapshot0() -> Result<()> {
 #[test]
 fn exit2_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot1.wat")?;
-    let output =
-        run_wasmtime_for_output(&["--disable-cache", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -271,8 +266,7 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot0.wat")?;
-    let output =
-        run_wasmtime_for_output(&["--disable-cache", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 1);
     } else {
@@ -285,8 +279,7 @@ fn exit125_wasi_snapshot0() -> Result<()> {
 #[test]
 fn exit125_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot1.wat")?;
-    let output =
-        run_wasmtime_for_output(&["--disable-cache", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 1);
     } else {
@@ -299,8 +292,7 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
-    let output =
-        run_wasmtime_for_output(&["--disable-cache", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
     assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -311,8 +303,7 @@ fn exit126_wasi_snapshot0() -> Result<()> {
 #[test]
 fn exit126_wasi_snapshot1() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot1.wat")?;
-    let output =
-        run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"], None)?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "-Ccache=n"], None)?;
     assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -323,7 +314,7 @@ fn exit126_wasi_snapshot1() -> Result<()> {
 #[test]
 fn minimal_command() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/minimal-command.wat")?;
-    let stdout = run_wasmtime(&["--disable-cache", wasm.path().to_str().unwrap()])?;
+    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
     assert_eq!(stdout, "");
     Ok(())
 }
@@ -332,7 +323,7 @@ fn minimal_command() -> Result<()> {
 #[test]
 fn minimal_reactor() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/minimal-reactor.wat")?;
-    let stdout = run_wasmtime(&["--disable-cache", wasm.path().to_str().unwrap()])?;
+    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
     assert_eq!(stdout, "");
     Ok(())
 }
@@ -345,7 +336,7 @@ fn command_invoke() -> Result<()> {
         "run",
         "--invoke",
         "_start",
-        "--disable-cache",
+        "-Ccache=n",
         wasm.path().to_str().unwrap(),
     ])?;
     Ok(())
@@ -359,7 +350,7 @@ fn reactor_invoke() -> Result<()> {
         "run",
         "--invoke",
         "_initialize",
-        "--disable-cache",
+        "-Ccache=n",
         wasm.path().to_str().unwrap(),
     ])?;
     Ok(())
@@ -371,7 +362,7 @@ fn greeter() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/greeter_command.wat")?;
     let stdout = run_wasmtime(&[
         "run",
-        "--disable-cache",
+        "-Ccache=n",
         "--preload",
         "reactor=tests/all/cli_tests/greeter_reactor.wat",
         wasm.path().to_str().unwrap(),
@@ -389,7 +380,7 @@ fn greeter_preload_command() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/greeter_reactor.wat")?;
     let stdout = run_wasmtime(&[
         "run",
-        "--disable-cache",
+        "-Ccache=n",
         "--preload",
         "reactor=tests/all/cli_tests/hello_wasi_snapshot1.wat",
         wasm.path().to_str().unwrap(),
@@ -404,7 +395,7 @@ fn greeter_preload_callable_command() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/greeter_command.wat")?;
     let stdout = run_wasmtime(&[
         "run",
-        "--disable-cache",
+        "-Ccache=n",
         "--preload",
         "reactor=tests/all/cli_tests/greeter_callable_command.wat",
         wasm.path().to_str().unwrap(),
@@ -418,8 +409,7 @@ fn greeter_preload_callable_command() -> Result<()> {
 #[test]
 fn exit_with_saved_fprs() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit_with_saved_fprs.wat")?;
-    let output =
-        run_wasmtime_for_output(&["--disable-cache", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
     assert_eq!(output.status.code().unwrap(), 0);
     assert!(output.stdout.is_empty());
     Ok(())
@@ -449,7 +439,7 @@ fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
     let stdout = {
         let path = wasm.path();
-        let args: &[&str] = &["--disable-cache", "-"];
+        let args: &[&str] = &["-Ccache=n", "-"];
         let output = run_wasmtime_for_output(args, Some(path))?;
         if !output.status.success() {
             bail!(
@@ -555,11 +545,9 @@ fn run_threads() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/threads.wat")?;
     let stdout = run_wasmtime(&[
         "run",
-        "--wasi-modules",
-        "experimental-wasi-threads",
-        "--wasm-features",
-        "threads",
-        "--disable-cache",
+        "-Wthreads",
+        "-Sthreads",
+        "-Ccache=n",
         wasm.path().to_str().unwrap(),
     ])?;
 
@@ -583,11 +571,9 @@ fn run_simple_with_wasi_threads() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
     let stdout = run_wasmtime(&[
         "run",
-        "--wasi-modules",
-        "experimental-wasi-threads",
-        "--wasm-features",
-        "threads",
-        "--disable-cache",
+        "-Wthreads",
+        "-Sthreads",
+        "-Ccache=n",
         "--invoke",
         "simple",
         wasm.path().to_str().unwrap(),
@@ -685,7 +671,7 @@ fn name_same_as_builtin_command() -> Result<()> {
     // NB: this will change in Wasmtime 14 when #6737 is relanded.
     let output = get_wasmtime_command()?
         .current_dir("tests/all/cli_tests")
-        .arg("--disable-cache")
+        .arg("-Ccache=n")
         .arg("run")
         .output()?;
     assert!(!output.status.success(), "expected failure got {output:#?}");
@@ -742,11 +728,7 @@ fn wasi_misaligned_pointer() -> Result<()> {
 #[ignore] // FIXME(#6811) currently is flaky and may produce no output
 fn hello_with_preview2() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
-    let stdout = run_wasmtime(&[
-        "--disable-cache",
-        "--preview2",
-        wasm.path().to_str().unwrap(),
-    ])?;
+    let stdout = run_wasmtime(&["-Ccache=n", "--preview2", wasm.path().to_str().unwrap()])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -757,7 +739,7 @@ fn component_missing_feature() -> Result<()> {
     let path = "tests/all/cli_tests/empty-component.wat";
     let wasm = build_wasm(path)?;
     let output = get_wasmtime_command()?
-        .arg("--disable-cache")
+        .arg("-Ccache=n")
         .arg(wasm.path())
         .output()?;
     assert!(!output.status.success());
@@ -769,7 +751,7 @@ fn component_missing_feature() -> Result<()> {
 
     // also tests with raw *.wat input
     let output = get_wasmtime_command()?
-        .arg("--disable-cache")
+        .arg("-Ccache=n")
         .arg(path)
         .output()?;
     assert!(!output.status.success());
@@ -787,7 +769,7 @@ fn component_missing_feature() -> Result<()> {
 #[test]
 fn bad_text_syntax() -> Result<()> {
     let output = get_wasmtime_command()?
-        .arg("--disable-cache")
+        .arg("-Ccache=n")
         .arg("tests/all/cli_tests/bad-syntax.wat")
         .output()?;
     assert!(!output.status.success());
@@ -807,11 +789,11 @@ fn run_basic_component() -> Result<()> {
 
     // Run both the `*.wasm` binary and the text format
     run_wasmtime(&[
-        "--disable-cache",
-        "--wasm-features=component-model",
+        "-Ccache=n",
+        "-Wcomponent-model",
         wasm.path().to_str().unwrap(),
     ])?;
-    run_wasmtime(&["--disable-cache", "--wasm-features=component-model", path])?;
+    run_wasmtime(&["-Ccache=n", "-Wcomponent-model", path])?;
 
     Ok(())
 }
@@ -848,12 +830,12 @@ fn run_precompiled_component() -> Result<()> {
         "tests/all/cli_tests/component-basic.wat",
         "-o",
         cwasm.to_str().unwrap(),
-        "--wasm-features=component-model",
+        "-Wcomponent-model",
     ])?;
     assert_eq!(stdout, "");
     let stdout = run_wasmtime(&[
         "run",
-        "--wasm-features=component-model",
+        "-Wcomponent-model",
         "--allow-precompiled",
         cwasm.to_str().unwrap(),
     ])?;
@@ -867,8 +849,8 @@ fn memory_growth_failure() -> Result<()> {
     let output = get_wasmtime_command()?
         .args(&[
             "run",
-            "--wasm-features=memory64",
-            "--trap-on-grow-failure",
+            "-Wmemory64",
+            "-Wtrap-on-grow-failure",
             "tests/all/cli_tests/memory-grow-failure.wat",
         ])
         .output()?;
@@ -886,7 +868,7 @@ fn table_growth_failure() -> Result<()> {
     let output = get_wasmtime_command()?
         .args(&[
             "run",
-            "--trap-on-grow-failure",
+            "-Wtrap-on-grow-failure",
             "tests/all/cli_tests/table-grow-failure.wat",
         ])
         .output()?;
@@ -904,7 +886,7 @@ fn table_growth_failure2() -> Result<()> {
     let output = get_wasmtime_command()?
         .args(&[
             "run",
-            "--trap-on-grow-failure",
+            "-Wtrap-on-grow-failure",
             "tests/all/cli_tests/table-grow-failure2.wat",
         ])
         .output()?;
@@ -914,5 +896,50 @@ fn table_growth_failure2() -> Result<()> {
         stderr.contains("forcing a table growth failure to be a trap"),
         "bad stderr: {stderr}"
     );
+    Ok(())
+}
+
+#[test]
+fn option_group_help() -> Result<()> {
+    run_wasmtime(&["run", "-Whelp"])?;
+    run_wasmtime(&["run", "-O", "help"])?;
+    run_wasmtime(&["run", "--codegen", "help"])?;
+    run_wasmtime(&["run", "--debug=help"])?;
+    run_wasmtime(&["run", "-Shelp"])?;
+    run_wasmtime(&["run", "-Whelp-long"])?;
+    Ok(())
+}
+
+#[test]
+fn option_group_comma_separated() -> Result<()> {
+    run_wasmtime(&[
+        "run",
+        "-Wrelaxed-simd,simd",
+        "tests/all/cli_tests/simple.wat",
+    ])?;
+    Ok(())
+}
+
+#[test]
+fn option_group_boolean_parsing() -> Result<()> {
+    run_wasmtime(&["run", "-Wrelaxed-simd", "tests/all/cli_tests/simple.wat"])?;
+    run_wasmtime(&["run", "-Wrelaxed-simd=n", "tests/all/cli_tests/simple.wat"])?;
+    run_wasmtime(&["run", "-Wrelaxed-simd=y", "tests/all/cli_tests/simple.wat"])?;
+    run_wasmtime(&["run", "-Wrelaxed-simd=no", "tests/all/cli_tests/simple.wat"])?;
+    run_wasmtime(&[
+        "run",
+        "-Wrelaxed-simd=yes",
+        "tests/all/cli_tests/simple.wat",
+    ])?;
+    run_wasmtime(&[
+        "run",
+        "-Wrelaxed-simd=true",
+        "tests/all/cli_tests/simple.wat",
+    ])?;
+    run_wasmtime(&[
+        "run",
+        "-Wrelaxed-simd=false",
+        "tests/all/cli_tests/simple.wat",
+    ])?;
     Ok(())
 }
