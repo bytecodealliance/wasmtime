@@ -1,6 +1,6 @@
 //! A simple TCP testcase, using IPv4.
 
-use wasi::io::streams::{self, FlushResult, StreamStatus, WriteReadiness};
+use wasi::io::streams;
 use wasi::poll::poll;
 use wasi::sockets::network::{IpAddressFamily, IpSocketAddress, Ipv4SocketAddress};
 use wasi::sockets::{instance_network, network, tcp, tcp_create_socket};
@@ -15,46 +15,46 @@ fn wait(sub: poll::Pollable) {
     }
 }
 
-fn write(output: streams::OutputStream, mut bytes: &[u8]) -> (usize, StreamStatus) {
+fn write(output: streams::OutputStream, mut bytes: &[u8]) -> (usize, streams::StreamStatus) {
     let total = bytes.len();
     let mut written = 0;
 
-    let mut permit = None;
-
     while !bytes.is_empty() {
-        while permit.is_none() {
-            match streams::blocking_check_write(output) {
-                WriteReadiness::Ready(n) => {
-                    permit = Some(n as usize);
-                    break;
-                }
-                WriteReadiness::Closed => return (written, StreamStatus::Ended),
-            };
-        }
-
-        let len = bytes.len().min(permit.take().unwrap());
+        let permit = streams::blocking_check_write(output).unwrap();
+        let len = bytes.len().min(permit as usize);
         let (chunk, rest) = bytes.split_at(len);
-        bytes = rest;
 
         match streams::write(output, chunk) {
-            Some(WriteReadiness::Ready(n)) => {
-                permit = Some(n as usize);
+            Ok(()) => {}
+
+            Err(streams::WriteError::Closed) => {
+                return (written, streams::StreamStatus::Ended);
             }
 
-            Some(WriteReadiness::Closed) => return (written, StreamStatus::Ended),
-
-            None => {}
+            Err(streams::WriteError::LastOperationFailed) => {
+                // try again
+                continue;
+            }
         }
 
         match streams::blocking_flush(output) {
-            FlushResult::Done => {}
-            FlushResult::Closed => return (written, StreamStatus::Ended),
+            Ok(()) => {}
+
+            Err(streams::WriteError::Closed) => {
+                return (written, streams::StreamStatus::Ended);
+            }
+
+            Err(streams::WriteError::LastOperationFailed) => {
+                // try again
+                continue;
+            }
         }
 
+        bytes = rest;
         written += len;
     }
 
-    (total, StreamStatus::Open)
+    (total, streams::StreamStatus::Open)
 }
 
 fn main() {
