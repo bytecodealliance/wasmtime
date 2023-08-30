@@ -381,7 +381,7 @@ block0(v0: i64):
 ;   ori s0, sp, 0
 ;   lui t6, 0x62
 ;   addi t6, t6, -0x580
-;   mv t6, a0
+;   add t6, t6, a0
 ;   ld t6, 0(t6)
 ;   addi t6, t6, 0x20
 ;   bgeu sp, t6, 8

@@ -1212,11 +1212,11 @@ impl MachInstEmit for Inst {
                     }
                     (_, Some(rs), None) => {
                         let mut insts = Inst::load_constant_u64(rd, offset as u64);
-                        insts.push(Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Addi,
+                        insts.push(Inst::AluRRR {
+                            alu_op: AluOPRRR::Add,
                             rd,
-                            rs,
-                            imm12: Imm12::zero(),
+                            rs1: rd.to_reg(),
+                            rs2: rs,
                         });
                         insts
                             .into_iter()
