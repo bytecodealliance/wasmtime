@@ -1097,6 +1097,7 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
+        self.monotonize_inst_offsets(&mut inst_offsets[..], func_body_len);
         let value_labels_ranges =
             self.compute_value_labels_ranges(regalloc, &inst_offsets[..], func_body_len);
         let frame_size = self.abi.frame_size();
@@ -1112,6 +1113,43 @@ impl<I: VCodeInst> VCode<I> {
             dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
             value_labels_ranges,
             frame_size,
+        }
+    }
+
+    fn monotonize_inst_offsets(&self, inst_offsets: &mut [CodeOffset], func_body_len: u32) {
+        if self.debug_value_labels.is_empty() {
+            return;
+        }
+
+        // During emission, branch removal can make offsets of instructions incorrect.
+        // Consider the following sequence: [insi][jmp0][jmp1][jmp2][insj]
+        // It will be recorded as (say):    [30]  [34]  [38]  [42]  [<would be 46>]
+        // When the jumps get removed we are left with (in "inst_offsets"):
+        // [insi][jmp0][jmp1][jmp2][insj][...]
+        // [30]  [34]  [38]  [42]  [34]
+        // Which violates the monotonicity invariant. This method sets offsets of these
+        // removed instructions such as to make them appear zero-sized:
+        // [insi][jmp0][jmp1][jmp2][insj][...]
+        // [30]  [34]  [34]  [34]  [34]
+        //
+        let mut next_offset = func_body_len;
+        for inst_index in (0..(inst_offsets.len() - 1)).rev() {
+            let inst_offset = inst_offsets[inst_index];
+            if inst_offset > next_offset {
+                trace!(
+                    "Fixing code offset of the removed Inst {}: {} -> {}",
+                    inst_index,
+                    inst_offset,
+                    next_offset
+                );
+                inst_offsets[inst_index] = next_offset;
+                continue;
+            }
+
+            // Not all instructions get their offsets recorded.
+            if inst_offset != 0 {
+                next_offset = inst_offset;
+            }
         }
     }
 
@@ -1158,24 +1196,34 @@ impl<I: VCodeInst> VCode<I> {
                 continue;
             };
 
-            ranges.push(ValueLocRange {
+            // ValueLocRanges are recorded by *instruction-end
+            // offset*. `from_offset` is the *start* of the
+            // instruction; that is the same as the end of another
+            // instruction, so we only want to begin coverage once
+            // we are past the previous instruction's end.
+            let start = from_offset + 1;
+
+            // Likewise, `end` is exclusive, but we want to
+            // *include* the end of the last
+            // instruction. `to_offset` is the start of the
+            // `to`-instruction, which is the exclusive end, i.e.,
+            // the first instruction not covered. That
+            // instruction's start is the same as the end of the
+            // last instruction that is included, so we go one
+            // byte further to be sure to include it.
+            let end = to_offset + 1;
+
+            trace!(
+                "Recording debug range for VL{} in {:?}: [Inst {}..Inst {}) [{}..{})",
+                label,
                 loc,
-                // ValueLocRanges are recorded by *instruction-end
-                // offset*. `from_offset` is the *start* of the
-                // instruction; that is the same as the end of another
-                // instruction, so we only want to begin coverage once
-                // we are past the previous instruction's end.
-                start: from_offset + 1,
-                // Likewise, `end` is exclusive, but we want to
-                // *include* the end of the last
-                // instruction. `to_offset` is the start of the
-                // `to`-instruction, which is the exclusive end, i.e.,
-                // the first instruction not covered. That
-                // instruction's start is the same as the end of the
-                // last instruction that is included, so we go one
-                // byte further to be sure to include it.
-                end: to_offset + 1,
-            });
+                from.inst().index(),
+                to.inst().index(),
+                start,
+                end
+            );
+
+            ranges.push(ValueLocRange { loc, start, end });
         }
 
         value_labels_ranges
