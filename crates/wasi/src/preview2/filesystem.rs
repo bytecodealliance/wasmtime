@@ -4,6 +4,7 @@ use crate::preview2::{
 };
 use anyhow::{anyhow, Context};
 use bytes::{Bytes, BytesMut};
+use futures::future::{maybe_done, MaybeDone};
 use std::sync::Arc;
 
 bitflags::bitflags! {
@@ -176,7 +177,9 @@ pub(crate) enum FileOutputMode {
 pub(crate) struct FileOutputStream {
     file: Arc<cap_std::fs::File>,
     mode: FileOutputMode,
-    task: Option<AbortOnDropJoinHandle<Result<(), std::io::Error>>>,
+    // Allows join future to be awaited in a cancellable manner. Gone variant indicates
+    // no task is currently outstanding.
+    task: MaybeDone<AbortOnDropJoinHandle<Result<(), std::io::Error>>>,
     closed: bool,
 }
 impl FileOutputStream {
@@ -184,7 +187,7 @@ impl FileOutputStream {
         Self {
             file,
             mode: FileOutputMode::Position(position),
-            task: None,
+            task: MaybeDone::Gone,
             closed: false,
         }
     }
@@ -192,7 +195,7 @@ impl FileOutputStream {
         Self {
             file,
             mode: FileOutputMode::Append,
-            task: None,
+            task: MaybeDone::Gone,
             closed: false,
         }
     }
@@ -209,7 +212,7 @@ impl HostOutputStream for FileOutputStream {
         if self.closed {
             return Err(OutputStreamError::Closed);
         }
-        if self.task.is_some() {
+        if !matches!(self.task, MaybeDone::Gone) {
             // a write is pending - this call was not permitted
             return Err(OutputStreamError::Trap(anyhow!(
                 "write not permitted: FileOutputStream write pending"
@@ -217,7 +220,7 @@ impl HostOutputStream for FileOutputStream {
         }
         let f = Arc::clone(&self.file);
         let m = self.mode;
-        self.task = Some(AbortOnDropJoinHandle::from(tokio::task::spawn_blocking(
+        self.task = maybe_done(AbortOnDropJoinHandle::from(tokio::task::spawn_blocking(
             move || match m {
                 FileOutputMode::Position(mut p) => {
                     let mut buf = buf;
@@ -252,21 +255,25 @@ impl HostOutputStream for FileOutputStream {
         if self.closed {
             return Err(OutputStreamError::Closed);
         }
-        // FIXME cancel safety
-        if let Some(t) = self.task.take() {
-            match t
-                .await
-                .context("join of FileOutputStream worker task")
-                .map_err(OutputStreamError::Trap)?
-            {
-                Ok(()) => Ok(FILE_WRITE_CAPACITY),
-                Err(e) => {
-                    self.closed = true;
-                    Err(OutputStreamError::LastOperationFailed(e.into()))
-                }
+        // If there is no outstanding task, accept more input:
+        if matches!(self.task, MaybeDone::Gone) {
+            return Ok(FILE_WRITE_CAPACITY);
+        }
+        // Wait for outstanding task:
+        std::pin::Pin::new(&mut self.task).await;
+
+        // Mark task as finished, and handle output:
+        match std::pin::Pin::new(&mut self.task)
+            .take_output()
+            .expect("just awaited for MaybeDone completion")
+            .context("join of FileOutputStream worker task")
+            .map_err(OutputStreamError::Trap)?
+        {
+            Ok(()) => Ok(FILE_WRITE_CAPACITY),
+            Err(e) => {
+                self.closed = true;
+                Err(OutputStreamError::LastOperationFailed(e.into()))
             }
-        } else {
-            Ok(FILE_WRITE_CAPACITY)
         }
     }
 }
