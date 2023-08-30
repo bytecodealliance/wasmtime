@@ -332,7 +332,6 @@ pub trait RustGenerator<'a> {
                         TypeDefKind::Flags(_) => out.push_str("Flags"),
                         TypeDefKind::Variant(_) => out.push_str("Variant"),
                         TypeDefKind::Enum(_) => out.push_str("Enum"),
-                        TypeDefKind::Union(_) => out.push_str("Union"),
                         TypeDefKind::Handle(Handle::Borrow(id)) => {
                             out.push_str("Borrow");
                             self.write_name(&Type::Id(*id), out);
@@ -354,56 +353,6 @@ pub trait RustGenerator<'a> {
             Some(ty) => self.write_name(ty, out),
             None => out.push_str("()"),
         }
-    }
-
-    /// Returns the names for the cases of the passed union.
-    fn union_case_names(&self, union: &Union) -> Vec<String> {
-        enum UsedState<'a> {
-            /// This name has been used once before.
-            ///
-            /// Contains a reference to the name given to the first usage so that a suffix can be added to it.
-            Once(&'a mut String),
-            /// This name has already been used multiple times.
-            ///
-            /// Contains the number of times this has already been used.
-            Multiple(usize),
-        }
-
-        // A `Vec` of the names we're assigning each of the union's cases in order.
-        let mut case_names = vec![String::new(); union.cases.len()];
-        // A map from case names to their `UsedState`.
-        let mut used = HashMap::new();
-        for (case, name) in union.cases.iter().zip(case_names.iter_mut()) {
-            self.write_name(&case.ty, name);
-
-            match used.get_mut(name.as_str()) {
-                None => {
-                    // Initialise this name's `UsedState`, with a mutable reference to this name
-                    // in case we have to add a suffix to it later.
-                    used.insert(name.clone(), UsedState::Once(name));
-                    // Since this is the first (and potentially only) usage of this name,
-                    // we don't need to add a suffix here.
-                }
-                Some(state) => match state {
-                    UsedState::Multiple(n) => {
-                        // Add a suffix of the index of this usage.
-                        write!(name, "{n}").unwrap();
-                        // Add one to the number of times this type has been used.
-                        *n += 1;
-                    }
-                    UsedState::Once(first) => {
-                        // Add a suffix of 0 to the first usage.
-                        first.push('0');
-                        // We now get a suffix of 1.
-                        name.push('1');
-                        // Then update the state.
-                        *state = UsedState::Multiple(2);
-                    }
-                },
-            }
-        }
-
-        case_names
     }
 
     fn param_name(&self, ty: TypeId) -> String {
