@@ -231,16 +231,21 @@ struct WorkerState {
 
 impl WorkerState {
     fn check_write(&mut self) -> Result<usize, OutputStreamError> {
+        self.check_error()?;
+        if self.flush_pending {
+            return Ok(0);
+        }
+        Ok(self.write_budget)
+    }
+
+    fn check_error(&mut self) -> Result<(), OutputStreamError> {
         if let Some(e) = self.error.take() {
             return Err(OutputStreamError::LastOperationFailed(e));
         }
         if !self.alive {
             return Err(OutputStreamError::Closed);
         }
-        if self.flush_pending {
-            return Ok(0);
-        }
-        Ok(self.write_budget)
+        Ok(())
     }
 }
 
@@ -300,6 +305,15 @@ impl Worker {
                     }
                 }
             }
+
+            {
+                let mut state = self.state.lock().unwrap();
+                if state.flush_pending {
+                    state.flush_pending = false;
+                    self.write_ready_changed.notify_waiters();
+                }
+            }
+
             notified.await;
         }
     }
@@ -334,12 +348,7 @@ impl AsyncWriteStream {
 impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
         let mut state = self.worker.state.lock().unwrap();
-        if !state.alive {
-            return Err(OutputStreamError::Closed);
-        }
-        if let Some(e) = state.error.take() {
-            return Err(OutputStreamError::LastOperationFailed(e));
-        }
+        state.check_error()?;
         if state.flush_pending {
             return Err(OutputStreamError::Trap(anyhow!(
                 "write not permitted while flush pending"
@@ -358,16 +367,11 @@ impl HostOutputStream for AsyncWriteStream {
     }
     fn flush(&mut self) -> Result<(), OutputStreamError> {
         let mut state = self.worker.state.lock().unwrap();
-        if !state.alive {
-            return Err(OutputStreamError::Closed);
-        }
-        if let Some(e) = state.error.take() {
-            return Err(OutputStreamError::LastOperationFailed(e));
-        }
-        if !state.items.is_empty() {
-            state.flush_pending = true;
-            self.worker.new_work.notify_waiters();
-        }
+        state.check_error()?;
+
+        state.flush_pending = true;
+        self.worker.new_work.notify_waiters();
+
         Ok(())
     }
 
@@ -446,7 +450,7 @@ mod test {
     const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(100);
 
     #[cfg(not(target_arch = "riscv64"))]
-    const TEST_ITERATIONS: usize = 100;
+    const TEST_ITERATIONS: usize = 10000;
 
     #[cfg(not(target_arch = "riscv64"))]
     const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(10);
