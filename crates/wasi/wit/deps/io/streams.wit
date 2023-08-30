@@ -220,7 +220,6 @@ interface streams {
     /// all derived `pollable`s created with this function are dropped.
     subscribe-to-output-stream: func(this: output-stream) -> pollable
 
-
     /// Write zeroes to a stream.
     ///
     /// this should be used precisely like `write` with the exact same

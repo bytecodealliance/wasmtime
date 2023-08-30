@@ -1631,6 +1631,43 @@ impl From<network::ErrorCode> for Errno {
     }
 }
 
+fn host_poll_oneoff(subscriptions: &mut [poll::Pollable]) -> Vec<bool> {
+    #[link(wasm_import_module = "wasi:poll/poll")]
+    extern "C" {
+        #[link_name = "poll-oneoff"]
+        fn poll_oneoff_import(pollables: *const Pollable, len: usize, rval: *mut BoolList);
+    }
+
+    let nsubscriptions = subscriptions.len();
+    let pollables = Pollables {
+        pointer: subscriptions.as_mut_ptr(),
+        index: 0,
+        length: nsubscriptions,
+    };
+
+    let mut ready_list = BoolList {
+        base: std::ptr::null(),
+        len: 0,
+    };
+
+    let mut results = vec![false; nsubscriptions];
+
+    unsafe {
+        ImportAlloc::new().with_buffer(results.as_mut_ptr() as *mut _, nsubscriptions, || {
+            poll_oneoff_import(
+                pollables.pointer,
+                pollables.length,
+                &mut ready_list as *mut _,
+            );
+        })
+    }
+
+    assert_eq!(ready_list.len, nsubscriptions);
+    assert_eq!(ready_list.base, results.as_ptr());
+
+    results
+}
+
 /// Concurrently poll for the occurrence of a set of events.
 #[no_mangle]
 pub unsafe extern "C" fn poll_oneoff(
@@ -2144,38 +2181,42 @@ impl BlockingMode {
         }
     }
     fn write(self, output_stream: streams::OutputStream, bytes: &[u8]) -> Result<usize, Errno> {
-        match self {
-            BlockingMode::NonBlocking => match streams::check_write(output_stream) {
-                Ok(0) | Err(streams::WriteError::Closed) => Ok(0),
+        let s = streams::subscribe_to_output_stream(output_stream);
 
-                Ok(n) => {
-                    let len = (n as usize).min(bytes.len());
-                    match streams::write(output_stream, &bytes[..len]) {
-                        Ok(()) => match streams::blocking_flush(output_stream) {
-                            Ok(()) => Ok(len),
-                            Err(_) => Err(ERRNO_IO),
-                        },
-                        Err(_) => Err(ERRNO_IO),
-                    }
-                }
+        if matches!(self, BlockingMode::Blocking) {
+            host_poll_oneoff(&mut [s]);
+        }
 
-                Err(streams::WriteError::LastOperationFailed) => Err(ERRNO_IO),
-            },
-            BlockingMode::Blocking => {
-                let n = match streams::blocking_check_write(output_stream) {
-                    Ok(n) => n,
-                    Err(streams::WriteError::Closed) => return Ok(0),
-                    Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
-                };
-                let len = (n as usize).min(bytes.len());
-                match streams::write(output_stream, &bytes[..len]) {
-                    Ok(_) => match streams::blocking_flush(output_stream) {
-                        Ok(()) => Ok(len),
-                        Err(_) => Err(ERRNO_IO),
-                    },
-                    Err(_) => Err(ERRNO_IO),
-                }
-            }
+        let permit = match streams::check_write(output_stream) {
+            Ok(n) => n,
+            Err(streams::WriteError::Closed) => 0,
+            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+        };
+
+        let len = bytes.len().min(permit as usize);
+        if len == 0 {
+            return Ok(0);
+        }
+
+        match streams::write(output_stream, &bytes[..len]) {
+            Ok(_) => {}
+            Err(streams::WriteError::Closed) => return Ok(0),
+            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+        }
+
+        match streams::flush(output_stream) {
+            Ok(_) => {}
+            Err(streams::WriteError::Closed) => return Ok(0),
+            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+        }
+
+        host_poll_oneoff(&mut [s]);
+        match streams::check_write(output_stream) {
+            Ok(_) => Ok(len),
+
+            // TODO: should this be `Ok(len)`?
+            Err(streams::WriteError::Closed) => Ok(0),
+            Err(streams::WriteError::LastOperationFailed) => Err(ERRNO_IO),
         }
     }
 }
