@@ -280,11 +280,31 @@ impl<T: WasiView> streams::Host for T {
             })?)
     }
 
-    async fn blocking_check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
+    async fn blocking_write_and_flush(
+        &mut self,
+        stream: OutputStream,
+        bytes: Vec<u8>,
+    ) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        // await until actually ready for writing:
-        let permit = s.write_ready().await?;
-        Ok(permit as u64)
+
+        if bytes.len() > 4096 {
+            return Err(streams::Error::trap(anyhow::anyhow!(
+                "Buffer too large for blocking-write-and-flush (expected at most 4096)"
+            )));
+        }
+
+        let mut bytes = bytes::Bytes::from(bytes);
+        while !bytes.is_empty() {
+            let permit = HostOutputStream::write_ready(s).await?;
+            let len = bytes.len().min(permit);
+            let chunk = bytes.split_to(len);
+            HostOutputStream::write(s, chunk)?;
+        }
+
+        HostOutputStream::flush(s)?;
+        let _ = HostOutputStream::write_ready(s).await?;
+
+        Ok(())
     }
 
     async fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
@@ -457,17 +477,21 @@ pub mod sync {
                 AsyncHost::write(self, stream, bytes).await
             })?)
         }
+        fn blocking_write_and_flush(
+            &mut self,
+            stream: OutputStream,
+            bytes: Vec<u8>,
+        ) -> Result<(), streams::Error> {
+            Ok(in_tokio(async {
+                AsyncHost::blocking_write_and_flush(self, stream, bytes).await
+            })?)
+        }
         fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
             in_tokio(async { AsyncHost::subscribe_to_output_stream(self, stream).await })
         }
         fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
             Ok(in_tokio(async {
                 AsyncHost::write_zeroes(self, stream, len).await
-            })?)
-        }
-        fn blocking_check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
-            Ok(in_tokio(async {
-                AsyncHost::blocking_check_write(self, stream).await
             })?)
         }
 

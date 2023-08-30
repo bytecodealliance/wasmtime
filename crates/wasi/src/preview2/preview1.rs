@@ -5,6 +5,7 @@ use crate::preview2::bindings::cli::{
 use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
 use crate::preview2::bindings::io::streams;
+use crate::preview2::bindings::poll;
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::host::filesystem::TableReaddirExt;
 use crate::preview2::{bindings, IsATTY, TableError, WasiView};
@@ -68,16 +69,26 @@ impl BlockingMode {
     }
     async fn write(
         &self,
-        host: &mut impl streams::Host,
+        host: &mut (impl streams::Host + poll::poll::Host),
         output_stream: streams::OutputStream,
         bytes: &[u8],
     ) -> Result<usize, types::Error> {
-        use streams::Host;
+        use poll::poll::Host as Poll;
+        use streams::Host as Streams;
 
         let n = match self {
-            BlockingMode::Blocking => Host::blocking_check_write(host, output_stream).await?,
-            BlockingMode::NonBlocking => Host::check_write(host, output_stream).await?,
+            BlockingMode::Blocking => {
+                let s = Streams::subscribe_to_output_stream(host, output_stream)
+                    .await
+                    .map_err(types::Error::trap)?;
+                let _ = Poll::poll_oneoff(host, vec![s])
+                    .await
+                    .map_err(types::Error::trap)?;
+                Streams::check_write(host, output_stream).await?
+            }
+            BlockingMode::NonBlocking => Streams::check_write(host, output_stream).await?,
         };
+
         let len = bytes.len().min(n as usize);
 
         // Either this was a blocking request to write `0` bytes, or it was a request to write `0`
@@ -86,8 +97,8 @@ impl BlockingMode {
             return Ok(0);
         }
 
-        Host::write(host, output_stream, bytes[..len].to_vec()).await?;
-        Host::blocking_flush(host, output_stream).await?;
+        Streams::write(host, output_stream, bytes[..len].to_vec()).await?;
+        Streams::blocking_flush(host, output_stream).await?;
 
         Ok(len)
     }
