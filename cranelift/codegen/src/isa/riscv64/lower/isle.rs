@@ -444,10 +444,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         MemFlags::new()
     }
 
-    fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
-        Some(*f)
-    }
-
     fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
         FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }

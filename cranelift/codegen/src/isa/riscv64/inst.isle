@@ -1682,10 +1682,6 @@
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
-
-(decl pack_float_rounding_mode (FRM) OptionFloatRoundingMode)
-(extern constructor pack_float_rounding_mode pack_float_rounding_mode)
-
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl fpu_rrr (FpuOPRRR Type Reg Reg) Reg)
 (rule (fpu_rrr op ty src1 src2)
