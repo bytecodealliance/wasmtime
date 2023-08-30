@@ -10,12 +10,9 @@
       (rd WritableReg)
       (imm Imm20))
 
-    (LoadConst32
+    (LoadInlineConst
       (rd WritableReg)
-      (imm u32))
-
-    (LoadConst64
-      (rd WritableReg)
+      (ty Type)
       (imm u64))
 
      (Auipc

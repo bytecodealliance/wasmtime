@@ -399,8 +399,7 @@ impl Inst {
             | Inst::BrTable { .. }
             | Inst::Auipc { .. }
             | Inst::Lui { .. }
-            | Inst::LoadConst32 { .. }
-            | Inst::LoadConst64 { .. }
+            | Inst::LoadInlineConst { .. }
             | Inst::AluRRR { .. }
             | Inst::FpuRRR { .. }
             | Inst::AluRRImm12 { .. }
@@ -533,17 +532,15 @@ impl MachInstEmit for Inst {
                 let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
                 sink.put4(x);
             }
-            &Inst::LoadConst32 { rd, imm } => {
+            &Inst::LoadInlineConst { rd, ty, imm } => {
                 let rd = allocs.next_writable(rd);
-                LoadConstant::U32(imm)
-                    .load_constant(rd, &mut |_| rd)
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
-            }
-            &Inst::LoadConst64 { rd, imm } => {
-                let rd = allocs.next_writable(rd);
-                LoadConstant::U64(imm)
-                    .load_constant(rd, &mut |_| rd)
+                let c = if ty.bits() == 64 {
+                    LoadConstant::U64(imm)
+                } else {
+                    LoadConstant::U32(imm as u32)
+                };
+
+                c.load_constant(rd, &mut |_| rd)
                     .into_iter()
                     .for_each(|inst| inst.emit(&[], sink, emit_info, state));
             }
