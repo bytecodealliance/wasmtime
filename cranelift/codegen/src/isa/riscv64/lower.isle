@@ -1201,9 +1201,25 @@
 (rule (lower (fpromote x))
   (rv_fcvtds x))
 
+;;;;;  Rules for `fvpromote_low`;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec_fits_in_register ty) (fvpromote_low x)))
+  (if-let half_ty (ty_half_width ty))
+  (rv_vfwcvt_f_f_v x (unmasked) (vstate_mf2 half_ty)))
+
 ;;;;;  Rules for `fdemote`;;;;;;;;;;;;;;;;;;
 (rule (lower (fdemote x))
   (rv_fcvtsd x))
+
+;;;;;  Rules for `fvdemote`;;;;;;;;;;;;;;;;;
+
+;; `vfncvt...` leaves the upper bits of the register undefined so
+;; we need to zero them out.
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $F32X4) (fvdemote x)))
+  (if-let zero (i8_to_imm5 0))
+  (let ((narrow VReg (rv_vfncvt_f_f_w x (unmasked) (vstate_mf2 ty)))
+        (mask VReg (gen_vec_mask 0xC)))
+    (rv_vmerge_vim narrow zero mask ty)))
 
 
 ;;;;;  Rules for for float arithmetic
@@ -1613,39 +1629,52 @@
   (gen_fcvt_int $false v $false from to))
 
 ;;;;;  Rules for `fcvt_to_sint`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_to_sint v @ (value_type from))))
+(rule 0 (lower (has_type to (fcvt_to_sint v @ (value_type (ty_scalar_float from)))))
   (gen_fcvt_int $false v $true from to))
 
 ;;;;;  Rules for `fcvt_to_sint_sat`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_to_sint_sat v @ (value_type from))))
+(rule 0 (lower (has_type to (fcvt_to_sint_sat v @ (value_type (ty_scalar_float from)))))
   (gen_fcvt_int $true v $true from to))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_sint_sat v @ (value_type from_ty))))
+  (if-let zero (i8_to_imm5 0))
+  (let ((is_nan VReg (rv_vmfne_vv v v (unmasked) from_ty))
+        (cvt VReg (rv_vfcvt_rtz_x_f_v v (unmasked) from_ty)))
+    (rv_vmerge_vim cvt zero is_nan from_ty)))
+
 ;;;;;  Rules for `fcvt_to_uint_sat`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_to_uint_sat v @ (value_type from))))
+(rule 0 (lower (has_type to (fcvt_to_uint_sat v @ (value_type (ty_scalar_float from)))))
   (gen_fcvt_int $true v $false from to))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_uint_sat v @ (value_type from_ty))))
+  (if-let zero (i8_to_imm5 0))
+  (let ((is_nan VReg (rv_vmfne_vv v v (unmasked) from_ty))
+        (cvt VReg (rv_vfcvt_rtz_xu_f_v v (unmasked) from_ty)))
+    (rv_vmerge_vim cvt zero is_nan from_ty)))
+
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_from_sint v @ (value_type from_ty))))
+(rule 0 (lower (has_type (ty_scalar_float to) (fcvt_from_sint v @ (value_type from_ty))))
   (let ((float_op FpuOPRR (int_convert_2_float_op from_ty $true to))
         (value XReg (normalize_fcvt_from_int v from_ty (ExtendOp.Signed))))
     (fpu_rr float_op to value)))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_sint v @ (value_type from_ty))))
+  (rv_vfcvt_f_x_v v (unmasked) from_ty))
+
 ;;;;;  Rules for `fcvt_from_uint`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_from_uint v @ (value_type from_ty))))
+(rule 0 (lower (has_type (ty_scalar_float to) (fcvt_from_uint v @ (value_type from_ty))))
   (let ((float_op FpuOPRR (int_convert_2_float_op from_ty $false to))
         (value XReg (normalize_fcvt_from_int v from_ty (ExtendOp.Zero))))
     (fpu_rr float_op to value)))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_uint v @ (value_type from_ty))))
+  (rv_vfcvt_f_xu_v v (unmasked) from_ty))
+
 ;;;;;  Rules for `symbol_value`;;;;;;;;;
 (rule
    (lower (symbol_value (symbol_value_data name _ offset)))
-   (load_ext_name name offset)
-)
+   (load_ext_name name offset))
+
 ;;;;;  Rules for `bitcast`;;;;;;;;;
 (rule
    (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
