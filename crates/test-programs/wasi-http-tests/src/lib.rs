@@ -73,11 +73,10 @@ pub async fn request(
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
     if let Some(mut buf) = body {
-        use streams::{FlushResult, WriteReadiness};
         while !buf.is_empty() {
             let permit = match streams::blocking_check_write(request_body) {
-                WriteReadiness::Ready(n) => usize::try_from(n)?,
-                WriteReadiness::Closed => anyhow::bail!("output stream is closed"),
+                Ok(n) => usize::try_from(n)?,
+                Err(_) => anyhow::bail!("output stream error"),
             };
 
             let len = buf.len().min(permit);
@@ -85,13 +84,13 @@ pub async fn request(
             buf = rest;
 
             match streams::write(request_body, chunk) {
-                Some(WriteReadiness::Closed) => anyhow::bail!("output stream is closed"),
+                Err(_) => anyhow::bail!("output stream error"),
                 _ => {}
             }
 
             match streams::blocking_flush(request_body) {
-                FlushResult::Closed => anyhow::bail!("output stream is closed"),
-                FlushResult::Done => {}
+                Ok(_) => {}
+                Err(_) => anyhow::bail!("output stream error"),
             }
         }
     }

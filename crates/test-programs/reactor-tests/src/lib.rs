@@ -30,14 +30,14 @@ impl TestReactor for T {
                 let mut out = s.as_bytes();
                 while !out.is_empty() {
                     match streams::blocking_check_write(o) {
-                        streams::WriteReadiness::Ready(n) => {
+                        Ok(n) => {
                             let len = (n as usize).min(out.len());
                             match streams::write(o, &out[..len]) {
-                                Some(streams::WriteReadiness::Closed) => return Err(()),
-                                _ => out = &out[len..],
+                                Ok(_) => out = &out[len..],
+                                Err(_) => return Err(()),
                             }
                         }
-                        streams::WriteReadiness::Closed => return Err(()),
+                        Err(_) => return Err(()),
                     }
                 }
             }

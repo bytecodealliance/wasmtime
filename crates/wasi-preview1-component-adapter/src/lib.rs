@@ -1741,7 +1741,7 @@ pub unsafe extern "C" fn poll_oneoff(
                     let stream = state
                         .descriptors()
                         .get_write_stream(subscription.u.u.fd_write.file_descriptor)?;
-                    streams::subscribe_to_write_ready(stream)
+                    streams::subscribe_to_output_stream(stream)
                 }
 
                 _ => return Err(ERRNO_INVAL),
@@ -2146,31 +2146,34 @@ impl BlockingMode {
     fn write(self, output_stream: streams::OutputStream, bytes: &[u8]) -> Result<usize, Errno> {
         match self {
             BlockingMode::NonBlocking => match streams::check_write(output_stream) {
-                None => Ok(0),
-                Some(streams::WriteReadiness::Closed) => Ok(0),
-                Some(streams::WriteReadiness::Ready(n)) => {
+                Ok(0) | Err(streams::WriteError::Closed) => Ok(0),
+
+                Ok(n) => {
                     let len = (n as usize).min(bytes.len());
                     match streams::write(output_stream, &bytes[..len]) {
-                        Some(streams::WriteReadiness::Closed) => Err(ERRNO_IO),
-                        _ => match streams::blocking_flush(output_stream) {
-                            streams::FlushResult::Done => Ok(len),
-                            streams::FlushResult::Closed => Err(ERRNO_IO),
+                        Ok(()) => match streams::blocking_flush(output_stream) {
+                            Ok(()) => Ok(len),
+                            Err(_) => Err(ERRNO_IO),
                         },
+                        Err(_) => Err(ERRNO_IO),
                     }
                 }
+
+                Err(streams::WriteError::LastOperationFailed) => Err(ERRNO_IO),
             },
             BlockingMode::Blocking => {
                 let n = match streams::blocking_check_write(output_stream) {
-                    streams::WriteReadiness::Closed => return Ok(0),
-                    streams::WriteReadiness::Ready(n) => n,
+                    Ok(n) => n,
+                    Err(streams::WriteError::Closed) => return Ok(0),
+                    Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
                 };
                 let len = (n as usize).min(bytes.len());
                 match streams::write(output_stream, &bytes[..len]) {
-                    Some(streams::WriteReadiness::Closed) => Err(ERRNO_IO),
-                    _ => match streams::blocking_flush(output_stream) {
-                        streams::FlushResult::Done => Ok(len),
-                        streams::FlushResult::Closed => Err(ERRNO_IO),
+                    Ok(_) => match streams::blocking_flush(output_stream) {
+                        Ok(()) => Ok(len),
+                        Err(_) => Err(ERRNO_IO),
                     },
+                    Err(_) => Err(ERRNO_IO),
                 }
             }
         }
