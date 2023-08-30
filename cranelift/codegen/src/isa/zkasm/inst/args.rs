@@ -1755,24 +1755,24 @@ impl FloatSelectOP {
         }
     }
     // move qnan bits into int register.
-    pub(crate) fn snan_bits(self, rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
-        let x = if ty == F32 { 22 } else { 51 };
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Srli,
-            rd: rd,
-            rs: rd.to_reg(),
-            imm12: Imm12::from_bits(x),
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Slli,
-            rd: rd,
-            rs: rd.to_reg(),
-            imm12: Imm12::from_bits(x),
-        });
-        insts
-    }
+    // pub(crate) fn snan_bits(self, rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
+    //     let mut insts = SmallInstVec::new();
+    //     insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
+    //     let x = if ty == F32 { 22 } else { 51 };
+    //     insts.push(Inst::AluRRImm12 {
+    //         alu_op: AluOPRRI::Srli,
+    //         rd: rd,
+    //         rs: rd.to_reg(),
+    //         imm12: Imm12::from_bits(x),
+    //     });
+    //     insts.push(Inst::AluRRImm12 {
+    //         alu_op: AluOPRRI::Slli,
+    //         rd: rd,
+    //         rs: rd.to_reg(),
+    //         imm12: Imm12::from_bits(x),
+    //     });
+    //     insts
+    // }
 }
 
 pub(crate) fn f32_bits(f: f32) -> u32 {

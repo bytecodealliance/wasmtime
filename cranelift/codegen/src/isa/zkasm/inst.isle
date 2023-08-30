@@ -1942,12 +1942,17 @@
 
 ;; In the most generic case, we shift left and then shift right.
 ;; The type of right shift is determined by the extend op.
+; (rule 0 (extend val extend_op (fits_in_32 from_ty) (fits_in_64 to_ty))
+;   (let ((val XReg (value_regs_get val 0))
+;         (shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
+;         (left XReg (rv_slli val shift))
+;         (shift_op AluOPRRI (extend_shift_op extend_op))
+;         (right XReg (alu_rr_imm12 shift_op left shift)))
+;     right))
+
+;; Hacky no-op version.
 (rule 0 (extend val extend_op (fits_in_32 from_ty) (fits_in_64 to_ty))
-  (let ((val XReg (value_regs_get val 0))
-        (shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
-        (left XReg (rv_slli val shift))
-        (shift_op AluOPRRI (extend_shift_op extend_op))
-        (right XReg (alu_rr_imm12 shift_op left shift)))
+  (let ((right XReg (value_regs_get val 0)))
     right))
 
 ;; If we are zero extending a U8 we can use a `andi` instruction.
