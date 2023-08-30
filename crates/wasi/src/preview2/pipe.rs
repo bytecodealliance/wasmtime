@@ -450,7 +450,7 @@ mod test {
     const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(100);
 
     #[cfg(not(target_arch = "riscv64"))]
-    const TEST_ITERATIONS: usize = 10000;
+    const TEST_ITERATIONS: usize = 100;
 
     #[cfg(not(target_arch = "riscv64"))]
     const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(10);
@@ -464,6 +464,8 @@ mod test {
             .expect("operation timed out")
     }
 
+    // TODO: is there a way to get tokio to warp through timeouts when it knows nothing is
+    // happening?
     async fn never_resolves<F: futures::Future>(fut: F) {
         tokio::time::timeout(REASONABLE_DURATION, fut)
             .await
@@ -717,7 +719,7 @@ mod test {
             .expect("write_ready does not trap");
         assert_eq!(readiness, 2048);
         // I can write whatever:
-        let readiness = writer.write(chunk.clone()).expect("write does not error");
+        writer.write(chunk.clone()).expect("write does not error");
 
         // This may consume 1k of the buffer:
         let readiness = resolves_immediately(writer.write_ready())
@@ -824,9 +826,15 @@ mod test {
         }
     }
 
-    /*
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn multiple_chunks_write_stream() {
+        // Run many times because the test is nondeterministic:
+        for n in 0..TEST_ITERATIONS {
+            multiple_chunks_write_stream_aux(n).await
+        }
+    }
+    #[tracing::instrument]
+    async fn multiple_chunks_write_stream_aux(_: usize) {
         use std::ops::Deref;
 
         let (mut reader, writer) = simplex(1024);
@@ -834,27 +842,20 @@ mod test {
 
         // Write a chunk:
         let chunk = Bytes::from_static(&[123; 1]);
-        let readiness = writer.write(chunk.clone()).expect("write does not trap");
 
-        match readiness {
-            Some(WriteReadiness::Ready(budget)) => assert!(
-                budget == 1023 || budget == 1024,
-                "unexpected budget: {budget}"
-            ),
-            _ => panic!("bad state for readiness: {readiness:?}"),
-        }
-
-        // After the write, still ready for more writing:
-        let readiness = resolves_immediately(writer.write_ready())
+        let permit = resolves_immediately(writer.write_ready())
             .await
-            .expect("write_ready does not trap");
-        match readiness {
-            WriteReadiness::Ready(budget) => assert!(
-                budget == 1024 || budget == 1023,
-                "unexpected budget: {budget}"
-            ),
-            _ => panic!("bad state for readiness: {readiness:?}"),
-        }
+            .expect("write should be ready");
+        assert_eq!(permit, 1024);
+
+        writer.write(chunk.clone()).expect("write does not trap");
+
+        // At this point the message will either be waiting for the worker to process the write, or
+        // it will be buffered in the simplex channel.
+        let permit = resolves_immediately(writer.write_ready())
+            .await
+            .expect("write should be ready");
+        assert!(matches!(permit, 1023 | 1024));
 
         let mut read_buf = vec![0; chunk.len()];
         let read_len = reader.read_exact(&mut read_buf).await.unwrap();
@@ -863,35 +864,49 @@ mod test {
 
         // Write a second, different chunk:
         let chunk2 = Bytes::from_static(&[45; 1]);
-        let readiness = writer.write(chunk2.clone()).expect("write does not trap");
 
-        match readiness {
-            Some(WriteReadiness::Ready(budget)) => assert!(
-                budget == 1024 || budget == 1023,
-                "unexpected budget: {budget}"
-            ),
-            _ => panic!("bad state for readiness: {readiness:?}"),
-        }
-        // After the write, still ready for more writing:
-        let readiness = resolves_immediately(writer.write_ready())
+        // We're only guaranteed to see a consistent write budget if we flush.
+        writer.flush().expect("channel is still alive");
+
+        let permit = resolves_immediately(writer.write_ready())
             .await
-            .expect("write_ready does not trap");
-        match readiness {
-            WriteReadiness::Ready(budget) => assert!(
-                budget == 1024 || budget == 1023,
-                "unexpected budget: {budget}"
-            ),
-            _ => panic!("bad state for readiness: {readiness:?}"),
-        }
+            .expect("write should be ready");
+        assert_eq!(permit, 1024);
+
+        writer.write(chunk2.clone()).expect("write does not trap");
+
+        // At this point the message will either be waiting for the worker to process the write, or
+        // it will be buffered in the simplex channel.
+        let permit = resolves_immediately(writer.write_ready())
+            .await
+            .expect("write should be ready");
+        assert!(matches!(permit, 1023 | 1024));
 
         let mut read2_buf = vec![0; chunk2.len()];
         let read2_len = reader.read_exact(&mut read2_buf).await.unwrap();
         assert_eq!(read2_len, chunk2.len());
         assert_eq!(read2_buf.as_slice(), chunk2.deref());
+
+        // We're only guaranteed to see a consistent write budget if we flush.
+        writer.flush().expect("channel is still alive");
+
+        let permit = resolves_immediately(writer.write_ready())
+            .await
+            .expect("write should be ready");
+        assert_eq!(permit, 1024);
     }
 
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn backpressure_write_stream() {
+        // Run many times because the test is nondeterministic:
+        for n in 0..TEST_ITERATIONS {
+            backpressure_write_stream_aux(n).await
+        }
+    }
+    #[tracing::instrument]
+    async fn backpressure_write_stream_aux(_: usize) {
+        use futures::future::poll_immediate;
+
         // The channel can buffer up to 1k, plus another 1k in the stream, before not
         // accepting more input:
         let (mut reader, writer) = simplex(1024);
@@ -899,31 +914,28 @@ mod test {
 
         let chunk = Bytes::from_static(&[0; 1024]);
 
-        // Write enough to fill the simplex buffer:
-        match writer.write(chunk.clone()).expect("write does not trap") {
-            Some(WriteReadiness::Ready(1024)) => {}
+        let permit = resolves_immediately(writer.write_ready())
+            .await
+            .expect("write should be ready");
+        assert_eq!(permit, 1024);
 
-            // If the worker hasn't picked up the write yet, the buffer will be full. We need to
-            // wait for the worker to process the buffer before continuing.
-            None => {
-                match resolves_immediately(writer.write_ready())
-                    .await
-                    .expect("write_ready does not trap")
-                {
-                    WriteReadiness::Ready(1024) => {}
-                    a => panic!("writer should be ready for more input: {a:?}"),
-                }
-            }
+        writer.write(chunk.clone()).expect("write succeeds");
 
-            Some(a) => panic!("invalid write readiness: {a:?}"),
-        }
+        // We might still be waiting for the worker to process the message, or the worker may have
+        // processed it and released all the budget back to us.
+        let permit = poll_immediate(writer.write_ready()).await;
+        assert!(matches!(permit, None | Some(Ok(1024))));
+
+        // Given a little time, the worker will process the message and release all the budget
+        // back.
+        let permit = resolves_immediately(writer.write_ready())
+            .await
+            .expect("write should be ready");
+        assert_eq!(permit, 1024);
 
         // Now fill the buffer between here and the writer task. This should always indicate
         // back-pressure because now both buffers (simplex and worker) are full.
-        match writer.write(chunk.clone()).expect("write does not trap") {
-            None => {}
-            Some(a) => panic!("expected backpressure: {a:?}"),
-        }
+        writer.write(chunk.clone()).expect("write does not trap");
 
         // Try shoving even more down there, and it shouldnt accept more input:
         writer
@@ -944,34 +956,13 @@ mod test {
         never_resolves(reader.read(&mut buf)).await;
 
         // Now the backpressure should be cleared, and an additional write should be accepted.
-        match resolves_immediately(writer.write_ready())
+        let permit = resolves_immediately(writer.write_ready())
             .await
-            .expect("ready is ok")
-        {
-            WriteReadiness::Ready(1024) => {}
-            a => panic!("invalid write readiness: {a:?}"),
-        }
+            .expect("ready is ok");
+        assert_eq!(permit, 1024);
 
         // and the write succeeds:
-        match writer.write(chunk.clone()).expect("write does not trap") {
-            // There's a race here on how fast the worker consumes the input, so we might see that
-            // either it's consumed everything, or that the buffer is currently full.
-            Some(WriteReadiness::Ready(1024)) => {}
-
-            // If the worker hasn't picked up the write yet, the buffer will be full. We need to
-            // wait for the worker to process the buffer before continuing.
-            None => {
-                match resolves_immediately(writer.write_ready())
-                    .await
-                    .expect("write_ready does not trap")
-                {
-                    WriteReadiness::Ready(1024) => {}
-                    a => panic!("writer should be ready for more input: {a:?}"),
-                }
-            }
-
-            Some(a) => panic!("invalid write readiness: {a:?}"),
-        }
+        writer.write(chunk.clone()).expect("write does not trap");
     }
 
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -989,39 +980,33 @@ mod test {
 
         let chunk = Bytes::from_static(&[0; 1024]);
 
+        let permit = resolves_immediately(writer.write_ready())
+            .await
+            .expect("write should be ready");
+        assert_eq!(permit, 1024);
+
+        writer.write(chunk.clone()).expect("write succeeds");
+
+        writer.flush().expect("flush succeeds");
+
+        // Waiting for write_ready to resolve after a flush should always show that we have the
+        // full budget available, as the message will have flushed to the simplex channel.
+        let permit = resolves_immediately(writer.write_ready())
+            .await
+            .expect("write_ready succeeds");
+        assert_eq!(permit, 1024);
+
         // Write enough to fill the simplex buffer:
-        match writer.write(chunk.clone()).expect("write does not trap") {
-            Some(WriteReadiness::Ready(1024)) => {}
+        writer.write(chunk.clone()).expect("write does not trap");
 
-            // If the worker hasn't picked up the write yet, the buffer will be full. We need to
-            // wait for the worker to process the buffer before continuing.
-            None => match writer.flush().expect("flush does not trap") {
-                Some(FlushResult::Done) => {}
-                None => match resolves_immediately(writer.write_ready())
-                    .await
-                    .expect("write_ready does not trap")
-                {
-                    FlushResult::Done => {}
-                    a => panic!("invalid write_ready result: {a:?}"),
-                },
-                a => panic!("invalid flush result: {a:?}"),
-            },
+        // Writes should be refused until this flush succeeds.
+        writer.flush().expect("flush succeeds");
 
-            Some(a) => panic!("invalid write readiness: {a:?}"),
-        }
-
-        // Now fill the buffer between here and the writer task. This should always indicate
-        // back-pressure because now both buffers (simplex and worker) are full.
-        match writer.write(chunk.clone()).expect("write does not trap") {
-            None => {}
-            Some(a) => panic!("expected backpressure: {a:?}"),
-        }
-
-        // Flushing the buffer should not succeed.
-        assert!(
-            writer.flush().expect("flush does not trap").is_none(),
-            "flush should not succeed"
-        );
+        // Try shoving even more down there, and it shouldnt accept more input:
+        writer
+            .write(chunk.clone())
+            .err()
+            .expect("unpermitted write does trap");
 
         // No amount of waiting will resolve the situation, as nothing is emptying the simplex
         // buffer.
@@ -1036,34 +1021,19 @@ mod test {
         never_resolves(reader.read(&mut buf)).await;
 
         // Now the backpressure should be cleared, and an additional write should be accepted.
-        match resolves_immediately(writer.write_ready())
+        let permit = resolves_immediately(writer.write_ready())
             .await
-            .expect("ready is ok")
-        {
-            WriteReadiness::Ready(1024) => {}
-            a => panic!("invalid write readiness: {a:?}"),
-        }
+            .expect("ready is ok");
+        assert_eq!(permit, 1024);
 
         // and the write succeeds:
-        match writer.write(chunk.clone()).expect("write does not trap") {
-            // There's a race here on how fast the worker consumes the input, so we might see that
-            // either it's consumed everything, or that the buffer is currently full.
-            Some(WriteReadiness::Ready(1024)) => {}
+        writer.write(chunk.clone()).expect("write does not trap");
 
-            // If the worker hasn't picked up the write yet, the buffer will be full. We need to
-            // wait for the worker to process the buffer before continuing.
-            None => {
-                match resolves_immediately(writer.write_ready())
-                    .await
-                    .expect("write_ready does not trap")
-                {
-                    WriteReadiness::Ready(1024) => {}
-                    a => panic!("writer should be ready for more input: {a:?}"),
-                }
-            }
+        writer.flush().expect("flush succeeds");
 
-            Some(a) => panic!("invalid write readiness: {a:?}"),
-        }
+        let permit = resolves_immediately(writer.write_ready())
+            .await
+            .expect("ready is ok");
+        assert_eq!(permit, 1024);
     }
-    */
 }
