@@ -1,4 +1,4 @@
-use crate::preview2::{StreamState, Table, TableError};
+use crate::preview2::{AbortOnDropJoinHandle, StreamState, Table, TableError};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
@@ -109,7 +109,7 @@ const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
 pub(crate) struct TcpWriteStream {
     stream: HostTcpSocketInner,
-    write_handle: Option<tokio::task::JoinHandle<anyhow::Result<()>>>,
+    write_handle: Option<AbortOnDropJoinHandle<anyhow::Result<()>>>,
 }
 
 impl TcpWriteStream {
@@ -126,23 +126,18 @@ impl TcpWriteStream {
         assert!(self.write_handle.is_none());
 
         let stream = self.stream.clone();
-        self.write_handle.replace(tokio::spawn(async move {
-            while !bytes.is_empty() {
-                stream.tcp_socket().writable().await?;
-                let n = stream.tcp_socket().try_write(&bytes)?;
-                let _ = bytes.split_to(n);
-            }
+        self.write_handle.replace(
+            tokio::spawn(async move {
+                while !bytes.is_empty() {
+                    stream.tcp_socket().writable().await?;
+                    let n = stream.tcp_socket().try_write(&bytes)?;
+                    let _ = bytes.split_to(n);
+                }
 
-            Ok(())
-        }));
-    }
-}
-
-impl Drop for TcpWriteStream {
-    fn drop(&mut self) {
-        if let Some(handle) = self.write_handle.take() {
-            handle.abort();
-        }
+                Ok(())
+            })
+            .into(),
+        );
     }
 }
 
