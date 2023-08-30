@@ -45,7 +45,7 @@
 ;;   ugt a3,a0,a3##ty=i64
 ;;   ld a2,0(a2)
 ;;   add a2,a2,a0
-;;   auipc a4,0; ld a4,12(a4); j 12; .8byte 0xffff0000
+;;   ld a4,[const(0)]
 ;;   add a2,a2,a4
 ;;   li a4,0
 ;;   andi t3,a3,255
@@ -66,7 +66,7 @@
 ;;   ugt a2,a0,a2##ty=i64
 ;;   ld a1,0(a1)
 ;;   add a1,a1,a0
-;;   auipc a3,0; ld a3,12(a3); j 12; .8byte 0xffff0000
+;;   ld a3,[const(0)]
 ;;   add a1,a1,a3
 ;;   li a3,0
 ;;   andi t3,a2,255

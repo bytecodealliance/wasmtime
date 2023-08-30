@@ -10,12 +10,9 @@
       (rd WritableReg)
       (imm Imm20))
 
-    (LoadConst32
+    (LoadInlineConst
       (rd WritableReg)
-      (imm u32))
-
-    (LoadConst64
-      (rd WritableReg)
+      (ty Type)
       (imm u64))
 
      (Auipc
@@ -1525,6 +1522,7 @@
 ;; Immediate Loading rules
 ;; TODO: Loading the zero reg directly causes a bunch of regalloc errors, we should look into it.
 ;; TODO: We can load constants like 0x3ff0000000000000 by loading the bits then doing a shift left.
+;; TODO: Load floats using `fld` instead of `ld`
 (decl imm (Type u64) Reg)
 
 ;; Refs get loaded as integers.
@@ -1553,10 +1551,12 @@
   (if-let (i64_generate_imm imm20 imm12) (i64_sextend_u64 ty c))
   (rv_addi (rv_lui imm20) imm12))
 
-;; Otherwise we fall back to loading the immediate from memory
-;; TODO: This doesen't yet emit the constant into the memory pool, but it would
-;; be pretty neat if it did.
-(rule 0 (imm (ty_int ty) c) (emit_load_const_64 c))
+;; Otherwise we fall back to loading the immediate from the constant pool.
+(rule 0 (imm (ty_int ty) c)
+  (emit_load
+    (LoadOP.Ld)
+    (mem_flags_trusted)
+    (gen_const_amode (emit_u64_le_const c))))
 
 ;; Imm12 Rules
 
@@ -1679,10 +1679,6 @@
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
-
-(decl pack_float_rounding_mode (FRM) OptionFloatRoundingMode)
-(extern constructor pack_float_rounding_mode pack_float_rounding_mode)
-
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl fpu_rrr (FpuOPRRR Type Reg Reg) Reg)
 (rule (fpu_rrr op ty src1 src2)
@@ -1714,12 +1710,6 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src (imm12_zero)))))
         dst))
 
-;; Helper for emitting the `LoadConst64` instruction.
-(decl emit_load_const_64 (u64) XReg)
-(rule (emit_load_const_64 imm)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.LoadConst64 dst imm))))
-        dst))
 
 ;; Helper for emitting the `Lui` instruction.
 ;; TODO: This should be something like `emit_u_type`. And should share the
@@ -2298,24 +2288,28 @@
 (decl gen_const_amode (VCodeConstant) AMode)
 (extern constructor gen_const_amode gen_const_amode)
 
-(decl offset32_imm (i32) Offset32)
-(extern constructor offset32_imm offset32_imm)
+
+;; Returns a canonical type for a LoadOP. We only return I64 or F64.
+(decl load_op_reg_type (LoadOP) Type)
+(rule 1 (load_op_reg_type (LoadOP.Fld)) $F64)
+(rule 1 (load_op_reg_type (LoadOP.Flw)) $F64)
+(rule 0 (load_op_reg_type _) $I64)
+
+(decl emit_load (LoadOP MemFlags AMode) Reg)
+(rule (emit_load op flags from)
+      (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
+            (_ Unit (emit (MInst.Load dst op flags from))))
+        dst))
 
 ;; helper function to load from memory.
 (decl gen_load (Reg Offset32 LoadOP MemFlags Type) Reg)
-(rule
-  (gen_load p offset op flags ty)
-  (let
-    ((tmp WritableReg (temp_writable_reg ty))
-      (_ Unit (emit (MInst.Load tmp op flags (gen_amode p offset $I64)))))
-    tmp))
+(rule (gen_load p offset op flags ty)
+  (emit_load op flags (gen_amode p offset $I64)))
 
 (decl gen_load_128 (Reg Offset32 MemFlags) ValueRegs)
-(rule
-  (gen_load_128 p offset flags)
-  (let
-    ((low Reg (gen_load p offset (LoadOP.Ld) flags $I64))
-      (high Reg (gen_load p (offset32_add offset 8) (LoadOP.Ld) flags $I64)))
+(rule (gen_load_128 p offset flags)
+  (let ((low Reg (gen_load p offset (LoadOP.Ld) flags $I64))
+        (high Reg (gen_load p (offset32_add offset 8) (LoadOP.Ld) flags $I64)))
     (value_regs low high)))
 
 (decl default_memflags () MemFlags)

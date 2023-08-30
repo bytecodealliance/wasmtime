@@ -227,16 +227,23 @@ impl Inst {
     pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
         let insts = Inst::load_const_imm(rd, value);
         insts.unwrap_or_else(|| {
-            smallvec![Inst::LoadConst32 {
+            smallvec![Inst::LoadInlineConst {
                 rd,
-                imm: value as u32
+                ty: I32,
+                imm: value
             }]
         })
     }
 
     pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
         let insts = Inst::load_const_imm(rd, value);
-        insts.unwrap_or_else(|| smallvec![Inst::LoadConst64 { rd, imm: value }])
+        insts.unwrap_or_else(|| {
+            smallvec![Inst::LoadInlineConst {
+                rd,
+                ty: I64,
+                imm: value
+            }]
+        })
     }
 
     pub(crate) fn construct_auipc_and_jalr(
@@ -377,8 +384,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
-        &Inst::LoadConst32 { rd, .. } => collector.reg_def(rd),
-        &Inst::LoadConst64 { rd, .. } => collector.reg_def(rd),
+        &Inst::LoadInlineConst { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
@@ -958,7 +964,7 @@ impl MachInst for Inst {
 
     fn worst_case_size() -> CodeOffset {
         // calculate by test function riscv64_worst_case_instruction_size()
-        116
+        124
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
@@ -1371,16 +1377,7 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
-            &Inst::LoadConst32 { rd, imm } => {
-                let rd = format_reg(rd.to_reg(), allocs);
-                let mut buf = String::new();
-                write!(&mut buf, "auipc {},0; ", rd).unwrap();
-                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
-                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 4).unwrap();
-                write!(&mut buf, ".4byte 0x{:x}", imm).unwrap();
-                buf
-            }
-            &Inst::LoadConst64 { rd, imm } => {
+            &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let mut buf = String::new();
                 write!(&mut buf, "auipc {},0; ", rd).unwrap();

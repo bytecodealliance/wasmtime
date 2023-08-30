@@ -379,18 +379,15 @@ block0(v0: i64):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
-;   auipc t6, 0
-;   ld t6, 0xc(t6)
-;   j 0xc
-;   .byte 0x80, 0x1a, 0x06, 0x00
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   lui t6, 0x62
+;   addi t6, t6, -0x580
 ;   add t6, t6, a0
 ;   ld t6, 0(t6)
 ;   addi t6, t6, 0x20
 ;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   addi sp, sp, -0x20
-; block1: ; offset 0x3c
+; block1: ; offset 0x30
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
