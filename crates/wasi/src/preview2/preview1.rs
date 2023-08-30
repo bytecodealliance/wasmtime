@@ -75,12 +75,8 @@ impl BlockingMode {
         use streams::Host;
 
         let n = match self {
-            BlockingMode::Blocking => Host::blocking_check_write(host, output_stream)
-                .await
-                .map_err(|e| types::Error::trap(e.into()))?,
-            BlockingMode::NonBlocking => Host::check_write(host, output_stream)
-                .await
-                .map_err(|e| types::Error::trap(e.into()))?,
+            BlockingMode::Blocking => Host::blocking_check_write(host, output_stream).await?,
+            BlockingMode::NonBlocking => Host::check_write(host, output_stream).await?,
         };
         let len = bytes.len().min(n as usize);
 
@@ -89,13 +85,9 @@ impl BlockingMode {
         if len == 0 {
             return Ok(0);
         }
-        Host::write(host, output_stream, bytes[..len].to_vec())
-            .await
-            .map_err(|e| types::Error::trap(e.into()))?;
 
-        Host::flush(host, output_stream)
-            .await
-            .map_err(|e| types::Error::trap(e.into()))?;
+        Host::write(host, output_stream, bytes[..len].to_vec()).await?;
+        Host::blocking_flush(host, output_stream).await?;
 
         Ok(len)
     }
@@ -513,6 +505,18 @@ mod sync {
 impl wiggle::GuestErrorType for types::Errno {
     fn success() -> Self {
         Self::Success
+    }
+}
+
+impl From<streams::Error> for types::Error {
+    fn from(err: streams::Error) -> Self {
+        match err.downcast() {
+            Ok(streams::WriteError::Closed | streams::WriteError::LastOperationFailed) => {
+                types::Errno::Io.into()
+            }
+
+            Err(t) => types::Error::trap(t),
+        }
     }
 }
 
