@@ -666,6 +666,8 @@ impl MachInstEmit for Inst {
                 let offset = from.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_i64(offset);
 
+                // TODO: We shouldn't just fall back to `LoadAddr` immediately. For `MachLabel`s
+                // we should try to emit the `auipc` and add a relocation on this load.
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
                     (Some(base), Some(imm12)) => (base, imm12),
@@ -693,6 +695,8 @@ impl MachInstEmit for Inst {
                 let offset = to.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_i64(offset);
 
+                // TODO: We shouldn't just fall back to `LoadAddr` immediately. For `MachLabel`s
+                // we should try to emit the `auipc` and add a relocation on this store.
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
                     (Some(base), Some(imm12)) => (base, imm12),
