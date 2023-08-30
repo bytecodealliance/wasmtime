@@ -426,6 +426,7 @@ jobs:
     - uses: abrown/install-openvino-action@v6
       with:
         version: 2022.3.0
+    - run: echo OPENVINO_BUILD_DIR="${{ env.OPENVINO_INSTALL_DIR }}" >> $GITHUB_ENV
 
     # Fix an ICE for now in gcc when compiling zstd with debuginfo (??)
     - run: echo CFLAGS=-g0 >> $GITHUB_ENV
