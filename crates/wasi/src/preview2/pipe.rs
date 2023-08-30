@@ -295,6 +295,8 @@ impl Worker {
                         let mut state = self.state.lock().unwrap();
                         state.write_budget += len;
 
+                        // FIXME: actually writer.flush here!!
+
                         if state.items.is_empty() && state.flush_pending {
                             tracing::debug!("worker marking flush complete");
                             state.flush_pending = false;
