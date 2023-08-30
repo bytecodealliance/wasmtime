@@ -396,17 +396,21 @@ impl<T> LinkerInstance<'_, T> {
     /// along with the representation of the resource that was just destroyed.
     ///
     /// [`Resource<U>`]: crate::component::Resource
+    ///
+    /// # Errors
+    ///
+    /// The provided `dtor` closure returns an error if something goes wrong
+    /// when a guest calls the `dtor` to drop a `Resource<T>` such as
+    /// a runtime trap or a runtime limit being exceeded.
     pub fn resource<U: 'static>(
         &mut self,
         name: &str,
-        dtor: impl Fn(StoreContextMut<'_, T>, u32) + Send + Sync + 'static,
+        dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
         let name = self.strings.intern(name);
         let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, param: u32| {
-                dtor(cx.as_context_mut(), param);
-            },
+            move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
         ));
         self.insert(name, Definition::Resource(ResourceType::host::<U>(), dtor))
     }

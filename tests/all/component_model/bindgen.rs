@@ -120,3 +120,199 @@ mod one_import {
         Ok(())
     }
 }
+
+mod resources_at_world_level {
+    use super::*;
+    use wasmtime::component::Resource;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo
+
+            world resources {
+                resource x {
+                    constructor()
+                }
+
+                export y: func(x: x)
+            }
+        ",
+    });
+
+    #[test]
+    fn run() -> Result<()> {
+        let engine = engine();
+
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "x" (type $x (sub resource)))
+                    (import "[constructor]x" (func $ctor (result (own $x))))
+
+                    (core func $dtor (canon resource.drop $x))
+                    (core func $ctor (canon lower (func $ctor)))
+
+                    (core module $m
+                        (import "" "ctor" (func $ctor (result i32)))
+                        (import "" "dtor" (func $dtor (param i32)))
+
+                        (func (export "x") (param i32)
+                            (call $dtor (local.get 0))
+                            (call $dtor (call $ctor))
+                        )
+                    )
+                    (core instance $i (instantiate $m
+                        (with "" (instance
+                            (export "ctor" (func $ctor))
+                            (export "dtor" (func $dtor))
+                        ))
+                    ))
+                    (func (export "y") (param "x" (own $x))
+                        (canon lift (core func $i "x")))
+                )
+            "#,
+        )?;
+
+        #[derive(Default)]
+        struct MyImports {
+            ctor_hit: bool,
+            drops: usize,
+        }
+
+        impl HostX for MyImports {
+            fn new(&mut self) -> Result<Resource<X>> {
+                self.ctor_hit = true;
+                Ok(Resource::new_own(80))
+            }
+
+            fn drop(&mut self, val: Resource<X>) -> Result<()> {
+                match self.drops {
+                    0 => assert_eq!(val.rep(), 40),
+                    1 => assert_eq!(val.rep(), 80),
+                    _ => unreachable!(),
+                }
+                self.drops += 1;
+                Ok(())
+            }
+        }
+
+        impl ResourcesImports for MyImports {}
+
+        let mut linker = Linker::new(&engine);
+        Resources::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        let mut store = Store::new(&engine, MyImports::default());
+        let (one_import, _) = Resources::instantiate(&mut store, &component, &linker)?;
+        one_import.call_y(&mut store, Resource::new_own(40))?;
+        assert!(store.data().ctor_hit);
+        assert_eq!(store.data().drops, 2);
+        Ok(())
+    }
+}
+
+mod resources_at_interface_level {
+    use super::*;
+    use wasmtime::component::Resource;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo
+
+            interface def {
+                resource x {
+                    constructor()
+                }
+            }
+
+            interface user {
+                use def.{x}
+
+                y: func(x: x)
+            }
+
+            world resources {
+                export user
+            }
+        ",
+    });
+
+    #[test]
+    fn run() -> Result<()> {
+        let engine = engine();
+
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import (interface "foo:foo/def") (instance $i
+                        (export $x "x" (type (sub resource)))
+                        (export "[constructor]x" (func (result (own $x))))
+                    ))
+                    (alias export $i "x" (type $x))
+                    (core func $dtor (canon resource.drop $x))
+                    (core func $ctor (canon lower (func $i "[constructor]x")))
+
+                    (core module $m
+                        (import "" "ctor" (func $ctor (result i32)))
+                        (import "" "dtor" (func $dtor (param i32)))
+
+                        (func (export "x") (param i32)
+                            (call $dtor (local.get 0))
+                            (call $dtor (call $ctor))
+                        )
+                    )
+                    (core instance $i (instantiate $m
+                        (with "" (instance
+                            (export "ctor" (func $ctor))
+                            (export "dtor" (func $dtor))
+                        ))
+                    ))
+                    (func $y (param "x" (own $x))
+                        (canon lift (core func $i "x")))
+
+                    (instance (export (interface "foo:foo/user"))
+                        (export "y" (func $y))
+                    )
+                )
+            "#,
+        )?;
+
+        #[derive(Default)]
+        struct MyImports {
+            ctor_hit: bool,
+            drops: usize,
+        }
+
+        use foo::foo::def::X;
+
+        impl foo::foo::def::HostX for MyImports {
+            fn new(&mut self) -> Result<Resource<X>> {
+                self.ctor_hit = true;
+                Ok(Resource::new_own(80))
+            }
+
+            fn drop(&mut self, val: Resource<X>) -> Result<()> {
+                match self.drops {
+                    0 => assert_eq!(val.rep(), 40),
+                    1 => assert_eq!(val.rep(), 80),
+                    _ => unreachable!(),
+                }
+                self.drops += 1;
+                Ok(())
+            }
+        }
+
+        impl foo::foo::def::Host for MyImports {}
+
+        let mut linker = Linker::new(&engine);
+        Resources::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        let mut store = Store::new(&engine, MyImports::default());
+        let (one_import, _) = Resources::instantiate(&mut store, &component, &linker)?;
+        one_import
+            .foo_foo_user()
+            .call_y(&mut store, Resource::new_own(40))?;
+        assert!(store.data().ctor_hit);
+        assert_eq!(store.data().drops, 2);
+        Ok(())
+    }
+}
