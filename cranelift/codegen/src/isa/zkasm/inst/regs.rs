@@ -142,7 +142,10 @@ pub fn writable_spilltmp_reg2() -> Writable<Reg> {
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 3] = {
         // Registers are A, B, C, D, E.
-        let x_registers: Vec<PReg> = (1..=7).map(|i| PReg::new(i, RegClass::Int)).collect();
+        let x_registers: Vec<PReg> = (5..=7)
+            .chain(10..20)
+            .map(|i| PReg::new(i, RegClass::Int))
+            .collect();
 
         let f_registers: Vec<PReg> = Vec::new();
         // (0..=7)
