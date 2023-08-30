@@ -1,0 +1,23 @@
+start:
+  zkPC + 2 => RR
+  :JMP(function_0)
+  :JMP(finalizeExecution)
+function_0:
+  SP + 1 => SP
+  RR :MSTORE(SP)
+L0:
+  C => E
+  0 + 2 => C
+  0 + 2 => D
+  C => A
+  D :ASSERT
+  :JMP(L1)
+L1:
+  $ => RR :MLOAD(SP)
+  SP - 1 => SP
+  :JMP(RR)
+
+finalizeExecution:
+  ${beforeLast()}  :JMPN(finalizeExecution)
+                   :JMP(start)
+
