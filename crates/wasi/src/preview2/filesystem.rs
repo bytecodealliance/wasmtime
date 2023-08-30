@@ -219,12 +219,22 @@ impl HostOutputStream for FileOutputStream {
         let m = self.mode;
         self.task = Some(AbortOnDropJoinHandle::from(tokio::task::spawn_blocking(
             move || match m {
-                FileOutputMode::Position(p) => {
-                    let _ = f.write_at(buf.as_ref(), p)?; // FIXME: make sure writes all
+                FileOutputMode::Position(mut p) => {
+                    let mut buf = buf;
+                    while !buf.is_empty() {
+                        let nwritten = f.write_at(buf.as_ref(), p)?;
+                        // afterwards buf contains [nwritten, len):
+                        let _ = buf.split_to(nwritten);
+                        p += nwritten as u64;
+                    }
                     Ok(())
                 }
                 FileOutputMode::Append => {
-                    let _ = f.append(buf.as_ref())?; // FIXME: make sure writes all
+                    let mut buf = buf;
+                    while !buf.is_empty() {
+                        let nwritten = f.append(buf.as_ref())?;
+                        let _ = buf.split_to(nwritten);
+                    }
                     Ok(())
                 }
             },
