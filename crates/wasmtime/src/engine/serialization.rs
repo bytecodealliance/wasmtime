@@ -145,8 +145,9 @@ pub fn check_compatible(engine: &Engine, mmap: &MmapVec, expected: ObjectKind) -
     bincode::deserialize::<Metadata>(data)?.check_compatible(engine)
 }
 
-pub fn detect_precompiled(bytes: &[u8]) -> Option<Precompiled> {
-    let obj = File::parse(bytes).ok()?;
+fn detect_precompiled<'data, R: object::ReadRef<'data>>(
+    obj: File<'data, R>,
+) -> Option<Precompiled> {
     match obj.flags() {
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
@@ -160,6 +161,16 @@ pub fn detect_precompiled(bytes: &[u8]) -> Option<Precompiled> {
         } => Some(Precompiled::Component),
         _ => None,
     }
+}
+
+pub fn detect_precompiled_bytes(bytes: &[u8]) -> Option<Precompiled> {
+    detect_precompiled(File::parse(bytes).ok()?)
+}
+
+pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Option<Precompiled>> {
+    let read_cache = object::ReadCache::new(std::fs::File::open(path)?);
+    let obj = File::parse(&read_cache)?;
+    Ok(detect_precompiled(obj))
 }
 
 #[derive(Serialize, Deserialize)]
