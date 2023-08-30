@@ -1377,7 +1377,11 @@ pub mod sync {
                 let result = io::streams::Host::subscribe_to_input_stream(ctx, stream)?;
                 // TODO: necessary until this PR has been merged:
                 // https://github.com/bytecodealliance/wasmtime/pull/6877
-                let _ = poll::poll::Host::poll_oneoff(ctx, vec![result])?;
+                let oneoff_result = poll::poll::Host::poll_oneoff(ctx, vec![result])?;
+                tracing::trace!(
+                    "[module='wasi:poll/poll' function='poll-oneoff'] return result={:?}",
+                    oneoff_result
+                );
                 tracing::trace!(
                     "[module='wasi:io/streams' function='subscribe-to-input-stream'] return result=Ok({:?})",
                     result
@@ -1397,7 +1401,11 @@ pub mod sync {
                 let result = io::streams::Host::subscribe_to_output_stream(ctx, stream)?;
                 // TODO: necessary until this PR has been merged:
                 // https://github.com/bytecodealliance/wasmtime/pull/6877
-                let _ = poll::poll::Host::poll_oneoff(ctx, vec![result])?;
+                let oneoff_result = poll::poll::Host::poll_oneoff(ctx, vec![result])?;
+                tracing::trace!(
+                    "[module='wasi:poll/poll' function='poll-oneoff'] return result={:?}",
+                    oneoff_result
+                );
                 tracing::trace!(
                     "[module='wasi:io/streams' function='subscribe-to-output-stream'] return result=Ok({:?})",
                     result
