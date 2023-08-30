@@ -1071,6 +1071,10 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
+        // Do any optimizations on branches at tail of buffer, as if we had
+        // bound one last label.
+        buffer.optimize_branches(ctrl_plane);
+
         // emission state is not needed anymore, move control plane back out
         *ctrl_plane = state.take_ctrl_plane();
 

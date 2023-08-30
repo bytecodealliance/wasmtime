@@ -848,7 +848,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         //   fixup record referring to that last branch is removed.
     }
 
-    fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
+    pub fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
         if ctrl_plane.get_decision() {
             return;
         }
@@ -1442,10 +1442,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         ctrl_plane: &mut ControlPlane,
     ) -> MachBufferFinalized<Stencil> {
         let _tt = timing::vcode_emit_finish();
-
-        // Do any optimizations on branches at tail of buffer, as if we
-        // had bound one last label.
-        self.optimize_branches(ctrl_plane);
 
         self.finish_emission_maybe_forcing_veneers(ForceVeneers::No, ctrl_plane);
 
