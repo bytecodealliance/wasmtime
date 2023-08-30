@@ -1265,8 +1265,14 @@ impl MachInstEmit for Inst {
                         .emit(&[], sink, emit_info, state);
                     }
                     (_, Some(rs), None) => {
-                        LoadConstant::U64(offset as u64)
-                            .load_constant_and_add(rd, rs)
+                        let mut insts = Inst::load_constant_u64(rd, offset as u64);
+                        insts.push(Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Addi,
+                            rd,
+                            rs,
+                            imm12: Imm12::zero(),
+                        });
+                        insts
                             .into_iter()
                             .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                     }
