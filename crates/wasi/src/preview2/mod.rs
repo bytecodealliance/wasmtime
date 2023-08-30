@@ -179,6 +179,15 @@ impl<T> From<tokio::task::JoinHandle<T>> for AbortOnDropJoinHandle<T> {
         AbortOnDropJoinHandle(jh)
     }
 }
+impl<T> std::future::Future for AbortOnDropJoinHandle<T> {
+    type Output = Result<T, tokio::task::JoinError>;
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        std::pin::Pin::new(&mut self.as_mut().0).poll(cx)
+    }
+}
 
 pub(crate) fn spawn<F, G>(f: F) -> AbortOnDropJoinHandle<G>
 where

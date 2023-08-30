@@ -1,5 +1,6 @@
 use crate::preview2::{
-    HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState, Table, TableError,
+    AbortOnDropJoinHandle, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
+    Table, TableError,
 };
 use anyhow::{anyhow, Context};
 use bytes::{Bytes, BytesMut};
@@ -175,7 +176,7 @@ pub(crate) enum FileOutputMode {
 pub(crate) struct FileOutputStream {
     file: Arc<cap_std::fs::File>,
     mode: FileOutputMode,
-    task: Option<tokio::task::JoinHandle<Result<(), std::io::Error>>>,
+    task: Option<AbortOnDropJoinHandle<Result<(), std::io::Error>>>,
     closed: bool,
 }
 impl FileOutputStream {
@@ -216,16 +217,18 @@ impl HostOutputStream for FileOutputStream {
         }
         let f = Arc::clone(&self.file);
         let m = self.mode;
-        self.task = Some(tokio::task::spawn_blocking(move || match m {
-            FileOutputMode::Position(p) => {
-                let _ = f.write_at(buf.as_ref(), p)?; // FIXME: make sure writes all
-                Ok(())
-            }
-            FileOutputMode::Append => {
-                let _ = f.append(buf.as_ref())?; // FIXME: make sure writes all
-                Ok(())
-            }
-        }));
+        self.task = Some(AbortOnDropJoinHandle::from(tokio::task::spawn_blocking(
+            move || match m {
+                FileOutputMode::Position(p) => {
+                    let _ = f.write_at(buf.as_ref(), p)?; // FIXME: make sure writes all
+                    Ok(())
+                }
+                FileOutputMode::Append => {
+                    let _ = f.append(buf.as_ref())?; // FIXME: make sure writes all
+                    Ok(())
+                }
+            },
+        )));
         Ok(())
     }
     fn flush(&mut self) -> Result<(), OutputStreamError> {
