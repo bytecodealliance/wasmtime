@@ -419,10 +419,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // Adjust the stack pointer downward for clobbers and the function fixed
         // frame (spillslots and storage slots).
         let stack_size = fixed_frame_storage_size + clobbered_size;
+        // Each stack slot is 256 bit and can fit 8 u32 values.
+        let stack_size = stack_size / 8;
         // Store each clobbered register in order at offsets from SP,
         // placing them above the fixed frame slots.
         if stack_size > 0 {
-            let mut cur_offset = 8;
+            let mut cur_offset = 1;
             for reg in clobbered_callee_saves {
                 let r_reg = reg.to_reg();
                 let ty = match r_reg.class() {
@@ -435,7 +437,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     real_reg_to_reg(reg.to_reg()),
                     ty,
                 ));
-                cur_offset += 8
+                cur_offset += 1
             }
             insts.push(Inst::AdjustSp {
                 amount: -(stack_size as i64),
@@ -456,12 +458,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let clobbered_callee_saves =
             Self::get_clobbered_callee_saves(call_conv, _flags, sig, clobbers);
         let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
+        // Each stack slot is 256 bit and can fit 8 u32 values.
+        let stack_size = stack_size / 8;
         if stack_size > 0 {
             insts.push(Inst::AdjustSp {
                 amount: stack_size as i64,
             });
         }
-        let mut cur_offset = 8;
+        let mut cur_offset = 1;
         for reg in &clobbered_callee_saves {
             let rreg = reg.to_reg();
             let ty = match rreg.class() {
@@ -474,7 +478,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 Writable::from_reg(real_reg_to_reg(reg.to_reg())),
                 ty,
             ));
-            cur_offset += 8
+            cur_offset += 1
         }
         insts
     }
@@ -699,11 +703,12 @@ impl Riscv64ABICallSite {
     }
 }
 
+// TODO(akashin): Figure out the correct clobbering convention.
 const CALLEE_SAVE_X_REG: [bool; 32] = [
-    false, false, true, false, false, false, false, false, // 0-7
-    true, true, false, false, false, false, false, false, // 8-15
-    false, false, true, true, true, true, true, true, // 16-23
-    true, true, true, true, false, false, false, false, // 24-31
+    false, false, false, false, false, false, false, false, // 0-7
+    false, false, false, false, false, false, false, false, // 8-15
+    false, false, false, false, false, false, false, false, // 16-23
+    false, false, false, false, false, false, false, false, // 24-31
 ];
 const CALLEE_SAVE_F_REG: [bool; 32] = [
     false, false, false, false, false, false, false, false, // 0-7
