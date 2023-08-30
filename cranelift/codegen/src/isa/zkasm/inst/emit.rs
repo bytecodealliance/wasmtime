@@ -506,6 +506,15 @@ fn put_string(s: &str, sink: &mut MachBuffer<Inst>) {
     sink.put_data(s.as_bytes());
 }
 
+fn access_reg_with_offset(reg: Reg, offset: i16) -> String {
+    let name = reg_name(reg);
+    match offset.cmp(&0) {
+        core::cmp::Ordering::Less => format!("{name} - {}", -offset),
+        core::cmp::Ordering::Equal => name,
+        core::cmp::Ordering::Greater => format!("{name} + {}", offset),
+    }
+}
+
 #[allow(unused)]
 impl MachInstEmit for Inst {
     type State = EmitState;
@@ -767,10 +776,9 @@ impl MachInstEmit for Inst {
                 };
                 put_string(
                     &format!(
-                        "$ => {} :MLOAD({} + {})\n",
+                        "$ => {} :MLOAD({})\n",
                         reg_name(rd.to_reg()),
-                        reg_name(addr),
-                        imm12.bits,
+                        access_reg_with_offset(addr, imm12.bits),
                     ),
                     sink,
                 );
@@ -803,10 +811,9 @@ impl MachInstEmit for Inst {
                 };
                 put_string(
                     &format!(
-                        "{} :MSTORE({} + {})\n",
+                        "{} :MSTORE({})\n",
                         reg_name(src),
-                        reg_name(addr),
-                        imm12.bits
+                        access_reg_with_offset(addr, imm12.bits),
                     ),
                     sink,
                 );
@@ -1094,7 +1101,10 @@ impl MachInstEmit for Inst {
                 debug_assert_eq!(kind.rs2, zero_reg());
                 match taken {
                     BranchTarget::Label(label) => {
-                        put_string(&format!("{} :JMPZ(L{})\n", reg_name(kind.rs1), label.index()), sink);
+                        put_string(
+                            &format!("{} :JMPZ(L{})\n", reg_name(kind.rs1), label.index()),
+                            sink,
+                        );
 
                         // let code = kind.emit();
                         // let code_inverse = kind.inverse().emit().to_le_bytes();
