@@ -17,9 +17,9 @@ block0(v0: f32x4):
 ; block0:
 ;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vfabs.v v4,v1 #avl=4, #vtype=(e32, m1, ta, ma)
-;   lui a4,307200
-;   fmv.w.x ft7,a4
-;   vmflt.vf v0,v4,ft7 #avl=4, #vtype=(e32, m1, ta, ma)
+;   lui a3,307200
+;   fmv.w.x fa0,a3
+;   vmflt.vf v0,v4,fa0 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vfcvt.rtz.x.f.v v12,v1 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vfcvt.f.x.v v14,v12 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vfsgnj.vv v16,v14,v1 #avl=4, #vtype=(e32, m1, ta, ma)
@@ -44,9 +44,9 @@ block0(v0: f32x4):
 ;   .byte 0x87, 0x80, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x02, 0xcd
 ;   .byte 0x57, 0x92, 0x10, 0x2a
-;   lui a4, 0x4b000
-;   fmv.w.x ft7, a4
-;   .byte 0x57, 0xd0, 0x43, 0x6e
+;   lui a3, 0x4b000
+;   fmv.w.x fa0, a3
+;   .byte 0x57, 0x50, 0x45, 0x6e
 ;   .byte 0x57, 0x96, 0x13, 0x4a
 ;   .byte 0x57, 0x97, 0xc1, 0x4a
 ;   .byte 0x57, 0x98, 0xe0, 0x22
@@ -74,9 +74,9 @@ block0(v0: f64x2):
 ; block0:
 ;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vfabs.v v4,v1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   auipc a4,0; ld a4,12(a4); j 12; .8byte 0x4330000000000000
-;   fmv.d.x ft7,a4
-;   vmflt.vf v0,v4,ft7 #avl=2, #vtype=(e64, m1, ta, ma)
+;   ld a3,[const(0)]
+;   fmv.d.x fa0,a3
+;   vmflt.vf v0,v4,fa0 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vfcvt.rtz.x.f.v v12,v1 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vfcvt.f.x.v v14,v12 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vfsgnj.vv v16,v14,v1 #avl=2, #vtype=(e64, m1, ta, ma)
@@ -101,13 +101,11 @@ block0(v0: f64x2):
 ;   .byte 0x87, 0x80, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x92, 0x10, 0x2a
-;   auipc a4, 0
-;   ld a4, 0xc(a4)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x30, 0x43
-;   fmv.d.x ft7, a4
-;   .byte 0x57, 0xd0, 0x43, 0x6e
+;   auipc t6, 0
+;   addi t6, t6, 0x44
+;   ld a3, 0(t6)
+;   fmv.d.x fa0, a3
+;   .byte 0x57, 0x50, 0x45, 0x6e
 ;   .byte 0x57, 0x96, 0x13, 0x4a
 ;   .byte 0x57, 0x97, 0xc1, 0x4a
 ;   .byte 0x57, 0x98, 0xe0, 0x22
@@ -120,4 +118,6 @@ block0(v0: f64x2):
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x30, 0x43
 
