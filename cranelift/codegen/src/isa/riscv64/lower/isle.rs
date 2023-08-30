@@ -358,6 +358,11 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
+
+    fn frm_bits(&mut self, frm: &FRM) -> UImm5 {
+        UImm5::maybe_from_u8(frm.bits()).unwrap()
+    }
+
     fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
         let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
         self.emit(&MInst::SelectReg {

@@ -331,6 +331,8 @@ impl Inst {
             | Inst::AluRRR { .. }
             | Inst::FpuRRR { .. }
             | Inst::AluRRImm12 { .. }
+            | Inst::CsrReg { .. }
+            | Inst::CsrImm { .. }
             | Inst::Load { .. }
             | Inst::Store { .. }
             | Inst::Args { .. }
@@ -594,6 +596,17 @@ impl MachInstEmit for Inst {
                     | reg_to_gpr_num(rs) << 15
                     | alu_op.imm12(imm12) << 20;
                 sink.put4(x);
+            }
+            &Inst::CsrReg { op, rd, rs, csr } => {
+                let rs = allocs.next(rs);
+                let rd = allocs.next_writable(rd);
+
+                sink.put4(encode_csr_reg(op, rd, rs, csr));
+            }
+            &Inst::CsrImm { op, rd, csr, imm } => {
+                let rd = allocs.next_writable(rd);
+
+                sink.put4(encode_csr_imm(op, rd, csr, imm));
             }
             &Inst::Load {
                 rd,

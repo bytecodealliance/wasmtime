@@ -1652,24 +1652,32 @@
    (gen_bitcast v in_ty out_ty))
 
 ;;;;;  Rules for `ceil`;;;;;;;;;
-(rule
-  (lower (has_type ty (ceil x)))
-  (gen_float_round (FloatRoundOP.Ceil) x ty)
-)
+(rule 0 (lower (has_type (ty_scalar_float ty) (ceil x)))
+  (gen_float_round (FloatRoundOP.Ceil) x ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ceil x)))
+  (gen_vec_round x (FRM.RUP) ty))
 
 ;;;;;  Rules for `floor`;;;;;;;;;
-(rule
-  (lower (has_type ty (floor x)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (floor x)))
   (gen_float_round (FloatRoundOP.Floor) x ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (floor x)))
+  (gen_vec_round x (FRM.RDN) ty))
+
 ;;;;;  Rules for `trunc`;;;;;;;;;
-(rule
-  (lower (has_type ty (trunc x)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (trunc x)))
   (gen_float_round (FloatRoundOP.Trunc) x ty))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (trunc x)))
+  (gen_vec_round x (FRM.RTZ) ty))
+
 ;;;;;  Rules for `nearest`;;;;;;;;;
-(rule
-  (lower (has_type ty (nearest x)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (nearest x)))
   (gen_float_round (FloatRoundOP.Nearest) x ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (nearest x)))
+  (gen_vec_round x (FRM.RNE) ty))
 
 
 ;;;;;  Rules for `select_spectre_guard`;;;;;;;;;

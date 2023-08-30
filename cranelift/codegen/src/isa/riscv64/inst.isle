@@ -59,6 +59,20 @@
       (rs Reg)
       (imm12 Imm12))
 
+    ;; A CSR Reading or Writing instruction with a register source and a register destination.
+    (CsrReg
+      (op CsrRegOP)
+      (rd WritableReg)
+      (rs Reg)
+      (csr CSR))
+
+    ;; A CSR Writing instruction with an immediate source and a register destination.
+    (CsrImm
+      (op CsrImmOP)
+      (rd WritableReg)
+      (imm UImm5)
+      (csr CSR))
+
     ;; An load
     (Load
       (rd WritableReg)
@@ -689,6 +703,30 @@
   (Bseti)
 ))
 
+(type CsrRegOP (enum
+  ;; Atomic Read/Write CSR
+  (CsrRW)
+  ;; Atomic Read and Set Bits in CSR
+  (CsrRS)
+  ;; Atomic Read and Clear Bits in CSR
+  (CsrRC)
+))
+
+(type CsrImmOP (enum
+  ;; Atomic Read/Write CSR (Immediate Source)
+  (CsrRWI)
+  ;; Atomic Read and Set Bits in CSR (Immediate Source)
+  (CsrRSI)
+  ;; Atomic Read and Clear Bits in CSR (Immediate Source)
+  (CsrRCI)
+))
+
+;; Enum of the known CSR registers
+(type CSR (enum
+  ;; Floating-Point Dynamic Rounding Mode
+  (Frm)
+))
+
 
 (type FRM (enum
   ;; Round to Nearest, ties to Even
@@ -705,6 +743,10 @@
   ;;In Rounding Mode register, Invalid.
   (Fcsr)
 ))
+
+(decl pure frm_bits (FRM) UImm5)
+(extern constructor frm_bits frm_bits)
+(convert FRM UImm5 frm_bits)
 
 (type FFlagsException (enum
   ;; Invalid Operation
@@ -1508,6 +1550,30 @@
   (alu_rrr (AluOPRRR.Packw) rs1 rs2))
 
 
+;; `Zicsr` Extension Instructions
+
+;; Helper for emitting the `csrrwi` instruction.
+(decl rv_csrrwi (CSR UImm5) XReg)
+(rule (rv_csrrwi csr imm)
+  (csr_imm (CsrImmOP.CsrRWI) csr imm))
+
+;; This is a special case of `csrrwi` when the CSR is the `frm` CSR.
+(decl rv_fsrmi (FRM) XReg)
+(rule (rv_fsrmi frm) (rv_csrrwi (CSR.Frm) frm))
+
+
+;; Helper for emitting the `csrw` instruction. This is a special case of
+;; `csrrw` where the destination register is always `x0`.
+(decl rv_csrw (CSR XReg) Unit)
+(rule (rv_csrw csr rs)
+  (csr_reg_dst_zero (CsrRegOP.CsrRW) csr rs))
+
+;; This is a special case of `csrw` when the CSR is the `frm` CSR.
+(decl rv_fsrm (XReg) Unit)
+(rule (rv_fsrm rs) (rv_csrw (CSR.Frm) rs))
+
+
+
 
 
 ;; Generate a mask for the bit-width of the given type
@@ -1686,7 +1752,6 @@
             (_ Unit (emit (MInst.FpuRRR op (gen_default_frm) dst src1 src2))))
         dst))
 
-
 ;; Helper for emitting `MInst.FpuRRRR` instructions.
 (decl fpu_rrrr (FpuOPRRRR Type Reg Reg Reg) Reg)
 (rule (fpu_rrrr op ty src1 src2 src3)
@@ -1710,7 +1775,6 @@
             (_ Unit (emit (MInst.AluRRImm12 op dst src (imm12_zero)))))
         dst))
 
-
 ;; Helper for emitting the `Lui` instruction.
 ;; TODO: This should be something like `emit_u_type`. And should share the
 ;; `MInst` with `auipc` since these instructions share the U-Type format.
@@ -1719,6 +1783,18 @@
       (let ((dst WritableXReg (temp_writable_xreg))
             (_ Unit (emit (MInst.Lui dst imm))))
         dst))
+
+;; Helper for emitting `MInst.CsrImm` instructions.
+(decl csr_imm (CsrImmOP CSR UImm5) XReg)
+(rule (csr_imm op csr imm)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.CsrImm op dst imm csr))))
+        dst))
+
+;; Helper for emitting a `MInst.CsrReg` instruction that writes the result to x0.
+(decl csr_reg_dst_zero (CsrRegOP CSR XReg) Unit)
+(rule (csr_reg_dst_zero op csr rs)
+      (emit (MInst.CsrReg op (writable_zero_reg) rs csr)))
 
 
 
