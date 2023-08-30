@@ -226,3 +226,32 @@ pub extern "C" fn wasmtime_config_dynamic_memory_reserved_for_growth_set(
 pub extern "C" fn wasmtime_config_native_unwind_info_set(c: &mut wasm_config_t, enabled: bool) {
     c.config.native_unwind_info(enabled);
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_config_target_set(
+    c: &mut wasm_config_t,
+    target: *const c_char,
+) -> Option<Box<wasmtime_error_t>> {
+    let target = CStr::from_ptr(target).to_str().expect("not valid utf-8");
+    handle_result(c.config.target(target), |_cfg| {})
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_config_cranelift_flag_enable(
+    c: &mut wasm_config_t,
+    flag: *const c_char,
+) {
+    let flag = CStr::from_ptr(flag).to_str().expect("not valid utf-8");
+    c.config.cranelift_flag_enable(flag);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_config_cranelift_flag_set(
+    c: &mut wasm_config_t,
+    flag: *const c_char,
+    value: *const c_char,
+) {
+    let flag = CStr::from_ptr(flag).to_str().expect("not valid utf-8");
+    let value = CStr::from_ptr(value).to_str().expect("not valid utf-8");
+    c.config.cranelift_flag_set(flag, value);
+}
