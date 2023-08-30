@@ -6,9 +6,13 @@
 
   (global $a i32 (i32.const -2))
   (global $b i64 (i64.const -5))
+  (global $3 f32 (f32.const -3))
+  (global $4 f64 (f64.const -4))
 
   (global $x (mut i32) (i32.const -12))
   (global $y (mut i64) (i64.const -15))
+  (global $7 (mut f32) (f32.const -13))
+  (global $8 (mut f64) (f64.const -14))
 
   (global $z1 i32 (global.get 0))
   (global $z2 i64 (global.get 1))
@@ -21,6 +25,13 @@
   (func (export "get-z2") (result i64) (global.get $z2))
   (func (export "set-x") (param i32) (global.set $x (local.get 0)))
   (func (export "set-y") (param i64) (global.set $y (local.get 0)))
+
+  (func (export "get-3") (result f32) (global.get $3))
+  (func (export "get-4") (result f64) (global.get $4))
+  (func (export "get-7") (result f32) (global.get $7))
+  (func (export "get-8") (result f64) (global.get $8))
+  (func (export "set-7") (param f32) (global.set $7 (local.get 0)))
+  (func (export "set-8") (param f64) (global.set $8 (local.get 0)))
 
   ;; As the argument of control constructs and instructions
 
@@ -82,6 +93,11 @@
   (func (export "as-return-value") (result i32)
     (global.get $x) (return)
   )
+
+  (func (export "as-drop-operand")
+    (drop (global.get $x))
+  )
+
   (func (export "as-br-value") (result i32)
     (block (result i32) (br 0 (global.get $x)))
   )
@@ -152,3 +168,13 @@
 (assert_return (invoke "as-unary-operand") (i32.const 0))
 (assert_return (invoke "as-binary-operand") (i32.const 36))
 (assert_return (invoke "as-compare-operand") (i32.const 1))
+
+(assert_return (invoke "get-3") (f32.const -3))
+(assert_return (invoke "get-4") (f64.const -4))
+(assert_return (invoke "get-7") (f32.const -13))
+(assert_return (invoke "get-8") (f64.const -14))
+(assert_return (invoke "set-7" (f32.const 8)))
+(assert_return (invoke "set-8" (f64.const 9)))
+(assert_return (invoke "get-7") (f32.const 8))
+(assert_return (invoke "get-8") (f64.const 9))
+(assert_return (invoke "as-drop-operand"))

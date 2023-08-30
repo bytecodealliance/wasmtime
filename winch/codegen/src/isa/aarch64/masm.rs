@@ -5,7 +5,7 @@ use crate::{
     isa::reg::Reg,
     masm::{
         CalleeKind, CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm,
-        RemKind, ShiftKind,
+        RemKind, ShiftKind, StackSlot,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -135,7 +135,7 @@ impl Masm for MacroAssembler {
         self.asm.ldr(src, dst, size);
     }
 
-    fn pop(&mut self, _dst: Reg) {
+    fn pop(&mut self, _dst: Reg, _size: OperandSize) {
         todo!()
     }
 
@@ -165,6 +165,10 @@ impl Masm for MacroAssembler {
             }
             _ => Self::handle_invalid_two_form_operand_combination(src, dst),
         }
+    }
+
+    fn cmov(&mut self, _src: Reg, _dst: Reg, _cc: CmpKind, _size: OperandSize) {
+        todo!()
     }
 
     fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
@@ -256,13 +260,16 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn push(&mut self, reg: Reg) -> u32 {
+    fn push(&mut self, reg: Reg, _size: OperandSize) -> StackSlot {
         let size = <Self::ABI as abi::ABI>::word_bytes();
         self.reserve_stack(size);
         let address = Address::from_shadow_sp(size as i64);
         self.asm.str(reg, address, OperandSize::S64);
 
-        self.sp_offset
+        StackSlot {
+            offset: self.sp_offset,
+            size,
+        }
     }
 
     fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address {

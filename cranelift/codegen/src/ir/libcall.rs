@@ -7,7 +7,7 @@ use crate::{
 use core::fmt;
 use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// The name of a runtime library routine.
 ///

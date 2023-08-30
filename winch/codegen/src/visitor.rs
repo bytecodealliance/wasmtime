@@ -8,8 +8,8 @@ use crate::abi::ABI;
 use crate::codegen::CodeGen;
 use crate::codegen::ControlStackFrame;
 use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, ShiftKind};
-use crate::stack::Val;
-use wasmparser::{BlockType, VisitOperator};
+use crate::stack::{TypedReg, Val};
+use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
 use wasmtime_environ::{FuncIndex, GlobalIndex, WasmType};
 
 /// A macro to define unsupported WebAssembly operators.
@@ -35,6 +35,8 @@ macro_rules! def_unsupported {
 
     (emit I32Const $($rest:tt)*) => {};
     (emit I64Const $($rest:tt)*) => {};
+    (emit F32Const $($rest:tt)*) => {};
+    (emit F64Const $($rest:tt)*) => {};
     (emit I32Add $($rest:tt)*) => {};
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
@@ -109,6 +111,8 @@ macro_rules! def_unsupported {
     (emit LocalTee $($rest:tt)*) => {};
     (emit GlobalGet $($rest:tt)*) => {};
     (emit GlobalSet $($rest:tt)*) => {};
+    (emit Select $($rest:tt)*) => {};
+    (emit Drop $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -125,6 +129,14 @@ where
 
     fn visit_i64_const(&mut self, val: i64) {
         self.context.stack.push(Val::i64(val));
+    }
+
+    fn visit_f32_const(&mut self, val: Ieee32) {
+        self.context.stack.push(Val::f32(val));
+    }
+
+    fn visit_f64_const(&mut self, val: Ieee64) {
+        self.context.stack.push(Val::f64(val));
     }
 
     fn visit_i32_add(&mut self) {
@@ -303,7 +315,7 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
-            masm.cmp_with_set(RegImm::i64(0), reg.into(), CmpKind::Eq, size);
+            masm.cmp_with_set(RegImm::i32(0), reg.into(), CmpKind::Eq, size);
         });
     }
 
@@ -484,13 +496,14 @@ where
     }
 
     fn visit_local_get(&mut self, index: u32) {
+        use WasmType::*;
         let context = &mut self.context;
         let slot = context
             .frame
             .get_local(index)
-            .expect(&format!("valid local at slot = {}", index));
+            .unwrap_or_else(|| panic!("valid local at slot = {}", index));
         match slot.ty {
-            WasmType::I32 | WasmType::I64 => context.stack.push(Val::local(index)),
+            I32 | I64 | F32 | F64 => context.stack.push(Val::local(index, slot.ty)),
             _ => panic!("Unsupported type {:?} for local", slot.ty),
         }
     }
@@ -498,7 +511,7 @@ where
     // TODO verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
         let src = self.context.set_local(self.masm, index);
-        self.context.regalloc.free_gpr(src);
+        self.context.free_reg(src);
     }
 
     fn visit_call(&mut self, index: u32) {
@@ -556,19 +569,21 @@ where
         let frame = Self::control_at(&mut self.control_frames, depth);
         frame.set_as_target();
         let result = frame.result();
-        let result_reg = self.context.gpr(result.result_reg(), self.masm);
-        let top = self.context.pop_to_reg(self.masm, None, OperandSize::S32);
-        self.context.free_gpr(result_reg);
+        let top =
+            self.context
+                .without::<TypedReg, M, _>(result.result_reg(), self.masm, |ctx, masm| {
+                    ctx.pop_to_reg(masm, None)
+                });
         self.context.pop_abi_results(result, self.masm);
         self.context.push_abi_results(result, self.masm);
         self.masm.branch(
             CmpKind::Ne,
-            top.into(),
-            top.into(),
+            top.reg.into(),
+            top.reg.into(),
             *frame.label(),
             OperandSize::S32,
         );
-        self.context.free_gpr(top);
+        self.context.free_reg(top);
     }
 
     fn visit_return(&mut self) {
@@ -598,8 +613,8 @@ where
     }
 
     fn visit_local_tee(&mut self, index: u32) {
-        let src = self.context.set_local(self.masm, index);
-        self.context.stack.push(Val::reg(src));
+        let typed_reg = self.context.set_local(self.masm, index);
+        self.context.stack.push(typed_reg.into());
     }
 
     fn visit_global_get(&mut self, global_index: u32) {
@@ -608,9 +623,9 @@ where
         let addr = self
             .masm
             .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
-        let dst = self.context.any_gpr(self.masm);
+        let dst = self.context.reg_for_type(ty, self.masm);
         self.masm.load(addr, dst, ty.into());
-        self.context.stack.push(Val::reg(dst));
+        self.context.stack.push(Val::reg(dst, ty));
     }
 
     fn visit_global_set(&mut self, global_index: u32) {
@@ -619,9 +634,32 @@ where
         let addr = self
             .masm
             .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
-        let reg = self.context.pop_to_reg(self.masm, None, ty.into());
-        self.context.free_gpr(reg);
-        self.masm.store(reg.into(), addr, ty.into());
+        let typed_reg = self.context.pop_to_reg(self.masm, None);
+        self.context.free_reg(typed_reg.reg);
+        self.masm.store(typed_reg.reg.into(), addr, ty.into());
+    }
+
+    fn visit_drop(&mut self) {
+        self.context.drop_last(1, |regalloc, val| match val {
+            Val::Reg(tr) => regalloc.free(tr.reg.into()),
+            Val::Memory(m) => self.masm.free_stack(m.slot.size),
+            _ => {}
+        });
+    }
+
+    fn visit_select(&mut self) {
+        let cond = self.context.pop_to_reg(self.masm, None);
+        let val2 = self.context.pop_to_reg(self.masm, None);
+        let val1 = self.context.pop_to_reg(self.masm, None);
+        self.masm
+            .cmp(RegImm::i32(0), cond.reg.into(), OperandSize::S32);
+        // Conditionally move val1 to val2 if the the comparision is
+        // not zero.
+        self.masm
+            .cmov(val1.into(), val2.into(), CmpKind::Ne, val1.ty.into());
+        self.context.stack.push(val2.into());
+        self.context.free_reg(val1.reg);
+        self.context.free_reg(cond);
     }
 
     wasmparser::for_each_operator!(def_unsupported);
@@ -648,8 +686,8 @@ where
 impl From<WasmType> for OperandSize {
     fn from(ty: WasmType) -> OperandSize {
         match ty {
-            WasmType::I32 => OperandSize::S32,
-            WasmType::I64 => OperandSize::S64,
+            WasmType::I32 | WasmType::F32 => OperandSize::S32,
+            WasmType::I64 | WasmType::F64 => OperandSize::S64,
             ty => todo!("unsupported type {:?}", ty),
         }
     }

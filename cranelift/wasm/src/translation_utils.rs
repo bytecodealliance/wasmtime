@@ -4,8 +4,6 @@ use crate::WasmResult;
 use core::u32;
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-#[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
 use wasmparser::{FuncValidator, WasmFuncType, WasmModuleResources};
 
 /// Get the parameter and result types for the given Wasm blocktype.

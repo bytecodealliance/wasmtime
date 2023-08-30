@@ -825,7 +825,6 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Variant(variant) => self.type_variant(id, name, variant, &ty.docs),
             TypeDefKind::Option(t) => self.type_option(id, name, t, &ty.docs),
             TypeDefKind::Result(r) => self.type_result(id, name, r, &ty.docs),
-            TypeDefKind::Union(u) => self.type_union(id, name, u, &ty.docs),
             TypeDefKind::List(t) => self.type_list(id, name, t, &ty.docs),
             TypeDefKind::Type(t) => self.type_alias(id, name, t, &ty.docs),
             TypeDefKind::Future(_) => todo!("generate for future"),
@@ -1022,16 +1021,6 @@ impl<'a> InterfaceGenerator<'a> {
             }),
             docs,
             "variant",
-        );
-    }
-
-    fn type_union(&mut self, id: TypeId, _name: &str, union: &Union, docs: &Docs) {
-        self.print_rust_enum(
-            id,
-            std::iter::zip(self.union_case_names(union), &union.cases)
-                .map(|(name, case)| (name, None, &case.docs, Some(&case.ty))),
-            docs,
-            "union",
         );
     }
 

@@ -42,8 +42,8 @@
 ;; function u0:0:
 ;; block0:
 ;;   ld t4,8(a2)
-;;   lui t0,1048575
-;;   addi t0,t0,4092
+;;   lui t3,1048575
+;;   addi t0,t3,4092
 ;;   add t4,t4,t0
 ;;   ugt t4,a0,t4##ty=i64
 ;;   bne t4,zero,taken(label3),not_taken(label1)
@@ -62,8 +62,8 @@
 ;; function u0:1:
 ;; block0:
 ;;   ld t4,8(a1)
-;;   lui t0,1048575
-;;   addi t0,t0,4092
+;;   lui t3,1048575
+;;   addi t0,t3,4092
 ;;   add t4,t4,t0
 ;;   ugt t4,a0,t4##ty=i64
 ;;   bne t4,zero,taken(label3),not_taken(label1)

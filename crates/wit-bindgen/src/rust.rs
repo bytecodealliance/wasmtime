@@ -1,7 +1,5 @@
 use crate::{types::TypeInfo, Ownership};
 use heck::*;
-use std::collections::HashMap;
-use std::fmt::Write;
 use wit_parser::*;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -112,7 +110,6 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Flags(_)
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
-                    | TypeDefKind::Union(_)
                     | TypeDefKind::Handle(_)
                     | TypeDefKind::Resource => true,
                     TypeDefKind::Type(Type::Id(t)) => {
@@ -163,9 +160,6 @@ pub trait RustGenerator<'a> {
             }
             TypeDefKind::Enum(_) => {
                 panic!("unsupported anonymous type reference: enum")
-            }
-            TypeDefKind::Union(_) => {
-                panic!("unsupported anonymous type reference: union")
             }
             TypeDefKind::Future(ty) => {
                 self.push_str("Future<");

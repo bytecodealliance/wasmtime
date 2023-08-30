@@ -302,7 +302,7 @@ impl IntegerCompare {
 
     pub(crate) fn inverse(self) -> Self {
         Self {
-            kind: self.kind.inverse(),
+            kind: self.kind.complement(),
             ..self
         }
     }

@@ -8,7 +8,7 @@ mod stack_map;
 pub use self::stack_map::StackMap;
 use core::fmt;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Offset in bytes from the beginning of the function.
 ///

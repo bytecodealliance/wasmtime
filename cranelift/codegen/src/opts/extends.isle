@@ -32,10 +32,3 @@
 ;; actually doing the extend in the first place.
 (rule (simplify (ireduce ty (sextend _ x @ (value_type ty)))) x)
 (rule (simplify (ireduce ty (uextend _ x @ (value_type ty)))) x)
-
-;; {u,s}widen_{low,high}+splat is the same as splat+{u,s}extend
-(rule (simplify (swiden_high wide (splat _ x))) (splat wide (sextend (lane_type wide) x)))
-(rule (simplify (swiden_low wide (splat _ x))) (splat wide (sextend (lane_type wide) x)))
-
-(rule (simplify (uwiden_high wide (splat _ x))) (splat wide (uextend (lane_type wide) x)))
-(rule (simplify (uwiden_low wide (splat _ x))) (splat wide (uextend (lane_type wide) x)))

@@ -12,7 +12,6 @@ use std::iter;
 /// Compute an open addressed, quadratically probed hash table containing
 /// `items`. The returned table is a list containing the elements of the
 /// iterable `items` and `None` in unused slots.
-#[allow(clippy::float_arithmetic)]
 pub fn generate_table<'cont, T, I: iter::Iterator<Item = &'cont T>, H: Fn(&T) -> usize>(
     items: I,
     num_items: usize,

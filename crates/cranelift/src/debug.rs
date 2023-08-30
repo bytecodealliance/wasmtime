@@ -1,7 +1,5 @@
 //! Debug utils for WebAssembly using Cranelift.
 
-#![allow(clippy::cast_ptr_alignment)]
-
 /// Memory definition offset in the VMContext structure.
 #[derive(Debug, Clone)]
 pub enum ModuleMemoryOffset {

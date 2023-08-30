@@ -19,8 +19,8 @@
 ;;    8:	 897c240c             	mov	dword ptr [rsp + 0xc], edi
 ;;    c:	 4c89742404           	mov	qword ptr [rsp + 4], r14
 ;;   11:	 e800000000           	call	0x16
-;;   16:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
-;;   1a:	 85c9                 	test	ecx, ecx
+;;   16:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
+;;   1a:	 85c0                 	test	eax, eax
 ;;   1c:	 0f8500000000         	jne	0x22
 ;;   22:	 4883c410             	add	rsp, 0x10
 ;;   26:	 5d                   	pop	rbp

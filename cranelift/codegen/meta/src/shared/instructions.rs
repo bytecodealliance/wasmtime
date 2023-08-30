@@ -616,7 +616,6 @@ fn define_simd_arithmetic(
     );
 }
 
-#[allow(clippy::many_single_char_names)]
 pub(crate) fn define(
     all_instructions: &mut AllInstructions,
     formats: &Formats,

@@ -21,7 +21,7 @@ use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_environ::{ModuleTranslation, WasmFuncType};
 
-use self::regs::ALL_GPR;
+use self::regs::{ALL_FPR, ALL_GPR};
 
 mod abi;
 mod address;
@@ -100,8 +100,7 @@ impl TargetIsa for X64 {
 
         let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
-        // TODO Add in floating point bitmask
-        let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
+        let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, ALL_FPR), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
         let env = FuncEnv::new(self.pointer_bytes(), translation);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);

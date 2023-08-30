@@ -1,7 +1,7 @@
 use crate::{
     abi::{ABISig, ABI},
     masm::{MacroAssembler, OperandSize},
-    stack::Val,
+    stack::TypedReg,
     CallingConvention,
 };
 use anyhow::Result;
@@ -151,7 +151,14 @@ where
     /// reachabiliy state when handling an unreachable `end` or `else`.
     fn reset_stack(context: &mut CodeGenContext, masm: &mut M, stack_len: usize, sp_offset: u32) {
         masm.reset_stack_pointer(sp_offset);
-        context.drop_last(context.stack.len() - stack_len);
+        // `CodeGenContext::reset_stack` only gets called when
+        // handling unreachable end or unreachable else, so we only
+        // care about freeing any registers in the provided range.
+        context.drop_last(context.stack.len() - stack_len, |regalloc, val| {
+            if val.is_reg() {
+                regalloc.free(val.get_reg().into())
+            }
+        });
     }
 
     fn emit_body(
@@ -261,8 +268,8 @@ where
             // and second arguments.
             let stack = &mut self.context.stack;
             let location = stack.len() - (sig.params().len() - 2);
-            stack.insert(location as usize, Val::reg(caller_vmctx));
-            stack.insert(location as usize, Val::reg(callee_vmctx));
+            stack.insert(location as usize, TypedReg::i64(caller_vmctx).into());
+            stack.insert(location as usize, TypedReg::i64(callee_vmctx).into());
             (
                 <M::ABI as ABI>::sig(&sig, &CallingConvention::Default),
                 Some(callee_addr),
@@ -303,6 +310,7 @@ where
     }
 
     fn spill_register_arguments(&mut self) {
+        use WasmType::*;
         self.sig
             .params
             .iter()
@@ -321,8 +329,7 @@ where
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    WasmType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
-                    WasmType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
+                    I32 | I64 | F32 | F64 => self.masm.store(src.into(), addr, ty.into()),
                     _ => panic!("Unsupported type {:?}", ty),
                 }
             });

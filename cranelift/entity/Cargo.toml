@@ -12,7 +12,8 @@ keywords = ["entity", "set", "map"]
 edition.workspace = true
 
 [dependencies]
-serde = { version = "1.0.94", features = ["derive"], optional = true }
+serde = { version = "1.0.188", optional = true }
+serde_derive = { version = "1.0.188", optional = true }
 
 [features]
-enable-serde = ["serde"]
+enable-serde = ["serde", "serde_derive"]

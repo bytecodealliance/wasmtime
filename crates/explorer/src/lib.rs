@@ -1,6 +1,6 @@
 use anyhow::Result;
 use capstone::arch::BuildsCapstone;
-use serde::Serialize;
+use serde_derive::Serialize;
 use std::{io::Write, str::FromStr};
 
 pub fn generate(

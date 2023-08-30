@@ -4,7 +4,7 @@
 pub use wasmparser;
 
 use cranelift_entity::entity_impl;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::fmt;
 
 mod error;

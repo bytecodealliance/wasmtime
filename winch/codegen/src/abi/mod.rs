@@ -44,6 +44,7 @@
 //! |                               | ----> Space allocated for calls
 //! |                               |
 use crate::isa::{reg::Reg, CallingConvention};
+use crate::masm::OperandSize;
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
 use wasmtime_environ::{WasmFuncType, WasmType};
@@ -98,7 +99,10 @@ pub(crate) trait ABI {
 
     /// Returns the callee-saved registers for the given
     /// calling convention.
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]>;
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]>;
+
+    /// Returns the size of each argument stack slot per argument type.
+    fn stack_arg_slot_size_for_type(ty: WasmType) -> u32;
 }
 
 /// ABI-specific representation of a function argument.
@@ -162,20 +166,20 @@ pub(crate) enum ABIResult {
         /// Type of the result.
         ty: Option<WasmType>,
         /// Register to hold the result.
-        reg: Reg,
+        reg: Option<Reg>,
     },
 }
 
 impl ABIResult {
     /// Create a register ABI result.
-    pub fn reg(ty: Option<WasmType>, reg: Reg) -> Self {
+    pub fn reg(ty: Option<WasmType>, reg: Option<Reg>) -> Self {
         Self::Reg { ty, reg }
     }
 
     /// Get the result reg.
-    pub fn result_reg(&self) -> Reg {
+    pub fn result_reg(&self) -> &Option<Reg> {
         match self {
-            Self::Reg { reg, .. } => *reg,
+            Self::Reg { reg, .. } => reg,
         }
     }
 
@@ -186,7 +190,7 @@ impl ABIResult {
         }
     }
 
-    /// Returns result's length.
+    /// Returns the length of the result.
     pub fn len(&self) -> usize {
         if self.is_void() {
             0

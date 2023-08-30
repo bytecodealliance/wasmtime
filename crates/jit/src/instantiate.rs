@@ -9,7 +9,7 @@ use crate::profiling::ProfilingAgent;
 use anyhow::{bail, Context, Error, Result};
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use object::SectionKind;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::ops::Range;
 use std::str;

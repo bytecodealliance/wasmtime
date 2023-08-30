@@ -18,5 +18,6 @@ wat = { workspace = true }
 similar = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
+serde_derive = { workspace = true }
 cranelift-codegen = { workspace = true }
 capstone = { workspace = true }

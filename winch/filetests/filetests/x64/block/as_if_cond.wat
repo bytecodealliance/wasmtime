@@ -19,12 +19,12 @@
 ;;    1:	 4889e5               	mov	rbp, rsp
 ;;    4:	 4883ec08             	sub	rsp, 8
 ;;    8:	 4c893424             	mov	qword ptr [rsp], r14
-;;    c:	 48c7c001000000       	mov	rax, 1
-;;   13:	 85c0                 	test	eax, eax
-;;   15:	 0f840d000000         	je	0x28
-;;   1b:	 4883ec08             	sub	rsp, 8
-;;   1f:	 e800000000           	call	0x24
-;;   24:	 4883c408             	add	rsp, 8
-;;   28:	 4883c408             	add	rsp, 8
-;;   2c:	 5d                   	pop	rbp
-;;   2d:	 c3                   	ret	
+;;    c:	 b801000000           	mov	eax, 1
+;;   11:	 85c0                 	test	eax, eax
+;;   13:	 0f840d000000         	je	0x26
+;;   19:	 4883ec08             	sub	rsp, 8
+;;   1d:	 e800000000           	call	0x22
+;;   22:	 4883c408             	add	rsp, 8
+;;   26:	 4883c408             	add	rsp, 8
+;;   2a:	 5d                   	pop	rbp
+;;   2b:	 c3                   	ret	

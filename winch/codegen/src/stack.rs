@@ -1,5 +1,56 @@
-use crate::isa::reg::Reg;
+use crate::{isa::reg::Reg, masm::StackSlot};
 use std::collections::VecDeque;
+use wasmparser::{Ieee32, Ieee64};
+use wasmtime_environ::WasmType;
+
+/// A typed register value used to track register values in the value
+/// stack.
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub struct TypedReg {
+    /// The physical register.
+    pub reg: Reg,
+    /// The type associated to the physical register.
+    pub ty: WasmType,
+}
+
+impl TypedReg {
+    /// Create a new TypedReg.
+    pub fn new(ty: WasmType, reg: Reg) -> Self {
+        Self { ty, reg }
+    }
+
+    /// Create an i64 TypedReg.
+    pub fn i64(reg: Reg) -> Self {
+        Self {
+            ty: WasmType::I64,
+            reg,
+        }
+    }
+}
+
+impl From<TypedReg> for Reg {
+    fn from(tr: TypedReg) -> Self {
+        tr.reg
+    }
+}
+
+/// A local value.
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub struct Local {
+    /// The index of the local.
+    pub index: u32,
+    /// The type of the local.
+    pub ty: WasmType,
+}
+
+/// A memory value.
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub struct Memory {
+    /// The type associated with the memory offset.
+    pub ty: WasmType,
+    /// The stack slot corresponding to the memory value.
+    pub slot: StackSlot,
+}
 
 /// Value definition to be used within the shadow stack.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -8,12 +59,34 @@ pub(crate) enum Val {
     I32(i32),
     /// I64 Constant.
     I64(i64),
-    /// A register.
-    Reg(Reg),
+    /// F32 Constant.
+    F32(Ieee32),
+    /// F64 Constant.
+    F64(Ieee64),
+    /// A register value.
+    Reg(TypedReg),
     /// A local slot.
-    Local(u32),
+    Local(Local),
     /// Offset to a memory location.
-    Memory(u32),
+    Memory(Memory),
+}
+
+impl From<TypedReg> for Val {
+    fn from(tr: TypedReg) -> Self {
+        Val::Reg(tr)
+    }
+}
+
+impl From<Local> for Val {
+    fn from(local: Local) -> Self {
+        Val::Local(local)
+    }
+}
+
+impl From<Memory> for Val {
+    fn from(mem: Memory) -> Self {
+        Val::Memory(mem)
+    }
 }
 
 impl Val {
@@ -27,14 +100,28 @@ impl Val {
         Self::I64(v)
     }
 
+    /// Create a new F32 constant value.
+    pub fn f32(v: Ieee32) -> Self {
+        Self::F32(v)
+    }
+
+    pub fn f64(v: Ieee64) -> Self {
+        Self::F64(v)
+    }
+
     /// Create a new Reg value.
-    pub fn reg(r: Reg) -> Self {
-        Self::Reg(r)
+    pub fn reg(reg: Reg, ty: WasmType) -> Self {
+        Self::Reg(TypedReg { reg, ty })
     }
 
     /// Create a new Local value.
-    pub fn local(index: u32) -> Self {
-        Self::Local(index)
+    pub fn local(index: u32, ty: WasmType) -> Self {
+        Self::Local(Local { index, ty })
+    }
+
+    /// Create a Memory value.
+    pub fn mem(ty: WasmType, slot: StackSlot) -> Self {
+        Self::Memory(Memory { ty, slot })
     }
 
     /// Check whether the value is a register.
@@ -57,9 +144,9 @@ impl Val {
     ///
     /// # Panics
     /// This method will panic if the value is not a register.
-    pub fn get_reg(&self) -> Reg {
+    pub fn get_reg(&self) -> TypedReg {
         match self {
-            Self::Reg(r) => *r,
+            Self::Reg(tr) => *tr,
             v => panic!("expected value {:?} to be a register", v),
         }
     }
@@ -99,6 +186,19 @@ impl Val {
         match *self {
             Self::I64(_) => true,
             _ => false,
+        }
+    }
+
+    /// Get the type of the value.
+    pub fn ty(&self) -> WasmType {
+        match self {
+            Val::I32(_) => WasmType::I32,
+            Val::I64(_) => WasmType::I64,
+            Val::F32(_) => WasmType::F32,
+            Val::F64(_) => WasmType::F64,
+            Val::Reg(r) => r.ty,
+            Val::Memory(m) => m.ty,
+            Val::Local(l) => l.ty,
         }
     }
 }
@@ -172,7 +272,7 @@ impl Stack {
 
     /// Pops the element at the top of the stack if it is a register;
     /// returns `None` otherwise.
-    pub fn pop_reg(&mut self) -> Option<Reg> {
+    pub fn pop_reg(&mut self) -> Option<TypedReg> {
         match self.peek() {
             Some(v) => v.is_reg().then(|| self.pop().unwrap().get_reg()),
             _ => None,
@@ -181,9 +281,11 @@ impl Stack {
 
     /// Pops the given register if it is at the top of the stack;
     /// returns `None` otherwise.
-    pub fn pop_named_reg(&mut self, reg: Reg) -> Option<Reg> {
+    pub fn pop_named_reg(&mut self, reg: Reg) -> Option<TypedReg> {
         match self.peek() {
-            Some(v) => (v.is_reg() && v.get_reg() == reg).then(|| self.pop().unwrap().get_reg()),
+            Some(v) => {
+                (v.is_reg() && v.get_reg().reg == reg).then(|| self.pop().unwrap().get_reg())
+            }
             _ => None,
         }
     }
@@ -198,6 +300,7 @@ impl Stack {
 mod tests {
     use super::{Stack, Val};
     use crate::isa::reg::Reg;
+    use wasmtime_environ::WasmType;
 
     #[test]
     fn test_pop_i32_const() {
@@ -205,7 +308,7 @@ mod tests {
         stack.push(Val::i32(33i32));
         assert_eq!(33, stack.pop_i32_const().unwrap());
 
-        stack.push(Val::local(10));
+        stack.push(Val::local(10, WasmType::I32));
         assert!(stack.pop_i32_const().is_none());
     }
 
@@ -213,23 +316,23 @@ mod tests {
     fn test_pop_reg() {
         let mut stack = Stack::new();
         let reg = Reg::int(2usize);
-        stack.push(Val::reg(reg));
+        stack.push(Val::reg(reg, WasmType::I32));
         stack.push(Val::i32(4));
 
         assert_eq!(None, stack.pop_reg());
         let _ = stack.pop().unwrap();
-        assert_eq!(reg, stack.pop_reg().unwrap());
+        assert_eq!(reg, stack.pop_reg().unwrap().reg);
     }
 
     #[test]
     fn test_pop_named_reg() {
         let mut stack = Stack::new();
         let reg = Reg::int(2usize);
-        stack.push(Val::reg(reg));
-        stack.push(Val::reg(Reg::int(4)));
+        stack.push(Val::reg(reg, WasmType::I32));
+        stack.push(Val::reg(Reg::int(4), WasmType::I32));
 
         assert_eq!(None, stack.pop_named_reg(reg));
         let _ = stack.pop().unwrap();
-        assert_eq!(reg, stack.pop_named_reg(reg).unwrap());
+        assert_eq!(reg, stack.pop_named_reg(reg).unwrap().reg);
     }
 }

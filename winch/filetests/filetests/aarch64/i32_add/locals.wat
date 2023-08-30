@@ -33,7 +33,7 @@
 ;;   38:	 808340b8             	ldur	w0, [x28, #8]
 ;;   3c:	 81c340b8             	ldur	w1, [x28, #0xc]
 ;;   40:	 2160200b             	add	w1, w1, w0, uxtx
-;;   44:	 e00301aa             	mov	x0, x1
+;;   44:	 e003012a             	mov	w0, w1
 ;;   48:	 ff430091             	add	sp, sp, #0x10
 ;;   4c:	 fc030091             	mov	x28, sp
 ;;   50:	 fd7bc1a8             	ldp	x29, x30, [sp], #0x10

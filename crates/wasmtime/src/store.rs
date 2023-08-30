@@ -1992,7 +1992,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
-    fn memory_grow_failed(&mut self, error: &anyhow::Error) {
+    fn memory_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
                 limiter(&mut self.data).memory_grow_failed(error)
@@ -2001,7 +2001,10 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
             Some(ResourceLimiterInner::Async(ref mut limiter)) => {
                 limiter(&mut self.data).memory_grow_failed(error)
             }
-            None => {}
+            None => {
+                log::debug!("ignoring memory growth failure error: {error:?}");
+                Ok(())
+            }
         }
     }
 
@@ -2039,7 +2042,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
-    fn table_grow_failed(&mut self, error: &anyhow::Error) {
+    fn table_grow_failed(&mut self, error: anyhow::Error) -> Result<()> {
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
                 limiter(&mut self.data).table_grow_failed(error)
@@ -2048,7 +2051,10 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
             Some(ResourceLimiterInner::Async(ref mut limiter)) => {
                 limiter(&mut self.data).table_grow_failed(error)
             }
-            None => {}
+            None => {
+                log::debug!("ignoring table growth failure: {error:?}");
+                Ok(())
+            }
         }
     }
 

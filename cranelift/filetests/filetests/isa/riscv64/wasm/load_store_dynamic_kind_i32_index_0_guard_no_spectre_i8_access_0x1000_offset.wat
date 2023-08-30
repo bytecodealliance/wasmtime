@@ -44,8 +44,8 @@
 ;;   slli t0,a0,32
 ;;   srli t2,t0,32
 ;;   ld t1,8(a2)
-;;   lui a0,1048575
-;;   addi a0,a0,4095
+;;   lui t0,1048575
+;;   addi a0,t0,4095
 ;;   add t1,t1,a0
 ;;   ugt t1,t2,t1##ty=i64
 ;;   bne t1,zero,taken(label3),not_taken(label1)
@@ -66,8 +66,8 @@
 ;;   slli t0,a0,32
 ;;   srli t2,t0,32
 ;;   ld t1,8(a1)
-;;   lui a0,1048575
-;;   addi a0,a0,4095
+;;   lui t0,1048575
+;;   addi a0,t0,4095
 ;;   add t1,t1,a0
 ;;   ugt t1,t2,t1##ty=i64
 ;;   bne t1,zero,taken(label3),not_taken(label1)

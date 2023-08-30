@@ -1,4 +1,7 @@
-use crate::{isa::reg::Reg, regset::RegSet};
+use crate::{
+    isa::reg::{Reg, RegClass},
+    regset::RegSet,
+};
 
 /// The register allocator.
 ///
@@ -23,26 +26,27 @@ impl RegAlloc {
         Self { regset, scratch }
     }
 
-    /// Allocate the next available general purpose register,
-    /// spilling if none available.
-    pub fn any_gpr<F>(&mut self, spill: &mut F) -> Reg
+    /// Allocate the next available register for the given class,
+    /// spilling if not available.
+    pub fn reg_for_class<F>(&mut self, class: RegClass, spill: &mut F) -> Reg
     where
         F: FnMut(&mut RegAlloc),
     {
-        self.regset.any_gpr().unwrap_or_else(|| {
+        self.regset.reg_for_class(class).unwrap_or_else(|| {
             spill(self);
-            self.regset.any_gpr().expect("any gpr to be available")
+            self.regset.reg_for_class(class).unwrap_or_else(|| {
+                panic!("expected register for class {:?}, to be avilable", class)
+            })
         })
     }
 
-    /// Checks if a general purpose register is avaiable.
-    pub fn gpr_available(&self, reg: Reg) -> bool {
-        self.regset.named_gpr_available(reg.hw_enc() as u32)
+    /// Returns true if the specified register is allocatable.
+    pub fn reg_available(&self, reg: Reg) -> bool {
+        self.regset.named_reg_available(reg)
     }
 
-    /// Request a specific general purpose register,
-    /// spilling if not available.
-    pub fn gpr<F>(&mut self, named: Reg, spill: &mut F) -> Reg
+    /// Request a specific register, spilling if not available.
+    pub fn reg<F>(&mut self, named: Reg, mut spill: F) -> Reg
     where
         F: FnMut(&mut RegAlloc),
     {
@@ -52,19 +56,18 @@ impl RegAlloc {
             return named;
         }
 
-        self.regset.gpr(named).unwrap_or_else(|| {
+        self.regset.reg(named).unwrap_or_else(|| {
             spill(self);
             self.regset
-                .gpr(named)
-                .expect(&format!("gpr {:?} to be available", named))
+                .reg(named)
+                .expect(&format!("register {:?} to be available", named))
         })
     }
 
-    /// Mark a particular general purpose register as available.
-    pub fn free_gpr(&mut self, reg: Reg) {
-        // Never mark the designated scratch register as allocatable.
+    /// Free the given register.
+    pub fn free(&mut self, reg: Reg) {
         if reg != self.scratch {
-            self.regset.free_gpr(reg);
+            self.regset.free(reg);
         }
     }
 }

@@ -260,6 +260,13 @@ user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
+[[publisher.backtrace]]
+version = "0.3.69"
+when = "2023-08-22"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
 [[publisher.bstr]]
 version = "1.6.0"
 when = "2023-07-05"
@@ -663,9 +670,23 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.serde]]
+version = "1.0.188"
+when = "2023-08-26"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
 [[publisher.serde_derive]]
 version = "1.0.171"
 when = "2023-07-10"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.serde_derive]]
+version = "1.0.188"
+when = "2023-08-26"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -693,6 +714,13 @@ user-name = "David Tolnay"
 [[publisher.syn]]
 version = "2.0.25"
 when = "2023-07-09"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.syn]]
+version = "2.0.29"
+when = "2023-08-17"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -834,6 +862,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-encoder]]
+version = "0.32.0"
+when = "2023-08-25"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasm-metadata]]
 version = "0.9.0"
 when = "2023-07-11"
@@ -855,6 +890,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-metadata]]
+version = "0.10.3"
+when = "2023-08-25"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasm-mutate]]
 version = "0.2.30"
 when = "2023-07-26"
@@ -869,6 +911,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-mutate]]
+version = "0.2.32"
+when = "2023-08-25"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasm-smith]]
 version = "0.12.13"
 when = "2023-07-26"
@@ -879,6 +928,13 @@ user-name = "Alex Crichton"
 [[publisher.wasm-smith]]
 version = "0.12.14"
 when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wasm-smith]]
+version = "0.12.15"
+when = "2023-08-25"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -904,6 +960,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasmparser]]
+version = "0.112.0"
+when = "2023-08-25"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasmprinter]]
 version = "0.2.62"
 when = "2023-07-26"
@@ -914,6 +977,13 @@ user-name = "Alex Crichton"
 [[publisher.wasmprinter]]
 version = "0.2.63"
 when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wasmprinter]]
+version = "0.2.64"
+when = "2023-08-25"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1076,6 +1146,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wast]]
+version = "64.0.0"
+when = "2023-08-25"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wat]]
 version = "1.0.69"
 when = "2023-07-26"
@@ -1086,6 +1163,13 @@ user-name = "Alex Crichton"
 [[publisher.wat]]
 version = "1.0.70"
 when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wat]]
+version = "1.0.71"
+when = "2023-08-25"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1254,6 +1338,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wit-component]]
+version = "0.14.0"
+when = "2023-08-25"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wit-parser]]
 version = "0.9.2"
 when = "2023-07-26"
@@ -1264,6 +1355,13 @@ user-name = "Alex Crichton"
 [[publisher.wit-parser]]
 version = "0.10.0"
 when = "2023-08-18"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-parser]]
+version = "0.11.0"
+when = "2023-08-25"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"

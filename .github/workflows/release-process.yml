@@ -197,6 +197,8 @@ jobs:
           # patch release marker is already in there. Note that this commit
           # message indicates that on-merge a release will be made.
           ./publish bump-patch
+          # Update `cargo vet` entries for all the new crate versions
+          cargo vet
           sed -i "s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
           num=$(./ci/print-current-version.sh)
           git commit -a -F-<<EOF

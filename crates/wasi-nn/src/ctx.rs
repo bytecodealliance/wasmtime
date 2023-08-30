@@ -1,15 +1,13 @@
 //! Implements the host state for the `wasi-nn` API: [WasiNnCtx].
 
-use crate::backend::{Backend, BackendError, BackendKind};
+use crate::backend::{self, BackendError};
 use crate::wit::types::GraphEncoding;
-use crate::{ExecutionContext, Graph, GraphRegistry, InMemoryRegistry};
+use crate::{Backend, ExecutionContext, Graph, InMemoryRegistry, Registry};
 use anyhow::anyhow;
 use std::{collections::HashMap, hash::Hash, path::Path};
 use thiserror::Error;
 use wiggle::GuestError;
 
-type Backends = HashMap<BackendKind, Box<dyn Backend>>;
-type Registry = Box<dyn GraphRegistry>;
 type GraphId = u32;
 type GraphExecutionContextId = u32;
 type BackendName = String;
@@ -21,23 +19,25 @@ type GraphDirectory = String;
 /// model types.
 pub fn preload(
     preload_graphs: &[(BackendName, GraphDirectory)],
-) -> anyhow::Result<(Backends, Registry)> {
-    let mut backends: HashMap<_, _> = crate::backend::list().into_iter().collect();
+) -> anyhow::Result<(impl IntoIterator<Item = Backend>, Registry)> {
+    let mut backends = backend::list();
     let mut registry = InMemoryRegistry::new();
     for (kind, path) in preload_graphs {
+        let kind_ = kind.parse()?;
         let backend = backends
-            .get_mut(&kind.parse()?)
+            .iter_mut()
+            .find(|b| b.encoding() == kind_)
             .ok_or(anyhow!("unsupported backend: {}", kind))?
             .as_dir_loadable()
             .ok_or(anyhow!("{} does not support directory loading", kind))?;
         registry.load(backend, Path::new(path))?;
     }
-    Ok((backends, Box::new(registry)))
+    Ok((backends, Registry::from(registry)))
 }
 
 /// Capture the state necessary for calling into the backend ML libraries.
 pub struct WasiNnCtx {
-    pub(crate) backends: Backends,
+    pub(crate) backends: HashMap<GraphEncoding, Backend>,
     pub(crate) registry: Registry,
     pub(crate) graphs: Table<GraphId, Graph>,
     pub(crate) executions: Table<GraphExecutionContextId, ExecutionContext>,
@@ -45,7 +45,8 @@ pub struct WasiNnCtx {
 
 impl WasiNnCtx {
     /// Make a new context from the default state.
-    pub fn new(backends: Backends, registry: Registry) -> Self {
+    pub fn new(backends: impl IntoIterator<Item = Backend>, registry: Registry) -> Self {
+        let backends = backends.into_iter().map(|b| (b.encoding(), b)).collect();
         Self {
             backends,
             registry,
@@ -129,6 +130,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::registry::GraphRegistry;
 
     #[test]
     fn example() {
@@ -139,6 +141,6 @@ mod test {
             }
         }
 
-        let ctx = WasiNnCtx::new(HashMap::new(), Box::new(FakeRegistry));
+        let _ctx = WasiNnCtx::new([], Registry::from(FakeRegistry));
     }
 }

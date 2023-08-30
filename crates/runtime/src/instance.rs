@@ -153,7 +153,6 @@ pub struct Instance {
     vmctx: VMContext,
 }
 
-#[allow(clippy::cast_ptr_alignment)]
 impl Instance {
     /// Create an instance at the given memory address.
     ///

@@ -10,17 +10,6 @@
     unstable_features
 )]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    warn(
-        clippy::mut_mut,
-        clippy::nonminimal_bool,
-        clippy::map_unwrap_or,
-        clippy::clippy::unicode_not_nfc,
-        clippy::use_self
-    )
-)]
 
 pub use crate::function_runner::TestFileCompiler;
 use crate::runner::TestRunner;

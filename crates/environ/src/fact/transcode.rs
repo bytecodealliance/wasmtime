@@ -1,6 +1,6 @@
 use crate::fact::core_types::CoreTypes;
 use crate::MemoryIndex;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use wasm_encoder::{EntityType, ValType};
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]

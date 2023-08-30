@@ -18,9 +18,9 @@ block0(v0: i8x16):
 ;   vle8.v v0,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmslt.vx v2,v0,zero #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmv.x.s a1,v2 #avl=2, #vtype=(e64, m1, ta, ma)
-;   lui a4,16
-;   addi a4,a4,4095
-;   and a0,a1,a4
+;   lui a3,16
+;   addi a5,a3,4095
+;   and a0,a1,a5
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -39,9 +39,9 @@ block0(v0: i8x16):
 ;   .byte 0x57, 0x41, 0x00, 0x6e
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0xd7, 0x25, 0x20, 0x42
-;   lui a4, 0x10
-;   addi a4, a4, -1
-;   and a0, a1, a4
+;   lui a3, 0x10
+;   addi a5, a3, -1
+;   and a0, a1, a5
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

@@ -10,6 +10,7 @@ edition.workspace = true
 
 [dependencies]
 cranelift-entity = { workspace = true, features = ['enable-serde'] }
-serde = { version = "1.0.94", features = ["derive"] }
+serde = "1.0.188"
+serde_derive = "1.0.188"
 thiserror = { workspace = true }
 wasmparser = { workspace = true }

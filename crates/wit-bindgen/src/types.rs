@@ -150,11 +150,6 @@ impl Types {
                 info = self.optional_type_info(resolve, r.ok.as_ref());
                 info |= self.optional_type_info(resolve, r.err.as_ref());
             }
-            TypeDefKind::Union(u) => {
-                for case in u.cases.iter() {
-                    info |= self.type_info(resolve, &case.ty);
-                }
-            }
             TypeDefKind::Future(ty) => {
                 info = self.optional_type_info(resolve, ty.as_ref());
             }

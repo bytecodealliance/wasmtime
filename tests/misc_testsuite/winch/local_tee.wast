@@ -5,9 +5,13 @@
 
   (func (export "type-local-i32") (result i32) (local i32) (local.tee 0 (i32.const 0)))
   (func (export "type-local-i64") (result i64) (local i64) (local.tee 0 (i64.const 0)))
+  (func (export "type-local-f32") (result f32) (local f32) (local.tee 0 (f32.const 0)))
+  (func (export "type-local-f64") (result f64) (local f64) (local.tee 0 (f64.const 0)))
 
   (func (export "type-param-i32") (param i32) (result i32) (local.tee 0 (i32.const 10)))
   (func (export "type-param-i64") (param i64) (result i64) (local.tee 0 (i64.const 11)))
+  (func (export "type-param-f32") (param f32) (result f32) (local.tee 0 (f32.const 11.1)))
+  (func (export "type-param-f64") (param f64) (result f64) (local.tee 0 (f64.const 12.2)))
 
   (func $dummy)
 
@@ -37,6 +41,18 @@
 
   (func (export "as-br_if-cond") (param i32)
     (block (br_if 0 (local.tee 0 (i32.const 1))))
+  )
+
+  (func (export "as-br_if-value") (param i32) (result i32)
+    (block (result i32)
+      (drop (br_if 0 (local.tee 0 (i32.const 8)) (i32.const 1))) (i32.const 7)
+    )
+  )
+
+  (func (export "as-br_if-value-cond") (param i32) (result i32)
+    (block (result i32)
+      (drop (br_if 0 (i32.const 6) (local.tee 0 (i32.const 9)))) (i32.const 7)
+    )
   )
 
   (func (export "as-return-value") (param i32) (result i32)
@@ -98,9 +114,13 @@
 
 (assert_return (invoke "type-local-i32") (i32.const 0))
 (assert_return (invoke "type-local-i64") (i64.const 0))
+(assert_return (invoke "type-local-f32") (f32.const 0))
+(assert_return (invoke "type-local-f64") (f64.const 0))
 
 (assert_return (invoke "type-param-i32" (i32.const 2)) (i32.const 10))
 (assert_return (invoke "type-param-i64" (i64.const 3)) (i64.const 11))
+(assert_return (invoke "type-param-f32" (f32.const 4.4)) (f32.const 11.1))
+(assert_return (invoke "type-param-f64" (f64.const 5.5)) (f64.const 12.2))
 
 (assert_return (invoke "as-block-first" (i32.const 0)) (i32.const 1))
 (assert_return (invoke "as-block-mid" (i32.const 0)) (i32.const 1))
@@ -113,6 +133,8 @@
 (assert_return (invoke "as-br-value" (i32.const 0)) (i32.const 9))
 
 (assert_return (invoke "as-br_if-cond" (i32.const 0)))
+(assert_return (invoke "as-br_if-value" (i32.const 0)) (i32.const 8))
+(assert_return (invoke "as-br_if-value-cond" (i32.const 0)) (i32.const 6))
 
 (assert_return (invoke "as-return-value" (i32.const 0)) (i32.const 7))
 
