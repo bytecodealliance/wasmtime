@@ -25,8 +25,7 @@ fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     me.pop(); // chop off `deps`
     if cfg!(target_os = "windows") {
         me.push("wasmtime.exe");
-    }
-    else {
+    } else {
         me.push("wasmtime");
     }
     cmd.arg(me);

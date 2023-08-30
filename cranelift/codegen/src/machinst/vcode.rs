@@ -1179,9 +1179,12 @@ impl<I: VCodeInst> VCode<I> {
                 inst_offsets[to.inst().index()]
             };
 
-            // Empty ranges or unavailable to-offsets can happen
+            // Empty ranges or unavailable offsets can happen
             // due to cold blocks and branch removal (see above).
-            if to_offset == NO_INST_OFFSET || from_offset == to_offset {
+            if from_offset == NO_INST_OFFSET
+                || to_offset == NO_INST_OFFSET
+                || from_offset == to_offset
+            {
                 continue;
             }
 
