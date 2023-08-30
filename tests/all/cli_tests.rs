@@ -812,14 +812,21 @@ fn run_basic_component() -> Result<()> {
 #[test]
 fn run_wasi_http_module() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/wasi-http.wat")?;
-    let stdout = run_wasmtime(&[
-        "--preview2",
-        "--wasi-modules",
-        "experimental-wasi-http",
-        "--disable-cache",
-        wasm.path().to_str().unwrap(),
-    ])?;
-    assert_eq!(stdout, "Called _start\n");
+    let output = run_wasmtime_for_output(
+        &[
+            "--preview2",
+            "--wasi-modules",
+            "experimental-wasi-http",
+            "--disable-cache",
+            wasm.path().to_str().unwrap(),
+        ],
+        None,
+    )?;
+    println!("{}", String::from_utf8_lossy(&output.stderr));
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .starts_with("Called _start\n"));
+    assert!(!output.status.success());
     Ok(())
 }
 

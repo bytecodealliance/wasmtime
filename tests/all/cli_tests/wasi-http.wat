@@ -1,4 +1,6 @@
 (module
+  (import "wasi_snapshot_preview1" "proc_exit"
+    (func $__wasi_proc_exit (param i32)))
   (import "wasi:io/streams" "write"
     (func $__wasi_io_streams_write (param i32 i32 i32 i32)))
   (import "wasi:io/streams" "blocking-write"
@@ -60,8 +62,10 @@
     (call $__wasi_http_types_drop_fields (local.get $headers_id))
     (call $__wasi_http_types_drop_outgoing_request (local.get $request_id))
 
-    (call $print (i32.const 64) (i32.const 0))
+    (call $print (i32.const 64) (i32.const 5))
     (drop (call $__wasi_io_streams_subscribe_to_output_stream (i32.const 4)))
+
+    (call $__wasi_proc_exit (i32.const 1))
   )
 
   ;; A helper function for printing ptr-len strings.
@@ -83,7 +87,7 @@
   (export "_start" (func $_start))
   (export "cabi_realloc" (func $cabi_realloc))
   (data (i32.const 32) "Called _start\0a")
-  (data (i32.const 64) "")
+  (data (i32.const 64) "Done\0a")
   (data (i32.const 96) "www.example.com")
   (data (i32.const 128) "body")
 )
