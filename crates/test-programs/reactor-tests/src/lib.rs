@@ -4,6 +4,7 @@ export_test_reactor!(T);
 
 struct T;
 use wasi::io::streams;
+use wasi::poll::poll;
 
 static mut STATE: Vec<String> = Vec::new();
 
@@ -25,22 +26,36 @@ impl TestReactor for T {
     }
 
     fn write_strings_to(o: OutputStream) -> Result<(), ()> {
+        let sub = streams::subscribe_to_output_stream(o);
         unsafe {
             for s in STATE.iter() {
                 let mut out = s.as_bytes();
                 while !out.is_empty() {
-                    match streams::blocking_check_write(o) {
-                        Ok(n) => {
-                            let len = (n as usize).min(out.len());
-                            match streams::write(o, &out[..len]) {
-                                Ok(_) => out = &out[len..],
-                                Err(_) => return Err(()),
-                            }
-                        }
+                    poll::poll_oneoff(&[sub]);
+                    let n = match streams::check_write(o) {
+                        Ok(n) => n,
+                        Err(_) => return Err(()),
+                    };
+
+                    let len = (n as usize).min(out.len());
+                    match streams::write(o, &out[..len]) {
+                        Ok(_) => out = &out[len..],
                         Err(_) => return Err(()),
                     }
                 }
             }
+
+            match streams::flush(o) {
+                Ok(_) => {}
+                Err(_) => return Err(()),
+            }
+
+            poll::poll_oneoff(&[sub]);
+            match streams::check_write(o) {
+                Ok(_) => {}
+                Err(_) => return Err(()),
+            }
+
             Ok(())
         }
     }

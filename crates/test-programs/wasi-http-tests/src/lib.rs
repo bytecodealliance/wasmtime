@@ -7,7 +7,7 @@ pub mod bindings {
     });
 }
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use std::fmt;
 use std::sync::OnceLock;
 
@@ -72,9 +72,13 @@ pub async fn request(
     let request_body = http_types::outgoing_request_write(request)
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
+    let sub = streams::subscribe_to_output_stream(request_body);
+
     if let Some(mut buf) = body {
         while !buf.is_empty() {
-            let permit = match streams::blocking_check_write(request_body) {
+            poll::poll_oneoff(&[sub]);
+
+            let permit = match streams::check_write(request_body) {
                 Ok(n) => usize::try_from(n)?,
                 Err(_) => anyhow::bail!("output stream error"),
             };
@@ -87,12 +91,19 @@ pub async fn request(
                 Err(_) => anyhow::bail!("output stream error"),
                 _ => {}
             }
-
-            match streams::blocking_flush(request_body) {
-                Ok(_) => {}
-                Err(_) => anyhow::bail!("output stream error"),
-            }
         }
+
+        match streams::flush(request_body) {
+            Err(_) => anyhow::bail!("output stream error"),
+            _ => {}
+        }
+
+        poll::poll_oneoff(&[sub]);
+
+        match streams::check_write(request_body) {
+            Ok(_) => {},
+            Err(_) => anyhow::bail!("output stream error"),
+        };
     }
 
     let future_response = outgoing_handler::handle(request, None);

@@ -150,13 +150,6 @@ interface streams {
         this: output-stream
     ) -> result<u64, write-error>
 
-    /// like check-write, except it blocks until the stream becomes ready for
-    /// more 1 or more byte to be written, or an error can be reported.
-    blocking-check-write: func(
-      this: output-stream
-    ) -> result<u64, write-error>
-
-
     /// perform a write. this function never blocks.
     ///
     /// Precondition: check-write gave permit of Ok(n) and contents has a
@@ -167,6 +160,34 @@ interface streams {
     write: func(
         this: output-stream,
         contents: list<u8>
+    ) -> result<_, write-error>
+
+    /// Perform a write of up to 4096 bytes, and then flush the stream.
+    ///
+    /// This is a convenience wrapper around the use of `check-write`,
+    /// `subscribe-to-output-stream`, `write`, and `flush`, and is implemented
+    /// with the following pseudo-code:
+    ///
+    /// ```
+    /// let pollable = subscribe-to-output-stream(this);
+    /// while !contents.is_empty() {
+    ///   // Wait for the stream to become writable
+    ///   poll-oneoff(pollable);
+    ///   let Ok(n) = check-write(this); // eliding error handling
+    ///   let len = min(n, contents.len());
+    ///   let (chunk, rest) = contents.split_at(len);
+    ///   write(this, chunk);            // eliding error handling
+    ///   contents = rest;
+    /// }
+    /// flush(this);
+    /// // Wait for completion of `flush`
+    /// poll-oneoff(pollable);
+    /// // Check for any errors that arose during `flush`
+    /// let _ = check-write(this);       // eliding error handling
+    /// ```
+    blocking-write-and-flush: func(
+      this: output-stream,
+      contents: list<u8>
     ) -> result<_, write-error>
 
     /// request to flush buffered output. this function never blocks.
@@ -198,7 +219,6 @@ interface streams {
     /// Implementations may trap if the `output-stream` is dropped before
     /// all derived `pollable`s created with this function are dropped.
     subscribe-to-output-stream: func(this: output-stream) -> pollable
-
 
     /// Write zeroes to a stream.
     ///

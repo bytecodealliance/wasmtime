@@ -19,8 +19,12 @@ fn write(output: streams::OutputStream, mut bytes: &[u8]) -> (usize, streams::St
     let total = bytes.len();
     let mut written = 0;
 
+    let s = streams::subscribe_to_output_stream(output);
+
     while !bytes.is_empty() {
-        let permit = match streams::blocking_check_write(output) {
+        poll::poll_oneoff(&[s]);
+
+        let permit = match streams::check_write(output) {
             Ok(n) => n,
             Err(_) => return (written, streams::StreamStatus::Ended),
         };

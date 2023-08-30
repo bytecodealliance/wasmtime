@@ -444,6 +444,16 @@ where
             })
         },
     )?;
+    linker.func_wrap1_async(
+        "wasi:io/streams",
+        "subscribe-to-output-stream",
+        move |mut caller: Caller<'_, T>, stream: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                io::streams::Host::subscribe_to_output_stream(ctx, stream).await
+            })
+        },
+    )?;
     linker.func_wrap2_async(
         "wasi:io/streams",
         "check-write",
@@ -453,33 +463,6 @@ where
                 let ctx = get_cx(caller.data_mut());
 
                 let result = match io::streams::Host::check_write(ctx, stream).await {
-                    // 0 == outer result tag (success)
-                    // 1 == result value (u64 lower 32 bits)
-                    // 2 == result value (u64 upper 32 bits)
-                    Ok(len) => [0, len as u32, (len >> 32) as u32],
-
-                    // 0 == outer result tag (failure)
-                    // 1 == result value (u64 lower 32 bits)
-                    // 2 == result value (unused)
-                    Err(_) => todo!("how do we extract runtime error cases?"),
-                };
-
-                let raw = u32_array_to_u8(&result);
-                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
-
-                Ok(())
-            })
-        },
-    )?;
-    linker.func_wrap2_async(
-        "wasi:io/streams",
-        "blocking-check-write",
-        move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
-            Box::new(async move {
-                let memory: Memory = memory_get(&mut caller)?;
-                let ctx = get_cx(caller.data_mut());
-
-                let result = match io::streams::Host::blocking_check_write(ctx, stream).await {
                     // 0 == outer result tag (success)
                     // 1 == result value (u64 lower 32 bits)
                     // 2 == result value (u64 upper 32 bits)

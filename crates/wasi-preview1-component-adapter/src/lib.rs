@@ -1631,18 +1631,19 @@ impl From<network::ErrorCode> for Errno {
     }
 }
 
-fn host_poll_oneoff(subscriptions: &mut [poll::Pollable]) -> Vec<bool> {
+fn host_poll_oneoff_single(pollable: poll::Pollable) {
     #[link(wasm_import_module = "wasi:poll/poll")]
     extern "C" {
         #[link_name = "poll-oneoff"]
         fn poll_oneoff_import(pollables: *const Pollable, len: usize, rval: *mut BoolList);
     }
 
-    let nsubscriptions = subscriptions.len();
+    let mut subs = [pollable];
+
     let pollables = Pollables {
-        pointer: subscriptions.as_mut_ptr(),
+        pointer: subs.as_mut_ptr(),
         index: 0,
-        length: nsubscriptions,
+        length: 1,
     };
 
     let mut ready_list = BoolList {
@@ -1650,10 +1651,10 @@ fn host_poll_oneoff(subscriptions: &mut [poll::Pollable]) -> Vec<bool> {
         len: 0,
     };
 
-    let mut results = vec![false; nsubscriptions];
+    let mut results = [false; 1];
 
     unsafe {
-        ImportAlloc::new().with_buffer(results.as_mut_ptr() as *mut _, nsubscriptions, || {
+        ImportAlloc::new().with_buffer(results.as_mut_ptr() as *mut _, 1, || {
             poll_oneoff_import(
                 pollables.pointer,
                 pollables.length,
@@ -1662,10 +1663,8 @@ fn host_poll_oneoff(subscriptions: &mut [poll::Pollable]) -> Vec<bool> {
         })
     }
 
-    assert_eq!(ready_list.len, nsubscriptions);
+    assert_eq!(ready_list.len, 1);
     assert_eq!(ready_list.base, results.as_ptr());
-
-    results
 }
 
 /// Concurrently poll for the occurrence of a set of events.
@@ -2184,7 +2183,7 @@ impl BlockingMode {
         let s = streams::subscribe_to_output_stream(output_stream);
 
         if matches!(self, BlockingMode::Blocking) {
-            host_poll_oneoff(&mut [s]);
+            host_poll_oneoff_single(s);
         }
 
         let permit = match streams::check_write(output_stream) {
@@ -2210,7 +2209,7 @@ impl BlockingMode {
             Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
         }
 
-        host_poll_oneoff(&mut [s]);
+        host_poll_oneoff_single(s);
         match streams::check_write(output_stream) {
             Ok(_) => Ok(len),
 
