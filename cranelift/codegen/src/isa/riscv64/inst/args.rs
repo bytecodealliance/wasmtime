@@ -161,6 +161,18 @@ impl AMode {
         }
     }
 
+    /// Retrieve a MachLabel that corresponds to this addressing mode, if it exists.
+    pub(crate) fn get_label_with_sink(&self, sink: &mut MachBuffer<Inst>) -> Option<MachLabel> {
+        match self {
+            &AMode::Const(addr) => Some(sink.get_label_for_constant(addr)),
+            &AMode::Label(label) => Some(label),
+            &AMode::RegOffset(..)
+            | &AMode::SPOffset(..)
+            | &AMode::FPOffset(..)
+            | &AMode::NominalSPOffset(..) => None,
+        }
+    }
+
     pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
         format!("{}", self.clone().with_allocs(allocs))
     }
