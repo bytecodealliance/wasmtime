@@ -20,34 +20,22 @@ fn write(output: streams::OutputStream, mut bytes: &[u8]) -> (usize, streams::St
     let mut written = 0;
 
     while !bytes.is_empty() {
-        let permit = streams::blocking_check_write(output).unwrap();
+        let permit = match streams::blocking_check_write(output) {
+            Ok(n) => n,
+            Err(_) => return (written, streams::StreamStatus::Ended),
+        };
+
         let len = bytes.len().min(permit as usize);
         let (chunk, rest) = bytes.split_at(len);
 
         match streams::write(output, chunk) {
             Ok(()) => {}
-
-            Err(streams::WriteError::Closed) => {
-                return (written, streams::StreamStatus::Ended);
-            }
-
-            Err(streams::WriteError::LastOperationFailed) => {
-                // try again
-                continue;
-            }
+            Err(_) => return (written, streams::StreamStatus::Ended),
         }
 
         match streams::blocking_flush(output) {
             Ok(()) => {}
-
-            Err(streams::WriteError::Closed) => {
-                return (written, streams::StreamStatus::Ended);
-            }
-
-            Err(streams::WriteError::LastOperationFailed) => {
-                // try again
-                continue;
-            }
+            Err(_) => return (written, streams::StreamStatus::Ended),
         }
 
         bytes = rest;
