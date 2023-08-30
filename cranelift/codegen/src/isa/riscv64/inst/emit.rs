@@ -25,78 +25,6 @@ impl EmitInfo {
     }
 }
 
-/// load constant by put the constant in the code stream.
-/// calculate the pc and using load instruction.
-/// This is only allow used in the emit stage.
-/// Because of those instruction must execute together.
-/// see https://github.com/bytecodealliance/wasmtime/pull/5612
-#[derive(Clone, Copy)]
-pub(crate) enum LoadConstant {
-    U32(u32),
-    U64(u64),
-}
-
-impl LoadConstant {
-    fn to_le_bytes(self) -> Vec<u8> {
-        match self {
-            LoadConstant::U32(x) => Vec::from_iter(x.to_le_bytes().into_iter()),
-            LoadConstant::U64(x) => Vec::from_iter(x.to_le_bytes().into_iter()),
-        }
-    }
-    fn load_op(self) -> LoadOP {
-        match self {
-            LoadConstant::U32(_) => LoadOP::Lwu,
-            LoadConstant::U64(_) => LoadOP::Ld,
-        }
-    }
-    fn load_ty(self) -> Type {
-        match self {
-            LoadConstant::U32(_) => R32,
-            LoadConstant::U64(_) => R64,
-        }
-    }
-
-    pub(crate) fn load_constant<F: FnMut(Type) -> Writable<Reg>>(
-        self,
-        rd: Writable<Reg>,
-        alloc_tmp: &mut F,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        // get current pc.
-        let pc = alloc_tmp(I64);
-        insts.push(Inst::Auipc {
-            rd: pc,
-            imm: Imm20 { bits: 0 },
-        });
-        // load
-        insts.push(Inst::Load {
-            rd,
-            op: self.load_op(),
-            flags: MemFlags::new(),
-            from: AMode::RegOffset(pc.to_reg(), 12, self.load_ty()),
-        });
-        let data = self.to_le_bytes();
-        // jump over.
-        insts.push(Inst::Jal {
-            dest: BranchTarget::ResolvedOffset(Inst::INSTRUCTION_SIZE + data.len() as i32),
-        });
-        insts.push(Inst::RawData { data });
-        insts
-    }
-
-    // load and perform an extra add.
-    pub(crate) fn load_constant_and_add(self, rd: Writable<Reg>, rs: Reg) -> SmallInstVec<Inst> {
-        let mut insts = self.load_constant(rd, &mut |_| rd);
-        insts.push(Inst::AluRRR {
-            alu_op: AluOPRRR::Add,
-            rd,
-            rs1: rd.to_reg(),
-            rs2: rs,
-        });
-        insts
-    }
-}
-
 pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
@@ -534,15 +462,32 @@ impl MachInstEmit for Inst {
             }
             &Inst::LoadInlineConst { rd, ty, imm } => {
                 let rd = allocs.next_writable(rd);
-                let c = if ty.bits() == 64 {
-                    LoadConstant::U64(imm)
-                } else {
-                    LoadConstant::U32(imm as u32)
-                };
 
-                c.load_constant(rd, &mut |_| rd)
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                let data = &imm.to_le_bytes()[..ty.bytes() as usize];
+
+                let label_data: MachLabel = sink.get_label();
+                let label_end: MachLabel = sink.get_label();
+
+                // Load into rd
+                Inst::Load {
+                    rd,
+                    op: LoadOP::from_type(ty),
+                    flags: MemFlags::new(),
+                    from: AMode::Label(label_data),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // Jump over the inline pool
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_end),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // Emit the inline data
+                sink.bind_label(label_data, &mut state.ctrl_plane);
+                Inst::RawData { data: data.into() }.emit(&[], sink, emit_info, state);
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::FpuRR {
                 frm,
