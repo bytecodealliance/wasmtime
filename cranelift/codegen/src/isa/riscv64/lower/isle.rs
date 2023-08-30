@@ -440,9 +440,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
-    fn offset32_imm(&mut self, offset: i32) -> Offset32 {
-        Offset32::new(offset)
-    }
     fn default_memflags(&mut self) -> MemFlags {
         MemFlags::new()
     }

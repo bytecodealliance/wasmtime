@@ -2295,9 +2295,6 @@
 (decl gen_const_amode (VCodeConstant) AMode)
 (extern constructor gen_const_amode gen_const_amode)
 
-(decl offset32_imm (i32) Offset32)
-(extern constructor offset32_imm offset32_imm)
-
 
 ;; Returns a canonical type for a LoadOP. We only return I64 or F64.
 (decl load_op_reg_type (LoadOP) Type)
