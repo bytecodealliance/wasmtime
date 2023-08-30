@@ -848,6 +848,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         //   fixup record referring to that last branch is removed.
     }
 
+    /// Performs various optimizations on branches pointing at the current label.
     pub fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
         if ctrl_plane.get_decision() {
             return;

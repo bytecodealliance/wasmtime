@@ -189,10 +189,6 @@ pub struct EmitResult {
     /// bb-starts. Computed only if `debug_value_labels` is non-empty.
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 
-    /// Final instruction offsets, recorded during emission. Computed
-    /// only if `debug_value_labels` is non-empty.
-    pub inst_offsets: Vec<CodeOffset>,
-
     /// Final length of function body.
     pub func_body_len: CodeOffset,
 
@@ -620,6 +616,8 @@ fn is_reftype(ty: Type) -> bool {
     ty == types::R64 || ty == types::R32
 }
 
+const NO_INST_OFFSET: CodeOffset = u32::MAX;
+
 impl<I: VCodeInst> VCode<I> {
     /// New empty VCode.
     fn new(
@@ -807,7 +805,7 @@ impl<I: VCodeInst> VCode<I> {
         let mut disasm = String::new();
 
         if !self.debug_value_labels.is_empty() {
-            inst_offsets.resize(self.insts.len(), 0);
+            inst_offsets.resize(self.insts.len(), NO_INST_OFFSET);
         }
 
         // Count edits per block ahead of time; this is needed for
@@ -1110,7 +1108,6 @@ impl<I: VCodeInst> VCode<I> {
             buffer: buffer.finish(&self.constants, ctrl_plane),
             bb_offsets,
             bb_edges,
-            inst_offsets,
             func_body_len,
             disasm: if want_disasm { Some(disasm) } else { None },
             sized_stackslot_offsets: self.abi.sized_stackslot_offsets().clone(),
@@ -1139,6 +1136,12 @@ impl<I: VCodeInst> VCode<I> {
         let mut next_offset = func_body_len;
         for inst_index in (0..(inst_offsets.len() - 1)).rev() {
             let inst_offset = inst_offsets[inst_index];
+
+            // Not all instructions get their offsets recorded.
+            if inst_offset == NO_INST_OFFSET {
+                continue;
+            }
+
             if inst_offset > next_offset {
                 trace!(
                     "Fixing code offset of the removed Inst {}: {} -> {}",
@@ -1150,10 +1153,7 @@ impl<I: VCodeInst> VCode<I> {
                 continue;
             }
 
-            // Not all instructions get their offsets recorded.
-            if inst_offset != 0 {
-                next_offset = inst_offset;
-            }
+            next_offset = inst_offset;
         }
     }
 
@@ -1179,9 +1179,9 @@ impl<I: VCodeInst> VCode<I> {
                 inst_offsets[to.inst().index()]
             };
 
-            // Empty range or to-offset of zero can happen because of
-            // cold blocks (see above).
-            if to_offset == 0 || from_offset == to_offset {
+            // Empty ranges or unavailable to-offsets can happen
+            // due to cold blocks and branch removal (see above).
+            if to_offset == NO_INST_OFFSET || from_offset == to_offset {
                 continue;
             }
 
