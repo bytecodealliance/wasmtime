@@ -141,8 +141,8 @@ impl<T: WasiView> tcp::Host for T {
 
         socket.tcp_state = HostTcpState::Connected;
         let (input, output) = socket.as_split();
-        let input_stream = self.table_mut().push_input_stream(input)?;
-        let output_stream = self.table_mut().push_output_stream(output)?;
+        let input_stream = self.table_mut().push_input_stream_child(input, this)?;
+        let output_stream = self.table_mut().push_output_stream_child(output, this)?;
 
         Ok((input_stream, output_stream))
     }
@@ -209,8 +209,12 @@ impl<T: WasiView> tcp::Host for T {
         let (input, output) = tcp_socket.as_split();
 
         let tcp_socket = self.table_mut().push_tcp_socket(tcp_socket)?;
-        let input_stream = self.table_mut().push_input_stream(input)?;
-        let output_stream = self.table_mut().push_output_stream(output)?;
+        let input_stream = self
+            .table_mut()
+            .push_input_stream_child(input, tcp_socket)?;
+        let output_stream = self
+            .table_mut()
+            .push_output_stream_child(output, tcp_socket)?;
 
         Ok((tcp_socket, input_stream, output_stream))
     }
