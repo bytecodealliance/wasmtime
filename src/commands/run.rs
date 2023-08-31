@@ -100,7 +100,7 @@ fn parse_profile(s: &str) -> Result<Profile> {
 
 /// Runs a WebAssembly module
 #[derive(Parser)]
-#[structopt(name = "run", trailing_var_arg = true, after_help = AFTER_HELP.as_str())]
+#[structopt(name = "run", trailing_var_arg = true)]
 pub struct RunCommand {
     #[clap(flatten)]
     common: CommonOptions,
