@@ -293,6 +293,20 @@ pub(crate) use self::store::ComponentStoreData;
 ///         interface::ErrorType: RustErrorType,
 ///     },
 ///
+///     // All generated bindgen types are "owned" meaning types like `String`
+///     // are used instead of `&str`, for example. This is the default and
+///     // ensures that the same type used in both imports and exports uses the
+///     // same generated type.
+///     ownership: Owning,
+///
+///     // Alternative to `Owning` above where borrowed types attempt to be used
+///     // instead. The `duplicate_if_necessary` configures whether duplicate
+///     // Rust types will be generated for the same WIT type if necessary, for
+///     // example when a type is used both as an import and an export.
+///     ownership: Borrowing {
+///         duplicate_if_necessary: true
+///     },
+///
 ///     // Restrict the code generated to what's needed for the interface
 ///     // imports in the inlined WIT document fragment.
 ///     interfaces: "
