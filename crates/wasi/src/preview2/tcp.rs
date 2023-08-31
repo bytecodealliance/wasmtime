@@ -53,42 +53,61 @@ pub(crate) struct HostTcpSocket {
 
 pub(crate) struct TcpReadStream {
     stream: Arc<tokio::net::TcpStream>,
+    closed: bool,
 }
 
 impl TcpReadStream {
     fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
-        Self { stream }
+        Self {
+            stream,
+            closed: false,
+        }
+    }
+    fn stream_state(&self) -> StreamState {
+        if self.closed {
+            StreamState::Closed
+        } else {
+            StreamState::Open
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl HostInputStream for TcpReadStream {
     fn read(&mut self, size: usize) -> Result<(bytes::Bytes, StreamState), anyhow::Error> {
-        if size == 0 {
-            return Ok((bytes::Bytes::new(), StreamState::Open));
+        if size == 0 || self.closed {
+            return Ok((bytes::Bytes::new(), self.stream_state()));
         }
 
         let mut buf = bytes::BytesMut::with_capacity(size);
-        let (n, state) = match self.stream.try_read_buf(&mut buf) {
+        let n = match self.stream.try_read_buf(&mut buf) {
             // A 0-byte read indicates that the stream has closed.
-            Ok(0) => (0, StreamState::Closed),
+            Ok(0) => {
+                self.closed = true;
+                0
+            }
 
-            Ok(n) => (n, StreamState::Open),
+            Ok(n) => n,
 
             // Failing with `EWOULDBLOCK` is how we differentiate between a closed channel and no
             // data to read right now.
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => (0, StreamState::Open),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => 0,
 
-            // FIXME: this is a closed stream, but we need to record it for future calls to
-            // ready
-            Err(_) => (0, StreamState::Closed),
+            Err(e) => {
+                tracing::debug!("unexpected error on TcpReadStream read: {e:?}");
+                self.closed = true;
+                0
+            }
         };
 
         buf.truncate(n);
-        Ok((buf.freeze(), state))
+        Ok((buf.freeze(), self.stream_state()))
     }
 
     async fn ready(&mut self) -> Result<(), anyhow::Error> {
+        if self.closed {
+            return Ok(());
+        }
         self.stream.readable().await?;
         Ok(())
     }
