@@ -623,10 +623,19 @@ impl MachInstEmit for Inst {
                 let label = from.get_label_with_sink(sink);
 
                 let (addr, imm12) = match (base, offset_imm12, label) {
-                    // If the offset fits into an imm12 we can directly encode it.
+                    // When loading from a Reg+Offset, if the offset fits into an imm12 we can directly encode it.
                     (Some(base), Some(imm12), _) => (base, imm12),
 
-                    // If the amode contains a label we can emit an internal relocation to it.
+                    // Otherwise, if the offset does not fit into a imm12, we need to materialize it into a
+                    // register and load from that.
+                    (Some(_), None, None) => {
+                        let tmp = writable_spilltmp_reg();
+                        Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
+                        (tmp.to_reg(), Imm12::zero())
+                    }
+
+                    // If the AMode contains a label we can emit an internal relocation that gets
+                    // resolved with the correct address later.
                     (None, Some(imm), Some(label)) => {
                         debug_assert_eq!(imm.as_i16(), 0);
 
@@ -645,13 +654,8 @@ impl MachInstEmit for Inst {
                         (rd.to_reg(), Imm12::zero())
                     }
 
-                    // Otherwise load the address it into a reg and load from it.
-                    (Some(_), None, None) => {
-                        let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
-                        (tmp.to_reg(), Imm12::zero())
-                    }
-
+                    // These cases are impossible with the current AModes that we have. We either
+                    // always have a register, or always have a label. Never both, and never neither.
                     (None, None, None)
                     | (None, Some(_), None)
                     | (Some(_), None, Some(_))
