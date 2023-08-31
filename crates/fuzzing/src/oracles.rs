@@ -255,9 +255,7 @@ fn compile_module(
         Ok(module) => Some(module),
         Err(_) if !known_valid => None,
         Err(e) => {
-            if let generators::InstanceAllocationStrategy::Pooling { .. } =
-                &config.wasmtime.strategy
-            {
+            if let generators::InstanceAllocationStrategy::Pooling(c) = &config.wasmtime.strategy {
                 // When using the pooling allocator, accept failures to compile
                 // when arbitrary table element limits have been exceeded as
                 // there is currently no way to constrain the generated module
@@ -273,6 +271,23 @@ fn compile_module(
                 // "random" instance size limit and if a module doesn't fit we
                 // move on to the next fuzz input.
                 if string.contains("instance allocation for this module requires") {
+                    return None;
+                }
+
+                // If the pooling allocator is more restrictive on the number of
+                // tables and memories than we allowed wasm-smith to generate
+                // then allow compilation errors along those lines.
+                if c.max_tables_per_module < (config.module_config.config.max_tables as u32)
+                    && string.contains("defined tables count")
+                    && string.contains("exceeds the per-instance limit")
+                {
+                    return None;
+                }
+
+                if c.max_memories_per_module < (config.module_config.config.max_memories as u32)
+                    && string.contains("defined memories count")
+                    && string.contains("exceeds the per-instance limit")
+                {
                     return None;
                 }
             }
@@ -329,7 +344,7 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     }
 
     // Also allow failures to instantiate as a result of hitting pooling limits.
-    if string.contains("maximum concurrent instance limit")
+    if string.contains("maximum concurrent core instance limit")
         || string.contains("maximum concurrent memory limit")
         || string.contains("maximum concurrent table limit")
     {
