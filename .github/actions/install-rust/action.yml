@@ -28,11 +28,11 @@ runs:
         msrv=70
 
         if [ "${{ inputs.toolchain }}" = "default" ]; then
-          echo "version=1.$((msrv+2)).0"
+          echo "version=1.$((msrv+2)).0" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
-          echo "version=1.$msrv.0"
+          echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
         else
-          echo "version=${{ inputs.toolchain }}"
+          echo "version=${{ inputs.toolchain }}" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Install Rust
