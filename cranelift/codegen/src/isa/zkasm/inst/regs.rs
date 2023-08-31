@@ -80,6 +80,7 @@ pub fn zero_reg() -> Reg {
 pub fn writable_zero_reg() -> Writable<Reg> {
     Writable::from_reg(zero_reg())
 }
+
 #[inline]
 pub fn stack_reg() -> Reg {
     x_reg(2)
@@ -100,6 +101,11 @@ pub fn link_reg() -> Reg {
 #[inline]
 pub fn writable_link_reg() -> Writable<Reg> {
     Writable::from_reg(link_reg())
+}
+
+/// Get a reference to the context register (CTX).
+pub fn context_reg() -> Reg {
+    x_reg(12)
 }
 
 /// Get a reference to the frame pointer (x29).

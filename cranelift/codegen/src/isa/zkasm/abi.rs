@@ -126,12 +126,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 continue;
             }
 
-            // TODO(akashin): Figure out how to properly handle VMContext register.
-            // For now we pin it to `CTX` register of ZK ASM.
+            // For now we pin VMContext register to `CTX` register of ZK ASM.
             if let ir::ArgumentPurpose::VMContext = param.purpose {
                 let mut slots = ABIArgSlotVec::new();
                 slots.push(ABIArgSlot::Reg {
-                    reg: x_reg(12).to_real_reg().unwrap(),
+                    reg: context_reg().to_real_reg().unwrap(),
                     ty: I32,
                     extension: param.extension,
                 });
