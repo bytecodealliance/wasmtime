@@ -519,3 +519,269 @@ block0(v0: i64, v1: i32):
 ;   stp x0, x1, [x6]
 ;   ret
 
+function %load_scaled16(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2 = ishl_imm v1, 0
+  v3 = iadd v0, v2
+  v4 = load.i8 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   ldrb w0, [x0, x1, LSL #0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrb w0, [x0, x1, lsl #0]
+;   ret
+
+function %load_scaled16(i64, i64) -> i16 {
+block0(v0: i64, v1: i64):
+  v2 = ishl_imm v1, 1
+  v3 = iadd v0, v2
+  v4 = load.i16 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   ldrh w0, [x0, x1, LSL #1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrh w0, [x0, x1, lsl #1]
+;   ret
+
+function %load_scaled32(i64, i64) -> i32 {
+block0(v0: i64, v1: i64):
+  v2 = ishl_imm v1, 2
+  v3 = iadd v0, v2
+  v4 = load.i32 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   ldr w0, [x0, x1, LSL #2]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr w0, [x0, x1, lsl #2]
+;   ret
+
+function %load_scaled64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = ishl_imm v1, 3
+  v3 = iadd v0, v2
+  v4 = load.i64 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   ldr x0, [x0, x1, LSL #3]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, [x0, x1, lsl #3]
+;   ret
+
+function %load_not_scaled64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = ishl_imm v1, 2
+  v3 = iadd v0, v2
+  v4 = load.i64 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   lsl x4, x1, #2
+;   ldr x0, [x0, x4]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lsl x4, x1, #2
+;   ldr x0, [x0, x4]
+;   ret
+
+function %load_uextend_scaled16(i64, i32) -> i8 {
+block0(v0: i64, v1: i32):
+  v2 = uextend.i64 v1
+  v3 = ishl_imm v2, 0
+  v4 = iadd v0, v3
+  v5 = load.i8 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldrb w0, [x0, w1, UXTW #0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrb w0, [x0, w1, uxtw #0]
+;   ret
+
+function %load_uextend_scaled16(i64, i32) -> i16 {
+block0(v0: i64, v1: i32):
+  v2 = uextend.i64 v1
+  v3 = ishl_imm v2, 1
+  v4 = iadd v0, v3
+  v5 = load.i16 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldrh w0, [x0, w1, UXTW #1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrh w0, [x0, w1, uxtw #1]
+;   ret
+
+function %load_uextend_scaled32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = uextend.i64 v1
+  v3 = ishl_imm v2, 2
+  v4 = iadd v0, v3
+  v5 = load.i32 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldr w0, [x0, w1, UXTW #2]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr w0, [x0, w1, uxtw #2]
+;   ret
+
+
+function %load_uextend_scaled64(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = uextend.i64 v1
+  v3 = ishl_imm v2, 3
+  v4 = iadd v0, v3
+  v5 = load.i64 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldr x0, [x0, w1, UXTW #3]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, [x0, w1, uxtw #3]
+;   ret
+
+function %load_not_extend_scaled64(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = ishl_imm v1, 3
+  v3 = uextend.i64 v2
+  v4 = iadd v0, v3
+  v5 = load.i64 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   lsl w4, w1, #3
+;   ldr x0, [x0, w4, UXTW]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lsl w4, w1, #3
+;   ldr x0, [x0, w4, uxtw]
+;   ret
+
+function %load_sextend_scaled8(i64, i32) -> i8 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = ishl_imm v2, 0
+  v4 = iadd v0, v3
+  v5 = load.i8 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldrb w0, [x0, w1, SXTW #0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrb w0, [x0, w1, sxtw #0]
+;   ret
+
+function %load_sextend_scaled16(i64, i32) -> i16 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = ishl_imm v2, 1
+  v4 = iadd v0, v3
+  v5 = load.i16 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldrh w0, [x0, w1, SXTW #1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldrh w0, [x0, w1, sxtw #1]
+;   ret
+
+function %load_sextend_scaled32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = ishl_imm v2, 2
+  v4 = iadd v0, v3
+  v5 = load.i32 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldr w0, [x0, w1, SXTW #2]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr w0, [x0, w1, sxtw #2]
+;   ret
+
+function %load_sextend_scaled64(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = ishl_imm v2, 3
+  v4 = iadd v0, v3
+  v5 = load.i64 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldr x0, [x0, w1, SXTW #3]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, [x0, w1, sxtw #3]
+;   ret
+

@@ -3122,15 +3122,37 @@
 (rule 5 (amode ty (iadd (sextend x @ (value_type $I32)) y) offset)
         (AMode.RegExtended (amode_add y offset) x (ExtendOp.SXTW)))
 
+;; `RegScaled*` rules where this matches an addition of an "index register" to a
+;; base register. The index register is shifted by the size of the type loaded
+;; in bytes to enable this mode matching.
+;;
+;; Note that this can additionally bundle an extending operation but the
+;; extension must happen before the shift. This will pattern-match the shift
+;; first and then if that succeeds afterwards try to find an extend.
+(rule 6 (amode ty (iadd x (ishl y (iconst (u64_from_imm64 n)))) offset)
+        (if-let $true (u64_eq (ty_bytes ty) (u64_shl 1 n)))
+        (amode_reg_scaled (amode_add x offset) y ty))
+(rule 7 (amode ty (iadd (ishl y (iconst (u64_from_imm64 n))) x) offset)
+        (if-let $true (u64_eq (ty_bytes ty) (u64_shl 1 n)))
+        (amode_reg_scaled (amode_add x offset) y ty))
+
+(decl amode_reg_scaled (Reg Value Type) AMode)
+(rule 0 (amode_reg_scaled base index ty)
+        (AMode.RegScaled base index ty))
+(rule 1 (amode_reg_scaled base (uextend index @ (value_type $I32)) ty)
+        (AMode.RegScaledExtended base index ty (ExtendOp.UXTW)))
+(rule 2 (amode_reg_scaled base (sextend index @ (value_type $I32)) ty)
+        (AMode.RegScaledExtended base index ty (ExtendOp.SXTW)))
+
 ;; Small optimizations where constants found in `iadd` are folded into the
 ;; `offset` immediate.
 ;;
 ;; NB: this should probably be done by mid-end optimizations rather than here
 ;; in the backend, but currently Cranelift doesn't do that.
-(rule 6 (amode ty (iadd x (iconst (simm32 y))) offset)
+(rule 8 (amode ty (iadd x (iconst (simm32 y))) offset)
         (if-let new_offset (s32_add_fallible y offset))
         (amode ty x new_offset))
-(rule 7 (amode ty (iadd (iconst (simm32 x)) y) offset)
+(rule 9 (amode ty (iadd (iconst (simm32 x)) y) offset)
         (if-let new_offset (s32_add_fallible x offset))
         (amode ty y new_offset))
 
