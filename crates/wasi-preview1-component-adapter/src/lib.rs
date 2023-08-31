@@ -2123,16 +2123,6 @@ impl From<filesystem::DescriptorType> for wasi::Filetype {
     }
 }
 
-struct DropPollable {
-    pollable: poll::Pollable,
-}
-
-impl Drop for DropPollable {
-    fn drop(&mut self) {
-        poll::drop_pollable(self.pollable)
-    }
-}
-
 #[derive(Clone, Copy)]
 pub enum BlockingMode {
     NonBlocking,
