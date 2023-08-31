@@ -142,7 +142,7 @@ fn main() {
 
     wait(sub);
     let (accepted, input, output) = tcp::accept(sock).unwrap();
-    let (data, status) = streams::read(input, second_message.len() as u64).unwrap();
+    let (data, status) = streams::blocking_read(input, second_message.len() as u64).unwrap();
     assert_eq!(status, streams::StreamStatus::Open);
 
     streams::drop_input_stream(input);
