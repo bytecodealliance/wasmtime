@@ -203,6 +203,52 @@
       )
     )
   )
+
+  (func (export "as-br_table-index")
+    (block (br_table 0 0 0 (br_if 0 (i32.const 1) (i32.const 2))))
+  )
+  (func (export "as-br_table-value") (result i32)
+    (block (result i32)
+      (br_table 0 0 0 (br_if 0 (i32.const 1) (i32.const 2)) (i32.const 3)) (i32.const 4)
+    )
+  )
+  (func (export "as-br_table-value-index") (result i32)
+    (block (result i32)
+      (br_table 0 0 (i32.const 2) (br_if 0 (i32.const 1) (i32.const 3))) (i32.const 4)
+    )
+  )
+
+  (func (export "nested-br_table-value") (param i32) (result i32)
+    (i32.add
+      (i32.const 1)
+      (block (result i32)
+        (drop (i32.const 2))
+        (br_table 0
+          (block (result i32)
+            (drop (br_if 1 (i32.const 8) (local.get 0))) (i32.const 4)
+          )
+          (i32.const 1)
+        )
+        (i32.const 16)
+      )
+    )
+  )
+
+  (func (export "nested-br_table-value-index") (param i32) (result i32)
+    (i32.add
+      (i32.const 1)
+      (block (result i32)
+        (drop (i32.const 2))
+        (br_table 0
+          (i32.const 4)
+          (block (result i32)
+            (drop (br_if 1 (i32.const 8) (local.get 0))) (i32.const 1)
+          )
+        )
+        (i32.const 16)
+      )
+    )
+  )
 )
 
 
@@ -260,3 +306,12 @@
 (assert_return (invoke "nested-br_if-value" (i32.const 1)) (i32.const 9))
 (assert_return (invoke "nested-br_if-value-cond" (i32.const 0)) (i32.const 5))
 (assert_return (invoke "nested-br_if-value-cond" (i32.const 1)) (i32.const 9))
+
+(assert_return (invoke "as-br_table-index"))
+(assert_return (invoke "as-br_table-value") (i32.const 1))
+(assert_return (invoke "as-br_table-value-index") (i32.const 1))
+
+(assert_return (invoke "nested-br_table-value" (i32.const 0)) (i32.const 5))
+(assert_return (invoke "nested-br_table-value" (i32.const 1)) (i32.const 9))
+(assert_return (invoke "nested-br_table-value-index" (i32.const 0)) (i32.const 5))
+(assert_return (invoke "nested-br_table-value-index" (i32.const 1)) (i32.const 9))

@@ -85,6 +85,17 @@
     )
   )
 
+  (func (export "as-br_table-first") (result i32)
+    (block (result i32)
+      (global.get $x) (i32.const 2) (br_table 0 0)
+    )
+  )
+  (func (export "as-br_table-last") (result i32)
+    (block (result i32)
+      (i32.const 2) (global.get $x) (br_table 0 0)
+    )
+  )
+
   (func $f (param i32) (result i32) (local.get 0))
   (func (export "as-call-value") (result i32)
     (call $f (global.get $x))
@@ -178,3 +189,6 @@
 (assert_return (invoke "get-7") (f32.const 8))
 (assert_return (invoke "get-8") (f64.const 9))
 (assert_return (invoke "as-drop-operand"))
+
+(assert_return (invoke "as-br_table-first") (i32.const 6))
+(assert_return (invoke "as-br_table-last") (i32.const 2))

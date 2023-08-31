@@ -2,7 +2,7 @@ use wasmtime_environ::WasmType;
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{ABIResult, ABI},
+    abi::ABIResult,
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm},
@@ -84,19 +84,19 @@ impl<'a> CodeGenContext<'a> {
     /// Executes the provided function, guaranteeing that the
     /// specified register, if any, remains unallocatable throughout
     /// the function's execution.
-    pub fn without<T, M, F>(&mut self, reg: &Option<Reg>, masm: &mut M, mut f: F) -> T
+    pub fn without<T, M, F>(&mut self, reg: Option<Reg>, masm: &mut M, mut f: F) -> T
     where
         M: MacroAssembler,
         F: FnMut(&mut Self, &mut M) -> T,
     {
         if let Some(reg) = reg {
-            self.reg(*reg, masm);
+            self.reg(reg, masm);
         }
 
         let result = f(self, masm);
 
         if let Some(reg) = reg {
-            self.free_reg(*reg);
+            self.free_reg(reg);
         }
 
         result
@@ -286,42 +286,6 @@ impl<'a> CodeGenContext<'a> {
         stack_mut.truncate(truncate);
     }
 
-    /// Pops the stack pointer to ensure that it is correctly placed according to the expectations
-    /// of the destination branch.
-    ///
-    /// This function must be used when performing unconditional jumps, as the machine stack might
-    /// be left unbalanced at the jump site, due to register spills. In this context unbalanced
-    /// refers to possible extra space created at the jump site, which might cause invaid memory
-    /// accesses. Note that in some cases the stack pointer offset might be already less than or
-    /// equal to the original stack pointer offset registered when entering the destination control
-    /// stack frame, which effectively means that when reaching the jump site no extra space was
-    /// allocated similar to what would happen in a fall through in which we assume that the
-    /// program has allocated and deallocated the right amount of stack space.
-    ///
-    /// More generally speaking the current stack pointer will be less than the original stack
-    /// pointer offset in cases in which the top value in the value stack is a memory entry which
-    /// needs to be popped into the return location according to the ABI (a register for single
-    /// value returns and a memory slot for 1+ returns). In short, this could happen given that we
-    /// handle return values preemptively when emitting unconditional branches, and push them back
-    /// to the value stack at control flow joins.
-    pub fn pop_sp_for_branch<M: MacroAssembler>(
-        &mut self,
-        destination: &ControlStackFrame,
-        masm: &mut M,
-    ) {
-        let (_, original_sp_offset) = destination.original_stack_len_and_sp_offset();
-        let current_sp_offset = masm.sp_offset();
-
-        assert!(
-            current_sp_offset >= original_sp_offset
-                || (current_sp_offset + <M::ABI as ABI>::word_bytes()) == original_sp_offset
-        );
-
-        if current_sp_offset > original_sp_offset {
-            masm.free_stack(current_sp_offset - original_sp_offset);
-        }
-    }
-
     /// Convenience wrapper around [`Self::spill_callback`].
     ///
     /// This function exists for cases in which triggering an unconditional
@@ -330,32 +294,82 @@ impl<'a> CodeGenContext<'a> {
         Self::spill_impl(&mut self.stack, &mut self.regalloc, &mut self.frame, masm);
     }
 
+    /// Prepares the compiler to emit an uncoditional jump to the
+    /// given destination branch.  This process involves:
+    /// * Balancing the machine stack pointer by popping it to
+    ///   match the destination branch.
+    /// * Updating the reachability state.
+    /// * Marking the destination frame as a destination target.
+    pub fn unconditional_jump<M, F>(&mut self, dest: &mut ControlStackFrame, masm: &mut M, mut f: F)
+    where
+        M: MacroAssembler,
+        F: FnMut(&mut M, &mut Self, &mut ControlStackFrame),
+    {
+        let (_, target_sp) = dest.original_stack_len_and_sp_offset();
+        // Invariant: The SP, must be greater or equal to the target
+        // SP, given that we haven't popped any results by this point
+        // yet. But it may happen in the callback.
+        assert!(masm.sp_offset() >= target_sp);
+        f(masm, self, dest);
+
+        // The following snippet, pops the stack pointer to ensure
+        // that it is correctly placed according to the expectations
+        // of the destination branch.
+        //
+        // This is done in the context of unconditional jumps, as the
+        // machine stack might be left unbalanced at the jump site,
+        // due to register spills. In this context unbalanced refers
+        // to possible extra space created at the jump site, which
+        // might cause invaid memory accesses. Note that in some cases
+        // the stack pointer offset might be already less than or
+        // equal to the original stack pointer offset registered when
+        // entering the destination control stack frame, which
+        // effectively means that when reaching the jump site no extra
+        // space was allocated similar to what would happen in a fall
+        // through in which we assume that the program has allocated
+        // and deallocated the right amount of stack space.
+        //
+        // More generally speaking the current stack pointer will be
+        // less than the original stack pointer offset in cases in
+        // which the top value in the value stack is a memory entry
+        // which needs to be popped into the return location according
+        // to the ABI (a register for single value returns and a
+        // memory slot for 1+ returns). In short, this could happen
+        // given that we handle return values preemptively when
+        // emitting unconditional branches, and push them back to the
+        // value stack at control flow joins.
+        let current_sp = masm.sp_offset();
+        if current_sp > target_sp {
+            masm.free_stack(current_sp - target_sp);
+        }
+
+        dest.set_as_target();
+        masm.jmp(*dest.label());
+        self.reachable = false;
+    }
+
     /// Handles the emission of the ABI result. This function is used at the end
     /// of a block or function to pop the results from the value stack into the
     /// corresponding ABI result representation.
     pub fn pop_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
-        if result.is_void() {
-            return;
+        match result {
+            ABIResult::Void => {}
+            ABIResult::Reg { reg, .. } => {
+                let TypedReg { reg, ty: _ } = self.pop_to_reg(masm, Some(*reg));
+                self.free_reg(reg);
+            }
         }
-
-        let TypedReg { reg, ty: _ } = self.pop_to_reg(masm, Some(result.result_reg().unwrap()));
-        self.free_reg(reg);
     }
 
     /// Push ABI results in to the value stack. This function is used at the end
     /// of a block or after a function call to push the corresponding ABI
     /// results into the value stack.
     pub fn push_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
-        if result.is_void() {
-            return;
-        }
-
         match result {
+            ABIResult::Void => {}
             ABIResult::Reg { ty, reg } => {
-                let reg = reg.unwrap();
-                let ty = ty.unwrap();
-                assert!(self.regalloc.reg_available(reg));
-                let typed_reg = TypedReg::new(ty, self.reg(reg, masm));
+                assert!(self.regalloc.reg_available(*reg));
+                let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm));
                 self.stack.push(typed_reg.into());
             }
         }
