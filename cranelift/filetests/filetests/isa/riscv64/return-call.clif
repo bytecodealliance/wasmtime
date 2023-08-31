@@ -103,12 +103,12 @@ block0(v0: f64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc t6, 0
-;   addi t6, t6, 0x18
-;   ld a0, 0(t6)
+;   auipc a0, 0
+;   ld a0, 0x18(a0)
 ;   fmv.d.x ft5, a0
 ;   fadd.d ft0, ft0, ft5
 ;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x30, 0x40
 

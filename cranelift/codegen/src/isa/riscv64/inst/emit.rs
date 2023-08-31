@@ -620,17 +620,48 @@ impl MachInstEmit for Inst {
                 let base = from.get_base_register();
                 let offset = from.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_i64(offset);
+                let label = from.get_label_with_sink(sink);
 
-                // TODO: We shouldn't just fall back to `LoadAddr` immediately. For `MachLabel`s
-                // we should try to emit the `auipc` and add a relocation on this load.
-                let (addr, imm12) = match (base, offset_imm12) {
-                    // If the offset fits into an imm12 we can directly encode it.
-                    (Some(base), Some(imm12)) => (base, imm12),
-                    // Otherwise load the address it into a reg and load from it.
-                    _ => {
+                let (addr, imm12) = match (base, offset_imm12, label) {
+                    // When loading from a Reg+Offset, if the offset fits into an imm12 we can directly encode it.
+                    (Some(base), Some(imm12), None) => (base, imm12),
+
+                    // Otherwise, if the offset does not fit into a imm12, we need to materialize it into a
+                    // register and load from that.
+                    (Some(_), None, None) => {
                         let tmp = writable_spilltmp_reg();
                         Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
                         (tmp.to_reg(), Imm12::zero())
+                    }
+
+                    // If the AMode contains a label we can emit an internal relocation that gets
+                    // resolved with the correct address later.
+                    (None, Some(imm), Some(label)) => {
+                        debug_assert_eq!(imm.as_i16(), 0);
+
+                        // Get the current PC.
+                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
+                        Inst::Auipc {
+                            rd,
+                            imm: Imm20::from_bits(0),
+                        }
+                        .emit(&[], sink, emit_info, state);
+
+                        // Emit a relocation for the load. This patches the offset into the instruction.
+                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
+
+                        // Imm12 here is meaningless since it's going to get replaced.
+                        (rd.to_reg(), Imm12::zero())
+                    }
+
+                    // These cases are impossible with the current AModes that we have. We either
+                    // always have a register, or always have a label. Never both, and never neither.
+                    (None, None, None)
+                    | (None, Some(_), None)
+                    | (Some(_), None, Some(_))
+                    | (Some(_), Some(_), Some(_))
+                    | (None, None, Some(_)) => {
+                        unreachable!("Invalid load address")
                     }
                 };
 
@@ -650,8 +681,6 @@ impl MachInstEmit for Inst {
                 let offset = to.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_i64(offset);
 
-                // TODO: We shouldn't just fall back to `LoadAddr` immediately. For `MachLabel`s
-                // we should try to emit the `auipc` and add a relocation on this store.
                 let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
                     (Some(base), Some(imm12)) => (base, imm12),
