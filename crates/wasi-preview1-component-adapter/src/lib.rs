@@ -1267,11 +1267,11 @@ pub unsafe extern "C" fn fd_write(
                     let wasi_stream = streams.get_write_stream()?;
 
                     let nbytes = if let StreamType::File(file) = &streams.type_ {
-                        file.blocking_mode.write(state, wasi_stream, bytes)?
+                        file.blocking_mode.write(wasi_stream, bytes)?
                     } else {
                         // Use blocking writes on non-file streams (stdout, stderr, as sockets
                         // aren't currently used).
-                        BlockingMode::Blocking.write(state, wasi_stream, bytes)?
+                        BlockingMode::Blocking.write(wasi_stream, bytes)?
                     };
 
                     // If this is a file, keep the current-position pointer up to date.
@@ -1629,44 +1629,6 @@ impl From<network::ErrorCode> for Errno {
             _ => unreachable!(),
         }
     }
-}
-
-fn host_poll_oneoff_single(state: &State, pollable: poll::Pollable) {
-    #[link(wasm_import_module = "wasi:poll/poll")]
-    extern "C" {
-        #[link_name = "poll-oneoff"]
-        fn poll_oneoff_import(pollables: *const Pollable, len: usize, rval: *mut BoolList);
-    }
-
-    let mut subs = [pollable];
-
-    let pollables = Pollables {
-        pointer: subs.as_mut_ptr(),
-        index: 0,
-        length: 1,
-    };
-
-    let mut ready_list = BoolList {
-        base: std::ptr::null(),
-        len: 0,
-    };
-
-    let mut results = [false; 1];
-
-    unsafe {
-        state
-            .import_alloc
-            .with_buffer(results.as_mut_ptr() as *mut _, 1, || {
-                poll_oneoff_import(
-                    pollables.pointer,
-                    pollables.length,
-                    &mut ready_list as *mut _,
-                );
-            })
-    }
-
-    assert_eq!(ready_list.len, 1);
-    assert_eq!(ready_list.base, results.as_ptr());
 }
 
 /// Concurrently poll for the occurrence of a set of events.
@@ -2191,50 +2153,48 @@ impl BlockingMode {
             BlockingMode::Blocking => streams::blocking_read(input_stream, read_len),
         }
     }
-    fn write(
-        self,
-        state: &State,
-        output_stream: streams::OutputStream,
-        bytes: &[u8],
-    ) -> Result<usize, Errno> {
-        let s = DropPollable {
-            pollable: streams::subscribe_to_output_stream(output_stream),
-        };
+    fn write(self, output_stream: streams::OutputStream, mut bytes: &[u8]) -> Result<usize, Errno> {
+        match self {
+            BlockingMode::Blocking => {
+                let total = bytes.len();
+                while !bytes.is_empty() {
+                    let len = bytes.len().min(4096);
+                    let (chunk, rest) = bytes.split_at(len);
+                    bytes = rest;
+                    match streams::blocking_write_and_flush(output_stream, chunk) {
+                        Ok(()) => {}
+                        Err(_) => return Err(ERRNO_IO),
+                    }
+                }
+                Ok(total)
+            }
 
-        if matches!(self, BlockingMode::Blocking) {
-            host_poll_oneoff_single(state, s.pollable);
-        }
+            BlockingMode::NonBlocking => {
+                let permit = match streams::check_write(output_stream) {
+                    Ok(n) => n,
+                    Err(streams::WriteError::Closed) => 0,
+                    Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+                };
 
-        let permit = match streams::check_write(output_stream) {
-            Ok(n) => n,
-            Err(streams::WriteError::Closed) => 0,
-            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
-        };
+                let len = bytes.len().min(permit as usize);
+                if len == 0 {
+                    return Ok(0);
+                }
 
-        let len = bytes.len().min(permit as usize);
-        if len == 0 {
-            return Ok(0);
-        }
+                match streams::write(output_stream, &bytes[..len]) {
+                    Ok(_) => {}
+                    Err(streams::WriteError::Closed) => return Ok(0),
+                    Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+                }
 
-        match streams::write(output_stream, &bytes[..len]) {
-            Ok(_) => {}
-            Err(streams::WriteError::Closed) => return Ok(0),
-            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
-        }
+                match streams::blocking_flush(output_stream) {
+                    Ok(_) => {}
+                    Err(streams::WriteError::Closed) => return Ok(0),
+                    Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+                }
 
-        match streams::flush(output_stream) {
-            Ok(_) => {}
-            Err(streams::WriteError::Closed) => return Ok(0),
-            Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
-        }
-
-        host_poll_oneoff_single(state, s.pollable);
-        match streams::check_write(output_stream) {
-            Ok(_) => Ok(len),
-
-            // TODO: should this be `Ok(len)`?
-            Err(streams::WriteError::Closed) => Ok(0),
-            Err(streams::WriteError::LastOperationFailed) => Err(ERRNO_IO),
+                Ok(len)
+            }
         }
     }
 }

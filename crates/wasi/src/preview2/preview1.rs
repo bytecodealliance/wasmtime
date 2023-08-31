@@ -71,39 +71,55 @@ impl BlockingMode {
         &self,
         host: &mut (impl streams::Host + poll::poll::Host),
         output_stream: streams::OutputStream,
-        bytes: &[u8],
+        mut bytes: &[u8],
     ) -> Result<usize, types::Error> {
-        use poll::poll::Host as Poll;
         use streams::Host as Streams;
 
-        let n = match self {
+        match self {
             BlockingMode::Blocking => {
-                let s = Streams::subscribe_to_output_stream(host, output_stream)
-                    .await
-                    .map_err(types::Error::trap)?;
-                let _ = Poll::poll_oneoff(host, vec![s])
-                    .await
-                    .map_err(types::Error::trap)?;
-                Poll::drop_pollable(host, s)
-                    .await
-                    .map_err(types::Error::trap)?;
-                Streams::check_write(host, output_stream).await?
+                let total = bytes.len();
+                while !bytes.is_empty() {
+                    // NOTE: blocking_write_and_flush takes at most one 4k buffer.
+                    let len = bytes.len().min(4096);
+                    let (chunk, rest) = bytes.split_at(len);
+                    bytes = rest;
+
+                    Streams::blocking_write_and_flush(host, output_stream, Vec::from(chunk)).await?
+                }
+
+                Ok(total)
             }
-            BlockingMode::NonBlocking => Streams::check_write(host, output_stream).await?,
-        };
+            BlockingMode::NonBlocking => {
+                let n = match Streams::check_write(host, output_stream).await {
+                    Ok(n) => n,
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => 0,
+                    Err(e) => Err(e)?,
+                };
 
-        let len = bytes.len().min(n as usize);
+                let len = bytes.len().min(n as usize);
+                if len == 0 {
+                    return Ok(0);
+                }
 
-        // Either this was a blocking request to write `0` bytes, or it was a request to write `0`
-        // or more bytes to a non-blocking handle.
-        if len == 0 {
-            return Ok(0);
+                match Streams::write(host, output_stream, bytes[..len].to_vec()).await {
+                    Ok(()) => {}
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => {
+                        return Ok(0)
+                    }
+                    Err(e) => Err(e)?,
+                }
+
+                match Streams::blocking_flush(host, output_stream).await {
+                    Ok(()) => {}
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => {
+                        return Ok(0)
+                    }
+                    Err(e) => Err(e)?,
+                };
+
+                Ok(len)
+            }
         }
-
-        Streams::write(host, output_stream, bytes[..len].to_vec()).await?;
-        Streams::blocking_flush(host, output_stream).await?;
-
-        Ok(len)
     }
 }
 
