@@ -481,16 +481,53 @@ where
             })
         },
     )?;
-    linker.func_wrap1_async(
+    linker.func_wrap2_async(
         "wasi:io/streams",
-        "blocking-flush",
-        move |mut caller: Caller<'_, T>, stream: u32| {
+        "flush",
+        move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
 
-                io::streams::Host::blocking_flush(ctx, stream).await?;
+                let result: [u32; 2] = match io::streams::Host::flush(ctx, stream).await {
+                    // 0 == outer result tag
+                    // 1 == unused
+                    Ok(_) => [0, 0],
 
-                Ok(0)
+                    // 0 == outer result tag
+                    // 1 == inner result tag
+                    Err(_) => todo!("how do we extract runtime error cases?"),
+                };
+
+                let raw = u32_array_to_u8(&result);
+                let memory: Memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "wasi:io/streams",
+        "blocking-flush",
+        move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+
+                let result: [u32; 2] = match io::streams::Host::blocking_flush(ctx, stream).await {
+                    // 0 == outer result tag
+                    // 1 == unused
+                    Ok(_) => [0, 0],
+
+                    // 0 == outer result tag
+                    // 1 == inner result tag
+                    Err(_) => todo!("how do we extract runtime error cases?"),
+                };
+
+                let raw = u32_array_to_u8(&result);
+                let memory: Memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
             })
         },
     )?;
