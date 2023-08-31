@@ -273,13 +273,13 @@ impl IntegerCompare {
     #[inline]
     pub(crate) fn op_name(&self) -> &'static str {
         match self.kind {
-            IntCC::Equal => "beq",
+            IntCC::Equal => "EQ",
             IntCC::NotEqual => "bne",
-            IntCC::SignedLessThan => "blt",
+            IntCC::SignedLessThan => "SLT",
             IntCC::SignedGreaterThanOrEqual => "bge",
             IntCC::SignedGreaterThan => "bgt",
             IntCC::SignedLessThanOrEqual => "ble",
-            IntCC::UnsignedLessThan => "bltu",
+            IntCC::UnsignedLessThan => "LT",
             IntCC::UnsignedGreaterThanOrEqual => "bgeu",
             IntCC::UnsignedGreaterThan => "bgtu",
             IntCC::UnsignedLessThanOrEqual => "bleu",

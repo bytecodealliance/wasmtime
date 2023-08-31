@@ -14,7 +14,7 @@ L1:
   0 + 10 => B
   $ => B :EQ
   A => C
-  B :JMPZ(L3)
+  B :JMPNZ(L3)
   :JMP(L2)
 L2:
   C => A

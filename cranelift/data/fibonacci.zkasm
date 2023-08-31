@@ -20,7 +20,7 @@ L1:
   $ => A :ADD
   0 + 10 => B
   $ => B :EQ
-  B :JMPZ(L3)
+  B :JMPNZ(L3)
   :JMP(L2)
 L2:
   C => B

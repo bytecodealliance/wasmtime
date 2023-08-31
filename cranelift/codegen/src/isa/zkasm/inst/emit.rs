@@ -1098,11 +1098,13 @@ impl MachInstEmit for Inst {
             } => {
                 kind.rs1 = allocs.next(kind.rs1);
                 kind.rs2 = allocs.next(kind.rs2);
-                debug_assert_eq!(kind.rs2, zero_reg());
+                // TODO(akashin): Support other types of comparisons.
+                assert!(matches!(kind.kind, IntCC::NotEqual));
+                assert_eq!(kind.rs2, zero_reg());
                 match taken {
                     BranchTarget::Label(label) => {
                         put_string(
-                            &format!("{} :JMPZ(L{})\n", reg_name(kind.rs1), label.index()),
+                            &format!("{} :JMPNZ(L{})\n", reg_name(kind.rs1), label.index()),
                             sink,
                         );
 
