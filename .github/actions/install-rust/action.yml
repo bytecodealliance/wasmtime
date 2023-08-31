@@ -18,14 +18,9 @@ runs:
       shell: bash
       id: select
       run: |
-        # This is Wasmtime's minimum supported rust version (MSRV). This is
-        # expressed as N in a version `1.N.0`. Wasmtime's current policy is that
-        # this number can be no larger than the current stable release of Rust
-        # minus 2.
-        #
-        # NB: when updating this additionally update `rust-version` in
-        # `Cargo.toml`.
-        msrv=70
+        # Determine MSRV as N in `1.N.0` by looking at the `rust-version`
+        # located in the root `Cargo.toml`.
+        msrv=$(grep 'rust-version.*1' Cargo.toml | sed 's/.*\.\([0-9]*\)\..*/\1/')
 
         if [ "${{ inputs.toolchain }}" = "default" ]; then
           echo "version=1.$((msrv+2)).0" >> "$GITHUB_OUTPUT"
