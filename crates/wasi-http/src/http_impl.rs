@@ -276,6 +276,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let (stream_id, stream) = self
             .table_mut()
             .push_stream(Bytes::from(buf), response_id)
+            .await
             .context("[handle_async] pushing stream")?;
         let response = self
             .table_mut()

@@ -287,6 +287,7 @@ impl Stream {
     }
 }
 
+#[async_trait::async_trait]
 pub trait TableHttpExt {
     fn push_request(&mut self, request: Box<dyn HttpRequest>) -> Result<u32, TableError>;
     fn get_request(&self, id: u32) -> Result<&(dyn HttpRequest), TableError>;
@@ -308,12 +309,17 @@ pub trait TableHttpExt {
     fn get_fields_mut(&mut self, id: u32) -> Result<&mut Box<ActiveFields>, TableError>;
     fn delete_fields(&mut self, id: u32) -> Result<(), TableError>;
 
-    fn push_stream(&mut self, content: Bytes, parent: u32) -> Result<(u32, Stream), TableError>;
+    async fn push_stream(
+        &mut self,
+        content: Bytes,
+        parent: u32,
+    ) -> Result<(u32, Stream), TableError>;
     fn get_stream(&self, id: u32) -> Result<&Stream, TableError>;
     fn get_stream_mut(&mut self, id: u32) -> Result<&mut Box<Stream>, TableError>;
     fn delete_stream(&mut self, id: u32) -> Result<(), TableError>;
 }
 
+#[async_trait::async_trait]
 impl TableHttpExt for Table {
     fn push_request(&mut self, request: Box<dyn HttpRequest>) -> Result<u32, TableError> {
         self.push(Box::new(request))
@@ -367,7 +373,11 @@ impl TableHttpExt for Table {
         self.delete::<Box<ActiveFields>>(id).map(|_old| ())
     }
 
-    fn push_stream(&mut self, content: Bytes, parent: u32) -> Result<(u32, Stream), TableError> {
+    async fn push_stream(
+        &mut self,
+        mut content: Bytes,
+        parent: u32,
+    ) -> Result<(u32, Stream), TableError> {
         let (a, b) = tokio::io::duplex(MAX_BUF_SIZE);
         let (_, write_stream) = tokio::io::split(a);
         let (read_stream, _) = tokio::io::split(b);
@@ -375,13 +385,17 @@ impl TableHttpExt for Table {
         // TODO: more informed budget here
         let mut output_stream = AsyncWriteStream::new(4096, write_stream);
 
-        let mut cursor = 0;
-        while cursor < content.len() {
-            // let (written, _) = output_stream
-            //     .write(content.slice(cursor..content.len()))
-            //     .map_err(|_| TableError::NotPresent)?;
-            // cursor += written;
-            todo!()
+        while !content.is_empty() {
+            let permit = output_stream
+                .write_ready()
+                .await
+                .map_err(|_| TableError::NotPresent)?;
+
+            let chunk = content.split_to(permit as usize);
+
+            output_stream
+                .write(chunk)
+                .map_err(|_| TableError::NotPresent)?;
         }
 
         let input_stream = Box::new(input_stream);
