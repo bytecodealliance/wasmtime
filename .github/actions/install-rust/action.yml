@@ -5,7 +5,7 @@ inputs:
   toolchain:
     description: 'Default toolchan to install'
     required: false
-    default: '1.71.0'
+    default: 'default'
   lockfiles:
     description: 'Path glob for Cargo.lock files to use as cache keys'
     required: false
@@ -14,13 +14,28 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Install Rust
+      shell: bash
+      id: select
+      run: |
+        # Determine MSRV as N in `1.N.0` by looking at the `rust-version`
+        # located in the root `Cargo.toml`.
+        msrv=$(grep 'rust-version.*1' Cargo.toml | sed 's/.*\.\([0-9]*\)\..*/\1/')
+
+        if [ "${{ inputs.toolchain }}" = "default" ]; then
+          echo "version=1.$((msrv+2)).0" >> "$GITHUB_OUTPUT"
+        elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
+          echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
+        else
+          echo "version=${{ inputs.toolchain }}" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Install Rust
       shell: bash
       run: |
         rustup set profile minimal
-        rustup update "${{ inputs.toolchain }}" --no-self-update
-        rustup default "${{ inputs.toolchain }}"
+        rustup update "${{ steps.select.outputs.version }}" --no-self-update
+        rustup default "${{ steps.select.outputs.version }}"
 
         # Save disk space by avoiding incremental compilation. Also turn down
         # debuginfo from 2 to 0 to help save disk space.
@@ -31,11 +46,7 @@ runs:
         EOF
 
         # Deny warnings on CI to keep our code warning-free as it lands in-tree.
-        # Don't do this on nightly though, since there's a fair amount of
-        # warning churn there.
-        if [[ "${{ inputs.toolchain }}" != nightly* ]]; then
-          echo RUSTFLAGS="-D warnings" >> "$GITHUB_ENV"
-        fi
+        echo RUSTFLAGS="-D warnings" >> "$GITHUB_ENV"
 
         if [[ "${{ runner.os }}" = "macOS" ]]; then
           cat >> "$GITHUB_ENV" <<EOF

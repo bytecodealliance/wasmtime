@@ -123,7 +123,9 @@ exclude = [
 version = "13.0.0"
 authors = ["The Wasmtime Project Developers"]
 edition = "2021"
-rust-version = "1.71.0"
+# Wasmtime's current policy is that this number can be no larger than the
+# current stable release of Rust minus 2.
+rust-version = "1.70.0"
 
 [workspace.dependencies]
 wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=13.0.0" }
