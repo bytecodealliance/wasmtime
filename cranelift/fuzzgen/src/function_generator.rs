@@ -594,11 +594,11 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (
                     Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
-                    &([I8X16, I128] | [I16X8, I128] | [I32X4, I128] | [I64X2, I128])
+                    &[I8X16 | I16X8 | I32X4 | I64X2, I128]
                 ),
                 (
                     Opcode::Rotr | Opcode::Rotl,
-                    &([I8X16, _] | [I16X8, _] | [I32X4, _] | [I64X2, _])
+                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
                 ),
             )
         }
@@ -661,11 +661,11 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (
                     Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
-                    &([I8X16, I128] | [I16X8, I128] | [I32X4, I128] | [I64X2, I128])
+                    &[I8X16 | I16X8 | I32X4 | I64X2, I128]
                 ),
                 (
                     Opcode::Rotr | Opcode::Rotl,
-                    &([I8X16, _] | [I16X8, _] | [I32X4, _] | [I64X2, _])
+                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
                 ),
                 // TODO
                 (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
