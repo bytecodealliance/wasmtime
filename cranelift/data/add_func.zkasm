@@ -5,19 +5,21 @@ start:
 function_0:
   SP + 1 => SP
   RR :MSTORE(SP)
+  SP + 1 => SP
 L0:
-  C => s2
+  CTX :MSTORE(SP)
   0 + 2 => C
   0 + 3 => D
-  s2 => E
+  $ => CTX :MLOAD(SP)
   C => A
   D :ASSERT
   0 + 5 => D
-  s2 => E
+  $ => CTX :MLOAD(SP)
   C => A
   D :ASSERT
   :JMP(L1)
 L1:
+  SP - 1 => SP
   $ => RR :MLOAD(SP)
   SP - 1 => SP
   :JMP(RR)

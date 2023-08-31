@@ -6,31 +6,29 @@ function_0:
   SP + 1 => SP
   RR :MSTORE(SP)
 L0:
-  C => a2
   0 + 0 => A
-  A => a3
+  A => D
   0 + 0 => A
   0 + 1 => B
-  B => a4
+  B => E
   :JMP(L1)
 L1:
   $ => C :ADD
-  B => a4
+  B => E
   0 + 1 => B
-  a3 => A
+  D => A
   $ => A :ADD
-  0 + 10 => E
-  ValueRegs { parts: [p10i, v2097151] }, ValueRegs { parts: [p7i, v2097151] } => E :CMP
-  E :JMPZ(L3)
+  0 + 10 => B
+  $ => B :EQ
+  B :JMPZ(L3)
   :JMP(L2)
 L2:
-  A => a3
   C => B
-  a4 => A
+  A => D
+  E => A
   :JMP(L1)
 L3:
   0 + 89 => D
-  a2 => E
   C => A
   D :ASSERT
   :JMP(L4)

@@ -6,7 +6,6 @@ function_0:
   SP + 1 => SP
   RR :MSTORE(SP)
 L0:
-  C => E
   2 + 3 => C
   0 + 5 => D
   C => A
