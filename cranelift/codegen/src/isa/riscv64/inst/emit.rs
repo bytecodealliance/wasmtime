@@ -624,7 +624,7 @@ impl MachInstEmit for Inst {
 
                 let (addr, imm12) = match (base, offset_imm12, label) {
                     // When loading from a Reg+Offset, if the offset fits into an imm12 we can directly encode it.
-                    (Some(base), Some(imm12), _) => (base, imm12),
+                    (Some(base), Some(imm12), None) => (base, imm12),
 
                     // Otherwise, if the offset does not fit into a imm12, we need to materialize it into a
                     // register and load from that.
@@ -659,6 +659,7 @@ impl MachInstEmit for Inst {
                     (None, None, None)
                     | (None, Some(_), None)
                     | (Some(_), None, Some(_))
+                    | (Some(_), Some(_), Some(_))
                     | (None, None, Some(_)) => {
                         unreachable!("Invalid load address")
                     }
