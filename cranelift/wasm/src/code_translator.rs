@@ -928,7 +928,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_store(memarg, ir::Opcode::Store, builder, state, environ)?;
         }
         /****************************** Nullary Operators ************************************/
-        Operator::I32Const { value } => state.push1(builder.ins().iconst(I32, i64::from(*value))),
+        Operator::I32Const { value } => {
+            state.push1(builder.ins().iconst(I32, *value as u32 as i64))
+        }
         Operator::I64Const { value } => state.push1(builder.ins().iconst(I64, *value)),
         Operator::F32Const { value } => {
             state.push1(builder.ins().f32const(f32_translation(*value)));
