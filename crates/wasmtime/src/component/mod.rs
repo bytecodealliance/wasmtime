@@ -281,6 +281,22 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // This option defaults to `false`.
 ///     async: true,
 ///
+///     // Alternative mode of async configuration where this still implies
+///     // async instantiation happens, for example, but more control is
+///     // provided over which imports are async and which aren't.
+///     //
+///     // Note that in this mode all exports are still async.
+///     async: {
+///         // All imports are async except for functions with these names
+///         except_imports: ["foo", "bar"],
+///
+///         // All imports are synchronous except for functions with these names
+///         //
+///         // Note that this key cannot be specified with `except_imports`,
+///         // only one or the other is accepted.
+///         only_imports: ["foo", "bar"],
+///     },
+///
 ///     // This can be used to translate WIT return values of the form
 ///     // `result<T, error-type>` into `Result<T, RustErrorType>` in Rust.
 ///     // The `RustErrorType` structure will have an automatically generated

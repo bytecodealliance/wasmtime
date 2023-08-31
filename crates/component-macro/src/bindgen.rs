@@ -1,10 +1,11 @@
 use proc_macro2::{Span, TokenStream};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Ident, Token};
-use wasmtime_wit_bindgen::{Opts, Ownership, TrappableError};
+use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError};
 use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
 
 pub struct Config {
@@ -15,7 +16,7 @@ pub struct Config {
 }
 
 pub fn expand(input: &Config) -> Result<TokenStream> {
-    if !cfg!(feature = "async") && input.opts.async_ {
+    if !cfg!(feature = "async") && input.opts.async_.maybe_async() {
         return Err(Error::new(
             Span::call_site(),
             "cannot enable async bindings unless `async` crate feature is active",
@@ -45,6 +46,7 @@ impl Parse for Config {
         let mut world = None;
         let mut inline = None;
         let mut path = None;
+        let mut async_configured = false;
 
         if input.peek(token::Brace) {
             let content;
@@ -71,7 +73,13 @@ impl Parse for Config {
                         inline = Some(s.value());
                     }
                     Opt::Tracing(val) => opts.tracing = val,
-                    Opt::Async(val) => opts.async_ = val,
+                    Opt::Async(val, span) => {
+                        if async_configured {
+                            return Err(Error::new(span, "cannot specify second async config"));
+                        }
+                        async_configured = true;
+                        opts.async_ = val;
+                    }
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
                     Opt::Ownership(val) => opts.ownership = val,
                     Opt::Interfaces(s) => {
@@ -171,6 +179,8 @@ mod kw {
     syn::custom_keyword!(ownership);
     syn::custom_keyword!(interfaces);
     syn::custom_keyword!(with);
+    syn::custom_keyword!(except_imports);
+    syn::custom_keyword!(only_imports);
 }
 
 enum Opt {
@@ -178,7 +188,7 @@ enum Opt {
     Path(syn::LitStr),
     Inline(syn::LitStr),
     Tracing(bool),
-    Async(bool),
+    Async(AsyncConfig, Span),
     TrappableErrorType(Vec<TrappableError>),
     Ownership(Ownership),
     Interfaces(syn::LitStr),
@@ -205,9 +215,43 @@ impl Parse for Opt {
             input.parse::<Token![:]>()?;
             Ok(Opt::Tracing(input.parse::<syn::LitBool>()?.value))
         } else if l.peek(Token![async]) {
-            input.parse::<Token![async]>()?;
+            let span = input.parse::<Token![async]>()?.span;
             input.parse::<Token![:]>()?;
-            Ok(Opt::Async(input.parse::<syn::LitBool>()?.value))
+            if input.peek(syn::LitBool) {
+                match input.parse::<syn::LitBool>()?.value {
+                    true => Ok(Opt::Async(AsyncConfig::All, span)),
+                    false => Ok(Opt::Async(AsyncConfig::None, span)),
+                }
+            } else {
+                let contents;
+                syn::braced!(contents in input);
+
+                let l = contents.lookahead1();
+                let ctor: fn(HashSet<String>) -> AsyncConfig = if l.peek(kw::except_imports) {
+                    contents.parse::<kw::except_imports>()?;
+                    contents.parse::<Token![:]>()?;
+                    AsyncConfig::AllExceptImports
+                } else if l.peek(kw::only_imports) {
+                    contents.parse::<kw::only_imports>()?;
+                    contents.parse::<Token![:]>()?;
+                    AsyncConfig::OnlyImports
+                } else {
+                    return Err(l.error());
+                };
+
+                let list;
+                syn::bracketed!(list in contents);
+                let fields: Punctuated<syn::LitStr, Token![,]> =
+                    list.parse_terminated(Parse::parse, Token![,])?;
+
+                if contents.peek(Token![,]) {
+                    contents.parse::<Token![,]>()?;
+                }
+                Ok(Opt::Async(
+                    ctor(fields.iter().map(|s| s.value()).collect()),
+                    span,
+                ))
+            }
         } else if l.peek(kw::ownership) {
             input.parse::<kw::ownership>()?;
             input.parse::<Token![:]>()?;

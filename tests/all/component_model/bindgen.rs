@@ -316,3 +316,97 @@ mod resources_at_interface_level {
         Ok(())
     }
 }
+
+mod async_config {
+    use super::*;
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo
+
+            world t1 {
+                import x: func()
+                import y: func()
+                export z: func()
+            }
+        ",
+        async: true,
+    });
+
+    struct T;
+
+    #[async_trait::async_trait]
+    impl T1Imports for T {
+        async fn x(&mut self) -> Result<()> {
+            Ok(())
+        }
+
+        async fn y(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    async fn _test_t1(t1: &T1, store: &mut Store<()>) {
+        let _ = t1.call_z(&mut *store).await;
+    }
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo
+
+            world t2 {
+                import x: func()
+                import y: func()
+                export z: func()
+            }
+        ",
+        async: {
+            except_imports: ["x"],
+        },
+    });
+
+    #[async_trait::async_trait]
+    impl T2Imports for T {
+        fn x(&mut self) -> Result<()> {
+            Ok(())
+        }
+
+        async fn y(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    async fn _test_t2(t2: &T2, store: &mut Store<()>) {
+        let _ = t2.call_z(&mut *store).await;
+    }
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo
+
+            world t3 {
+                import x: func()
+                import y: func()
+                export z: func()
+            }
+        ",
+        async: {
+            only_imports: ["x"],
+        },
+    });
+
+    #[async_trait::async_trait]
+    impl T3Imports for T {
+        async fn x(&mut self) -> Result<()> {
+            Ok(())
+        }
+
+        fn y(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    async fn _test_t3(t3: &T3, store: &mut Store<()>) {
+        let _ = t3.call_z(&mut *store).await;
+    }
+}
