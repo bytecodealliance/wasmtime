@@ -17,7 +17,10 @@ fn main() {
     let sub = tcp::subscribe(sock);
 
     tcp::start_bind(sock, net, addr).unwrap();
+
     wait(sub);
+    wasi::poll::poll::drop_pollable(sub);
+
     tcp::finish_bind(sock).unwrap();
 
     example_body(net, sock, IpAddressFamily::Ipv4)
