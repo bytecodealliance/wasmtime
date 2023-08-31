@@ -626,7 +626,10 @@ impl MachInstEmit for Inst {
                     // If the offset fits into an imm12 we can directly encode it.
                     (Some(base), Some(imm12), _) => (base, imm12),
 
-                    (_, _, Some(label)) => {
+                    // If the amode contains a label we can emit an internal relocation to it.
+                    (None, Some(imm), Some(label)) => {
+                        debug_assert_eq!(imm.as_i16(), 0);
+
                         // Get the current PC.
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
                         Inst::Auipc {
@@ -643,10 +646,17 @@ impl MachInstEmit for Inst {
                     }
 
                     // Otherwise load the address it into a reg and load from it.
-                    _ => {
+                    (Some(_), None, None) => {
                         let tmp = writable_spilltmp_reg();
                         Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
                         (tmp.to_reg(), Imm12::zero())
+                    }
+
+                    (None, None, None)
+                    | (None, Some(_), None)
+                    | (Some(_), None, Some(_))
+                    | (None, None, Some(_)) => {
+                        unreachable!("Invalid load address")
                     }
                 };
 
