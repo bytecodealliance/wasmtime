@@ -168,7 +168,7 @@ interface streams {
     /// `subscribe-to-output-stream`, `write`, and `flush`, and is implemented
     /// with the following pseudo-code:
     ///
-    /// ```
+    /// ```text
     /// let pollable = subscribe-to-output-stream(this);
     /// while !contents.is_empty() {
     ///   // Wait for the stream to become writable
