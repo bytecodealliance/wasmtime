@@ -5,8 +5,7 @@ inputs:
   toolchain:
     description: 'Default toolchan to install'
     required: false
-    # NB: when updating this additionally update `rust-version` in `Cargo.toml`.
-    default: '1.72.0'
+    default: 'default'
   lockfiles:
     description: 'Path glob for Cargo.lock files to use as cache keys'
     required: false
@@ -15,13 +14,33 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Install Rust
+      shell: bash
+      id: select
+      run: |
+        # This is Wasmtime's minimum supported rust version (MSRV). This is
+        # expressed as N in a version `1.N.0`. Wasmtime's current policy is that
+        # this number can be no larger than the current stable release of Rust
+        # minus 2.
+        #
+        # NB: when updating this additionally update `rust-version` in
+        # `Cargo.toml`.
+        msrv=70
+
+        if [ "${{ inputs.toolchain }}" = "default" ]; then
+          echo "version=1.$((msrv+2)).0"
+        elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
+          echo "version=1.$msrv.0"
+        else
+          echo "version=${{ inputs.toolchain }}"
+        fi
 
     - name: Install Rust
       shell: bash
       run: |
         rustup set profile minimal
-        rustup update "${{ inputs.toolchain }}" --no-self-update
-        rustup default "${{ inputs.toolchain }}"
+        rustup update "${{ steps.select.outputs.version }}" --no-self-update
+        rustup default "${{ steps.select.outputs.version }}"
 
         # Save disk space by avoiding incremental compilation. Also turn down
         # debuginfo from 2 to 0 to help save disk space.
@@ -32,11 +51,7 @@ runs:
         EOF
 
         # Deny warnings on CI to keep our code warning-free as it lands in-tree.
-        # Don't do this on nightly though, since there's a fair amount of
-        # warning churn there.
-        if [[ "${{ inputs.toolchain }}" != nightly* ]]; then
-          echo RUSTFLAGS="-D warnings" >> "$GITHUB_ENV"
-        fi
+        echo RUSTFLAGS="-D warnings" >> "$GITHUB_ENV"
 
         if [[ "${{ runner.os }}" = "macOS" ]]; then
           cat >> "$GITHUB_ENV" <<EOF

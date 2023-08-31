@@ -21,13 +21,13 @@ your editor.
 
 ### Minimum Supported `rustc` Version
 
-Wasmtime supports the current stable version of Rust.
+Wasmtime supports the latest three stable releases of Rust.
 
 Cranelift supports stable Rust, and follows the [Rust Update Policy for
 Firefox].
 
-Some of the developer scripts depend on nightly Rust, for example to run
-clippy and other tools, however we avoid depending on these for the main
-build.
+Some of the CI jobs depend on nightly Rust, for example to run rustdoc with
+nightly features, however these use pinned versions in CI that are updated
+periodically and the general repository does not depend on nightly features.
 
 [Rust Update Policy for Firefox]: https://wiki.mozilla.org/Rust_Update_Policy_for_Firefox#Schedule
