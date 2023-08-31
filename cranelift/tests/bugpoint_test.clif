@@ -910,7 +910,7 @@ block51:
     v428 = iadd_imm.i64 v28, 8
     v429 = load.i16 v428
         v435 -> v429
-    v430 = iconst.i16 0xffff_ffff_ffff_8000
+    v430 = iconst.i16 0x8000
     v431 = icmp eq v429, v430
     v433 = uextend.i32 v431
     brif v433, block154, block52
