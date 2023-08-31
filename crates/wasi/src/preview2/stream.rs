@@ -139,6 +139,11 @@ pub(crate) trait InternalTableStreamExt {
         &mut self,
         istream: InternalInputStream,
     ) -> Result<u32, TableError>;
+    fn push_internal_input_stream_child(
+        &mut self,
+        istream: InternalInputStream,
+        parent: u32,
+    ) -> Result<u32, TableError>;
     fn get_internal_input_stream_mut(
         &mut self,
         fd: u32,
@@ -151,6 +156,13 @@ impl InternalTableStreamExt for Table {
         istream: InternalInputStream,
     ) -> Result<u32, TableError> {
         self.push(Box::new(istream))
+    }
+    fn push_internal_input_stream_child(
+        &mut self,
+        istream: InternalInputStream,
+        parent: u32,
+    ) -> Result<u32, TableError> {
+        self.push_child(Box::new(istream), parent)
     }
     fn get_internal_input_stream_mut(
         &mut self,
@@ -167,6 +179,12 @@ impl InternalTableStreamExt for Table {
 pub trait TableStreamExt {
     /// Push a [`HostInputStream`] into a [`Table`], returning the table index.
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
+    /// Same as [`push_input_stream`] except assigns a parent resource to the input-stream created.
+    fn push_input_stream_child(
+        &mut self,
+        istream: Box<dyn HostInputStream>,
+        parent: u32,
+    ) -> Result<u32, TableError>;
     /// Get a mutable reference to a [`HostInputStream`] in a [`Table`].
     fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError>;
     /// Remove [`HostInputStream`] from table:
@@ -175,6 +193,13 @@ pub trait TableStreamExt {
     /// Push a [`HostOutputStream`] into a [`Table`], returning the table index.
     fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
         -> Result<u32, TableError>;
+    /// Same as [`push_output_stream`] except assigns a parent resource to the output-stream
+    /// created.
+    fn push_output_stream_child(
+        &mut self,
+        ostream: Box<dyn HostOutputStream>,
+        parent: u32,
+    ) -> Result<u32, TableError>;
     /// Get a mutable reference to a [`HostOutputStream`] in a [`Table`].
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError>;
 
@@ -184,6 +209,13 @@ pub trait TableStreamExt {
 impl TableStreamExt for Table {
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
         self.push_internal_input_stream(InternalInputStream::Host(istream))
+    }
+    fn push_input_stream_child(
+        &mut self,
+        istream: Box<dyn HostInputStream>,
+        parent: u32,
+    ) -> Result<u32, TableError> {
+        self.push_internal_input_stream_child(InternalInputStream::Host(istream), parent)
     }
     fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError> {
         match self.get_internal_input_stream_mut(fd)? {
@@ -210,6 +242,13 @@ impl TableStreamExt for Table {
         ostream: Box<dyn HostOutputStream>,
     ) -> Result<u32, TableError> {
         self.push(Box::new(ostream))
+    }
+    fn push_output_stream_child(
+        &mut self,
+        ostream: Box<dyn HostOutputStream>,
+        parent: u32,
+    ) -> Result<u32, TableError> {
+        self.push_child(Box::new(ostream), parent)
     }
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError> {
         let boxed: &mut Box<dyn HostOutputStream> = self.get_mut(fd)?;
