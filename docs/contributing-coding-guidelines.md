@@ -21,7 +21,7 @@ your editor.
 
 ### Minimum Supported `rustc` Version
 
-Wasmtime and Cranelift supports the latest three stable releases of Rust. This
+Wasmtime and Cranelift support the latest three stable releases of Rust. This
 means that if the latest version of Rust is 1.72.0 then Wasmtime supports Rust
 1.70.0, 1.71.0, and 1.72.0. CI will test by default with 1.72.0 and there will
 be one job running the full test suite on Linux x86\_64 on 1.70.0.
