@@ -262,10 +262,9 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
             let code_info = compiled_code.code_info();
 
-            println!(
-                "{}",
-                std::str::from_utf8(compiled_code.code_buffer()).unwrap()
-            );
+            if let Ok(code) = std::str::from_utf8(compiled_code.code_buffer()) {
+                println!("{code}",);
+            }
 
             if options.print_size {
                 println!(
