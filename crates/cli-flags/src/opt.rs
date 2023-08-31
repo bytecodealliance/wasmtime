@@ -75,7 +75,7 @@ macro_rules! wasmtime_option_group {
                                 val.map(|v| v.to_string()),
                             ))
                         },
-                        val_help: "=val",
+                        val_help: "[=val]",
                         docs: concat!($($prefixed_doc, "\n",)*),
                     },
                  )?
