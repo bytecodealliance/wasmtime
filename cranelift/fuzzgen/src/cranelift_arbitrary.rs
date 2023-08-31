@@ -11,11 +11,12 @@ use target_lexicon::Architecture;
 
 /// A trait for generating random Cranelift datastructures.
 pub trait CraneliftArbitrary {
-    fn _type(&mut self, architecture: Architecture) -> Result<Type>;
+    fn _type(&mut self, simd_enabled: bool) -> Result<Type>;
     fn callconv(&mut self, architecture: Architecture) -> Result<CallConv>;
-    fn abi_param(&mut self, architecture: Architecture) -> Result<AbiParam>;
+    fn abi_param(&mut self, simd_enabled: bool) -> Result<AbiParam>;
     fn signature(
         &mut self,
+        simd_enabled: bool,
         architecture: Architecture,
         max_params: usize,
         max_rets: usize,
@@ -23,26 +24,21 @@ pub trait CraneliftArbitrary {
     fn datavalue(&mut self, ty: Type) -> Result<DataValue>;
 }
 
-/// Returns the set of types that are valid for value generation, dependent on architecture.
-pub fn types_for_architecture(architecture: Architecture) -> &'static [Type] {
-    // TODO: It would be nice if we could get these directly from cranelift
-    // TODO: RISCV does not support SIMD yet
-    let supports_simd = !matches!(architecture, Architecture::Riscv64(_));
-    if supports_simd {
-        &[
-            I8, I16, I32, I64, I128, // Scalar Integers
-            F32, F64, // Scalar Floats
-            I8X16, I16X8, I32X4, I64X2, // SIMD Integers
-            F32X4, F64X2, // SIMD Floats
-        ]
-    } else {
-        &[I8, I16, I32, I64, I128, F32, F64]
-    }
-}
-
 impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
-    fn _type(&mut self, architecture: Architecture) -> Result<Type> {
-        Ok(*self.choose(types_for_architecture(architecture))?)
+    fn _type(&mut self, simd_enabled: bool) -> Result<Type> {
+        // TODO: It would be nice if we could get these directly from cranelift
+        let choices: &[Type] = if simd_enabled {
+            &[
+                I8, I16, I32, I64, I128, // Scalar Integers
+                F32, F64, // Scalar Floats
+                I8X16, I16X8, I32X4, I64X2, // SIMD Integers
+                F32X4, F64X2, // SIMD Floats
+            ]
+        } else {
+            &[I8, I16, I32, I64, I128, F32, F64]
+        };
+
+        Ok(*self.choose(choices)?)
     }
 
     fn callconv(&mut self, architecture: Architecture) -> Result<CallConv> {
@@ -71,8 +67,8 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         Ok(*self.choose(&allowed_callconvs[..])?)
     }
 
-    fn abi_param(&mut self, architecture: Architecture) -> Result<AbiParam> {
-        let value_type = self._type(architecture)?;
+    fn abi_param(&mut self, simd_enabled: bool) -> Result<AbiParam> {
+        let value_type = self._type(simd_enabled)?;
         // TODO: There are more argument purposes to be explored...
         let purpose = ArgumentPurpose::Normal;
         let extension = if value_type.is_int() {
@@ -94,6 +90,7 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
 
     fn signature(
         &mut self,
+        simd_enabled: bool,
         architecture: Architecture,
         max_params: usize,
         max_rets: usize,
@@ -102,11 +99,11 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         let mut sig = Signature::new(callconv);
 
         for _ in 0..max_params {
-            sig.params.push(self.abi_param(architecture)?);
+            sig.params.push(self.abi_param(simd_enabled)?);
         }
 
         for _ in 0..max_rets {
-            sig.returns.push(self.abi_param(architecture)?);
+            sig.returns.push(self.abi_param(simd_enabled)?);
         }
 
         Ok(sig)
