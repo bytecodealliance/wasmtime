@@ -1520,10 +1520,30 @@ impl MachInstEmit for Inst {
                 let a = alloc_value_regs(a, &mut allocs);
                 let b = alloc_value_regs(b, &mut allocs);
                 let rd = allocs.next_writable(rd);
-                put_string(
-                    &format!("{:?}, {:?} => {} :CMP\n", a, b, reg_name(rd.to_reg())),
-                    sink,
-                );
+
+                let a = a
+                    .only_reg()
+                    .expect("Only support 1 register in comparison now");
+                let b = b
+                    .only_reg()
+                    .expect("Only support 1 register in comparison now");
+                debug_assert_eq!(a, a0());
+                debug_assert_eq!(b, b0());
+
+                let opcode = match cc {
+                    IntCC::Equal => "EQ",
+                    IntCC::NotEqual => "NEQ",
+                    IntCC::SignedLessThan => "SLT",
+                    IntCC::SignedGreaterThanOrEqual => todo!(),
+                    IntCC::SignedGreaterThan => todo!(),
+                    IntCC::SignedLessThanOrEqual => todo!(),
+                    IntCC::UnsignedLessThan => "LT",
+                    IntCC::UnsignedGreaterThanOrEqual => todo!(),
+                    IntCC::UnsignedGreaterThan => todo!(),
+                    IntCC::UnsignedLessThanOrEqual => todo!(),
+                };
+
+                put_string(&format!("$ => {} :{opcode}\n", reg_name(rd.to_reg())), sink);
 
                 /*
                 let label_true = sink.get_label();

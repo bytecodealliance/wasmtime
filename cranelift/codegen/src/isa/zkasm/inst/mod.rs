@@ -568,8 +568,19 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         }
 
         &Inst::Icmp { rd, a, b, .. } => {
-            collector.reg_uses(a.regs());
-            collector.reg_uses(b.regs());
+            // TODO(akashin): Why would Icmp have multiple input registers?
+            // collector.reg_uses(a.regs());
+            // collector.reg_uses(b.regs());
+            collector.reg_fixed_use(
+                a.only_reg()
+                    .expect("Only support 1 register in comparison now"),
+                a0(),
+            );
+            collector.reg_fixed_use(
+                b.only_reg()
+                    .expect("Only support 1 register in comparison now"),
+                b0(),
+            );
             collector.reg_def(rd);
         }
 
