@@ -3,7 +3,7 @@ use crate::types::{TypeInfo, Types};
 use anyhow::{anyhow, bail, Context};
 use heck::*;
 use indexmap::IndexMap;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::mem;
@@ -94,7 +94,7 @@ pub struct Opts {
     pub tracing: bool,
 
     /// Whether or not to use async rust functions and traits.
-    pub async_: bool,
+    pub async_: AsyncConfig,
 
     /// A list of "trappable errors" which are used to replace the `E` in
     /// `result<T, E>` found in WIT.
@@ -121,6 +121,42 @@ pub struct TrappableError {
 
     /// The name, in Rust, of the error type to generate.
     pub rust_type_name: String,
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum AsyncConfig {
+    /// No functions are `async`.
+    #[default]
+    None,
+    /// All generated functions should be `async`.
+    All,
+    /// These imported functions should not be async, but everything else is.
+    AllExceptImports(HashSet<String>),
+    /// These functions are the only imports that are async, all other imports
+    /// are sync.
+    ///
+    /// Note that all exports are still async in this situation.
+    OnlyImports(HashSet<String>),
+}
+
+impl AsyncConfig {
+    pub fn is_import_async(&self, f: &str) -> bool {
+        match self {
+            AsyncConfig::None => false,
+            AsyncConfig::All => true,
+            AsyncConfig::AllExceptImports(set) => !set.contains(f),
+            AsyncConfig::OnlyImports(set) => set.contains(f),
+        }
+    }
+
+    pub fn maybe_async(&self) -> bool {
+        match self {
+            AsyncConfig::None => false,
+            AsyncConfig::All | AsyncConfig::AllExceptImports(_) | AsyncConfig::OnlyImports(_) => {
+                true
+            }
+        }
+    }
 }
 
 impl Opts {
@@ -412,7 +448,7 @@ impl Wasmtime {
         }
         self.src.push_str("}\n");
 
-        let (async_, async__, send, await_) = if self.opts.async_ {
+        let (async_, async__, send, await_) = if self.opts.async_.maybe_async() {
             ("async", "_async", ":Send", ".await")
         } else {
             ("", "", "", "")
@@ -577,7 +613,7 @@ impl Wasmtime {
         }
 
         let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
-        if self.opts.async_ {
+        if self.opts.async_.maybe_async() {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
         uwrite!(self.src, "pub trait {world_camel}Imports");
@@ -646,7 +682,7 @@ impl Wasmtime {
             self.src.push_str(&name);
         }
 
-        let maybe_send = if self.opts.async_ {
+        let maybe_send = if self.opts.async_.maybe_async() {
             " + Send, T: Send"
         } else {
             ""
@@ -854,7 +890,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.rustdoc(docs);
         uwriteln!(self.src, "pub enum {camel} {{}}");
 
-        if self.gen.opts.async_ {
+        if self.gen.opts.async_.maybe_async() {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
 
@@ -1375,7 +1411,7 @@ impl<'a> InterfaceGenerator<'a> {
         let iface = &self.resolve.interfaces[id];
         let owner = TypeOwner::Interface(id);
 
-        if self.gen.opts.async_ {
+        if self.gen.opts.async_.maybe_async() {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
         // Generate the `pub trait` which represents the host functionality for
@@ -1400,7 +1436,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
         uwriteln!(self.src, "}}");
 
-        let where_clause = if self.gen.opts.async_ {
+        let where_clause = if self.gen.opts.async_.maybe_async() {
             "T: Send, U: Host + Send".to_string()
         } else {
             "U: Host".to_string()
@@ -1443,7 +1479,7 @@ impl<'a> InterfaceGenerator<'a> {
         uwrite!(
             self.src,
             "{linker}.{}(\"{}\", ",
-            if self.gen.opts.async_ {
+            if self.gen.opts.async_.is_import_async(&func.name) {
                 "func_wrap_async"
             } else {
                 "func_wrap"
@@ -1472,7 +1508,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.src.push_str(", ");
         }
         self.src.push_str(") |");
-        if self.gen.opts.async_ {
+        if self.gen.opts.async_.is_import_async(&func.name) {
             self.src.push_str(" Box::new(async move { \n");
         } else {
             self.src.push_str(" { \n");
@@ -1541,7 +1577,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{},", i);
         }
-        if self.gen.opts.async_ {
+        if self.gen.opts.async_.is_import_async(&func.name) {
             uwrite!(self.src, ").await;\n");
         } else {
             uwrite!(self.src, ");\n");
@@ -1571,7 +1607,7 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "r\n");
         }
 
-        if self.gen.opts.async_ {
+        if self.gen.opts.async_.is_import_async(&func.name) {
             // Need to close Box::new and async block
             self.src.push_str("})");
         } else {
@@ -1582,7 +1618,7 @@ impl<'a> InterfaceGenerator<'a> {
     fn generate_function_trait_sig(&mut self, func: &Function) {
         self.rustdoc(&func.docs);
 
-        if self.gen.opts.async_ {
+        if self.gen.opts.async_.is_import_async(&func.name) {
             self.push_str("async ");
         }
         self.push_str("fn ");
@@ -1658,7 +1694,11 @@ impl<'a> InterfaceGenerator<'a> {
         ns: Option<&WorldKey>,
         func: &Function,
     ) {
-        let (async_, async__, await_) = if self.gen.opts.async_ {
+        // Exports must be async if anything could be async, it's just imports
+        // that get to be optionally async/sync.
+        let is_async = self.gen.opts.async_.maybe_async();
+
+        let (async_, async__, await_) = if is_async {
             ("async", "_async", ".await")
         } else {
             ("", "", "")
@@ -1681,7 +1721,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str(") -> wasmtime::Result<");
         self.print_result_ty(&func.results, TypeMode::Owned);
 
-        if self.gen.opts.async_ {
+        if is_async {
             self.src
                 .push_str("> where <S as wasmtime::AsContext>::Data: Send {\n");
         } else {
