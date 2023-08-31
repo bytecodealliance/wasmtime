@@ -133,6 +133,11 @@ impl TcpWriteStream {
         let stream = self.stream.clone();
         self.write_handle.replace(
             tokio::spawn(async move {
+                // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
+                // primitive try_write, which goes directly to attempt a write with mio. This has
+                // two advantages: 1. this operation takes a &TcpStream instead of a &mut TcpStream
+                // required to AsyncWrite, and 2. it eliminates any buffering in tokio we may need
+                // to flush.
                 while !bytes.is_empty() {
                     stream.tcp_socket().writable().await?;
                     let n = stream.tcp_socket().try_write(&bytes)?;
