@@ -425,7 +425,6 @@ impl<T: WasiView> tcp::Host for T {
             let join = Box::pin(async move {
                 socket
                     .inner
-                    .tcp_socket()
                     .ready(Interest::READABLE | Interest::WRITABLE)
                     .await
                     .unwrap();

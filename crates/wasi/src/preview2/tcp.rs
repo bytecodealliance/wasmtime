@@ -45,40 +45,24 @@ pub(crate) enum HostTcpState {
 pub(crate) struct HostTcpSocket {
     /// The part of a `HostTcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
-    pub(crate) inner: HostTcpSocketInner,
+    pub(crate) inner: Arc<tokio::net::TcpStream>,
 
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: HostTcpState,
 }
 
-pub(crate) struct HostTcpSocketInner {
+pub(crate) struct TcpReadStream {
     stream: Arc<tokio::net::TcpStream>,
 }
 
-impl HostTcpSocketInner {
-    fn new(stream: cap_std::net::TcpListener) -> Self {
-        let fd = stream.into_raw_socketlike();
-        let stream = unsafe { std::net::TcpStream::from_raw_socketlike(fd) };
-        let stream = tokio::net::TcpStream::try_from(stream).unwrap();
-
-        Self {
-            stream: Arc::new(stream),
-        }
-    }
-
-    pub(crate) fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        &self.stream
-    }
-
-    pub(crate) fn clone(&self) -> Self {
-        Self {
-            stream: Arc::clone(&self.stream),
-        }
+impl TcpReadStream {
+    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+        Self { stream }
     }
 }
 
 #[async_trait::async_trait]
-impl HostInputStream for HostTcpSocketInner {
+impl HostInputStream for TcpReadStream {
     fn read(&mut self, size: usize) -> Result<(bytes::Bytes, StreamState), anyhow::Error> {
         if size == 0 {
             return Ok((bytes::Bytes::new(), StreamState::Open));
@@ -113,12 +97,12 @@ impl HostInputStream for HostTcpSocketInner {
 const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
 
 pub(crate) struct TcpWriteStream {
-    stream: HostTcpSocketInner,
+    stream: Arc<tokio::net::TcpStream>,
     write_handle: Option<AbortOnDropJoinHandle<anyhow::Result<()>>>,
 }
 
 impl TcpWriteStream {
-    pub(crate) fn new(stream: HostTcpSocketInner) -> Self {
+    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
         Self {
             stream,
             write_handle: None,
@@ -139,8 +123,8 @@ impl TcpWriteStream {
                 // required to AsyncWrite, and 2. it eliminates any buffering in tokio we may need
                 // to flush.
                 while !bytes.is_empty() {
-                    stream.tcp_socket().writable().await?;
-                    let n = stream.tcp_socket().try_write(&bytes)?;
+                    stream.writable().await?;
+                    let n = stream.try_write(&bytes)?;
                     let _ = bytes.split_to(n);
                 }
 
@@ -155,7 +139,7 @@ impl TcpWriteStream {
 impl HostOutputStream for TcpWriteStream {
     fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), OutputStreamError> {
         while !bytes.is_empty() {
-            match self.stream.tcp_socket().try_write(&bytes) {
+            match self.stream.try_write(&bytes) {
                 Ok(n) => {
                     let _ = bytes.split_to(n);
                 }
@@ -197,7 +181,6 @@ impl HostOutputStream for TcpWriteStream {
         }
 
         self.stream
-            .tcp_socket()
             .writable()
             .await
             .map_err(|e| OutputStreamError::LastOperationFailed(e.into()))?;
@@ -211,33 +194,36 @@ impl HostTcpSocket {
     pub fn new(family: AddressFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
-        let tcp_socket = TcpListener::new(family, Blocking::No)?;
-
-        Ok(Self {
-            inner: HostTcpSocketInner::new(tcp_socket),
-            tcp_state: HostTcpState::Default,
-        })
+        let tcp_listener = TcpListener::new(family, Blocking::No)?;
+        Self::from_tcp_listener(tcp_listener)
     }
 
     /// Create a `HostTcpSocket` from an existing socket.
     ///
     /// The socket must be in non-blocking mode.
     pub fn from_tcp_stream(tcp_socket: cap_std::net::TcpStream) -> io::Result<Self> {
-        let tcp_socket = TcpListener::from(rustix::fd::OwnedFd::from(tcp_socket));
+        let tcp_listener = TcpListener::from(rustix::fd::OwnedFd::from(tcp_socket));
+        Self::from_tcp_listener(tcp_listener)
+    }
+
+    pub fn from_tcp_listener(tcp_listener: cap_std::net::TcpListener) -> io::Result<Self> {
+        let fd = tcp_listener.into_raw_socketlike();
+        let std_stream = unsafe { std::net::TcpStream::from_raw_socketlike(fd) };
+        let stream = tokio::net::TcpStream::try_from(std_stream)?;
 
         Ok(Self {
-            inner: HostTcpSocketInner::new(tcp_socket),
+            inner: Arc::new(stream),
             tcp_state: HostTcpState::Default,
         })
     }
 
     pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        self.inner.tcp_socket()
+        &self.inner
     }
 
     /// Create the input/output stream pair for a tcp socket.
     pub fn as_split(&self) -> (Box<impl HostInputStream>, Box<impl HostOutputStream>) {
-        let input = Box::new(self.inner.clone());
+        let input = Box::new(TcpReadStream::new(self.inner.clone()));
         let output = Box::new(TcpWriteStream::new(self.inner.clone()));
         (input, output)
     }
