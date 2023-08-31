@@ -103,7 +103,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // All registers that can be used as parameters or rets.
         // both start and end are included.
         let (x_start, x_end, f_start, f_end) = match (call_conv, args_or_rets) {
-            (isa::CallConv::Tail, _) => (9, 29, 0, 31),
+            (isa::CallConv::Tail, _) => (5, 7, 5, 7),
             (_, ArgsOrRets::Args) => (5, 7, 5, 7),
             (_, ArgsOrRets::Rets) => (5, 7, 5, 7),
         };
@@ -121,6 +121,22 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     pointer: None,
                     offset: offset as i64,
                     size: size as u64,
+                    purpose: param.purpose,
+                });
+                continue;
+            }
+
+            // TODO(akashin): Figure out how to properly handle VMContext register.
+            // For now we pin it to `CTX` register of ZK ASM.
+            if let ir::ArgumentPurpose::VMContext = param.purpose {
+                let mut slots = ABIArgSlotVec::new();
+                slots.push(ABIArgSlot::Reg {
+                    reg: x_reg(12).to_real_reg().unwrap(),
+                    ty: I32,
+                    extension: param.extension,
+                });
+                args.push(ABIArg::Slots {
+                    slots,
                     purpose: param.purpose,
                 });
                 continue;
