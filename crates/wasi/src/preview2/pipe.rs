@@ -230,14 +230,6 @@ struct WorkerState {
 }
 
 impl WorkerState {
-    fn check_write(&mut self) -> Result<usize, OutputStreamError> {
-        self.check_error()?;
-        if self.flush_pending {
-            return Ok(0);
-        }
-        Ok(self.write_budget)
-    }
-
     fn check_error(&mut self) -> Result<(), OutputStreamError> {
         if let Some(e) = self.error.take() {
             return Err(OutputStreamError::LastOperationFailed(e));
@@ -255,6 +247,16 @@ struct Worker {
     write_ready_changed: tokio::sync::Notify,
 }
 
+enum Job {
+    Flush,
+    Write(Bytes),
+}
+
+enum WriteStatus<'a> {
+    Done(Result<usize, OutputStreamError>),
+    Pending(tokio::sync::futures::Notified<'a>),
+}
+
 impl Worker {
     fn new(write_budget: usize) -> Self {
         Self {
@@ -269,50 +271,74 @@ impl Worker {
             write_ready_changed: tokio::sync::Notify::new(),
         }
     }
-    fn pop(&self) -> Option<Bytes> {
-        self.state.lock().unwrap().items.pop_front()
+    fn check_write(&self) -> WriteStatus<'_> {
+        let mut state = self.state();
+        if let Err(e) = state.check_error() {
+            return WriteStatus::Done(Err(e));
+        }
+
+        if state.flush_pending || state.write_budget == 0 {
+            return WriteStatus::Pending(self.write_ready_changed.notified());
+        }
+
+        WriteStatus::Done(Ok(state.write_budget))
+    }
+    fn state(&self) -> std::sync::MutexGuard<WorkerState> {
+        self.state.lock().unwrap()
+    }
+    fn pop(&self) -> Option<Job> {
+        let mut state = self.state();
+        if state.items.is_empty() {
+            if state.flush_pending {
+                return Some(Job::Flush);
+            }
+        } else if let Some(bytes) = state.items.pop_front() {
+            return Some(Job::Write(bytes));
+        }
+
+        None
+    }
+    fn report_error(&self, e: std::io::Error) {
+        {
+            let mut state = self.state();
+            state.alive = false;
+            state.error = Some(e.into());
+            state.flush_pending = false;
+        }
+        self.write_ready_changed.notify_waiters();
     }
     async fn work<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(&self, mut writer: T) {
         use tokio::io::AsyncWriteExt;
         loop {
             let notified = self.new_work.notified();
-            while let Some(mut bytes) = self.pop() {
-                tracing::debug!("worker writing: {bytes:?}");
-                let len = bytes.len();
-                match writer.write_all_buf(&mut bytes).await {
-                    Err(e) => {
-                        tracing::debug!("dying in worker: {e:?}");
-                        let mut state = self.state.lock().unwrap();
-                        state.alive = false;
-                        state.error = Some(e.into());
-                        state.flush_pending = false;
-                        self.write_ready_changed.notify_waiters();
-
-                        return;
-                    }
-                    Ok(_) => {
-                        let mut state = self.state.lock().unwrap();
-                        state.write_budget += len;
-
-                        // FIXME: actually writer.flush here!!
-
-                        if state.items.is_empty() && state.flush_pending {
-                            tracing::debug!("worker marking flush complete");
-                            state.flush_pending = false;
+            while let Some(job) = self.pop() {
+                match job {
+                    Job::Flush => {
+                        if let Err(e) = writer.flush().await {
+                            self.report_error(e);
+                            return;
                         }
-                        drop(state);
 
-                        self.write_ready_changed.notify_waiters();
+                        tracing::debug!("worker marking flush complete");
+                        self.state().flush_pending = false;
+                    }
+
+                    Job::Write(mut bytes) => {
+                        tracing::debug!("worker writing: {bytes:?}");
+                        let len = bytes.len();
+                        match writer.write_all_buf(&mut bytes).await {
+                            Err(e) => {
+                                self.report_error(e);
+                                return;
+                            }
+                            Ok(_) => {
+                                self.state().write_budget += len;
+                            }
+                        }
                     }
                 }
-            }
 
-            {
-                let mut state = self.state.lock().unwrap();
-                if state.flush_pending {
-                    state.flush_pending = false;
-                    self.write_ready_changed.notify_waiters();
-                }
+                self.write_ready_changed.notify_waiters();
             }
 
             notified.await;
@@ -348,7 +374,7 @@ impl AsyncWriteStream {
 #[async_trait::async_trait]
 impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
-        let mut state = self.worker.state.lock().unwrap();
+        let mut state = self.worker.state();
         state.check_error()?;
         if state.flush_pending {
             return Err(OutputStreamError::Trap(anyhow!(
@@ -367,7 +393,7 @@ impl HostOutputStream for AsyncWriteStream {
         Ok(())
     }
     fn flush(&mut self) -> Result<(), OutputStreamError> {
-        let mut state = self.worker.state.lock().unwrap();
+        let mut state = self.worker.state();
         state.check_error()?;
 
         state.flush_pending = true;
@@ -377,15 +403,12 @@ impl HostOutputStream for AsyncWriteStream {
     }
 
     async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
-        let notified = self.worker.write_ready_changed.notified();
-        let readiness = self.worker.state.lock().unwrap().check_write()?;
-        if readiness > 0 {
-            return Ok(readiness);
+        loop {
+            match self.worker.check_write() {
+                WriteStatus::Done(r) => return r,
+                WriteStatus::Pending(notifier) => notifier.await,
+            }
         }
-        notified.await;
-        let permit = self.worker.state.lock().unwrap().check_write()?;
-        debug_assert!(permit > 0);
-        Ok(permit)
     }
 }
 
