@@ -71,24 +71,9 @@ async fn instantiate(
     wasi_ctx: ReactorCtx,
 ) -> Result<(Store<ReactorCtx>, TestReactor)> {
     let mut linker = Linker::new(&ENGINE);
-
-    // All of the imports available to the world are provided by the wasi-common crate:
-    preview2::bindings::filesystem::types::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::filesystem::preopens::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::io::streams::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::environment::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::exit::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::stdin::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::stdout::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::stderr::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_input::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_output::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_stdin::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_stdout::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_stderr::add_to_linker(&mut linker, |x| x)?;
+    preview2::command::add_to_linker(&mut linker)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);
-
     let (testreactor, _instance) =
         TestReactor::instantiate_async(&mut store, &component, &linker).await?;
     Ok((store, testreactor))

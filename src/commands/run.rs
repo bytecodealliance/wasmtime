@@ -293,6 +293,11 @@ pub struct RunCommand {
     /// removed. For now this is primarily here for testing.
     #[clap(long)]
     preview2: bool,
+
+    /// Flag for WASI preview2 to inherit the host's network within the guest so
+    /// it has full access to all addresses/ports/etc.
+    #[clap(long)]
+    inherit_network: bool,
 }
 
 #[derive(Clone)]
@@ -1059,6 +1064,10 @@ impl RunCommand {
                 preview2::FilePerms::all(),
                 name,
             );
+        }
+
+        if self.inherit_network {
+            builder.inherit_network(ambient_authority());
         }
 
         let data = store.data_mut();

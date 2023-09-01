@@ -37,7 +37,6 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::filesystem::types::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::filesystem::preopens::add_to_linker(l, |t| t)?;
-    crate::preview2::bindings::sockets::tcp::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::poll::poll::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::io::streams::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::random::random::add_to_linker(l, |t| t)?;
@@ -51,6 +50,10 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::bindings::cli::terminal_stdin::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::cli::terminal_stdout::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::cli::terminal_stderr::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::sockets::tcp::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::sockets::tcp_create_socket::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::sockets::instance_network::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::sockets::network::add_to_linker(l, |t| t)?;
     Ok(())
 }
 
@@ -110,6 +113,9 @@ pub mod sync {
         crate::preview2::bindings::cli::terminal_stdout::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::cli::terminal_stderr::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sockets::tcp::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::sockets::tcp_create_socket::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::sockets::instance_network::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::sockets::network::add_to_linker(l, |t| t)?;
         Ok(())
     }
 }

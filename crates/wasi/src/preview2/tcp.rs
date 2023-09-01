@@ -7,6 +7,7 @@ use io_lifetimes::AsSocketlike;
 use std::io;
 use std::sync::Arc;
 use system_interface::io::IoExt;
+use tokio::io::Interest;
 
 /// The state of a TCP socket.
 ///
@@ -64,15 +65,17 @@ impl HostTcpSocket {
         // by our async implementation.
         let tcp_socket = TcpListener::new(family, Blocking::No)?;
 
-        let tcp_socket = unsafe {
-            tokio::net::TcpStream::try_from(std::net::TcpStream::from_raw_socketlike(
-                tcp_socket.into_raw_socketlike(),
-            ))
-            .unwrap()
-        };
+        let std_socket =
+            unsafe { std::net::TcpStream::from_raw_socketlike(tcp_socket.into_raw_socketlike()) };
+
+        let tokio_tcp_socket = crate::preview2::with_ambient_tokio_runtime(|| {
+            tokio::net::TcpStream::try_from(std_socket).unwrap()
+        });
 
         Ok(Self {
-            inner: Arc::new(HostTcpSocketInner { tcp_socket }),
+            inner: Arc::new(HostTcpSocketInner {
+                tcp_socket: tokio_tcp_socket,
+            }),
             tcp_state: HostTcpState::Default,
         })
     }
@@ -84,15 +87,16 @@ impl HostTcpSocket {
         let fd = rustix::fd::OwnedFd::from(tcp_socket);
         let tcp_socket = TcpListener::from(fd);
 
-        let tcp_socket = unsafe {
-            tokio::net::TcpStream::try_from(std::net::TcpStream::from_raw_socketlike(
-                tcp_socket.into_raw_socketlike(),
-            ))
-            .unwrap()
-        };
+        let std_tcp_socket =
+            unsafe { std::net::TcpStream::from_raw_socketlike(tcp_socket.into_raw_socketlike()) };
+        let tokio_tcp_socket = crate::preview2::with_ambient_tokio_runtime(|| {
+            tokio::net::TcpStream::try_from(std_tcp_socket).unwrap()
+        });
 
         Ok(Self {
-            inner: Arc::new(HostTcpSocketInner { tcp_socket }),
+            inner: Arc::new(HostTcpSocketInner {
+                tcp_socket: tokio_tcp_socket,
+            }),
             tcp_state: HostTcpState::Default,
         })
     }
@@ -121,10 +125,10 @@ impl HostInputStream for Arc<HostTcpSocketInner> {
             return Ok((Bytes::new(), StreamState::Open));
         }
         let mut buf = BytesMut::zeroed(size);
-        let r = self
-            .tcp_socket()
-            .as_socketlike_view::<TcpStream>()
-            .read(&mut buf);
+        let socket = self.tcp_socket();
+        let r = socket.try_io(Interest::READABLE, || {
+            socket.as_socketlike_view::<TcpStream>().read(&mut buf)
+        });
         let (n, state) = read_result(r)?;
         buf.truncate(n);
         Ok((buf.freeze(), state))
@@ -142,10 +146,10 @@ impl HostOutputStream for Arc<HostTcpSocketInner> {
         if buf.is_empty() {
             return Ok((0, StreamState::Open));
         }
-        let r = self
-            .tcp_socket
-            .as_socketlike_view::<TcpStream>()
-            .write(buf.as_ref());
+        let socket = self.tcp_socket();
+        let r = socket.try_io(Interest::WRITABLE, || {
+            socket.as_socketlike_view::<TcpStream>().write(buf.as_ref())
+        });
         let (n, state) = write_result(r)?;
         Ok((n, state))
     }
@@ -186,7 +190,11 @@ pub(crate) fn read_result(r: io::Result<usize>) -> io::Result<(usize, StreamStat
     match r {
         Ok(0) => Ok((0, StreamState::Closed)),
         Ok(n) => Ok((n, StreamState::Open)),
-        Err(e) if e.kind() == io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
+        Err(e)
+            if e.kind() == io::ErrorKind::Interrupted || e.kind() == io::ErrorKind::WouldBlock =>
+        {
+            Ok((0, StreamState::Open))
+        }
         Err(e) => Err(e),
     }
 }
