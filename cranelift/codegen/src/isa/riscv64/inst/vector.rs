@@ -236,6 +236,13 @@ impl VecOpCategory {
 }
 
 impl VecOpMasking {
+    pub fn is_enabled(&self) -> bool {
+        match self {
+            VecOpMasking::Enabled { .. } => true,
+            VecOpMasking::Disabled => false,
+        }
+    }
+
     pub fn encode(&self) -> u32 {
         match self {
             VecOpMasking::Enabled { .. } => 0,
@@ -300,6 +307,12 @@ impl VecAluOpRRRR {
     }
 }
 
+impl VecInstOverlapInfo for VecAluOpRRRR {
+    fn forbids_src_dst_overlaps(&self) -> bool {
+        false
+    }
+}
+
 impl fmt::Display for VecAluOpRRRR {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = format!("{self:?}");
@@ -336,9 +349,10 @@ impl VecAluOpRRRImm5 {
             VecAluOpRRRImm5::VslideupVI => true,
         }
     }
+}
 
-    /// Some instructions do not allow the source and destination registers to overlap.
-    pub fn forbids_src_dst_overlaps(&self) -> bool {
+impl VecInstOverlapInfo for VecAluOpRRRImm5 {
+    fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
             VecAluOpRRRImm5::VslideupVI => true,
         }
@@ -569,9 +583,10 @@ impl VecAluOpRRR {
             _ => unreachable!(),
         }
     }
+}
 
-    /// Some instructions do not allow the source and destination registers to overlap.
-    pub fn forbids_src_dst_overlaps(&self) -> bool {
+impl VecInstOverlapInfo for VecAluOpRRR {
+    fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
             VecAluOpRRR::VrgatherVV
             | VecAluOpRRR::VrgatherVX
@@ -593,6 +608,37 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VwsubWV
             | VecAluOpRRR::VwsubWX => true,
             _ => false,
+        }
+    }
+
+    // Only mask writing operations, and reduction operations (`vred*`) allow mask / dst overlaps.
+    fn forbids_mask_dst_overlaps(&self) -> bool {
+        match self {
+            VecAluOpRRR::VredmaxuVS
+            | VecAluOpRRR::VredminuVS
+            | VecAluOpRRR::VmandMM
+            | VecAluOpRRR::VmorMM
+            | VecAluOpRRR::VmnandMM
+            | VecAluOpRRR::VmnorMM
+            | VecAluOpRRR::VmseqVX
+            | VecAluOpRRR::VmsneVX
+            | VecAluOpRRR::VmsltuVX
+            | VecAluOpRRR::VmsltVX
+            | VecAluOpRRR::VmsleuVX
+            | VecAluOpRRR::VmsleVX
+            | VecAluOpRRR::VmsgtuVX
+            | VecAluOpRRR::VmsgtVX
+            | VecAluOpRRR::VmfeqVV
+            | VecAluOpRRR::VmfneVV
+            | VecAluOpRRR::VmfltVV
+            | VecAluOpRRR::VmfleVV
+            | VecAluOpRRR::VmfeqVF
+            | VecAluOpRRR::VmfneVF
+            | VecAluOpRRR::VmfltVF
+            | VecAluOpRRR::VmfleVF
+            | VecAluOpRRR::VmfgtVF
+            | VecAluOpRRR::VmfgeVF => false,
+            _ => true,
         }
     }
 }
@@ -704,12 +750,26 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VmsgtVI => false,
         }
     }
+}
 
-    /// Some instructions do not allow the source and destination registers to overlap.
-    pub fn forbids_src_dst_overlaps(&self) -> bool {
+impl VecInstOverlapInfo for VecAluOpRRImm5 {
+    fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
             VecAluOpRRImm5::VrgatherVI => true,
             _ => false,
+        }
+    }
+
+    // Only mask writing operations, and reduction operations (`vred*`) allow mask / dst overlaps.
+    fn forbids_mask_dst_overlaps(&self) -> bool {
+        match self {
+            VecAluOpRRImm5::VmseqVI
+            | VecAluOpRRImm5::VmsneVI
+            | VecAluOpRRImm5::VmsleuVI
+            | VecAluOpRRImm5::VmsleVI
+            | VecAluOpRRImm5::VmsgtuVI
+            | VecAluOpRRImm5::VmsgtVI => false,
+            _ => true,
         }
     }
 }
@@ -908,9 +968,10 @@ impl VecAluOpRR {
             VecAluOpRR::VmvSX | VecAluOpRR::VmvVX => RegClass::Int,
         }
     }
+}
 
-    /// Some instructions do not allow the source and destination registers to overlap.
-    pub fn forbids_src_dst_overlaps(&self) -> bool {
+impl VecInstOverlapInfo for VecAluOpRR {
+    fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
             VecAluOpRR::VzextVF2
             | VecAluOpRR::VzextVF4
@@ -986,6 +1047,14 @@ impl VecAluOpRImm5 {
     }
 }
 
+impl VecInstOverlapInfo for VecAluOpRImm5 {
+    fn forbids_src_dst_overlaps(&self) -> bool {
+        match self {
+            VecAluOpRImm5::VmvVI => false,
+        }
+    }
+}
+
 impl fmt::Display for VecAluOpRImm5 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
@@ -1055,5 +1124,45 @@ impl VecAMode {
         match self {
             VecAMode::UnitStride { .. } => 0b000,
         }
+    }
+}
+
+pub trait VecInstOverlapInfo {
+    /// § 5.2 Vector Operands states:
+    ///
+    /// A destination vector register group can overlap a source vector register group
+    /// only if one of the following holds:
+    ///
+    ///  * The destination EEW equals the source EEW.
+    ///
+    ///  * The destination EEW is smaller than the source EEW and the overlap is
+    ///  in the lowest-numbered part of the source register group (e.g., when LMUL=1,
+    ///  vnsrl.wi v0, v0, 3 is legal, but a destination of v1 is not).
+    ///
+    ///  * The destination EEW is greater than the source EEW, the source EMUL is at
+    ///  least 1, and the overlap is in the highest-numbered part of the destination register
+    ///  group (e.g., when LMUL=8, vzext.vf4 v0, v6 is legal, but a source of v0, v2, or v4 is not).
+    ///
+    /// For the purpose of determining register group overlap constraints, mask elements have EEW=1.
+    fn forbids_src_dst_overlaps(&self) -> bool;
+
+    /// § 5.3 Vector Masking states:
+    ///
+    /// > The destination vector register group for a masked vector instruction
+    /// > cannot overlap the source mask register (v0), unless the destination
+    /// > vector register is being written with a mask value (e.g., compares) or
+    /// > the scalar result of a reduction. These instruction encodings are reserved.
+    ///
+    /// In almost all instructions we should not allow the mask to be re-used as
+    /// a destination register.
+    fn forbids_mask_dst_overlaps(&self) -> bool {
+        true
+    }
+
+    /// There are two broad categories of overlaps (see above). But we can't represent such
+    /// fine grained overlaps to regalloc. So if any of the two come into play we forbid
+    /// all source and destination overlaps (including masks).
+    fn forbids_overlaps(&self, mask: &VecOpMasking) -> bool {
+        self.forbids_src_dst_overlaps() || (mask.is_enabled() && self.forbids_mask_dst_overlaps())
     }
 }
