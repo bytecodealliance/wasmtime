@@ -319,6 +319,7 @@ macro_rules! impl_index {
     ($(impl Index<$ty:ident> for ComponentTypes { $output:ident => $field:ident })*) => ($(
         impl std::ops::Index<$ty> for ComponentTypes {
             type Output = $output;
+            #[inline]
             fn index(&self, idx: $ty) -> &$output {
                 &self.$field[idx]
             }

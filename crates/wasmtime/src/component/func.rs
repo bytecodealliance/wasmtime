@@ -564,6 +564,7 @@ impl Func {
     ///
     /// Panics if this is called on a function in an asynchronous store.
     /// This only works with functions defined within a synchronous store.
+    #[inline]
     pub fn post_return(&self, mut store: impl AsContextMut) -> Result<()> {
         let store = store.as_context_mut();
         assert!(
@@ -596,6 +597,7 @@ impl Func {
         store.on_fiber(|store| self.post_return_impl(store)).await?
     }
 
+    #[inline]
     fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
         let data = &mut store.0[self.0];

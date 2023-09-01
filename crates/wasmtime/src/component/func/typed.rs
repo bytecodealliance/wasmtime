@@ -613,10 +613,12 @@ forward_lowers! {
 macro_rules! forward_string_lifts {
     ($($a:ty,)*) => ($(
         unsafe impl Lift for $a {
+            #[inline]
             fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 Ok(<WasmStr as Lift>::lift(cx, ty, src)?.to_str_from_memory(cx.memory())?.into())
             }
 
+            #[inline]
             fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 Ok(<WasmStr as Lift>::load(cx, ty, bytes)?.to_str_from_memory(cx.memory())?.into())
             }
@@ -672,6 +674,7 @@ macro_rules! integers {
         }
 
         unsafe impl Lower for $primitive {
+            #[inline]
             fn lower<T>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
@@ -683,6 +686,7 @@ macro_rules! integers {
                 Ok(())
             }
 
+            #[inline]
             fn store<T>(
                 &self,
                 cx: &mut LowerContext<'_, T>,
@@ -753,6 +757,7 @@ macro_rules! floats {
         }
 
         unsafe impl Lower for $float {
+            #[inline]
             fn lower<T>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
@@ -764,6 +769,7 @@ macro_rules! floats {
                 Ok(())
             }
 
+            #[inline]
             fn store<T>(
                 &self,
                 cx: &mut LowerContext<'_, T>,
@@ -872,6 +878,7 @@ unsafe impl ComponentType for char {
 }
 
 unsafe impl Lower for char {
+    #[inline]
     fn lower<T>(
         &self,
         _cx: &mut LowerContext<'_, T>,
@@ -883,6 +890,7 @@ unsafe impl Lower for char {
         Ok(())
     }
 
+    #[inline]
     fn store<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
@@ -1205,6 +1213,7 @@ unsafe impl ComponentType for WasmStr {
 }
 
 unsafe impl Lift for WasmStr {
+    #[inline]
     fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::String));
         // FIXME: needs memory64 treatment
@@ -1214,6 +1223,7 @@ unsafe impl Lift for WasmStr {
         WasmStr::new(ptr, len, cx)
     }
 
+    #[inline]
     fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::String));
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
@@ -2050,6 +2060,7 @@ where
     T: Lift,
     E: Lift,
 {
+    #[inline]
     fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         let (ok, err) = match ty {
             InterfaceType::Result(ty) => {
@@ -2084,6 +2095,7 @@ where
         })
     }
 
+    #[inline]
     fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         let discrim = bytes[0];
@@ -2218,6 +2230,7 @@ macro_rules! impl_component_ty_for_tuples {
         unsafe impl<$($t,)*> Lift for ($($t,)*)
             where $($t: Lift),*
         {
+            #[inline]
             fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, _src: &Self::Lower) -> Result<Self> {
                 let types = match ty {
                     InterfaceType::Tuple(t) => &cx.types[t].types,
@@ -2233,6 +2246,7 @@ macro_rules! impl_component_ty_for_tuples {
                 )*))
             }
 
+            #[inline]
             fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
                 let types = match ty {
