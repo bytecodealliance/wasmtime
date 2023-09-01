@@ -366,6 +366,7 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | Loop { .. }
                         | Br { .. }
                         | BrIf { .. }
+                        | BrTable { .. }
                         | Unreachable { .. }
                         | Return { .. }
                         | F32Const { .. }
