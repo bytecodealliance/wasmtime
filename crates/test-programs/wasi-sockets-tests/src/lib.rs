@@ -101,9 +101,9 @@ pub fn example_body(net: tcp::Network, sock: tcp::TcpSocket, family: network::Ip
     let (data, status) = streams::blocking_read(input, first_message.len() as u64).unwrap();
     assert_eq!(status, streams::StreamStatus::Open);
 
-    tcp::drop_tcp_socket(accepted);
     streams::drop_input_stream(input);
     streams::drop_output_stream(output);
+    tcp::drop_tcp_socket(accepted);
 
     // Check that we sent and recieved our message!
     assert_eq!(data, first_message); // Not guaranteed to work but should work in practice.
