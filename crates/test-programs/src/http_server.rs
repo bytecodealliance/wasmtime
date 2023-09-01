@@ -1,10 +1,14 @@
+use anyhow::Context;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::{body::Bytes, service::service_fn, Request, Response};
 use std::{
     future::Future,
     net::{SocketAddr, TcpListener},
     sync::{mpsc, OnceLock},
+    time::Duration,
 };
+
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(50);
 
 async fn test(
     mut req: Request<hyper::body::Incoming>,
@@ -13,10 +17,7 @@ async fn test(
     let method = req.method().to_string();
     let body = req.body_mut().collect().await.unwrap();
     let buf = body.to_bytes();
-    tracing::trace!(
-        "hyper request body {:?}",
-        std::str::from_utf8(&buf[..]).unwrap()
-    );
+    tracing::trace!("hyper request body size {:?}", buf.len());
 
     Response::builder()
         .status(http::StatusCode::OK)
@@ -75,10 +76,10 @@ impl ServerHttp1 {
     }
 
     fn shutdown(self) -> anyhow::Result<()> {
-        tracing::debug!("shuting down http2 server");
+        tracing::debug!("shutting down http1 server");
         self.receiver
-            .recv()
-            .expect("value received from http1 server dedicated thread")
+            .recv_timeout(DEFAULT_TIMEOUT)
+            .context("value received from http1 server dedicated thread")?
     }
 }
 
@@ -155,10 +156,10 @@ impl ServerHttp2 {
     }
 
     fn shutdown(self) -> anyhow::Result<()> {
-        tracing::debug!("shuting down http2 server");
+        tracing::debug!("shutting down http2 server");
         self.receiver
-            .recv()
-            .expect("value received from http2 server dedicated thread")
+            .recv_timeout(DEFAULT_TIMEOUT)
+            .context("value received from http2 server dedicated thread")?
     }
 }
 
@@ -185,17 +186,16 @@ where
     let (tx, rx) = mpsc::channel::<anyhow::Result<()>>();
     tracing::debug!("running inner function in a dedicated thread");
     std::thread::spawn(move || {
-        tx.send(f())
-            .expect("value sent from http1 server dedicated thread");
+        let _ = tx.send(f());
     });
     let result = rx
-        .recv()
-        .expect("value received from request dedicated thread");
+        .recv_timeout(DEFAULT_TIMEOUT)
+        .context("value received from request dedicated thread");
 
     if let Err(err) = server.shutdown() {
         tracing::error!("[host/server] failure {:?}", err);
     }
-    result
+    result?
 }
 
 pub async fn setup_http2(f: impl Future<Output = anyhow::Result<()>>) -> anyhow::Result<()> {
@@ -221,15 +221,14 @@ where
     let (tx, rx) = mpsc::channel::<anyhow::Result<()>>();
     tracing::debug!("running inner function in a dedicated thread");
     std::thread::spawn(move || {
-        tx.send(f())
-            .expect("value sent from http2 server dedicated thread");
+        let _ = tx.send(f());
     });
     let result = rx
-        .recv()
-        .expect("value received from request dedicated thread");
+        .recv_timeout(DEFAULT_TIMEOUT)
+        .context("value received from request dedicated thread");
 
     if let Err(err) = server.shutdown() {
         tracing::error!("[host/server] failure {:?}", err);
     }
-    result
+    result?
 }
