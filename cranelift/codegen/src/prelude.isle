@@ -87,6 +87,7 @@
 
 (decl pure u16_as_u64 (u16) u64)
 (extern constructor u16_as_u64 u16_as_u64)
+(convert u16 u64 u16_as_u64)
 
 (decl pure u32_as_u64 (u32) u64)
 (extern constructor u32_as_u64 u32_as_u64)

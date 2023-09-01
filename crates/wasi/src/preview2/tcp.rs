@@ -228,7 +228,9 @@ impl HostTcpSocket {
     pub fn from_tcp_listener(tcp_listener: cap_std::net::TcpListener) -> io::Result<Self> {
         let fd = tcp_listener.into_raw_socketlike();
         let std_stream = unsafe { std::net::TcpStream::from_raw_socketlike(fd) };
-        let stream = tokio::net::TcpStream::try_from(std_stream)?;
+        let stream = crate::preview2::with_ambient_tokio_runtime(|| {
+            tokio::net::TcpStream::try_from(std_stream)
+        })?;
 
         Ok(Self {
             inner: Arc::new(stream),

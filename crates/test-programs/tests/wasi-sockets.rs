@@ -45,24 +45,7 @@ async fn run(name: &str) -> anyhow::Result<()> {
     let component = get_component(name);
     let mut linker = Linker::new(&ENGINE);
 
-    preview2::bindings::io::streams::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::poll::poll::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::exit::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::stdin::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::stdout::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::stderr::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_input::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_output::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_stdin::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_stdout::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::terminal_stderr::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::cli::environment::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::filesystem::types::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::filesystem::preopens::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::sockets::tcp::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::sockets::tcp_create_socket::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::sockets::network::add_to_linker(&mut linker, |x| x)?;
-    preview2::bindings::sockets::instance_network::add_to_linker(&mut linker, |x| x)?;
+    preview2::command::add_to_linker(&mut linker)?;
 
     // Create our wasi context.
     let mut table = Table::new();

@@ -216,3 +216,13 @@ pub(crate) fn in_tokio<F: std::future::Future>(f: F) -> F::Output {
         }
     }
 }
+
+fn with_ambient_tokio_runtime<R>(f: impl FnOnce() -> R) -> R {
+    match tokio::runtime::Handle::try_current() {
+        Ok(_) => f(),
+        Err(_) => {
+            let _enter = RUNTIME.enter();
+            f()
+        }
+    }
+}

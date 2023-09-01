@@ -4,7 +4,7 @@ target x86_64
 
 function %f1() -> i64 {
 block0:
-  v0 = iconst.i32 0xffff_ffff_9876_5432
+  v0 = iconst.i32 0x9876_5432
   v1 = uextend.i64 v0
   return v1
   ; check: v2 = iconst.i64 0x9876_5432

@@ -80,13 +80,6 @@ Unreleased.
   These methods do not affect the size of the pre-allocated pool.
   [#6835](https://github.com/bytecodealliance/wasmtime/pull/6835)
 
-* Options to the `wasmtime` CLI for Wasmtime itself must now come before the
-  WebAssembly module. For example `wasmtime run foo.wasm --disable-cache` now
-  must be specified as `wasmtime run --disable-cache foo.wasm`. Any
-  argument/option after the WebAssembly module is now interpreted as an argument
-  to the wasm module itself.
-  [#6737](https://github.com/bytecodealliance/wasmtime/pull/6737)
-
 * Builder methods for WASI contexts onw use `&mut self` instead of `self`.
   [#6770](https://github.com/bytecodealliance/wasmtime/pull/6770)
 

@@ -92,10 +92,9 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   feq.s a0, fa0, fa0
-;   beqz a0, 0x44
+;   beqz a0, 0x40
 ;   auipc t6, 0
-;   addi t6, t6, 0x10
-;   lw t6, 0(t6)
+;   lw t6, 0xc(t6)
 ;   j 8
 ;   .byte 0x00, 0x00, 0x80, 0xbf
 ;   fmv.w.x ft3, t6
@@ -126,10 +125,9 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   feq.d a0, fa0, fa0
-;   beqz a0, 0x5c
+;   beqz a0, 0x54
 ;   auipc t6, 0
-;   addi t6, t6, 0x10
-;   ld t6, 0(t6)
+;   ld t6, 0xc(t6)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0xf0, 0xbf
@@ -138,8 +136,7 @@ block0(v0: f64):
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   auipc t6, 0
-;   addi t6, t6, 0x10
-;   ld t6, 0(t6)
+;   ld t6, 0xc(t6)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x70, 0x40
@@ -166,10 +163,9 @@ block0(v0: f32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   feq.s a0, fa0, fa0
-;   beqz a0, 0x44
+;   beqz a0, 0x40
 ;   auipc t6, 0
-;   addi t6, t6, 0x10
-;   lw t6, 0(t6)
+;   lw t6, 0xc(t6)
 ;   j 8
 ;   .byte 0x00, 0x00, 0x80, 0xbf
 ;   fmv.w.x ft3, t6
@@ -200,10 +196,9 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   feq.d a0, fa0, fa0
-;   beqz a0, 0x5c
+;   beqz a0, 0x54
 ;   auipc t6, 0
-;   addi t6, t6, 0x10
-;   ld t6, 0(t6)
+;   ld t6, 0xc(t6)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0xf0, 0xbf
@@ -212,8 +207,7 @@ block0(v0: f64):
 ;   beqz a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   auipc t6, 0
-;   addi t6, t6, 0x10
-;   ld t6, 0(t6)
+;   ld t6, 0xc(t6)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0xf0, 0x40

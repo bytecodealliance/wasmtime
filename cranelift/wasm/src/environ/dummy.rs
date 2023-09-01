@@ -509,7 +509,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _heap: Heap,
         _val: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_memory_size(
@@ -518,7 +518,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _index: MemoryIndex,
         _heap: Heap,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_memory_copy(
@@ -570,7 +570,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _index: TableIndex,
         _table: ir::Table,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_table_grow(
@@ -581,7 +581,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _delta: ir::Value,
         _init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_table_get(
@@ -660,7 +660,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         mut pos: FuncCursor,
         _global_index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_custom_global_set(
@@ -681,7 +681,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _expected: ir::Value,
         _timeout: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_atomic_notify(
