@@ -98,6 +98,7 @@ where
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
+            AttributeValue::Block(d) => write::AttributeValue::Block(d.to_slice()?.to_vec()),
             AttributeValue::Udata(u) => write::AttributeValue::Udata(u),
             AttributeValue::Data1(d) => write::AttributeValue::Data1(d),
             AttributeValue::Data2(d) => write::AttributeValue::Data2(d),
