@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 use gimli::write::{Address, FrameDescriptionEntry};
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 type Register = u16;
 

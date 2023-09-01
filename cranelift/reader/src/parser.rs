@@ -12,6 +12,7 @@ use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
+use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, UserExternalNameRef};
@@ -483,10 +484,6 @@ impl<'a> Parser<'a> {
 
     // Get the current lookahead token, after making sure there is one.
     fn token(&mut self) -> Option<Token<'a>> {
-        // clippy says self.lookahead is immutable so this loop is either infinite or never
-        // running. I don't think this is true - self.lookahead is mutated in the loop body - so
-        // maybe this is a clippy bug? Either way, disable clippy for this.
-        #[cfg_attr(feature = "cargo-clippy", allow(clippy::while_immutable_condition))]
         while self.lookahead.is_none() {
             match self.lex.next() {
                 Some(Ok(LocatedToken { token, location })) => {
@@ -2460,10 +2457,25 @@ impl<'a> Parser<'a> {
                 opcode,
                 arg: self.match_value("expected SSA value operand")?,
             },
-            InstructionFormat::UnaryImm => InstructionData::UnaryImm {
-                opcode,
-                imm: self.match_imm64("expected immediate integer operand")?,
-            },
+            InstructionFormat::UnaryImm => {
+                let msg = |bits| format!("expected immediate {bits}-bit integer operand");
+                let unsigned = match explicit_control_type {
+                    Some(types::I8) => self.match_imm8(&msg(8))? as u8 as i64,
+                    Some(types::I16) => self.match_imm16(&msg(16))? as u16 as i64,
+                    Some(types::I32) => self.match_imm32(&msg(32))? as u32 as i64,
+                    Some(types::I64) => self.match_imm64(&msg(64))?.bits(),
+                    _ => {
+                        return err!(
+                            self.loc,
+                            "expected one of the following type: i8, i16, i32 or i64"
+                        )
+                    }
+                };
+                InstructionData::UnaryImm {
+                    opcode,
+                    imm: Imm64::new(unsigned),
+                }
+            }
             InstructionFormat::UnaryIeee32 => InstructionData::UnaryIeee32 {
                 opcode,
                 imm: self.match_ieee32("expected immediate 32-bit float operand")?,

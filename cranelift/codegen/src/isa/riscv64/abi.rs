@@ -285,7 +285,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             insts.extend(Inst::load_constant_u32(
                 writable_spilltmp_reg2(),
                 imm as u64,
-                &mut |_| writable_spilltmp_reg2(),
             ));
             insts.push(Inst::AluRRR {
                 alu_op: AluOPRRR::Add,
@@ -391,11 +390,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
-        insts.extend(Inst::load_constant_u32(
-            writable_a0(),
-            frame_size as u64,
-            &mut |_| writable_a0(),
-        ));
+        insts.extend(Inst::load_constant_u32(writable_a0(), frame_size as u64));
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Probestack),
@@ -578,7 +573,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let arg1 = Writable::from_reg(x_reg(11));
         let arg2 = Writable::from_reg(x_reg(12));
         let tmp = alloc_tmp(Self::word_type());
-        insts.extend(Inst::load_constant_u64(tmp, size as u64, &mut alloc_tmp).into_iter());
+        insts.extend(Inst::load_constant_u64(tmp, size as u64).into_iter());
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),

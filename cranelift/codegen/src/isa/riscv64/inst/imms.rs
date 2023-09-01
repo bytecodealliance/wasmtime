@@ -13,22 +13,19 @@ pub struct Imm12 {
 impl Imm12 {
     pub(crate) const FALSE: Self = Self { bits: 0 };
     pub(crate) const TRUE: Self = Self { bits: 1 };
+
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
-        let sign_bit = 1 << 11;
-        if val == 0 {
-            Some(Imm12 { bits: 0 })
-        } else if (val & sign_bit) != 0 && (val >> 12) == 0xffff_ffff_ffff_f {
-            Some(Imm12 {
-                bits: (val & 0xffff) as i16,
-            })
-        } else if (val & sign_bit) == 0 && (val >> 12) == 0 {
-            Some(Imm12 {
-                bits: (val & 0xffff) as i16,
-            })
+        Self::maybe_from_i64(val as i64)
+    }
+
+    pub fn maybe_from_i64(val: i64) -> Option<Imm12> {
+        if val >= -2048 && val <= 2047 {
+            Some(Imm12 { bits: val as i16 })
         } else {
             None
         }
     }
+
     #[inline]
     pub fn from_bits(bits: i16) -> Self {
         Self { bits: bits & 0xfff }
@@ -81,6 +78,7 @@ impl Imm20 {
             bits: bits & 0xf_ffff,
         }
     }
+
     #[inline]
     pub fn as_u32(&self) -> u32 {
         (self.bits as u32) & 0xf_ffff
@@ -178,14 +176,10 @@ impl Inst {
     ///
     /// `value` must be between `imm_min()` and `imm_max()`, or else
     /// this helper returns `None`.
-    pub(crate) fn generate_imm<R>(
-        value: u64,
-        mut handle_imm: impl FnMut(Option<Imm20>, Option<Imm12>) -> R,
-    ) -> Option<R> {
+    pub(crate) fn generate_imm(value: u64) -> Option<(Imm20, Imm12)> {
         if let Some(imm12) = Imm12::maybe_from_u64(value) {
             // can be load using single imm12.
-            let r = handle_imm(None, Some(imm12));
-            return Some(r);
+            return Some((Imm20::from_bits(0), imm12));
         }
         let value = value as i64;
         if !(value >= Self::imm_min() && value <= Self::imm_max()) {
@@ -217,17 +211,9 @@ impl Inst {
         };
         assert!(imm20 >= -(0x7_ffff + 1) && imm20 <= 0x7_ffff);
         assert!(imm20 != 0 || imm12 != 0);
-        Some(handle_imm(
-            if imm20 != 0 {
-                Some(Imm20::from_bits(imm20 as i32))
-            } else {
-                None
-            },
-            if imm12 != 0 {
-                Some(Imm12::from_bits(imm12 as i16))
-            } else {
-                None
-            },
+        Some((
+            Imm20::from_bits(imm20 as i32),
+            Imm12::from_bits(imm12 as i16),
         ))
     }
 }

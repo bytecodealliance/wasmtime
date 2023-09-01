@@ -21,8 +21,7 @@ use wasmparser::{
     self, Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind,
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
     GlobalSectionReader, ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader,
-    Naming, Operator, StructuralType, TableSectionReader, TagSectionReader, TagType, TypeRef,
-    TypeSectionReader,
+    Naming, Operator, TableSectionReader, TagSectionReader, TagType, TypeRef, TypeSectionReader,
 };
 
 fn memory(ty: MemoryType) -> Memory {
@@ -50,20 +49,9 @@ pub fn parse_type_section<'a>(
     let count = types.count();
     environ.reserve_types(count)?;
 
-    for entry in types {
-        let entry = entry?;
-        if entry.is_final || entry.supertype_idx.is_some() {
-            unimplemented!("gc proposal");
-        }
-        match entry.structural_type {
-            StructuralType::Func(wasm_func_ty) => {
-                let ty = environ.convert_func_type(&wasm_func_ty);
-                environ.declare_type_func(ty)?;
-            }
-            StructuralType::Array(_) | StructuralType::Struct(_) => {
-                unimplemented!("gc proposal");
-            }
-        }
+    for ty in types.into_iter_err_on_gc_types() {
+        let ty = environ.convert_func_type(&ty?);
+        environ.declare_type_func(ty)?;
     }
     Ok(())
 }

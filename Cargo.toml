@@ -44,6 +44,7 @@ once_cell = { workspace = true }
 listenfd = "1.0.0"
 wat = { workspace = true }
 serde = { workspace = true }
+serde_derive = { workspace = true }
 serde_json = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true }
@@ -134,7 +135,9 @@ exclude = [
 version = "13.0.0"
 authors = ["The Wasmtime Project Developers"]
 edition = "2021"
-rust-version = "1.71.0"
+# Wasmtime's current policy is that this number can be no larger than the
+# current stable release of Rust minus 2.
+rust-version = "1.70.0"
 
 [workspace.dependencies]
 wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=13.0.0" }
@@ -219,15 +222,15 @@ is-terminal = "0.4.0"
 wit-bindgen = { version = "0.9.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.111.0"
-wat = "1.0.70"
-wast = "63.0.0"
-wasmprinter = "0.2.63"
-wasm-encoder = "0.31.1"
-wasm-smith = "0.12.14"
-wasm-mutate = "0.2.31"
-wit-parser = "0.10.0"
-wit-component = "0.13.2"
+wasmparser = "0.112.0"
+wat = "1.0.71"
+wast = "64.0.0"
+wasmprinter = "0.2.64"
+wasm-encoder = "0.32.0"
+wasm-smith = "0.12.15"
+wasm-mutate = "0.2.32"
+wit-parser = "0.11.0"
+wit-component = "0.14.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -256,7 +259,9 @@ async-trait = "0.1.71"
 heck = "0.4"
 similar = "2.1.0"
 toml = "0.5.9"
-serde = "1.0.94"
+# serde and serde_derive must have the same version
+serde = "1.0.188"
+serde_derive = "1.0.188"
 serde_json = "1.0.80"
 glob = "0.3.0"
 libfuzzer-sys = "0.4.0"

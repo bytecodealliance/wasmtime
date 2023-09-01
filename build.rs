@@ -254,19 +254,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 return true;
             }
 
-            let known_failure = [
-                "canonicalize_nan",
-                "cvt_from_uint",
-                "issue_3327_bnot_lowering",
-                "simd_conversions",
-                "simd_f32x4_rounding",
-                "simd_f64x2_rounding",
-                "simd_i32x4_trunc_sat_f32x4",
-                "simd_i32x4_trunc_sat_f64x2",
-                "simd_load",
-                "simd_splat",
-            ]
-            .contains(&testname);
+            let known_failure = ["issue_3327_bnot_lowering"].contains(&testname);
 
             known_failure
         }

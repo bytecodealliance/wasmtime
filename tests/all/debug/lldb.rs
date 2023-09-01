@@ -23,7 +23,11 @@ fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     let mut me = std::env::current_exe().expect("current_exe specified");
     me.pop(); // chop off the file name
     me.pop(); // chop off `deps`
-    me.push("wasmtime");
+    if cfg!(target_os = "windows") {
+        me.push("wasmtime.exe");
+    } else {
+        me.push("wasmtime");
+    }
     cmd.arg(me);
 
     cmd.arg("--");
@@ -165,6 +169,34 @@ check: frame #0
 sameln: norm(n=(__ptr =
 check: = 27
 check: resuming
+"#,
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+pub fn test_debug_inst_offsets_are_correct_when_branches_are_removed() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "--disable-cache",
+            "-g",
+            "--opt-level",
+            "0",
+            "tests/all/debug/testsuite/two_removed_branches.wasm",
+        ],
+        r#"r"#,
+    )?;
+
+    // We are simply checking that the output compiles.
+    check_lldb_output(
+        &output,
+        r#"
+check: exited with status
 "#,
     )?;
     Ok(())

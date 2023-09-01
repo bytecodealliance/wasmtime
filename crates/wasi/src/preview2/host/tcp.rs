@@ -201,10 +201,12 @@ impl<T: WasiView> tcp::Host for T {
         }
 
         // Do the OS accept call.
-        let (connection, _addr) = socket
-            .tcp_socket()
-            .as_socketlike_view::<TcpListener>()
-            .accept_with(Blocking::No)?;
+        let tcp_socket = socket.tcp_socket();
+        let (connection, _addr) = tcp_socket.try_io(Interest::READABLE, || {
+            tcp_socket
+                .as_socketlike_view::<TcpListener>()
+                .accept_with(Blocking::No)
+        })?;
         let tcp_socket = HostTcpSocket::from_tcp_stream(connection)?;
 
         let input_clone = tcp_socket.clone_inner();

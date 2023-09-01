@@ -49,7 +49,7 @@
 ;; block1:
 ;;   ld t0,0(a2)
 ;;   add t4,t0,t4
-;;   auipc t0,0; ld t0,12(t0); j 12; .8byte 0xffff0000
+;;   ld t0,[const(0)]
 ;;   add t4,t4,t0
 ;;   sw a1,0(t4)
 ;;   j label2
@@ -68,7 +68,7 @@
 ;; block1:
 ;;   ld t0,0(a1)
 ;;   add t4,t0,t4
-;;   auipc t0,0; ld t0,12(t0); j 12; .8byte 0xffff0000
+;;   ld t0,[const(0)]
 ;;   add t4,t4,t0
 ;;   lw a0,0(t4)
 ;;   j label2

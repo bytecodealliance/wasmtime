@@ -3,7 +3,7 @@
 use crate::machinst::RealReg;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 #[cfg(feature = "unwind")]
 pub mod systemv;

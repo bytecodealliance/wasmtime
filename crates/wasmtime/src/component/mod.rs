@@ -23,9 +23,7 @@ pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resources::{Resource, ResourceAny};
 pub use self::types::{ResourceType, Type};
-pub use self::values::{
-    Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Union, Val, Variant,
-};
+pub use self::values::{Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Val, Variant};
 pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 
 // These items are expected to be used by an eventual
@@ -35,8 +33,8 @@ pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 pub mod __internal {
     pub use super::func::{
         bad_type_info, format_flags, lower_payload, typecheck_enum, typecheck_flags,
-        typecheck_record, typecheck_union, typecheck_variant, ComponentVariant, LiftContext,
-        LowerContext, MaybeUninitExt, Options,
+        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext,
+        MaybeUninitExt, Options,
     };
     pub use super::matching::InstanceType;
     pub use crate::map_maybe_uninit;
@@ -283,6 +281,22 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // This option defaults to `false`.
 ///     async: true,
 ///
+///     // Alternative mode of async configuration where this still implies
+///     // async instantiation happens, for example, but more control is
+///     // provided over which imports are async and which aren't.
+///     //
+///     // Note that in this mode all exports are still async.
+///     async: {
+///         // All imports are async except for functions with these names
+///         except_imports: ["foo", "bar"],
+///
+///         // All imports are synchronous except for functions with these names
+///         //
+///         // Note that this key cannot be specified with `except_imports`,
+///         // only one or the other is accepted.
+///         only_imports: ["foo", "bar"],
+///     },
+///
 ///     // This can be used to translate WIT return values of the form
 ///     // `result<T, error-type>` into `Result<T, RustErrorType>` in Rust.
 ///     // The `RustErrorType` structure will have an automatically generated
@@ -293,6 +307,20 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // By default this option is not specified.
 ///     trappable_error_type: {
 ///         interface::ErrorType: RustErrorType,
+///     },
+///
+///     // All generated bindgen types are "owned" meaning types like `String`
+///     // are used instead of `&str`, for example. This is the default and
+///     // ensures that the same type used in both imports and exports uses the
+///     // same generated type.
+///     ownership: Owning,
+///
+///     // Alternative to `Owning` above where borrowed types attempt to be used
+///     // instead. The `duplicate_if_necessary` configures whether duplicate
+///     // Rust types will be generated for the same WIT type if necessary, for
+///     // example when a type is used both as an import and an export.
+///     ownership: Borrowing {
+///         duplicate_if_necessary: true
 ///     },
 ///
 ///     // Restrict the code generated to what's needed for the interface

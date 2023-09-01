@@ -4,7 +4,7 @@ use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use log::warn;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 use crate::binemit::CodeOffset;
 use crate::isa::unwind::UnwindInst;

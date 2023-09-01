@@ -9,7 +9,7 @@ use regalloc2::{
 };
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// The first 192 vregs (64 int, 64 float, 64 vec) are "pinned" to
 /// physical registers: this means that they are always constrained to

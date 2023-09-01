@@ -15,7 +15,8 @@ cranelift-codegen = { workspace = true }
 cranelift-control = { workspace = true }
 hashbrown = { workspace = true, optional = true }
 anyhow = { workspace = true }
-serde = { version = "1.0.94", features = ["derive"], optional = true }
+serde = { version = "1.0.188", optional = true }
+serde_derive = { version = "1.0.188", optional = true }
 
 [features]
 default = ["std"]
@@ -23,4 +24,4 @@ std = ["cranelift-codegen/std"]
 core = ["hashbrown", "cranelift-codegen/core"]
 
 # For dependent crates that want to serialize some parts of cranelift
-enable-serde = ["serde", "cranelift-codegen/enable-serde"]
+enable-serde = ["serde", "serde_derive", "cranelift-codegen/enable-serde"]

@@ -18,7 +18,6 @@ mod kw {
 pub enum VariantStyle {
     Variant,
     Enum,
-    Union,
 }
 
 impl fmt::Display for VariantStyle {
@@ -26,7 +25,6 @@ impl fmt::Display for VariantStyle {
         f.write_str(match self {
             Self::Variant => "variant",
             Self::Enum => "enum",
-            Self::Union => "union",
         })
     }
 }
@@ -70,9 +68,6 @@ impl Parse for Style {
         } else if lookahead.peek(Token![enum]) {
             input.parse::<Token![enum]>()?;
             Ok(Style::Variant(VariantStyle::Enum))
-        } else if lookahead.peek(Token![union]) {
-            input.parse::<Token![union]>()?;
-            Ok(Style::Variant(VariantStyle::Union))
         } else if input.peek(kw::flags) {
             Err(input.error(
                 "`flags` not allowed here; \
@@ -238,7 +233,6 @@ fn expand_variant(
                                     match style {
                                         VariantStyle::Variant => "at most one unnamed field each",
                                         VariantStyle::Enum => "no fields",
-                                        VariantStyle::Union => "exactly one unnamed field each",
                                     }
                                 ),
                             ))
@@ -443,7 +437,6 @@ impl Expander for LiftExpander {
         let interface_type_variant = match style {
             VariantStyle::Variant => quote!(Variant),
             VariantStyle::Enum => quote!(Enum),
-            VariantStyle::Union => quote!(Union),
         };
 
         for (index, VariantCase { ident, ty, .. }) in cases.iter().enumerate() {
@@ -456,7 +449,6 @@ impl Expander for LiftExpander {
                     VariantStyle::Variant => {
                         quote!(ty.cases[#index].ty.unwrap_or_else(#internal::bad_type_info))
                     }
-                    VariantStyle::Union => quote!(ty.types[#index]),
                     VariantStyle::Enum => unreachable!(),
                 };
                 lifts.extend(
@@ -618,7 +610,6 @@ impl Expander for LowerExpander {
         let interface_type_variant = match style {
             VariantStyle::Variant => quote!(Variant),
             VariantStyle::Enum => quote!(Enum),
-            VariantStyle::Union => quote!(Union),
         };
 
         for (index, VariantCase { ident, ty, .. }) in cases.iter().enumerate() {
@@ -637,7 +628,6 @@ impl Expander for LowerExpander {
                     VariantStyle::Variant => {
                         quote!(ty.cases[#index].ty.unwrap_or_else(#internal::bad_type_info))
                     }
-                    VariantStyle::Union => quote!(ty.types[#index]),
                     VariantStyle::Enum => unreachable!(),
                 };
                 pattern = quote!(Self::#ident(value));
@@ -768,13 +758,6 @@ impl Expander for ComponentTypeExpander {
         for (index, VariantCase { attrs, ident, ty }) in cases.iter().enumerate() {
             let rename = find_rename(attrs)?;
 
-            if let (Some(_), VariantStyle::Union) = (&rename, style) {
-                return Err(Error::new(
-                    ident.span(),
-                    "renaming `union` cases is not permitted; only the type is used",
-                ));
-            }
-
             let name = rename.unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
 
             if let Some(ty) = ty {
@@ -783,9 +766,6 @@ impl Expander for ComponentTypeExpander {
                 case_names_and_checks.extend(match style {
                     VariantStyle::Variant => {
                         quote!((#name, Some(<#ty as wasmtime::component::ComponentType>::typecheck)),)
-                    }
-                    VariantStyle::Union => {
-                        quote!(<#ty as wasmtime::component::ComponentType>::typecheck,)
                     }
                     VariantStyle::Enum => {
                         return Err(Error::new(
@@ -810,9 +790,6 @@ impl Expander for ComponentTypeExpander {
                     VariantStyle::Variant => {
                         quote!((#name, None),)
                     }
-                    VariantStyle::Union => {
-                        quote!(<() as wasmtime::component::ComponentType>::typecheck,)
-                    }
                     VariantStyle::Enum => quote!(#name,),
                 });
                 lower_payload_case_declarations.extend(quote!(#ident: [wasmtime::ValRaw; 0],));
@@ -821,7 +798,6 @@ impl Expander for ComponentTypeExpander {
 
         let typecheck = match style {
             VariantStyle::Variant => quote!(typecheck_variant),
-            VariantStyle::Union => quote!(typecheck_union),
             VariantStyle::Enum => quote!(typecheck_enum),
         };
 

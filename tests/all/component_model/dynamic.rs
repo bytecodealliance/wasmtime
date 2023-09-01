@@ -436,8 +436,6 @@ fn everything() -> Result<()> {
                     (case "M" $m)
                 ))
                 (export $j "j" (type $j'))
-                (type $z' (union u32 float64))
-                (export $z "z" (type $z'))
 
                 (type $Foo' (record
                     (field "A" u32)
@@ -454,7 +452,6 @@ fn everything() -> Result<()> {
                     (field "V" string)
                     (field "W" char)
                     (field "Y" (tuple u32 u32))
-                    (field "Z" $z)
                     (field "AA" (option u32))
                     (field "BB" (result string (error string)))
                 ))
@@ -497,8 +494,8 @@ fn everything() -> Result<()> {
         .fields()
         .map(|field| field.ty)
         .collect::<Box<[component::Type]>>();
-    let (b_type, c_type, f_type, j_type, y_type, z_type, aa_type, bb_type) = (
-        &types[1], &types[2], &types[3], &types[4], &types[13], &types[14], &types[15], &types[16],
+    let (b_type, c_type, f_type, j_type, y_type, aa_type, bb_type) = (
+        &types[1], &types[2], &types[3], &types[4], &types[13], &types[14], &types[15],
     );
     let f_element_type = &f_type.unwrap_list().ty();
     let input = ty.unwrap_record().new_val([
@@ -535,10 +532,6 @@ fn everything() -> Result<()> {
             y_type
                 .unwrap_tuple()
                 .new_val(Box::new([Val::U32(42), Val::U32(24)]))?,
-        ),
-        (
-            "Z",
-            z_type.unwrap_union().new_val(1, Val::Float64(3.14159265))?,
         ),
         (
             "AA",

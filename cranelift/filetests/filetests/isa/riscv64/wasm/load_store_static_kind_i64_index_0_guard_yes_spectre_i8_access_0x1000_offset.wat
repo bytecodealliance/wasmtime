@@ -62,8 +62,8 @@
 ;; function u0:1:
 ;; block0:
 ;;   lui a2,65535
-;;   addi a2,a2,4095
-;;   ugt a3,a0,a2##ty=i64
+;;   addi a3,a2,4095
+;;   ugt a3,a0,a3##ty=i64
 ;;   ld a2,0(a1)
 ;;   add a2,a2,a0
 ;;   lui a4,1

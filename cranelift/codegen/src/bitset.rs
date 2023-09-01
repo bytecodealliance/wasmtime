@@ -12,7 +12,10 @@ use core::ops::{Add, BitOr, Shl, Sub};
 
 /// A small bitset built on a single primitive integer type
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct BitSet<T>(pub T);
 
 impl<T> BitSet<T>

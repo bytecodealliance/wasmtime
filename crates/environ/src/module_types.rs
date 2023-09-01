@@ -1,5 +1,5 @@
 use crate::{PrimaryMap, SignatureIndex, WasmFuncType};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Index;
 

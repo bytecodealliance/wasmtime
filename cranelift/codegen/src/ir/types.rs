@@ -4,7 +4,7 @@ use core::default::Default;
 use core::fmt::{self, Debug, Display, Formatter};
 use cranelift_codegen_shared::constants;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
 
 /// The type of an SSA value.

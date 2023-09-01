@@ -20,7 +20,8 @@ wasmtime-types = { workspace = true }
 hashbrown = { workspace = true, optional = true }
 itertools = "0.10.0"
 log = { workspace = true }
-serde = { version = "1.0.94", features = ["derive"], optional = true }
+serde = { version = "1.0.188", optional = true }
+serde_derive = { version = "1.0.188", optional = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]
@@ -31,4 +32,4 @@ target-lexicon = { workspace = true }
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std"]
 core = ["hashbrown", "cranelift-codegen/core", "cranelift-frontend/core"]
-enable-serde = ["serde"]
+enable-serde = ["serde", "serde_derive"]

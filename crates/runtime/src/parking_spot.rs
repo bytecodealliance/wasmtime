@@ -9,8 +9,6 @@
 //! - *Unparking* refers to dequeuing a thread from a queue keyed by some address
 //! and resuming it.
 
-#![deny(clippy::all)]
-#![deny(clippy::pedantic)]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 

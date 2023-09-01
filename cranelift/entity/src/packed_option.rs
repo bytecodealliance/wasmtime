@@ -11,7 +11,7 @@ use core::fmt;
 use core::mem;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Types that have a reserved value which can't be created any other way.
 pub trait ReservedValue {

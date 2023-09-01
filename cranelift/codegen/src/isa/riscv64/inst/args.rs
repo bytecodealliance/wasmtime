@@ -161,6 +161,18 @@ impl AMode {
         }
     }
 
+    /// Retrieve a MachLabel that corresponds to this addressing mode, if it exists.
+    pub(crate) fn get_label_with_sink(&self, sink: &mut MachBuffer<Inst>) -> Option<MachLabel> {
+        match self {
+            &AMode::Const(addr) => Some(sink.get_label_for_constant(addr)),
+            &AMode::Label(label) => Some(label),
+            &AMode::RegOffset(..)
+            | &AMode::SPOffset(..)
+            | &AMode::FPOffset(..)
+            | &AMode::NominalSPOffset(..) => None,
+        }
+    }
+
     pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
         format!("{}", self.clone().with_allocs(allocs))
     }
@@ -1808,5 +1820,81 @@ pub(crate) fn f64_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
         (false, 32) => (-1., 4294967296.0),
         (false, 64) => (-1., 18446744073709551616.0),
         _ => unreachable!(),
+    }
+}
+
+impl CsrRegOP {
+    pub(crate) fn funct3(self) -> u32 {
+        match self {
+            CsrRegOP::CsrRW => 0b001,
+            CsrRegOP::CsrRS => 0b010,
+            CsrRegOP::CsrRC => 0b011,
+        }
+    }
+
+    pub(crate) fn opcode(self) -> u32 {
+        0b1110011
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            CsrRegOP::CsrRW => "csrrw",
+            CsrRegOP::CsrRS => "csrrs",
+            CsrRegOP::CsrRC => "csrrc",
+        }
+    }
+}
+
+impl Display for CsrRegOP {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl CsrImmOP {
+    pub(crate) fn funct3(self) -> u32 {
+        match self {
+            CsrImmOP::CsrRWI => 0b101,
+            CsrImmOP::CsrRSI => 0b110,
+            CsrImmOP::CsrRCI => 0b111,
+        }
+    }
+
+    pub(crate) fn opcode(self) -> u32 {
+        0b1110011
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            CsrImmOP::CsrRWI => "csrrwi",
+            CsrImmOP::CsrRSI => "csrrsi",
+            CsrImmOP::CsrRCI => "csrrci",
+        }
+    }
+}
+
+impl Display for CsrImmOP {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl CSR {
+    pub(crate) fn bits(self) -> Imm12 {
+        Imm12::from_bits(match self {
+            CSR::Frm => 0x0002,
+        })
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            CSR::Frm => "frm",
+        }
+    }
+}
+
+impl Display for CSR {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.name())
     }
 }

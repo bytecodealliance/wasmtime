@@ -1659,6 +1659,39 @@ impl<'a> Verifier<'a> {
         }
     }
 
+    fn iconst_bounds(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
+        use crate::ir::instructions::InstructionData::UnaryImm;
+
+        let inst_data = &self.func.dfg.insts[inst];
+        if let UnaryImm {
+            opcode: Opcode::Iconst,
+            imm,
+        } = inst_data
+        {
+            let ctrl_typevar = self.func.dfg.ctrl_typevar(inst);
+            let bounds_mask = match ctrl_typevar {
+                types::I8 => u8::MAX.into(),
+                types::I16 => u16::MAX.into(),
+                types::I32 => u32::MAX.into(),
+                types::I64 => u64::MAX,
+                _ => unreachable!(),
+            };
+
+            let value = imm.bits() as u64;
+            if value & bounds_mask != value {
+                errors.fatal((
+                    inst,
+                    self.context(inst),
+                    "constant immediate is out of bounds",
+                ))
+            } else {
+                Ok(())
+            }
+        } else {
+            Ok(())
+        }
+    }
+
     fn typecheck_function_signature(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         let params = self
             .func
@@ -1735,6 +1768,7 @@ impl<'a> Verifier<'a> {
                 self.instruction_integrity(inst, errors)?;
                 self.typecheck(inst, errors)?;
                 self.immediate_constraints(inst, errors)?;
+                self.iconst_bounds(inst, errors)?;
             }
 
             self.encodable_as_bb(block, errors)?;
@@ -1755,7 +1789,7 @@ impl<'a> Verifier<'a> {
 mod tests {
     use super::{Verifier, VerifierError, VerifierErrors};
     use crate::ir::instructions::{InstructionData, Opcode};
-    use crate::ir::{types, AbiParam, Function};
+    use crate::ir::{types, AbiParam, Function, Type};
     use crate::settings;
 
     macro_rules! assert_err_with_msg {
@@ -1810,6 +1844,74 @@ mod tests {
         let _ = verifier.run(&mut errors);
 
         assert_err_with_msg!(errors, "instruction format");
+    }
+
+    fn test_iconst_bounds(immediate: i64, ctrl_typevar: Type) -> VerifierErrors {
+        let mut func = Function::new();
+        let block0 = func.dfg.make_block();
+        func.layout.append_block(block0);
+
+        let test_inst = func.dfg.make_inst(InstructionData::UnaryImm {
+            opcode: Opcode::Iconst,
+            imm: immediate.into(),
+        });
+
+        let end_inst = func.dfg.make_inst(InstructionData::MultiAry {
+            opcode: Opcode::Return,
+            args: Default::default(),
+        });
+
+        func.dfg.append_result(test_inst, ctrl_typevar);
+        func.layout.append_inst(test_inst, block0);
+        func.layout.append_inst(end_inst, block0);
+
+        let flags = &settings::Flags::new(settings::builder());
+        let verifier = Verifier::new(&func, flags.into());
+        let mut errors = VerifierErrors::default();
+
+        let _ = verifier.run(&mut errors);
+        errors
+    }
+
+    fn test_iconst_bounds_err(immediate: i64, ctrl_typevar: Type) {
+        assert_err_with_msg!(
+            test_iconst_bounds(immediate, ctrl_typevar),
+            "constant immediate is out of bounds"
+        );
+    }
+
+    fn test_iconst_bounds_ok(immediate: i64, ctrl_typevar: Type) {
+        assert!(test_iconst_bounds(immediate, ctrl_typevar).is_empty());
+    }
+
+    #[test]
+    fn negative_iconst_8() {
+        test_iconst_bounds_err(-10, types::I8);
+    }
+
+    #[test]
+    fn negative_iconst_32() {
+        test_iconst_bounds_err(-1, types::I32);
+    }
+
+    #[test]
+    fn large_iconst_8() {
+        test_iconst_bounds_err(1 + u8::MAX as i64, types::I8);
+    }
+
+    #[test]
+    fn large_iconst_16() {
+        test_iconst_bounds_err(10 + u16::MAX as i64, types::I16);
+    }
+
+    #[test]
+    fn valid_iconst_8() {
+        test_iconst_bounds_ok(10, types::I8);
+    }
+
+    #[test]
+    fn valid_iconst_32() {
+        test_iconst_bounds_ok(u32::MAX as i64, types::I32);
     }
 
     #[test]

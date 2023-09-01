@@ -94,7 +94,7 @@ block0(v0: f32):
 ;   feq.s a0, fa0, fa0
 ;   beqz a0, 0x40
 ;   auipc t6, 0
-;   lwu t6, 0xc(t6)
+;   lw t6, 0xc(t6)
 ;   j 8
 ;   .byte 0x00, 0x00, 0x80, 0xbf
 ;   fmv.w.x ft3, t6
@@ -165,7 +165,7 @@ block0(v0: f32):
 ;   feq.s a0, fa0, fa0
 ;   beqz a0, 0x40
 ;   auipc t6, 0
-;   lwu t6, 0xc(t6)
+;   lw t6, 0xc(t6)
 ;   j 8
 ;   .byte 0x00, 0x00, 0x80, 0xbf
 ;   fmv.w.x ft3, t6

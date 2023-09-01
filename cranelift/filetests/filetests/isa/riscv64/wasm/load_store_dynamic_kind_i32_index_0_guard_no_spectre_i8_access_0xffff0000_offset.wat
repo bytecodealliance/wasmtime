@@ -43,7 +43,7 @@
 ;; block0:
 ;;   slli t0,a0,32
 ;;   srli t2,t0,32
-;;   auipc t1,0; ld t1,12(t1); j 12; .8byte 0xffff0001
+;;   ld t1,[const(1)]
 ;;   add t0,t2,t1
 ;;   ult a0,t0,t2##ty=i64
 ;;   trap_if a0,heap_oob
@@ -53,7 +53,7 @@
 ;; block1:
 ;;   ld a0,0(a2)
 ;;   add a0,a0,t2
-;;   auipc a2,0; ld a2,12(a2); j 12; .8byte 0xffff0000
+;;   ld a2,[const(0)]
 ;;   add a0,a0,a2
 ;;   sb a1,0(a0)
 ;;   j label2
@@ -66,7 +66,7 @@
 ;; block0:
 ;;   slli t0,a0,32
 ;;   srli t2,t0,32
-;;   auipc t1,0; ld t1,12(t1); j 12; .8byte 0xffff0001
+;;   ld t1,[const(1)]
 ;;   add t0,t2,t1
 ;;   ult a0,t0,t2##ty=i64
 ;;   trap_if a0,heap_oob
@@ -76,7 +76,7 @@
 ;; block1:
 ;;   ld a0,0(a1)
 ;;   add a0,a0,t2
-;;   auipc a1,0; ld a1,12(a1); j 12; .8byte 0xffff0000
+;;   ld a1,[const(0)]
 ;;   add a0,a0,a1
 ;;   lbu a0,0(a0)
 ;;   j label2

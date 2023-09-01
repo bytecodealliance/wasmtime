@@ -55,8 +55,9 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 // Instructions (top level): definition
 
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, FClassResult, FFlagsException, FloatRoundOP, FloatSelectOP,
-    FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
+    AluOPRRI, AluOPRRR, AtomicOP, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FloatRoundOP,
+    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, CSR,
+    FRM,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{MInst, VecAluOpRRImm5, VecAluOpRRR};
 
@@ -195,23 +196,23 @@ impl Inst {
     }
 
     /// Immediates can be loaded using lui and addi instructions.
-    fn load_const_imm<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> Option<SmallInstVec<Inst>> {
-        Inst::generate_imm(value, |imm20, imm12| {
+    fn load_const_imm(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
+        Inst::generate_imm(value).map(|(imm20, imm12)| {
             let mut insts = SmallVec::new();
 
-            let rs = if let Some(imm) = imm20 {
-                let rd = if imm12.is_some() { alloc_tmp(I64) } else { rd };
-                insts.push(Inst::Lui { rd, imm });
+            let imm20_is_zero = imm20.as_u32() == 0;
+            let imm12_is_zero = imm12.as_i16() == 0;
+
+            let rs = if !imm20_is_zero {
+                insts.push(Inst::Lui { rd, imm: imm20 });
                 rd.to_reg()
             } else {
                 zero_reg()
             };
 
-            if let Some(imm12) = imm12 {
+            // We also need to emit the addi if the value is 0, otherwise we just
+            // won't produce any instructions.
+            if !imm12_is_zero || (imm20_is_zero && imm12_is_zero) {
                 insts.push(Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Addi,
                     rd,
@@ -224,27 +225,26 @@ impl Inst {
         })
     }
 
-    pub(crate) fn load_constant_u32<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
+    pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value);
         insts.unwrap_or_else(|| {
-            smallvec![Inst::LoadConst32 {
+            smallvec![Inst::LoadInlineConst {
                 rd,
-                imm: value as u32
+                ty: I32,
+                imm: value
             }]
         })
     }
 
-    pub fn load_constant_u64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
-        insts.unwrap_or_else(|| smallvec![Inst::LoadConst64 { rd, imm: value }])
+    pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value);
+        insts.unwrap_or_else(|| {
+            smallvec![Inst::LoadInlineConst {
+                rd,
+                ty: I64,
+                imm: value
+            }]
+        })
     }
 
     pub(crate) fn construct_auipc_and_jalr(
@@ -252,19 +252,20 @@ impl Inst {
         tmp: Writable<Reg>,
         offset: i64,
     ) -> [Inst; 2] {
-        Inst::generate_imm(offset as u64, |imm20, imm12| {
-            let a = Inst::Auipc {
-                rd: tmp,
-                imm: imm20.unwrap_or_default(),
-            };
-            let b = Inst::Jalr {
-                rd: link.unwrap_or(writable_zero_reg()),
-                base: tmp.to_reg(),
-                offset: imm12.unwrap_or_default(),
-            };
-            [a, b]
-        })
-        .expect("code range is too big.")
+        Inst::generate_imm(offset as u64)
+            .map(|(imm20, imm12)| {
+                let a = Inst::Auipc {
+                    rd: tmp,
+                    imm: imm20,
+                };
+                let b = Inst::Jalr {
+                    rd: link.unwrap_or(writable_zero_reg()),
+                    base: tmp.to_reg(),
+                    offset: imm12,
+                };
+                [a, b]
+            })
+            .expect("code range is too big.")
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
@@ -275,11 +276,7 @@ impl Inst {
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallVec::new();
         let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u32(
-            tmp,
-            const_data as u64,
-            &mut alloc_tmp,
-        ));
+        insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F32),
@@ -297,7 +294,7 @@ impl Inst {
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallInstVec::new();
         let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u64(tmp, const_data, &mut alloc_tmp));
+        insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::FpuRR {
             frm: None,
             alu_op: FpuOPRR::move_x_to_f_op(F64),
@@ -388,8 +385,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
-        &Inst::LoadConst32 { rd, .. } => collector.reg_def(rd),
-        &Inst::LoadConst64 { rd, .. } => collector.reg_def(rd),
+        &Inst::LoadInlineConst { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
@@ -402,6 +398,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::AluRRImm12 { rd, rs, .. } => {
             collector.reg_use(rs);
+            collector.reg_def(rd);
+        }
+        &Inst::CsrReg { rd, rs, .. } => {
+            collector.reg_use(rs);
+            collector.reg_def(rd);
+        }
+        &Inst::CsrImm { rd, .. } => {
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
@@ -969,7 +972,7 @@ impl MachInst for Inst {
 
     fn worst_case_size() -> CodeOffset {
         // calculate by test function riscv64_worst_case_instruction_size()
-        116
+        124
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
@@ -1382,16 +1385,7 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
-            &Inst::LoadConst32 { rd, imm } => {
-                let rd = format_reg(rd.to_reg(), allocs);
-                let mut buf = String::new();
-                write!(&mut buf, "auipc {},0; ", rd).unwrap();
-                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
-                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 4).unwrap();
-                write!(&mut buf, ".4byte 0x{:x}", imm).unwrap();
-                buf
-            }
-            &Inst::LoadConst64 { rd, imm } => {
+            &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let mut buf = String::new();
                 write!(&mut buf, "auipc {},0; ", rd).unwrap();
@@ -1523,6 +1517,31 @@ impl Inst {
                     }
                     (alu_op, _, imm12) => {
                         format!("{} {},{},{}", alu_op.op_name(), rd, rs_s, imm12.as_i16())
+                    }
+                }
+            }
+            &Inst::CsrReg { op, rd, rs, csr } => {
+                let rs_s = format_reg(rs, allocs);
+                let rd_s = format_reg(rd.to_reg(), allocs);
+
+                match (op, csr, rd) {
+                    (CsrRegOP::CsrRW, CSR::Frm, rd) if rd.to_reg() == zero_reg() => {
+                        format!("fsrm {rs_s}")
+                    }
+                    _ => {
+                        format!("{op} {rd_s},{csr},{rs_s}")
+                    }
+                }
+            }
+            &Inst::CsrImm { op, rd, csr, imm } => {
+                let rd_s = format_reg(rd.to_reg(), allocs);
+
+                match (op, csr, rd) {
+                    (CsrImmOP::CsrRWI, CSR::Frm, rd) if rd.to_reg() != zero_reg() => {
+                        format!("fsrmi {rd_s},{imm}")
+                    }
+                    _ => {
+                        format!("{op} {rd_s},{csr},{imm}")
                     }
                 }
             }
@@ -2071,22 +2090,21 @@ impl LabelUse {
             }
             LabelUse::PCRel32 => {
                 let insn2 = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
-                Inst::generate_imm(offset as u64, |imm20, imm12| {
-                    let imm20 = imm20.unwrap_or_default();
-                    let imm12 = imm12.unwrap_or_default();
-                    // Encode the OR-ed-in value with zero_reg(). The
-                    // register parameter must be in the original
-                    // encoded instruction and or'ing in zeroes does not
-                    // change it.
-                    buffer[0..4].clone_from_slice(&u32::to_le_bytes(
-                        insn | enc_auipc(writable_zero_reg(), imm20),
-                    ));
-                    buffer[4..8].clone_from_slice(&u32::to_le_bytes(
-                        insn2 | enc_jalr(writable_zero_reg(), zero_reg(), imm12),
-                    ));
-                })
-                // expect make sure we handled.
-                .expect("we have check the range before,this is a compiler error.");
+                Inst::generate_imm(offset as u64)
+                    .map(|(imm20, imm12)| {
+                        // Encode the OR-ed-in value with zero_reg(). The
+                        // register parameter must be in the original
+                        // encoded instruction and or'ing in zeroes does not
+                        // change it.
+                        buffer[0..4].clone_from_slice(&u32::to_le_bytes(
+                            insn | enc_auipc(writable_zero_reg(), imm20),
+                        ));
+                        buffer[4..8].clone_from_slice(&u32::to_le_bytes(
+                            insn2 | enc_jalr(writable_zero_reg(), zero_reg(), imm12),
+                        ));
+                    })
+                    // expect make sure we handled.
+                    .expect("we have check the range before,this is a compiler error.");
             }
 
             LabelUse::B12 => {

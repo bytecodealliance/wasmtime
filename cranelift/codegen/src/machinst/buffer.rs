@@ -335,7 +335,10 @@ impl MachBufferFinalized<Stencil> {
 /// A `MachBuffer` once emission is completed: holds generated code and records,
 /// without fixups. This allows the type to be independent of the backend.
 #[derive(PartialEq, Debug, Clone)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct MachBufferFinalized<T: CompilePhase> {
     /// The buffer contents, as raw bytes.
     pub(crate) data: SmallVec<[u8; 1024]>,
@@ -848,7 +851,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         //   fixup record referring to that last branch is removed.
     }
 
-    fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
+    /// Performs various optimizations on branches pointing at the current label.
+    pub fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
         if ctrl_plane.get_decision() {
             return;
         }
@@ -1443,10 +1447,6 @@ impl<I: VCodeInst> MachBuffer<I> {
     ) -> MachBufferFinalized<Stencil> {
         let _tt = timing::vcode_emit_finish();
 
-        // Do any optimizations on branches at tail of buffer, as if we
-        // had bound one last label.
-        self.optimize_branches(ctrl_plane);
-
         self.finish_emission_maybe_forcing_veneers(ForceVeneers::No, ctrl_plane);
 
         let alignment = self.finish_constants(constants);
@@ -1713,7 +1713,10 @@ impl<I: VCodeInst> Ord for MachLabelFixup<I> {
 
 /// A relocation resulting from a compilation.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct MachReloc {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
@@ -1728,7 +1731,10 @@ pub struct MachReloc {
 
 /// A trap record resulting from a compilation.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct MachTrap {
     /// The offset at which the trap instruction occurs, *relative to the
     /// containing section*.
@@ -1739,7 +1745,10 @@ pub struct MachTrap {
 
 /// A call site record resulting from a compilation.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
     pub ret_addr: CodeOffset,
@@ -1749,7 +1758,10 @@ pub struct MachCallSite {
 
 /// A source-location mapping resulting from a compilation.
 #[derive(PartialEq, Debug, Clone)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct MachSrcLoc<T: CompilePhase> {
     /// The start of the region of code corresponding to a source location.
     /// This is relative to the start of the function, not to the start of the
@@ -1775,7 +1787,10 @@ impl MachSrcLoc<Stencil> {
 
 /// Record of stack map metadata: stack offsets containing references.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct MachStackMap {
     /// The code offset at which this stack map applies.
     pub offset: CodeOffset,

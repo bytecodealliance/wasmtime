@@ -87,6 +87,7 @@
 
 (decl pure u16_as_u64 (u16) u64)
 (extern constructor u16_as_u64 u16_as_u64)
+(convert u16 u64 u16_as_u64)
 
 (decl pure u32_as_u64 (u32) u64)
 (extern constructor u32_as_u64 u32_as_u64)
@@ -183,6 +184,10 @@
 
 (decl pure u64_lt (u64 u64) bool)
 (extern constructor u64_lt u64_lt)
+
+;; Sign extends a u64 from ty bits up to 64bits
+(decl pure i64_sextend_u64 (Type u64) i64)
+(extern constructor i64_sextend_u64 i64_sextend_u64)
 
 (decl pure i64_sextend_imm64 (Type Imm64) i64)
 (extern constructor i64_sextend_imm64 i64_sextend_imm64)

@@ -55,7 +55,10 @@ impl ModuleReloc {
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct FuncId(u32);
 entity_impl!(FuncId, "funcid");
 
@@ -83,7 +86,10 @@ impl FuncId {
 
 /// A data object identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct DataId(u32);
 entity_impl!(DataId, "dataid");
 
@@ -111,7 +117,10 @@ impl DataId {
 
 /// Linkage refers to where an entity is defined and who can see it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub enum Linkage {
     /// Defined outside of a module.
     Import,
@@ -170,7 +179,10 @@ impl Linkage {
 
 /// A declared name may refer to either a function or data declaration
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub enum FuncOrDataId {
     /// When it's a FuncId
     Func(FuncId),
@@ -190,7 +202,10 @@ impl From<FuncOrDataId> for ModuleExtName {
 
 /// Information about a function which can be called.
 #[derive(Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct FunctionDeclaration {
     #[allow(missing_docs)]
     pub name: Option<String>,
@@ -348,7 +363,10 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
 
 /// Information about a data object which can be accessed.
 #[derive(Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct DataDeclaration {
     #[allow(missing_docs)]
     pub name: Option<String>,
@@ -386,7 +404,10 @@ impl DataDeclaration {
 
 /// A translated `ExternalName` into something global we can handle.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub enum ModuleExtName {
     /// User defined function, converted from `ExternalName::User`.
     User {

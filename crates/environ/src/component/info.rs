@@ -49,7 +49,7 @@
 use crate::component::*;
 use crate::{EntityIndex, PrimaryMap, SignatureIndex, WasmType};
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Metadata as a result of compiling a component.
 pub struct ComponentTranslation {

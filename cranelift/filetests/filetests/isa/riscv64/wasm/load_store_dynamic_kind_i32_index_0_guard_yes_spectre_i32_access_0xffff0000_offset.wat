@@ -43,7 +43,7 @@
 ;; block0:
 ;;   slli a5,a0,32
 ;;   srli a7,a5,32
-;;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xffff0004
+;;   ld a6,[const(1)]
 ;;   add a5,a7,a6
 ;;   ult t3,a5,a7##ty=i64
 ;;   trap_if t3,heap_oob
@@ -51,7 +51,7 @@
 ;;   ugt t3,a5,t3##ty=i64
 ;;   ld t4,0(a2)
 ;;   add a7,t4,a7
-;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0000
+;;   ld t4,[const(0)]
 ;;   add a7,a7,t4
 ;;   li t4,0
 ;;   andi a2,t3,255
@@ -70,7 +70,7 @@
 ;; block0:
 ;;   slli a5,a0,32
 ;;   srli a7,a5,32
-;;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xffff0004
+;;   ld a6,[const(1)]
 ;;   add a5,a7,a6
 ;;   ult t3,a5,a7##ty=i64
 ;;   trap_if t3,heap_oob
@@ -78,7 +78,7 @@
 ;;   ugt t3,a5,t3##ty=i64
 ;;   ld t4,0(a1)
 ;;   add a7,t4,a7
-;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0000
+;;   ld t4,[const(0)]
 ;;   add a7,a7,t4
 ;;   li t4,0
 ;;   andi a1,t3,255

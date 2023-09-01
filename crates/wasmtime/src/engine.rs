@@ -647,7 +647,12 @@ impl Engine {
     /// this will return `Some(...)` indicating so. Otherwise `None` is
     /// returned.
     pub fn detect_precompiled(&self, bytes: &[u8]) -> Option<Precompiled> {
-        serialization::detect_precompiled(bytes)
+        serialization::detect_precompiled_bytes(bytes)
+    }
+
+    /// Like [`Engine::detect_precompiled`], but performs the detection on a file.
+    pub fn detect_precompiled_file(&self, path: impl AsRef<Path>) -> Result<Option<Precompiled>> {
+        serialization::detect_precompiled_file(path)
     }
 }
 

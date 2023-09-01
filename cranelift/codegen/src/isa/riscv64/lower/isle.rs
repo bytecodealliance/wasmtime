@@ -14,7 +14,7 @@ use crate::isa::riscv64::lower::args::{
 };
 use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
-use crate::machinst::{isle::*, MachInst, SmallInstVec};
+use crate::machinst::{isle::*, MachInst};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
@@ -58,13 +58,6 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
             lower_ctx,
             backend,
             min_vec_reg_size: backend.isa_flags.min_vec_reg_size(),
-        }
-    }
-
-    #[inline]
-    fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
-        for i in list {
-            self.lower_ctx.emit(i.clone());
         }
     }
 }
@@ -287,17 +280,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
-    fn imm(&mut self, ty: Type, val: u64) -> Reg {
-        let tmp = self.temp_writable_reg(ty);
-        let alloc_tmp = &mut |ty| self.temp_writable_reg(ty);
-        let insts = match ty {
-            F32 => MInst::load_fp_constant32(tmp, val as u32, alloc_tmp),
-            F64 => MInst::load_fp_constant64(tmp, val, alloc_tmp),
-            _ => MInst::load_constant_u64(tmp, val, alloc_tmp),
-        };
-        self.emit_list(&insts);
-        tmp.to_reg()
+    fn i64_generate_imm(&mut self, imm: i64) -> Option<(Imm20, Imm12)> {
+        MInst::generate_imm(imm as u64)
     }
+
     #[inline]
     fn emit(&mut self, arg0: &MInst) -> Unit {
         self.lower_ctx.emit(arg0.clone());
@@ -307,11 +293,37 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm12::maybe_from_u64(arg0)
     }
     #[inline]
+    fn imm12_from_i64(&mut self, arg0: i64) -> Option<Imm12> {
+        Imm12::maybe_from_i64(arg0)
+    }
+    #[inline]
+    fn imm12_is_zero(&mut self, imm: Imm12) -> Option<()> {
+        if imm.as_u32() == 0 {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn imm20_is_zero(&mut self, imm: Imm20) -> Option<()> {
+        if imm.as_u32() == 0 {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn imm5_from_u64(&mut self, arg0: u64) -> Option<Imm5> {
         Imm5::maybe_from_i8(i8::try_from(arg0 as i64).ok()?)
     }
     #[inline]
-    fn imm5_from_i8(&mut self, arg0: i8) -> Option<Imm5> {
+    fn imm5_from_i64(&mut self, arg0: i64) -> Option<Imm5> {
+        Imm5::maybe_from_i8(i8::try_from(arg0).ok()?)
+    }
+    #[inline]
+    fn i8_to_imm5(&mut self, arg0: i8) -> Option<Imm5> {
         Imm5::maybe_from_i8(arg0)
     }
     #[inline]
@@ -331,10 +343,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         writable_zero_reg()
     }
     #[inline]
-    fn neg_imm12(&mut self, arg0: Imm12) -> Imm12 {
-        -arg0
-    }
-    #[inline]
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
     }
@@ -344,12 +352,17 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     #[inline]
     fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {
-        Imm12::maybe_from_u64(val as u64).unwrap()
+        Imm12::maybe_from_i64(val).unwrap()
     }
 
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
+
+    fn frm_bits(&mut self, frm: &FRM) -> UImm5 {
+        UImm5::maybe_from_u8(frm.bits()).unwrap()
+    }
+
     fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
         let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
         self.emit(&MInst::SelectReg {
@@ -364,26 +377,20 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         });
         rd.to_reg()
     }
-    fn load_u64_constant(&mut self, val: u64) -> Reg {
-        let rd = self.temp_writable_reg(I64);
-        MInst::load_constant_u64(rd, val, &mut |ty| self.temp_writable_reg(ty))
-            .iter()
-            .for_each(|i| self.emit(i));
-        rd.to_reg()
-    }
+
     fn u8_as_i32(&mut self, x: u8) -> i32 {
         x as i32
     }
 
     fn imm12_const(&mut self, val: i32) -> Imm12 {
-        if let Some(res) = Imm12::maybe_from_u64(val as u64) {
+        if let Some(res) = Imm12::maybe_from_i64(val as i64) {
             res
         } else {
             panic!("Unable to make an Imm12 value from {}", val)
         }
     }
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
-        Imm12::maybe_from_u64((val + add) as u64).unwrap()
+        Imm12::maybe_from_i64((val + add) as i64).unwrap()
     }
 
     //
@@ -438,15 +445,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
-    fn offset32_imm(&mut self, offset: i32) -> Offset32 {
-        Offset32::new(offset)
-    }
     fn default_memflags(&mut self) -> MemFlags {
         MemFlags::new()
-    }
-
-    fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
-        Some(*f)
     }
 
     fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {

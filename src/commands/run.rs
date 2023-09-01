@@ -6,8 +6,11 @@
 )]
 
 use anyhow::{anyhow, bail, Context as _, Error, Result};
+use clap::builder::{OsStringValueParser, TypedValueParser};
 use clap::Parser;
 use once_cell::sync::Lazy;
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -34,6 +37,18 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttpCtx;
+
+fn parse_module(s: OsString) -> anyhow::Result<PathBuf> {
+    // Do not accept wasmtime subcommand names as the module name
+    match s.to_str() {
+        Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
+            bail!("module name cannot be the same as a subcommand")
+        }
+        #[cfg(unix)]
+        Some("-") => Ok(PathBuf::from("/dev/stdin")),
+        _ => Ok(s.into()),
+    }
+}
 
 fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
     let mut parts = s.splitn(2, '=');
@@ -103,7 +118,7 @@ static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_strin
 
 /// Runs a WebAssembly module
 #[derive(Parser)]
-#[structopt(name = "run", after_help = AFTER_HELP.as_str())]
+#[structopt(name = "run", trailing_var_arg = true, after_help = AFTER_HELP.as_str())]
 pub struct RunCommand {
     #[clap(flatten)]
     common: CommonOptions,
@@ -177,6 +192,14 @@ pub struct RunCommand {
     #[clap(long = "wasi-nn-graph", value_name = "FORMAT::HOST_DIR", value_parser = parse_graphs)]
     graphs: Vec<(String, String)>,
 
+    /// The path of the WebAssembly module to run
+    #[clap(
+        required = true,
+        value_name = "MODULE",
+        value_parser = OsStringValueParser::new().try_map(parse_module),
+    )]
+    module: PathBuf,
+
     /// Load the given WebAssembly module before the main module
     #[clap(
         long = "preload",
@@ -220,6 +243,11 @@ pub struct RunCommand {
     #[clap(long = "coredump-on-trap", value_name = "PATH")]
     coredump_on_trap: Option<String>,
 
+    // NOTE: this must come last for trailing varargs
+    /// The arguments to pass to the module
+    #[clap(value_name = "ARGS")]
+    module_args: Vec<String>,
+
     /// Maximum size, in bytes, that a linear memory is allowed to reach.
     ///
     /// Growth beyond this limit will cause `memory.grow` instructions in
@@ -258,14 +286,6 @@ pub struct RunCommand {
     #[clap(long)]
     wmemcheck: bool,
 
-    /// The WebAssembly module to run and arguments to pass to it.
-    ///
-    /// Arguments passed to the wasm module will be configured as WASI CLI
-    /// arguments unless the `--invoke` CLI argument is passed in which case
-    /// arguments will be interpreted as arguments to the function specified.
-    #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
-    module_and_args: Vec<PathBuf>,
-
     /// Indicates that the implementation of WASI preview1 should be backed by
     /// the preview2 implementation for components.
     ///
@@ -273,6 +293,11 @@ pub struct RunCommand {
     /// removed. For now this is primarily here for testing.
     #[clap(long)]
     preview2: bool,
+
+    /// Flag for WASI preview2 to inherit the host's network within the guest so
+    /// it has full access to all addresses/ports/etc.
+    #[clap(long)]
+    inherit_network: bool,
 }
 
 #[derive(Clone)]
@@ -337,7 +362,7 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        let main = self.load_module(&engine, &self.module_and_args[0])?;
+        let main = self.load_module(&engine, &self.module)?;
 
         // Validate coredump-on-trap argument
         if let Some(coredump_path) = self.coredump_on_trap.as_ref() {
@@ -429,12 +454,8 @@ impl RunCommand {
         // Load the main wasm module.
         match self
             .load_main_module(&mut store, &mut linker, &main, modules)
-            .with_context(|| {
-                format!(
-                    "failed to run main module `{}`",
-                    self.module_and_args[0].display()
-                )
-            }) {
+            .with_context(|| format!("failed to run main module `{}`", self.module.display()))
+        {
             Ok(()) => (),
             Err(e) => {
                 // Exit the process if Wasmtime understands the error;
@@ -483,25 +504,27 @@ impl RunCommand {
         Ok(listeners)
     }
 
-    fn compute_argv(&self) -> Result<Vec<String>> {
+    fn compute_argv(&self) -> Vec<String> {
         let mut result = Vec::new();
 
-        for (i, arg) in self.module_and_args.iter().enumerate() {
-            // For argv[0], which is the program name. Only include the base
-            // name of the main wasm module, to avoid leaking path information.
-            let arg = if i == 0 {
-                arg.components().next_back().unwrap().as_os_str()
-            } else {
-                arg.as_ref()
-            };
-            result.push(
-                arg.to_str()
-                    .ok_or_else(|| anyhow!("failed to convert {arg:?} to utf-8"))?
-                    .to_string(),
-            );
+        // Add argv[0], which is the program name. Only include the base name of the
+        // main wasm module, to avoid leaking path information.
+        result.push(
+            self.module
+                .components()
+                .next_back()
+                .map(|c| c.as_os_str())
+                .and_then(OsStr::to_str)
+                .unwrap_or("")
+                .to_owned(),
+        );
+
+        // Add the remaining arguments.
+        for arg in self.module_args.iter() {
+            result.push(arg.clone());
         }
 
-        Ok(result)
+        result
     }
 
     fn setup_epoch_handler(
@@ -510,7 +533,7 @@ impl RunCommand {
         modules: Vec<(String, Module)>,
     ) -> Box<dyn FnOnce(&mut Store<Host>)> {
         if let Some(Profile::Guest { path, interval }) = &self.profile {
-            let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
+            let module_name = self.module.to_str().unwrap_or("<main module>");
             let interval = *interval;
             store.data_mut().guest_profiler =
                 Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
@@ -616,10 +639,9 @@ impl RunCommand {
             CliLinker::Core(linker) => {
                 // Use "" as a default module name.
                 let module = module.unwrap_core();
-                linker.module(&mut *store, "", &module).context(format!(
-                    "failed to instantiate {:?}",
-                    self.module_and_args[0]
-                ))?;
+                linker
+                    .module(&mut *store, "", &module)
+                    .context(format!("failed to instantiate {:?}", self.module))?;
 
                 // If a function to invoke was given, invoke it.
                 let func = if let Some(name) = &self.invoke {
@@ -674,7 +696,7 @@ impl RunCommand {
                  is experimental and may break in the future"
             );
         }
-        let mut args = self.module_and_args.iter().skip(1);
+        let mut args = self.module_args.iter();
         let mut values = Vec::new();
         for ty in ty.params() {
             let val = match args.next() {
@@ -687,9 +709,6 @@ impl RunCommand {
                     }
                 }
             };
-            let val = val
-                .to_str()
-                .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
             values.push(match ty {
                 // TODO: integer parsing here should handle hexadecimal notation
                 // like `0x0...`, but the Rust standard library currently only
@@ -747,9 +766,7 @@ impl RunCommand {
         if !err.is::<wasmtime::Trap>() {
             return err;
         }
-        let source_name = self.module_and_args[0]
-            .to_str()
-            .unwrap_or_else(|| "unknown");
+        let source_name = self.module.to_str().unwrap_or_else(|| "unknown");
 
         if let Err(coredump_err) = generate_coredump(&err, &source_name, coredump_path) {
             eprintln!("warning: coredump failed to generate: {}", coredump_err);
@@ -995,7 +1012,7 @@ impl RunCommand {
 
     fn set_preview1_ctx(&self, store: &mut Store<Host>) -> Result<()> {
         let mut builder = WasiCtxBuilder::new();
-        builder.inherit_stdio().args(&self.compute_argv()?)?;
+        builder.inherit_stdio().args(&self.compute_argv())?;
 
         for (key, value) in self.vars.iter() {
             let value = match value {
@@ -1027,7 +1044,7 @@ impl RunCommand {
 
     fn set_preview2_ctx(&self, store: &mut Store<Host>) -> Result<()> {
         let mut builder = preview2::WasiCtxBuilder::new();
-        builder.inherit_stdio().args(&self.compute_argv()?);
+        builder.inherit_stdio().args(&self.compute_argv());
 
         for (key, value) in self.vars.iter() {
             let value = match value {
@@ -1052,6 +1069,10 @@ impl RunCommand {
                 preview2::FilePerms::all(),
                 name,
             );
+        }
+
+        if self.inherit_network {
+            builder.inherit_network(ambient_authority());
         }
 
         let data = store.data_mut();

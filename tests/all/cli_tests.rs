@@ -604,6 +604,7 @@ fn wasm_flags() -> Result<()> {
     let stdout = run_wasmtime(&[
         "run",
         "tests/all/cli_tests/print-arguments.wat",
+        "--",
         "--argument",
         "-for",
         "the",
@@ -619,7 +620,7 @@ fn wasm_flags() -> Result<()> {
             command\n\
         "
     );
-    let stdout = run_wasmtime(&["run", "tests/all/cli_tests/print-arguments.wat", "-"])?;
+    let stdout = run_wasmtime(&["run", "tests/all/cli_tests/print-arguments.wat", "--", "-"])?;
     assert_eq!(
         stdout,
         "\
@@ -627,7 +628,7 @@ fn wasm_flags() -> Result<()> {
             -\n\
         "
     );
-    let stdout = run_wasmtime(&["run", "tests/all/cli_tests/print-arguments.wat", "--"])?;
+    let stdout = run_wasmtime(&["run", "tests/all/cli_tests/print-arguments.wat", "--", "--"])?;
     assert_eq!(
         stdout,
         "\
@@ -648,7 +649,6 @@ fn wasm_flags() -> Result<()> {
         "\
             print-arguments.wat\n\
             --\n\
-            --\n\
             -a\n\
             b\n\
         "
@@ -658,30 +658,37 @@ fn wasm_flags() -> Result<()> {
 
 #[test]
 fn name_same_as_builtin_command() -> Result<()> {
-    // a bare subcommand shouldn't run successfully
+    // A bare subcommand shouldn't run successfully.
+    //
+    // This is ambiguous between a missing module argument and a module named
+    // `run` with no other options.
     let output = get_wasmtime_command()?
         .current_dir("tests/all/cli_tests")
         .arg("run")
         .output()?;
     assert!(!output.status.success());
 
-    // a `--` prefix should let everything else get interpreted as a wasm
-    // module and arguments, even if the module has a name like `run`
+    // Currently even `--` isn't enough to disambiguate, so this still is an
+    // error.
+    //
+    // NB: this will change in Wasmtime 14 when #6737 is relanded.
     let output = get_wasmtime_command()?
         .current_dir("tests/all/cli_tests")
         .arg("--")
         .arg("run")
         .output()?;
-    assert!(output.status.success(), "expected success got {output:#?}");
+    assert!(!output.status.success(), "expected failure got {output:#?}");
 
-    // Passing options before the subcommand should work and doesn't require
-    // `--` to disambiguate
+    // Passing `--foo` options before the module is also not enough to
+    // disambiguate for now.
+    //
+    // NB: this will change in Wasmtime 14 when #6737 is relanded.
     let output = get_wasmtime_command()?
         .current_dir("tests/all/cli_tests")
         .arg("--disable-cache")
         .arg("run")
         .output()?;
-    assert!(output.status.success(), "expected success got {output:#?}");
+    assert!(!output.status.success(), "expected failure got {output:#?}");
     Ok(())
 }
 
@@ -701,6 +708,7 @@ fn wasm_flags_without_subcommand() -> Result<()> {
     let output = get_wasmtime_command()?
         .current_dir("tests/all/cli_tests/")
         .arg("print-arguments.wat")
+        .arg("--")
         .arg("-foo")
         .arg("bar")
         .output()?;
