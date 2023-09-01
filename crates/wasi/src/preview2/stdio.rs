@@ -4,8 +4,7 @@ use crate::preview2::bindings::cli::{
 };
 use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe::AsyncWriteStream;
-use crate::preview2::{HostOutputStream, StreamState, WasiView};
-use anyhow::Error;
+use crate::preview2::{HostOutputStream, OutputStreamError, WasiView};
 use bytes::Bytes;
 use is_terminal::IsTerminal;
 
@@ -19,10 +18,19 @@ mod worker_thread_stdin;
 #[cfg(windows)]
 pub use self::worker_thread_stdin::{stdin, Stdin};
 
+// blocking-write-and-flush must accept 4k. It doesn't seem likely that we need to
+// buffer more than that to implement a wrapper on the host process's stdio. If users
+// really need more, they can write their own implementation using AsyncWriteStream
+// and tokio's stdout/err.
+const STDIO_BUFFER_SIZE: usize = 4096;
+
 pub struct Stdout(AsyncWriteStream);
 
 pub fn stdout() -> Stdout {
-    Stdout(AsyncWriteStream::new(tokio::io::stdout()))
+    Stdout(AsyncWriteStream::new(
+        STDIO_BUFFER_SIZE,
+        tokio::io::stdout(),
+    ))
 }
 impl IsTerminal for Stdout {
     fn is_terminal(&self) -> bool {
@@ -31,18 +39,24 @@ impl IsTerminal for Stdout {
 }
 #[async_trait::async_trait]
 impl HostOutputStream for Stdout {
-    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
         self.0.write(bytes)
     }
-    async fn ready(&mut self) -> Result<(), Error> {
-        self.0.ready().await
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        self.0.flush()
+    }
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        self.0.write_ready().await
     }
 }
 
 pub struct Stderr(AsyncWriteStream);
 
 pub fn stderr() -> Stderr {
-    Stderr(AsyncWriteStream::new(tokio::io::stderr()))
+    Stderr(AsyncWriteStream::new(
+        STDIO_BUFFER_SIZE,
+        tokio::io::stderr(),
+    ))
 }
 impl IsTerminal for Stderr {
     fn is_terminal(&self) -> bool {
@@ -51,11 +65,14 @@ impl IsTerminal for Stderr {
 }
 #[async_trait::async_trait]
 impl HostOutputStream for Stderr {
-    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
         self.0.write(bytes)
     }
-    async fn ready(&mut self) -> Result<(), Error> {
-        self.0.ready().await
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        self.0.flush()
+    }
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        self.0.write_ready().await
     }
 }
 
