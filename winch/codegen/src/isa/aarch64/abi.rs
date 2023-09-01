@@ -89,12 +89,15 @@ impl ABI for Aarch64ABI {
         assert!(returns.len() <= 1, "multi-value not supported");
 
         let ty = returns.get(0).copied();
-        let reg = ty.map(|ty| match ty {
-            WasmType::I32 | WasmType::I64 => regs::xreg(0),
-            WasmType::F32 | WasmType::F64 => regs::vreg(0),
-            t => panic!("Unsupported return type {:?}", t),
-        });
-        ABIResult::reg(ty, reg)
+        ty.map(|ty| {
+            let reg = match ty {
+                WasmType::I32 | WasmType::I64 => regs::xreg(0),
+                WasmType::F32 | WasmType::F64 => regs::vreg(0),
+                t => panic!("Unsupported return type {:?}", t),
+            };
+            ABIResult::reg(ty, reg)
+        })
+        .unwrap_or_else(|| ABIResult::void())
     }
 
     fn scratch_reg() -> Reg {

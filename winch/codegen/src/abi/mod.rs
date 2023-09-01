@@ -162,31 +162,45 @@ impl ABIArg {
 /// ABI-specific representation of the function result.
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum ABIResult {
+    Void,
     Reg {
         /// Type of the result.
-        ty: Option<WasmType>,
+        ty: WasmType,
         /// Register to hold the result.
-        reg: Option<Reg>,
+        reg: Reg,
     },
+}
+
+impl Default for ABIResult {
+    fn default() -> Self {
+        Self::Void
+    }
 }
 
 impl ABIResult {
     /// Create a register ABI result.
-    pub fn reg(ty: Option<WasmType>, reg: Option<Reg>) -> Self {
+    pub fn reg(ty: WasmType, reg: Reg) -> Self {
         Self::Reg { ty, reg }
     }
 
+    /// Createa void ABI result.
+    pub fn void() -> Self {
+        Self::Void
+    }
+
     /// Get the result reg.
-    pub fn result_reg(&self) -> &Option<Reg> {
+    pub fn result_reg(&self) -> Option<Reg> {
         match self {
-            Self::Reg { reg, .. } => reg,
+            Self::Reg { reg, .. } => Some(*reg),
+            _ => None,
         }
     }
 
     /// Checks if the result is void.
     pub fn is_void(&self) -> bool {
         match self {
-            Self::Reg { ty, .. } => ty.is_none(),
+            Self::Void => true,
+            _ => false,
         }
     }
 

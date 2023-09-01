@@ -110,6 +110,20 @@
   (func (export "as-compare-right") (param i32) (result i32)
     (i32.ne (i32.const 10) (local.tee 0 (i32.const 42)))
   )
+
+  (func (export "as-br_table-index") (param i32)
+    (block (br_table 0 0 0 (local.tee 0 (i32.const 0))))
+  )
+  (func (export "as-br_table-value") (param i32) (result i32)
+    (block (result i32)
+      (br_table 0 0 0 (local.tee 0 (i32.const 10)) (i32.const 1)) (i32.const 7)
+    )
+  )
+  (func (export "as-br_table-value-index") (param i32) (result i32)
+    (block (result i32)
+      (br_table 0 0 (i32.const 6) (local.tee 0 (i32.const 11))) (i32.const 7)
+    )
+  )
 )
 
 (assert_return (invoke "type-local-i32") (i32.const 0))
@@ -154,3 +168,7 @@
 (assert_return (invoke "as-test-operand" (i32.const 0)) (i32.const 1))
 (assert_return (invoke "as-compare-left" (i32.const 0)) (i32.const 0))
 (assert_return (invoke "as-compare-right" (i32.const 0)) (i32.const 1))
+
+(assert_return (invoke "as-br_table-index" (i32.const 0)))
+(assert_return (invoke "as-br_table-value" (i32.const 0)) (i32.const 10))
+(assert_return (invoke "as-br_table-value-index" (i32.const 0)) (i32.const 6))

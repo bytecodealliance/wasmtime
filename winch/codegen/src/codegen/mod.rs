@@ -1,7 +1,7 @@
 use crate::{
     abi::{ABISig, ABI},
     masm::{MacroAssembler, OperandSize},
-    stack::TypedReg,
+    stack::{TypedReg, Val},
     CallingConvention,
 };
 use anyhow::Result;
@@ -101,7 +101,6 @@ where
         match frame {
             ControlStackFrame::If {
                 reachable,
-                original_sp_offset,
                 original_stack_len,
                 ..
             } => {
@@ -111,12 +110,7 @@ where
                     // entry, the if-else branch will be reachable.
                     self.context.reachable = true;
                     // Reset the stack to the original length and offset.
-                    Self::reset_stack(
-                        &mut self.context,
-                        self.masm,
-                        *original_stack_len,
-                        *original_sp_offset,
-                    );
+                    Self::reset_stack(&mut self.context, *original_stack_len);
                     frame.bind_else(self.masm, self.context.reachable);
                 }
             }
@@ -131,9 +125,9 @@ where
         if frame.is_next_sequence_reachable() {
             self.context.reachable = true;
 
-            let (value_stack_len, sp_offset) = frame.original_stack_len_and_sp_offset();
+            let (value_stack_len, _) = frame.original_stack_len_and_sp_offset();
             // Reset the stack to the original length and offset.
-            Self::reset_stack(&mut self.context, self.masm, value_stack_len, sp_offset);
+            Self::reset_stack(&mut self.context, value_stack_len);
             // If the current frame is the outermost frame, which corresponds to the
             // current function's body, only bind the exit label as we don't need to
             // push any more values to the value stack, else perform the entire `bind_end`
@@ -143,22 +137,33 @@ where
             } else {
                 frame.bind_end(self.masm, &mut self.context);
             }
+        } else if is_outermost {
+            // If we reach the end of the function in an unreachable
+            // state, perform the necessary cleanup to leave the stack
+            // and SP in the expected state.  The compiler can enter
+            // in this state through an infinite loop.
+            let (value_stack_len, target_sp) = frame.original_stack_len_and_sp_offset();
+            Self::reset_stack(&mut self.context, value_stack_len);
+            if self.masm.sp_offset() > target_sp {
+                self.masm.free_stack(self.masm.sp_offset() - target_sp);
+            }
         }
     }
 
     /// Helper function to reset value and stack pointer to the given length and stack pointer
     /// offset respectively. This function is only used when restoring the code generation's
     /// reachabiliy state when handling an unreachable `end` or `else`.
-    fn reset_stack(context: &mut CodeGenContext, masm: &mut M, stack_len: usize, sp_offset: u32) {
-        masm.reset_stack_pointer(sp_offset);
+    pub fn reset_stack(context: &mut CodeGenContext, target_stack_len: usize) {
         // `CodeGenContext::reset_stack` only gets called when
         // handling unreachable end or unreachable else, so we only
         // care about freeing any registers in the provided range.
-        context.drop_last(context.stack.len() - stack_len, |regalloc, val| {
-            if val.is_reg() {
-                regalloc.free(val.get_reg().into())
-            }
-        });
+        context.drop_last(
+            context.stack.len() - target_stack_len,
+            |regalloc, val| match val {
+                Val::Reg(tr) => regalloc.free(tr.reg),
+                _ => {}
+            },
+        );
     }
 
     fn emit_body(
@@ -296,19 +301,6 @@ where
         Ok(())
     }
 
-    /// Returns the control stack frame at the given depth.
-    ///
-    /// # Panics
-    /// This function panics if the given depth cannot be associated
-    /// with a control stack frame.
-    pub fn control_at(frames: &mut [ControlStackFrame], depth: u32) -> &mut ControlStackFrame {
-        let index = (frames.len() - 1)
-            .checked_sub(depth as usize)
-            .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth));
-
-        &mut frames[index]
-    }
-
     fn spill_register_arguments(&mut self) {
         use WasmType::*;
         self.sig
@@ -334,4 +326,12 @@ where
                 }
             });
     }
+}
+
+/// Returns the index of the [`ControlStackFrame`] for the given
+/// depth.
+pub fn control_index(depth: u32, control_length: usize) -> usize {
+    (control_length - 1)
+        .checked_sub(depth as usize)
+        .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth))
 }

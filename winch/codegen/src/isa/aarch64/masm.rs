@@ -319,6 +319,10 @@ impl Masm for MacroAssembler {
     fn unreachable(&mut self) {
         todo!()
     }
+
+    fn jmp_table(&mut self, _targets: &[MachLabel], _index: Reg, _tmp: Reg) {
+        todo!()
+    }
 }
 
 impl MacroAssembler {

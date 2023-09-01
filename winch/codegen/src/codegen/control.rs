@@ -414,7 +414,8 @@ impl ControlStackFrame {
         }
     }
 
-    // TODO document.
+    /// Returns the value stack length and stack pointer offset of the
+    /// control frame registered at entry.
     pub fn original_stack_len_and_sp_offset(&self) -> (usize, u32) {
         use ControlStackFrame::*;
         match self {
@@ -438,6 +439,18 @@ impl ControlStackFrame {
                 original_sp_offset,
                 ..
             } => (*original_stack_len, *original_sp_offset),
+        }
+    }
+
+    /// Resolves how to handle results when the current frame is a
+    /// jump target Notably in the case of loops we don't take into
+    /// account the frame's results, just the params (void until
+    /// multi-value is supported).
+    pub fn as_target_result(&self) -> ABIResult {
+        use ControlStackFrame::*;
+        match self {
+            Loop { .. } => ABIResult::void(),
+            f => *f.result(),
         }
     }
 }

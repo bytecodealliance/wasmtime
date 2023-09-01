@@ -1,8 +1,8 @@
 //! Function call emission.  For more details around the ABI and
 //! calling convention, see [ABI].
-use super::CodeGenContext;
 use crate::{
     abi::{ABIArg, ABISig, ABI},
+    codegen::CodeGenContext,
     masm::{CalleeKind, MacroAssembler, OperandSize},
     reg::Reg,
 };
