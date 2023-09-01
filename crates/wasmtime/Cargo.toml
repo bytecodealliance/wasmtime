@@ -52,7 +52,9 @@ fxprof-processed-profile = "0.6.0"
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
-features = ["Win32_System_Diagnostics_Debug"]
+features = [
+  "Win32_System_Diagnostics_Debug",
+]
 
 [dev-dependencies]
 tempfile = "3.0"
@@ -112,7 +114,10 @@ pooling-allocator = ["wasmtime-runtime/pooling-allocator"]
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
 # `Engine::precompile_module` function.
-all-arch = ["wasmtime-cranelift?/all-arch", "wasmtime-winch?/all-arch"]
+all-arch = [
+  "wasmtime-cranelift?/all-arch",
+  "wasmtime-winch?/all-arch",
+]
 
 # Enables in-progress support for the component model. Note that this feature is
 # in-progress, buggy, and incomplete. This is primarily here for internal

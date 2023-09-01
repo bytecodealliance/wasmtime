@@ -54,24 +54,14 @@ rustix = { workspace = true, features = ["mm", "param"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests
-wasmtime = { workspace = true, features = [
-  'component-model',
-  'async',
-  'default',
-  'winch',
-] }
+wasmtime = { workspace = true, features = ['component-model', 'async', 'default', 'winch'] }
 env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = { workspace = true }
 tempfile = { workspace = true }
 test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { workspace = true }
-tokio = { version = "1.8.0", features = [
-  "rt",
-  "time",
-  "macros",
-  "rt-multi-thread",
-] }
+tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 wast = { workspace = true }
 criterion = "0.5.0"
 num_cpus = "1.13.0"
@@ -203,9 +193,7 @@ byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-arra
 regalloc2 = "0.9.2"
 
 # cap-std family:
-target-lexicon = { version = "0.12.3", default-features = false, features = [
-  "std",
-] }
+target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
 cap-std = "2.0.0"
 cap-rand = { version = "2.0.0", features = ["small_rng"] }
 cap-fs-ext = "2.0.0"
@@ -234,15 +222,8 @@ wit-component = "0.14.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
-object = { version = "0.32", default-features = false, features = [
-  'read_core',
-  'elf',
-  'std',
-] }
-gimli = { version = "0.28.0", default-features = false, features = [
-  'read',
-  'std',
-] }
+object = { version = "0.32", default-features = false, features = ['read_core', 'elf', 'std'] }
+gimli = { version = "0.28.0", default-features = false, features = ['read', 'std'] }
 anyhow = "1.0.22"
 windows-sys = "0.48.0"
 env_logger = "0.10"
@@ -294,15 +275,12 @@ vtune = ["wasmtime/vtune"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads"]
 wasi-http = ["dep:wasmtime-wasi-http", "wasmtime-wasi-http/sync"]
-pooling-allocator = [
-  "wasmtime/pooling-allocator",
-  "wasmtime-cli-flags/pooling-allocator",
-]
+pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 component-model = [
   "wasmtime/component-model",
   "wasmtime-wast/component-model",
-  "wasmtime-cli-flags/component-model",
+  "wasmtime-cli-flags/component-model"
 ]
 winch = ["wasmtime/winch"]
 wmemcheck = ["wasmtime/wmemcheck"]
