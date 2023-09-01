@@ -195,7 +195,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
                 let (s, conn) = t?;
                 tokio::task::spawn(async move {
                     if let Err(err) = conn.await {
-                        println!("[host/client] Connection failed: {:?}", err);
+                        tracing::debug!("[host/client] Connection failed: {:?}", err);
                     }
                 });
                 s
@@ -214,7 +214,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
             let (s, conn) = t?;
             tokio::task::spawn(async move {
                 if let Err(err) = conn.await {
-                    println!("[host/client] Connection failed: {:?}", err);
+                    tracing::debug!("[host/client] Connection failed: {:?}", err);
                 }
             });
             s
