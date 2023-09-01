@@ -320,7 +320,7 @@ impl<'a> CodeGenContext<'a> {
         // machine stack might be left unbalanced at the jump site,
         // due to register spills. In this context unbalanced refers
         // to possible extra space created at the jump site, which
-        // might cause invaid memory accesses. Note that in some cases
+        // might cause invalid memory accesses. Note that in some cases
         // the stack pointer offset might be already less than or
         // equal to the original stack pointer offset registered when
         // entering the destination control stack frame, which
@@ -334,10 +334,9 @@ impl<'a> CodeGenContext<'a> {
         // which the top value in the value stack is a memory entry
         // which needs to be popped into the return location according
         // to the ABI (a register for single value returns and a
-        // memory slot for 1+ returns). In short, this could happen
-        // given that we handle return values preemptively when
-        // emitting unconditional branches, and push them back to the
-        // value stack at control flow joins.
+        // memory slot for 1+ returns). This could happen in the
+        // callback invocation above if the callback invokes
+        // `CodeGenContext::pop_abi_results` (e.g. `br` instruction).
         let current_sp = masm.sp_offset();
         if current_sp > target_sp {
             masm.free_stack(current_sp - target_sp);
