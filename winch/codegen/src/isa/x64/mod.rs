@@ -103,12 +103,7 @@ impl TargetIsa for X64 {
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, ALL_FPR), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
         let env = FuncEnv::new(self.pointer_bytes(), translation);
-        let mut codegen = CodeGen::new(
-            &mut masm,
-            codegen_context,
-            env,
-            abi_sig,
-        );
+        let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
 
