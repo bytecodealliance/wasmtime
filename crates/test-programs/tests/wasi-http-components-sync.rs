@@ -122,6 +122,12 @@ fn outbound_request_post() {
 }
 
 #[test_log::test]
+#[ignore = "test is currently flaky in ci and needs to be debugged"]
+fn outbound_request_post_large() {
+    setup_http1_sync(|| run("outbound_request_post_large")).unwrap();
+}
+
+#[test_log::test]
 fn outbound_request_put() {
     setup_http1_sync(|| run("outbound_request_put")).unwrap();
 }
