@@ -134,7 +134,10 @@ interface streams {
     /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
     type output-stream = u32
 
-    /// An error for output-stream operations
+    /// An error for output-stream operations.
+    ///
+    /// Contrary to input-streams, a closed output-stream is reported using
+    /// an error.
     enum write-error {
         /// The last operation (a write or flush) failed before completion.
         last-operation-failed,
@@ -143,14 +146,20 @@ interface streams {
         /// future operations.
         closed
     }
-    /// Check readiness for writing. this function never blocks.
+    /// Check readiness for writing. This function never blocks.
     ///
-    /// Returns the number of bytes allowed to call write with, or an error.
+    /// Returns the number of bytes permitted for the next call to `write`,
+    /// or an error. Calling `write` with more bytes than this function has
+    /// permitted will trap.
+    ///
+    /// When this function returns 0 bytes, the `subscribe-to-output-stream`
+    /// pollable will become ready when this function will report at least
+    /// 1 byte, or an error.
     check-write: func(
         this: output-stream
     ) -> result<u64, write-error>
 
-    /// perform a write. this function never blocks.
+    /// Perform a write. This function never blocks.
     ///
     /// Precondition: check-write gave permit of Ok(n) and contents has a
     /// length of less than or equal to n. Otherwise, this function will trap.
@@ -162,7 +171,8 @@ interface streams {
         contents: list<u8>
     ) -> result<_, write-error>
 
-    /// Perform a write of up to 4096 bytes, and then flush the stream.
+    /// Perform a write of up to 4096 bytes, and then flush the stream. Block
+    /// until all of these operations are complete, or an error occurs.
     ///
     /// This is a convenience wrapper around the use of `check-write`,
     /// `subscribe-to-output-stream`, `write`, and `flush`, and is implemented
@@ -190,28 +200,30 @@ interface streams {
       contents: list<u8>
     ) -> result<_, write-error>
 
-    /// request to flush buffered output. this function never blocks.
+    /// Request to flush buffered output. This function never blocks.
     ///
-    /// this tells the output-stream that the caller intends any buffered
+    /// This tells the output-stream that the caller intends any buffered
     /// output to be flushed. the output which is expected to be flushed
     /// is all that has been passed to `write` prior to this call.
     ///
-    /// upon calling this function, the output-stream will not accept any
-    /// writes (meaning, check-write will return ok(0)) until the flush has
-    /// completed. The subscribe-to-output-stream pollable will become ready
+    /// Upon calling this function, the `output-stream` will not accept any
+    /// writes (`check-write` will return `ok(0)`) until the flush has
+    /// completed. The `subscribe-to-output-stream` pollable will become ready
     /// when the flush has completed and the stream can accept more writes.
     flush: func(
         this: output-stream,
     ) -> result<_, write-error>
 
+    /// Request to flush buffered output, and block until flush completes
+    /// and stream is ready for writing again.
     blocking-flush: func(
         this: output-stream,
     ) -> result<_, write-error>
 
     /// Create a `pollable` which will resolve once the output-stream
     /// is ready for more writing, or an error has occured. When this
-    /// pollable is ready, check-write will return Ok(n) with n>0, or 
-    /// an Err.
+    /// pollable is ready, `check-write` will return `ok(n)` with n>0, or an
+    /// error.
     ///
     /// If the stream is closed, this pollable is always ready immediately.
     ///
