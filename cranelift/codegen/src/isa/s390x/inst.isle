@@ -2989,7 +2989,7 @@
         dst))
 
 ;; 32-bit result type, value fits in i16
-(rule 6 (imm (gpr32_ty ty) (i16_from_u64 n))
+(rule 6 (imm (gpr32_ty ty) (u32_pair _ (i16_from_u32 n)))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst n))))
         dst))

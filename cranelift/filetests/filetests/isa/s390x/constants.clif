@@ -189,11 +189,11 @@ block0:
 
 ; VCode:
 ; block0:
-;   iilf %r2, 4294967295
+;   lhi %r2, -1
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   iilf %r2, 0xffffffff
+;   lhi %r2, -1
 ;   br %r14
 
