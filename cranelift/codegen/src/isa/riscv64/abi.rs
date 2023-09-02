@@ -21,10 +21,11 @@ use crate::CodegenError;
 use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::PRegSet;
+use regalloc2::{MachineEnv, PReg, PRegSet};
 use regs::x_reg;
 
 use smallvec::{smallvec, SmallVec};
+use std::sync::OnceLock;
 
 /// Support for the Riscv64 ABI from the callee side (within a function body).
 pub(crate) type Riscv64Callee = Callee<Riscv64MachineDeps>;
@@ -628,6 +629,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         s.nominal_sp_to_fp
     }
 
+    fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
+        static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
+        MACHINE_ENV.get_or_init(create_reg_enviroment)
+    }
+
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         if call_conv_of_callee == isa::CallConv::Tail {
             TAIL_CLOBBERS
@@ -950,6 +956,65 @@ const fn tail_clobbers() -> PRegSet {
 }
 
 const TAIL_CLOBBERS: PRegSet = tail_clobbers();
+
+fn create_reg_enviroment() -> MachineEnv {
+    // Some C Extension instructions can only use a subset of the registers.
+    // x8 - x15, f8 - f15, v8 - v15 so we should prefer to use those since
+    // they allow us to emit C instructions more often.
+    //
+    // In general the order of preference is:
+    //   1. Compressible Caller Saved registers.
+    //   2. Non-Compressible Caller Saved registers.
+    //   3. Compressible Callee Saved registers.
+    //   4. Non-Compressible Callee Saved registers.
+
+    let preferred_regs_by_class: [Vec<PReg>; 3] = {
+        let x_registers: Vec<PReg> = (10..=15).map(px_reg).collect();
+        let f_registers: Vec<PReg> = (10..=15).map(pf_reg).collect();
+        let v_registers: Vec<PReg> = (8..=15).map(pv_reg).collect();
+
+        [x_registers, f_registers, v_registers]
+    };
+
+    let non_preferred_regs_by_class: [Vec<PReg>; 3] = {
+        // x0 - x4 are special registers, so we don't want to use them.
+        // Omit x30 and x31 since they are the spilltmp registers.
+
+        // Start with the Non-Compressible Caller Saved registers.
+        let x_registers: Vec<PReg> = (5..=7)
+            .chain(16..=17)
+            .chain(28..=29)
+            // The first Callee Saved register is x9 since its Compressible
+            // Omit x8 since it's the frame pointer.
+            .chain(9..=9)
+            // The rest of the Callee Saved registers are Non-Compressible
+            .chain(18..=27)
+            .map(px_reg)
+            .collect();
+
+        // Prefer Caller Saved registers.
+        let f_registers: Vec<PReg> = (0..=7)
+            .chain(16..=17)
+            .chain(28..=31)
+            // Once those are exhausted, we should prefer f8 and f9 since they are
+            // callee saved, but compressible.
+            .chain(8..=9)
+            .chain(18..=27)
+            .map(pf_reg)
+            .collect();
+
+        let v_registers = (0..=7).chain(16..=31).map(pv_reg).collect();
+
+        [x_registers, f_registers, v_registers]
+    };
+
+    MachineEnv {
+        preferred_regs_by_class,
+        non_preferred_regs_by_class,
+        fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
+    }
+}
 
 impl Riscv64MachineDeps {
     fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {

@@ -1,13 +1,11 @@
 //! S390x ISA definitions: registers.
 
 use alloc::string::String;
-use regalloc2::MachineEnv;
 use regalloc2::PReg;
 use regalloc2::VReg;
 
 use crate::isa::s390x::inst::{RegPair, WritableRegPair};
 use crate::machinst::*;
-use crate::settings;
 
 //=============================================================================
 // Registers, the Universe thereof, and printing
@@ -81,82 +79,6 @@ pub fn writable_spilltmp_reg() -> Writable<Reg> {
 
 pub fn zero_reg() -> Reg {
     gpr(0)
-}
-
-/// Create the register universe for AArch64.
-pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
-    fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().into()
-    }
-
-    MachineEnv {
-        preferred_regs_by_class: [
-            vec![
-                // no r0; can't use for addressing?
-                // no r1; it is our spilltmp.
-                preg(gpr(2)),
-                preg(gpr(3)),
-                preg(gpr(4)),
-                preg(gpr(5)),
-            ],
-            vec![
-                preg(vr(0)),
-                preg(vr(1)),
-                preg(vr(2)),
-                preg(vr(3)),
-                preg(vr(4)),
-                preg(vr(5)),
-                preg(vr(6)),
-                preg(vr(7)),
-                preg(vr(16)),
-                preg(vr(17)),
-                preg(vr(18)),
-                preg(vr(19)),
-                preg(vr(20)),
-                preg(vr(21)),
-                preg(vr(22)),
-                preg(vr(23)),
-                preg(vr(24)),
-                preg(vr(25)),
-                preg(vr(26)),
-                preg(vr(27)),
-                preg(vr(28)),
-                preg(vr(29)),
-                preg(vr(30)),
-                preg(vr(31)),
-            ],
-            // Vector Regclass is unused
-            vec![],
-        ],
-        non_preferred_regs_by_class: [
-            vec![
-                preg(gpr(6)),
-                preg(gpr(7)),
-                preg(gpr(8)),
-                preg(gpr(9)),
-                preg(gpr(10)),
-                preg(gpr(11)),
-                preg(gpr(12)),
-                preg(gpr(13)),
-                preg(gpr(14)),
-                // no r15; it is the stack pointer.
-            ],
-            vec![
-                preg(vr(8)),
-                preg(vr(9)),
-                preg(vr(10)),
-                preg(vr(11)),
-                preg(vr(12)),
-                preg(vr(13)),
-                preg(vr(14)),
-                preg(vr(15)),
-            ],
-            // Vector Regclass is unused
-            vec![],
-        ],
-        fixed_stack_slots: vec![],
-        scratch_by_class: [None, None, None],
-    }
 }
 
 pub fn show_reg(reg: Reg) -> String {

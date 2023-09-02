@@ -80,9 +80,10 @@ use crate::machinst::{RealReg, Reg, RegClass, Writable};
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
-use regalloc2::{PReg, PRegSet};
+use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
+use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
 
@@ -782,6 +783,11 @@ impl ABIMachineSpec for S390xMachineDeps {
         s.initial_sp_offset
     }
 
+    fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
+        static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
+        MACHINE_ENV.get_or_init(create_machine_env)
+    }
+
     fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
         CLOBBERS
     }
@@ -947,3 +953,74 @@ const fn clobbers() -> PRegSet {
 }
 
 const CLOBBERS: PRegSet = clobbers();
+
+fn create_machine_env() -> MachineEnv {
+    MachineEnv {
+        preferred_regs_by_class: [
+            vec![
+                // no r0; can't use for addressing?
+                // no r1; it is our spilltmp.
+                gpr_preg(2),
+                gpr_preg(3),
+                gpr_preg(4),
+                gpr_preg(5),
+            ],
+            vec![
+                vr_preg(0),
+                vr_preg(1),
+                vr_preg(2),
+                vr_preg(3),
+                vr_preg(4),
+                vr_preg(5),
+                vr_preg(6),
+                vr_preg(7),
+                vr_preg(16),
+                vr_preg(17),
+                vr_preg(18),
+                vr_preg(19),
+                vr_preg(20),
+                vr_preg(21),
+                vr_preg(22),
+                vr_preg(23),
+                vr_preg(24),
+                vr_preg(25),
+                vr_preg(26),
+                vr_preg(27),
+                vr_preg(28),
+                vr_preg(29),
+                vr_preg(30),
+                vr_preg(31),
+            ],
+            // Vector Regclass is unused
+            vec![],
+        ],
+        non_preferred_regs_by_class: [
+            vec![
+                gpr_preg(6),
+                gpr_preg(7),
+                gpr_preg(8),
+                gpr_preg(9),
+                gpr_preg(10),
+                gpr_preg(11),
+                gpr_preg(12),
+                gpr_preg(13),
+                gpr_preg(14),
+                // no r15; it is the stack pointer.
+            ],
+            vec![
+                vr_preg(8),
+                vr_preg(9),
+                vr_preg(10),
+                vr_preg(11),
+                vr_preg(12),
+                vr_preg(13),
+                vr_preg(14),
+                vr_preg(15),
+            ],
+            // Vector Regclass is unused
+            vec![],
+        ],
+        fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
+    }
+}

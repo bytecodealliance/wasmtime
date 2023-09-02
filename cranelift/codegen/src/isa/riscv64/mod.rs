@@ -14,7 +14,6 @@ use crate::{ir, CodegenError};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;
@@ -23,8 +22,6 @@ mod settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 
-use inst::crate_reg_eviroment;
-
 use self::inst::EmitInfo;
 
 /// An riscv64 backend.
@@ -32,7 +29,6 @@ pub struct Riscv64Backend {
     triple: Triple,
     flags: shared_settings::Flags,
     isa_flags: riscv_settings::Flags,
-    mach_env: MachineEnv,
 }
 
 impl Riscv64Backend {
@@ -42,12 +38,10 @@ impl Riscv64Backend {
         flags: shared_settings::Flags,
         isa_flags: riscv_settings::Flags,
     ) -> Riscv64Backend {
-        let mach_env = crate_reg_eviroment(&flags);
         Riscv64Backend {
             triple,
             flags,
             isa_flags,
-            mach_env,
         }
     }
 
@@ -113,10 +107,6 @@ impl TargetIsa for Riscv64Backend {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.flags
-    }
-
-    fn machine_env(&self) -> &MachineEnv {
-        &self.mach_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
