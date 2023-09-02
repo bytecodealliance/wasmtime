@@ -8,11 +8,12 @@ use cranelift::codegen::ir::{types::*, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{Function, LibCall};
 use cranelift::codegen::isa::{self, Builder};
 use cranelift::codegen::Context;
-use cranelift::prelude::isa::OwnedTargetIsa;
+use cranelift::prelude::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift::prelude::settings::SettingKind;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
+use target_isa_extras::TargetIsaExtras;
 use target_lexicon::Architecture;
 
 mod config;
@@ -20,6 +21,7 @@ mod cranelift_arbitrary;
 mod function_generator;
 mod passes;
 mod print;
+mod target_isa_extras;
 
 pub use print::PrintableTestCase;
 
@@ -53,10 +55,15 @@ where
         }
     }
 
-    pub fn generate_signature(&mut self, architecture: Architecture) -> Result<Signature> {
+    pub fn generate_signature(&mut self, isa: &dyn TargetIsa) -> Result<Signature> {
         let max_params = self.u.int_in_range(self.config.signature_params.clone())?;
         let max_rets = self.u.int_in_range(self.config.signature_rets.clone())?;
-        Ok(self.u.signature(architecture, max_params, max_rets)?)
+        Ok(self.u.signature(
+            isa.supports_simd(),
+            isa.triple().architecture,
+            max_params,
+            max_rets,
+        )?)
     }
 
     pub fn generate_test_inputs(mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
@@ -144,7 +151,7 @@ where
         usercalls: Vec<(UserExternalName, Signature)>,
         libcalls: Vec<LibCall>,
     ) -> Result<Function> {
-        let sig = self.generate_signature(isa.triple().architecture)?;
+        let sig = self.generate_signature(&*isa)?;
 
         let func = FunctionGenerator::new(
             &mut self.u,
