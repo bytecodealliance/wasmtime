@@ -1368,6 +1368,8 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let label_true = sink.get_label();
                 let label_false = sink.get_label();
+                let label_end = sink.get_label();
+
                 Inst::lower_br_icmp(
                     cc,
                     a,
@@ -1382,11 +1384,12 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_true, &mut state.ctrl_plane);
                 Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
                 Inst::Jal {
-                    dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
+                    dest: BranchTarget::Label(label_end),
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_false, &mut state.ctrl_plane);
                 Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::AtomicCas {
                 offset,
