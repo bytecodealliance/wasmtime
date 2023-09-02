@@ -419,6 +419,51 @@ impl MachInstEmit for Inst {
         // to allow disabling the check for `JTSequence`, which is always
         // emitted following an `EmitIsland`.
         let mut start_off = sink.cur_offset();
+
+        // First try to emit this as a compressed instruction
+        let success = self.try_emit_compressed(&mut allocs, sink, emit_info, state, &mut start_off);
+        if !success {
+            // If we can't lets emit it as a normal instruction
+            self.emit_uncompressed(&mut allocs, sink, emit_info, state, &mut start_off);
+        }
+
+        let end_off = sink.cur_offset();
+        assert!(
+            (end_off - start_off) <= Inst::worst_case_size(),
+            "Inst:{:?} length:{} worst_case_size:{}",
+            self,
+            end_off - start_off,
+            Inst::worst_case_size()
+        );
+    }
+
+    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
+        let mut allocs = AllocationConsumer::new(allocs);
+        self.print_with_state(state, &mut allocs)
+    }
+}
+
+impl Inst {
+    /// Tries to emit an instruction as compressed, if we can't return false.
+    fn try_emit_compressed(
+        &self,
+        _allocs: &mut AllocationConsumer,
+        _sink: &mut MachBuffer<Inst>,
+        _emit_info: &EmitInfo,
+        _state: &mut EmitState,
+        _start_off: &mut u32,
+    ) -> bool {
+        false
+    }
+
+    fn emit_uncompressed(
+        &self,
+        mut allocs: &mut AllocationConsumer,
+        sink: &mut MachBuffer<Inst>,
+        emit_info: &EmitInfo,
+        state: &mut EmitState,
+        start_off: &mut u32,
+    ) {
         match self {
             &Inst::Nop0 => {
                 // do nothing
@@ -866,7 +911,7 @@ impl MachInstEmit for Inst {
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
                 // in this case.
-                start_off = sink.cur_offset();
+                *start_off = sink.cur_offset();
             }
 
             &Inst::ReturnCallInd { callee, ref info } => {
@@ -892,12 +937,11 @@ impl MachInstEmit for Inst {
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
                 // in this case.
-                start_off = sink.cur_offset();
+                *start_off = sink.cur_offset();
             }
-
             &Inst::Jal { label } => {
-                sink.use_label_at_offset(start_off, label, LabelUse::Jal20);
-                sink.add_uncond_branch(start_off, start_off + 4, label);
+                sink.use_label_at_offset(*start_off, label, LabelUse::Jal20);
+                sink.add_uncond_branch(*start_off, *start_off + 4, label);
                 sink.put4(0b1101111);
             }
             &Inst::CondBr {
@@ -911,8 +955,8 @@ impl MachInstEmit for Inst {
                     CondBrTarget::Label(label) => {
                         let code = kind.emit();
                         let code_inverse = kind.inverse().emit().to_le_bytes();
-                        sink.use_label_at_offset(start_off, label, LabelUse::B12);
-                        sink.add_cond_branch(start_off, start_off + 4, label, &code_inverse);
+                        sink.use_label_at_offset(*start_off, label, LabelUse::B12);
+                        sink.add_cond_branch(*start_off, *start_off + 4, label, &code_inverse);
                         sink.put4(code);
                     }
                     CondBrTarget::Fallthrough => panic!("Cannot fallthrough in taken target"),
@@ -1118,7 +1162,7 @@ impl MachInstEmit for Inst {
 
                 // We've just emitted an island that is safe up to *here*.
                 // Mark it as such so that we don't needlessly emit additional islands.
-                start_off = sink.cur_offset();
+                *start_off = sink.cur_offset();
             }
 
             &Inst::VirtualSPOffsetAdj { amount } => {
@@ -2919,19 +2963,6 @@ impl MachInstEmit for Inst {
                 ));
             }
         };
-        let end_off = sink.cur_offset();
-        assert!(
-            (end_off - start_off) <= Inst::worst_case_size(),
-            "Inst:{:?} length:{} worst_case_size:{}",
-            self,
-            end_off - start_off,
-            Inst::worst_case_size()
-        );
-    }
-
-    fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String {
-        let mut allocs = AllocationConsumer::new(allocs);
-        self.print_with_state(state, &mut allocs)
     }
 }
 
