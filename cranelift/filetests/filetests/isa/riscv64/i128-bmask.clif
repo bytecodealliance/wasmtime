@@ -10,17 +10,17 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   or a0,a0,a1
-;   sltu a2,zero,a0
-;   sub a1,zero,a2
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a1,zero,a5
 ;   mv a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   or a0, a0, a1
-;   snez a2, a0
-;   neg a1, a2
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a1, a5
 ;   mv a0, a1
 ;   ret
 
@@ -32,16 +32,16 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   or a0,a0,a1
-;   sltu a2,zero,a0
-;   sub a0,zero,a2
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a0,zero,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   or a0, a0, a1
-;   snez a2, a0
-;   neg a0, a2
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a0, a5
 ;   ret
 
 function %bmask_i128_i32(i128) -> i32 {
@@ -52,16 +52,16 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   or a0,a0,a1
-;   sltu a2,zero,a0
-;   sub a0,zero,a2
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a0,zero,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   or a0, a0, a1
-;   snez a2, a0
-;   neg a0, a2
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a0, a5
 ;   ret
 
 function %bmask_i128_i16(i128) -> i16 {
@@ -72,16 +72,16 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   or a0,a0,a1
-;   sltu a2,zero,a0
-;   sub a0,zero,a2
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a0,zero,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   or a0, a0, a1
-;   snez a2, a0
-;   neg a0, a2
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a0, a5
 ;   ret
 
 function %bmask_i128_i8(i128) -> i8 {
@@ -92,16 +92,16 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   or a0,a0,a1
-;   sltu a2,zero,a0
-;   sub a0,zero,a2
+;   or a3,a0,a1
+;   sltu a5,zero,a3
+;   sub a0,zero,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   or a0, a0, a1
-;   snez a2, a0
-;   neg a0, a2
+;   or a3, a0, a1
+;   snez a5, a3
+;   neg a0, a5
 ;   ret
 
 function %bmask_i64_i128(i64) -> i128 {
@@ -112,15 +112,15 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   sltu t2,zero,a0
-;   sub a1,zero,t2
+;   sltu a2,zero,a0
+;   sub a1,zero,a2
 ;   mv a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   snez t2, a0
-;   neg a1, t2
+;   snez a2, a0
+;   neg a1, a2
 ;   mv a0, a1
 ;   ret
 
@@ -132,19 +132,19 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   slli t2,a0,32
-;   srli a1,t2,32
-;   sltu a3,zero,a1
-;   sub a1,zero,a3
+;   slli a2,a0,32
+;   srli a4,a2,32
+;   sltu a0,zero,a4
+;   sub a1,zero,a0
 ;   mv a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x20
-;   srli a1, t2, 0x20
-;   snez a3, a1
-;   neg a1, a3
+;   slli a2, a0, 0x20
+;   srli a4, a2, 0x20
+;   snez a0, a4
+;   neg a1, a0
 ;   mv a0, a1
 ;   ret
 
@@ -156,19 +156,19 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   slli t2,a0,48
-;   srli a1,t2,48
-;   sltu a3,zero,a1
-;   sub a1,zero,a3
+;   slli a2,a0,48
+;   srli a4,a2,48
+;   sltu a0,zero,a4
+;   sub a1,zero,a0
 ;   mv a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x30
-;   srli a1, t2, 0x30
-;   snez a3, a1
-;   neg a1, a3
+;   slli a2, a0, 0x30
+;   srli a4, a2, 0x30
+;   snez a0, a4
+;   neg a1, a0
 ;   mv a0, a1
 ;   ret
 
@@ -180,17 +180,17 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   andi t2,a0,255
-;   sltu a1,zero,t2
-;   sub a1,zero,a1
+;   andi a2,a0,255
+;   sltu a4,zero,a2
+;   sub a1,zero,a4
 ;   mv a0,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   andi t2, a0, 0xff
-;   snez a1, t2
-;   neg a1, a1
+;   andi a2, a0, 0xff
+;   snez a4, a2
+;   neg a1, a4
 ;   mv a0, a1
 ;   ret
 

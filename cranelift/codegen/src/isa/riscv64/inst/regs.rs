@@ -98,7 +98,7 @@ pub fn writable_link_reg() -> Writable<Reg> {
     Writable::from_reg(link_reg())
 }
 
-/// Get a reference to the frame pointer (x29).
+/// Get a reference to the frame pointer (x8).
 #[inline]
 pub fn fp_reg() -> Reg {
     x_reg(8)
@@ -136,36 +136,52 @@ pub fn writable_spilltmp_reg2() -> Writable<Reg> {
 }
 
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
+    // Some C Extension instructions can only use a subset of the registers.
+    // x8 - x15, f8 - f15, v8 - v15 so we should prefer to use those since
+    // they allow us to emit C instructions more often.
+    //
+    // In general the order of preference is:
+    //   1. Compressible Caller Saved registers.
+    //   2. Non-Compressible Caller Saved registers.
+    //   3. Compressible Callee Saved registers.
+    //   4. Non-Compressible Callee Saved registers.
+
     let preferred_regs_by_class: [Vec<PReg>; 3] = {
-        let x_registers: Vec<PReg> = (5..=7)
-            .chain(10..=17)
-            .chain(28..=29)
-            .map(|i| PReg::new(i, RegClass::Int))
-            .collect();
-
-        let f_registers: Vec<PReg> = (0..=7)
-            .chain(10..=17)
-            .chain(28..=31)
-            .map(|i| PReg::new(i, RegClass::Float))
-            .collect();
-
-        let v_registers: Vec<PReg> = (0..=31).map(|i| PReg::new(i, RegClass::Vector)).collect();
+        let x_registers: Vec<PReg> = (10..=15).map(px_reg).collect();
+        let f_registers: Vec<PReg> = (10..=15).map(pf_reg).collect();
+        let v_registers: Vec<PReg> = (8..=15).map(pv_reg).collect();
 
         [x_registers, f_registers, v_registers]
     };
 
     let non_preferred_regs_by_class: [Vec<PReg>; 3] = {
-        let x_registers: Vec<PReg> = (9..=9)
+        // x0 - x4 are special registers, so we don't want to use them.
+        // Omit x30 and x31 since they are the spilltmp registers.
+
+        // Start with the Non-Compressible Caller Saved registers.
+        let x_registers: Vec<PReg> = (5..=7)
+            .chain(16..=17)
+            .chain(28..=29)
+            // The first Callee Saved register is x9 since its Compressible
+            // Omit x8 since it's the frame pointer.
+            .chain(9..=9)
+            // The rest of the Callee Saved registers are Non-Compressible
             .chain(18..=27)
-            .map(|i| PReg::new(i, RegClass::Int))
+            .map(px_reg)
             .collect();
 
-        let f_registers: Vec<PReg> = (8..=9)
+        // Prefer Caller Saved registers.
+        let f_registers: Vec<PReg> = (0..=7)
+            .chain(16..=17)
+            .chain(28..=31)
+            // Once those are exhausted, we should prefer f8 and f9 since they are
+            // callee saved, but compressible.
+            .chain(8..=9)
             .chain(18..=27)
-            .map(|i| PReg::new(i, RegClass::Float))
+            .map(pf_reg)
             .collect();
 
-        let v_registers = vec![];
+        let v_registers = (0..=7).chain(16..=31).map(pv_reg).collect();
 
         [x_registers, f_registers, v_registers]
     };

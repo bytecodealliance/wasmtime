@@ -245,8 +245,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   eq a2,a0,a1##ty=i64
-;   bne a2,zero,taken(label2),not_taken(label1)
+;   eq a5,a0,a1##ty=i64
+;   bne a5,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,2
 ;   ret
@@ -257,10 +257,10 @@ block2:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a0, a1, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
-;   bnez a2, 0xc
+;   mv a5, zero
+;   bnez a5, 0xc
 ; block1: ; offset 0x14
 ;   addi a0, zero, 2
 ;   ret
@@ -280,8 +280,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   eq a1,a0,a1##ty=i64
-;   bne a1,zero,taken(label1),not_taken(label2)
+;   eq a4,a0,a1##ty=i64
+;   bne a4,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -293,9 +293,9 @@ block1:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a0, a1, 0xc
-;   addi a1, zero, 1
+;   addi a4, zero, 1
 ;   j 8
-;   mv a1, zero
+;   mv a4, zero
 ; block1: ; offset 0x10
 ;   addi a0, zero, 1
 ;   ret
@@ -311,8 +311,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   ne a0,[a0,a1],[zerozero]##ty=i128
-;   bne a0,zero,taken(label1),not_taken(label2)
+;   ne a3,[a0,a1],[zerozero]##ty=i128
+;   bne a3,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -324,9 +324,9 @@ block1:
 ; block0: ; offset 0x0
 ;   bnez a1, 8
 ;   beqz a0, 0xc
-;   addi a0, zero, 1
+;   addi a3, zero, 1
 ;   j 8
-;   mv a0, zero
+;   mv a3, zero
 ; block1: ; offset 0x14
 ;   ret
 
@@ -341,8 +341,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   eq a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   eq a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -354,9 +354,9 @@ block1:
 ; block0: ; offset 0x0
 ;   bne a1, a3, 0x10
 ;   bne a0, a2, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x14
 ;   ret
 
@@ -371,8 +371,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   ne a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   ne a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -384,9 +384,9 @@ block1:
 ; block0: ; offset 0x0
 ;   bne a1, a3, 8
 ;   beq a0, a2, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x14
 ;   ret
 
@@ -401,8 +401,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   slt a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   slt a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -415,9 +415,9 @@ block1:
 ;   blt a1, a3, 0xc
 ;   bne a1, a3, 0x10
 ;   bgeu a0, a2, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x18
 ;   ret
 
@@ -432,8 +432,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   ult a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   ult a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -446,9 +446,9 @@ block1:
 ;   bltu a1, a3, 0xc
 ;   bne a1, a3, 0x10
 ;   bgeu a0, a2, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x18
 ;   ret
 
@@ -463,8 +463,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   sle a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   sle a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -477,9 +477,9 @@ block1:
 ;   blt a1, a3, 0xc
 ;   bne a1, a3, 0x10
 ;   bltu a2, a0, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x18
 ;   ret
 
@@ -494,8 +494,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   ule a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   ule a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -508,9 +508,9 @@ block1:
 ;   bltu a1, a3, 0xc
 ;   bne a1, a3, 0x10
 ;   bltu a2, a0, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x18
 ;   ret
 
@@ -525,8 +525,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   sgt a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   sgt a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -539,9 +539,9 @@ block1:
 ;   blt a3, a1, 0xc
 ;   bne a1, a3, 0x10
 ;   bgeu a2, a0, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x18
 ;   ret
 
@@ -556,8 +556,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   ugt a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   ugt a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -570,9 +570,9 @@ block1:
 ;   bltu a3, a1, 0xc
 ;   bne a1, a3, 0x10
 ;   bgeu a2, a0, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x18
 ;   ret
 
@@ -587,8 +587,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   sge a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   sge a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -601,9 +601,9 @@ block1:
 ;   blt a3, a1, 0xc
 ;   bne a1, a3, 0x10
 ;   bltu a0, a2, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x18
 ;   ret
 
@@ -618,8 +618,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   uge a2,[a0,a1],[a2,a3]##ty=i128
-;   bne a2,zero,taken(label1),not_taken(label2)
+;   uge a5,[a0,a1],[a2,a3]##ty=i128
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -632,9 +632,9 @@ block1:
 ;   bltu a3, a1, 0xc
 ;   bne a1, a3, 0x10
 ;   bltu a0, a2, 0xc
-;   addi a2, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a2, zero
+;   mv a5, zero
 ; block1: ; offset 0x18
 ;   ret
 
@@ -649,8 +649,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   andi t2,a0,255
-;   bne t2,zero,taken(label1),not_taken(label2)
+;   andi a2,a0,255
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -660,7 +660,7 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   andi t2, a0, 0xff
+;   andi a2, a0, 0xff
 ; block1: ; offset 0x4
 ;   ret
 
@@ -675,9 +675,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   slli t2,a0,48
-;   srli a1,t2,48
-;   bne a1,zero,taken(label1),not_taken(label2)
+;   slli a2,a0,48
+;   srli a4,a2,48
+;   bne a4,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -687,8 +687,8 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x30
-;   srli a1, t2, 0x30
+;   slli a2, a0, 0x30
+;   srli a4, a2, 0x30
 ; block1: ; offset 0x8
 ;   ret
 
@@ -703,9 +703,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   slli t2,a0,32
-;   srli a1,t2,32
-;   bne a1,zero,taken(label1),not_taken(label2)
+;   slli a2,a0,32
+;   srli a4,a2,32
+;   bne a4,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -715,8 +715,8 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x20
-;   srli a1, t2, 0x20
+;   slli a2, a0, 0x20
+;   srli a4, a2, 0x20
 ; block1: ; offset 0x8
 ;   ret
 

@@ -14,10 +14,10 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a6,16(fp)
-;   ld t3,24(fp)
-;   ld t0,32(fp)
-;   ld t2,40(fp)
+;   ld a4,16(fp)
+;   ld a0,24(fp)
+;   ld a2,32(fp)
+;   ld a4,40(fp)
 ;   ld s1,48(fp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -31,10 +31,10 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   ld a6, 0x10(s0)
-;   ld t3, 0x18(s0)
-;   ld t0, 0x20(s0)
-;   ld t2, 0x28(s0)
+;   ld a4, 0x10(s0)
+;   ld a0, 0x18(s0)
+;   ld a2, 0x20(s0)
+;   ld a4, 0x28(s0)
 ;   ld s1, 0x30(s0)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -106,16 +106,16 @@ block0:
 ;   li s11,100
 ;   li t3,105
 ;   li t4,110
-;   li t1,115
-;   li t2,120
-;   li t0,125
+;   li t0,115
+;   li t1,120
+;   li t2,125
 ;   li s1,130
 ;   li a0,135
 ;   add sp,-48
 ;   virtual_sp_offset_adj +48
-;   sd t1,0(sp)
-;   sd t2,8(sp)
-;   sd t0,16(sp)
+;   sd t0,0(sp)
+;   sd t1,8(sp)
+;   sd t2,16(sp)
 ;   sd s1,24(sp)
 ;   sd a0,32(sp)
 ;   load_sym t0,%tail_callee_stack_args+0
@@ -159,15 +159,15 @@ block0:
 ;   addi s11, zero, 0x64
 ;   addi t3, zero, 0x69
 ;   addi t4, zero, 0x6e
-;   addi t1, zero, 0x73
-;   addi t2, zero, 0x78
-;   addi t0, zero, 0x7d
+;   addi t0, zero, 0x73
+;   addi t1, zero, 0x78
+;   addi t2, zero, 0x7d
 ;   addi s1, zero, 0x82
 ;   addi a0, zero, 0x87
 ;   addi sp, sp, -0x30
-;   sd t1, 0(sp)
-;   sd t2, 8(sp)
-;   sd t0, 0x10(sp)
+;   sd t0, 0(sp)
+;   sd t1, 8(sp)
+;   sd t2, 0x10(sp)
 ;   sd s1, 0x18(sp)
 ;   sd a0, 0x20(sp)
 ;   auipc t0, 0
@@ -224,8 +224,8 @@ block0:
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   li t1,10
-;   sd t1,16(nominal_sp)
+;   li a3,10
+;   sd a3,16(nominal_sp)
 ;   li a0,15
 ;   sd a0,8(nominal_sp)
 ;   li a1,20
@@ -248,14 +248,14 @@ block0:
 ;   li s11,100
 ;   li t3,105
 ;   li t4,110
-;   li t1,115
-;   li t2,120
-;   li t0,125
+;   li t0,115
+;   li t1,120
+;   li t2,125
 ;   li a0,130
 ;   li a1,135
-;   sd t1,0(s1)
-;   sd t2,8(s1)
-;   sd t0,16(s1)
+;   sd t0,0(s1)
+;   sd t1,8(s1)
+;   sd t2,16(s1)
 ;   sd a0,24(s1)
 ;   sd a1,32(s1)
 ;   ld a1,0(nominal_sp)
@@ -275,8 +275,8 @@ block0:
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
-;   addi t1, zero, 0xa
-;   sd t1, 0x10(sp)
+;   addi a3, zero, 0xa
+;   sd a3, 0x10(sp)
 ;   addi a0, zero, 0xf
 ;   sd a0, 8(sp)
 ;   addi a1, zero, 0x14
@@ -299,14 +299,14 @@ block0:
 ;   addi s11, zero, 0x64
 ;   addi t3, zero, 0x69
 ;   addi t4, zero, 0x6e
-;   addi t1, zero, 0x73
-;   addi t2, zero, 0x78
-;   addi t0, zero, 0x7d
+;   addi t0, zero, 0x73
+;   addi t1, zero, 0x78
+;   addi t2, zero, 0x7d
 ;   addi a0, zero, 0x82
 ;   addi a1, zero, 0x87
-;   sd t1, 0(s1)
-;   sd t2, 8(s1)
-;   sd t0, 0x10(s1)
+;   sd t0, 0(s1)
+;   sd t1, 8(s1)
+;   sd t2, 0x10(s1)
 ;   sd a0, 0x18(s1)
 ;   sd a1, 0x20(s1)
 ;   ld a1, 0(sp)
@@ -337,10 +337,10 @@ block0:
 ;   load_addr s1,0(sp)
 ;   load_sym t0,%tail_callee_stack_rets+0
 ;   callind t0
-;   ld t0,0(sp)
-;   ld t2,8(sp)
-;   ld a1,16(sp)
-;   ld a3,24(sp)
+;   ld a2,0(sp)
+;   ld a4,8(sp)
+;   ld a0,16(sp)
+;   ld a2,24(sp)
 ;   ld s1,32(sp)
 ;   add sp,+48
 ;   virtual_sp_offset_adj -48
@@ -364,10 +364,10 @@ block0:
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   jalr t0
-;   ld t0, 0(sp)
-;   ld t2, 8(sp)
-;   ld a1, 0x10(sp)
-;   ld a3, 0x18(sp)
+;   ld a2, 0(sp)
+;   ld a4, 8(sp)
+;   ld a0, 0x10(sp)
+;   ld a2, 0x18(sp)
 ;   ld s1, 0x20(sp)
 ;   addi sp, sp, 0x30
 ;   ld ra, 8(sp)
@@ -390,23 +390,23 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   sd a3,0(nominal_sp)
-;   sd a6,8(nominal_sp)
-;   sd t3,16(nominal_sp)
-;   ld a6,16(fp)
-;   ld t3,24(fp)
-;   ld t1,32(fp)
-;   ld t2,40(fp)
+;   sd a0,0(nominal_sp)
+;   sd a2,8(nominal_sp)
+;   sd a4,16(nominal_sp)
+;   ld a4,16(fp)
+;   ld a0,24(fp)
+;   ld t2,32(fp)
+;   ld t1,40(fp)
 ;   ld t0,48(fp)
-;   ld a3,56(fp)
-;   sd a6,0(a3)
-;   sd t3,8(a3)
-;   sd t1,16(a3)
-;   sd t2,24(a3)
-;   sd t0,32(a3)
-;   ld a3,0(nominal_sp)
-;   ld a6,8(nominal_sp)
-;   ld t3,16(nominal_sp)
+;   ld a2,56(fp)
+;   sd a4,0(a2)
+;   sd a0,8(a2)
+;   sd t2,16(a2)
+;   sd t1,24(a2)
+;   sd t0,32(a2)
+;   ld a0,0(nominal_sp)
+;   ld a2,8(nominal_sp)
+;   ld a4,16(nominal_sp)
 ;   add sp,+32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -421,23 +421,23 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
-;   sd a3, 0(sp)
-;   sd a6, 8(sp)
-;   sd t3, 0x10(sp)
-;   ld a6, 0x10(s0)
-;   ld t3, 0x18(s0)
-;   ld t1, 0x20(s0)
-;   ld t2, 0x28(s0)
+;   sd a0, 0(sp)
+;   sd a2, 8(sp)
+;   sd a4, 0x10(sp)
+;   ld a4, 0x10(s0)
+;   ld a0, 0x18(s0)
+;   ld t2, 0x20(s0)
+;   ld t1, 0x28(s0)
 ;   ld t0, 0x30(s0)
-;   ld a3, 0x38(s0)
-;   sd a6, 0(a3)
-;   sd t3, 8(a3)
-;   sd t1, 0x10(a3)
-;   sd t2, 0x18(a3)
-;   sd t0, 0x20(a3)
-;   ld a3, 0(sp)
-;   ld a6, 8(sp)
-;   ld t3, 0x10(sp)
+;   ld a2, 0x38(s0)
+;   sd a4, 0(a2)
+;   sd a0, 8(a2)
+;   sd t2, 0x10(a2)
+;   sd t1, 0x18(a2)
+;   sd t0, 0x20(a2)
+;   ld a0, 0(sp)
+;   ld a2, 8(sp)
+;   ld a4, 0x10(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -509,28 +509,28 @@ block0:
 ;   li s11,100
 ;   li t3,105
 ;   li t4,110
-;   li t1,115
-;   li t2,120
-;   li t0,125
+;   li t0,115
+;   li t1,120
+;   li t2,125
 ;   li s1,130
 ;   li a0,135
 ;   add sp,-96
 ;   virtual_sp_offset_adj +96
-;   sd t1,0(sp)
-;   sd t2,8(sp)
-;   sd t0,16(sp)
+;   sd t0,0(sp)
+;   sd t1,8(sp)
+;   sd t2,16(sp)
 ;   sd s1,24(sp)
 ;   sd a0,32(sp)
-;   load_addr t0,48(sp)
-;   sd t0,40(sp)
+;   load_addr a0,48(sp)
+;   sd a0,40(sp)
 ;   load_sym t0,%tail_callee_stack_args_and_rets+0
 ;   ld a0,0(nominal_sp)
 ;   ld s1,8(nominal_sp)
 ;   callind t0
-;   ld a3,0(sp)
-;   ld a5,8(sp)
-;   ld a7,16(sp)
-;   ld t4,24(sp)
+;   ld a4,0(sp)
+;   ld a0,8(sp)
+;   ld a2,16(sp)
+;   ld a4,24(sp)
 ;   ld s1,32(sp)
 ;   add sp,+48
 ;   virtual_sp_offset_adj -48
@@ -571,19 +571,19 @@ block0:
 ;   addi s11, zero, 0x64
 ;   addi t3, zero, 0x69
 ;   addi t4, zero, 0x6e
-;   addi t1, zero, 0x73
-;   addi t2, zero, 0x78
-;   addi t0, zero, 0x7d
+;   addi t0, zero, 0x73
+;   addi t1, zero, 0x78
+;   addi t2, zero, 0x7d
 ;   addi s1, zero, 0x82
 ;   addi a0, zero, 0x87
 ;   addi sp, sp, -0x60
-;   sd t1, 0(sp)
-;   sd t2, 8(sp)
-;   sd t0, 0x10(sp)
+;   sd t0, 0(sp)
+;   sd t1, 8(sp)
+;   sd t2, 0x10(sp)
 ;   sd s1, 0x18(sp)
 ;   sd a0, 0x20(sp)
-;   addi t0, sp, 0x30
-;   sd t0, 0x28(sp)
+;   addi a0, sp, 0x30
+;   sd a0, 0x28(sp)
 ;   auipc t0, 0
 ;   ld t0, 0xc(t0)
 ;   j 0xc
@@ -592,10 +592,10 @@ block0:
 ;   ld a0, 0x60(sp)
 ;   ld s1, 0x68(sp)
 ;   jalr t0
-;   ld a3, 0(sp)
-;   ld a5, 8(sp)
-;   ld a7, 0x10(sp)
-;   ld t4, 0x18(sp)
+;   ld a4, 0(sp)
+;   ld a0, 8(sp)
+;   ld a2, 0x10(sp)
+;   ld a4, 0x18(sp)
 ;   ld s1, 0x20(sp)
 ;   addi sp, sp, 0x30
 ;   addi sp, sp, 0x10
