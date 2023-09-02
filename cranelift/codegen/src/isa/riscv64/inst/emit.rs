@@ -1047,6 +1047,8 @@ impl MachInstEmit for Inst {
                 let tmp2 = allocs.next_writable(tmp2);
                 let ext_index = writable_spilltmp_reg();
 
+                let label_compute_target = sink.get_label();
+
                 // The default target is passed in as the 0th element of `targets`
                 // separate it here for clarity.
                 let default_target = targets[0];
@@ -1099,7 +1101,7 @@ impl MachInstEmit for Inst {
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                 Inst::CondBr {
-                    taken: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 3),
+                    taken: BranchTarget::Label(label_compute_target),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::UnsignedLessThan,
@@ -1119,6 +1121,7 @@ impl MachInstEmit for Inst {
 
                 // Compute the jump table offset.
                 // We need to emit a PC relative offset,
+                sink.bind_label(label_compute_target, &mut state.ctrl_plane);
 
                 // Get the current PC.
                 Inst::Auipc {
