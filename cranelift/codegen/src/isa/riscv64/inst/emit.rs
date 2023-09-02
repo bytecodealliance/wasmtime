@@ -1966,33 +1966,30 @@ impl MachInstEmit for Inst {
                 offset,
             } => {
                 let rd = allocs.next_writable(rd);
-                // get the current pc.
-                Inst::Auipc {
-                    rd: rd,
-                    imm: Imm20::from_bits(0),
-                }
-                .emit(&[], sink, emit_info, state);
-                // load the value.
+
+                let label_data = sink.get_label();
+                let label_end = sink.get_label();
+
+                // Load the value from a label
                 Inst::Load {
-                    rd: rd,
+                    rd,
                     op: LoadOP::Ld,
                     flags: MemFlags::trusted(),
-                    from: AMode::RegOffset(
-                        rd.to_reg(),
-                        12, // auipc load and jal.
-                        I64,
-                    ),
-                }
-                .emit(&[], sink, emit_info, state);
-                // jump over.
-                Inst::Jal {
-                    // jal and abs8 size for 12.
-                    dest: BranchTarget::offset(12),
+                    from: AMode::Label(label_data),
                 }
                 .emit(&[], sink, emit_info, state);
 
+                // Jump over the data
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_end),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                sink.bind_label(label_data, &mut state.ctrl_plane);
                 sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
                 sink.put8(0);
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::TrapIfC {
                 rs1,
