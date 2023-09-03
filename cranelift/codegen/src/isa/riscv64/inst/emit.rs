@@ -399,10 +399,12 @@ impl MachInstEmit for Inst {
         emit_info: &Self::Info,
         state: &mut EmitState,
     ) {
+        // Transform this into a instruction with all the physical regs
         let mut allocs = AllocationConsumer::new(allocs);
+        let inst = self.clone().allocate(&mut allocs);
 
         // Check if we need to update the vector state before emitting this instruction
-        if let Some(expected) = self.expected_vstate() {
+        if let Some(expected) = inst.expected_vstate() {
             if state.vstate != EmitVState::Known(expected.clone()) {
                 // Update the vector state.
                 Inst::VecSetState {
@@ -421,10 +423,10 @@ impl MachInstEmit for Inst {
         let mut start_off = sink.cur_offset();
 
         // First try to emit this as a compressed instruction
-        let success = self.try_emit_compressed(&mut allocs, sink, emit_info, state, &mut start_off);
+        let success = inst.try_emit_compressed(sink, emit_info, state, &mut start_off);
         if !success {
             // If we can't lets emit it as a normal instruction
-            self.emit_uncompressed(&mut allocs, sink, emit_info, state, &mut start_off);
+            inst.emit_uncompressed(sink, emit_info, state, &mut start_off);
         }
 
         let end_off = sink.cur_offset();
@@ -447,7 +449,6 @@ impl Inst {
     /// Tries to emit an instruction as compressed, if we can't return false.
     fn try_emit_compressed(
         &self,
-        _allocs: &mut AllocationConsumer,
         _sink: &mut MachBuffer<Inst>,
         _emit_info: &EmitInfo,
         _state: &mut EmitState,
@@ -458,7 +459,6 @@ impl Inst {
 
     fn emit_uncompressed(
         &self,
-        mut allocs: &mut AllocationConsumer,
         sink: &mut MachBuffer<Inst>,
         emit_info: &EmitInfo,
         state: &mut EmitState,
@@ -488,13 +488,10 @@ impl Inst {
                 sink.put_data(&data[..]);
             }
             &Inst::Lui { rd, ref imm } => {
-                let rd = allocs.next_writable(rd);
                 let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
                 sink.put4(x);
             }
             &Inst::LoadInlineConst { rd, ty, imm } => {
-                let rd = allocs.next_writable(rd);
-
                 let data = &imm.to_le_bytes()[..ty.bytes() as usize];
 
                 let label_data: MachLabel = sink.get_label();
@@ -524,8 +521,6 @@ impl Inst {
                 rd,
                 rs,
             } => {
-                let rs = allocs.next(rs);
-                let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3(frm) << 12
@@ -546,10 +541,6 @@ impl Inst {
                 rs3,
                 frm,
             } => {
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
-                let rs3 = allocs.next(rs3);
-                let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3(frm) << 12
@@ -567,10 +558,6 @@ impl Inst {
                 rs1,
                 rs2,
             } => {
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
-                let rd = allocs.next_writable(rd);
-
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | (alu_op.funct3(frm)) << 12
@@ -582,8 +569,8 @@ impl Inst {
             &Inst::Unwind { ref inst } => {
                 sink.add_unwind(inst.clone());
             }
-            &Inst::DummyUse { reg } => {
-                allocs.next(reg);
+            &Inst::DummyUse { .. } => {
+                // This has already been handled by Inst::allocate.
             }
             &Inst::AluRRR {
                 alu_op,
@@ -591,9 +578,6 @@ impl Inst {
                 rs1,
                 rs2,
             } => {
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
-                let rd = allocs.next_writable(rd);
                 let (rs1, rs2) = if alu_op.reverse_rs() {
                     (rs2, rs1)
                 } else {
@@ -615,8 +599,6 @@ impl Inst {
                 rs,
                 imm12,
             } => {
-                let rs = allocs.next(rs);
-                let rd = allocs.next_writable(rd);
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
                     | alu_op.funct3() << 12
@@ -625,14 +607,9 @@ impl Inst {
                 sink.put4(x);
             }
             &Inst::CsrReg { op, rd, rs, csr } => {
-                let rs = allocs.next(rs);
-                let rd = allocs.next_writable(rd);
-
                 sink.put4(encode_csr_reg(op, rd, rs, csr));
             }
             &Inst::CsrImm { op, rd, csr, imm } => {
-                let rd = allocs.next_writable(rd);
-
                 sink.put4(encode_csr_imm(op, rd, csr, imm));
             }
             &Inst::Load {
@@ -641,9 +618,6 @@ impl Inst {
                 from,
                 flags,
             } => {
-                let from = from.clone().with_allocs(&mut allocs);
-                let rd = allocs.next_writable(rd);
-
                 let base = from.get_base_register();
                 let offset = from.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_i64(offset);
@@ -701,9 +675,6 @@ impl Inst {
                 sink.put4(encode_i_type(op.op_code(), rd, op.funct3(), addr, imm12));
             }
             &Inst::Store { op, src, flags, to } => {
-                let to = to.clone().with_allocs(&mut allocs);
-                let src = allocs.next(src);
-
                 let base = to.get_base_register();
                 let offset = to.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_i64(offset);
@@ -752,8 +723,6 @@ impl Inst {
                 from_bits,
                 to_bits: _to_bits,
             } => {
-                let rn = allocs.next(rn);
-                let rd = allocs.next_writable(rd);
                 let mut insts = SmallInstVec::new();
                 let shift_bits = (64 - from_bits) as i16;
                 let is_u8 = || from_bits == 8 && signed == false;
@@ -865,7 +834,6 @@ impl Inst {
                 );
             }
             &Inst::CallInd { ref info } => {
-                let rn = allocs.next(info.rn);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
@@ -875,7 +843,7 @@ impl Inst {
                 }
                 Inst::Jalr {
                     rd: writable_link_reg(),
-                    base: rn,
+                    base: info.rn,
                     offset: Imm12::zero(),
                 }
                 .emit(&[], sink, emit_info, state);
@@ -893,13 +861,11 @@ impl Inst {
                 ref info,
             } => {
                 emit_return_call_common_sequence(
-                    &mut allocs,
                     sink,
                     emit_info,
                     state,
                     info.new_stack_arg_size,
                     info.old_stack_arg_size,
-                    &info.uses,
                 );
 
                 sink.add_call_site(ir::Opcode::ReturnCall);
@@ -915,16 +881,12 @@ impl Inst {
             }
 
             &Inst::ReturnCallInd { callee, ref info } => {
-                let callee = allocs.next(callee);
-
                 emit_return_call_common_sequence(
-                    &mut allocs,
                     sink,
                     emit_info,
                     state,
                     info.new_stack_arg_size,
                     info.old_stack_arg_size,
-                    &info.uses,
                 );
 
                 Inst::Jalr {
@@ -947,10 +909,8 @@ impl Inst {
             &Inst::CondBr {
                 taken,
                 not_taken,
-                mut kind,
+                kind,
             } => {
-                kind.rs1 = allocs.next(kind.rs1);
-                kind.rs2 = allocs.next(kind.rs2);
                 match taken {
                     CondBrTarget::Label(label) => {
                         let code = kind.emit();
@@ -975,9 +935,6 @@ impl Inst {
                 if rd.to_reg() == rm {
                     return;
                 }
-
-                let rm = allocs.next(rm);
-                let rd = allocs.next_writable(rd);
 
                 match rm.class() {
                     RegClass::Int => Inst::AluRRImm12 {
@@ -1012,9 +969,6 @@ impl Inst {
             }
 
             &Inst::MovFromPReg { rd, rm } => {
-                debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
-                let rd = allocs.next_writable(rd);
-
                 Inst::gen_move(rd, Reg::from(rm), I64).emit(&[], sink, emit_info, state);
             }
 
@@ -1024,9 +978,6 @@ impl Inst {
                 tmp2,
                 ref targets,
             } => {
-                let index = allocs.next(index);
-                let tmp1 = allocs.next_writable(tmp1);
-                let tmp2 = allocs.next_writable(tmp2);
                 let ext_index = writable_spilltmp_reg();
 
                 let label_compute_target = sink.get_label();
@@ -1180,9 +1131,6 @@ impl Inst {
                 src,
                 amo,
             } => {
-                let addr = allocs.next(addr);
-                let src = allocs.next(src);
-                let rd = allocs.next_writable(rd);
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
@@ -1207,15 +1155,10 @@ impl Inst {
                 sink.put4(x);
             }
             &Inst::Auipc { rd, imm } => {
-                let rd = allocs.next_writable(rd);
-                let x = enc_auipc(rd, imm);
-                sink.put4(x);
+                sink.put4(enc_auipc(rd, imm));
             }
 
             &Inst::LoadAddr { rd, mem } => {
-                let mem = mem.with_allocs(&mut allocs);
-                let rd = allocs.next_writable(rd);
-
                 let base = mem.get_base_register();
                 let offset = mem.get_offset_with_state(state);
                 let offset_imm12 = Imm12::maybe_from_i64(offset);
@@ -1284,15 +1227,6 @@ impl Inst {
                 ref y,
                 ty: _ty,
             } => {
-                let condition = allocs.next(condition);
-                let x = alloc_value_regs(x, &mut allocs);
-                let y = alloc_value_regs(y, &mut allocs);
-                let dst: Vec<_> = dst
-                    .clone()
-                    .into_iter()
-                    .map(|r| allocs.next_writable(r))
-                    .collect();
-
                 let mut insts = SmallInstVec::new();
                 let label_false = sink.get_label();
                 insts.push(Inst::CondBr {
@@ -1322,23 +1256,12 @@ impl Inst {
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::Jalr { rd, base, offset } => {
-                let rd = allocs.next_writable(rd);
-                let x = enc_jalr(rd, base, offset);
-                sink.put4(x);
+                sink.put4(enc_jalr(rd, base, offset));
             }
             &Inst::EBreak => {
                 sink.put4(0x00100073);
             }
-            &Inst::Icmp {
-                cc,
-                rd,
-                ref a,
-                ref b,
-                ty,
-            } => {
-                let a = alloc_value_regs(a, &mut allocs);
-                let b = alloc_value_regs(b, &mut allocs);
-                let rd = allocs.next_writable(rd);
+            &Inst::Icmp { cc, rd, a, b, ty } => {
                 let label_true = sink.get_label();
                 let label_false = sink.get_label();
                 let label_end = sink.get_label();
@@ -1370,13 +1293,6 @@ impl Inst {
                 v,
                 ty,
             } => {
-                let offset = allocs.next(offset);
-                let e = allocs.next(e);
-                let addr = allocs.next(addr);
-                let v = allocs.next(v);
-                let t0 = allocs.next_writable(t0);
-                let dst = allocs.next_writable(dst);
-
                 //     # addr holds address of memory location
                 //     # e holds expected value
                 //     # v holds desired value
@@ -1470,11 +1386,6 @@ impl Inst {
                 x,
                 t0,
             } => {
-                let offset = allocs.next(offset);
-                let p = allocs.next(p);
-                let x = allocs.next(x);
-                let t0 = allocs.next_writable(t0);
-                let dst = allocs.next_writable(dst);
                 let retry = sink.get_label();
                 sink.bind_label(retry, &mut state.ctrl_plane);
                 // load old value.
@@ -1673,13 +1584,10 @@ impl Inst {
             &Inst::IntSelect {
                 op,
                 ref dst,
-                ref x,
-                ref y,
+                x,
+                y,
                 ty,
             } => {
-                let x = alloc_value_regs(x, &mut allocs);
-                let y = alloc_value_regs(y, &mut allocs);
-                let dst: Vec<_> = dst.iter().map(|r| allocs.next_writable(*r)).collect();
                 let label_true = sink.get_label();
                 let label_false = sink.get_label();
                 let label_done = sink.get_label();
@@ -1717,11 +1625,11 @@ impl Inst {
                 };
                 //here is true , use x.
                 sink.bind_label(label_true, &mut state.ctrl_plane);
-                gen_move(&dst, &x, sink, state);
+                gen_move(dst, &x, sink, state);
                 Inst::gen_jump(label_done).emit(&[], sink, emit_info, state);
                 // here is false use y
                 sink.bind_label(label_false, &mut state.ctrl_plane);
-                gen_move(&dst, &y, sink, state);
+                gen_move(dst, &y, sink, state);
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
 
@@ -1731,12 +1639,6 @@ impl Inst {
                 rs1,
                 rs2,
             } => {
-                let mut condition = condition.clone();
-                condition.rs1 = allocs.next(condition.rs1);
-                condition.rs2 = allocs.next(condition.rs2);
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
-                let rd = allocs.next_writable(rd);
                 let label_true = sink.get_label();
                 let label_jump_over = sink.get_label();
                 let ty = Inst::canonical_type_for_rc(rs1.class());
@@ -1762,9 +1664,6 @@ impl Inst {
                 out_type,
                 tmp,
             } => {
-                let rs = allocs.next(rs);
-                let tmp = allocs.next_writable(tmp);
-                let rd = allocs.next_writable(rd);
                 let label_nan = sink.get_label();
                 let label_jump_over = sink.get_label();
                 // get if nan.
@@ -1926,8 +1825,6 @@ impl Inst {
                 ref name,
                 offset,
             } => {
-                let rd = allocs.next_writable(rd);
-
                 let label_data = sink.get_label();
                 let label_end = sink.get_label();
 
@@ -1955,8 +1852,6 @@ impl Inst {
                 cc,
                 trap_code,
             } => {
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
                 let label_trap = sink.get_label();
                 let label_jump_over = sink.get_label();
                 Inst::CondBr {
@@ -1971,7 +1866,6 @@ impl Inst {
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::TrapIf { test, trap_code } => {
-                let test = allocs.next(test);
                 let label_trap = sink.get_label();
                 let label_jump_over = sink.get_label();
                 Inst::CondBr {
@@ -2000,8 +1894,6 @@ impl Inst {
                 sink.put_data(Inst::TRAP_OPCODE);
             }
             &Inst::AtomicLoad { rd, ty, p } => {
-                let p = allocs.next(p);
-                let rd = allocs.next_writable(rd);
                 // emit the fence.
                 Inst::Fence {
                     pred: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
@@ -2023,8 +1915,6 @@ impl Inst {
                 .emit(&[], sink, emit_info, state);
             }
             &Inst::AtomicStore { src, ty, p } => {
-                let src = allocs.next(src);
-                let p = allocs.next(p);
                 Inst::Fence {
                     pred: Inst::FENCE_REQ_R | Inst::FENCE_REQ_W,
                     succ: Inst::FENCE_REQ_W,
@@ -2047,10 +1937,6 @@ impl Inst {
                 ty,
             } => {
                 // this code is port from glibc ceil floor ... implementation.
-                let rs = allocs.next(rs);
-                let int_tmp = allocs.next_writable(int_tmp);
-                let f_tmp = allocs.next_writable(f_tmp);
-                let rd = allocs.next_writable(rd);
                 let label_nan = sink.get_label();
                 let label_x = sink.get_label();
                 let label_jump_over = sink.get_label();
@@ -2183,10 +2069,6 @@ impl Inst {
                 rs2,
                 ty,
             } => {
-                let rs1 = allocs.next(rs1);
-                let rs2 = allocs.next(rs2);
-                let tmp = allocs.next_writable(tmp);
-                let rd = allocs.next_writable(rd);
                 let label_nan = sink.get_label();
                 let label_jump_over = sink.get_label();
                 // check if rs1 is nan.
@@ -2306,10 +2188,6 @@ impl Inst {
                 rs,
                 ty,
             } => {
-                let rs = allocs.next(rs);
-                let tmp = allocs.next_writable(tmp);
-                let step = allocs.next_writable(step);
-                let sum = allocs.next_writable(sum);
                 // load 0 to sum , init.
                 Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 // load
@@ -2391,10 +2269,6 @@ impl Inst {
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::Rev8 { rs, rd, tmp, step } => {
-                let rs = allocs.next(rs);
-                let tmp = allocs.next_writable(tmp);
-                let step = allocs.next_writable(step);
-                let rd = allocs.next_writable(rd);
                 // init.
                 Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 Inst::gen_move(tmp, rs, I64).emit(&[], sink, emit_info, state);
@@ -2467,10 +2341,6 @@ impl Inst {
                 leading,
                 ty,
             } => {
-                let rs = allocs.next(rs);
-                let tmp = allocs.next_writable(tmp);
-                let step = allocs.next_writable(step);
-                let sum = allocs.next_writable(sum);
                 // load 0 to sum , init.
                 Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 // load
@@ -2563,11 +2433,6 @@ impl Inst {
                 tmp2,
                 rd,
             } => {
-                let rs = allocs.next(rs);
-                let step = allocs.next_writable(step);
-                let tmp = allocs.next_writable(tmp);
-                let tmp2 = allocs.next_writable(tmp2);
-                let rd = allocs.next_writable(rd);
                 Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 Inst::load_imm12(step, Imm12::from_bits(ty.bits() as i16)).emit(
                     &[],
@@ -2763,14 +2628,9 @@ impl Inst {
                 ref mask,
                 ..
             } => {
-                let vs2 = allocs.next(vs2);
-                let vd_src = allocs.next(vd_src);
-                let vd = allocs.next_writable(vd);
-                let mask = mask.with_allocs(&mut allocs);
-
                 debug_assert_eq!(vd.to_reg(), vd_src);
 
-                sink.put4(encode_valu_rrr_imm(op, vd, imm, vs2, mask));
+                sink.put4(encode_valu_rrr_imm(op, vd, imm, vs2, *mask));
             }
             &Inst::VecAluRRRR {
                 op,
@@ -2781,15 +2641,9 @@ impl Inst {
                 ref mask,
                 ..
             } => {
-                let vs1 = allocs.next(vs1);
-                let vs2 = allocs.next(vs2);
-                let vd_src = allocs.next(vd_src);
-                let vd = allocs.next_writable(vd);
-                let mask = mask.with_allocs(&mut allocs);
-
                 debug_assert_eq!(vd.to_reg(), vd_src);
 
-                sink.put4(encode_valu_rrrr(op, vd, vs2, vs1, mask));
+                sink.put4(encode_valu_rrrr(op, vd, vs2, vs1, *mask));
             }
             &Inst::VecAluRRR {
                 op,
@@ -2799,12 +2653,7 @@ impl Inst {
                 ref mask,
                 ..
             } => {
-                let vs1 = allocs.next(vs1);
-                let vs2 = allocs.next(vs2);
-                let vd = allocs.next_writable(vd);
-                let mask = mask.with_allocs(&mut allocs);
-
-                sink.put4(encode_valu(op, vd, vs1, vs2, mask));
+                sink.put4(encode_valu(op, vd, vs1, vs2, *mask));
             }
             &Inst::VecAluRRImm5 {
                 op,
@@ -2814,11 +2663,7 @@ impl Inst {
                 ref mask,
                 ..
             } => {
-                let vs2 = allocs.next(vs2);
-                let vd = allocs.next_writable(vd);
-                let mask = mask.with_allocs(&mut allocs);
-
-                sink.put4(encode_valu_rr_imm(op, vd, imm, vs2, mask));
+                sink.put4(encode_valu_rr_imm(op, vd, imm, vs2, *mask));
             }
             &Inst::VecAluRR {
                 op,
@@ -2827,11 +2672,7 @@ impl Inst {
                 ref mask,
                 ..
             } => {
-                let vs = allocs.next(vs);
-                let vd = allocs.next_writable(vd);
-                let mask = mask.with_allocs(&mut allocs);
-
-                sink.put4(encode_valu_rr(op, vd, vs, mask));
+                sink.put4(encode_valu_rr(op, vd, vs, *mask));
             }
             &Inst::VecAluRImm5 {
                 op,
@@ -2840,14 +2681,9 @@ impl Inst {
                 ref mask,
                 ..
             } => {
-                let vd = allocs.next_writable(vd);
-                let mask = mask.with_allocs(&mut allocs);
-
-                sink.put4(encode_valu_r_imm(op, vd, imm, mask));
+                sink.put4(encode_valu_r_imm(op, vd, imm, *mask));
             }
             &Inst::VecSetState { rd, ref vstate } => {
-                let rd = allocs.next_writable(rd);
-
                 sink.put4(encode_vcfg_imm(
                     0x57,
                     rd.to_reg(),
@@ -2867,10 +2703,6 @@ impl Inst {
                 flags,
                 ..
             } => {
-                let from = from.clone().with_allocs(&mut allocs);
-                let to = allocs.next_writable(to);
-                let mask = mask.with_allocs(&mut allocs);
-
                 // Vector Loads don't support immediate offsets, so we need to load it into a register.
                 let addr = match from {
                     VecAMode::UnitStride { base } => {
@@ -2905,7 +2737,7 @@ impl Inst {
                     eew,
                     addr,
                     from.lumop(),
-                    mask,
+                    *mask,
                     from.mop(),
                     from.nf(),
                 ));
@@ -2919,10 +2751,6 @@ impl Inst {
                 flags,
                 ..
             } => {
-                let to = to.clone().with_allocs(&mut allocs);
-                let from = allocs.next(from);
-                let mask = mask.with_allocs(&mut allocs);
-
                 // Vector Stores don't support immediate offsets, so we need to load it into a register.
                 let addr = match to {
                     VecAMode::UnitStride { base } => {
@@ -2957,37 +2785,642 @@ impl Inst {
                     eew,
                     addr,
                     to.sumop(),
-                    mask,
+                    *mask,
                     to.mop(),
                     to.nf(),
                 ));
             }
         };
     }
-}
 
-// helper function.
-fn alloc_value_regs(orgin: &ValueRegs<Reg>, alloc: &mut AllocationConsumer) -> ValueRegs<Reg> {
-    match orgin.regs().len() {
-        1 => ValueRegs::one(alloc.next(orgin.regs()[0])),
-        2 => ValueRegs::two(alloc.next(orgin.regs()[0]), alloc.next(orgin.regs()[1])),
-        _ => unreachable!(),
+    fn allocate(self, allocs: &mut AllocationConsumer) -> Self {
+        fn alloc_value_regs(
+            orgin: &ValueRegs<Reg>,
+            alloc: &mut AllocationConsumer,
+        ) -> ValueRegs<Reg> {
+            match orgin.regs().len() {
+                1 => ValueRegs::one(alloc.next(orgin.regs()[0])),
+                2 => ValueRegs::two(alloc.next(orgin.regs()[0]), alloc.next(orgin.regs()[1])),
+                _ => unreachable!(),
+            }
+        }
+
+        match self {
+            Inst::Nop0 => self,
+            Inst::Nop4 => self,
+            Inst::RawData { .. } => self,
+            Inst::Lui { rd, imm } => Inst::Lui {
+                rd: allocs.next_writable(rd),
+                imm,
+            },
+            Inst::LoadInlineConst { rd, ty, imm } => Inst::LoadInlineConst {
+                rd: allocs.next_writable(rd),
+                ty,
+                imm,
+            },
+            Inst::FpuRR {
+                frm,
+                alu_op,
+                rd,
+                rs,
+            } => Inst::FpuRR {
+                rs: allocs.next(rs),
+                rd: allocs.next_writable(rd),
+                frm,
+                alu_op,
+            },
+            Inst::FpuRRRR {
+                alu_op,
+                rd,
+                rs1,
+                rs2,
+                rs3,
+                frm,
+            } => Inst::FpuRRRR {
+                rs1: allocs.next(rs1),
+                rs2: allocs.next(rs2),
+                rs3: allocs.next(rs3),
+                rd: allocs.next_writable(rd),
+                alu_op,
+                frm,
+            },
+            Inst::FpuRRR {
+                alu_op,
+                frm,
+                rd,
+                rs1,
+                rs2,
+            } => Inst::FpuRRR {
+                alu_op,
+                frm,
+                rs1: allocs.next(rs1),
+                rs2: allocs.next(rs2),
+                rd: allocs.next_writable(rd),
+            },
+            Inst::Unwind { .. } => self,
+            Inst::DummyUse { reg } => Inst::DummyUse {
+                reg: allocs.next(reg),
+            },
+            Inst::AluRRR {
+                alu_op,
+                rd,
+                rs1,
+                rs2,
+            } => Inst::AluRRR {
+                alu_op,
+                rs1: allocs.next(rs1),
+                rs2: allocs.next(rs2),
+                rd: allocs.next_writable(rd),
+            },
+            Inst::AluRRImm12 {
+                alu_op,
+                rd,
+                rs,
+                imm12,
+            } => Inst::AluRRImm12 {
+                alu_op,
+                rs: allocs.next(rs),
+                rd: allocs.next_writable(rd),
+                imm12,
+            },
+            Inst::CsrReg { op, rd, rs, csr } => Inst::CsrReg {
+                op,
+                rs: allocs.next(rs),
+                rd: allocs.next_writable(rd),
+                csr,
+            },
+            Inst::CsrImm { op, rd, csr, imm } => Inst::CsrImm {
+                op,
+                rd: allocs.next_writable(rd),
+                csr,
+                imm,
+            },
+            Inst::Load {
+                rd,
+                op,
+                from,
+                flags,
+            } => Inst::Load {
+                from: from.clone().with_allocs(allocs),
+                rd: allocs.next_writable(rd),
+                op,
+                flags,
+            },
+            Inst::Store { op, src, flags, to } => Inst::Store {
+                op,
+                flags,
+                to: to.clone().with_allocs(allocs),
+                src: allocs.next(src),
+            },
+
+            Inst::Args { .. } => self,
+            Inst::Ret { .. } => self,
+
+            Inst::Extend {
+                rd,
+                rn,
+                signed,
+                from_bits,
+                to_bits,
+            } => Inst::Extend {
+                rn: allocs.next(rn),
+                rd: allocs.next_writable(rd),
+                signed,
+                from_bits,
+                to_bits,
+            },
+            Inst::AdjustSp { .. } => self,
+
+            Inst::Call { .. } => self,
+            Inst::CallInd { mut info } => {
+                info.rn = allocs.next(info.rn);
+                Inst::CallInd { info }
+            }
+
+            Inst::ReturnCall { callee, info } => {
+                for u in &info.uses {
+                    let _ = allocs.next(u.vreg);
+                }
+
+                Inst::ReturnCall { callee, info }
+            }
+
+            Inst::ReturnCallInd { callee, info } => {
+                let callee = allocs.next(callee);
+
+                for u in &info.uses {
+                    let _ = allocs.next(u.vreg);
+                }
+
+                Inst::ReturnCallInd { callee, info }
+            }
+
+            Inst::Jal { .. } => self,
+
+            Inst::CondBr {
+                taken,
+                not_taken,
+                mut kind,
+            } => {
+                kind.rs1 = allocs.next(kind.rs1);
+                kind.rs2 = allocs.next(kind.rs2);
+                Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind,
+                }
+            }
+
+            Inst::Mov { rd, rm, ty } => Inst::Mov {
+                ty,
+                rm: allocs.next(rm),
+                rd: allocs.next_writable(rd),
+            },
+
+            Inst::MovFromPReg { rd, rm } => {
+                debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
+                let rd = allocs.next_writable(rd);
+                Inst::MovFromPReg { rd, rm }
+            }
+
+            Inst::BrTable {
+                index,
+                tmp1,
+                tmp2,
+                targets,
+            } => Inst::BrTable {
+                index: allocs.next(index),
+                tmp1: allocs.next_writable(tmp1),
+                tmp2: allocs.next_writable(tmp2),
+                targets,
+            },
+
+            Inst::VirtualSPOffsetAdj { .. } => self,
+            Inst::Atomic {
+                op,
+                rd,
+                addr,
+                src,
+                amo,
+            } => Inst::Atomic {
+                op,
+                amo,
+                addr: allocs.next(addr),
+                src: allocs.next(src),
+                rd: allocs.next_writable(rd),
+            },
+            Inst::Fence { .. } => self,
+            Inst::Auipc { rd, imm } => Inst::Auipc {
+                rd: allocs.next_writable(rd),
+                imm,
+            },
+
+            Inst::LoadAddr { rd, mem } => Inst::LoadAddr {
+                mem: mem.with_allocs(allocs),
+                rd: allocs.next_writable(rd),
+            },
+
+            Inst::Select {
+                ref dst,
+                condition,
+                ref x,
+                ref y,
+                ty,
+            } => {
+                let condition = allocs.next(condition);
+                let x = alloc_value_regs(x, allocs);
+                let y = alloc_value_regs(y, allocs);
+                let dst: Vec<_> = dst
+                    .clone()
+                    .into_iter()
+                    .map(|r| allocs.next_writable(r))
+                    .collect();
+
+                Inst::Select {
+                    dst,
+                    condition,
+                    x,
+                    y,
+                    ty,
+                }
+            }
+            Inst::Jalr { rd, base, offset } => {
+                // For some reason this does not use base?
+                debug_assert!(base.is_real());
+                Inst::Jalr {
+                    rd: allocs.next_writable(rd),
+                    base,
+                    offset,
+                }
+            }
+
+            Inst::EBreak => self,
+
+            Inst::Icmp {
+                cc,
+                rd,
+                ref a,
+                ref b,
+                ty,
+            } => Inst::Icmp {
+                cc,
+                a: alloc_value_regs(a, allocs),
+                b: alloc_value_regs(b, allocs),
+                rd: allocs.next_writable(rd),
+                ty,
+            },
+
+            Inst::AtomicCas {
+                offset,
+                t0,
+                dst,
+                e,
+                addr,
+                v,
+                ty,
+            } => Inst::AtomicCas {
+                ty,
+                offset: allocs.next(offset),
+                e: allocs.next(e),
+                addr: allocs.next(addr),
+                v: allocs.next(v),
+                t0: allocs.next_writable(t0),
+                dst: allocs.next_writable(dst),
+            },
+
+            Inst::AtomicRmwLoop {
+                offset,
+                op,
+                dst,
+                ty,
+                p,
+                x,
+                t0,
+            } => Inst::AtomicRmwLoop {
+                op,
+                ty,
+                offset: allocs.next(offset),
+                p: allocs.next(p),
+                x: allocs.next(x),
+                t0: allocs.next_writable(t0),
+                dst: allocs.next_writable(dst),
+            },
+
+            Inst::IntSelect {
+                op,
+                dst,
+                ref x,
+                ref y,
+                ty,
+            } => {
+                let x = alloc_value_regs(x, allocs);
+                let y = alloc_value_regs(y, allocs);
+                let dst: Vec<_> = dst.iter().map(|r| allocs.next_writable(*r)).collect();
+                Inst::IntSelect { op, ty, dst, x, y }
+            }
+
+            Inst::SelectReg {
+                condition,
+                rd,
+                rs1,
+                rs2,
+            } => {
+                let mut condition: IntegerCompare = condition.clone();
+                condition.rs1 = allocs.next(condition.rs1);
+                condition.rs2 = allocs.next(condition.rs2);
+                Inst::SelectReg {
+                    condition,
+                    rs1: allocs.next(rs1),
+                    rs2: allocs.next(rs2),
+                    rd: allocs.next_writable(rd),
+                }
+            }
+
+            Inst::FcvtToInt {
+                is_sat,
+                rd,
+                rs,
+                is_signed,
+                in_type,
+                out_type,
+                tmp,
+            } => Inst::FcvtToInt {
+                is_sat,
+                is_signed,
+                in_type,
+                out_type,
+                rs: allocs.next(rs),
+                tmp: allocs.next_writable(tmp),
+                rd: allocs.next_writable(rd),
+            },
+
+            Inst::LoadExtName { rd, name, offset } => Inst::LoadExtName {
+                rd: allocs.next_writable(rd),
+                name,
+                offset,
+            },
+
+            Inst::TrapIfC {
+                rs1,
+                rs2,
+                cc,
+                trap_code,
+            } => Inst::TrapIfC {
+                rs1: allocs.next(rs1),
+                rs2: allocs.next(rs2),
+                cc,
+                trap_code,
+            },
+
+            Inst::TrapIf { test, trap_code } => Inst::TrapIf {
+                test: allocs.next(test),
+                trap_code,
+            },
+
+            Inst::Udf { .. } => self,
+
+            Inst::AtomicLoad { rd, ty, p } => Inst::AtomicLoad {
+                ty,
+                p: allocs.next(p),
+                rd: allocs.next_writable(rd),
+            },
+
+            Inst::AtomicStore { src, ty, p } => Inst::AtomicStore {
+                ty,
+                src: allocs.next(src),
+                p: allocs.next(p),
+            },
+
+            Inst::FloatRound {
+                op,
+                rd,
+                int_tmp,
+                f_tmp,
+                rs,
+                ty,
+            } => Inst::FloatRound {
+                op,
+                ty,
+                rs: allocs.next(rs),
+                int_tmp: allocs.next_writable(int_tmp),
+                f_tmp: allocs.next_writable(f_tmp),
+                rd: allocs.next_writable(rd),
+            },
+
+            Inst::FloatSelect {
+                op,
+                rd,
+                tmp,
+                rs1,
+                rs2,
+                ty,
+            } => Inst::FloatSelect {
+                op,
+                ty,
+                rs1: allocs.next(rs1),
+                rs2: allocs.next(rs2),
+                tmp: allocs.next_writable(tmp),
+                rd: allocs.next_writable(rd),
+            },
+
+            Inst::Popcnt {
+                sum,
+                tmp,
+                step,
+                rs,
+                ty,
+            } => Inst::Popcnt {
+                rs: allocs.next(rs),
+                tmp: allocs.next_writable(tmp),
+                step: allocs.next_writable(step),
+                sum: allocs.next_writable(sum),
+                ty,
+            },
+
+            Inst::Rev8 { rs, rd, tmp, step } => Inst::Rev8 {
+                rs: allocs.next(rs),
+                tmp: allocs.next_writable(tmp),
+                step: allocs.next_writable(step),
+                rd: allocs.next_writable(rd),
+            },
+
+            Inst::Cltz {
+                sum,
+                tmp,
+                step,
+                rs,
+                leading,
+                ty,
+            } => Inst::Cltz {
+                rs: allocs.next(rs),
+                tmp: allocs.next_writable(tmp),
+                step: allocs.next_writable(step),
+                sum: allocs.next_writable(sum),
+                leading,
+                ty,
+            },
+
+            Inst::Brev8 {
+                rs,
+                ty,
+                step,
+                tmp,
+                tmp2,
+                rd,
+            } => Inst::Brev8 {
+                rs: allocs.next(rs),
+                step: allocs.next_writable(step),
+                tmp: allocs.next_writable(tmp),
+                tmp2: allocs.next_writable(tmp2),
+                rd: allocs.next_writable(rd),
+                ty,
+            },
+
+            Inst::StackProbeLoop { .. } => self,
+
+            Inst::VecAluRRRImm5 {
+                op,
+                vd,
+                vd_src,
+                imm,
+                vs2,
+                mask,
+                vstate,
+            } => Inst::VecAluRRRImm5 {
+                op,
+                vs2: allocs.next(vs2),
+                vd_src: allocs.next(vd_src),
+                vd: allocs.next_writable(vd),
+                mask: mask.with_allocs(allocs),
+                imm,
+                vstate,
+            },
+
+            Inst::VecAluRRRR {
+                op,
+                vd,
+                vd_src,
+                vs1,
+                vs2,
+                mask,
+                vstate,
+            } => Inst::VecAluRRRR {
+                op,
+                vs1: allocs.next(vs1),
+                vs2: allocs.next(vs2),
+                vd_src: allocs.next(vd_src),
+                vd: allocs.next_writable(vd),
+                mask: mask.with_allocs(allocs),
+                vstate,
+            },
+
+            Inst::VecAluRRR {
+                op,
+                vd,
+                vs1,
+                vs2,
+                mask,
+                vstate,
+            } => Inst::VecAluRRR {
+                op,
+                vs1: allocs.next(vs1),
+                vs2: allocs.next(vs2),
+                vd: allocs.next_writable(vd),
+                mask: mask.with_allocs(allocs),
+                vstate,
+            },
+
+            Inst::VecAluRRImm5 {
+                op,
+                vd,
+                imm,
+                vs2,
+                mask,
+                vstate,
+            } => Inst::VecAluRRImm5 {
+                op,
+                imm,
+                vs2: allocs.next(vs2),
+                vd: allocs.next_writable(vd),
+                mask: mask.with_allocs(allocs),
+                vstate,
+            },
+
+            Inst::VecAluRR {
+                op,
+                vd,
+                vs,
+                mask,
+                vstate,
+            } => Inst::VecAluRR {
+                op,
+                vs: allocs.next(vs),
+                vd: allocs.next_writable(vd),
+                mask: mask.with_allocs(allocs),
+                vstate,
+            },
+
+            Inst::VecAluRImm5 {
+                op,
+                vd,
+                imm,
+                mask,
+                vstate,
+            } => Inst::VecAluRImm5 {
+                vd: allocs.next_writable(vd),
+                mask: mask.with_allocs(allocs),
+                op,
+                imm,
+                vstate,
+            },
+
+            Inst::VecSetState { rd, vstate } => Inst::VecSetState {
+                rd: allocs.next_writable(rd),
+                vstate,
+            },
+
+            Inst::VecLoad {
+                eew,
+                to,
+                from,
+                mask,
+                flags,
+                vstate,
+            } => Inst::VecLoad {
+                eew,
+                from: from.clone().with_allocs(allocs),
+                to: allocs.next_writable(to),
+                mask: mask.with_allocs(allocs),
+                flags,
+                vstate,
+            },
+
+            Inst::VecStore {
+                eew,
+                to,
+                from,
+                mask,
+                flags,
+                vstate,
+            } => Inst::VecStore {
+                eew,
+                to: to.clone().with_allocs(allocs),
+                from: allocs.next(from),
+                mask: mask.with_allocs(allocs),
+                flags,
+                vstate,
+            },
+        }
     }
 }
 
 fn emit_return_call_common_sequence(
-    allocs: &mut AllocationConsumer<'_>,
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
     new_stack_arg_size: u32,
     old_stack_arg_size: u32,
-    uses: &CallArgList,
 ) {
-    for u in uses {
-        let _ = allocs.next(u.vreg);
-    }
-
     // We are emitting a dynamic number of instructions and might need an
     // island. We emit four instructions regardless of how many stack arguments
     // we have, up to two instructions for the actual call, and then two

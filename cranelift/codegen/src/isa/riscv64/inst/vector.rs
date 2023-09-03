@@ -235,6 +235,7 @@ impl VecOpCategory {
     }
 }
 
+impl Copy for VecOpMasking {}
 impl VecOpMasking {
     pub fn is_enabled(&self) -> bool {
         match self {
