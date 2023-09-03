@@ -42,11 +42,11 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   sd s7, -8(sp)
 ;   addi sp, sp, -0x410
 ; block1: ; offset 0x18
-;   ori s7, a0, 0
+;   mv s7, a0
 ;   .byte 0x57, 0x70, 0x84, 0xcc
 ;   auipc t6, 0
 ;   addi t6, t6, 0x40
@@ -55,7 +55,7 @@ block0:
 ;   .byte 0xa7, 0x01, 0x01, 0x02
 ;   auipc ra, 0 ; reloc_external RiscvCall u2:0 0
 ;   jalr ra
-;   ori a0, s7, 0
+;   mv a0, s7
 ;   .byte 0x87, 0x01, 0x01, 0x02
 ;   .byte 0xa7, 0x01, 0x05, 0x02
 ;   addi sp, sp, 0x410
