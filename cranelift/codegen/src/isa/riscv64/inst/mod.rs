@@ -1980,8 +1980,8 @@ impl MachInstLabelUse for LabelUse {
 
     /// Perform the patch.
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
-        assert!(use_offset % 4 == 0);
-        assert!(label_offset % 4 == 0);
+        assert!(use_offset % 2 == 0);
+        assert!(label_offset % 2 == 0);
         let offset = (label_offset as i64) - (use_offset as i64);
 
         // re-check range

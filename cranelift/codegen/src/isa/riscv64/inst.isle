@@ -699,6 +699,20 @@
   (Bseti)
 ))
 
+(type COpcodeSpace (enum
+  (C0)
+  (C1)
+  (C2)
+))
+
+
+;; Opcodes for the CR compressed instruction format
+(type CrOp (enum
+  (CMv)
+  (CAdd)
+))
+
+
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR
   (CsrRW)

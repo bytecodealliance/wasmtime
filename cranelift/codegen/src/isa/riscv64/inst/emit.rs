@@ -3,6 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
+use crate::isa::riscv64::lower::isle::generated_code::CrOp;
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -449,12 +450,28 @@ impl Inst {
     /// Tries to emit an instruction as compressed, if we can't return false.
     fn try_emit_compressed(
         &self,
-        _sink: &mut MachBuffer<Inst>,
-        _emit_info: &EmitInfo,
+        sink: &mut MachBuffer<Inst>,
+        emit_info: &EmitInfo,
         _state: &mut EmitState,
         _start_off: &mut u32,
     ) -> bool {
-        false
+        let has_zca = emit_info.isa_flags.has_zca();
+
+        match *self {
+            // C.ADD
+            Inst::AluRRR {
+                alu_op: AluOPRRR::Add,
+                rd,
+                rs1,
+                rs2,
+            } if has_zca && rd.to_reg() == rs1 && rs1 != zero_reg() && rs2 != zero_reg() => {
+                sink.put2(encode_cr_type(CrOp::CAdd, rd, rs2));
+            }
+
+            _ => return false,
+        }
+
+        return true;
     }
 
     fn emit_uncompressed(
