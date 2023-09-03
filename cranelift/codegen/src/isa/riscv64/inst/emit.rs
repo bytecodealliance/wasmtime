@@ -1058,7 +1058,10 @@ impl Inst {
                     rd: tmp1,
                     imm: Imm20::from_bits(0),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit_uncompressed(sink, emit_info, state, start_off);
+
+                // These instructions must be emitted as uncompressed since we
+                // are manually computing the offset from the PC.
 
                 // Multiply the index by 8, since that is the size in
                 // bytes of each jump table entry
@@ -1068,7 +1071,7 @@ impl Inst {
                     rs: ext_index.to_reg(),
                     imm12: Imm12::from_bits(3),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit_uncompressed(sink, emit_info, state, start_off);
 
                 // Calculate the base of the jump, PC + the offset from above.
                 Inst::AluRRR {
@@ -1077,7 +1080,7 @@ impl Inst {
                     rs1: tmp1.to_reg(),
                     rs2: tmp2.to_reg(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit_uncompressed(sink, emit_info, state, start_off);
 
                 // Jump to the middle of the jump table.
                 // We add a 16 byte offset here, since we used 4 instructions
@@ -1087,7 +1090,7 @@ impl Inst {
                     base: tmp1.to_reg(),
                     offset: Imm12::from_bits((4 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE) as i16),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit_uncompressed(sink, emit_info, state, start_off);
 
                 // Emit the jump table.
                 //
@@ -1108,7 +1111,7 @@ impl Inst {
 
                     Inst::construct_auipc_and_jalr(None, tmp2, 0)
                         .iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
                 }
 
                 // We've just emitted an island that is safe up to *here*.
