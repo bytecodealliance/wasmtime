@@ -584,7 +584,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
+    fn gen_prologue_frame_setup(flags: &settings::Flags) -> (SmallInstVec<Inst>, u32) {
         let mut insts = SmallVec::new();
 
         // stp fp (x29), lr (x30), [sp, #-16]!
@@ -597,10 +597,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
             flags: MemFlags::trusted(),
         });
 
+        let setup_area_size = 16; // FP, LR
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::PushFrameRegs {
-                    offset_upward_to_caller_sp: 16, // FP, LR
+                    offset_upward_to_caller_sp: setup_area_size,
                 },
             });
         }
@@ -617,7 +618,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 shift12: false,
             },
         });
-        insts
+
+        (insts, setup_area_size)
     }
 
     fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {

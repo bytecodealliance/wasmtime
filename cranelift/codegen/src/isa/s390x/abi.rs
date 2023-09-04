@@ -556,8 +556,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
-        SmallVec::new()
+    fn gen_prologue_frame_setup(_flags: &settings::Flags) -> (SmallInstVec<Inst>, u32) {
+        (SmallVec::new(), 0)
     }
 
     fn gen_epilogue_frame_restore(_flags: &settings::Flags) -> SmallInstVec<Inst> {

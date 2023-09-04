@@ -6,7 +6,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
 use cranelift_wasm::get_vmctx_value_label;
-use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
+use gimli::{self, write, Expression, Operation, Reader, ReaderOffset};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -146,9 +146,9 @@ fn translate_loc(
             }
             Some(writer.into_vec())
         }
-        LabelValueLoc::SPOffset(off) => {
+        LabelValueLoc::CFAOffset(off) => {
             let mut writer = ExpressionWriter::new();
-            writer.write_op_breg(X86_64::RSP.0)?;
+            writer.write_op(gimli::constants::DW_OP_fbreg)?;
             writer.write_sleb128(off)?;
             if !add_stack_value {
                 writer.write_op(gimli::constants::DW_OP_deref)?;
@@ -178,8 +178,8 @@ fn append_memory_deref(
             };
             writer.write_sleb128(memory_offset)?;
         }
-        LabelValueLoc::SPOffset(off) => {
-            writer.write_op_breg(X86_64::RSP.0)?;
+        LabelValueLoc::CFAOffset(off) => {
+            writer.write_op(gimli::constants::DW_OP_fbreg)?;
             writer.write_sleb128(off)?;
             writer.write_op(gimli::constants::DW_OP_deref)?;
             writer.write_op(gimli::constants::DW_OP_consts)?;
@@ -1169,7 +1169,7 @@ mod tests {
         value_ranges.insert(
             value_0,
             vec![ValueLocRange {
-                loc: LabelValueLoc::SPOffset(0),
+                loc: LabelValueLoc::CFAOffset(0),
                 start: 0,
                 end: 25,
             }],
@@ -1177,7 +1177,7 @@ mod tests {
         value_ranges.insert(
             value_1,
             vec![ValueLocRange {
-                loc: LabelValueLoc::SPOffset(0),
+                loc: LabelValueLoc::CFAOffset(0),
                 start: 5,
                 end: 30,
             }],
@@ -1186,12 +1186,12 @@ mod tests {
             value_2,
             vec![
                 ValueLocRange {
-                    loc: LabelValueLoc::SPOffset(0),
+                    loc: LabelValueLoc::CFAOffset(0),
                     start: 0,
                     end: 10,
                 },
                 ValueLocRange {
-                    loc: LabelValueLoc::SPOffset(0),
+                    loc: LabelValueLoc::CFAOffset(0),
                     start: 20,
                     end: 30,
                 },

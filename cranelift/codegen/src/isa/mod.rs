@@ -49,8 +49,8 @@ pub use crate::isa::call_conv::CallConv;
 use crate::flowgraph;
 use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
-use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder, UnwindInfoKind};
+use crate::isa::unwind::{systemv::RegisterMappingError, UnwindInfoKind};
+use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder};
 use crate::settings;
 use crate::settings::SetResult;
 use crate::CodegenResult;
