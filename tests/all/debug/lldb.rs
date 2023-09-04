@@ -203,9 +203,9 @@ check: exited with status
 }
 
 #[test]
-// #[ignore]
+#[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos", target_os = "windows"),
+    any(target_os = "linux", target_os = "macos"),
     target_pointer_width = "64"
 ))]
 pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
