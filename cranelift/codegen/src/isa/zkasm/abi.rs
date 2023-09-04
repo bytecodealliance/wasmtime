@@ -103,9 +103,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // All registers that can be used as parameters or rets.
         // both start and end are included.
         let (x_start, x_end, f_start, f_end) = match (call_conv, args_or_rets) {
-            (isa::CallConv::Tail, _) => (5, 7, 5, 7),
-            (_, ArgsOrRets::Args) => (5, 7, 5, 7),
-            (_, ArgsOrRets::Rets) => (5, 7, 5, 7),
+            (isa::CallConv::Tail, _) => (10, 11, 0, 0),
+            (_, ArgsOrRets::Args) => (10, 11, 0, 0),
+            (_, ArgsOrRets::Rets) => (10, 11, 0, 0),
         };
         let mut next_x_reg = x_start;
         let mut next_f_reg = f_start;
@@ -511,7 +511,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => insts.push(Inst::Call {
+            &CallDest::ExtName(ref name, _) => insts.push(Inst::Call {
                 info: Box::new(CallInfo {
                     dest: name.clone(),
                     uses,
@@ -523,25 +523,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     callee_pop_size,
                 }),
             }),
-            &CallDest::ExtName(ref name, RelocDistance::Far) => {
-                insts.push(Inst::LoadExtName {
-                    rd: tmp,
-                    name: Box::new(name.clone()),
-                    offset: 0,
-                });
-                insts.push(Inst::CallInd {
-                    info: Box::new(CallIndInfo {
-                        rn: tmp.to_reg(),
-                        uses,
-                        defs,
-                        clobbers,
-                        opcode,
-                        caller_callconv: caller_conv,
-                        callee_callconv: callee_conv,
-                        callee_pop_size,
-                    }),
-                });
-            }
             &CallDest::Reg(reg) => insts.push(Inst::CallInd {
                 info: Box::new(CallIndInfo {
                     rn: *reg,

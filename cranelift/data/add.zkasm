@@ -6,10 +6,9 @@ function_0:
   SP + 1 => SP
   RR :MSTORE(SP)
 L0:
-  2 + 3 => C
-  0 + 5 => D
-  C => A
-  D :ASSERT
+  2 + 3 => A
+  0 + 5 => B
+  B :ASSERT
   :JMP(L1)
 L1:
   $ => RR :MLOAD(SP)

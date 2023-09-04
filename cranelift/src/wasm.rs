@@ -6,6 +6,7 @@
 use crate::disasm::print_all;
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
@@ -237,7 +238,8 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         .start_func
         .expect("Must have a start function");
     println!("  zkPC + 2 => RR");
-    // TODO(akashin): Figure out why we need to do -1 here.
+    // TODO(akashin): This is a poor translation between DefinedFuncIndex and FuncIndex.
+    // Ideally, we would use some library function for this.
     println!("  :JMP(function_{})", start_func.index() - 1);
     println!("  :JMP(finalizeExecution)");
 
@@ -261,8 +263,31 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 .compile_and_emit(isa, &mut mem, &mut Default::default())
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
             let code_info = compiled_code.code_info();
+            let mut code_buffer = compiled_code.code_buffer().to_vec();
+            let mut delta = 0i32;
+            for reloc in compiled_code.buffer.relocs() {
+                let start = (reloc.offset as i32 + delta) as usize;
+                let mut pos = start;
+                while code_buffer[pos] != b'\n' {
+                    pos += 1;
+                    delta -= 1;
+                }
 
-            if let Ok(code) = std::str::from_utf8(compiled_code.code_buffer()) {
+                let code = if let ExternalName::User(name) = reloc.name {
+                    if name.index() == 0 {
+                        b"  B :ASSERT".to_vec()
+                    } else {
+                        format!("  JMP(function_{})", name.index()).as_bytes().to_vec()
+                    }
+                } else {
+                    b"  UNKNOWN".to_vec()
+                };
+                delta += code.len() as i32;
+
+                code_buffer.splice(start..pos, code);
+            }
+
+            if let Ok(code) = std::str::from_utf8(&code_buffer) {
                 println!("{code}",);
             }
 

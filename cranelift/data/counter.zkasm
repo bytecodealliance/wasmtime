@@ -13,16 +13,13 @@ L1:
   $ => A :ADD
   0 + 10 => B
   $ => B :EQ
-  A => C
   B :JMPNZ(L3)
   :JMP(L2)
 L2:
-  C => A
   :JMP(L1)
 L3:
-  0 + 10 => D
-  C => A
-  D :ASSERT
+  0 + 10 => B
+  B :ASSERT
   :JMP(L4)
 L4:
   $ => RR :MLOAD(SP)

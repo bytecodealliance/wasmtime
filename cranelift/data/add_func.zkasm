@@ -8,15 +8,13 @@ function_0:
   SP + 1 => SP
 L0:
   CTX :MSTORE(SP)
-  0 + 2 => C
-  0 + 3 => D
+  0 + 2 => A
+  0 + 3 => B
   $ => CTX :MLOAD(SP)
-  C => A
-  D :ASSERT
-  0 + 5 => D
+  B :ASSERT
+  0 + 5 => B
   $ => CTX :MLOAD(SP)
-  C => A
-  D :ASSERT
+  JMP(function_1)
   :JMP(L1)
 L1:
   SP - 1 => SP
@@ -26,9 +24,7 @@ L1:
 
 function_1:
 L0:
-  C => A
-  D => B
-  $ => C :ADD
+  $ => A :ADD
   :JMP(L1)
 L1:
   :JMP(RR)

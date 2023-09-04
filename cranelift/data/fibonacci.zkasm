@@ -5,34 +5,37 @@ start:
 function_0:
   SP + 1 => SP
   RR :MSTORE(SP)
+  SP + 1 => SP
 L0:
   0 + 0 => A
   A => D
   0 + 0 => A
   0 + 1 => B
-  B => E
+  B :MSTORE(SP)
   :JMP(L1)
 L1:
-  $ => C :ADD
-  B => E
+  $ => A :ADD
+  A => C
+  B :MSTORE(SP)
   0 + 1 => B
   D => A
   $ => A :ADD
   0 + 10 => B
-  $ => B :EQ
-  B :JMPNZ(L3)
+  $ => E :EQ
+  E :JMPNZ(L3)
   :JMP(L2)
 L2:
   C => B
   A => D
-  E => A
+  $ => A :MLOAD(SP)
   :JMP(L1)
 L3:
-  0 + 89 => D
+  0 + 89 => B
   C => A
-  D :ASSERT
+  B :ASSERT
   :JMP(L4)
 L4:
+  SP - 1 => SP
   $ => RR :MLOAD(SP)
   SP - 1 => SP
   :JMP(RR)

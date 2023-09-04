@@ -921,78 +921,98 @@ impl MachInstEmit for Inst {
             }
             &Inst::Call { ref info } => {
                 // call
-                todo!() /* match info.dest {
-                            ExternalName::User { .. } => {
-                                if info.opcode.is_call() {
-                                    sink.add_call_site(info.opcode);
-                                }
-                                sink.add_reloc(Reloc::RiscvCall, &info.dest, 0);
-                                if let Some(s) = state.take_stack_map() {
-                                    sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
-                                }
-                                Inst::construct_auipc_and_jalr(
-                                    Some(writable_link_reg()),
-                                    writable_link_reg(),
-                                    0,
-                                )
-                                .into_iter()
-                                .for_each(|i| i.emit(&[], sink, emit_info, state));
-                            }
-                            ExternalName::LibCall(..)
-                            | ExternalName::TestCase { .. }
-                            | ExternalName::KnownSymbol(..) => {
-                                // use indirect call. it is more simple.
-                                // load ext name.
-                                Inst::LoadExtName {
-                                    rd: writable_spilltmp_reg2(),
-                                    name: Box::new(info.dest.clone()),
-                                    offset: 0,
-                                }
-                                .emit(&[], sink, emit_info, state);
+                match info.dest {
+                    ExternalName::User(name) => {
+                        // For now we only support calls.
+                        assert!(info.opcode.is_call());
+                        sink.add_call_site(info.opcode);
+                        sink.add_reloc(Reloc::RiscvCall, &info.dest, 0);
+                        // This will be patched externally to do a necessary jump.
+                        put_string(&format!("; CALL {name}\n"), sink);
 
-                                if let Some(s) = state.take_stack_map() {
-                                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                                }
-                                if info.opcode.is_call() {
-                                    sink.add_call_site(info.opcode);
-                                }
-                                // call
-                                Inst::Jalr {
-                                    rd: writable_link_reg(),
-                                    base: spilltmp_reg2(),
-                                    offset: Imm12::zero(),
-                                }
-                                .emit(&[], sink, emit_info, state);
-                            }
-                        }
+                        // match name.index() {
+                        //     // Special case for ASSERT call.
+                        //     0 => {
+                        //         Inst::Mov {
+                        //             ty: types::I64,
+                        //             rd: regs::writable_a0(),
+                        //             rm: info.uses[0].preg,
+                        //         }
+                        //         .emit(&[], sink, emit_info, state);
+                        //         put_string(
+                        //             &format!("{} :ASSERT\n", reg_name(info.uses[1].preg)),
+                        //             sink,
+                        //         );
+                        //     }
+                        //     v => {
+                        //         Inst::Jal {
+                        //             dest: BranchTarget::Label(MachLabel::new(v)),
+                        //         }
+                        //         .emit(&[], sink, emit_info, state);
+                        //     }
+                        // };
 
-                        let callee_pop_size = i64::from(info.callee_pop_size);
-                        state.virtual_sp_offset -= callee_pop_size;
-                        trace!(
-                            "call adjusts virtual sp offset by {callee_pop_size} -> {}",
-                            state.virtual_sp_offset
-                        ); */
+                        // if let Some(s) = state.take_stack_map() {
+                        //     sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
+                        // }
+                        // Inst::construct_auipc_and_jalr(
+                        //     Some(writable_link_reg()),
+                        //     writable_link_reg(),
+                        //     0,
+                        // )
+                        // .into_iter()
+                        // .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    }
+                    ExternalName::LibCall(..)
+                    | ExternalName::TestCase { .. }
+                    | ExternalName::KnownSymbol(..) => {
+                        unimplemented!();
+                        // use indirect call. it is more simple.
+                        // load ext name.
+                        // Inst::LoadExtName {
+                        //     rd: writable_spilltmp_reg2(),
+                        //     name: Box::new(info.dest.clone()),
+                        //     offset: 0,
+                        // }
+                        // .emit(&[], sink, emit_info, state);
+                        //
+                        // if let Some(s) = state.take_stack_map() {
+                        //     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
+                        // }
+                        // if info.opcode.is_call() {
+                        //     sink.add_call_site(info.opcode);
+                        // }
+                        // call
+                        // Inst::Jalr {
+                        //     rd: writable_link_reg(),
+                        //     base: spilltmp_reg2(),
+                        //     offset: Imm12::zero(),
+                        // }
+                        // .emit(&[], sink, emit_info, state);
+                    }
+                }
+
+                let callee_pop_size = i64::from(info.callee_pop_size);
+                state.virtual_sp_offset -= callee_pop_size;
+                trace!(
+                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                    state.virtual_sp_offset
+                );
             }
             &Inst::CallInd { ref info } => {
                 // let rn = allocs.next(info.rn);
                 // put_string(&format!("CALL {}, {:?}\n", reg_name(rn), info.uses), sink);
 
-                Inst::Mov {
-                    ty: types::I64,
-                    rd: regs::writable_a0(),
-                    rm: info.uses[0].preg,
-                }
-                .emit(&[], sink, emit_info, state);
-                put_string(&format!("{} :ASSERT\n", reg_name(info.uses[1].preg)), sink);
+                dbg!(info);
+                todo!();
+                // For now we only support calls.
+                // assert!(info.opcode.is_call());
 
                 /*
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
 
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
                 Inst::Jalr {
                     rd: writable_link_reg(),
                     base: rn,
@@ -2145,6 +2165,7 @@ impl MachInstEmit for Inst {
                 ref name,
                 offset,
             } => {
+                // dbg!(rd, name, offset);
                 // let rd = allocs.next_writable(rd);
                 // put_string(&format!("CALL {name:?} => {}\n", reg_name(rd.to_reg())), sink);
 
