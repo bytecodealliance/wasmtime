@@ -249,7 +249,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
 
         let mut saved_size = None;
         let func_index = num_func_imports + def_index.index();
-        println!("function_{}:", func_index);
+        println!("\nfunction_{}:", func_index);
         let mut mem = vec![];
         let (relocs, traps, stack_maps) = if options.check_translation {
             if let Err(errors) = context.verify(fisa) {
