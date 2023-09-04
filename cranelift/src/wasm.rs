@@ -272,10 +272,11 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 }
 
                 let code = if let ExternalName::User(name) = reloc.name {
-                    if name.index() == 0 {
+                    let name = &func.params.user_named_funcs()[name];
+                    if name.index == 0 {
                         b"  B :ASSERT".to_vec()
                     } else {
-                        format!("  JMP(function_{})", name.index()).as_bytes().to_vec()
+                        format!("  JMP(function_{})", name.index).as_bytes().to_vec()
                     }
                 } else {
                     b"  UNKNOWN".to_vec()

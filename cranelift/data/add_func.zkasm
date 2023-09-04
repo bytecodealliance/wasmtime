@@ -2,6 +2,7 @@ start:
   zkPC + 2 => RR
   :JMP(function_1)
   :JMP(finalizeExecution)
+
 function_1:
   SP + 1 => SP
   RR :MSTORE(SP)
@@ -11,16 +12,17 @@ L0:
   0 + 2 => A
   0 + 3 => B
   $ => CTX :MLOAD(SP)
-  B :ASSERT
+  JMP(function_2)
   0 + 5 => B
   $ => CTX :MLOAD(SP)
-  JMP(function_1)
+  B :ASSERT
   :JMP(L1)
 L1:
   SP - 1 => SP
   $ => RR :MLOAD(SP)
   SP - 1 => SP
   :JMP(RR)
+
 
 function_2:
 L0:
