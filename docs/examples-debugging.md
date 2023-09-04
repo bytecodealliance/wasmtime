@@ -36,3 +36,6 @@ If you run into trouble, the following discussions might help:
   (lldb) p *foo
   ```
 - The address of the start of instance memory can be found in `__vmctx->memory`
+- On Windows you may experience degraded WASM compilation throughput due to the
+  enablement of additional native heap checks when under the debugger by default.
+  You can set the environment variable `_NO_DEBUG_HEAP` to `1` to disable them.
