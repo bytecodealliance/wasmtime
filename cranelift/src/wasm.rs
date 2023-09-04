@@ -238,20 +238,18 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         .start_func
         .expect("Must have a start function");
     println!("  zkPC + 2 => RR");
-    // TODO(akashin): This is a poor translation between DefinedFuncIndex and FuncIndex.
-    // Ideally, we would use some library function for this.
-    println!("  :JMP(function_{})", start_func.index() - 1);
+    println!("  :JMP(function_{})", start_func.index());
     println!("  :JMP(finalizeExecution)");
 
     let num_func_imports = dummy_environ.get_num_func_imports();
     let mut total_module_code_size = 0;
     let mut context = Context::new();
     for (def_index, func) in dummy_environ.info.function_bodies.iter() {
-        println!("function_{}:", def_index.index());
         context.func = func.clone();
 
         let mut saved_size = None;
         let func_index = num_func_imports + def_index.index();
+        println!("function_{}:", func_index);
         let mut mem = vec![];
         let (relocs, traps, stack_maps) = if options.check_translation {
             if let Err(errors) = context.verify(fisa) {

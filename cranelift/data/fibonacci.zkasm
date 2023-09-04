@@ -1,8 +1,8 @@
 start:
   zkPC + 2 => RR
-  :JMP(function_0)
+  :JMP(function_1)
   :JMP(finalizeExecution)
-function_0:
+function_1:
   SP + 1 => SP
   RR :MSTORE(SP)
   SP + 1 => SP
