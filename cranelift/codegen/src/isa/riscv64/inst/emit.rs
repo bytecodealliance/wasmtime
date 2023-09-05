@@ -546,6 +546,16 @@ impl Inst {
                 sink.put2(encode_cr2_type(CrOp::CJr, base));
             }
 
+            // c.jalr
+            Inst::Jalr { rd, base, offset }
+                if has_zca
+                    && rd.to_reg() == link_reg()
+                    && base != zero_reg()
+                    && offset.as_i16() == 0 =>
+            {
+                sink.put2(encode_cr2_type(CrOp::CJalr, base));
+            }
+
             _ => return false,
         }
 
@@ -902,19 +912,23 @@ impl Inst {
                         }
                         .emit(&[], sink, emit_info, state);
 
-                        if let Some(s) = state.take_stack_map() {
-                            sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                        }
-                        if info.opcode.is_call() {
-                            sink.add_call_site(info.opcode);
-                        }
                         // call
-                        Inst::Jalr {
-                            rd: writable_link_reg(),
-                            base: spilltmp_reg2(),
-                            offset: Imm12::zero(),
+                        Inst::CallInd {
+                            info: Box::new(CallIndInfo {
+                                rn: spilltmp_reg2(),
+                                // This doesen't really matter but we might as well send
+                                // the correct info.
+                                uses: info.uses.clone(),
+                                defs: info.defs.clone(),
+                                clobbers: info.clobbers,
+                                opcode: Opcode::CallIndirect,
+                                caller_callconv: info.caller_callconv,
+                                callee_callconv: info.callee_callconv,
+                                // Send this as 0 to avoid updating the pop size twice.
+                                callee_pop_size: 0,
+                            }),
                         }
-                        .emit_uncompressed(sink, emit_info, state, start_off);
+                        .emit(&[], sink, emit_info, state);
                     }
                 }
 
@@ -926,19 +940,22 @@ impl Inst {
                 );
             }
             &Inst::CallInd { ref info } => {
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                }
+                let start_offset = sink.cur_offset();
 
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
                 Inst::Jalr {
                     rd: writable_link_reg(),
                     base: info.rn,
                     offset: Imm12::zero(),
                 }
-                .emit_uncompressed(sink, emit_info, state, start_off);
+                .emit(&[], sink, emit_info, state);
+
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
+                }
+
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.opcode);
+                }
 
                 let callee_pop_size = i64::from(info.callee_pop_size);
                 state.virtual_sp_offset -= callee_pop_size;
