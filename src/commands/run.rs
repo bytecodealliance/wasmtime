@@ -35,8 +35,8 @@ use wasmtime_wasi_nn::WasiNnCtx;
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
 
-// #[cfg(feature = "wasi-http")]
-// use wasmtime_wasi_http::WasiHttpCtx;
+#[cfg(feature = "wasi-http")]
+use wasmtime_wasi_http::WasiHttpCtx;
 
 fn parse_module(s: OsString) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
@@ -667,12 +667,8 @@ impl RunCommand {
 
                 let component = module.unwrap_component();
 
-                let (command, _instance) = preview2::command::sync::Command::instantiate(
-                    &mut *store,
-                    &component,
-                    &linker,
-                )?;
-
+                let (command, _instance) =
+                    preview2::command::sync::Command::instantiate(&mut *store, component, linker)?;
                 let result = command
                     .wasi_cli_run()
                     .call_run(&mut *store)
@@ -912,7 +908,7 @@ impl RunCommand {
             match linker {
                 CliLinker::Core(linker) => {
                     if self.preview2 {
-                        wasmtime_wasi::preview2::preview1::add_to_linker_sync(linker)?;
+                        preview2::preview1::add_to_linker_sync(linker)?;
                         self.set_preview2_ctx(store)?;
                     } else {
                         wasmtime_wasi::add_to_linker(linker, |host| {
@@ -923,7 +919,7 @@ impl RunCommand {
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    wasmtime_wasi::preview2::command::sync::add_to_linker(linker)?;
+                    preview2::command::sync::add_to_linker(linker)?;
                     self.set_preview2_ctx(store)?;
                 }
             }
@@ -998,7 +994,16 @@ impl RunCommand {
             }
             #[cfg(feature = "wasi-http")]
             {
-                bail!("wasi-http support will be swapped over to component CLI support soon");
+                match linker {
+                    CliLinker::Core(linker) => {
+                        wasmtime_wasi_http::sync::add_to_linker(linker)?;
+                    }
+                    #[cfg(feature = "component-model")]
+                    CliLinker::Component(linker) => {
+                        wasmtime_wasi_http::proxy::sync::add_to_linker(linker)?;
+                    }
+                }
+                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
             }
         }
 
@@ -1096,8 +1101,8 @@ struct Host {
     wasi_nn: Option<Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
-    // #[cfg(feature = "wasi-http")]
-    // wasi_http: Option<WasiHttp>,
+    #[cfg(feature = "wasi-http")]
+    wasi_http: Option<Arc<WasiHttpCtx>>,
     limits: StoreLimits,
     guest_profiler: Option<Arc<GuestProfiler>>,
 }
@@ -1128,6 +1133,18 @@ impl preview2::preview1::WasiPreview1View for Host {
 
     fn adapter_mut(&mut self) -> &mut preview2::preview1::WasiPreview1Adapter {
         Arc::get_mut(&mut self.preview2_adapter).expect("preview2 is not compatible with threads")
+    }
+}
+
+#[cfg(feature = "wasi-http")]
+impl wasmtime_wasi_http::types::WasiHttpView for Host {
+    fn http_ctx(&self) -> &WasiHttpCtx {
+        self.wasi_http.as_ref().unwrap()
+    }
+
+    fn http_ctx_mut(&mut self) -> &mut WasiHttpCtx {
+        let ctx = self.wasi_http.as_mut().unwrap();
+        Arc::get_mut(ctx).expect("wasi-http is not compatible with threads")
     }
 }
 

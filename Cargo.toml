@@ -29,7 +29,9 @@ wasmtime-cranelift = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true }
 wasmtime-wast = { workspace = true }
-wasmtime-wasi = { workspace = true, features = ["exit"] }
+wasmtime-wasi = { workspace = true, default-features = true, features = [
+  "exit",
+] }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-threads = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
@@ -143,8 +145,8 @@ wasmtime-jit = { path = "crates/jit", version = "=13.0.0" }
 wasmtime-jit-debug = { path = "crates/jit-debug", version = "=13.0.0" }
 wasmtime-runtime = { path = "crates/runtime", version = "=13.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=13.0.0" }
-wasmtime-wasi = { path = "crates/wasi", version = "13.0.0" }
-wasmtime-wasi-http = { path = "crates/wasi-http", version = "=13.0.0" }
+wasmtime-wasi = { path = "crates/wasi", version = "13.0.0", default-features = false }
+wasmtime-wasi-http = { path = "crates/wasi-http", version = "=13.0.0", default-features = false }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "13.0.0" }
 wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "13.0.0" }
 wasmtime-component-util = { path = "crates/component-util", version = "=13.0.0" }
@@ -272,7 +274,7 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads"]
-wasi-http = ["dep:wasmtime-wasi-http"]
+wasi-http = ["dep:wasmtime-wasi-http", "wasmtime-wasi-http?/sync"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 component-model = [
