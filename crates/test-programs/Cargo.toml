@@ -21,6 +21,7 @@ http-body-util = "0.1.0-rc.2"
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 is-terminal = { workspace = true }
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "macros"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
@@ -36,12 +37,14 @@ wasmtime = { workspace = true, features = ['cranelift', 'component-model'] }
 
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
-wasmtime-wasi = { workspace = true, features = ["tokio"] }
+wasmtime-wasi = { workspace = true, default-features = true, features = [
+    "tokio",
+] }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
-wasmtime-wasi-http = { workspace = true }
+wasmtime-wasi-http = { workspace = true, features = ["sync"] }
 
 [features]
 test_programs = []

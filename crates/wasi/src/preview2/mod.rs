@@ -167,7 +167,7 @@ where
     }
 }
 
-pub(crate) fn in_tokio<F: std::future::Future>(f: F) -> F::Output {
+pub fn in_tokio<F: std::future::Future>(f: F) -> F::Output {
     match tokio::runtime::Handle::try_current() {
         Ok(h) => {
             let _enter = h.enter();
