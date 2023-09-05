@@ -217,7 +217,7 @@ pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
             "0",
             "tests/all/debug/testsuite/spilled_frame_base.wasm",
         ],
-        r#"b spilled_frame_base.c:7
+        r#"b spilled_frame_base.c:8
 r
 fr v i
 n

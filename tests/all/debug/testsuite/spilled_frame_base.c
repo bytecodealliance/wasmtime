@@ -1,3 +1,4 @@
+// Originally built using WASI SDK 20.0, "clang spilled_frame_base.c -o spilled_frame_base.wasm -g -target wasm32-wasi"
 void func_11(int x, int y, int z, int a, int b, int c, int d, int e, int f, int g, int h) { }
 void func_12(int x, int y, int z, int a, int b, int c, int d, int e, int f, int g, int h, int i) { }
 void func_13(int x, int y, int z, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) { }
@@ -13,4 +14,3 @@ int main() {
 
     return i + i;
 }
-
