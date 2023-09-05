@@ -482,10 +482,24 @@ impl CompiledCode {
         &self,
         isa: &dyn crate::isa::TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        use crate::isa::unwind::UnwindInfoKind;
         let unwind_info_kind = match isa.triple().operating_system {
             target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
             _ => UnwindInfoKind::SystemV,
         };
+        self.create_unwind_info_of_kind(isa, unwind_info_kind)
+    }
+
+    /// Creates unwind information for the function using the supplied
+    /// "kind". Supports cross-OS (but not cross-arch) generation.
+    ///
+    /// Returns `None` if the function has no unwind information.
+    #[cfg(feature = "unwind")]
+    pub fn create_unwind_info_of_kind(
+        &self,
+        isa: &dyn crate::isa::TargetIsa,
+        unwind_info_kind: crate::isa::unwind::UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         isa.emit_unwind_info(self, unwind_info_kind)
     }
 }
@@ -536,18 +550,4 @@ pub trait TextSectionBuilder {
     /// Completes this text section, filling out any final details, and returns
     /// the bytes of the text section.
     fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8>;
-}
-
-/// Expected unwind info type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum UnwindInfoKind {
-    /// No unwind info.
-    None,
-    /// SystemV CIE/FDE unwind info.
-    #[cfg(feature = "unwind")]
-    SystemV,
-    /// Windows X64 Unwind info
-    #[cfg(feature = "unwind")]
-    Windows,
 }

@@ -123,10 +123,10 @@ impl TargetIsa for X64Backend {
     fn emit_unwind_info(
         &self,
         result: &CompiledCode,
-        kind: crate::machinst::UnwindInfoKind,
+        kind: crate::isa::unwind::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         use crate::isa::unwind::UnwindInfo;
-        use crate::machinst::UnwindInfoKind;
+        use crate::isa::unwind::UnwindInfoKind;
         Ok(match kind {
             UnwindInfoKind::SystemV => {
                 let mapper = self::inst::unwind::systemv::RegisterMapper;

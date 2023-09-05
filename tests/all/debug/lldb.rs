@@ -201,3 +201,52 @@ check: exited with status
     )?;
     Ok(())
 }
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "--disable-cache",
+            "-g",
+            "--opt-level",
+            "0",
+            "tests/all/debug/testsuite/spilled_frame_base.wasm",
+        ],
+        r#"b spilled_frame_base.c:8
+r
+fr v i
+n
+fr v i
+n
+fr v i
+n
+fr v i
+n
+fr v i
+n
+fr v i
+c
+"#,
+    )?;
+
+    // Check that if the frame base (shadow frame pointer) local
+    // is spilled, we can still read locals that reference it.
+    check_lldb_output(
+        &output,
+        r#"
+check: i = 0
+check: i = 1
+check: i = 1
+check: i = 1
+check: i = 1
+check: i = 1
+check: exited with status
+"#,
+    )?;
+    Ok(())
+}

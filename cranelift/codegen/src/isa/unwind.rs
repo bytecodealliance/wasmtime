@@ -11,6 +11,23 @@ pub mod systemv;
 #[cfg(feature = "unwind")]
 pub mod winx64;
 
+/// CFA-based unwind information used on SystemV.
+pub type CfaUnwindInfo = systemv::UnwindInfo;
+
+/// Expected unwind info type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum UnwindInfoKind {
+    /// No unwind info.
+    None,
+    /// SystemV CIE/FDE unwind info.
+    #[cfg(feature = "unwind")]
+    SystemV,
+    /// Windows X64 Unwind info
+    #[cfg(feature = "unwind")]
+    Windows,
+}
+
 /// Represents unwind information for a single function.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
@@ -21,7 +38,7 @@ pub enum UnwindInfo {
     WindowsX64(winx64::UnwindInfo),
     /// System V ABI unwind information.
     #[cfg(feature = "unwind")]
-    SystemV(systemv::UnwindInfo),
+    SystemV(CfaUnwindInfo),
 }
 
 /// Unwind pseudoinstruction used in VCode backends: represents that

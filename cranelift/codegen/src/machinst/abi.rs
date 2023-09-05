@@ -522,8 +522,8 @@ pub trait ABIMachineSpec {
 
     /// Generate the usual frame-setup sequence for this architecture: e.g.,
     /// `push rbp / mov rbp, rsp` on x86-64, or `stp fp, lr, [sp, #-16]!` on
-    /// AArch64.
-    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Self::I>;
+    /// AArch64. Return generated instructions and stack size of the setup area.
+    fn gen_prologue_frame_setup(flags: &settings::Flags) -> (SmallInstVec<Self::I>, u32);
 
     /// Generate the usual frame-restore sequence for this architecture.
     fn gen_epilogue_frame_restore(flags: &settings::Flags) -> SmallInstVec<Self::I>;
@@ -1021,6 +1021,9 @@ pub struct Callee<M: ABIMachineSpec> {
     /// Storage allocated for the fixed part of the stack frame.  This is
     /// usually the same as the total frame size below.
     fixed_frame_storage_size: u32,
+    /// Size of the area between the FP as defined in the prolog and caller's SP.
+    /// It will usually contain the saved FP/LR pair.
+    frame_setup_area_size: u32,
     /// "Total frame size", as defined by "distance between FP and nominal SP".
     /// Some items are pushed below nominal SP, so the function may actually use
     /// more stack than this would otherwise imply. It is simply the initial
@@ -1185,6 +1188,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             clobbered: vec![],
             spillslots: None,
             fixed_frame_storage_size: 0,
+            frame_setup_area_size: 0,
             total_frame_size: None,
             ret_area_ptr: None,
             arg_temp_reg: vec![],
@@ -1760,10 +1764,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         ty: Type,
         into_regs: ValueRegs<Writable<Reg>>,
     ) -> SmallInstVec<M::I> {
-        // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
-        let islot = slot.index() as i64;
-        let spill_off = islot * M::word_bytes() as i64;
-        let sp_off = self.stackslots_size as i64 + spill_off;
+        let sp_off = self.get_spillslot_offset(slot);
         trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
 
         gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
@@ -1776,10 +1777,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         ty: Type,
         from_regs: ValueRegs<Reg>,
     ) -> SmallInstVec<M::I> {
-        // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
-        let islot = slot.index() as i64;
-        let spill_off = islot * M::word_bytes() as i64;
-        let sp_off = self.stackslots_size as i64 + spill_off;
+        let sp_off = self.get_spillslot_offset(slot);
         trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
 
         gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
@@ -1890,8 +1888,9 @@ impl<M: ABIMachineSpec> Callee<M> {
         );
 
         if self.setup_frame {
-            // set up frame
-            insts.extend(M::gen_prologue_frame_setup(&self.flags).into_iter());
+            let (setup_insts, setup_area_size) = M::gen_prologue_frame_setup(&self.flags);
+            insts.extend(setup_insts.into_iter());
+            self.frame_setup_area_size = setup_area_size;
         }
 
         // Leaf functions with zero stack don't need a stack check if one's
@@ -1992,12 +1991,18 @@ impl<M: ABIMachineSpec> Callee<M> {
     }
 
     /// Returns the full frame size for the given function, after prologue
-    /// emission has run. This comprises the spill slots and stack-storage slots
-    /// (but not storage for clobbered callee-save registers, arguments pushed
-    /// at callsites within this function, or other ephemeral pushes).
+    /// emission has run. This comprises the spill slots and stack-storage
+    /// slots as well as storage for clobbered callee-save registers, but
+    /// not arguments arguments pushed at callsites within this function,
+    /// or other ephemeral pushes.
     pub fn frame_size(&self) -> u32 {
         self.total_frame_size
             .expect("frame size not computed before prologue generation")
+    }
+
+    /// Returns offset from the nominal SP to caller's SP.
+    pub fn nominal_sp_to_caller_sp_offset(&self) -> u32 {
+        self.frame_size() + self.frame_setup_area_size
     }
 
     /// Returns the size of arguments expected on the stack.
@@ -2018,6 +2023,16 @@ impl<M: ABIMachineSpec> Callee<M> {
                 .unwrap()
         };
         M::get_number_of_spillslots_for_value(rc, max, &self.isa_flags)
+    }
+
+    /// Get the spill slot offset relative to nominal SP.
+    pub fn get_spillslot_offset(&self, slot: SpillSlot) -> i64 {
+        // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
+        let islot = slot.index() as i64;
+        let spill_off = islot * M::word_bytes() as i64;
+        let sp_off = self.stackslots_size as i64 + spill_off;
+
+        sp_off
     }
 
     /// Generate a spill.

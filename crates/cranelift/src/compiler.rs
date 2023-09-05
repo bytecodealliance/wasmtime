@@ -6,7 +6,10 @@ use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
     self, InstBuilder, MemFlags, UserExternalName, UserExternalNameRef, UserFuncName, Value,
 };
-use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
+use cranelift_codegen::isa::{
+    unwind::{UnwindInfo, UnwindInfoKind},
+    OwnedTargetIsa, TargetIsa,
+};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{CompiledCode, MachStackMap};
@@ -1052,13 +1055,6 @@ impl FunctionCompiler<'_> {
             );
         }
 
-        if body_and_tunables
-            .map(|(_, t)| t.generate_native_debuginfo)
-            .unwrap_or(false)
-        {
-            compiled_function.set_value_labels_ranges(compiled_code.value_labels_ranges.clone());
-        }
-
         if isa.flags().unwind_info() {
             let unwind = compiled_code
                 .create_unwind_info(isa)
@@ -1066,6 +1062,27 @@ impl FunctionCompiler<'_> {
 
             if let Some(unwind_info) = unwind {
                 compiled_function.set_unwind_info(unwind_info);
+            }
+        }
+
+        if body_and_tunables
+            .map(|(_, t)| t.generate_native_debuginfo)
+            .unwrap_or(false)
+        {
+            compiled_function.set_value_labels_ranges(compiled_code.value_labels_ranges.clone());
+
+            // DWARF debugging needs the CFA-based unwind information even on Windows.
+            if !matches!(
+                compiled_function.metadata().unwind_info,
+                Some(UnwindInfo::SystemV(_))
+            ) {
+                let cfa_unwind = compiled_code
+                    .create_unwind_info_of_kind(isa, UnwindInfoKind::SystemV)
+                    .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+
+                if let Some(UnwindInfo::SystemV(cfa_unwind_info)) = cfa_unwind {
+                    compiled_function.set_cfa_unwind_info(cfa_unwind_info);
+                }
             }
         }
 

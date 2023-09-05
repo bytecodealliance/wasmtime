@@ -1191,16 +1191,13 @@ impl<I: VCodeInst> VCode<I> {
             let loc = if let Some(preg) = alloc.as_reg() {
                 LabelValueLoc::Reg(Reg::from(preg))
             } else {
-                // We can't translate spillslot locations at the
-                // moment because ValueLabelLoc requires an
-                // instantaneous SP offset, and this can *change*
-                // within the range we have here because of callsites
-                // adjusting SP temporarily. To avoid the complexity
-                // of accurately plumbing through nominal-SP
-                // adjustment sites, we just omit debug info for
-                // values that are spilled. Not ideal, but debug info
-                // is best-effort.
-                continue;
+                let slot = alloc.as_stack().unwrap();
+                let sp_offset = self.abi.get_spillslot_offset(slot);
+                let sp_to_caller_sp_offset = self.abi.nominal_sp_to_caller_sp_offset();
+                let caller_sp_to_cfa_offset =
+                    crate::isa::unwind::systemv::caller_sp_to_cfa_offset();
+                let cfa_to_sp_offset = -((sp_to_caller_sp_offset + caller_sp_to_cfa_offset) as i64);
+                LabelValueLoc::CFAOffset(cfa_to_sp_offset + sp_offset)
             };
 
             // ValueLocRanges are recorded by *instruction-end
@@ -1219,6 +1216,21 @@ impl<I: VCodeInst> VCode<I> {
             // last instruction that is included, so we go one
             // byte further to be sure to include it.
             let end = to_offset + 1;
+
+            // Coalesce adjacent ranges that for the same location
+            // to minimize output size here and for the consumers.
+            if let Some(last_loc_range) = ranges.last_mut() {
+                if last_loc_range.loc == loc && last_loc_range.end == start {
+                    trace!(
+                        "Extending debug range for VL{} in {:?} to {}",
+                        label,
+                        loc,
+                        end
+                    );
+                    last_loc_range.end = end;
+                    continue;
+                }
+            }
 
             trace!(
                 "Recording debug range for VL{} in {:?}: [Inst {}..Inst {}) [{}..{})",
