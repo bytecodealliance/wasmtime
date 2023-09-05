@@ -78,7 +78,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   sd s1, -8(sp)
 ;   sd s2, -0x10(sp)
 ;   sd s3, -0x18(sp)

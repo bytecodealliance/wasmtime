@@ -117,8 +117,8 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a3, a0, 0
-;   ori a2, a1, 0
+;   mv a3, a0
+;   mv a2, a1
 ;   lr.d.aqrl a0, (a3)
 ;   and a1, a2, a0
 ;   not a1, a1
@@ -141,8 +141,8 @@ block0(v0: i64, v1: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a3, a0, 0
-;   ori a2, a1, 0
+;   mv a3, a0
+;   mv a2, a1
 ;   lr.w.aqrl a0, (a3)
 ;   and a1, a2, a0
 ;   not a1, a1

@@ -30,7 +30,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
 ;   mv a0, sp
@@ -71,7 +71,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
 ;   auipc t5, 0
@@ -121,7 +121,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
 ;   mv t1, sp
@@ -164,7 +164,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
 ;   auipc t5, 0
@@ -215,7 +215,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
 ;   mv t2, sp
@@ -258,7 +258,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
 ;   auipc t5, 0
@@ -642,7 +642,7 @@ block0(v0: i8):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   sd s1, -8(sp)
 ;   sd s2, -0x10(sp)
 ;   sd s3, -0x18(sp)
@@ -873,10 +873,10 @@ block0(v0: i128):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   ori a2, a0, 0
+;   mv a2, a0
 ;   mv a0, sp
 ;   sd a2, 0(a0)
 ;   sd a1, 8(a0)
@@ -917,10 +917,10 @@ block0(v0: i128):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
-;   ori a2, a0, 0
+;   mv a2, a0
 ;   addi a0, sp, 0x20
 ;   sd a2, 0(a0)
 ;   sd a1, 8(a0)
@@ -964,7 +964,7 @@ block0(v0: i128):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
 ;   auipc t5, 0
@@ -977,7 +977,7 @@ block0(v0: i128):
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
 ; block1: ; offset 0x3c
-;   ori a2, a0, 0
+;   mv a2, a0
 ;   mv a0, sp
 ;   sd a2, 0(a0)
 ;   sd a1, 8(a0)
@@ -1018,7 +1018,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
 ;   mv t2, sp
@@ -1060,7 +1060,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
 ;   addi t2, sp, 0x20
@@ -1105,7 +1105,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
 ;   auipc t5, 0

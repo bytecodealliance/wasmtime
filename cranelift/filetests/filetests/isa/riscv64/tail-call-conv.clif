@@ -29,7 +29,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ; block1: ; offset 0x10
 ;   ld a6, 0x10(s0)
 ;   ld t3, 0x18(s0)
@@ -133,7 +133,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
 ;   addi s1, zero, 0xa
@@ -272,7 +272,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
 ;   addi t1, zero, 0xa
@@ -354,7 +354,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ; block1: ; offset 0x10
 ;   addi sp, sp, -0x30
 ;   mv s1, sp
@@ -418,7 +418,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
 ;   sd a3, 0(sp)
@@ -545,7 +545,7 @@ block0:
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
 ;   addi s1, zero, 0xa

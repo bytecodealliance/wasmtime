@@ -112,7 +112,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a4, a0, 0
+;   mv a4, a0
 ;   addi a1, zero, 0x7f
 ;   add a0, a4, a1
 ;   bgeu a0, a4, 0xc
@@ -168,12 +168,12 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add a1, a0, a1
-;   ori a3, a1, 0
+;   mv a3, a1
 ;   bgeu a3, a0, 0xc
 ;   addi a2, zero, 1
 ;   j 8
 ;   mv a2, zero
-;   ori a0, a3, 0
+;   mv a0, a3
 ;   beqz a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
 ;   ret

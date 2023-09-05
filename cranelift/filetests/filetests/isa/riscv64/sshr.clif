@@ -415,27 +415,27 @@ block0(v0: i128, v1: i8):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
 ;   sra a4, a1, a3
 ;   addi a6, zero, -1
 ;   bltz a1, 0xc
-;   ori t3, zero, 0
+;   mv t3, zero
 ;   j 8
-;   ori t3, a6, 0
+;   mv t3, a6
 ;   addi t0, zero, 0x40
 ;   andi t2, a2, 0x7f
 ;   bgeu t2, t0, 8
 ;   j 8
-;   ori a0, a4, 0
+;   mv a0, a4
 ;   bgeu t2, t0, 0xc
-;   ori a1, a4, 0
+;   mv a1, a4
 ;   j 8
-;   ori a1, t3, 0
+;   mv a1, t3
 ;   ret
 
 function %sshr_i128_i16(i128, i16) -> i128 {
@@ -470,27 +470,27 @@ block0(v0: i128, v1: i16):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
 ;   sra a4, a1, a3
 ;   addi a6, zero, -1
 ;   bltz a1, 0xc
-;   ori t3, zero, 0
+;   mv t3, zero
 ;   j 8
-;   ori t3, a6, 0
+;   mv t3, a6
 ;   addi t0, zero, 0x40
 ;   andi t2, a2, 0x7f
 ;   bgeu t2, t0, 8
 ;   j 8
-;   ori a0, a4, 0
+;   mv a0, a4
 ;   bgeu t2, t0, 0xc
-;   ori a1, a4, 0
+;   mv a1, a4
 ;   j 8
-;   ori a1, t3, 0
+;   mv a1, t3
 ;   ret
 
 function %sshr_i128_i32(i128, i32) -> i128 {
@@ -525,27 +525,27 @@ block0(v0: i128, v1: i32):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
 ;   sra a4, a1, a3
 ;   addi a6, zero, -1
 ;   bltz a1, 0xc
-;   ori t3, zero, 0
+;   mv t3, zero
 ;   j 8
-;   ori t3, a6, 0
+;   mv t3, a6
 ;   addi t0, zero, 0x40
 ;   andi t2, a2, 0x7f
 ;   bgeu t2, t0, 8
 ;   j 8
-;   ori a0, a4, 0
+;   mv a0, a4
 ;   bgeu t2, t0, 0xc
-;   ori a1, a4, 0
+;   mv a1, a4
 ;   j 8
-;   ori a1, t3, 0
+;   mv a1, t3
 ;   ret
 
 function %sshr_i128_i64(i128, i64) -> i128 {
@@ -580,27 +580,27 @@ block0(v0: i128, v1: i64):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
 ;   sra a4, a1, a3
 ;   addi a6, zero, -1
 ;   bltz a1, 0xc
-;   ori t3, zero, 0
+;   mv t3, zero
 ;   j 8
-;   ori t3, a6, 0
+;   mv t3, a6
 ;   addi t0, zero, 0x40
 ;   andi t2, a2, 0x7f
 ;   bgeu t2, t0, 8
 ;   j 8
-;   ori a0, a4, 0
+;   mv a0, a4
 ;   bgeu t2, t0, 0xc
-;   ori a1, a4, 0
+;   mv a1, a4
 ;   j 8
-;   ori a1, t3, 0
+;   mv a1, t3
 ;   ret
 
 function %sshr_i128_i128(i128, i128) -> i128 {
@@ -635,27 +635,27 @@ block0(v0: i128, v1: i128):
 ;   sub a6, a4, a3
 ;   sll t3, a1, a6
 ;   beqz a3, 0xc
-;   ori t0, t3, 0
+;   mv t0, t3
 ;   j 8
-;   ori t0, zero, 0
+;   mv t0, zero
 ;   srl t2, a0, a3
 ;   or a4, t0, t2
 ;   addi a5, zero, 0x40
 ;   sra a5, a1, a3
 ;   addi a7, zero, -1
 ;   bltz a1, 0xc
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   j 8
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   addi t1, zero, 0x40
 ;   andi a1, a2, 0x7f
 ;   bgeu a1, t1, 0xc
-;   ori a0, a4, 0
+;   mv a0, a4
 ;   j 8
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   bgeu a1, t1, 0xc
-;   ori a1, a5, 0
+;   mv a1, a5
 ;   j 8
-;   ori a1, t4, 0
+;   mv a1, t4
 ;   ret
 

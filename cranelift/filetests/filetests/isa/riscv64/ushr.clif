@@ -99,7 +99,7 @@ block0(v0: i8, v1: i128):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a5, a1, 0
+;   mv a5, a1
 ;   andi a1, a0, 0xff
 ;   andi a3, a5, 7
 ;   srlw a0, a1, a3
@@ -404,9 +404,9 @@ block0(v0: i128, v1: i8):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
@@ -414,11 +414,11 @@ block0(v0: i128, v1: i8):
 ;   andi a6, a2, 0x7f
 ;   bgeu a6, a4, 8
 ;   j 8
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   bgeu a6, a4, 0xc
-;   ori a1, a5, 0
+;   mv a1, a5
 ;   j 8
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   ret
 
 function %ushr_i128_i16(i128, i16) -> i128 {
@@ -450,9 +450,9 @@ block0(v0: i128, v1: i16):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
@@ -460,11 +460,11 @@ block0(v0: i128, v1: i16):
 ;   andi a6, a2, 0x7f
 ;   bgeu a6, a4, 8
 ;   j 8
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   bgeu a6, a4, 0xc
-;   ori a1, a5, 0
+;   mv a1, a5
 ;   j 8
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   ret
 
 function %ushr_i128_i32(i128, i32) -> i128 {
@@ -496,9 +496,9 @@ block0(v0: i128, v1: i32):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
@@ -506,11 +506,11 @@ block0(v0: i128, v1: i32):
 ;   andi a6, a2, 0x7f
 ;   bgeu a6, a4, 8
 ;   j 8
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   bgeu a6, a4, 0xc
-;   ori a1, a5, 0
+;   mv a1, a5
 ;   j 8
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   ret
 
 function %ushr_i128_i64(i128, i64) -> i128 {
@@ -542,9 +542,9 @@ block0(v0: i128, v1: i64):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
@@ -552,11 +552,11 @@ block0(v0: i128, v1: i64):
 ;   andi a6, a2, 0x7f
 ;   bgeu a6, a4, 8
 ;   j 8
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   bgeu a6, a4, 0xc
-;   ori a1, a5, 0
+;   mv a1, a5
 ;   j 8
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   ret
 
 function %ushr_i128_i128(i128, i128) -> i128 {
@@ -588,21 +588,21 @@ block0(v0: i128, v1: i128):
 ;   sub a6, a4, a3
 ;   sll t3, a1, a6
 ;   beqz a3, 0xc
-;   ori t0, t3, 0
+;   mv t0, t3
 ;   j 8
-;   ori t0, zero, 0
+;   mv t0, zero
 ;   srl t2, a0, a3
 ;   or a5, t0, t2
 ;   addi a4, zero, 0x40
 ;   srl a6, a1, a3
 ;   andi a7, a2, 0x7f
 ;   bgeu a7, a4, 0xc
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   j 8
-;   ori a0, a6, 0
+;   mv a0, a6
 ;   bgeu a7, a4, 0xc
-;   ori a1, a6, 0
+;   mv a1, a6
 ;   j 8
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   ret
 

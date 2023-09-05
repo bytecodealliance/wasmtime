@@ -25,9 +25,9 @@ block0(v0: i8):
 ;   .byte 0x93, 0x13, 0x45, 0x60
 ;   not a1, t2
 ;   bltz t2, 0xc
-;   ori a3, t2, 0
+;   mv a3, t2
 ;   j 8
-;   ori a3, a1, 0
+;   mv a3, a1
 ;   andi a5, a3, 0xff
 ;   .byte 0x93, 0x98, 0x07, 0x60
 ;   addi t4, a7, -0x38
@@ -56,9 +56,9 @@ block0(v0: i16):
 ;   .byte 0x93, 0x13, 0x55, 0x60
 ;   not a1, t2
 ;   bltz t2, 0xc
-;   ori a3, t2, 0
+;   mv a3, t2
 ;   j 8
-;   ori a3, a1, 0
+;   mv a3, a1
 ;   .byte 0xbb, 0xc7, 0x06, 0x08
 ;   .byte 0x93, 0x98, 0x07, 0x60
 ;   addi t4, a7, -0x30
@@ -85,9 +85,9 @@ block0(v0: i32):
 ;   sext.w t2, a0
 ;   not a1, t2
 ;   bltz t2, 0xc
-;   ori a3, t2, 0
+;   mv a3, t2
 ;   j 8
-;   ori a3, a1, 0
+;   mv a3, a1
 ;   .byte 0x9b, 0x97, 0x06, 0x60
 ;   addi a0, a5, -1
 ;   ret
@@ -110,9 +110,9 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   not t2, a0
 ;   bltz a0, 0xc
-;   ori a1, a0, 0
+;   mv a1, a0
 ;   j 8
-;   ori a1, t2, 0
+;   mv a1, t2
 ;   .byte 0x93, 0x96, 0x05, 0x60
 ;   addi a0, a3, -1
 ;   ret
@@ -142,18 +142,18 @@ block0(v0: i128):
 ; block0: ; offset 0x0
 ;   not a2, a0
 ;   bltz a1, 8
-;   ori a2, a0, 0
+;   mv a2, a0
 ;   not a4, a1
 ;   bltz a1, 0xc
-;   ori a6, a1, 0
+;   mv a6, a1
 ;   j 8
-;   ori a6, a4, 0
+;   mv a6, a4
 ;   .byte 0x13, 0x1e, 0x08, 0x60
 ;   .byte 0x93, 0x12, 0x06, 0x60
 ;   beqz a6, 0xc
-;   ori t2, zero, 0
+;   mv t2, zero
 ;   j 8
-;   ori t2, t0, 0
+;   mv t2, t0
 ;   add a1, t3, t2
 ;   mv a3, zero
 ;   addi a0, a1, -1
