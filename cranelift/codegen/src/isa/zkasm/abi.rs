@@ -752,7 +752,8 @@ const fn default_clobbers() -> PRegSet {
         .with(px_reg(7))
         .with(px_reg(10))
         .with(px_reg(11))
-        .with(px_reg(12))
+        // CTX register is not clobbered.
+        // .with(px_reg(12))
         .with(px_reg(13))
         .with(px_reg(14))
         .with(px_reg(15))
