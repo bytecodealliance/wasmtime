@@ -7,7 +7,6 @@ function_1:
   SP + 1 => SP
   RR :MSTORE(SP)
   SP + 1 => SP
-L1_0:
   CTX :MSTORE(SP)
   0 + 2 => A
   0 + 3 => B
@@ -16,19 +15,15 @@ L1_0:
   0 + 5 => B
   $ => CTX :MLOAD(SP)
   B :ASSERT
-  :JMP(L1_1)
-L1_1:
   SP - 1 => SP
   $ => RR :MLOAD(SP)
   SP - 1 => SP
   :JMP(RR)
 
 function_2:
-L2_0:
   $ => A :ADD
-  :JMP(L2_1)
-L2_1:
   :JMP(RR)
+
 finalizeExecution:
   ${beforeLast()}  :JMPN(finalizeExecution)
                    :JMP(start)

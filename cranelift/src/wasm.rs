@@ -14,6 +14,7 @@ use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_reader::parse_sets_and_triple;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
@@ -289,20 +290,52 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             }
 
             if let Ok(code) = std::str::from_utf8(&code_buffer) {
+                let mut label_definition: HashMap<usize, usize> = HashMap::new();
+                let mut label_uses: HashMap<usize, Vec<usize>> = HashMap::new();
                 let mut lines = Vec::new();
-                for line in code.lines() {
+                for (index, line) in code.lines().enumerate() {
                     let mut line = line.to_string();
                     if line.starts_with(&"label_") {
-                        let label_index = &line[6..];
-                        line = format!("L{func_index}_{label_index}");
+                        let label_index: usize = line[6..line.len() - 1]
+                            .parse()
+                            .expect("Failed to parse label index");
+                        line = format!("L{func_index}_{label_index}:");
+                        label_definition.insert(label_index, index);
                     } else if line.contains(&"label_") {
                         let pos = line.find(&"label_").unwrap();
                         let pos_end = pos + line[pos..].find(&")").unwrap();
-                        let label_index = &line[pos + 6..pos_end];
+                        let label_index: usize = line[pos + 6..pos_end]
+                            .parse()
+                            .expect("Failed to parse label index");
                         line.replace_range(pos..pos_end, &format!("L{func_index}_{label_index}"));
+                        label_uses.entry(label_index).or_default().push(index);
                     }
                     lines.push(line);
                 }
+
+                let mut lines_to_delete = Vec::new();
+                for (label, label_line) in label_definition {
+                    match label_uses.entry(label) {
+                        std::collections::hash_map::Entry::Occupied(uses) => {
+                            if uses.get().len() == 1 {
+                                let use_line = uses.get()[0];
+                                if use_line + 1 == label_line {
+                                    lines_to_delete.push(use_line);
+                                    lines_to_delete.push(label_line);
+                                }
+                            }
+                        }
+                        std::collections::hash_map::Entry::Vacant(_) => {
+                            lines_to_delete.push(label_line);
+                        }
+                    }
+                }
+                lines_to_delete.sort();
+                lines_to_delete.reverse();
+                for index in lines_to_delete {
+                    lines.remove(index);
+                }
+
                 println!("{}", lines.join("\n"));
             }
 
@@ -361,7 +394,8 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         context.clear();
     }
 
-    let postamble = "finalizeExecution:
+    let postamble = "
+finalizeExecution:
   ${beforeLast()}  :JMPN(finalizeExecution)
                    :JMP(start)
 ";
