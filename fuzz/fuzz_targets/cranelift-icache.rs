@@ -69,7 +69,7 @@ impl FunctionWithIsa {
         let usercalls = (0..func_count)
             .map(|i| {
                 let name = UserExternalName::new(2, i as u32);
-                let sig = gen.generate_signature(architecture)?;
+                let sig = gen.generate_signature(&*isa)?;
                 Ok((name, sig))
             })
             .collect::<anyhow::Result<Vec<(UserExternalName, Signature)>>>()

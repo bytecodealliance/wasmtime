@@ -129,17 +129,17 @@ impl ABI for X64ABI {
         // This invariant will be lifted once support for multi-value is added.
         assert!(returns.len() <= 1, "multi-value not supported");
         let ty = returns.get(0).copied();
-        let reg = ty.map(|ty| {
-            match ty {
+        ty.map(|ty| {
+            let reg = match ty {
                 // The `Default`, `WasmtimeFastcall` and `WasmtimeSystemV use `rax` and `xmm0`.
                 // NOTE This should be updated when supporting multi-value.
                 WasmType::I32 | WasmType::I64 => regs::rax(),
                 WasmType::F32 | WasmType::F64 => regs::xmm0(),
                 t => panic!("Unsupported return type {:?}", t),
-            }
-        });
-
-        ABIResult::reg(ty, reg)
+            };
+            ABIResult::reg(ty, reg)
+        })
+        .unwrap_or_else(|| ABIResult::void())
     }
 
     fn scratch_reg() -> Reg {

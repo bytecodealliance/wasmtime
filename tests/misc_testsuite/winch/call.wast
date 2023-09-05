@@ -136,6 +136,14 @@
   (func (export "as-compare-right") (result i32)
     (block (result i32) (i32.ne (i32.const 10) (call $dummy (i32.const 1))))
   )
+
+  (func (export "as-br_table-first") (result i32)
+    (block (result i32) (call $const-i32) (i32.const 2) (br_table 0 0))
+  )
+  (func (export "as-br_table-last") (result i32)
+    (block (result i32) (i32.const 2) (call $const-i32) (br_table 0 0))
+  )
+
 )
 
 (assert_return (invoke "type-i32") (i32.const 0x132))
@@ -182,3 +190,6 @@
 (assert_return (invoke "as-compare-left") (i32.const 1))
 (assert_return (invoke "as-compare-right") (i32.const 1))
 (assert_return (invoke "as-drop-operand"))
+
+(assert_return (invoke "as-br_table-first") (i32.const 0x132))
+(assert_return (invoke "as-br_table-last") (i32.const 2))

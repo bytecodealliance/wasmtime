@@ -24,7 +24,7 @@ use cranelift_codegen::{
 };
 
 use super::address::Address;
-use smallvec::smallvec;
+use smallvec::{smallvec, SmallVec};
 
 // Conversions between winch-codegen x64 types and cranelift-codegen x64 types.
 
@@ -820,6 +820,24 @@ impl Assembler {
     /// Performs an unconditional jump to the given label.
     pub fn jmp(&mut self, target: MachLabel) {
         self.emit(Inst::JmpKnown { dst: target });
+    }
+
+    /// Emits a jump table sequence.
+    pub fn jmp_table(
+        &mut self,
+        targets: SmallVec<[MachLabel; 4]>,
+        default: MachLabel,
+        index: Reg,
+        tmp1: Reg,
+        tmp2: Reg,
+    ) {
+        self.emit(Inst::JmpTableSeq {
+            idx: index.into(),
+            tmp1: Writable::from_reg(tmp1.into()),
+            tmp2: Writable::from_reg(tmp2.into()),
+            default_target: default,
+            targets: Box::new(targets),
+        })
     }
 
     /// Emit a trap instruction.

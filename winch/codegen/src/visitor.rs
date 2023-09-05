@@ -5,10 +5,12 @@
 //! machine code emitter.
 
 use crate::abi::ABI;
-use crate::codegen::CodeGen;
 use crate::codegen::ControlStackFrame;
+use crate::codegen::{control_index, CodeGen};
 use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, ShiftKind};
 use crate::stack::{TypedReg, Val};
+use smallvec::SmallVec;
+use wasmparser::BrTable;
 use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
 use wasmtime_environ::{FuncIndex, GlobalIndex, WasmType};
 
@@ -113,6 +115,7 @@ macro_rules! def_unsupported {
     (emit GlobalSet $($rest:tt)*) => {};
     (emit Select $($rest:tt)*) => {};
     (emit Drop $($rest:tt)*) => {};
+    (emit BrTable $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -557,25 +560,26 @@ where
     }
 
     fn visit_br(&mut self, depth: u32) {
-        let frame = Self::control_at(&mut self.control_frames, depth);
-        self.context.pop_abi_results(frame.result(), self.masm);
-        self.context.pop_sp_for_branch(&frame, self.masm);
-        self.masm.jmp(*frame.label());
-        frame.set_as_target();
-        self.context.reachable = false;
+        let index = control_index(depth, self.control_frames.len());
+        let frame = &mut self.control_frames[index];
+        self.context
+            .unconditional_jump(frame, self.masm, |masm, cx, frame| {
+                cx.pop_abi_results(&frame.as_target_result(), masm);
+            });
     }
 
     fn visit_br_if(&mut self, depth: u32) {
-        let frame = Self::control_at(&mut self.control_frames, depth);
+        let index = control_index(depth, self.control_frames.len());
+        let frame = &mut self.control_frames[index];
         frame.set_as_target();
-        let result = frame.result();
+        let result = frame.as_target_result();
         let top =
             self.context
                 .without::<TypedReg, M, _>(result.result_reg(), self.masm, |ctx, masm| {
                     ctx.pop_to_reg(masm, None)
                 });
-        self.context.pop_abi_results(result, self.masm);
-        self.context.push_abi_results(result, self.masm);
+        self.context.pop_abi_results(&result, self.masm);
+        self.context.push_abi_results(&result, self.masm);
         self.masm.branch(
             CmpKind::Ne,
             top.reg.into(),
@@ -586,21 +590,59 @@ where
         self.context.free_reg(top);
     }
 
+    fn visit_br_table(&mut self, targets: BrTable<'a>) {
+        // +1 to account for the default target.
+        let len = targets.len() + 1;
+        // SmallVec<[_; 5]> to match the binary emission layer (e.g
+        // see `JmpTableSeq'), but here we use 5 instead since we
+        // bundle the default target as the last element in the array.
+        let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
+
+        let default_index = control_index(targets.default(), self.control_frames.len());
+        let default_result = self.control_frames[default_index].as_target_result();
+        let (index, tmp) = self.context.without::<(TypedReg, _), M, _>(
+            default_result.result_reg(),
+            self.masm,
+            |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
+        );
+
+        self.context.pop_abi_results(&default_result, self.masm);
+        self.context.push_abi_results(&default_result, self.masm);
+        self.masm.jmp_table(&labels, index.into(), tmp);
+
+        for (t, l) in targets
+            .targets()
+            .into_iter()
+            .chain(std::iter::once(Ok(targets.default())))
+            .zip(labels.iter())
+        {
+            let control_index = control_index(t.unwrap(), self.control_frames.len());
+
+            self.masm.bind(*l);
+            self.context.unconditional_jump(
+                &mut self.control_frames[control_index],
+                self.masm,
+                // NB: We don't perform any result handling as it was
+                // already taken care of above before jumping to the
+                // jump table above. The call to `unconditional_jump`,
+                // will stil take care of the proper stack alignment.
+                |_, _, _| {},
+            )
+        }
+        self.context.free_reg(index.reg);
+        self.context.free_reg(tmp);
+    }
+
     fn visit_return(&mut self) {
-        // Grab the outermost frame, which is the function's body frame. We
-        // don't rely on `Self::control_at` since this frame is implicit and we
-        // know that it should exist at index 0.
+        // Grab the outermost frame, which is the function's body
+        // frame. We don't rely on [`codegen::control_index`] since
+        // this frame is implicit and we know that it should exist at
+        // index 0.
         let outermost = &mut self.control_frames[0];
-        self.context.pop_abi_results(outermost.result(), self.masm);
-        // Ensure that the stack pointer is correctly balanced.
-        self.context.pop_sp_for_branch(&outermost, self.masm);
-        // The outermost should always be a block and therefore,
-        // should always have an exit label.
-        self.masm.jmp(*outermost.exit_label().unwrap());
-        // Set the frame as branch target so that
-        // we can bind the function's exit label.
-        outermost.set_as_target();
-        self.context.reachable = false;
+        self.context
+            .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
+                cx.pop_abi_results(&frame.as_target_result(), masm);
+            });
     }
 
     fn visit_unreachable(&mut self) {
