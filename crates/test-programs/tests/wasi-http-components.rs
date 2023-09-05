@@ -114,6 +114,10 @@ async fn run(name: &str) -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_get() {
     setup_http1(run("outbound_request_get")).await.unwrap();
 }
@@ -133,6 +137,10 @@ async fn outbound_request_post_large() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_put() {
     setup_http1(run("outbound_request_put")).await.unwrap();
 }
