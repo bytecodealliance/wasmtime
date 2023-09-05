@@ -14,7 +14,7 @@ use cranelift_codegen::Context;
 use cranelift_entity::EntityRef;
 use cranelift_reader::parse_sets_and_triple;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;

@@ -356,7 +356,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
+    fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
         // add  sp,sp,-16    ;; alloc stack space for fp.
         // sd   ra,8(sp)     ;; save ra.
         // sd   fp,0(sp)     ;; store old fp.
@@ -423,8 +423,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     // nominal SP offset; abi_impl generic code will do that.
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
-        setup_frame: bool,
-        flags: &settings::Flags,
+        _setup_frame: bool,
+        _flags: &settings::Flags,
         clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         _outgoing_args_size: u32,
@@ -504,7 +504,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         defs: CallRetList,
         clobbers: PRegSet,
         opcode: ir::Opcode,
-        tmp: Writable<Reg>,
+        _tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
         callee_pop_size: u32,
