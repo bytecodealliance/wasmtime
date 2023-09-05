@@ -58,7 +58,7 @@ pub use crate::isa::riscv64::lower::isle::generated_code::{
     FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, CSR,
     FRM,
 };
-use crate::isa::riscv64::lower::isle::generated_code::{MInst, VecAluOpRRImm5, VecAluOpRRR};
+use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -1938,6 +1938,9 @@ pub enum LabelUse {
     /// Since we currently don't support offsets in labels, this relocation has
     /// an implicit offset of 4.
     PCRelLo12I,
+
+    /// 11-bit PC-relative jump offset. Equivalent to the `RVC_JUMP` relocation
+    RVCJump,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -1952,7 +1955,8 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::PCRelLo12I | LabelUse::PCRelHi20 | LabelUse::PCRel32 => {
                 Inst::imm_max() as CodeOffset
             }
-            LabelUse::B12 => ((1 << 11) - 1) * 2,
+            // RVCJump has the same range as B12 since the offset is multiplied by 2
+            LabelUse::RVCJump | LabelUse::B12 => ((1 << 11) - 1) * 2,
         }
     }
 
@@ -1967,6 +1971,7 @@ impl MachInstLabelUse for LabelUse {
     /// Size of window into code needed to do the patch.
     fn patch_size(self) -> CodeOffset {
         match self {
+            LabelUse::RVCJump => 2,
             LabelUse::Jal20 | LabelUse::B12 | LabelUse::PCRelHi20 | LabelUse::PCRelLo12I => 4,
             LabelUse::PCRel32 => 8,
         }
@@ -1993,7 +1998,7 @@ impl MachInstLabelUse for LabelUse {
     /// Is a veneer supported for this label reference type?
     fn supports_veneer(self) -> bool {
         match self {
-            Self::Jal20 | Self::B12 => true,
+            Self::Jal20 | Self::B12 | Self::RVCJump => true,
             _ => false,
         }
     }
@@ -2001,7 +2006,7 @@ impl MachInstLabelUse for LabelUse {
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
         match self {
-            Self::B12 | Self::Jal20 => 8,
+            Self::B12 | Self::Jal20 | Self::RVCJump => 8,
             _ => unreachable!(),
         }
     }
@@ -2051,7 +2056,11 @@ impl LabelUse {
     }
 
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
-        let insn = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        let insn = match self {
+            LabelUse::RVCJump => u16::from_le_bytes(buffer[..2].try_into().unwrap()) as u32,
+            _ => u32::from_le_bytes(buffer[..4].try_into().unwrap()),
+        };
+
         match self {
             LabelUse::Jal20 => {
                 let offset = offset as u32;
@@ -2116,6 +2125,18 @@ impl LabelUse {
                 let lo12 = (offset + 4) as u32 & 0xFFF;
                 let insn = (insn & 0xFFFFF) | (lo12 << 20);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
+            }
+            LabelUse::RVCJump => {
+                debug_assert!(offset & 1 == 0);
+
+                // We currently only support this for the C.J operation, so assert that is the opcode in
+                // the buffer.
+                debug_assert_eq!(insn & 0xFFFF, 0xA001);
+
+                buffer[0..2].clone_from_slice(&u16::to_le_bytes(encode_cj_type(
+                    CjOp::CJ,
+                    Imm12::from_bits(i16::try_from(offset).unwrap()),
+                )));
             }
         }
     }

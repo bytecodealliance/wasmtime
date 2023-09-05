@@ -724,6 +724,11 @@
   (CSubw)
 ))
 
+;; Opcodes for the CJ compressed instruction format
+(type CjOp (enum
+  (CJ)
+))
+
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR

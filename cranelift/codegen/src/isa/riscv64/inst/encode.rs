@@ -9,7 +9,7 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5,
+    CaOp, CjOp, CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5,
     VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
@@ -349,5 +349,34 @@ pub fn encode_ca_type(op: CaOp, rd: WritableReg, rs2: Reg) -> u16 {
     bits |= unsigned_field_width(op.funct2(), 2) << 5;
     bits |= reg_to_compressed_gpr_num(rd.to_reg()) << 7;
     bits |= unsigned_field_width(op.funct6(), 6) << 10;
+    bits.try_into().unwrap()
+}
+
+// Encode a CJ type instruction.
+//
+// The imm field is a 11 bit signed immediate that is shifted left by 1.
+//
+// 0--1-2-----12-13--------15
+// |op |  imm   |  funct3  |
+pub fn encode_cj_type(op: CjOp, imm: Imm12) -> u16 {
+    let imm = imm.as_u32();
+    debug_assert!(imm & 1 == 0);
+
+    // The offset bits are in rather weird positions.
+    // [11|4|9:8|10|6|7|3:1|5]
+    let mut imm_field = 0;
+    imm_field |= ((imm >> 11) & 1) << 10;
+    imm_field |= ((imm >> 4) & 1) << 9;
+    imm_field |= ((imm >> 8) & 3) << 7;
+    imm_field |= ((imm >> 10) & 1) << 6;
+    imm_field |= ((imm >> 6) & 1) << 5;
+    imm_field |= ((imm >> 7) & 1) << 4;
+    imm_field |= ((imm >> 1) & 7) << 1;
+    imm_field |= ((imm >> 5) & 1) << 0;
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= unsigned_field_width(imm_field, 11) << 2;
+    bits |= unsigned_field_width(op.funct3(), 3) << 13;
     bits.try_into().unwrap()
 }

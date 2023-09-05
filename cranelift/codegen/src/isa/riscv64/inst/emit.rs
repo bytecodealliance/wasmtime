@@ -461,7 +461,7 @@ impl Inst {
         sink: &mut MachBuffer<Inst>,
         emit_info: &EmitInfo,
         _state: &mut EmitState,
-        _start_off: &mut u32,
+        start_off: &mut u32,
     ) -> bool {
         let has_zca = emit_info.isa_flags.has_zca();
 
@@ -526,6 +526,16 @@ impl Inst {
 
                 sink.put2(encode_ca_type(op, rd, rs2));
             }
+
+            // c.j
+            //
+            // We don't have a separate JAL as that is only availabile in RV32C
+            Inst::Jal { label } if has_zca => {
+                sink.use_label_at_offset(*start_off, label, LabelUse::RVCJump);
+                sink.add_uncond_branch(*start_off, *start_off + 2, label);
+                sink.put2(encode_cj_type(CjOp::CJ, Imm12::zero()));
+            }
+
             _ => return false,
         }
 
