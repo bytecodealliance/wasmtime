@@ -277,7 +277,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                     if name.index == 0 {
                         b"  B :ASSERT".to_vec()
                     } else {
-                        format!("  :JMP(function_{})", name.index)
+                        format!("  zkPC + 2 => RR\n  :JMP(function_{})", name.index)
                             .as_bytes()
                             .to_vec()
                     }

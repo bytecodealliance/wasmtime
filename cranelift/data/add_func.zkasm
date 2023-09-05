@@ -8,6 +8,7 @@ function_1:
   RR :MSTORE(SP)
   0 + 2 => A
   0 + 3 => B
+  zkPC + 2 => RR
   :JMP(function_2)
   0 + 5 => B
   B :ASSERT
