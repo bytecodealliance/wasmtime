@@ -276,7 +276,9 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                     if name.index == 0 {
                         b"  B :ASSERT".to_vec()
                     } else {
-                        format!("  JMP(function_{})", name.index).as_bytes().to_vec()
+                        format!("  :JMP(function_{})", name.index)
+                            .as_bytes()
+                            .to_vec()
                     }
                 } else {
                     b"  UNKNOWN".to_vec()
@@ -287,7 +289,21 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             }
 
             if let Ok(code) = std::str::from_utf8(&code_buffer) {
-                println!("{code}",);
+                let mut lines = Vec::new();
+                for line in code.lines() {
+                    let mut line = line.to_string();
+                    if line.starts_with(&"label_") {
+                        let label_index = &line[6..];
+                        line = format!("L{func_index}_{label_index}");
+                    } else if line.contains(&"label_") {
+                        let pos = line.find(&"label_").unwrap();
+                        let pos_end = pos + line[pos..].find(&")").unwrap();
+                        let label_index = &line[pos + 6..pos_end];
+                        line.replace_range(pos..pos_end, &format!("L{func_index}_{label_index}"));
+                    }
+                    lines.push(line);
+                }
+                println!("{}", lines.join("\n"));
             }
 
             if options.print_size {

@@ -562,7 +562,7 @@ impl MachInstEmit for Inst {
                         x.emit(&[], sink, emit_info, state) */
             }
             &Inst::Label { imm } => {
-                sink.put_data(format!("L{imm}:\n").as_bytes());
+                sink.put_data(format!("label_{imm}:\n").as_bytes());
             }
             &Inst::RawData { ref data } => {
                 // Right now we only put a u32 or u64 in this instruction.
@@ -1084,9 +1084,9 @@ impl MachInstEmit for Inst {
                 match dest {
                     BranchTarget::Label(label) => {
                         // TODO: the following two lines allow eg. optimizing out jump-to-here
-                        /* sink.use_label_at_offset(start_off, label, LabelUse::Jal20);
-                        sink.add_uncond_branch(start_off, start_off + 4, label); */
-                        put_string(&format!(":JMP(L{})\n", label.index()), sink);
+                        // sink.use_label_at_offset(start_off, label, LabelUse::Jal20);
+                        // sink.add_uncond_branch(start_off, start_off + 4, label);
+                        put_string(&format!(":JMP(label_{})\n", label.index()), sink);
                     }
                     BranchTarget::ResolvedOffset(offset) => {
                         todo!() /*
@@ -1124,7 +1124,7 @@ impl MachInstEmit for Inst {
                 match taken {
                     BranchTarget::Label(label) => {
                         put_string(
-                            &format!("{} :JMPNZ(L{})\n", reg_name(kind.rs1), label.index()),
+                            &format!("{} :JMPNZ(label_{})\n", reg_name(kind.rs1), label.index()),
                             sink,
                         );
 

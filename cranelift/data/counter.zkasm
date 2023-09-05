@@ -6,27 +6,26 @@ start:
 function_1:
   SP + 1 => SP
   RR :MSTORE(SP)
-L0:
+L1_0:
   0 + 0 => A
-  :JMP(L1)
-L1:
+  :JMP(L1_1)
+L1_1:
   0 + 1 => B
   $ => A :ADD
   0 + 10 => B
   $ => B :EQ
-  B :JMPNZ(L3)
-  :JMP(L2)
-L2:
-  :JMP(L1)
-L3:
+  B :JMPNZ(L1_3)
+  :JMP(L1_2)
+L1_2:
+  :JMP(L1_1)
+L1_3:
   0 + 10 => B
   B :ASSERT
-  :JMP(L4)
-L4:
+  :JMP(L1_4)
+L1_4:
   $ => RR :MLOAD(SP)
   SP - 1 => SP
   :JMP(RR)
-
 finalizeExecution:
   ${beforeLast()}  :JMPN(finalizeExecution)
                    :JMP(start)
