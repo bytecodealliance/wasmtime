@@ -1914,7 +1914,8 @@ impl CrOp {
     pub fn funct4(&self) -> u32 {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CrOp::CMv => 0b1000,
+            // `c.jr` has the same op/funct4 as C.MV, but RS2 is 0, which is illegal for mv.
+            CrOp::CMv | CrOp::CJr => 0b1000,
             CrOp::CAdd => 0b1001,
         }
     }
@@ -1922,7 +1923,7 @@ impl CrOp {
     pub fn op(&self) -> COpcodeSpace {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CrOp::CMv | CrOp::CAdd => COpcodeSpace::C2,
+            CrOp::CMv | CrOp::CAdd | CrOp::CJr => COpcodeSpace::C2,
         }
     }
 }

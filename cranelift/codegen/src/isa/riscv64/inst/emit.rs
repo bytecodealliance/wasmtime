@@ -536,6 +536,16 @@ impl Inst {
                 sink.put2(encode_cj_type(CjOp::CJ, Imm12::zero()));
             }
 
+            // c.jr
+            Inst::Jalr { rd, base, offset }
+                if has_zca
+                    && rd.to_reg() == zero_reg()
+                    && base != zero_reg()
+                    && offset.as_i16() == 0 =>
+            {
+                sink.put2(encode_cr2_type(CrOp::CJr, base));
+            }
+
             _ => return false,
         }
 
@@ -788,9 +798,14 @@ impl Inst {
                 // only to constrain registers at a certain point.
             }
             &Inst::Ret {} => {
-                //jalr x0, x1, 0
-                let x: u32 = (0b1100111) | (1 << 15);
-                sink.put4(x);
+                // RISC-V does not have a dedicated ret instruction, instead we emit the equivalent
+                // `jalr x0, x1, 0` that jumps to the return address.
+                Inst::Jalr {
+                    rd: writable_zero_reg(),
+                    base: link_reg(),
+                    offset: Imm12::zero(),
+                }
+                .emit(&[], sink, emit_info, state);
             }
 
             &Inst::Extend {

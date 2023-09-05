@@ -338,6 +338,14 @@ pub fn encode_cr_type(op: CrOp, rd: WritableReg, rs2: Reg) -> u16 {
     bits.try_into().unwrap()
 }
 
+// This isn't technically a instruction format that exists. It's just a CR type
+// where the source is rs1, rs2 is zero. rs1 is never written to.
+//
+// Used for C.JR and C.JALR
+pub fn encode_cr2_type(op: CrOp, rs1: Reg) -> u16 {
+    encode_cr_type(op, WritableReg::from_reg(rs1), zero_reg())
+}
+
 // Encode a CA type instruction.
 //
 // 0--1-2-----4-5--------6-7--------9-10------15

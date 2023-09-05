@@ -16,8 +16,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.add a0, a1
-;   ret
-
+;   c.jr ra
 
 function %c_mv(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -32,8 +31,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.mv a0, a1
-;   ret
-
+;   c.jr ra
 
 function %c_mv_ori(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -49,7 +47,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.mv a0, a1
-;   ret
+;   c.jr ra
 
 function %c_and(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -65,8 +63,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.and a0, a1
-;   ret
-
+;   c.jr ra
 
 function %c_or(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -82,7 +79,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.or a0, a1
-;   ret
+;   c.jr ra
 
 function %c_xor(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -98,7 +95,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.xor a0, a1
-;   ret
+;   c.jr ra
 
 function %c_sub(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -114,7 +111,7 @@ block0(v0: i64, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.sub a0, a1
-;   ret
+;   c.jr ra
 
 function %c_add_w(i32, i32) -> i64 {
 block0(v0: i32, v1: i32):
@@ -131,7 +128,7 @@ block0(v0: i32, v1: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.addw a0, a1
-;   ret
+;   c.jr ra
 
 function %c_sub_w(i32, i32) -> i64 {
 block0(v0: i32, v1: i32):
@@ -148,7 +145,7 @@ block0(v0: i32, v1: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   c.subw a0, a1
-;   ret
+;   c.jr ra
 
 ;; The select emits a `c.j` instruction.
 function %c_j(i8, i8, i8) -> i8 {
@@ -170,5 +167,55 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   c.mv a0, a1
 ;   c.j 4
 ;   c.mv a0, a2
+;   c.jr ra
+
+;; Tail call's use `c.jr`
+function %call_i8(i8) -> i8 tail {
+    fn0 = %callee_i8(i8) -> i8 tail
+
+block0(v0: i8):
+    return_call fn0(v0)
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   load_sym a2,%callee_i8+0
+;   return_call_ind a2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   c.mv s0, sp
+; block1: ; offset 0xe
+;   auipc a2, 0
+;   ld a2, 0xa(a2)
+;   c.j 0xa
+;   c.unimp ; reloc_external Abs8 %callee_i8 0
+;   c.unimp
+;   c.unimp
+;   c.unimp
+;   ld ra, 8(s0)
+;   ld t6, 0(s0)
+;   addi sp, s0, 0x10
+;   c.mv s0, t6
+;   c.jr a2
+
+function %c_ret(i32) -> i32 {
+block0(v0: i32):
+    return v0
+}
+
+; VCode:
+; block0:
 ;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.jr ra
 

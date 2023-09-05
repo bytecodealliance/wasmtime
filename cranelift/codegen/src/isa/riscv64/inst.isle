@@ -712,6 +712,7 @@
 (type CrOp (enum
   (CMv)
   (CAdd)
+  (CJr)
 ))
 
 ;; Opcodes for the CA compressed instruction format
