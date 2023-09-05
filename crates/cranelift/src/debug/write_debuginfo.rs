@@ -149,8 +149,12 @@ fn create_frame_table<'a>(
     let cie_id = table.add_cie(isa.create_systemv_cie()?);
 
     for (i, metadata) in funcs {
+        // The CFA-based unwind info will either be natively present, or we
+        // have generated it and placed into the "cfa_unwind_info" auxiliary
+        // field. We shouldn't emit both, though, it'd be wasteful.
         let mut unwind_info: Option<&CfaUnwindInfo> = None;
         if let Some(UnwindInfo::SystemV(info)) = &metadata.unwind_info {
+            debug_assert!(metadata.cfa_unwind_info.is_none());
             unwind_info = Some(info);
         } else if let Some(info) = &metadata.cfa_unwind_info {
             unwind_info = Some(info);
