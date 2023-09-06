@@ -816,6 +816,28 @@ fn run_basic_component() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "wasi-http")]
+#[test]
+fn run_wasi_http_module() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/wasi-http.wat")?;
+    let output = run_wasmtime_for_output(
+        &[
+            "--preview2",
+            "--wasi-modules",
+            "experimental-wasi-http",
+            "--disable-cache",
+            wasm.path().to_str().unwrap(),
+        ],
+        None,
+    )?;
+    println!("{}", String::from_utf8_lossy(&output.stderr));
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .starts_with("Called _start\n"));
+    assert!(!output.status.success());
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(not(feature = "component-model"), ignore)]
 fn run_precompiled_component() -> Result<()> {

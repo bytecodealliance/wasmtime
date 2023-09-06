@@ -19,8 +19,8 @@
 ;;   1b:	 8944240c             	mov	dword ptr [rsp + 0xc], eax
 ;;   1f:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
 ;;   24:	 4153                 	push	r11
-;;   26:	 58                   	pop	rax
-;;   27:	 e9faffffff           	jmp	0x26
-;;   2c:	 4883c410             	add	rsp, 0x10
-;;   30:	 5d                   	pop	rbp
-;;   31:	 c3                   	ret	
+;;   26:	 e9fbffffff           	jmp	0x26
+;;   2b:	 4883c408             	add	rsp, 8
+;;   2f:	 4883c410             	add	rsp, 0x10
+;;   33:	 5d                   	pop	rbp
+;;   34:	 c3                   	ret	

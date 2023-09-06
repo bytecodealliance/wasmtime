@@ -72,7 +72,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   bgeu sp, a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ; block1: ; offset 0x18
@@ -119,7 +119,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   ld t6, 0(a0)
 ;   ld t6, 4(t6)
 ;   bgeu sp, t6, 8
@@ -162,7 +162,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   addi t6, a0, 0xb0
 ;   bgeu sp, t6, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
@@ -206,7 +206,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   bgeu sp, a0, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   lui t5, 0x62
@@ -266,7 +266,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   ld t6, 0(a0)
 ;   ld t6, 4(t6)
 ;   addi t6, t6, 0x20
@@ -318,7 +318,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   ld t6, 0(a0)
 ;   ld t6, 4(t6)
 ;   bgeu sp, t6, 8
@@ -378,7 +378,7 @@ block0(v0: i64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ;   lui t6, 0x62
 ;   addi t6, t6, -0x580
 ;   add t6, t6, a0

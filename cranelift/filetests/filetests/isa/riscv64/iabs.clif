@@ -21,9 +21,9 @@ block0(v0: i8):
 ;   srai a1, t2, 0x38
 ;   neg a3, a1
 ;   blt a3, a1, 0xc
-;   ori a0, a3, 0
+;   mv a0, a3
 ;   j 8
-;   ori a0, a1, 0
+;   mv a0, a1
 ;   ret
 
 function %iabs_i16(i16) -> i16 {
@@ -46,9 +46,9 @@ block0(v0: i16):
 ;   srai a1, t2, 0x30
 ;   neg a3, a1
 ;   blt a3, a1, 0xc
-;   ori a0, a3, 0
+;   mv a0, a3
 ;   j 8
-;   ori a0, a1, 0
+;   mv a0, a1
 ;   ret
 
 function %iabs_i32(i32) -> i32 {
@@ -69,9 +69,9 @@ block0(v0: i32):
 ;   sext.w t2, a0
 ;   neg a1, t2
 ;   blt a1, t2, 0xc
-;   ori a0, a1, 0
+;   mv a0, a1
 ;   j 8
-;   ori a0, t2, 0
+;   mv a0, t2
 ;   ret
 
 function %iabs_i64(i64) -> i64 {
@@ -90,6 +90,6 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   neg t2, a0
 ;   blt t2, a0, 8
-;   ori a0, t2, 0
+;   mv a0, t2
 ;   ret
 

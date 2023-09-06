@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::cranelift_arbitrary::CraneliftArbitrary;
+use crate::target_isa_extras::TargetIsaExtras;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
@@ -717,12 +718,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         }
 
         Architecture::Riscv64(_) => {
-            // RISC-V Does not support SIMD at all
-            let is_simd = args.iter().chain(rets).any(|t| t.is_vector());
-            if is_simd {
-                return false;
-            }
-
             exceptions!(
                 op,
                 args,
@@ -761,9 +756,17 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
                 // TODO
-                (Opcode::SelectSpectreGuard, &[_, _, _], &[F32 | F64]),
+                (
+                    Opcode::SelectSpectreGuard,
+                    &[_, _, _],
+                    &[F32 | F64 | I8X16 | I16X8 | I32X4 | I64X2 | F64X2 | F32X4]
+                ),
                 // TODO
                 (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
+                (
+                    Opcode::Rotr | Opcode::Rotl,
+                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
+                ),
             )
         }
 
@@ -1372,9 +1375,9 @@ where
     /// Generates an instruction(`iconst`/`fconst`/etc...) to introduce a constant value
     fn generate_const(&mut self, builder: &mut FunctionBuilder, ty: Type) -> Result<Value> {
         Ok(match self.u.datavalue(ty)? {
-            DataValue::I8(i) => builder.ins().iconst(ty, i as i64),
-            DataValue::I16(i) => builder.ins().iconst(ty, i as i64),
-            DataValue::I32(i) => builder.ins().iconst(ty, i as i64),
+            DataValue::I8(i) => builder.ins().iconst(ty, i as u8 as i64),
+            DataValue::I16(i) => builder.ins().iconst(ty, i as u16 as i64),
+            DataValue::I32(i) => builder.ins().iconst(ty, i as u32 as i64),
             DataValue::I64(i) => builder.ins().iconst(ty, i as i64),
             DataValue::I128(i) => {
                 let hi = builder.ins().iconst(I64, (i >> 64) as i64);
@@ -1823,7 +1826,7 @@ where
 
         let mut params = Vec::with_capacity(param_count);
         for _ in 0..param_count {
-            params.push(self.u._type(self.isa.triple().architecture)?);
+            params.push(self.u._type((&*self.isa).supports_simd())?);
         }
         Ok(params)
     }
@@ -1843,7 +1846,7 @@ where
 
         // Create a pool of vars that are going to be used in this function
         for _ in 0..self.param(&self.config.vars_per_function)? {
-            let ty = self.u._type(self.isa.triple().architecture)?;
+            let ty = self.u._type((&*self.isa).supports_simd())?;
             let value = self.generate_const(builder, ty)?;
             vars.push((ty, value));
         }

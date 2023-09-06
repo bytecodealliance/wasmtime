@@ -143,13 +143,13 @@ where
 
         // Move the return values into the value ptr.  We are only
         // supporting a single return value at this time.
-        let ABIResult::Reg { reg, ty } = &wasm_sig.result;
-        if let Some(ty) = ty {
-            self.masm.store(
-                RegImm::reg(reg.unwrap()),
+        match wasm_sig.result {
+            ABIResult::Reg { ty, reg } => self.masm.store(
+                RegImm::reg(reg),
                 self.masm.address_at_reg(self.scratch_reg, 0),
-                (*ty).into(),
-            );
+                ty.into(),
+            ),
+            ABIResult::Void => {}
         }
 
         self.epilogue_with_callee_saved_restore(spill_size);

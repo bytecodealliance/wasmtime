@@ -161,6 +161,12 @@ pub struct UnwindInfo {
     len: u32,
 }
 
+/// Offset from the caller's SP to CFA as we define it.
+pub(crate) fn caller_sp_to_cfa_offset() -> u32 {
+    // Currently we define them to always be equal.
+    0
+}
+
 pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<Reg>>(
     insts: &[(CodeOffset, UnwindInst)],
     code_len: usize,

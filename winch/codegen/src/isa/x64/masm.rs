@@ -591,6 +591,25 @@ impl Masm for MacroAssembler {
     fn unreachable(&mut self) {
         self.asm.trap(TrapCode::UnreachableCodeReached)
     }
+
+    fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {
+        // At least one default target.
+        assert!(targets.len() >= 1);
+        let default_index = targets.len() - 1;
+        // Emit bounds check, by conditionally moving the max cases
+        // into the given index reg if the contents of the index reg
+        // are greater.
+        let max = default_index;
+        let size = OperandSize::S32;
+        self.asm.mov_ir(max as u64, tmp, size);
+        self.asm.cmp_rr(index, tmp, size);
+        self.asm.cmov(tmp, index, CmpKind::LtU, size);
+
+        let default = targets[default_index];
+        let rest = &targets[0..default_index];
+        let tmp1 = regs::scratch();
+        self.asm.jmp_table(rest.into(), default, index, tmp1, tmp);
+    }
 }
 
 impl MacroAssembler {

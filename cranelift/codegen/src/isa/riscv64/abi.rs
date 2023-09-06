@@ -341,7 +341,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
+    fn gen_prologue_frame_setup(flags: &settings::Flags) -> (SmallInstVec<Self::I>, u32) {
         // add  sp,sp,-16    ;; alloc stack space for fp.
         // sd   ra,8(sp)     ;; save ra.
         // sd   fp,0(sp)     ;; store old fp.
@@ -358,10 +358,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             fp_reg(),
             I64,
         ));
+
+        let setup_area_size = 16; // FP, LR
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::PushFrameRegs {
-                    offset_upward_to_caller_sp: 16, // FP, LR
+                    offset_upward_to_caller_sp: setup_area_size,
                 },
             });
         }
@@ -370,7 +372,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             rm: stack_reg(),
             ty: I64,
         });
-        insts
+
+        (insts, setup_area_size)
     }
     /// reverse of gen_prologue_frame_setup.
     fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {

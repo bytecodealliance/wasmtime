@@ -21,7 +21,7 @@ block0(v0: i128):
 ;   or a0, a0, a1
 ;   snez a2, a0
 ;   neg a1, a2
-;   ori a0, a1, 0
+;   mv a0, a1
 ;   ret
 
 function %bmask_i128_i64(i128) -> i64 {
@@ -121,7 +121,7 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   snez t2, a0
 ;   neg a1, t2
-;   ori a0, a1, 0
+;   mv a0, a1
 ;   ret
 
 function %bmask_i32_i128(i32) -> i128 {
@@ -145,7 +145,7 @@ block0(v0: i32):
 ;   srli a1, t2, 0x20
 ;   snez a3, a1
 ;   neg a1, a3
-;   ori a0, a1, 0
+;   mv a0, a1
 ;   ret
 
 function %bmask_i16_i128(i16) -> i128 {
@@ -169,7 +169,7 @@ block0(v0: i16):
 ;   srli a1, t2, 0x30
 ;   snez a3, a1
 ;   neg a1, a3
-;   ori a0, a1, 0
+;   mv a0, a1
 ;   ret
 
 function %bmask_i8_i128(i8) -> i128 {
@@ -191,6 +191,6 @@ block0(v0: i8):
 ;   andi t2, a0, 0xff
 ;   snez a1, t2
 ;   neg a1, a1
-;   ori a0, a1, 0
+;   mv a0, a1
 ;   ret
 

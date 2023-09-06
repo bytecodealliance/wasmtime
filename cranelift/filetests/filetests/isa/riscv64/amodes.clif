@@ -410,12 +410,12 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld t2, 0(a0)
-;   ori a2, t2, 0
+;   mv a2, t2
 ;   ld a1, 8(a0)
-;   ori a3, a2, 0
+;   mv a3, a2
 ;   sd a3, 0(a0)
 ;   sd a1, 8(a0)
-;   ori a0, a2, 0
+;   mv a0, a2
 ;   ret
 
 function %i128_imm_offset(i64) -> i128 {
@@ -439,12 +439,12 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld t2, 0x10(a0)
-;   ori a2, t2, 0
+;   mv a2, t2
 ;   ld a1, 0x18(a0)
-;   ori a3, a2, 0
+;   mv a3, a2
 ;   sd a3, 0x10(a0)
 ;   sd a1, 0x18(a0)
-;   ori a0, a2, 0
+;   mv a0, a2
 ;   ret
 
 function %i128_imm_offset_large(i64) -> i128 {
@@ -468,12 +468,12 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld t2, 0x1f8(a0)
-;   ori a2, t2, 0
+;   mv a2, t2
 ;   ld a1, 0x200(a0)
-;   ori a3, a2, 0
+;   mv a3, a2
 ;   sd a3, 0x1f8(a0)
 ;   sd a1, 0x200(a0)
-;   ori a0, a2, 0
+;   mv a0, a2
 ;   ret
 
 function %i128_imm_offset_negative_large(i64) -> i128 {
@@ -497,12 +497,12 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld t2, -0x200(a0)
-;   ori a2, t2, 0
+;   mv a2, t2
 ;   ld a1, -0x1f8(a0)
-;   ori a3, a2, 0
+;   mv a3, a2
 ;   sd a3, -0x200(a0)
 ;   sd a1, -0x1f8(a0)
-;   ori a0, a2, 0
+;   mv a0, a2
 ;   ret
 
 function %i128_add_offset(i64) -> i128 {

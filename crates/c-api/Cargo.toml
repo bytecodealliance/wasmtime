@@ -28,7 +28,7 @@ wat = { workspace = true, optional = true }
 
 # Optional dependencies for the `wasi` feature
 wasi-cap-std-sync = { workspace = true, optional = true }
-wasmtime-wasi = { workspace = true, optional = true }
+wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 cap-std = { workspace = true, optional = true }
 wasi-common = { workspace = true, optional = true }
 

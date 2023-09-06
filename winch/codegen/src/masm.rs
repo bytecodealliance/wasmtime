@@ -456,6 +456,10 @@ pub(crate) trait MacroAssembler {
     /// Emits and unconditional jump to the given label.
     fn jmp(&mut self, target: MachLabel);
 
+    /// Emits a jump table sequence. The default label is specified as
+    /// the last element of the targets slice.
+    fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg);
+
     /// Emit an unreachable code trap.
     fn unreachable(&mut self);
 }

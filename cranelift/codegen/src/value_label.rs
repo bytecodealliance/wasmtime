@@ -22,10 +22,10 @@ pub struct ValueLocRange {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum LabelValueLoc {
-    /// New-backend Reg.
+    /// Register.
     Reg(Reg),
-    /// New-backend offset from stack pointer.
-    SPOffset(i64),
+    /// Offset from the Canonical Frame Address (aka CFA).
+    CFAOffset(i64),
 }
 
 /// Resulting map of Value labels and their ranges/locations.

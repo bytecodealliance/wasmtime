@@ -58,7 +58,7 @@ features = [
 
 [dev-dependencies]
 tempfile = "3.0"
-wasmtime-wasi = { path = "../wasi" }
+wasmtime-wasi = { path = "../wasi", default-features = true }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 
 [features]

@@ -16,8 +16,8 @@ block0(v0: i8):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a3, a0, 0
-;   ori a0, zero, 0
+;   mv a3, a0
+;   mv a0, zero
 ;   addi a1, zero, 8
 ;   addi t2, zero, 1
 ;   slli t2, t2, 7
@@ -54,8 +54,8 @@ block0(v0: i16):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a7, a0, 0
-;   ori a2, zero, 0
+;   mv a7, a0
+;   mv a2, zero
 ;   addi a1, zero, 0x10
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0xf
@@ -74,8 +74,8 @@ block0(v0: i16):
 ;   j -0x28
 ;   slli a0, a0, 1
 ;   j -0x30
-;   ori a4, zero, 0
-;   ori a5, a2, 0
+;   mv a4, zero
+;   mv a5, a2
 ;   addi a6, zero, 0x38
 ;   bltz a6, 0x1c
 ;   andi t6, a5, 0xff
@@ -103,8 +103,8 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a7, a0, 0
-;   ori a2, zero, 0
+;   mv a7, a0
+;   mv a2, zero
 ;   addi a1, zero, 0x20
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0x1f
@@ -123,8 +123,8 @@ block0(v0: i32):
 ;   j -0x28
 ;   slli a0, a0, 1
 ;   j -0x30
-;   ori a4, zero, 0
-;   ori a5, a2, 0
+;   mv a4, zero
+;   mv a5, a2
 ;   addi a6, zero, 0x38
 ;   bltz a6, 0x1c
 ;   andi t6, a5, 0xff
@@ -151,9 +151,9 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a6, a0, 0
-;   ori t2, zero, 0
-;   ori a0, a6, 0
+;   mv a6, a0
+;   mv t2, zero
+;   mv a0, a6
 ;   addi a1, zero, 0x38
 ;   bltz a1, 0x1c
 ;   andi t6, a0, 0xff
@@ -162,7 +162,7 @@ block0(v0: i64):
 ;   addi a1, a1, -8
 ;   srli a0, a0, 8
 ;   j -0x18
-;   ori a0, zero, 0
+;   mv a0, zero
 ;   addi a5, zero, 0x40
 ;   addi a3, zero, 1
 ;   slli a3, a3, 0x3f
@@ -202,10 +202,10 @@ block0(v0: i128):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a3, a0, 0
-;   ori a7, a1, 0
-;   ori a0, zero, 0
-;   ori a1, a3, 0
+;   mv a3, a0
+;   mv a7, a1
+;   mv a0, zero
+;   mv a1, a3
 ;   addi a2, zero, 0x38
 ;   bltz a2, 0x1c
 ;   andi t6, a1, 0xff
@@ -214,7 +214,7 @@ block0(v0: i128):
 ;   addi a2, a2, -8
 ;   srli a1, a1, 8
 ;   j -0x18
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   addi a6, zero, 0x40
 ;   addi a4, zero, 1
 ;   slli a4, a4, 0x3f
@@ -233,9 +233,9 @@ block0(v0: i128):
 ;   j -0x28
 ;   slli a5, a5, 1
 ;   j -0x30
-;   ori a3, a7, 0
-;   ori t4, zero, 0
-;   ori t0, a3, 0
+;   mv a3, a7
+;   mv t4, zero
+;   mv t0, a3
 ;   addi t1, zero, 0x38
 ;   bltz t1, 0x1c
 ;   andi t6, t0, 0xff
@@ -244,7 +244,7 @@ block0(v0: i128):
 ;   addi t1, t1, -8
 ;   srli t0, t0, 8
 ;   j -0x18
-;   ori a0, zero, 0
+;   mv a0, zero
 ;   addi a2, zero, 0x40
 ;   addi a4, zero, 1
 ;   slli a4, a4, 0x3f
@@ -279,8 +279,8 @@ block0(v0: i8):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 8
 ;   addi t2, zero, 1
 ;   slli t2, t2, 7
@@ -307,8 +307,8 @@ block0(v0: i16):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x10
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0xf
@@ -335,8 +335,8 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x20
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0x1f
@@ -363,8 +363,8 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x40
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0x3f
@@ -394,7 +394,7 @@ block0(v0: i128):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, zero, 0
+;   mv a2, zero
 ;   addi a3, zero, 0x40
 ;   addi a4, zero, 1
 ;   slli a4, a4, 0x3f
@@ -405,7 +405,7 @@ block0(v0: i128):
 ;   addi a3, a3, -1
 ;   srli a4, a4, 1
 ;   j -0x18
-;   ori a6, zero, 0
+;   mv a6, zero
 ;   addi a5, zero, 0x40
 ;   addi a4, zero, 1
 ;   slli a4, a4, 0x3f
@@ -417,9 +417,9 @@ block0(v0: i128):
 ;   srli a4, a4, 1
 ;   j -0x18
 ;   beqz a1, 0xc
-;   ori t3, zero, 0
+;   mv t3, zero
 ;   j 8
-;   ori t3, a6, 0
+;   mv t3, a6
 ;   add a0, a2, t3
 ;   mv a1, zero
 ;   ret
@@ -446,10 +446,10 @@ block0(v0: i8):
 ;   srai a1, t2, 0x38
 ;   not a3, a1
 ;   bltz a1, 0xc
-;   ori a5, a1, 0
+;   mv a5, a1
 ;   j 8
-;   ori a5, a3, 0
-;   ori t4, zero, 0
+;   mv a5, a3
+;   mv t4, zero
 ;   addi t3, zero, 8
 ;   addi a7, zero, 1
 ;   slli a7, a7, 7
@@ -485,10 +485,10 @@ block0(v0: i16):
 ;   srai a1, t2, 0x30
 ;   not a3, a1
 ;   bltz a1, 0xc
-;   ori a5, a1, 0
+;   mv a5, a1
 ;   j 8
-;   ori a5, a3, 0
-;   ori t4, zero, 0
+;   mv a5, a3
+;   mv t4, zero
 ;   addi t3, zero, 0x10
 ;   addi a7, zero, 1
 ;   slli a7, a7, 0xf
@@ -522,10 +522,10 @@ block0(v0: i32):
 ;   sext.w t2, a0
 ;   not a1, t2
 ;   bltz t2, 0xc
-;   ori a3, t2, 0
+;   mv a3, t2
 ;   j 8
-;   ori a3, a1, 0
-;   ori a7, zero, 0
+;   mv a3, a1
+;   mv a7, zero
 ;   addi a6, zero, 0x20
 ;   addi a5, zero, 1
 ;   slli a5, a5, 0x1f
@@ -557,10 +557,10 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   not t2, a0
 ;   bltz a0, 0xc
-;   ori a1, a0, 0
+;   mv a1, a0
 ;   j 8
-;   ori a1, t2, 0
-;   ori a5, zero, 0
+;   mv a1, t2
+;   mv a5, zero
 ;   addi a4, zero, 0x40
 ;   addi a3, zero, 1
 ;   slli a3, a3, 0x3f
@@ -599,13 +599,13 @@ block0(v0: i128):
 ; block0: ; offset 0x0
 ;   not a2, a0
 ;   bltz a1, 8
-;   ori a2, a0, 0
+;   mv a2, a0
 ;   not a4, a1
 ;   bltz a1, 0xc
-;   ori a6, a1, 0
+;   mv a6, a1
 ;   j 8
-;   ori a6, a4, 0
-;   ori t0, zero, 0
+;   mv a6, a4
+;   mv t0, zero
 ;   addi t4, zero, 0x40
 ;   addi t3, zero, 1
 ;   slli t3, t3, 0x3f
@@ -616,7 +616,7 @@ block0(v0: i128):
 ;   addi t4, t4, -1
 ;   srli t3, t3, 1
 ;   j -0x18
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   addi a0, zero, 0x40
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0x3f
@@ -628,9 +628,9 @@ block0(v0: i128):
 ;   srli t2, t2, 1
 ;   j -0x18
 ;   beqz a6, 0xc
-;   ori a3, zero, 0
+;   mv a3, zero
 ;   j 8
-;   ori a3, a1, 0
+;   mv a3, a1
 ;   add a5, t0, a3
 ;   mv a7, zero
 ;   addi a0, a5, -1
@@ -651,8 +651,8 @@ block0(v0: i8):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 8
 ;   addi t2, zero, 1
 ;   blez a1, 0x1c
@@ -678,8 +678,8 @@ block0(v0: i16):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x10
 ;   addi t2, zero, 1
 ;   blez a1, 0x1c
@@ -705,8 +705,8 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x20
 ;   addi t2, zero, 1
 ;   blez a1, 0x1c
@@ -732,8 +732,8 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x40
 ;   addi t2, zero, 1
 ;   blez a1, 0x1c
@@ -763,8 +763,8 @@ block0(v0: i128):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori t4, a1, 0
-;   ori a2, zero, 0
+;   mv t4, a1
+;   mv a2, zero
 ;   addi a1, zero, 0x40
 ;   addi a3, zero, 1
 ;   blez a1, 0x1c
@@ -774,7 +774,7 @@ block0(v0: i128):
 ;   addi a1, a1, -1
 ;   slli a3, a3, 1
 ;   j -0x18
-;   ori a6, zero, 0
+;   mv a6, zero
 ;   addi a5, zero, 0x40
 ;   addi a4, zero, 1
 ;   blez a5, 0x1c
@@ -785,9 +785,9 @@ block0(v0: i128):
 ;   slli a4, a4, 1
 ;   j -0x18
 ;   beqz a0, 0xc
-;   ori t3, zero, 0
+;   mv t3, zero
 ;   j 8
-;   ori t3, a2, 0
+;   mv t3, a2
 ;   add a0, a6, t3
 ;   mv a1, zero
 ;   ret
@@ -809,8 +809,8 @@ block0(v0: i128):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori t3, a0, 0
-;   ori a2, zero, 0
+;   mv t3, a0
+;   mv a2, zero
 ;   addi a3, zero, 0x40
 ;   addi a0, zero, 1
 ;   slli a0, a0, 0x3f
@@ -821,7 +821,7 @@ block0(v0: i128):
 ;   addi a3, a3, -1
 ;   srli a0, a0, 1
 ;   j -0x18
-;   ori a6, zero, 0
+;   mv a6, zero
 ;   addi a5, zero, 0x40
 ;   addi a4, zero, 1
 ;   slli a4, a4, 0x3f
@@ -850,8 +850,8 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x40
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0x3f
@@ -878,8 +878,8 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x20
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0x1f
@@ -906,8 +906,8 @@ block0(v0: i16):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 0x10
 ;   addi t2, zero, 1
 ;   slli t2, t2, 0xf
@@ -934,8 +934,8 @@ block0(v0: i8):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ori a2, a0, 0
-;   ori a0, zero, 0
+;   mv a2, a0
+;   mv a0, zero
 ;   addi a1, zero, 8
 ;   addi t2, zero, 1
 ;   slli t2, t2, 7
@@ -1723,21 +1723,21 @@ block0(v0: i128, v1: i8):
 ;   sll a7, a0, a3
 ;   srl t4, a0, a5
 ;   beqz a3, 0xc
-;   ori t1, t4, 0
+;   mv t1, t4
 ;   j 8
-;   ori t1, zero, 0
+;   mv t1, zero
 ;   sll a0, a1, a3
 ;   or a3, t1, a0
 ;   addi a4, zero, 0x40
 ;   andi a6, a2, 0x7f
 ;   bgeu a6, a4, 0xc
-;   ori a0, a7, 0
+;   mv a0, a7
 ;   j 8
-;   ori a0, zero, 0
+;   mv a0, zero
 ;   bgeu a6, a4, 0xc
-;   ori a1, a3, 0
+;   mv a1, a3
 ;   j 8
-;   ori a1, a7, 0
+;   mv a1, a7
 ;   ret
 
 function %ishl_i128_i128(i128, i128) -> i128 {
@@ -1770,21 +1770,21 @@ block0(v0: i128, v1: i128):
 ;   sll t3, a0, a3
 ;   srl t0, a0, a6
 ;   beqz a3, 0xc
-;   ori t2, t0, 0
+;   mv t2, t0
 ;   j 8
-;   ori t2, zero, 0
+;   mv t2, zero
 ;   sll a1, a1, a3
 ;   or a3, t2, a1
 ;   addi a5, zero, 0x40
 ;   andi a7, a2, 0x7f
 ;   bgeu a7, a5, 0xc
-;   ori a0, t3, 0
+;   mv a0, t3
 ;   j 8
-;   ori a0, zero, 0
+;   mv a0, zero
 ;   bgeu a7, a5, 0xc
-;   ori a1, a3, 0
+;   mv a1, a3
 ;   j 8
-;   ori a1, t3, 0
+;   mv a1, t3
 ;   ret
 
 function %ushr_i128_i8(i128, i8) -> i128 {
@@ -1816,9 +1816,9 @@ block0(v0: i128, v1: i8):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
@@ -1826,11 +1826,11 @@ block0(v0: i128, v1: i8):
 ;   andi a6, a2, 0x7f
 ;   bgeu a6, a4, 8
 ;   j 8
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   bgeu a6, a4, 0xc
-;   ori a1, a5, 0
+;   mv a1, a5
 ;   j 8
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   ret
 
 function %ushr_i128_i128(i128, i128) -> i128 {
@@ -1862,22 +1862,22 @@ block0(v0: i128, v1: i128):
 ;   sub a6, a4, a3
 ;   sll t3, a1, a6
 ;   beqz a3, 0xc
-;   ori t0, t3, 0
+;   mv t0, t3
 ;   j 8
-;   ori t0, zero, 0
+;   mv t0, zero
 ;   srl t2, a0, a3
 ;   or a5, t0, t2
 ;   addi a4, zero, 0x40
 ;   srl a6, a1, a3
 ;   andi a7, a2, 0x7f
 ;   bgeu a7, a4, 0xc
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   j 8
-;   ori a0, a6, 0
+;   mv a0, a6
 ;   bgeu a7, a4, 0xc
-;   ori a1, a6, 0
+;   mv a1, a6
 ;   j 8
-;   ori a1, zero, 0
+;   mv a1, zero
 ;   ret
 
 function %sshr_i128_i8(i128, i8) -> i128 {
@@ -1912,27 +1912,27 @@ block0(v0: i128, v1: i8):
 ;   sub a5, a4, a3
 ;   sll a7, a1, a5
 ;   beqz a3, 0xc
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   j 8
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   srl t1, a0, a3
 ;   or a0, t4, t1
 ;   addi a4, zero, 0x40
 ;   sra a4, a1, a3
 ;   addi a6, zero, -1
 ;   bltz a1, 0xc
-;   ori t3, zero, 0
+;   mv t3, zero
 ;   j 8
-;   ori t3, a6, 0
+;   mv t3, a6
 ;   addi t0, zero, 0x40
 ;   andi t2, a2, 0x7f
 ;   bgeu t2, t0, 8
 ;   j 8
-;   ori a0, a4, 0
+;   mv a0, a4
 ;   bgeu t2, t0, 0xc
-;   ori a1, a4, 0
+;   mv a1, a4
 ;   j 8
-;   ori a1, t3, 0
+;   mv a1, t3
 ;   ret
 
 function %sshr_i128_i128(i128, i128) -> i128 {
@@ -1967,27 +1967,27 @@ block0(v0: i128, v1: i128):
 ;   sub a6, a4, a3
 ;   sll t3, a1, a6
 ;   beqz a3, 0xc
-;   ori t0, t3, 0
+;   mv t0, t3
 ;   j 8
-;   ori t0, zero, 0
+;   mv t0, zero
 ;   srl t2, a0, a3
 ;   or a4, t0, t2
 ;   addi a5, zero, 0x40
 ;   sra a5, a1, a3
 ;   addi a7, zero, -1
 ;   bltz a1, 0xc
-;   ori t4, zero, 0
+;   mv t4, zero
 ;   j 8
-;   ori t4, a7, 0
+;   mv t4, a7
 ;   addi t1, zero, 0x40
 ;   andi a1, a2, 0x7f
 ;   bgeu a1, t1, 0xc
-;   ori a0, a4, 0
+;   mv a0, a4
 ;   j 8
-;   ori a0, a5, 0
+;   mv a0, a5
 ;   bgeu a1, t1, 0xc
-;   ori a1, a5, 0
+;   mv a1, a5
 ;   j 8
-;   ori a1, t4, 0
+;   mv a1, t4
 ;   ret
 

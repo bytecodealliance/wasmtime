@@ -444,7 +444,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
-    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Self::I> {
+    fn gen_prologue_frame_setup(flags: &settings::Flags) -> (SmallInstVec<Self::I>, u32) {
         let r_rsp = regs::rsp();
         let r_rbp = regs::rbp();
         let w_rbp = Writable::from_reg(r_rbp);
@@ -453,10 +453,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // RSP before the call will be 0 % 16.  So here, it is 8 % 16.
         insts.push(Inst::push64(RegMemImm::reg(r_rbp)));
 
+        let setup_area_size = 16; // RBP, return address
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::PushFrameRegs {
-                    offset_upward_to_caller_sp: 16, // RBP, return address
+                    offset_upward_to_caller_sp: setup_area_size,
                 },
             });
         }
@@ -464,7 +465,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // `mov %rsp, %rbp`
         // RSP is now 0 % 16
         insts.push(Inst::mov_r_r(OperandSize::Size64, r_rsp, w_rbp));
-        insts
+
+        (insts, setup_area_size)
     }
 
     fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Self::I> {

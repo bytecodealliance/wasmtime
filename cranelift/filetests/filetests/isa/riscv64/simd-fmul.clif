@@ -29,7 +29,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, s0, 0x10
@@ -71,7 +71,7 @@ block0(v0: f32x4, v1: f32):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, s0, 0x10
@@ -111,7 +111,7 @@ block0(v0: f32x4, v1: f32):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, s0, 0x10
@@ -151,7 +151,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, s0, 0x10
@@ -193,7 +193,7 @@ block0(v0: f64x2, v1: f64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, s0, 0x10
@@ -233,7 +233,7 @@ block0(v0: f64x2, v1: f64):
 ;   addi sp, sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
-;   ori s0, sp, 0
+;   mv s0, sp
 ; block1: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   addi t6, s0, 0x10

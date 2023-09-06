@@ -37,6 +37,13 @@
     (loop (result i32) (call $dummy) (call $dummy) (select (i32.const 2) (i32.const 3) (local.get 0)))
   )
 
+  (func (export "as-br_table-first") (param i32) (result i32)
+    (block (result i32) (select (i32.const 2) (i32.const 3) (local.get 0)) (i32.const 2) (br_table 0 0))
+  )
+  (func (export "as-br_table-last") (param i32) (result i32)
+    (block (result i32) (i32.const 2) (select (i32.const 2) (i32.const 3) (local.get 0)) (br_table 0 0))
+  )
+
   (func (export "as-if-condition") (param i32)
     (select (i32.const 2) (i32.const 3) (local.get 0)) (if (then (call $dummy)))
   )
@@ -186,3 +193,8 @@
 (assert_return (invoke "as-compare-left" (i32.const 1)) (i32.const 1))
 (assert_return (invoke "as-compare-right" (i32.const 0)) (i32.const 0))
 (assert_return (invoke "as-compare-right" (i32.const 1)) (i32.const 1))
+
+(assert_return (invoke "as-br_table-first" (i32.const 0)) (i32.const 3))
+(assert_return (invoke "as-br_table-first" (i32.const 1)) (i32.const 2))
+(assert_return (invoke "as-br_table-last" (i32.const 0)) (i32.const 2))
+(assert_return (invoke "as-br_table-last" (i32.const 1)) (i32.const 2))
