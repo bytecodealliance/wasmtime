@@ -802,12 +802,14 @@
        (Args
         (args VecArgPair))
 
+       ;; A pseudo-instruction that moves vregs to return registers.
+       (Rets
+        (rets VecRetPair))
+
        ;; ---- branches (exactly one must appear at end of BB) ----
 
        ;; A machine return instruction.
-       (Ret
-        (rets VecRetPair)
-        (stack_bytes_to_pop u32))
+       (Ret)
 
        ;; A machine return instruction with pointer authentication using SP as the
        ;; modifier. This instruction requires pointer authentication support
@@ -816,9 +818,7 @@
        ;; the relevant support.
        (AuthenticatedRet
         (key APIKey)
-        (is_hint bool)
-        (rets VecRetPair)
-        (stack_bytes_to_pop u32))
+        (is_hint bool))
 
        ;; An unconditional branch.
        (Jump

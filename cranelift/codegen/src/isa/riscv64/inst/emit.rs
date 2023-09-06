@@ -324,6 +324,7 @@ impl Inst {
             | Inst::Load { .. }
             | Inst::Store { .. }
             | Inst::Args { .. }
+            | Inst::Rets { .. }
             | Inst::Ret { .. }
             | Inst::Extend { .. }
             | Inst::AdjustSp { .. }
@@ -729,19 +730,11 @@ impl Inst {
 
                 sink.put4(encode_s_type(op.op_code(), op.funct3(), addr, src, imm12));
             }
-            &Inst::Args { .. } => {
+            &Inst::Args { .. } | &Inst::Rets { .. } => {
                 // Nothing: this is a pseudoinstruction that serves
                 // only to constrain registers at a certain point.
             }
-            &Inst::Ret {
-                stack_bytes_to_pop, ..
-            } => {
-                if stack_bytes_to_pop != 0 {
-                    Inst::AdjustSp {
-                        amount: i64::from(stack_bytes_to_pop),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                }
+            &Inst::Ret {} => {
                 //jalr x0, x1, 0
                 let x: u32 = (0b1100111) | (1 << 15);
                 sink.put4(x);
@@ -2948,6 +2941,7 @@ impl Inst {
             },
 
             Inst::Args { .. } => self,
+            Inst::Rets { .. } => self,
             Inst::Ret { .. } => self,
 
             Inst::Extend {

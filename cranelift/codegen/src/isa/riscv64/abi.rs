@@ -246,21 +246,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         specified
     }
 
-    fn gen_args(_isa_flags: &crate::isa::riscv64::settings::Flags, args: Vec<ArgPair>) -> Inst {
+    fn gen_args(args: Vec<ArgPair>) -> Inst {
         Inst::Args { args }
     }
 
-    fn gen_ret(
-        _setup_frame: bool,
-        _isa_flags: &Self::F,
-        _call_conv: isa::CallConv,
-        rets: Vec<RetPair>,
-        stack_bytes_to_pop: u32,
-    ) -> Inst {
-        Inst::Ret {
-            rets,
-            stack_bytes_to_pop,
-        }
+    fn gen_rets(rets: Vec<RetPair>) -> Inst {
+        Inst::Rets { rets }
     }
 
     fn get_stacklimit_reg(_call_conv: isa::CallConv) -> Reg {
@@ -341,54 +332,77 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    fn gen_prologue_frame_setup(flags: &settings::Flags) -> (SmallInstVec<Self::I>, u32) {
-        // add  sp,sp,-16    ;; alloc stack space for fp.
-        // sd   ra,8(sp)     ;; save ra.
-        // sd   fp,0(sp)     ;; store old fp.
-        // mv   fp,sp        ;; set fp to sp.
+    fn gen_prologue_frame_setup(
+        _call_conv: isa::CallConv,
+        flags: &settings::Flags,
+        _isa_flags: &RiscvFlags,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        insts.push(Inst::AdjustSp { amount: -16 });
-        insts.push(Self::gen_store_stack(
-            StackAMode::SPOffset(8, I64),
-            link_reg(),
-            I64,
-        ));
-        insts.push(Self::gen_store_stack(
-            StackAMode::SPOffset(0, I64),
-            fp_reg(),
-            I64,
-        ));
 
-        let setup_area_size = 16; // FP, LR
-        if flags.unwind_info() {
-            insts.push(Inst::Unwind {
-                inst: UnwindInst::PushFrameRegs {
-                    offset_upward_to_caller_sp: setup_area_size,
-                },
+        if frame_layout.setup_area_size > 0 {
+            // add  sp,sp,-16    ;; alloc stack space for fp.
+            // sd   ra,8(sp)     ;; save ra.
+            // sd   fp,0(sp)     ;; store old fp.
+            // mv   fp,sp        ;; set fp to sp.
+            insts.push(Inst::AdjustSp { amount: -16 });
+            insts.push(Self::gen_store_stack(
+                StackAMode::SPOffset(8, I64),
+                link_reg(),
+                I64,
+            ));
+            insts.push(Self::gen_store_stack(
+                StackAMode::SPOffset(0, I64),
+                fp_reg(),
+                I64,
+            ));
+
+            if flags.unwind_info() {
+                insts.push(Inst::Unwind {
+                    inst: UnwindInst::PushFrameRegs {
+                        offset_upward_to_caller_sp: frame_layout.setup_area_size,
+                    },
+                });
+            }
+            insts.push(Inst::Mov {
+                rd: writable_fp_reg(),
+                rm: stack_reg(),
+                ty: I64,
             });
         }
-        insts.push(Inst::Mov {
-            rd: writable_fp_reg(),
-            rm: stack_reg(),
-            ty: I64,
-        });
 
-        (insts, setup_area_size)
+        insts
     }
     /// reverse of gen_prologue_frame_setup.
-    fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {
+    fn gen_epilogue_frame_restore(
+        call_conv: isa::CallConv,
+        _flags: &settings::Flags,
+        _isa_flags: &RiscvFlags,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(8, I64),
-            writable_link_reg(),
-            I64,
-        ));
-        insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(0, I64),
-            writable_fp_reg(),
-            I64,
-        ));
-        insts.push(Inst::AdjustSp { amount: 16 });
+
+        if frame_layout.setup_area_size > 0 {
+            insts.push(Self::gen_load_stack(
+                StackAMode::SPOffset(8, I64),
+                writable_link_reg(),
+                I64,
+            ));
+            insts.push(Self::gen_load_stack(
+                StackAMode::SPOffset(0, I64),
+                writable_fp_reg(),
+                I64,
+            ));
+            insts.push(Inst::AdjustSp { amount: 16 });
+        }
+
+        if call_conv == isa::CallConv::Tail && frame_layout.stack_args_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(
+                frame_layout.stack_args_size.try_into().unwrap(),
+            ));
+        }
+        insts.push(Inst::Ret {});
+
         insts
     }
 
@@ -410,28 +424,23 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             }),
         });
     }
-    // Returns stack bytes used as well as instructions. Does not adjust
-    // nominal SP offset; abi_impl generic code will do that.
+
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
-        setup_frame: bool,
         flags: &settings::Flags,
-        clobbered_callee_saves: &[Writable<RealReg>],
-        fixed_frame_storage_size: u32,
-        _outgoing_args_size: u32,
-    ) -> (u64, SmallVec<[Inst; 16]>) {
+        frame_layout: &FrameLayout,
+    ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let clobbered_size = compute_clobber_size(&clobbered_callee_saves);
         // Adjust the stack pointer downward for clobbers and the function fixed
         // frame (spillslots and storage slots).
-        let stack_size = fixed_frame_storage_size + clobbered_size;
-        if flags.unwind_info() && setup_frame {
+        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
+        if flags.unwind_info() && frame_layout.setup_area_size > 0 {
             // The *unwind* frame (but not the actual frame) starts at the
             // clobbers, just below the saved FP/LR pair.
             insts.push(Inst::Unwind {
                 inst: UnwindInst::DefineNewFrame {
-                    offset_downward_to_clobbers: clobbered_size,
-                    offset_upward_to_caller_sp: 16, // FP, LR
+                    offset_downward_to_clobbers: frame_layout.clobber_size,
+                    offset_upward_to_caller_sp: frame_layout.setup_area_size,
                 },
             });
         }
@@ -440,7 +449,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         if stack_size > 0 {
             // since we use fp, we didn't need use UnwindInst::StackAlloc.
             let mut cur_offset = 8;
-            for reg in clobbered_callee_saves {
+            for reg in &frame_layout.clobbered_callee_saves {
                 let r_reg = reg.to_reg();
                 let ty = match r_reg.class() {
                     RegClass::Int => I64,
@@ -450,7 +459,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 if flags.unwind_info() {
                     insts.push(Inst::Unwind {
                         inst: UnwindInst::SaveReg {
-                            clobber_offset: clobbered_size - cur_offset,
+                            clobber_offset: frame_layout.clobber_size - cur_offset,
                             reg: r_reg,
                         },
                     });
@@ -466,28 +475,23 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 amount: -(stack_size as i64),
             });
         }
-        (clobbered_size as u64, insts)
+        insts
     }
 
     fn gen_clobber_restore(
-        call_conv: isa::CallConv,
-        sig: &Signature,
+        _call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        clobbers: &[Writable<RealReg>],
-        fixed_frame_storage_size: u32,
-        _outgoing_args_size: u32,
+        frame_layout: &FrameLayout,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let clobbered_callee_saves =
-            Self::get_clobbered_callee_saves(call_conv, _flags, sig, clobbers);
-        let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
+        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
         if stack_size > 0 {
             insts.push(Inst::AdjustSp {
                 amount: stack_size as i64,
             });
         }
         let mut cur_offset = 8;
-        for reg in &clobbered_callee_saves {
+        for reg in &frame_layout.clobbered_callee_saves {
             let rreg = reg.to_reg();
             let ty = match rreg.class() {
                 RegClass::Int => I64,
@@ -636,12 +640,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    fn get_clobbered_callee_saves(
+    fn compute_frame_layout(
         call_conv: isa::CallConv,
-        _flags: &settings::Flags,
+        flags: &settings::Flags,
         _sig: &Signature,
         regs: &[Writable<RealReg>],
-    ) -> Vec<Writable<RealReg>> {
+        is_leaf: bool,
+        stack_args_size: u32,
+        fixed_frame_storage_size: u32,
+        outgoing_args_size: u32,
+    ) -> FrameLayout {
         let mut regs: Vec<Writable<RealReg>> = regs
             .iter()
             .cloned()
@@ -649,21 +657,34 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             .collect();
 
         regs.sort();
-        regs
-    }
 
-    fn is_frame_setup_needed(
-        is_leaf: bool,
-        stack_args_size: u32,
-        num_clobbered_callee_saves: usize,
-        fixed_frame_storage_size: u32,
-    ) -> bool {
-        !is_leaf
+        // Compute clobber size.
+        let clobber_size = compute_clobber_size(&regs);
+
+        // Compute linkage frame size.
+        let setup_area_size = if flags.preserve_frame_pointers()
+            || !is_leaf
             // The function arguments that are passed on the stack are addressed
             // relative to the Frame Pointer.
             || stack_args_size > 0
-            || num_clobbered_callee_saves > 0
-        || fixed_frame_storage_size > 0
+            || clobber_size > 0
+            || fixed_frame_storage_size > 0
+        {
+            16 // FP, LR
+        } else {
+            0
+        };
+
+        // Return FrameLayout structure.
+        debug_assert!(outgoing_args_size == 0);
+        FrameLayout {
+            stack_args_size,
+            setup_area_size,
+            clobber_size,
+            fixed_frame_storage_size,
+            outgoing_args_size,
+            clobbered_callee_saves: regs,
+        }
     }
 
     fn gen_inline_probestack(

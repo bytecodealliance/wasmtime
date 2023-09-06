@@ -860,11 +860,12 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_def(arg.vreg, arg.preg);
             }
         }
-        &Inst::Ret { ref rets, .. } | &Inst::AuthenticatedRet { ref rets, .. } => {
+        &Inst::Rets { ref rets } => {
             for ret in rets {
                 collector.reg_fixed_use(ret.vreg, ret.preg);
             }
         }
+        &Inst::Ret { .. } | &Inst::AuthenticatedRet { .. } => {}
         &Inst::Jump { .. } => {}
         &Inst::Call { ref info, .. } => {
             for u in &info.uses {
@@ -1044,7 +1045,7 @@ impl MachInst for Inst {
 
     fn is_term(&self) -> MachTerminator {
         match self {
-            &Inst::Ret { .. } | &Inst::AuthenticatedRet { .. } => MachTerminator::Ret,
+            &Inst::Rets { .. } => MachTerminator::Ret,
             &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
@@ -2592,15 +2593,8 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret {
-                ref rets,
-                stack_bytes_to_pop,
-            } => {
-                let mut s = if stack_bytes_to_pop == 0 {
-                    "ret".to_string()
-                } else {
-                    format!("add sp, sp, #{} ; ret", stack_bytes_to_pop)
-                };
+            &Inst::Rets { ref rets } => {
+                let mut s = "rets".to_string();
                 for ret in rets {
                     let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
                     let vreg = pretty_print_reg(ret.vreg, allocs);
@@ -2608,34 +2602,18 @@ impl Inst {
                 }
                 s
             }
-            &Inst::AuthenticatedRet {
-                key,
-                is_hint,
-                stack_bytes_to_pop,
-                ref rets,
-            } => {
+            &Inst::Ret {} => "ret".to_string(),
+            &Inst::AuthenticatedRet { key, is_hint } => {
                 let key = match key {
                     APIKey::AZ => "az",
                     APIKey::BZ => "bz",
                     APIKey::ASP => "asp",
                     APIKey::BSP => "bsp",
                 };
-                let mut s = match (is_hint, stack_bytes_to_pop) {
-                    (false, 0) => format!("reta{key}"),
-                    (false, n) => {
-                        format!("add sp, sp, #{n} ; reta{key}")
-                    }
-                    (true, 0) => format!("auti{key} ; ret"),
-                    (true, n) => {
-                        format!("add sp, sp, #{n} ; auti{key} ; ret")
-                    }
-                };
-                for ret in rets {
-                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
-                    let vreg = pretty_print_reg(ret.vreg, allocs);
-                    write!(&mut s, " {vreg}={preg}").unwrap();
+                match is_hint {
+                    false => format!("reta{key}"),
+                    true => format!("auti{key} ; ret"),
                 }
-                s
             }
             &Inst::Jump { ref dest } => {
                 let dest = dest.pretty_print(0, allocs);

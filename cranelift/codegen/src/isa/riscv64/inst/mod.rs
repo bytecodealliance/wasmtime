@@ -407,11 +407,12 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_def(arg.vreg, arg.preg);
             }
         }
-        &Inst::Ret { ref rets, .. } => {
+        &Inst::Rets { ref rets } => {
             for ret in rets {
                 collector.reg_fixed_use(ret.vreg, ret.preg);
             }
         }
+        &Inst::Ret { .. } => {}
 
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_use(rn);
@@ -888,7 +889,7 @@ impl MachInst for Inst {
             &Inst::Jal { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::Jalr { .. } => MachTerminator::Uncond,
-            &Inst::Ret { .. } => MachTerminator::Ret,
+            &Inst::Rets { .. } => MachTerminator::Ret,
             &Inst::BrTable { .. } => MachTerminator::Indirect,
             &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             _ => MachTerminator::None,
@@ -1557,16 +1558,8 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret {
-                ref rets,
-                stack_bytes_to_pop,
-            } => {
-                let mut s = if stack_bytes_to_pop == 0 {
-                    "ret".to_string()
-                } else {
-                    format!("add sp, sp, #{stack_bytes_to_pop} ; ret")
-                };
-
+            &Inst::Rets { ref rets } => {
+                let mut s = "rets".to_string();
                 let mut empty_allocs = AllocationConsumer::default();
                 for ret in rets {
                     let preg = format_reg(ret.preg, &mut empty_allocs);
@@ -1575,6 +1568,7 @@ impl Inst {
                 }
                 s
             }
+            &Inst::Ret {} => "ret".to_string(),
 
             &MInst::Extend {
                 rd,

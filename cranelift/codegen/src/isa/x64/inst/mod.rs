@@ -11,7 +11,6 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
@@ -140,6 +139,7 @@ impl Inst {
             | Inst::Push64 { .. }
             | Inst::StackProbeLoop { .. }
             | Inst::Args { .. }
+            | Inst::Rets { .. }
             | Inst::Ret { .. }
             | Inst::Setcc { .. }
             | Inst::ShiftR { .. }
@@ -586,11 +586,8 @@ impl Inst {
         }
     }
 
-    pub(crate) fn ret(rets: Vec<RetPair>, stack_bytes_to_pop: u32) -> Inst {
-        Inst::Ret {
-            rets,
-            stack_bytes_to_pop,
-        }
+    pub(crate) fn ret(stack_bytes_to_pop: u32) -> Inst {
+        Inst::Ret { stack_bytes_to_pop }
     }
 
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
@@ -1684,18 +1681,20 @@ impl PrettyPrint for Inst {
                 s
             }
 
-            Inst::Ret {
-                rets,
-                stack_bytes_to_pop,
-            } => {
-                let mut s = "ret".to_string();
-                if *stack_bytes_to_pop != 0 {
-                    write!(&mut s, " {stack_bytes_to_pop}").unwrap();
-                }
+            Inst::Rets { rets } => {
+                let mut s = "rets".to_string();
                 for ret in rets {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
                     write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
+            }
+
+            Inst::Ret { stack_bytes_to_pop } => {
+                let mut s = "ret".to_string();
+                if *stack_bytes_to_pop != 0 {
+                    write!(&mut s, " {stack_bytes_to_pop}").unwrap();
                 }
                 s
             }
@@ -2407,10 +2406,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
 
-        Inst::Ret {
-            rets,
-            stack_bytes_to_pop: _,
-        } => {
+        Inst::Rets { rets } => {
             // The return value(s) are live-out; we represent this
             // with register uses on the return instruction.
             for ret in rets.iter() {
@@ -2421,6 +2417,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         Inst::JmpKnown { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
+        | Inst::Ret { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
@@ -2531,7 +2528,7 @@ impl MachInst for Inst {
     fn is_term(&self) -> MachTerminator {
         match self {
             // Interesting cases.
-            &Self::Ret { .. } => MachTerminator::Ret,
+            &Self::Rets { .. } => MachTerminator::Ret,
             &Self::ReturnCallKnown { .. } | &Self::ReturnCallUnknown { .. } => {
                 MachTerminator::RetCall
             }

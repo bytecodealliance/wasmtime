@@ -42,22 +42,7 @@ fn test_riscv64_binemit() {
 
     let mut insns = Vec::<TestUnit>::with_capacity(500);
 
-    insns.push(TestUnit::new(
-        Inst::Ret {
-            rets: vec![],
-            stack_bytes_to_pop: 0,
-        },
-        "ret",
-        0x00008067,
-    ));
-    insns.push(TestUnit::new(
-        Inst::Ret {
-            rets: vec![],
-            stack_bytes_to_pop: 16,
-        },
-        "add sp, sp, #16 ; ret",
-        "1301010167800000",
-    ));
+    insns.push(TestUnit::new(Inst::Ret {}, "ret", 0x00008067));
 
     insns.push(TestUnit::new(
         Inst::Mov {
