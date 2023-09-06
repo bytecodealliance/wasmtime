@@ -33,8 +33,8 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   load_sym t2,%callee_i64+0
-;   return_call_ind t2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
+;   load_sym a2,%callee_i64+0
+;   return_call_ind a2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -43,8 +43,8 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   auipc t2, 0
-;   ld t2, 0xc(t2)
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -52,7 +52,7 @@ block0(v0: i64):
 ;   ld t6, 0(s0)
 ;   addi sp, s0, 0x10
 ;   mv s0, t6
-;   jr t2
+;   jr a2
 
 ;;;; Test colocated tail calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -96,17 +96,17 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   ld a0,[const(0)]
-;   fmv.d.x ft5,a0
-;   fadd.d ft0,ft0,ft5
+;   ld a3,[const(0)]
+;   fmv.d.x fa5,a3
+;   fadd.d ft0,ft0,fa5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0x18(a0)
-;   fmv.d.x ft5, a0
-;   fadd.d ft0, ft0, ft5
+;   auipc a3, 0
+;   ld a3, 0x18(a3)
+;   fmv.d.x fa5, a3
+;   fadd.d ft0, ft0, fa5
 ;   ret
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -125,8 +125,8 @@ block0(v0: f64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   load_sym t2,%callee_f64+0
-;   return_call_ind t2 old_stack_arg_size:0 new_stack_arg_size:0 ft0=ft0
+;   load_sym a2,%callee_f64+0
+;   return_call_ind a2 old_stack_arg_size:0 new_stack_arg_size:0 ft0=ft0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -135,8 +135,8 @@ block0(v0: f64):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   auipc t2, 0
-;   ld t2, 0xc(t2)
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_f64 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -144,7 +144,7 @@ block0(v0: f64):
 ;   ld t6, 0(s0)
 ;   addi sp, s0, 0x10
 ;   mv s0, t6
-;   jr t2
+;   jr a2
 
 ;;;; Test passing `i8`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -157,18 +157,18 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   li a2,0
-;   andi a0,s1,255
-;   andi a2,a2,255
-;   eq s1,a0,a2##ty=i8
+;   li a5,0
+;   andi a3,s1,255
+;   andi a5,a5,255
+;   eq s1,a3,a5##ty=i8
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a2, zero
-;   andi a0, s1, 0xff
-;   andi a2, a2, 0xff
-;   bne a0, a2, 0xc
+;   mv a5, zero
+;   andi a3, s1, 0xff
+;   andi a5, a5, 0xff
+;   bne a3, a5, 0xc
 ;   addi s1, zero, 1
 ;   j 8
 ;   mv s1, zero
@@ -187,8 +187,8 @@ block0(v0: i8):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   load_sym t2,%callee_i8+0
-;   return_call_ind t2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
+;   load_sym a2,%callee_i8+0
+;   return_call_ind a2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -197,8 +197,8 @@ block0(v0: i8):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   auipc t2, 0
-;   ld t2, 0xc(t2)
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i8 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
@@ -206,7 +206,7 @@ block0(v0: i8):
 ;   ld t6, 0(s0)
 ;   addi sp, s0, 0x10
 ;   mv s0, t6
-;   jr t2
+;   jr a2
 
 ;;;; Test passing many arguments on stack ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -221,10 +221,10 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a6,16(fp)
-;   ld t3,24(fp)
-;   ld t0,32(fp)
-;   ld t2,40(fp)
+;   ld a4,16(fp)
+;   ld a0,24(fp)
+;   ld a2,32(fp)
+;   ld a4,40(fp)
 ;   ld s1,48(fp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -238,10 +238,10 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   ld a6, 0x10(s0)
-;   ld t3, 0x18(s0)
-;   ld t0, 0x20(s0)
-;   ld t2, 0x28(s0)
+;   ld a4, 0x10(s0)
+;   ld a0, 0x18(s0)
+;   ld a2, 0x20(s0)
+;   ld a4, 0x28(s0)
 ;   ld s1, 0x30(s0)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -409,10 +409,10 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a6,16(fp)
-;   ld t3,24(fp)
-;   ld t0,32(fp)
-;   ld t2,40(fp)
+;   ld a4,16(fp)
+;   ld a0,24(fp)
+;   ld a2,32(fp)
+;   ld a4,40(fp)
 ;   ld s1,48(fp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -426,10 +426,10 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   ld a6, 0x10(s0)
-;   ld t3, 0x18(s0)
-;   ld t0, 0x20(s0)
-;   ld t2, 0x28(s0)
+;   ld a4, 0x10(s0)
+;   ld a0, 0x18(s0)
+;   ld a2, 0x20(s0)
+;   ld a4, 0x28(s0)
 ;   ld s1, 0x30(s0)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -448,11 +448,11 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   ld a6,16(fp)
-;   ld t3,24(fp)
-;   ld t0,32(fp)
-;   ld t2,40(fp)
-;   ld a1,48(fp)
+;   ld a4,16(fp)
+;   ld a0,24(fp)
+;   ld a2,32(fp)
+;   ld a4,40(fp)
+;   ld a0,48(fp)
 ;   ld s1,56(fp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -466,11 +466,11 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ; block1: ; offset 0x10
-;   ld a6, 0x10(s0)
-;   ld t3, 0x18(s0)
-;   ld t0, 0x20(s0)
-;   ld t2, 0x28(s0)
-;   ld a1, 0x30(s0)
+;   ld a4, 0x10(s0)
+;   ld a0, 0x18(s0)
+;   ld a2, 0x20(s0)
+;   ld a4, 0x28(s0)
+;   ld a0, 0x30(s0)
 ;   ld s1, 0x38(s0)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -526,8 +526,8 @@ block2:
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   li a1,10
-;   sd a1,16(nominal_sp)
+;   li a0,10
+;   sd a0,16(nominal_sp)
 ;   li a0,15
 ;   sd a0,8(nominal_sp)
 ;   li a1,20
@@ -593,8 +593,8 @@ block2:
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
-;   addi a1, zero, 0xa
-;   sd a1, 0x10(sp)
+;   addi a0, zero, 0xa
+;   sd a0, 0x10(sp)
 ;   addi a0, zero, 0xf
 ;   sd a0, 8(sp)
 ;   addi a1, zero, 0x14
