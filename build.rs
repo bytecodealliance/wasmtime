@@ -250,9 +250,13 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         }
 
         "riscv64" => {
-            let known_failure = ["issue_3327_bnot_lowering"].contains(&testname);
-
-            known_failure
+            // This test case is disabled because it relies on `fvpromote_low`
+            // not flipping the sign bit of the input when it is a NaN. This
+            // is allowed by the spec. It's worth keeping the testcase as is
+            // since it is stressing a specific codegen bug in another arch.
+            //
+            // See #6961 for more details
+            testname == "issue_3327_bnot_lowering"
         }
 
         _ => false,
