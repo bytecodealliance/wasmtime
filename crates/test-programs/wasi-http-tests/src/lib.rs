@@ -2,8 +2,8 @@ pub mod bindings {
     wit_bindgen::generate!({
         path: "../../wasi-http/wit",
         world: "wasmtime:wasi/command-extended",
-        macro_call_prefix: "::wasi_http_tests::bindings::",
-        macro_export,
+        // macro_call_prefix: "::wasi_http_tests::bindings::",
+        // macro_export,
     });
 }
 

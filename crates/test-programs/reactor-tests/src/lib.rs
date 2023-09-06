@@ -1,12 +1,16 @@
-wit_bindgen::generate!("test-reactor" in "../../wasi/wit");
-
-export_test_reactor!(T);
+wit_bindgen::generate!({
+    world: "test-reactor",
+    path: "../../wasi/wit",
+    exports: {
+        world: T,
+    }
+});
 
 struct T;
 
 static mut STATE: Vec<String> = Vec::new();
 
-impl TestReactor for T {
+impl Guest for T {
     fn add_strings(ss: Vec<String>) -> u32 {
         for s in ss {
             match s.split_once("$") {

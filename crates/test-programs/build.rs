@@ -61,7 +61,7 @@ fn build_and_generate_tests() {
 
     if BUILD_WASI_HTTP_TESTS {
         modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
-        components_rs(&meta, "wasi-http-tests", "bin", &reactor_adapter, &out_dir);
+        components_rs(&meta, "wasi-http-tests", "bin", &command_adapter, &out_dir);
     }
 
     components_rs(&meta, "command-tests", "bin", &command_adapter, &out_dir);

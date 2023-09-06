@@ -29,8 +29,6 @@ world command-extended {
   import wasi:cli/terminal-stdout
   import wasi:cli/terminal-stderr
 
-  export wasi:cli/run
-
   // We should replace all others with `include self.command`
   // as soon as the unioning of worlds is available:
   // https://github.com/WebAssembly/component-model/issues/169

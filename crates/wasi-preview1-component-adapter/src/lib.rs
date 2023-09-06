@@ -25,7 +25,7 @@ compile_error!("only one of the `command` and `reactor` features may be selected
 mod macros;
 
 mod descriptors;
-use crate::descriptors::{Descriptor, Descriptors, IsATTY, StreamType, Streams};
+use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 
 pub mod bindings {
     #[cfg(feature = "command")]

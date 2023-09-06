@@ -69,7 +69,7 @@ async fn instantiate_module(module: Module, ctx: Ctx) -> Result<(Store<Ctx>, Fun
     let mut store = Store::new(&ENGINE, ctx);
 
     let instance = linker.instantiate_async(&mut store, &module).await?;
-    let command = instance.get_func(&mut store, "wasi:cli/run#run").unwrap();
+    let command = instance.get_func(&mut store, "_start").unwrap();
     Ok((store, command))
 }
 
@@ -103,9 +103,7 @@ async fn run(name: &str) -> anyhow::Result<()> {
             },
         )
         .await?;
-        command
-            .call_async(&mut store, &[], &mut [wasmtime::Val::null()])
-            .await
+        command.call_async(&mut store, &[], &mut []).await
     };
     r.map_err(move |trap: anyhow::Error| {
         let stdout = stdout.try_into_inner().expect("single ref to stdout");

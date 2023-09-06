@@ -1,11 +1,11 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
 use wasi_http_tests::bindings::wasi::http::types::{Method, Scheme};
 
-struct Component;
+fn main() {
+    wasi_http_tests::in_tokio(async { run().await })
+}
 
-fn main() {}
-
-async fn run() -> Result<(), ()> {
+async fn run() {
     let res = wasi_http_tests::request(
         Method::Post,
         Scheme::Http,
@@ -23,14 +23,4 @@ async fn run() -> Result<(), ()> {
     let method = res.header("x-wasmtime-test-method").unwrap();
     assert_eq!(std::str::from_utf8(method).unwrap(), "POST");
     assert_eq!(res.body, b"{\"foo\": \"bar\"}");
-
-    Ok(())
 }
-
-impl wasi_http_tests::bindings::exports::wasi::cli::run::Run for Component {
-    fn run() -> Result<(), ()> {
-        wasi_http_tests::in_tokio(async { run().await })
-    }
-}
-
-wasi_http_tests::export_command_extended!(Component);

@@ -207,7 +207,7 @@ io-extras = "0.18.0"
 rustix = "0.38.8"
 is-terminal = "0.4.0"
 # wit-bindgen:
-wit-bindgen = { version = "0.9.0", default-features = false }
+wit-bindgen = { version = "0.11.0", default-features = false }
 
 # wasm-tools family:
 wasmparser = "0.112.0"
@@ -328,3 +328,10 @@ debug-assertions = false
 # Omit integer overflow checks, which include failure messages which require
 # string initializers.
 overflow-checks = false
+
+# Same as `wasi-preview1-component-adapter` above
+[profile.dev.package.wit-bindgen]
+incremental = false
+debug-assertions = false
+overflow-checks = false
+opt-level = 's'
