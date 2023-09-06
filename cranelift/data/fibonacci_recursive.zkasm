@@ -1,0 +1,67 @@
+start:
+  zkPC + 2 => RR
+  :JMP(function_2)
+  :JMP(finalizeExecution)
+
+function_1:
+  SP + 1 => SP
+  RR :MSTORE(SP)
+  SP + 2 => SP
+  A :MSTORE(SP)
+  0 + 0 => B
+  $ => E :EQ
+  E :JMPNZ(L1_5)
+  0 + 1 => B
+  $ => A :MLOAD(SP)
+  $ => B :SUB
+  B => A
+  0 + 0 => B
+  $ => A :EQ
+  A :JMPNZ(L1_3)
+  0 + 1 => B
+  $ => A :MLOAD(SP)
+  $ => B :SUB
+  A :MSTORE(SP)
+  B => A
+  zkPC + 2 => RR
+  :JMP(function_1)
+  A :MSTORE(SP + 8)
+  0 + 2 => B
+  $ => A :MLOAD(SP)
+  $ => A :SUB
+  zkPC + 2 => RR
+  :JMP(function_1)
+  A => B
+  $ => A :MLOAD(SP + 8)
+  $ => A :ADD
+  :JMP(L1_4)
+L1_3:
+  0 + 1 => A
+  :JMP(L1_4)
+L1_4:
+  :JMP(L1_6)
+L1_5:
+  0 + 0 => A
+  :JMP(L1_6)
+L1_6:
+  SP - 2 => SP
+  $ => RR :MLOAD(SP)
+  SP - 1 => SP
+  :JMP(RR)
+
+function_2:
+  SP + 1 => SP
+  RR :MSTORE(SP)
+  0 + 11 => A
+  zkPC + 2 => RR
+  :JMP(function_1)
+  0 + 89 => B
+  B :ASSERT
+  $ => RR :MLOAD(SP)
+  SP - 1 => SP
+  :JMP(RR)
+
+finalizeExecution:
+  ${beforeLast()}  :JMPN(finalizeExecution)
+                   :JMP(start)
+

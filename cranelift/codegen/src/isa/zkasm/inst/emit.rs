@@ -1369,12 +1369,13 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::VirtualSPOffsetAdj { amount } => {
-                todo!() /* crate::trace!(
-                            "virtual sp offset adjusted by {} -> {}",
-                            amount,
-                            state.virtual_sp_offset + amount
-                        );
-                        state.virtual_sp_offset += amount; */
+                println!("virtual_sp_offset_adj {amount}");
+                // crate::trace!(
+                //     "virtual sp offset adjusted by {} -> {}",
+                //     amount,
+                //     state.virtual_sp_offset + amount
+                //     );
+                // state.virtual_sp_offset += amount;
             }
             &Inst::Atomic {
                 op,

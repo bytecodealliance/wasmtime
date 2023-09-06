@@ -776,7 +776,7 @@ impl AluOPRRR {
     pub(crate) const fn op_name(self) -> &'static str {
         match self {
             Self::Add => "ADD",
-            Self::Sub => "sub",
+            Self::Sub => "SUB",
             Self::Sll => "sll",
             Self::Slt => "slt",
             Self::Sgt => "sgt",
@@ -787,8 +787,8 @@ impl AluOPRRR {
             Self::Sra => "sra",
             Self::Or => "or",
             Self::And => "and",
-            Self::Addw => "addw",
-            Self::Subw => "subw",
+            Self::Addw => "ADD",
+            Self::Subw => "SUB",
             Self::Sllw => "sllw",
             Self::Srlw => "srlw",
             Self::Sraw => "sraw",
