@@ -28,12 +28,23 @@ macro_rules! define_zvl_ext {
 pub(crate) fn define() -> TargetIsa {
     let mut setting = SettingGroupBuilder::new("riscv64");
 
-    let _has_m = setting.add_bool("has_m", "has extension M?", "", false);
-    let _has_a = setting.add_bool("has_a", "has extension A?", "", false);
-    let _has_f = setting.add_bool("has_f", "has extension F?", "", false);
-    let _has_d = setting.add_bool("has_d", "has extension D?", "", false);
+    // We target a minimum of riscv64gc. That means that we have the following extensions by default:
+    //
+    // * M (integer multiplication and division)
+    // * A (atomic instructions)
+    // * F (single-precision floating point)
+    // * D (double-precision floating point)
+    // * C (compressed instructions)
+    // * Zicsr (control and status register instructions)
+    // * Zifencei (instruction-fetch fence)
+
+    let _has_m = setting.add_bool("has_m", "has extension M?", "", true);
+    let _has_a = setting.add_bool("has_a", "has extension A?", "", true);
+    let _has_f = setting.add_bool("has_f", "has extension F?", "", true);
+    let _has_d = setting.add_bool("has_d", "has extension D?", "", true);
     let _has_v = setting.add_bool("has_v", "has extension V?", "", false);
-    let _has_c = setting.add_bool("has_c", "has extension C?", "", false);
+    let _has_c = setting.add_bool("has_c", "has extension C?", "", true);
+
     let _has_zbkb = setting.add_bool(
         "has_zbkb",
         "has extension zbkb?",
@@ -69,13 +80,13 @@ pub(crate) fn define() -> TargetIsa {
         "has_zicsr",
         "has extension zicsr?",
         "Zicsr: Control and Status Register (CSR) Instructions",
-        false,
+        true,
     );
     let _has_zifencei = setting.add_bool(
         "has_zifencei",
         "has extension zifencei?",
         "Zifencei: Instruction-Fetch Fence",
-        false,
+        true,
     );
 
     // Zvl*: Minimum Vector Length Standard Extensions

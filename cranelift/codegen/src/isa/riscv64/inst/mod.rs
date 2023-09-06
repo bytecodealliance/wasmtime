@@ -127,10 +127,7 @@ impl BranchTarget {
     pub(crate) fn zero() -> Self {
         Self::ResolvedOffset(0)
     }
-    #[inline]
-    pub(crate) fn offset(off: i32) -> Self {
-        Self::ResolvedOffset(off)
-    }
+
     #[inline]
     pub(crate) fn is_zero(self) -> bool {
         match self {
@@ -138,6 +135,7 @@ impl BranchTarget {
             BranchTarget::ResolvedOffset(off) => off == 0,
         }
     }
+
     #[inline]
     pub(crate) fn as_offset(self) -> Option<i32> {
         match self {

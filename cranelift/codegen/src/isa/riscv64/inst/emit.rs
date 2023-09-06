@@ -1042,6 +1042,8 @@ impl MachInstEmit for Inst {
                 let tmp2 = allocs.next_writable(tmp2);
                 let ext_index = writable_spilltmp_reg();
 
+                let label_compute_target = sink.get_label();
+
                 // The default target is passed in as the 0th element of `targets`
                 // separate it here for clarity.
                 let default_target = targets[0];
@@ -1094,7 +1096,7 @@ impl MachInstEmit for Inst {
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                 Inst::CondBr {
-                    taken: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 3),
+                    taken: BranchTarget::Label(label_compute_target),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::UnsignedLessThan,
@@ -1114,6 +1116,7 @@ impl MachInstEmit for Inst {
 
                 // Compute the jump table offset.
                 // We need to emit a PC relative offset,
+                sink.bind_label(label_compute_target, &mut state.ctrl_plane);
 
                 // Get the current PC.
                 Inst::Auipc {
@@ -1363,6 +1366,8 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let label_true = sink.get_label();
                 let label_false = sink.get_label();
+                let label_end = sink.get_label();
+
                 Inst::lower_br_icmp(
                     cc,
                     a,
@@ -1377,11 +1382,12 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_true, &mut state.ctrl_plane);
                 Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
                 Inst::Jal {
-                    dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
+                    dest: BranchTarget::Label(label_end),
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_false, &mut state.ctrl_plane);
                 Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::AtomicCas {
                 offset,
@@ -1958,33 +1964,30 @@ impl MachInstEmit for Inst {
                 offset,
             } => {
                 let rd = allocs.next_writable(rd);
-                // get the current pc.
-                Inst::Auipc {
-                    rd: rd,
-                    imm: Imm20::from_bits(0),
-                }
-                .emit(&[], sink, emit_info, state);
-                // load the value.
+
+                let label_data = sink.get_label();
+                let label_end = sink.get_label();
+
+                // Load the value from a label
                 Inst::Load {
-                    rd: rd,
+                    rd,
                     op: LoadOP::Ld,
                     flags: MemFlags::trusted(),
-                    from: AMode::RegOffset(
-                        rd.to_reg(),
-                        12, // auipc load and jal.
-                        I64,
-                    ),
-                }
-                .emit(&[], sink, emit_info, state);
-                // jump over.
-                Inst::Jal {
-                    // jal and abs8 size for 12.
-                    dest: BranchTarget::offset(12),
+                    from: AMode::Label(label_data),
                 }
                 .emit(&[], sink, emit_info, state);
 
+                // Jump over the data
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_end),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                sink.bind_label(label_data, &mut state.ctrl_plane);
                 sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
                 sink.put8(0);
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::TrapIfC {
                 rs1,
