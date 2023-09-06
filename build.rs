@@ -250,10 +250,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         }
 
         "riscv64" => {
-            if testsuite.contains("relaxed_simd") {
-                return true;
-            }
-
             let known_failure = ["issue_3327_bnot_lowering"].contains(&testname);
 
             known_failure
