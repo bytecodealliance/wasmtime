@@ -4,9 +4,11 @@ use wasi_http_tests::bindings::wasi::http::types::{Method, Scheme};
 
 struct Component;
 
-fn main() {}
+fn main() {
+    wasi_http_tests::in_tokio(async { run().await })
+}
 
-async fn run() -> Result<(), ()> {
+async fn run() {
     const LEN: usize = 4000;
     let mut buffer = [0; LEN];
     io::repeat(0b001).read_exact(&mut buffer).unwrap();
@@ -27,14 +29,4 @@ async fn run() -> Result<(), ()> {
     let method = res.header("x-wasmtime-test-method").unwrap();
     assert_eq!(std::str::from_utf8(method).unwrap(), "POST");
     assert_eq!(res.body.len(), LEN);
-
-    Ok(())
 }
-
-impl wasi_http_tests::bindings::exports::wasi::cli::run::Run for Component {
-    fn run() -> Result<(), ()> {
-        wasi_http_tests::in_tokio(async { run().await })
-    }
-}
-
-wasi_http_tests::export_command_extended!(Component);
