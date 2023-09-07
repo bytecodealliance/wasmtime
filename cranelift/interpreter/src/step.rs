@@ -1009,7 +1009,10 @@ where
         Opcode::VhighBits => {
             // `ctrl_ty` controls the return type for this, so the input type
             // must be retrieved via `inst_context`.
-            let vector_type = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let vector_type = inst_context
+                .type_of(inst_context.args()[0])
+                .unwrap()
+                .as_int();
             let a = extractlanes(&arg(0), vector_type)?;
             let mut result: u128 = 0;
             for (i, val) in a.into_iter().enumerate() {
