@@ -1025,9 +1025,11 @@ where
             assign(DataValue::bool(any != init, false, types::I8)?)
         }
         Opcode::VallTrue => assign(DataValue::bool(
-            !(arg(0).iter_lanes(ctrl_ty)?.try_fold(false, |acc, lane| {
-                Ok::<bool, ValueError>(acc | lane.is_zero()?)
-            })?),
+            !(arg(0)
+                .iter_lanes(ctrl_ty.as_int())?
+                .try_fold(false, |acc, lane| {
+                    Ok::<bool, ValueError>(acc | lane.is_zero()?)
+                })?),
             false,
             types::I8,
         )?),
