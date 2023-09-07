@@ -1276,7 +1276,7 @@
   (lower (uload32 flags p @ (value_type (ty_addr64 _)) offset))
   (gen_load p offset (int_load_op $false 32) flags $I64))
 
-;;;;;  Rules for `iload16`;;;;;;;;;
+;;;;;  Rules for `iload32`;;;;;;;;;
 (rule
   (lower (sload32 flags p @ (value_type (ty_addr64 _)) offset))
   (gen_load p offset (int_load_op $true 32) flags $I64))
