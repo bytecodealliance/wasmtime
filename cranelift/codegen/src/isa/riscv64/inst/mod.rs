@@ -181,7 +181,10 @@ pub(crate) fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst>
 }
 
 impl Inst {
-    const INSTRUCTION_SIZE: i32 = 4;
+    /// RISC-V can have multiple instruction sizes. 2 bytes for compressed
+    /// instructions, 4 for regular instructions, 6 and 8 byte instructions
+    /// are also being considered.
+    const UNCOMPRESSED_INSTRUCTION_SIZE: i32 = 4;
 
     #[inline]
     pub(crate) fn load_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
@@ -1390,7 +1393,7 @@ impl Inst {
                 let mut buf = String::new();
                 write!(&mut buf, "auipc {},0; ", rd).unwrap();
                 write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
-                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 8).unwrap();
+                write!(&mut buf, "j {}; ", Inst::UNCOMPRESSED_INSTRUCTION_SIZE + 8).unwrap();
                 write!(&mut buf, ".8byte 0x{:x}", imm).unwrap();
                 buf
             }
