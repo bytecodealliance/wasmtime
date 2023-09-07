@@ -1019,9 +1019,10 @@ where
             assign(DataValueExt::int(result as i128, ctrl_ty)?)
         }
         Opcode::VanyTrue => {
-            let lane_ty = ctrl_ty.lane_type();
+            let simd_ty = ctrl_ty.as_int();
+            let lane_ty = simd_ty.lane_type();
             let init = DataValue::bool(false, true, lane_ty)?;
-            let any = fold_vector(arg(0), ctrl_ty, init.clone(), |acc, lane| acc.or(lane))?;
+            let any = fold_vector(arg(0), simd_ty, init.clone(), |acc, lane| acc.or(lane))?;
             assign(DataValue::bool(any != init, false, types::I8)?)
         }
         Opcode::VallTrue => assign(DataValue::bool(
