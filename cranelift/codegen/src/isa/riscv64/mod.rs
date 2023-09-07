@@ -243,7 +243,8 @@ fn isa_constructor(
     // Ensure that those combination of features is enabled.
     if !isa_flags.has_g() {
         return Err(CodegenError::Unsupported(
-            "The RISC-V Backend currently requires all the features in the G Extension enabled".into(),
+            "The RISC-V Backend currently requires all the features in the G Extension enabled"
+                .into(),
         ));
     }
 
