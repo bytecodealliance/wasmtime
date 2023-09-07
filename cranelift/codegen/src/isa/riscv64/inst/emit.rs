@@ -1150,7 +1150,7 @@ impl MachInstEmit for Inst {
                 Inst::Jalr {
                     rd: writable_zero_reg(),
                     base: tmp1.to_reg(),
-                    offset: Imm12::from_bits((4 * Inst::INSTRUCTION_SIZE) as i16),
+                    offset: Imm12::from_bits((4 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE) as i16),
                 }
                 .emit(&[], sink, emit_info, state);
 
@@ -1161,7 +1161,8 @@ impl MachInstEmit for Inst {
 
                 // Each entry in the jump table is 2 instructions, so 8 bytes. Check if
                 // we need to emit a jump table here to support that jump.
-                let distance = (targets.len() * 2 * Inst::INSTRUCTION_SIZE as usize) as u32;
+                let distance =
+                    (targets.len() * 2 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE as usize) as u32;
                 if sink.island_needed(distance) {
                     sink.emit_island(distance, &mut state.ctrl_plane);
                 }
@@ -3072,7 +3073,7 @@ fn emit_return_call_common_sequence(
     // instructions per word of stack argument space.
     let new_stack_words = new_stack_arg_size / 8;
     let insts = 4 + 2 + 2 * new_stack_words;
-    let space_needed = insts * u32::try_from(Inst::INSTRUCTION_SIZE).unwrap();
+    let space_needed = insts * u32::try_from(Inst::UNCOMPRESSED_INSTRUCTION_SIZE).unwrap();
     if sink.island_needed(space_needed) {
         let jump_around_label = sink.get_label();
         Inst::Jal {
