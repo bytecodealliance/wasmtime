@@ -1,5 +1,5 @@
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::settings::SettingGroupBuilder;
+use crate::cdsl::settings::{PredicateNode, SettingGroupBuilder};
 
 macro_rules! define_zvl_ext {
     (DEF: $settings:expr, $size:expr) => {{
@@ -38,12 +38,32 @@ pub(crate) fn define() -> TargetIsa {
     // * Zicsr (control and status register instructions)
     // * Zifencei (instruction-fetch fence)
 
-    let _has_m = setting.add_bool("has_m", "has extension M?", "", true);
-    let _has_a = setting.add_bool("has_a", "has extension A?", "", true);
-    let _has_f = setting.add_bool("has_f", "has extension F?", "", true);
-    let _has_d = setting.add_bool("has_d", "has extension D?", "", true);
-    let _has_v = setting.add_bool("has_v", "has extension V?", "", false);
-    let _has_c = setting.add_bool("has_c", "has extension C?", "", true);
+    let has_m = setting.add_bool(
+        "has_m",
+        "has extension M?",
+        "Integer multiplication and division",
+        true,
+    );
+    let has_a = setting.add_bool("has_a", "has extension A?", "Atomic instructions", true);
+    let has_f = setting.add_bool(
+        "has_f",
+        "has extension F?",
+        "Single-precision floating point",
+        true,
+    );
+    let has_d = setting.add_bool(
+        "has_d",
+        "has extension D?",
+        "Double-precision floating point",
+        true,
+    );
+    let _has_v = setting.add_bool(
+        "has_v",
+        "has extension V?",
+        "Vector instruction support",
+        false,
+    );
+    let _has_c = setting.add_bool("has_c", "has extension C?", "Compressed instructions", true);
 
     let _has_zbkb = setting.add_bool(
         "has_zbkb",
@@ -76,13 +96,13 @@ pub(crate) fn define() -> TargetIsa {
         false,
     );
 
-    let _has_zicsr = setting.add_bool(
+    let has_zicsr = setting.add_bool(
         "has_zicsr",
         "has extension zicsr?",
         "Zicsr: Control and Status Register (CSR) Instructions",
         true,
     );
-    let _has_zifencei = setting.add_bool(
+    let has_zifencei = setting.add_bool(
         "has_zifencei",
         "has extension zifencei?",
         "Zifencei: Instruction-Fetch Fence",
@@ -107,6 +127,11 @@ pub(crate) fn define() -> TargetIsa {
     let (_, zvl16384b) = define_zvl_ext!(setting, 16384, zvl8192b);
     let (_, zvl32768b) = define_zvl_ext!(setting, 32768, zvl16384b);
     let (_, _zvl65536b) = define_zvl_ext!(setting, 65536, zvl32768b);
+
+    setting.add_predicate(
+        "has_g",
+        predicate!(has_m && has_a && has_f && has_d && has_zicsr && has_zifencei),
+    );
 
     TargetIsa::new("riscv64", setting.build())
 }
