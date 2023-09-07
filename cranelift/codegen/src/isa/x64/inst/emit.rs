@@ -382,6 +382,7 @@ pub(crate) fn emit(
                 Sarx => (LP::_F3, 0xf7),
                 Shrx => (LP::_F2, 0xf7),
                 Shlx => (LP::_66, 0xf7),
+                Bzhi => (LP::None, 0xf5),
             };
 
             VexInstruction::new()

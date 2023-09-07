@@ -757,7 +757,8 @@
       (enum Andn
             Sarx
             Shrx
-            Shlx))
+            Shlx
+            Bzhi))
 
 (type UnaryRmROpcode extern
       (enum Bsr
@@ -2699,6 +2700,14 @@
 (rule 1 (x64_sar (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
         (if-let $true (use_bmi2))
         (x64_sarx ty src1 src2))
+
+;; Helper for creating zeroing-of-high-bits instructions bzhi
+;;
+;; Note that the `src` operands are swapped here. The amount-to-shift-by
+;; is stored in `vvvv` which is `src1` in the `AluRmRVex` instruction shape.
+(decl x64_bzhi (Type GprMem Gpr) Gpr)
+(rule (x64_bzhi ty src1 src2)
+      (alu_rm_r_vex ty (AluRmROpcode.Bzhi) src2 src1))
 
 ;; Helper for creating byteswap instructions.
 ;; In x64, 32- and 64-bit registers use BSWAP instruction, and

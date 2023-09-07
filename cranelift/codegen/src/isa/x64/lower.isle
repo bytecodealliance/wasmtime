@@ -363,6 +363,19 @@
          (if-let $true (use_bmi1))
          (x64_blsi ty x))
 
+;; Specialization of `bzhi` for BMI2
+;;
+;; The `bzhi` instruction clears all bits indexed by the second operand of the
+;; first operand. This is pattern-matched here with a `band` against a mask
+;; which is generated to be N bits large. Note that if the index is larger than
+;; the bit-width of the type then `bzhi` doesn't have the same semantics as
+;; `ishl`, so an `and` instruction is required to mask the index to match the
+;; semantics of Cranelift's `ishl`.
+
+(rule 14 (lower (has_type (ty_32_or_64 ty) (band x (isub (ishl (u64_from_iconst 1) index) (u64_from_iconst 1)))))
+         (if-let $true (use_bmi2))
+         (x64_bzhi ty x (x64_and ty index (RegMemImm.Imm (u32_sub (ty_bits ty) 1)))))
+
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `{i,b}64` and smaller.
