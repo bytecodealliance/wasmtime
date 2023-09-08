@@ -105,17 +105,56 @@ impl std::error::Error for OutputStreamError {
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
 pub trait HostOutputStream: Send + Sync {
-    /// FIXME docs
+    /// Write bytes after obtaining a permit to write those bytes
+    /// Prior to calling [`write`](Self::write)
+    /// the caller must call [`write_ready`](Self::write_ready),
+    /// which resolves to a non-zero permit
+    /// 
+    /// This method must never block.
+    /// [`write_ready`](Self::write_ready) permit indicates the maximum amount of bytes that are
+    /// permitted to be written in a single [`write`](Self::write) following the
+    /// [`write_ready`](Self::write_ready) resolution
+    ///
+    /// # Errors
+    ///
+    /// Returns an [OutputStreamError] if:
+    /// - stream is closed
+    /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
+    /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
     fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError>;
 
-    /// FIXME docs
+    /// Trigger a flush of any bytes buffered in this stream implementation.
+    /// 
+    /// This method may be called at any time and must never block.
+    ///
+    /// After this method is called, [`write_ready`](Self::write_ready) must pend until flush is
+    /// complete.
+    /// When [`write_ready`](Self::write_ready) becomes ready after a flush, that guarantees that
+    /// all prior writes have been flushed from the implementation successfully, or that any error
+    /// associated with those writes is reported in the return value of [`flush`](Self::flush) or
+    /// [`write_ready`](Self::write_ready)
+    ///
+    /// # Errors
+    ///
+    /// Returns an [OutputStreamError] if:
+    /// - stream is closed
+    /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
+    /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
     fn flush(&mut self) -> Result<(), OutputStreamError>;
 
-    /// FIXME docs
+    /// Returns a future, which:
+    /// - when pending, indicates 0 bytes are permitted for writing
+    /// - when ready, returns a non-zero number of bytes permitted to write
+    ///
+    /// # Errors
+    ///
+    /// Returns an [OutputStreamError] if:
+    /// - stream is closed
+    /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     async fn write_ready(&mut self) -> Result<usize, OutputStreamError>;
 
-    /// Repeatedly write a byte to a stream. Important: this write must be
-    /// non-blocking!
+    /// Repeatedly write a byte to a stream.
+    /// Important: this write must be non-blocking!
     /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn write_zeroes(&mut self, nelem: usize) -> Result<(), OutputStreamError> {

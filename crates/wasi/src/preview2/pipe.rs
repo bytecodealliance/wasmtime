@@ -98,7 +98,8 @@ impl HostOutputStream for MemoryOutputPipe {
         if consumed < self.capacity {
             Ok(self.capacity - consumed)
         } else {
-            Ok(0)
+            // Since the buffer is full, no more bytes will ever be written
+            Err(OutputStreamError::Closed)
         }
     }
 }
