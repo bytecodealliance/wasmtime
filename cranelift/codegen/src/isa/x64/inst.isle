@@ -2368,6 +2368,11 @@
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
 
+(decl x64_movimm_m (Type SyntheticAmode u64) SideEffectNoResult)
+(rule (x64_movimm_m ty addr imm)
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (SideEffectNoResult.Inst (MInst.MovImmM size imm addr))))
+
 (decl xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
 (rule (xmm_movrm op addr data)
       (SideEffectNoResult.Inst (MInst.XmmMovRM op data addr)))
