@@ -22,6 +22,7 @@ use cranelift_codegen::{
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
     VCodeConstantData, VCodeConstants, Writable,
 };
+use regalloc2::RegClass;
 
 use super::address::Address;
 use smallvec::{smallvec, SmallVec};
@@ -410,18 +411,36 @@ impl Assembler {
 
     /// "and" two registers.
     pub fn and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::And,
-            src1: dst.into(),
-            src2: src.into(),
-            dst: dst.into(),
-        });
+        match dst.class() {
+            RegClass::Int => {
+                self.emit(Inst::AluRmiR {
+                    size: size.into(),
+                    op: AluRmiROpcode::And,
+                    src1: dst.into(),
+                    src2: src.into(),
+                    dst: dst.into(),
+                });
+            }
+            RegClass::Float => {
+                let op = match size {
+                    OperandSize::S32 => SseOpcode::Andps,
+                    OperandSize::S64 => SseOpcode::Andpd,
+                    OperandSize::S128 => unreachable!(),
+                };
+
+                self.emit(Inst::XmmRmR {
+                    op,
+                    src1: dst.into(),
+                    src2: XmmMemAligned::from(Xmm::from(src)),
+                    dst: dst.into(),
+                });
+            }
+            RegClass::Vector => unreachable!(),
+        }
     }
 
     pub fn and_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
-
         self.emit(Inst::AluRmiR {
             size: size.into(),
             op: AluRmiROpcode::And,
@@ -429,6 +448,21 @@ impl Assembler {
             src2: GprMemImm::new(imm).expect("valid immediate"),
             dst: dst.into(),
         });
+    }
+
+    pub fn gpr_to_xmm(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Movd,
+            OperandSize::S64 => SseOpcode::Movq,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::GprToXmm {
+            op,
+            src: src.into(),
+            dst: dst.into(),
+            src_size: size.into(),
+        })
     }
 
     pub fn or_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {

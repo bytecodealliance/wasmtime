@@ -166,6 +166,10 @@ pub(crate) fn xmm15() -> Reg {
     fpr(15)
 }
 
+pub(crate) fn scratch_xmm() -> Reg {
+    xmm15()
+}
+
 const GPR: u32 = 16;
 const FPR: u32 = 16;
 const ALLOCATABLE_GPR: u32 = (1 << GPR) - 1;
@@ -174,12 +178,15 @@ const ALLOCATABLE_FPR: u32 = (1 << FPR) - 1;
 // R14: Is a pinned register, used as the instance register.
 const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP) | (1 << ENC_R11) | (1 << ENC_R14);
 
+// xmm15: Is used as the scratch register.
+const NON_ALLOCATABLE_FPR: u32 = 1 << 15;
+
 /// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;
 /// Bitmask to represent the available floating point registers.
 // Note: at the time of writing all floating point registers are allocatable,
 // but we might need a scratch register in the future.
-pub(crate) const ALL_FPR: u32 = ALLOCATABLE_FPR;
+pub(crate) const ALL_FPR: u32 = ALLOCATABLE_FPR & !NON_ALLOCATABLE_FPR;
 
 /// Returns the callee-saved registers according to a particular calling
 /// convention.
