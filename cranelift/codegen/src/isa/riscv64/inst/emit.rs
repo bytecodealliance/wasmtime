@@ -206,19 +206,6 @@ impl Inst {
         });
         insts
     }
-    pub(crate) fn emit_fneg(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
-        Inst::FpuRRR {
-            alu_op: if ty == F32 {
-                FpuOPRRR::FsgnjnS
-            } else {
-                FpuOPRRR::FsgnjnD
-            },
-            frm: None,
-            rd: rd,
-            rs1: rs,
-            rs2: rs,
-        }
-    }
 
     pub(crate) fn lower_br_icmp(
         cc: IntCC,
@@ -352,8 +339,6 @@ impl Inst {
             | Inst::Mov { .. }
             | Inst::MovFromPReg { .. }
             | Inst::Fence { .. }
-            | Inst::FenceI
-            | Inst::ECall
             | Inst::EBreak
             | Inst::Udf { .. }
             | Inst::FpuRR { .. }
@@ -1226,7 +1211,6 @@ impl MachInstEmit for Inst {
 
                 sink.put4(x);
             }
-            &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
                 let rd = allocs.next_writable(rd);
                 let x = enc_auipc(rd, imm);
@@ -1348,9 +1332,6 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let x = enc_jalr(rd, base, offset);
                 sink.put4(x);
-            }
-            &Inst::ECall => {
-                sink.put4(0x00000073);
             }
             &Inst::EBreak => {
                 sink.put4(0x00100073);

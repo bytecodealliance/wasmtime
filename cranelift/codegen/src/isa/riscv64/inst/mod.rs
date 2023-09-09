@@ -505,8 +505,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::Fence { .. } => {}
-        &Inst::FenceI => {}
-        &Inst::ECall => {}
         &Inst::EBreak => {}
         &Inst::Udf { .. } => {}
         &Inst::FpuRR { rd, rs, .. } => {
@@ -1748,7 +1746,6 @@ impl Inst {
                     Inst::fence_req_to_string(succ),
                 )
             }
-            &MInst::FenceI => "fence.i".into(),
             &MInst::Select {
                 ref dst,
                 condition,
@@ -1765,7 +1762,6 @@ impl Inst {
             }
             &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
-            &MInst::ECall {} => String::from("ecall"),
             &Inst::VecAluRRRR {
                 op,
                 vd,

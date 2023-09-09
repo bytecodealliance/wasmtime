@@ -174,10 +174,6 @@
       (pred FenceReq)
       (succ FenceReq))
 
-    (FenceI)
-
-    (ECall)
-
     (EBreak)
 
     ;; An instruction guaranteed to always be undefined and to trigger an illegal instruction at
