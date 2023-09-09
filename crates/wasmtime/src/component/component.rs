@@ -291,6 +291,7 @@ impl Component {
         &self.inner.static_modules[idx]
     }
 
+    #[inline]
     pub(crate) fn types(&self) -> &Arc<ComponentTypes> {
         self.inner.component_types()
     }

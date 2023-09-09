@@ -1580,6 +1580,7 @@ at https://bytecodealliance.org/security.
         std::process::abort();
     }
 
+    #[inline]
     #[cfg(feature = "component-model")]
     pub(crate) fn component_calls_and_host_table(
         &mut self,

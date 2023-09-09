@@ -348,12 +348,14 @@ impl<'a, T> LowerContext<'a, T> {
 
     /// Begins a call into the component instance, starting recording of
     /// metadata related to resource borrowing.
+    #[inline]
     pub fn enter_call(&mut self) {
         self.resource_tables().enter_call()
     }
 
     /// Completes a call into the component instance, validating that it's ok to
     /// complete by ensuring the are no remaining active borrows.
+    #[inline]
     pub fn exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
     }
@@ -389,6 +391,7 @@ impl<'a> LiftContext<'a> {
     ///
     /// This is unsafe for the same reasons as `LowerContext::new` where the
     /// validity of `instance` is required to be upheld by the caller.
+    #[inline]
     pub unsafe fn new(
         store: &'a mut StoreOpaque,
         options: &'a Options,
@@ -499,11 +502,13 @@ impl<'a> LiftContext<'a> {
     }
 
     /// Same as `LowerContext::enter_call`
+    #[inline]
     pub fn enter_call(&mut self) {
         self.resource_tables().enter_call()
     }
 
     /// Same as `LiftContext::enter_call`
+    #[inline]
     pub fn exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
     }
