@@ -352,7 +352,6 @@ impl Inst {
             | Inst::Mov { .. }
             | Inst::MovFromPReg { .. }
             | Inst::Fence { .. }
-            | Inst::FenceI
             | Inst::EBreak
             | Inst::Udf { .. }
             | Inst::FpuRR { .. }
@@ -1225,7 +1224,6 @@ impl MachInstEmit for Inst {
 
                 sink.put4(x);
             }
-            &Inst::FenceI => sink.put4(0x0000100f),
             &Inst::Auipc { rd, imm } => {
                 let rd = allocs.next_writable(rd);
                 let x = enc_auipc(rd, imm);

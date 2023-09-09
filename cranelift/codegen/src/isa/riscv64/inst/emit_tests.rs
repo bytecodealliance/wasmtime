@@ -2049,7 +2049,6 @@ fn test_riscv64_binemit() {
         "fence w,r",
         0x120000f,
     ));
-    insns.push(TestUnit::new(Inst::FenceI {}, "fence.i", 0x100f));
     insns.push(TestUnit::new(Inst::EBreak {}, "ebreak", 0x100073));
 
     insns.push(TestUnit::new(

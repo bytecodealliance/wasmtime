@@ -505,7 +505,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::Fence { .. } => {}
-        &Inst::FenceI => {}
         &Inst::EBreak => {}
         &Inst::Udf { .. } => {}
         &Inst::FpuRR { rd, rs, .. } => {
@@ -1747,7 +1746,6 @@ impl Inst {
                     Inst::fence_req_to_string(succ),
                 )
             }
-            &MInst::FenceI => "fence.i".into(),
             &MInst::Select {
                 ref dst,
                 condition,
