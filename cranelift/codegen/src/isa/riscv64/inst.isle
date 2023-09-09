@@ -132,7 +132,7 @@
 
     (Jal
       ;; (rd WritableReg) don't use
-      (dest BranchTarget))
+      (label MachLabel))
 
     (CondBr
       (taken BranchTarget)
@@ -2664,21 +2664,6 @@
         (test XReg (rv_srli sum (imm12_const (ty_bits ty)))))
     (value_regs sum test)))
 
-(decl label_to_br_target (MachLabel) BranchTarget)
-(extern constructor label_to_br_target label_to_br_target)
-
-(decl gen_jump (MachLabel) MInst)
-(rule
-  (gen_jump v)
-  (MInst.Jal (label_to_br_target v)))
-
-(decl vec_label_get (VecMachLabel u8) MachLabel )
-(extern constructor vec_label_get vec_label_get)
-
-(decl partial lower_branch (Inst VecMachLabel) Unit)
-(rule (lower_branch (jump _) targets )
-      (emit_side_effect (SideEffectNoResult.Inst (gen_jump (vec_label_get targets 0)))))
-
 ;;; cc a b targets Type
 (decl lower_br_icmp (IntCC ValueRegs ValueRegs VecMachLabel Type) Unit)
 (extern constructor lower_br_icmp lower_br_icmp)
@@ -2721,6 +2706,17 @@
       (let ((lo XReg (value_regs_get regs 0))
             (hi XReg (value_regs_get regs 1)))
         (rv_or lo hi)))
+
+
+(decl label_to_br_target (MachLabel) BranchTarget)
+(extern constructor label_to_br_target label_to_br_target)
+
+(decl vec_label_get (VecMachLabel u8) MachLabel )
+(extern constructor vec_label_get vec_label_get)
+
+(decl partial lower_branch (Inst VecMachLabel) Unit)
+(rule (lower_branch (jump _) targets )
+      (emit_side_effect (SideEffectNoResult.Inst (MInst.Jal (vec_label_get targets 0)))))
 
 ;; Default behavior for branching based on an input value.
 (rule

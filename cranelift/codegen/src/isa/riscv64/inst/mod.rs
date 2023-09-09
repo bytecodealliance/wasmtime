@@ -480,7 +480,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::TrapIf { test, .. } => {
             collector.reg_use(test);
         }
-        &Inst::Jal { .. } => {}
+        &Inst::Jal { .. } => {
+            // JAL technically has a rd register, but we currently always
+            // hardcode it to x0.
+        }
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
             collector.reg_use(kind.rs2);
@@ -969,9 +972,7 @@ impl MachInst for Inst {
     }
 
     fn gen_jump(target: MachLabel) -> Inst {
-        Inst::Jal {
-            dest: BranchTarget::Label(target),
-        }
+        Inst::Jal { label: target }
     }
 
     fn worst_case_size() -> CodeOffset {
@@ -1663,8 +1664,8 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
             }
-            &MInst::Jal { dest, .. } => {
-                format!("{} {}", "j", dest)
+            &MInst::Jal { label } => {
+                format!("j {}", label.to_string())
             }
             &MInst::CondBr {
                 taken,
