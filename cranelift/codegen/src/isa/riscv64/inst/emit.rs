@@ -206,19 +206,6 @@ impl Inst {
         });
         insts
     }
-    pub(crate) fn emit_fneg(rd: Writable<Reg>, rs: Reg, ty: Type) -> Inst {
-        Inst::FpuRRR {
-            alu_op: if ty == F32 {
-                FpuOPRRR::FsgnjnS
-            } else {
-                FpuOPRRR::FsgnjnD
-            },
-            frm: None,
-            rd: rd,
-            rs1: rs,
-            rs2: rs,
-        }
-    }
 
     pub(crate) fn lower_br_icmp(
         cc: IntCC,
