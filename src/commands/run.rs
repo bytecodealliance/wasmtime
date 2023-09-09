@@ -943,7 +943,7 @@ impl RunCommand {
             );
         }
 
-        if self.inherit_network {
+        if self.common.wasi.inherit_network == Some(true) {
             builder.inherit_network(ambient_authority());
         }
 

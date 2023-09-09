@@ -239,6 +239,9 @@ wasmtime_option_group! {
         /// available is dependent on the backends implemented in the
         /// `wasmtime_wasi_nn` crate.
         pub nn_graph: Vec<WasiNnGraph>,
+        /// Flag for WASI preview2 to inherit the host's network within the
+        /// guest so it has full access to all addresses/ports/etc.
+        pub inherit_network: Option<bool>,
 
     }
 
