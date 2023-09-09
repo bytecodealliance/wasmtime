@@ -109,8 +109,8 @@ pub enum BranchTarget {
     /// An unresolved reference to a Label, as passed into
     /// `lower_branch_group()`.
     Label(MachLabel),
-    /// A fixed PC offset.
-    ResolvedOffset(i32),
+    /// No jump; fall through to the next instruction.
+    Fallthrough,
 }
 
 impl BranchTarget {
@@ -121,26 +121,9 @@ impl BranchTarget {
             _ => None,
         }
     }
-    /// offset zero.
-    #[inline]
-    pub(crate) fn zero() -> Self {
-        Self::ResolvedOffset(0)
-    }
 
-    #[inline]
-    pub(crate) fn is_zero(self) -> bool {
-        match self {
-            BranchTarget::Label(_) => false,
-            BranchTarget::ResolvedOffset(off) => off == 0,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn as_offset(self) -> Option<i32> {
-        match self {
-            BranchTarget::Label(_) => None,
-            BranchTarget::ResolvedOffset(off) => Some(off),
-        }
+    pub(crate) fn is_fallthrouh(&self) -> bool {
+        self == &BranchTarget::Fallthrough
     }
 }
 
@@ -148,7 +131,7 @@ impl Display for BranchTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
-            BranchTarget::ResolvedOffset(off) => write!(f, "{}", off),
+            BranchTarget::Fallthrough => write!(f, "0"),
         }
     }
 }
@@ -1673,9 +1656,8 @@ impl Inst {
             } => {
                 let rs1 = format_reg(kind.rs1, allocs);
                 let rs2 = format_reg(kind.rs2, allocs);
-                if not_taken.is_zero() && taken.as_label().is_none() {
-                    let off = taken.as_offset().unwrap();
-                    format!("{} {},{},{}", kind.op_name(), rs1, rs2, off)
+                if not_taken.is_fallthrouh() && taken.as_label().is_none() {
+                    format!("{} {},{},0", kind.op_name(), rs1, rs2)
                 } else {
                     let x = format!(
                         "{} {},{},taken({}),not_taken({})",
