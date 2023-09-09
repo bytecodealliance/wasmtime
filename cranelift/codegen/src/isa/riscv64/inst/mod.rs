@@ -102,10 +102,9 @@ pub struct ReturnCallInfo {
     pub new_stack_arg_size: u32,
 }
 
-/// A branch target. Either unresolved (basic-block index) or resolved (offset
-/// from end of current instruction).
+/// A conditional branch target.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BranchTarget {
+pub enum CondBrTarget {
     /// An unresolved reference to a Label, as passed into
     /// `lower_branch_group()`.
     Label(MachLabel),
@@ -113,25 +112,25 @@ pub enum BranchTarget {
     Fallthrough,
 }
 
-impl BranchTarget {
+impl CondBrTarget {
     /// Return the target's label, if it is a label-based target.
     pub(crate) fn as_label(self) -> Option<MachLabel> {
         match self {
-            BranchTarget::Label(l) => Some(l),
+            CondBrTarget::Label(l) => Some(l),
             _ => None,
         }
     }
 
     pub(crate) fn is_fallthrouh(&self) -> bool {
-        self == &BranchTarget::Fallthrough
+        self == &CondBrTarget::Fallthrough
     }
 }
 
-impl Display for BranchTarget {
+impl Display for CondBrTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
-            BranchTarget::Fallthrough => write!(f, "0"),
+            CondBrTarget::Label(l) => write!(f, "{}", l.to_string()),
+            CondBrTarget::Fallthrough => write!(f, "0"),
         }
     }
 }

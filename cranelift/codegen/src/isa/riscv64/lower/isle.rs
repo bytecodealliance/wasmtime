@@ -201,8 +201,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             *cc,
             a,
             self.int_zero_reg(ty),
-            BranchTarget::Label(targets[0]),
-            BranchTarget::Label(targets[1]),
+            CondBrTarget::Label(targets[0]),
+            CondBrTarget::Label(targets[1]),
             ty,
         )
         .iter()
@@ -218,8 +218,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     ) -> Unit {
         let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty);
         self.emit(&MInst::CondBr {
-            taken: BranchTarget::Label(targets[0]),
-            not_taken: BranchTarget::Label(targets[1]),
+            taken: CondBrTarget::Label(targets[0]),
+            not_taken: CondBrTarget::Label(targets[1]),
             kind: IntegerCompare {
                 kind: IntCC::NotEqual,
                 rs1: test,
@@ -254,8 +254,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         val[x as usize]
     }
 
-    fn label_to_br_target(&mut self, label: MachLabel) -> BranchTarget {
-        BranchTarget::Label(label)
+    fn label_to_br_target(&mut self, label: MachLabel) -> CondBrTarget {
+        CondBrTarget::Label(label)
     }
 
     fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {

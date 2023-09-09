@@ -174,8 +174,8 @@ impl Inst {
         tmp: Writable<Reg>,
         rs: Reg,
         ty: Type,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
+        taken: CondBrTarget,
+        not_taken: CondBrTarget,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
         let class_op = if ty == F32 {
@@ -224,8 +224,8 @@ impl Inst {
         cc: IntCC,
         a: ValueRegs<Reg>,
         b: ValueRegs<Reg>,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
+        taken: CondBrTarget,
+        not_taken: CondBrTarget,
         ty: Type,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
@@ -261,7 +261,7 @@ impl Inst {
                 // then we can go to not_taken otherwise fallthrough.
                 insts.push(Inst::CondBr {
                     taken: not_taken,
-                    not_taken: BranchTarget::Fallthrough,
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: high(IntCC::NotEqual),
                 });
                 // the rest part.
@@ -278,7 +278,7 @@ impl Inst {
                 // we can goto the taken part , otherwise fallthrought.
                 insts.push(Inst::CondBr {
                     taken,
-                    not_taken: BranchTarget::Fallthrough, //  no branch
+                    not_taken: CondBrTarget::Fallthrough, //  no branch
                     kind: high(IntCC::NotEqual),
                 });
 
@@ -299,13 +299,13 @@ impl Inst {
                 //
                 insts.push(Inst::CondBr {
                     taken,
-                    not_taken: BranchTarget::Fallthrough,
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: high(cc.without_equal()),
                 });
                 //
                 insts.push(Inst::CondBr {
                     taken: not_taken,
-                    not_taken: BranchTarget::Fallthrough,
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: high(IntCC::NotEqual),
                 });
                 insts.push(Inst::CondBr {
@@ -923,21 +923,21 @@ impl MachInstEmit for Inst {
                 kind.rs1 = allocs.next(kind.rs1);
                 kind.rs2 = allocs.next(kind.rs2);
                 match taken {
-                    BranchTarget::Label(label) => {
+                    CondBrTarget::Label(label) => {
                         let code = kind.emit();
                         let code_inverse = kind.inverse().emit().to_le_bytes();
                         sink.use_label_at_offset(start_off, label, LabelUse::B12);
                         sink.add_cond_branch(start_off, start_off + 4, label, &code_inverse);
                         sink.put4(code);
                     }
-                    BranchTarget::Fallthrough => {}
+                    CondBrTarget::Fallthrough => {}
                 }
 
                 match not_taken {
-                    BranchTarget::Label(label) => {
+                    CondBrTarget::Label(label) => {
                         Inst::gen_jump(label).emit(&[], sink, emit_info, state)
                     }
-                    BranchTarget::Fallthrough => {}
+                    CondBrTarget::Fallthrough => {}
                 };
             }
 
@@ -1054,8 +1054,8 @@ impl MachInstEmit for Inst {
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_compute_target),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_compute_target),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::UnsignedLessThan,
                         rs1: ext_index.to_reg(),
@@ -1268,8 +1268,8 @@ impl MachInstEmit for Inst {
                 let mut insts = SmallInstVec::new();
                 let label_false = sink.get_label();
                 insts.push(Inst::CondBr {
-                    taken: BranchTarget::Label(label_false),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_false),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
                         rs1: condition,
@@ -1322,8 +1322,8 @@ impl MachInstEmit for Inst {
                     cc,
                     a,
                     b,
-                    BranchTarget::Label(label_true),
-                    BranchTarget::Label(label_false),
+                    CondBrTarget::Label(label_true),
+                    CondBrTarget::Label(label_false),
                     ty,
                 )
                 .into_iter()
@@ -1388,8 +1388,8 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                 }
                 Inst::CondBr {
-                    taken: BranchTarget::Label(fail_label),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(fail_label),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: e,
@@ -1425,8 +1425,8 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 // check is our value stored.
                 Inst::CondBr {
-                    taken: BranchTarget::Label(cas_lebel),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(cas_lebel),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: t0.to_reg(),
@@ -1567,8 +1567,8 @@ impl MachInstEmit for Inst {
                             },
                             ValueRegs::one(dst.to_reg()),
                             ValueRegs::one(x),
-                            BranchTarget::Label(label_select_dst),
-                            BranchTarget::Fallthrough,
+                            CondBrTarget::Label(label_select_dst),
+                            CondBrTarget::Fallthrough,
                             ty,
                         )
                         .iter()
@@ -1634,8 +1634,8 @@ impl MachInstEmit for Inst {
 
                 // if store is not ok,retry.
                 Inst::CondBr {
-                    taken: BranchTarget::Label(retry),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(retry),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: t0.to_reg(),
@@ -1662,8 +1662,8 @@ impl MachInstEmit for Inst {
                     op.to_int_cc(),
                     x,
                     y,
-                    BranchTarget::Label(label_true),
-                    BranchTarget::Label(label_false),
+                    CondBrTarget::Label(label_true),
+                    CondBrTarget::Label(label_false),
                     ty,
                 )
                 .into_iter()
@@ -1746,8 +1746,8 @@ impl MachInstEmit for Inst {
                 Inst::emit_not_nan(rd, rs, in_type).emit(&[], sink, emit_info, state);
                 // jump to nan.
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_nan),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_nan),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
                         rs2: zero_reg(),
@@ -1935,8 +1935,8 @@ impl MachInstEmit for Inst {
                 let label_trap = sink.get_label();
                 let label_jump_over = sink.get_label();
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_trap),
-                    not_taken: BranchTarget::Label(label_jump_over),
+                    taken: CondBrTarget::Label(label_trap),
+                    not_taken: CondBrTarget::Label(label_jump_over),
                     kind: IntegerCompare { kind: cc, rs1, rs2 },
                 }
                 .emit(&[], sink, emit_info, state);
@@ -1950,8 +1950,8 @@ impl MachInstEmit for Inst {
                 let label_trap = sink.get_label();
                 let label_jump_over = sink.get_label();
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_trap),
-                    not_taken: BranchTarget::Label(label_jump_over),
+                    taken: CondBrTarget::Label(label_trap),
+                    not_taken: CondBrTarget::Label(label_jump_over),
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: test,
@@ -2032,8 +2032,8 @@ impl MachInstEmit for Inst {
                 // check if is nan.
                 Inst::emit_not_nan(int_tmp, rs, ty).emit(&[], sink, emit_info, state);
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_nan),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_nan),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
                         rs1: int_tmp.to_reg(),
@@ -2088,8 +2088,8 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
 
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_x),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_x),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: int_tmp.to_reg(),
@@ -2167,8 +2167,8 @@ impl MachInstEmit for Inst {
                 // check if rs1 is nan.
                 Inst::emit_not_nan(tmp, rs1, ty).emit(&[], sink, emit_info, state);
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_nan),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_nan),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
                         rs1: tmp.to_reg(),
@@ -2179,8 +2179,8 @@ impl MachInstEmit for Inst {
                 // check if rs2 is nan.
                 Inst::emit_not_nan(tmp, rs2, ty).emit(&[], sink, emit_info, state);
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_nan),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_nan),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::Equal,
                         rs1: tmp.to_reg(),
@@ -2207,15 +2207,15 @@ impl MachInstEmit for Inst {
                             tmp,
                             rs1,
                             ty,
-                            BranchTarget::Label(label_done),
-                            BranchTarget::Fallthrough,
+                            CondBrTarget::Label(label_done),
+                            CondBrTarget::Fallthrough,
                         );
                         insts.extend(Inst::emit_if_float_not_zero(
                             tmp,
                             rs2,
                             ty,
-                            BranchTarget::Label(label_done),
-                            BranchTarget::Fallthrough,
+                            CondBrTarget::Label(label_done),
+                            CondBrTarget::Fallthrough,
                         ));
                         insts
                             .iter()
@@ -2307,8 +2307,8 @@ impl MachInstEmit for Inst {
                 let label_loop = sink.get_label();
                 sink.bind_label(label_loop, &mut state.ctrl_plane);
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_done),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_done),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::SignedLessThanOrEqual,
                         rs1: step.to_reg(),
@@ -2327,8 +2327,8 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                     let label_over = sink.get_label();
                     Inst::CondBr {
-                        taken: BranchTarget::Label(label_over),
-                        not_taken: BranchTarget::Fallthrough,
+                        taken: CondBrTarget::Label(label_over),
+                        not_taken: CondBrTarget::Fallthrough,
                         kind: IntegerCompare {
                             kind: IntCC::Equal,
                             rs1: zero_reg(),
@@ -2379,8 +2379,8 @@ impl MachInstEmit for Inst {
                 let label_loop = sink.get_label();
                 sink.bind_label(label_loop, &mut state.ctrl_plane);
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_done),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_done),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::SignedLessThan,
                         rs1: step.to_reg(),
@@ -2470,8 +2470,8 @@ impl MachInstEmit for Inst {
                 let label_loop = sink.get_label();
                 sink.bind_label(label_loop, &mut state.ctrl_plane);
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_done),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_done),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::SignedLessThanOrEqual,
                         rs1: step.to_reg(),
@@ -2489,8 +2489,8 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::CondBr {
-                        taken: BranchTarget::Label(label_done),
-                        not_taken: BranchTarget::Fallthrough,
+                        taken: CondBrTarget::Label(label_done),
+                        not_taken: CondBrTarget::Fallthrough,
                         kind: IntegerCompare {
                             kind: IntCC::NotEqual,
                             rs1: zero_reg(),
@@ -2572,8 +2572,8 @@ impl MachInstEmit for Inst {
                 let label_loop = sink.get_label();
                 sink.bind_label(label_loop, &mut state.ctrl_plane);
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_done),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_done),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::SignedLessThanOrEqual,
                         rs1: step.to_reg(),
@@ -2592,8 +2592,8 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                     let label_over = sink.get_label();
                     Inst::CondBr {
-                        taken: BranchTarget::Label(label_over),
-                        not_taken: BranchTarget::Fallthrough,
+                        taken: CondBrTarget::Label(label_over),
+                        not_taken: CondBrTarget::Fallthrough,
                         kind: IntegerCompare {
                             kind: IntCC::Equal,
                             rs1: zero_reg(),
@@ -2646,8 +2646,8 @@ impl MachInstEmit for Inst {
                         }
                         .emit(&[], sink, emit_info, state);
                         Inst::CondBr {
-                            taken: BranchTarget::Label(label_sll_1),
-                            not_taken: BranchTarget::Fallthrough,
+                            taken: CondBrTarget::Label(label_sll_1),
+                            not_taken: CondBrTarget::Fallthrough,
                             kind: IntegerCompare {
                                 kind: IntCC::NotEqual,
                                 rs1: spilltmp_reg2(),
@@ -2694,8 +2694,8 @@ impl MachInstEmit for Inst {
                 let label_done = sink.get_label();
                 sink.bind_label(loop_start, &mut state.ctrl_plane);
                 Inst::CondBr {
-                    taken: BranchTarget::Label(label_done),
-                    not_taken: BranchTarget::Fallthrough,
+                    taken: CondBrTarget::Label(label_done),
+                    not_taken: CondBrTarget::Fallthrough,
                     kind: IntegerCompare {
                         kind: IntCC::UnsignedLessThanOrEqual,
                         rs1: step.to_reg(),
