@@ -930,7 +930,7 @@ impl MachInstEmit for Inst {
                         sink.add_cond_branch(start_off, start_off + 4, label, &code_inverse);
                         sink.put4(code);
                     }
-                    CondBrTarget::Fallthrough => {}
+                    CondBrTarget::Fallthrough => panic!("Cannot fallthrough in taken target"),
                 }
 
                 match not_taken {
