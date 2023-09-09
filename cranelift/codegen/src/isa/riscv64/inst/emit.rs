@@ -353,7 +353,6 @@ impl Inst {
             | Inst::MovFromPReg { .. }
             | Inst::Fence { .. }
             | Inst::FenceI
-            | Inst::ECall
             | Inst::EBreak
             | Inst::Udf { .. }
             | Inst::FpuRR { .. }
@@ -1348,9 +1347,6 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let x = enc_jalr(rd, base, offset);
                 sink.put4(x);
-            }
-            &Inst::ECall => {
-                sink.put4(0x00000073);
             }
             &Inst::EBreak => {
                 sink.put4(0x00100073);
