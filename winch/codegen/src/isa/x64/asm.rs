@@ -1,7 +1,7 @@
 //! Assembler library implementation for x64.
 
 use crate::{
-    isa::reg::Reg,
+    isa::reg::{Reg, RegClass},
     masm::{CalleeKind, CmpKind, DivKind, OperandSize, RemKind, ShiftKind},
 };
 use cranelift_codegen::{
@@ -22,7 +22,6 @@ use cranelift_codegen::{
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
     VCodeConstantData, VCodeConstants, Writable,
 };
-use regalloc2::RegClass;
 
 use super::address::Address;
 use smallvec::{smallvec, SmallVec};

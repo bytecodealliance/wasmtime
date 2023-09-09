@@ -267,6 +267,7 @@ impl Masm for MacroAssembler {
 
     fn float_neg(&mut self, dst: Reg, src: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst.into(), &src);
+        assert_eq!(dst.class(), RegClass::Float);
         let mask = match size {
             OperandSize::S32 => I::I32(0x80000000),
             OperandSize::S64 => I::I64(0x8000000000000000),
@@ -281,6 +282,7 @@ impl Masm for MacroAssembler {
 
     fn float_abs(&mut self, dst: Reg, src: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst.into(), &src);
+        assert_eq!(dst.class(), RegClass::Float);
         let mask = match size {
             OperandSize::S32 => I::I32(0x7fffffff),
             OperandSize::S64 => I::I64(0x7fffffffffffffff),
