@@ -1084,11 +1084,8 @@ impl MachInstEmit for Inst {
                     },
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.use_label_at_offset(
-                    sink.cur_offset(),
-                    default_target.as_label().unwrap(),
-                    LabelUse::PCRel32,
-                );
+
+                sink.use_label_at_offset(sink.cur_offset(), default_target, LabelUse::PCRel32);
                 Inst::construct_auipc_and_jalr(None, tmp2, 0)
                     .iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1148,11 +1145,7 @@ impl MachInstEmit for Inst {
 
                 // Emit the jumps back to back
                 for target in targets.iter() {
-                    sink.use_label_at_offset(
-                        sink.cur_offset(),
-                        target.as_label().unwrap(),
-                        LabelUse::PCRel32,
-                    );
+                    sink.use_label_at_offset(sink.cur_offset(), *target, LabelUse::PCRel32);
 
                     Inst::construct_auipc_and_jalr(None, tmp2, 0)
                         .iter()

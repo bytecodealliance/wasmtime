@@ -231,7 +231,7 @@
       (index Reg)
       (tmp1 WritableReg)
       (tmp2 WritableReg)
-      (targets VecBranchTarget))
+      (targets VecMachLabel))
 
     ;; atomic compare and set operation
     (AtomicCas
@@ -767,7 +767,6 @@
 ;;;; lowest four bit are used.
 (type FenceReq (primitive u8))
 
-(type VecBranchTarget (primitive VecBranchTarget))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
@@ -2711,7 +2710,7 @@
 (decl label_to_br_target (MachLabel) BranchTarget)
 (extern constructor label_to_br_target label_to_br_target)
 
-(decl vec_label_get (VecMachLabel u8) MachLabel )
+(decl vec_label_get (VecMachLabel u8) MachLabel)
 (extern constructor vec_label_get vec_label_get)
 
 (decl partial lower_branch (Inst VecMachLabel) Unit)
@@ -2750,12 +2749,11 @@
         (else BranchTarget (label_to_br_target (vec_label_get targets 1))))
     (emit_side_effect (cond_br (emit_fcmp cc ty a b) then else))))
 
-;;;
+
 (decl lower_br_table (Reg VecMachLabel) Unit)
 (extern constructor lower_br_table lower_br_table)
 
-(rule
-  (lower_branch (br_table index _) targets)
+(rule (lower_branch (br_table index _) targets)
   (lower_br_table index targets))
 
 (decl load_ra () Reg)
