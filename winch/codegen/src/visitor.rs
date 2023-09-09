@@ -7,7 +7,9 @@
 use crate::abi::ABI;
 use crate::codegen::ControlStackFrame;
 use crate::codegen::{control_index, CodeGen};
-use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, ShiftKind};
+use crate::masm::{
+    CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, RoundingMode, ShiftKind,
+};
 use crate::stack::{TypedReg, Val};
 use smallvec::SmallVec;
 use wasmparser::BrTable;
@@ -43,6 +45,14 @@ macro_rules! def_unsupported {
     (emit F64Abs $($rest:tt)*) => {};
     (emit F32Neg $($rest:tt)*) => {};
     (emit F64Neg $($rest:tt)*) => {};
+    (emit F32Floor $($rest:tt)*) => {};
+    (emit F64Floor $($rest:tt)*) => {};
+    (emit F32Ceil $($rest:tt)*) => {};
+    (emit F64Ceil $($rest:tt)*) => {};
+    (emit F32Nearest $($rest:tt)*) => {};
+    (emit F64Nearest $($rest:tt)*) => {};
+    (emit F32Trunc $($rest:tt)*) => {};
+    (emit F64Trunc $($rest:tt)*) => {};
     (emit I32Add $($rest:tt)*) => {};
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
@@ -171,6 +181,62 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_neg(reg, size);
+            });
+    }
+
+    fn visit_f32_floor(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
+                masm.float_round(RoundingMode::Down, reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f64_floor(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
+                masm.float_round(RoundingMode::Down, reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f32_ceil(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
+                masm.float_round(RoundingMode::Up, reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f64_ceil(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
+                masm.float_round(RoundingMode::Up, reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f32_nearest(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
+                masm.float_round(RoundingMode::Nearest, reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f64_nearest(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
+                masm.float_round(RoundingMode::Nearest, reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f32_trunc(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
+                masm.float_round(RoundingMode::Zero, reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f64_trunc(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
+                masm.float_round(RoundingMode::Zero, reg, RegImm::Reg(reg), size);
             });
     }
 
