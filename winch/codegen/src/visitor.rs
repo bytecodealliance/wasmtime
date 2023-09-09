@@ -41,6 +41,8 @@ macro_rules! def_unsupported {
     (emit F64Const $($rest:tt)*) => {};
     (emit F32Abs $($rest:tt)*) => {};
     (emit F64Abs $($rest:tt)*) => {};
+    (emit F32Neg $($rest:tt)*) => {};
+    (emit F64Neg $($rest:tt)*) => {};
     (emit I32Add $($rest:tt)*) => {};
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
@@ -155,6 +157,20 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_abs(reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f32_neg(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
+                masm.float_neg(reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f64_neg(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
+                masm.float_neg(reg, RegImm::Reg(reg), size);
             });
     }
 

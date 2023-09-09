@@ -489,13 +489,32 @@ impl Assembler {
 
     /// Logical exclusive or with registers.
     pub fn xor_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Xor,
-            src1: dst.into(),
-            src2: src.into(),
-            dst: dst.into(),
-        });
+        match dst.class() {
+            RegClass::Int => {
+                self.emit(Inst::AluRmiR {
+                    size: size.into(),
+                    op: AluRmiROpcode::Xor,
+                    src1: dst.into(),
+                    src2: src.into(),
+                    dst: dst.into(),
+                });
+            }
+            RegClass::Float => {
+                let op = match size {
+                    OperandSize::S32 => SseOpcode::Xorps,
+                    OperandSize::S64 => SseOpcode::Xorpd,
+                    OperandSize::S128 => unreachable!(),
+                };
+
+                self.emit(Inst::XmmRmR {
+                    op,
+                    src1: dst.into(),
+                    src2: XmmMemAligned::from(Xmm::from(src)),
+                    dst: dst.into(),
+                });
+            }
+            RegClass::Vector => todo!(),
+        }
     }
 
     pub fn xor_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
