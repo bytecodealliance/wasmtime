@@ -45,3 +45,24 @@ block0(v0: i64x2):
 ; run: %vany_true_i64x2([0 0]) == 0
 ; run: %vany_true_i64x2([-1 0]) == 1
 ; run: %vany_true_i64x2([-1 -1]) == 1
+
+function %vany_true_f32x4(f32x4) -> i8 {
+block0(v0: f32x4):
+    v1 = vany_true v0
+    return v1
+}
+; run: %vany_true_f32x4([0.0 0.0 0.0 0.0]) == 0
+; run: %vany_true_f32x4([0.0 -0.0 0.0 0.0]) == 1
+; run: %vany_true_f32x4([-0.0 -0.0 -0.0 -0.0]) == 1
+; run: %vany_true_f32x4([0x1.0 0x1.0 0x1.0 0x1.0]) == 1
+
+
+function %vany_true_f64x2(f64x2) -> i8 {
+block0(v0: f64x2):
+    v1 = vany_true v0
+    return v1
+}
+; run: %vany_true_f64x2([0.0 0.0]) == 0
+; run: %vany_true_f64x2([0.0 -0.0]) == 1
+; run: %vany_true_f64x2([-0.0 -0.0]) == 1
+; run: %vany_true_f64x2([0x1.0 0x1.0]) == 1

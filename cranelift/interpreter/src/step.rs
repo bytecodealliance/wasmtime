@@ -1009,7 +1009,10 @@ where
         Opcode::VhighBits => {
             // `ctrl_ty` controls the return type for this, so the input type
             // must be retrieved via `inst_context`.
-            let vector_type = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let vector_type = inst_context
+                .type_of(inst_context.args()[0])
+                .unwrap()
+                .as_int();
             let a = extractlanes(&arg(0), vector_type)?;
             let mut result: u128 = 0;
             for (i, val) in a.into_iter().enumerate() {
@@ -1019,15 +1022,18 @@ where
             assign(DataValueExt::int(result as i128, ctrl_ty)?)
         }
         Opcode::VanyTrue => {
-            let lane_ty = ctrl_ty.lane_type();
+            let simd_ty = ctrl_ty.as_int();
+            let lane_ty = simd_ty.lane_type();
             let init = DataValue::bool(false, true, lane_ty)?;
-            let any = fold_vector(arg(0), ctrl_ty, init.clone(), |acc, lane| acc.or(lane))?;
+            let any = fold_vector(arg(0), simd_ty, init.clone(), |acc, lane| acc.or(lane))?;
             assign(DataValue::bool(any != init, false, types::I8)?)
         }
         Opcode::VallTrue => assign(DataValue::bool(
-            !(arg(0).iter_lanes(ctrl_ty)?.try_fold(false, |acc, lane| {
-                Ok::<bool, ValueError>(acc | lane.is_zero()?)
-            })?),
+            !(arg(0)
+                .iter_lanes(ctrl_ty.as_int())?
+                .try_fold(false, |acc, lane| {
+                    Ok::<bool, ValueError>(acc | lane.is_zero()?)
+                })?),
             false,
             types::I8,
         )?),
