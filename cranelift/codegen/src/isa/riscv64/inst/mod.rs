@@ -965,7 +965,7 @@ impl MachInst for Inst {
 
     fn function_alignment() -> FunctionAlignment {
         FunctionAlignment {
-            minimum: 4,
+            minimum: 2,
             preferred: 4,
         }
     }
