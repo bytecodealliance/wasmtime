@@ -460,7 +460,7 @@ impl Inst {
         &self,
         sink: &mut MachBuffer<Inst>,
         emit_info: &EmitInfo,
-        _state: &mut EmitState,
+        state: &mut EmitState,
         start_off: &mut u32,
     ) -> bool {
         let has_zca = emit_info.isa_flags.has_zca();
@@ -563,6 +563,15 @@ impl Inst {
                     writable_zero_reg(),
                     zero_reg(),
                 ));
+            }
+
+            // c.unimp
+            Inst::Udf { trap_code } if has_zca => {
+                sink.add_trap(trap_code);
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
+                }
+                sink.put2(0x0000);
             }
 
             _ => return false,
@@ -2010,7 +2019,10 @@ impl Inst {
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
+                    sink.add_stack_map(
+                        StackMapExtent::UpcomingBytes(Inst::TRAP_OPCODE.len() as u32),
+                        s,
+                    );
                 }
                 sink.put_data(Inst::TRAP_OPCODE);
             }

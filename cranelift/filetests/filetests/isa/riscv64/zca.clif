@@ -268,3 +268,16 @@ block0:
 ;   c.ebreak
 ;   c.jr ra
 
+function %c_unimp() {
+block0:
+  trap user0
+}
+
+; VCode:
+; block0:
+;   udf##trap_code=user0
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.unimp ; trap: user0
+
