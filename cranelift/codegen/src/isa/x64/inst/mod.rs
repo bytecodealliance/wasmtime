@@ -1369,14 +1369,14 @@ impl PrettyPrint for Inst {
                 }
             }
 
-            Inst::MovImmM { size, simm64, dst } => {
+            Inst::MovImmM { size, simm32, dst } => {
                 let dst = dst.pretty_print(size.to_bytes(), allocs);
                 let suffix = suffix_bwlq(*size);
                 let imm = match *size {
-                    OperandSize::Size8 => ((*simm64 as u8) as i8).to_string(),
-                    OperandSize::Size16 => ((*simm64 as u16) as i16).to_string(),
-                    OperandSize::Size32 => ((*simm64 as u32) as i32).to_string(),
-                    OperandSize::Size64 => (*simm64 as i64).to_string(),
+                    OperandSize::Size8 => ((*simm32 as u8) as i8).to_string(),
+                    OperandSize::Size16 => ((*simm32 as u16) as i16).to_string(),
+                    OperandSize::Size32 => simm32.to_string(),
+                    OperandSize::Size64 => (*simm32 as i64).to_string(),
                 };
                 let op = ljustify2("mov".to_string(), suffix);
                 format!("{op} ${imm}, {dst}")

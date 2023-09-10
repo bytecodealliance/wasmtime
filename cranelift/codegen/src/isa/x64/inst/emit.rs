@@ -797,7 +797,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::MovImmM { size, simm64, dst } => {
+        Inst::MovImmM { size, simm32, dst } => {
             let dst = &dst.finalize(state, sink).with_allocs(allocs);
             let default_rex = RexFlags::clear_w();
             let default_opcode = 0xC7;
@@ -810,13 +810,7 @@ pub(crate) fn emit(
                 // operand is a memory operand, not a possibly 8-bit register.
                 OperandSize::Size8 => (0xC6, default_rex, bytes, prefix),
                 OperandSize::Size16 => (0xC7, default_rex, bytes, LegacyPrefixes::_66),
-                OperandSize::Size64 => {
-                    if !low32_will_sign_extend_to_64(*simm64) {
-                        panic!("Immediate-to-memory moves require immediate operand to sign-extend to 64 bits.");
-                    }
-
-                    (default_opcode, RexFlags::from(*size), bytes, prefix)
-                }
+                OperandSize::Size64 => (default_opcode, RexFlags::from(*size), bytes, prefix),
 
                 _ => (default_opcode, default_rex, bytes, prefix),
             };
@@ -826,7 +820,7 @@ pub(crate) fn emit(
             // 32-bit C7 /0 id
             // 64-bit REX.W C7 /0 id
             emit_std_enc_mem(sink, prefix, opcode, 1, /*subopcode*/ 0, dst, rex, 0);
-            emit_simm(sink, size, *simm64 as u32);
+            emit_simm(sink, size, *simm32 as u32);
         }
 
         Inst::MovRR { size, src, dst } => {

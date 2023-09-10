@@ -2856,7 +2856,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size8,
-            simm64: i8::MIN as u64,
+            simm32: i8::MIN as i32,
             dst: Amode::imm_reg(99, rax).into(),
         },
         "C6406380",
@@ -2866,7 +2866,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size8,
-            simm64: i8::MAX as u64,
+            simm32: i8::MAX as i32,
             dst: Amode::imm_reg(99, r8).into(),
         },
         "41C640637F",
@@ -2876,7 +2876,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size16,
-            simm64: i16::MIN as u64,
+            simm32: i16::MIN as i32,
             dst: Amode::imm_reg(99, rcx).into(),
         },
         "66C741630080",
@@ -2886,7 +2886,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size16,
-            simm64: i16::MAX as u64,
+            simm32: i16::MAX as i32,
             dst: Amode::imm_reg(99, r9).into(),
         },
         "6641C74163FF7F",
@@ -2896,7 +2896,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size32,
-            simm64: i32::MIN as u64,
+            simm32: i32::MIN,
             dst: Amode::imm_reg(99, rdx).into(),
         },
         "C7426300000080",
@@ -2906,7 +2906,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size32,
-            simm64: i32::MAX as u64,
+            simm32: i32::MAX,
             dst: Amode::imm_reg(99, r10).into(),
         },
         "41C74263FFFFFF7F",
@@ -2916,7 +2916,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size64,
-            simm64: i32::MIN as u64,
+            simm32: i32::MIN,
             dst: Amode::imm_reg(99, rbx).into(),
         },
         "48C7436300000080",
@@ -2926,7 +2926,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size64,
-            simm64: i32::MAX as u64,
+            simm32: i32::MAX,
             dst: Amode::imm_reg(99, r11).into(),
         },
         "49C74363FFFFFF7F",
@@ -2936,7 +2936,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size8,
-            simm64: 0u64,
+            simm32: 0i32,
             dst: Amode::imm_reg(99, rsp).into(),
         },
         "C644246300",
@@ -2946,7 +2946,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size16,
-            simm64: 0u64,
+            simm32: 0i32,
             dst: Amode::imm_reg(99, r12).into(),
         },
         "6641C74424630000",
@@ -2956,7 +2956,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size32,
-            simm64: 0u64,
+            simm32: 0i32,
             dst: Amode::imm_reg(99, rbp).into(),
         },
         "C7456300000000",
@@ -2966,7 +2966,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size64,
-            simm64: 0u64,
+            simm32: 0i32,
             dst: Amode::imm_reg(99, r13).into(),
         },
         "49C7456300000000",
