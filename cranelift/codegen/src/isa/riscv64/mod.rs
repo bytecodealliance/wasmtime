@@ -168,10 +168,27 @@ impl TargetIsa for Riscv64Backend {
     #[cfg(feature = "disas")]
     fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
         use capstone::prelude::*;
-        let mut cs = Capstone::new()
-            .riscv()
-            .mode(arch::riscv::ArchMode::RiscV64)
-            .build()?;
+        let mut cs_builder = Capstone::new().riscv().mode(arch::riscv::ArchMode::RiscV64);
+
+        // Enable C instruction decoding if we have compressed instructions enabled.
+        //
+        // We can't enable this unconditionally because it will cause Capstone to
+        // emit weird instructions and generally mess up when it encounters unknown
+        // instructions, such as any Zba,Zbb,Zbc or Vector instructions.
+        //
+        // This causes the default disassembly to be quite unreadable, so enable
+        // it only when we are actually going to be using them.
+        let uses_compressed = self
+            .isa_flags()
+            .iter()
+            .filter(|f| ["has_zca", "has_zcb", "has_zcd"].contains(&f.name))
+            .any(|f| f.as_bool().unwrap_or(false));
+        if uses_compressed {
+            cs_builder = cs_builder.extra_mode([arch::riscv::ArchExtraMode::RiscVC].into_iter());
+        }
+
+        let mut cs = cs_builder.build()?;
+
         // Similar to AArch64, RISC-V uses inline constants rather than a separate
         // constant pool. We want to skip dissasembly over inline constants instead
         // of stopping on invalid bytes.
