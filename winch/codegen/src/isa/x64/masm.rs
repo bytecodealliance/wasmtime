@@ -265,6 +265,36 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn float_neg(&mut self, dst: Reg, src: RegImm, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.into(), &src);
+        assert_eq!(dst.class(), RegClass::Float);
+        let mask = match size {
+            OperandSize::S32 => I::I32(0x80000000),
+            OperandSize::S64 => I::I64(0x8000000000000000),
+            OperandSize::S128 => unreachable!(),
+        };
+        let scratch_gpr = regs::scratch();
+        self.load_constant(&mask, scratch_gpr, size);
+        let scratch_xmm = regs::scratch_xmm();
+        self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
+        self.asm.xor_rr(scratch_xmm, dst, size);
+    }
+
+    fn float_abs(&mut self, dst: Reg, src: RegImm, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst.into(), &src);
+        assert_eq!(dst.class(), RegClass::Float);
+        let mask = match size {
+            OperandSize::S32 => I::I32(0x7fffffff),
+            OperandSize::S64 => I::I64(0x7fffffffffffffff),
+            OperandSize::S128 => unreachable!(),
+        };
+        let scratch_gpr = regs::scratch();
+        self.load_constant(&mask, scratch_gpr, size);
+        let scratch_xmm = regs::scratch_xmm();
+        self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
+        self.asm.and_rr(scratch_xmm, dst, size);
+    }
+
     fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {

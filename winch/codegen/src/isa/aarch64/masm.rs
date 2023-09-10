@@ -228,6 +228,14 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn float_neg(&mut self, _dst: Reg, _src: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
+    fn float_abs(&mut self, _dst: Reg, _src: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
     fn and(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
         todo!()
     }

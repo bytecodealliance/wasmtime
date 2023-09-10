@@ -370,7 +370,11 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | Unreachable { .. }
                         | Return { .. }
                         | F32Const { .. }
-                        | F64Const { .. } => {}
+                        | F64Const { .. }
+                        | F32Abs { .. }
+                        | F64Abs { .. }
+                        | F32Neg { .. }
+                        | F64Neg { .. } => {}
                         _ => {
                             supported = false;
                             break 'main;

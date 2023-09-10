@@ -317,6 +317,12 @@ pub(crate) trait MacroAssembler {
     /// Perform multiplication operation.
     fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
 
+    /// Perform a floating point abs operation.
+    fn float_abs(&mut self, dst: Reg, src: RegImm, size: OperandSize);
+
+    /// Perform a floating point negation operation.
+    fn float_neg(&mut self, dst: Reg, src: RegImm, size: OperandSize);
+
     /// Perform logical and operation.
     fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
 
