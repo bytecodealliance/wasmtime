@@ -2,7 +2,8 @@
 ; If you change this file, you should most likely update
 ; simd-arithmetic-nondeterministic*.clif as well.
 test run
-target riscv64gc has_v
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 ;; With the current implementation on RISC-V we always return a positive Canonical NaN
 ;; if any input is NaN. This is compatible with the spec but different from the

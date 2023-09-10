@@ -5,6 +5,7 @@ target aarch64
 target s390x
 target x86_64
 target riscv64
+target riscv64 has_c has_zcb
 
 function %select_spectre_guard_i8_eq(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):

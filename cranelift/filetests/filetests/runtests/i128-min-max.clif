@@ -1,6 +1,7 @@
 test interpret
 test run
 target riscv64
+target riscv64 has_c has_zcb
 target s390x
 
 

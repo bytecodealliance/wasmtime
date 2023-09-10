@@ -4,6 +4,7 @@ target s390x
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 set opt_level=speed
 target aarch64
@@ -11,6 +12,7 @@ target s390x
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %bitselect_i64x2(i64x2, i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2, v2: i64x2):

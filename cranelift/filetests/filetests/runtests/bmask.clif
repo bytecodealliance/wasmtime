@@ -4,6 +4,7 @@ target x86_64
 target aarch64
 target s390x
 target riscv64
+target riscv64 has_c has_zcb
 
 function %bmask_i64_i64(i64) -> i64 {
 block0(v0: i64):

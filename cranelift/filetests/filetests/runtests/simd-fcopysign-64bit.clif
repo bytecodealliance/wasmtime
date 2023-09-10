@@ -2,6 +2,7 @@ test interpret
 test run
 target aarch64
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 ; x86_64 and s390x do not support 64-bit vectors in `fcopysign`.
 
 function %fcopysign_f32x2(f32x2, f32x2) -> f32x2 {

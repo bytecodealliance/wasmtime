@@ -8,6 +8,7 @@ target riscv64
 target riscv64 has_zba
 target riscv64 has_zbb
 target riscv64 has_zbkb
+target riscv64 has_c has_zcb
 
 function %i128_uextend_i64(i64) -> i128 {
 block0(v0: i64):

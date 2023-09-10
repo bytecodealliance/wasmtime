@@ -8,6 +8,8 @@ set machine_code_cfg_info=true
 set enable_table_access_spectre_mitigation=false
 target aarch64
 target x86_64
+target riscv64
+target riscv64 has_c has_zcb
 
 function %u1() -> i64 sext, f64, i8, i8 sext, i8 sext system_v {
 block0:

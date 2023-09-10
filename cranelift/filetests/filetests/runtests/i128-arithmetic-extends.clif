@@ -6,6 +6,7 @@ target s390x
 target x86_64
 target riscv64
 target riscv64 has_zba
+target riscv64 has_c has_zcb
 
 function %sext_sshr_i32_i128(i32, i128) -> i64 {
 block0(v0: i32, v1: i128):

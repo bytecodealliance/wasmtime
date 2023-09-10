@@ -5,6 +5,8 @@ target aarch64
 target aarch64 sign_return_address
 target aarch64 has_pauth sign_return_address
 target s390x
+target riscv64
+target riscv64 has_c has_zcb
 
 ; A non-recursive fibonacci implementation.
 function %fibonacci(i32) -> i32 {
