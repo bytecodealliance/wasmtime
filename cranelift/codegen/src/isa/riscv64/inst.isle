@@ -714,6 +714,9 @@
   (CAdd)
   (CJr)
   (CJalr)
+  ;; c.ebreak technically isn't a CR format instruction, but it's encoding
+  ;; lines up with this format.
+  (CEbreak)
 ))
 
 ;; Opcodes for the CA compressed instruction format

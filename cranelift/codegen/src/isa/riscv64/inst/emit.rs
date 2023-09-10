@@ -556,6 +556,15 @@ impl Inst {
                 sink.put2(encode_cr2_type(CrOp::CJalr, base));
             }
 
+            // c.ebreak
+            Inst::EBreak if has_zca => {
+                sink.put2(encode_cr_type(
+                    CrOp::CEbreak,
+                    writable_zero_reg(),
+                    zero_reg(),
+                ));
+            }
+
             _ => return false,
         }
 

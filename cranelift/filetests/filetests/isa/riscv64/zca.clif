@@ -252,3 +252,19 @@ block0(v0: i64, v1: i64):
 ;   addi sp, sp, 0x10
 ;   c.jr ra
 
+function %c_ebreak() {
+block0:
+  debugtrap
+  return
+}
+
+; VCode:
+; block0:
+;   ebreak
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.ebreak
+;   c.jr ra
+
