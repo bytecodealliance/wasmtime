@@ -718,6 +718,38 @@ pub fn add_component_to_linker<T: WasiHttpView>(
             })
         },
     )?;
+    linker.func_wrap4_async(
+        "wasi:io/streams",
+        "blocking-write-and-flush",
+        move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
+            Box::new(async move {
+                let memory: Memory = memory_get(&mut caller)?;
+                let body = slice_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+
+                let ctx = get_cx(caller.data_mut());
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-write-and-flush'] call stream={:?} body={:?}",
+                    stream,
+                    body
+                );
+                let result = io::streams::Host::blocking_write_and_flush(ctx, stream, body.into()).await;
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-write-and-flush'] return result={:?}",
+                    result
+                );
+                result?;
+
+                // First == is_err
+                // Second == {ok: is_err = false, tag: is_err = true}
+                let result: [u32; 2] = [0, 0];
+                let raw = u32_array_to_u8(&result);
+
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
+        },
+    )?;
     linker.func_wrap1_async(
         "wasi:http/types",
         "drop-fields",
@@ -1462,6 +1494,42 @@ pub mod sync {
                 let result = io::streams::Host::write(ctx, stream, body.into());
                 tracing::trace!(
                     "[module='wasi:io/streams' function='write'] return result={:?}",
+                    result
+                );
+                result?;
+
+                // First == is_err
+                // Second == {ok: is_err = false, tag: is_err = true}
+                let result: [u32; 2] = [0, 0];
+                let raw = u32_array_to_u8(&result);
+
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            },
+        )?;
+        linker.func_wrap(
+            "wasi:io/streams",
+            "blocking-write-and-flush",
+            move |mut caller: Caller<'_, T>,
+                  stream: u32,
+                  body_ptr: u32,
+                  body_len: u32,
+                  ptr: u32|
+                  -> anyhow::Result<()> {
+                let memory = memory_get(&mut caller)?;
+                let body =
+                    string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+
+                let ctx = get_cx(caller.data_mut());
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-write-and-flush'] call stream={:?} body={:?}",
+                    stream,
+                    body
+                );
+                let result = io::streams::Host::blocking_write_and_flush(ctx, stream, body.into());
+                tracing::trace!(
+                    "[module='wasi:io/streams' function='blocking-write-and-flush'] return result={:?}",
                     result
                 );
                 result?;
