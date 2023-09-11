@@ -1,7 +1,7 @@
 //! Riscv64 ISA: binary code emission.
 
 use crate::binemit::StackMap;
-use crate::ir::{self, RelSourceLoc, TrapCode};
+use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CrOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
@@ -343,6 +343,7 @@ impl Inst {
             | Inst::Jal { .. }
             | Inst::CondBr { .. }
             | Inst::LoadExtName { .. }
+            | Inst::ElfTlsGetAddr { .. }
             | Inst::LoadAddr { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::Mov { .. }
@@ -1958,6 +1959,61 @@ impl Inst {
 
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
+
+            &Inst::ElfTlsGetAddr { rd, ref name } => {
+                // RISC-V's TLS GD model is slightly different from other arches.
+                //
+                // We have a relocation (R_RISCV_TLS_GD_HI20) that loads the high 20 bits
+                // of the address relative to the GOT entry. This relocation points to
+                // the symbol as usual.
+                //
+                // However when loading the bottom 12bits of the address, we need to
+                // use a label that points to the previous AUIPC instruction.
+                //
+                // label:
+                //    auipc a0,0                    # R_RISCV_TLS_GD_HI20 (symbol)
+                //    addi  a0,a0,0                 # R_RISCV_PCREL_LO12_I (label)
+                //
+                // https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic
+
+                // Create a lable that is going to be published to the final binary object.
+                let auipc_label = sink.get_label();
+                sink.bind_label(auipc_label, &mut state.ctrl_plane);
+                sink.set_label_visiblity(auipc_label, LabelVisibility::Public);
+
+                // Get the current PC.
+                sink.add_reloc(Reloc::RiscvTlsGdHi20, &**name, 0);
+                Inst::Auipc {
+                    rd: rd,
+                    imm: Imm20::from_bits(0),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+
+                // The `addi` here, points to the `auipc` label instead of directly to the symbol.
+                sink.add_reloc(Reloc::RiscvPCRelLo12I, &auipc_label, 0);
+                Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Addi,
+                    rd: rd,
+                    rs: rd.to_reg(),
+                    imm12: Imm12::from_bits(0),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+
+                Inst::Call {
+                    info: Box::new(CallInfo {
+                        dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        opcode: crate::ir::Opcode::TlsValue,
+                        caller_callconv: CallConv::SystemV,
+                        callee_callconv: CallConv::SystemV,
+                        callee_pop_size: 0,
+                        clobbers: PRegSet::empty(),
+                    }),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+            }
+
             &Inst::TrapIfC {
                 rs1,
                 rs2,
@@ -3272,6 +3328,12 @@ impl Inst {
                 name,
                 offset,
             },
+
+            Inst::ElfTlsGetAddr { rd, name } => {
+                let rd = allocs.next_writable(rd);
+                debug_assert_eq!(a0(), rd.to_reg());
+                Inst::ElfTlsGetAddr { rd, name }
+            }
 
             Inst::TrapIfC {
                 rs1,

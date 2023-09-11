@@ -148,6 +148,11 @@
       (name BoxExternalName)
       (offset i64))
 
+    ;; Load a TLS symbol address
+    (ElfTlsGetAddr
+      (rd WritableReg)
+      (name BoxExternalName))
+
     ;; Load address referenced by `mem` into `rd`.
     (LoadAddr
       (rd WritableReg)
@@ -2624,6 +2629,12 @@
 ;;;; load extern name
 (decl load_ext_name (ExternalName i64) Reg)
 (extern constructor load_ext_name load_ext_name)
+
+(decl elf_tls_get_addr (ExternalName) Reg)
+(rule (elf_tls_get_addr name)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ElfTlsGetAddr dst name))))
+        dst))
 
 (decl int_convert_2_float_op (Type bool Type) FpuOPRR)
 (extern constructor int_convert_2_float_op int_convert_2_float_op)

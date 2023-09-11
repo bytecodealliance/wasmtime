@@ -473,6 +473,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::LoadExtName { rd, .. } => {
             collector.reg_def(rd);
         }
+        &Inst::ElfTlsGetAddr { rd, .. } => {
+            // x10 is a0 which is both the first argument and the first return value.
+            collector.reg_fixed_def(rd, a0());
+            let mut clobbers = Riscv64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
+            clobbers.remove(px_reg(10));
+            collector.reg_clobbers(clobbers);
+        }
         &Inst::LoadAddr { rd, mem } => {
             if let Some(r) = mem.get_allocatable_register() {
                 collector.reg_use(r);
@@ -1690,6 +1697,10 @@ impl Inst {
             } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
+            }
+            &Inst::ElfTlsGetAddr { rd, ref name } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("elf_tls_get_addr {rd},{}", name.display(None))
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
                 let rs = mem.to_string_with_alloc(allocs);

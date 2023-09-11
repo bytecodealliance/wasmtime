@@ -803,6 +803,30 @@ impl ObjectModule {
                     0,
                 )
             }
+            Reloc::RiscvTlsGdHi20 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvTlsGdHi20 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_TLS_GD_HI20),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
+            Reloc::RiscvPCRelLo12I => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvPCRelLo12I is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_PCREL_LO12_I),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };
