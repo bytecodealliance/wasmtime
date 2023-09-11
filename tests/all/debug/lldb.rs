@@ -148,7 +148,8 @@ check: exited with status
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "-Ccache=n,opt-level=0",
+            "-Ccache=n",
+            "-Oopt-level=0",
             "-Ddebug-info",
             "tests/all/debug/testsuite/fraction-norm.wasm",
         ],
@@ -181,7 +182,8 @@ check: resuming
 pub fn test_debug_inst_offsets_are_correct_when_branches_are_removed() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "-Ccache=n,opt-level=0",
+            "-Ccache=n",
+            "-Oopt-level=0",
             "-Ddebug-info",
             "tests/all/debug/testsuite/two_removed_branches.wasm",
         ],
@@ -207,7 +209,8 @@ check: exited with status
 pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "-Ccache=n,opt-level=0",
+            "-Ccache=n",
+            "-Oopt-level=0",
             "-Ddebug-info",
             "tests/all/debug/testsuite/spilled_frame_base.wasm",
         ],
