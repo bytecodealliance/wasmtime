@@ -8,7 +8,6 @@
 use anyhow::{anyhow, bail, Context as _, Error, Result};
 use clap::builder::{OsStringValueParser, TypedValueParser};
 use clap::Parser;
-use once_cell::sync::Lazy;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs::File;
@@ -21,7 +20,8 @@ use wasmtime::{
     AsContextMut, Engine, Func, GuestProfiler, Module, Precompiled, Store, StoreLimits,
     StoreLimitsBuilder, UpdateDeadline, Val, ValType,
 };
-use wasmtime_cli_flags::{CommonOptions, WasiModules};
+use wasmtime_cli_flags::opt::WasmtimeOptionValue;
+use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::preview2;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
@@ -58,30 +58,14 @@ fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
     ))
 }
 
-fn parse_map_dirs(s: &str) -> Result<(String, String)> {
-    let parts: Vec<&str> = s.split("::").collect();
-    if parts.len() != 2 {
-        bail!("must contain exactly one double colon ('::')");
-    }
-    Ok((parts[0].into(), parts[1].into()))
-}
-
-fn parse_graphs(s: &str) -> Result<(String, String)> {
-    let parts: Vec<&str> = s.split("::").collect();
-    if parts.len() != 2 {
-        bail!("must contain exactly one double colon ('::')");
-    }
-    Ok((parts[0].into(), parts[1].into()))
-}
-
-fn parse_dur(s: &str) -> Result<Duration> {
-    // assume an integer without a unit specified is a number of seconds ...
-    if let Ok(val) = s.parse() {
-        return Ok(Duration::from_secs(val));
-    }
-    // ... otherwise try to parse it with units such as `3s` or `300ms`
-    let dur = humantime::parse_duration(s)?;
-    Ok(dur)
+fn parse_dirs(s: &str) -> Result<(String, String)> {
+    let mut parts = s.split("::");
+    let guest = parts.next().unwrap();
+    let host = match parts.next() {
+        Some(host) => host,
+        None => guest,
+    };
+    Ok((guest.into(), host.into()))
 }
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
@@ -108,34 +92,18 @@ fn parse_profile(s: &str) -> Result<Profile> {
         }),
         ["guest", path, dur] => Ok(Profile::Guest {
             path: path.to_string(),
-            interval: parse_dur(dur)?,
+            interval: WasmtimeOptionValue::parse(Some(dur))?,
         }),
         _ => bail!("unknown profiling strategy: {s}"),
     }
 }
 
-static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_string());
-
 /// Runs a WebAssembly module
 #[derive(Parser)]
-#[structopt(name = "run", trailing_var_arg = true, after_help = AFTER_HELP.as_str())]
+#[structopt(name = "run", trailing_var_arg = true)]
 pub struct RunCommand {
     #[clap(flatten)]
     common: CommonOptions,
-
-    /// Allow unknown exports when running commands.
-    #[clap(long = "allow-unknown-exports")]
-    allow_unknown_exports: bool,
-
-    /// Allow the main module to import unknown functions, using an
-    /// implementation that immediately traps, when running commands.
-    #[clap(long = "trap-unknown-imports")]
-    trap_unknown_imports: bool,
-
-    /// Allow the main module to import unknown functions, using an
-    /// implementation that returns default values, when running commands.
-    #[clap(long = "default-values-unknown-imports")]
-    default_values_unknown_imports: bool,
 
     /// Allow executing precompiled WebAssembly modules as `*.cwasm` files.
     ///
@@ -146,22 +114,14 @@ pub struct RunCommand {
     #[clap(long = "allow-precompiled")]
     allow_precompiled: bool,
 
-    /// Inherit environment variables and file descriptors following the
-    /// systemd listen fd specification (UNIX only)
-    #[clap(long = "listenfd")]
-    listenfd: bool,
-
-    /// Grant access to the given TCP listen socket
-    #[clap(
-        long = "tcplisten",
-        number_of_values = 1,
-        value_name = "SOCKET ADDRESS"
-    )]
-    tcplisten: Vec<String>,
-
-    /// Grant access to the given host directory
-    #[clap(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
-    dirs: Vec<String>,
+    /// Grant access of a host directory to a guest.
+    ///
+    /// If specified as just `GUEST_DIR` then the same directory name on the
+    /// host is made available within the guest. If specified as `GUEST::HOST`
+    /// then the `HOST` directory is opened and made available as the name
+    /// `GUEST` in the guest.
+    #[clap(long = "dir", value_name = "GUEST_DIR[::HOST_DIR]", value_parser = parse_dirs)]
+    dirs: Vec<(String, String)>,
 
     /// Pass an environment variable to the program.
     ///
@@ -176,21 +136,6 @@ pub struct RunCommand {
     /// The name of the function to run
     #[clap(long, value_name = "FUNCTION")]
     invoke: Option<String>,
-
-    /// Grant access to a guest directory mapped as a host directory
-    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)]
-    map_dirs: Vec<(String, String)>,
-
-    /// Pre-load machine learning graphs (i.e., models) for use by wasi-nn.
-    ///
-    /// Each use of the flag will preload a ML model from the host directory
-    /// using the given model encoding. The model will be mapped to the
-    /// directory name: e.g., `--wasi-nn-graph openvino:/foo/bar` will preload
-    /// an OpenVINO model named `bar`. Note that which model encodings are
-    /// available is dependent on the backends implemented in the
-    /// `wasmtime_wasi_nn` crate.
-    #[clap(long = "wasi-nn-graph", value_name = "FORMAT::HOST_DIR", value_parser = parse_graphs)]
-    graphs: Vec<(String, String)>,
 
     /// The path of the WebAssembly module to run
     #[clap(
@@ -208,14 +153,6 @@ pub struct RunCommand {
         value_parser = parse_preloads,
     )]
     preloads: Vec<(String, PathBuf)>,
-
-    /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
-    #[clap(
-        long = "wasm-timeout",
-        value_name = "TIME",
-        value_parser = parse_dur,
-    )]
-    wasm_timeout: Option<Duration>,
 
     /// Profiling strategy (valid options are: perfmap, jitdump, vtune, guest)
     ///
@@ -239,65 +176,10 @@ pub struct RunCommand {
     )]
     profile: Option<Profile>,
 
-    /// Enable coredump generation after a WebAssembly trap.
-    #[clap(long = "coredump-on-trap", value_name = "PATH")]
-    coredump_on_trap: Option<String>,
-
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
     #[clap(value_name = "ARGS")]
     module_args: Vec<String>,
-
-    /// Maximum size, in bytes, that a linear memory is allowed to reach.
-    ///
-    /// Growth beyond this limit will cause `memory.grow` instructions in
-    /// WebAssembly modules to return -1 and fail.
-    #[clap(long, value_name = "BYTES")]
-    max_memory_size: Option<usize>,
-
-    /// Maximum size, in table elements, that a table is allowed to reach.
-    #[clap(long)]
-    max_table_elements: Option<u32>,
-
-    /// Maximum number of WebAssembly instances allowed to be created.
-    #[clap(long)]
-    max_instances: Option<usize>,
-
-    /// Maximum number of WebAssembly tables allowed to be created.
-    #[clap(long)]
-    max_tables: Option<usize>,
-
-    /// Maximum number of WebAssembly linear memories allowed to be created.
-    #[clap(long)]
-    max_memories: Option<usize>,
-
-    /// Force a trap to be raised on `memory.grow` and `table.grow` failure
-    /// instead of returning -1 from these instructions.
-    ///
-    /// This is not necessarily a spec-compliant option to enable but can be
-    /// useful for tracking down a backtrace of what is requesting so much
-    /// memory, for example.
-    #[clap(long)]
-    trap_on_grow_failure: bool,
-
-    /// Enables memory error checking.
-    ///
-    /// See wmemcheck.md for documentation on how to use.
-    #[clap(long)]
-    wmemcheck: bool,
-
-    /// Indicates that the implementation of WASI preview1 should be backed by
-    /// the preview2 implementation for components.
-    ///
-    /// This will become the default in the future and this option will be
-    /// removed. For now this is primarily here for testing.
-    #[clap(long)]
-    preview2: bool,
-
-    /// Flag for WASI preview2 to inherit the host's network within the guest so
-    /// it has full access to all addresses/ports/etc.
-    #[clap(long)]
-    inherit_network: bool,
 }
 
 #[derive(Clone)]
@@ -338,12 +220,12 @@ impl CliModule {
 
 impl RunCommand {
     /// Executes the command.
-    pub fn execute(&self) -> Result<()> {
+    pub fn execute(mut self) -> Result<()> {
         self.common.init_logging();
 
         let mut config = self.common.config(None)?;
 
-        if self.wasm_timeout.is_some() {
+        if self.common.wasm.timeout.is_some() {
             config.epoch_interruption(true);
         }
         match self.profile {
@@ -357,15 +239,13 @@ impl RunCommand {
             None => {}
         }
 
-        config.wmemcheck(self.wmemcheck);
-
         let engine = Engine::new(&config)?;
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
         let main = self.load_module(&engine, &self.module)?;
 
         // Validate coredump-on-trap argument
-        if let Some(coredump_path) = self.coredump_on_trap.as_ref() {
+        if let Some(coredump_path) = &self.common.debug.coredump {
             if coredump_path.contains("%") {
                 bail!("the coredump-on-trap path does not support patterns yet.")
             }
@@ -378,10 +258,10 @@ impl RunCommand {
                 CliLinker::Component(wasmtime::component::Linker::new(&engine))
             }
         };
-        if self.allow_unknown_exports {
+        if let Some(enable) = self.common.wasm.unknown_exports_allow {
             match &mut linker {
                 CliLinker::Core(l) => {
-                    l.allow_unknown_exports(true);
+                    l.allow_unknown_exports(enable);
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(_) => {
@@ -395,29 +275,30 @@ impl RunCommand {
         self.populate_with_wasi(&mut linker, &mut store, &main)?;
 
         let mut limits = StoreLimitsBuilder::new();
-        if let Some(max) = self.max_memory_size {
+        if let Some(max) = self.common.wasm.max_memory_size {
             limits = limits.memory_size(max);
         }
-        if let Some(max) = self.max_table_elements {
+        if let Some(max) = self.common.wasm.max_table_elements {
             limits = limits.table_elements(max);
         }
-        if let Some(max) = self.max_instances {
+        if let Some(max) = self.common.wasm.max_instances {
             limits = limits.instances(max);
         }
-        if let Some(max) = self.max_tables {
+        if let Some(max) = self.common.wasm.max_tables {
             limits = limits.tables(max);
         }
-        if let Some(max) = self.max_memories {
+        if let Some(max) = self.common.wasm.max_memories {
             limits = limits.memories(max);
         }
-        store.data_mut().limits = limits
-            .trap_on_grow_failure(self.trap_on_grow_failure)
-            .build();
+        if let Some(enable) = self.common.wasm.trap_on_grow_failure {
+            limits = limits.trap_on_grow_failure(enable);
+        }
+        store.data_mut().limits = limits.build();
         store.limiter(|t| &mut t.limits);
 
         // If fuel has been configured, we want to add the configured
         // fuel amount to this store.
-        if let Some(fuel) = self.common.fuel {
+        if let Some(fuel) = self.common.wasm.fuel {
             store.add_fuel(fuel)?;
         }
 
@@ -471,15 +352,7 @@ impl RunCommand {
     fn compute_preopen_dirs(&self) -> Result<Vec<(String, Dir)>> {
         let mut preopen_dirs = Vec::new();
 
-        for dir in self.dirs.iter() {
-            preopen_dirs.push((
-                dir.clone(),
-                Dir::open_ambient_dir(dir, ambient_authority())
-                    .with_context(|| format!("failed to open directory '{}'", dir))?,
-            ));
-        }
-
-        for (guest, host) in self.map_dirs.iter() {
+        for (guest, host) in self.dirs.iter() {
             preopen_dirs.push((
                 guest.clone(),
                 Dir::open_ambient_dir(host, ambient_authority())
@@ -493,7 +366,7 @@ impl RunCommand {
     fn compute_preopen_sockets(&self) -> Result<Vec<TcpListener>> {
         let mut listeners = vec![];
 
-        for address in &self.tcplisten {
+        for address in &self.common.wasi.tcplisten {
             let stdlistener = std::net::TcpListener::bind(address)
                 .with_context(|| format!("failed to bind to address '{}'", address))?;
 
@@ -551,7 +424,7 @@ impl RunCommand {
                 store.as_context_mut().data_mut().guest_profiler = Some(profiler);
             }
 
-            if let Some(timeout) = self.wasm_timeout {
+            if let Some(timeout) = self.common.wasm.timeout {
                 let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
                 assert!(timeout > 0);
                 store.epoch_deadline_callback(move |mut store| {
@@ -593,7 +466,7 @@ impl RunCommand {
             });
         }
 
-        if let Some(timeout) = self.wasm_timeout {
+        if let Some(timeout) = self.common.wasm.timeout {
             store.set_epoch_deadline(1);
             let engine = store.engine().clone();
             thread::spawn(move || {
@@ -614,7 +487,7 @@ impl RunCommand {
     ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
-        if self.trap_unknown_imports {
+        if self.common.wasm.unknown_imports_trap == Some(true) {
             match linker {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_traps(module.unwrap_core())?;
@@ -624,7 +497,7 @@ impl RunCommand {
         }
 
         // ...or as default values.
-        if self.default_values_unknown_imports {
+        if self.common.wasm.unknown_imports_default == Some(true) {
             match linker {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_default_values(module.unwrap_core())?;
@@ -759,7 +632,7 @@ impl RunCommand {
     }
 
     fn handle_coredump(&self, err: Error) -> Error {
-        let coredump_path = match &self.coredump_on_trap {
+        let coredump_path = match &self.common.debug.coredump {
             Some(path) => path,
             None => return err,
         };
@@ -882,13 +755,7 @@ impl RunCommand {
 
     #[cfg(feature = "component-model")]
     fn ensure_allow_components(&self) -> Result<()> {
-        if !self
-            .common
-            .wasm_features
-            .unwrap_or_default()
-            .component_model
-            .unwrap_or(false)
-        {
+        if self.common.wasm.component_model != Some(true) {
             bail!("cannot execute a component without `--wasm-features component-model`");
         }
 
@@ -902,12 +769,10 @@ impl RunCommand {
         store: &mut Store<Host>,
         module: &CliModule,
     ) -> Result<()> {
-        let wasi_modules = self.common.wasi_modules.unwrap_or(WasiModules::default());
-
-        if wasi_modules.wasi_common {
+        if self.common.wasi.common != Some(false) {
             match linker {
                 CliLinker::Core(linker) => {
-                    if self.preview2 {
+                    if self.common.wasi.preview2 == Some(true) {
                         preview2::preview1::add_to_linker_sync(linker)?;
                         self.set_preview2_ctx(store)?;
                     } else {
@@ -925,7 +790,7 @@ impl RunCommand {
             }
         }
 
-        if wasi_modules.wasi_nn {
+        if self.common.wasi.nn == Some(true) {
             #[cfg(not(feature = "wasi-nn"))]
             {
                 bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
@@ -954,12 +819,19 @@ impl RunCommand {
                         })?;
                     }
                 }
-                let (backends, registry) = wasmtime_wasi_nn::preload(&self.graphs)?;
+                let graphs = self
+                    .common
+                    .wasi
+                    .nn_graph
+                    .iter()
+                    .map(|g| (g.format.clone(), g.dir.clone()))
+                    .collect::<Vec<_>>();
+                let (backends, registry) = wasmtime_wasi_nn::preload(&graphs)?;
                 store.data_mut().wasi_nn = Some(Arc::new(WasiNnCtx::new(backends, registry)));
             }
         }
 
-        if wasi_modules.wasi_threads {
+        if self.common.wasi.threads == Some(true) {
             #[cfg(not(feature = "wasi-threads"))]
             {
                 // Silence the unused warning for `module` as it is only used in the
@@ -987,7 +859,7 @@ impl RunCommand {
             }
         }
 
-        if wasi_modules.wasi_http {
+        if self.common.wasi.http == Some(true) {
             #[cfg(not(feature = "wasi-http"))]
             {
                 bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
@@ -1025,7 +897,7 @@ impl RunCommand {
 
         let mut num_fd: usize = 3;
 
-        if self.listenfd {
+        if self.common.wasi.listenfd == Some(true) {
             num_fd = ctx_set_listenfd(num_fd, &mut builder)?;
         }
 
@@ -1055,7 +927,7 @@ impl RunCommand {
             builder.env(key, &value);
         }
 
-        if self.listenfd {
+        if self.common.wasi.listenfd == Some(true) {
             bail!("components do not support --listenfd");
         }
         for _ in self.compute_preopen_sockets()? {
@@ -1071,7 +943,7 @@ impl RunCommand {
             );
         }
 
-        if self.inherit_network {
+        if self.common.wasi.inherit_network == Some(true) {
             builder.inherit_network(ambient_authority());
         }
 

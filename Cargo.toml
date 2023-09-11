@@ -39,7 +39,6 @@ wasmtime-runtime = { workspace = true }
 clap = { workspace = true, features = ["color", "suggestions", "derive"] }
 anyhow = { workspace = true }
 target-lexicon = { workspace = true }
-humantime = "2.0.0"
 once_cell = { workspace = true }
 listenfd = "1.0.0"
 wat = { workspace = true }

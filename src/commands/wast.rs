@@ -2,21 +2,14 @@
 
 use anyhow::{Context as _, Result};
 use clap::Parser;
-use once_cell::sync::Lazy;
 use std::path::PathBuf;
 use wasmtime::{Engine, Store};
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::WastContext;
 
-static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_string());
-
 /// Runs a WebAssembly test script file
 #[derive(Parser)]
-#[clap(
-    name = "wast",
-    version,
-    after_help = AFTER_HELP.as_str(),
-)]
+#[clap(name = "wast", version)]
 pub struct WastCommand {
     #[clap(flatten)]
     common: CommonOptions,
@@ -28,7 +21,7 @@ pub struct WastCommand {
 
 impl WastCommand {
     /// Executes the command.
-    pub fn execute(self) -> Result<()> {
+    pub fn execute(mut self) -> Result<()> {
         self.common.init_logging();
 
         let config = self.common.config(None)?;

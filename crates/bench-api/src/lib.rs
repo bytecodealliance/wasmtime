@@ -143,7 +143,7 @@ use std::slice;
 use std::{env, path::PathBuf};
 use target_lexicon::Triple;
 use wasmtime::{Engine, Instance, Linker, Module, Store};
-use wasmtime_cli_flags::{CommonOptions, WasiModules};
+use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
 
 pub type ExitCode = c_int;
@@ -423,7 +423,7 @@ struct HostState {
 
 impl BenchState {
     fn new(
-        options: CommonOptions,
+        mut options: CommonOptions,
         compilation_timer: *mut u8,
         compilation_start: extern "C" fn(*mut u8),
         compilation_end: extern "C" fn(*mut u8),
@@ -456,17 +456,15 @@ impl BenchState {
             Ok(())
         })?;
 
-        let epoch_interruption = options.epoch_interruption;
-        let fuel = options.fuel;
+        let epoch_interruption = options.wasm.epoch_interruption.unwrap_or(false);
+        let fuel = options.wasm.fuel;
 
-        let wasi_modules = options.wasi_modules.unwrap_or(WasiModules::default());
-
-        if wasi_modules.wasi_common {
+        if options.wasi.common != Some(false) {
             wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
         }
 
         #[cfg(feature = "wasi-nn")]
-        if wasi_modules.wasi_nn {
+        if options.wasi.nn == Some(true) {
             wasmtime_wasi_nn::witx::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
         }
 

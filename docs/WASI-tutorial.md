@@ -237,11 +237,10 @@ here ("Operation not permitted"), rather than Unix access controls
 of the directories they've been granted. This is true when resolving symbolic
 links as well.
 
-`wasmtime` also has the ability to remap directories, with the `--mapdir`
-command-line option:
+`wasmtime` also has the ability to remap directories:
 
 ```
-$ wasmtime --dir=. --mapdir=/tmp::/var/tmp demo.wasm test.txt /tmp/somewhere.txt
+$ wasmtime --dir=. --dir=/tmp::/var/tmp demo.wasm test.txt /tmp/somewhere.txt
 $ cat /var/tmp/somewhere.txt
 hello world
 ```

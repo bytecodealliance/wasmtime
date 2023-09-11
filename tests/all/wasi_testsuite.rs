@@ -38,12 +38,7 @@ fn wasi_testsuite() -> Result<()> {
     )?;
     run_all(
         "tests/wasi_testsuite/wasi-threads",
-        &[
-            "--wasi-modules",
-            "experimental-wasi-threads",
-            "--wasm-features",
-            "threads",
-        ],
+        &["-Sthreads", "-Wthreads"],
         &[],
     )?;
     Ok(())
@@ -110,11 +105,11 @@ fn build_command<P: AsRef<Path>>(module: P, extra_flags: &[&str], spec: &Spec) -
         .ok_or(anyhow!("module has no parent?"))?;
 
     // Add arguments.
-    cmd.args(["run", "--disable-cache"]);
+    cmd.args(["run", "-Ccache=n"]);
     cmd.args(extra_flags);
     if let Some(dirs) = &spec.dirs {
         for dir in dirs {
-            cmd.arg("--mapdir");
+            cmd.arg("--dir");
             cmd.arg(format!("{}::{}", dir, parent_dir.join(dir).display()));
         }
     }
