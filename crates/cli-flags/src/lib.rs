@@ -426,7 +426,7 @@ impl CommonOptions {
             #[cfg(feature = "pooling-allocator")]
             config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
             #[cfg(not(feature = "pooling-allocator"))]
-            bail!("support for the pooling allocator was disabled at compile-time");
+            anyhow::bail!("support for the pooling allocator was disabled at compile-time");
         }
 
         if let Some(max) = self.wasm.max_wasm_stack {
