@@ -66,8 +66,8 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
 pub fn test_debug_dwarf_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "--disable-cache",
-            "-g",
+            "-Ccache=n",
+            "-Ddebug-info",
             "--invoke",
             "fib",
             "tests/all/debug/testsuite/fib-wasm.wasm",
@@ -107,8 +107,8 @@ check: exited with status
 pub fn test_debug_dwarf5_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "--disable-cache",
-            "-g",
+            "-Ccache=n",
+            "-Ddebug-info",
             "--invoke",
             "fib",
             "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
@@ -148,10 +148,8 @@ check: exited with status
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "--disable-cache",
-            "-g",
-            "--opt-level",
-            "0",
+            "-Ccache=n,opt-level=0",
+            "-Ddebug-info",
             "tests/all/debug/testsuite/fraction-norm.wasm",
         ],
         r#"b fraction-norm.cc:26
@@ -183,10 +181,8 @@ check: resuming
 pub fn test_debug_inst_offsets_are_correct_when_branches_are_removed() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "--disable-cache",
-            "-g",
-            "--opt-level",
-            "0",
+            "-Ccache=n,opt-level=0",
+            "-Ddebug-info",
             "tests/all/debug/testsuite/two_removed_branches.wasm",
         ],
         r#"r"#,
@@ -211,10 +207,8 @@ check: exited with status
 pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "--disable-cache",
-            "-g",
-            "--opt-level",
-            "0",
+            "-Ccache=n,opt-level=0",
+            "-Ddebug-info",
             "tests/all/debug/testsuite/spilled_frame_base.wasm",
         ],
         r#"b spilled_frame_base.c:8
