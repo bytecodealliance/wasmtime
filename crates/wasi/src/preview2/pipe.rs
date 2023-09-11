@@ -120,6 +120,7 @@ pub struct AsyncReadStream {
     state: StreamState,
     buffer: Option<Result<Bytes, std::io::Error>>,
     receiver: mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
+    #[allow(unused)] // just used to implement unix stdin
     pub(crate) join_handle: crate::preview2::AbortOnDropJoinHandle<()>,
 }
 

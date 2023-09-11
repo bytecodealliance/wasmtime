@@ -486,10 +486,7 @@ impl<T: WasiView> tcp::Host for T {
                 | HostTcpState::ConnectReady => {}
 
                 HostTcpState::Listening | HostTcpState::Connecting | HostTcpState::Connected => {
-                    match rustix::net::shutdown(
-                        &dropped.inner.tcp_socket,
-                        rustix::net::Shutdown::ReadWrite,
-                    ) {
+                    match rustix::net::shutdown(&dropped.inner, rustix::net::Shutdown::ReadWrite) {
                         Ok(()) | Err(Errno::NOTCONN) => {}
                         Err(err) => Err(err).unwrap(),
                     }

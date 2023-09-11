@@ -216,7 +216,8 @@ impl InternalTableStreamExt for Table {
 pub trait TableStreamExt {
     /// Push a [`HostInputStream`] into a [`Table`], returning the table index.
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
-    /// Same as [`push_input_stream`] except assigns a parent resource to the input-stream created.
+    /// Same as [`push_input_stream`](Self::push_output_stream) except assigns a parent resource to
+    /// the input-stream created.
     fn push_input_stream_child(
         &mut self,
         istream: Box<dyn HostInputStream>,
@@ -230,8 +231,8 @@ pub trait TableStreamExt {
     /// Push a [`HostOutputStream`] into a [`Table`], returning the table index.
     fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
         -> Result<u32, TableError>;
-    /// Same as [`push_output_stream`] except assigns a parent resource to the output-stream
-    /// created.
+    /// Same as [`push_output_stream`](Self::push_output_stream) except assigns a parent resource
+    /// to the output-stream created.
     fn push_output_stream_child(
         &mut self,
         ostream: Box<dyn HostOutputStream>,
