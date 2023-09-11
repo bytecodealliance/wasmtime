@@ -303,34 +303,34 @@ pub(crate) trait MacroAssembler {
     fn pop(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform a move.
-    fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize);
+    fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize);
 
     /// Perform a conditional move.
     fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize);
 
     /// Perform add operation.
-    fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+    fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform subtraction operation.
-    fn sub(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+    fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform multiplication operation.
-    fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+    fn mul(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform a floating point abs operation.
-    fn float_abs(&mut self, dst: Reg, src: RegImm, size: OperandSize);
+    fn float_abs(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform a floating point negation operation.
-    fn float_neg(&mut self, dst: Reg, src: RegImm, size: OperandSize);
+    fn float_neg(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform logical and operation.
-    fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+    fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform logical or operation.
-    fn or(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+    fn or(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform logical exclusive or operation.
-    fn xor(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+    fn xor(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
     /// Perform a shift operation.
     /// Shift is special in that some architectures have specific expectations

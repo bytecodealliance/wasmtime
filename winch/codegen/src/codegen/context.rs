@@ -150,11 +150,11 @@ impl<'a> CodeGenContext<'a> {
     pub fn move_val_to_reg<M: MacroAssembler>(&self, src: &Val, dst: Reg, masm: &mut M) {
         let size: OperandSize = src.ty().into();
         match src {
-            Val::Reg(tr) => masm.mov(RegImm::reg(tr.reg), RegImm::reg(dst), size),
-            Val::I32(imm) => masm.mov(RegImm::i32(*imm), RegImm::reg(dst), size),
-            Val::I64(imm) => masm.mov(RegImm::i64(*imm), RegImm::reg(dst), size),
-            Val::F32(imm) => masm.mov(RegImm::f32(imm.bits()), RegImm::reg(dst), size),
-            Val::F64(imm) => masm.mov(RegImm::f64(imm.bits()), RegImm::reg(dst), size),
+            Val::Reg(tr) => masm.mov(RegImm::reg(tr.reg), dst, size),
+            Val::I32(imm) => masm.mov(RegImm::i32(*imm), dst, size),
+            Val::I64(imm) => masm.mov(RegImm::i64(*imm), dst, size),
+            Val::F32(imm) => masm.mov(RegImm::f32(imm.bits()), dst, size),
+            Val::F64(imm) => masm.mov(RegImm::f64(imm.bits()), dst, size),
             Val::Local(local) => {
                 let slot = self
                     .frame
@@ -184,7 +184,7 @@ impl<'a> CodeGenContext<'a> {
     /// Prepares arguments for emitting an i32 binary operation.
     pub fn i32_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
     where
-        F: FnMut(&mut M, RegImm, RegImm, OperandSize),
+        F: FnMut(&mut M, Reg, RegImm, OperandSize),
         M: MacroAssembler,
     {
         let top = self.stack.peek().expect("value at stack top");
@@ -195,17 +195,12 @@ impl<'a> CodeGenContext<'a> {
                 .pop_i32_const()
                 .expect("i32 const value at stack top");
             let typed_reg = self.pop_to_reg(masm, None);
-            emit(
-                masm,
-                RegImm::reg(typed_reg.reg),
-                RegImm::i32(val),
-                OperandSize::S32,
-            );
+            emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32);
             self.stack.push(typed_reg.into());
         } else {
             let src = self.pop_to_reg(masm, None);
             let dst = self.pop_to_reg(masm, None);
-            emit(masm, dst.reg.into(), src.reg.into(), OperandSize::S32);
+            emit(masm, dst.reg, src.reg.into(), OperandSize::S32);
             self.free_reg(src);
             self.stack.push(dst.into());
         }
@@ -214,7 +209,7 @@ impl<'a> CodeGenContext<'a> {
     /// Prepares arguments for emitting an i64 binary operation.
     pub fn i64_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
     where
-        F: FnMut(&mut M, RegImm, RegImm, OperandSize),
+        F: FnMut(&mut M, Reg, RegImm, OperandSize),
         M: MacroAssembler,
     {
         let top = self.stack.peek().expect("value at stack top");
@@ -224,17 +219,12 @@ impl<'a> CodeGenContext<'a> {
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
             let typed_reg = self.pop_to_reg(masm, None);
-            emit(
-                masm,
-                RegImm::reg(typed_reg.reg),
-                RegImm::i64(val),
-                OperandSize::S64,
-            );
+            emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64);
             self.stack.push(typed_reg.into());
         } else {
             let src = self.pop_to_reg(masm, None);
             let dst = self.pop_to_reg(masm, None);
-            emit(masm, dst.reg.into(), src.reg.into(), OperandSize::S64);
+            emit(masm, dst.reg, src.reg.into(), OperandSize::S64);
             self.free_reg(src);
             self.stack.push(dst.into());
         }
