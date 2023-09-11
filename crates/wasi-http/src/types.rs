@@ -1,7 +1,7 @@
 //! Implements the base structure (i.e. [WasiHttpCtx]) that will provide the
 //! implementation of the wasi-http API.
 
-use crate::wasi::http::types::{
+use crate::bindings::http::types::{
     IncomingStream, Method, OutgoingRequest, OutgoingStream, RequestOptions, Scheme,
 };
 use bytes::Bytes;
@@ -183,7 +183,7 @@ impl HttpResponse for ActiveResponse {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ActiveFuture {
     request_id: OutgoingRequest,
     options: Option<RequestOptions>,
@@ -368,6 +368,7 @@ impl TableHttpExt for Table {
     }
 
     fn push_stream(&mut self, content: Bytes, parent: u32) -> Result<(u32, Stream), TableError> {
+        tracing::debug!("preparing http body stream");
         let (a, b) = tokio::io::duplex(MAX_BUF_SIZE);
         let (_, write_stream) = tokio::io::split(a);
         let (read_stream, _) = tokio::io::split(b);
@@ -388,6 +389,12 @@ impl TableHttpExt for Table {
         let stream = Stream::new(input_id, output_id, parent);
         let cloned_stream = stream.clone();
         let stream_id = self.push(Box::new(Box::new(stream)))?;
+        tracing::trace!(
+            "http body stream details ( id: {:?}, input: {:?}, output: {:?} )",
+            stream_id,
+            input_id,
+            output_id
+        );
         Ok((stream_id, cloned_stream))
     }
     fn get_stream(&self, id: u32) -> Result<&Stream, TableError> {
