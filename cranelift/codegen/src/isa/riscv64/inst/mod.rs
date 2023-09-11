@@ -46,7 +46,6 @@ use std::fmt::{Display, Formatter};
 
 pub(crate) type OptionReg = Option<Reg>;
 pub(crate) type OptionImm12 = Option<Imm12>;
-pub(crate) type VecBranchTarget = Vec<BranchTarget>;
 pub(crate) type OptionUimm5 = Option<UImm5>;
 pub(crate) type OptionFloatRoundingMode = Option<FRM>;
 pub(crate) type VecU8 = Vec<u8>;
@@ -103,53 +102,35 @@ pub struct ReturnCallInfo {
     pub new_stack_arg_size: u32,
 }
 
-/// A branch target. Either unresolved (basic-block index) or resolved (offset
-/// from end of current instruction).
+/// A conditional branch target.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BranchTarget {
+pub enum CondBrTarget {
     /// An unresolved reference to a Label, as passed into
     /// `lower_branch_group()`.
     Label(MachLabel),
-    /// A fixed PC offset.
-    ResolvedOffset(i32),
+    /// No jump; fall through to the next instruction.
+    Fallthrough,
 }
 
-impl BranchTarget {
+impl CondBrTarget {
     /// Return the target's label, if it is a label-based target.
     pub(crate) fn as_label(self) -> Option<MachLabel> {
         match self {
-            BranchTarget::Label(l) => Some(l),
+            CondBrTarget::Label(l) => Some(l),
             _ => None,
         }
     }
-    /// offset zero.
-    #[inline]
-    pub(crate) fn zero() -> Self {
-        Self::ResolvedOffset(0)
-    }
 
-    #[inline]
-    pub(crate) fn is_zero(self) -> bool {
-        match self {
-            BranchTarget::Label(_) => false,
-            BranchTarget::ResolvedOffset(off) => off == 0,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn as_offset(self) -> Option<i32> {
-        match self {
-            BranchTarget::Label(_) => None,
-            BranchTarget::ResolvedOffset(off) => Some(off),
-        }
+    pub(crate) fn is_fallthrouh(&self) -> bool {
+        self == &CondBrTarget::Fallthrough
     }
 }
 
-impl Display for BranchTarget {
+impl Display for CondBrTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
-            BranchTarget::ResolvedOffset(off) => write!(f, "{}", off),
+            CondBrTarget::Label(l) => write!(f, "{}", l.to_string()),
+            CondBrTarget::Fallthrough => write!(f, "0"),
         }
     }
 }
@@ -480,7 +461,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::TrapIf { test, .. } => {
             collector.reg_use(test);
         }
-        &Inst::Jal { .. } => {}
+        &Inst::Jal { .. } => {
+            // JAL technically has a rd register, but we currently always
+            // hardcode it to x0.
+        }
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
             collector.reg_use(kind.rs2);
@@ -967,9 +951,7 @@ impl MachInst for Inst {
     }
 
     fn gen_jump(target: MachLabel) -> Inst {
-        Inst::Jal {
-            dest: BranchTarget::Label(target),
-        }
+        Inst::Jal { label: target }
     }
 
     fn worst_case_size() -> CodeOffset {
@@ -1360,7 +1342,6 @@ impl Inst {
                 tmp2,
                 ref targets,
             } => {
-                let targets: Vec<_> = targets.iter().map(|x| x.as_label().unwrap()).collect();
                 format!(
                     "{} {},{}##tmp1={},tmp2={}",
                     "br_table",
@@ -1661,8 +1642,8 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
             }
-            &MInst::Jal { dest, .. } => {
-                format!("{} {}", "j", dest)
+            &MInst::Jal { label } => {
+                format!("j {}", label.to_string())
             }
             &MInst::CondBr {
                 taken,
@@ -1672,9 +1653,8 @@ impl Inst {
             } => {
                 let rs1 = format_reg(kind.rs1, allocs);
                 let rs2 = format_reg(kind.rs2, allocs);
-                if not_taken.is_zero() && taken.as_label().is_none() {
-                    let off = taken.as_offset().unwrap();
-                    format!("{} {},{},{}", kind.op_name(), rs1, rs2, off)
+                if not_taken.is_fallthrouh() && taken.as_label().is_none() {
+                    format!("{} {},{},0", kind.op_name(), rs1, rs2)
                 } else {
                     let x = format!(
                         "{} {},{},taken({}),not_taken({})",
