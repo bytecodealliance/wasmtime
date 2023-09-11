@@ -1,7 +1,7 @@
 use cranelift_codegen::{
     binemit,
     ir::{self, ExternalName, UserExternalNameRef},
-    settings, MachReloc, MachTrap,
+    settings, MachReloc, MachTrap, RelocTarget,
 };
 use std::collections::BTreeMap;
 use wasmtime_environ::{FlagValue, FuncIndex, Trap, TrapInformation};
@@ -108,17 +108,19 @@ where
     let &MachReloc {
         offset,
         kind,
-        ref name,
+        ref target,
         addend,
     } = reloc;
-    let reloc_target = if let ExternalName::User(user_func_ref) = *name {
-        let (namespace, index) = transform_user_func_ref(user_func_ref);
-        debug_assert_eq!(namespace, 0);
-        RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-    } else if let ExternalName::LibCall(libcall) = *name {
-        RelocationTarget::LibCall(libcall)
-    } else {
-        panic!("unrecognized external name")
+    let reloc_target = match *target {
+        RelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
+            let (namespace, index) = transform_user_func_ref(user_func_ref);
+            debug_assert_eq!(namespace, 0);
+            RelocationTarget::UserFunc(FuncIndex::from_u32(index))
+        }
+        RelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
+            RelocationTarget::LibCall(libcall)
+        }
+        _ => panic!("unrecognized external name"),
     };
     Relocation {
         reloc: kind,

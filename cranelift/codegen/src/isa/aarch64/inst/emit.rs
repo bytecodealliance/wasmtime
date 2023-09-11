@@ -3174,7 +3174,7 @@ impl MachInstEmit for Inst {
                 // Note: this is not `Inst::Jump { .. }.emit(..)` because we
                 // have different metadata in this case: we don't have a label
                 // for the target, but rather a function relocation.
-                sink.add_reloc(Reloc::Arm64Call, callee, 0);
+                sink.add_reloc(Reloc::Arm64Call, &**callee, 0);
                 sink.put4(enc_jump26(0b000101, 0));
                 sink.add_call_site(ir::Opcode::ReturnCall);
 
@@ -3382,12 +3382,12 @@ impl MachInstEmit for Inst {
                     //   ldr     rd, [rd, :got_lo12:X]
 
                     // adrp rd, symbol
-                    sink.add_reloc(Reloc::Aarch64AdrGotPage21, name, 0);
+                    sink.add_reloc(Reloc::Aarch64AdrGotPage21, &**name, 0);
                     let inst = Inst::Adrp { rd, off: 0 };
                     inst.emit(&[], sink, emit_info, state);
 
                     // ldr rd, [rd, :got_lo12:X]
-                    sink.add_reloc(Reloc::Aarch64Ld64GotLo12Nc, name, 0);
+                    sink.add_reloc(Reloc::Aarch64Ld64GotLo12Nc, &**name, 0);
                     let inst = Inst::ULoad64 {
                         rd,
                         mem: AMode::reg(rd.to_reg()),
@@ -3415,7 +3415,7 @@ impl MachInstEmit for Inst {
                         dest: BranchTarget::ResolvedOffset(12),
                     };
                     inst.emit(&[], sink, emit_info, state);
-                    sink.add_reloc(Reloc::Abs8, name, offset);
+                    sink.add_reloc(Reloc::Abs8, &**name, offset);
                     sink.put8(0);
                 }
             }

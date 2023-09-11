@@ -978,7 +978,7 @@ impl Inst {
                 );
 
                 sink.add_call_site(ir::Opcode::ReturnCall);
-                sink.add_reloc(Reloc::RiscvCall, &callee, 0);
+                sink.add_reloc(Reloc::RiscvCall, &**callee, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));

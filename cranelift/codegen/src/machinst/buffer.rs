@@ -171,6 +171,7 @@
 //!   all longer-range fixups to later.
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
+use crate::ir::function::FunctionParameters;
 use crate::ir::{ExternalName, Opcode, RelSourceLoc, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
@@ -390,6 +391,10 @@ const LABEL_LIST_THRESHOLD: usize = 100;
 /// for references to the label, and will come back and patch the code
 /// appropriately when the label's location is eventually known.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct MachLabel(u32);
 entity_impl!(MachLabel);
 
@@ -1511,8 +1516,13 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Add an external relocation at the current offset.
-    pub fn add_reloc(&mut self, kind: Reloc, name: &ExternalName, addend: Addend) {
-        let name = name.clone();
+    pub fn add_reloc<T: Into<RelocTarget> + Clone>(
+        &mut self,
+        kind: Reloc,
+        target: &T,
+        addend: Addend,
+    ) {
+        let target: RelocTarget = target.clone().into();
         // FIXME(#3277): This should use `I::LabelUse::from_reloc` to optionally
         // generate a label-use statement to track whether an island is possibly
         // needed to escape this function to actually get to the external name.
@@ -1549,7 +1559,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.relocs.push(MachReloc {
             offset: self.data.len() as CodeOffset,
             kind,
-            name,
+            target,
             addend,
         });
     }
@@ -1773,9 +1783,49 @@ pub struct MachReloc {
     /// The kind of relocation.
     pub kind: Reloc,
     /// The external symbol / name to which this relocation refers.
-    pub name: ExternalName,
+    pub target: RelocTarget,
     /// The addend to add to the symbol value.
     pub addend: i64,
+}
+
+/// A Relocation target
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub enum RelocTarget {
+    /// Points to an [ExternalName] outside the current function.
+    ExternalName(ExternalName),
+    /// Points to a [MachLabel] inside this function.
+    /// This is different from [MachLabelFixup] in that both the relocation and the
+    /// label will be emitted and are only resolved at link time.
+    ///
+    /// There is no reason to prefer this over [MachLabelFixup] unless the ABI requires it.
+    Label(MachLabel),
+}
+
+impl From<ExternalName> for RelocTarget {
+    fn from(name: ExternalName) -> Self {
+        Self::ExternalName(name)
+    }
+}
+
+impl From<MachLabel> for RelocTarget {
+    fn from(label: MachLabel) -> Self {
+        Self::Label(label)
+    }
+}
+
+impl RelocTarget {
+    /// Returns a display for the current `RelocTarget`, with extra context to prettify the
+    /// output.
+    pub fn display<'a>(&'a self, params: Option<&'a FunctionParameters>) -> String {
+        match self {
+            RelocTarget::ExternalName(name) => format!("{}", name.display(params)),
+            RelocTarget::Label(label) => format!(".L{}", label.as_u32()),
+        }
+    }
 }
 
 /// A label resulting from a compilation.

@@ -11,8 +11,9 @@ use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::function::{Function, VersionMarker};
+use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::settings::SetError;
-use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
+use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context, RelocTarget};
 use cranelift_codegen::{MachLabelSite, MachReloc};
 use cranelift_control::ControlPlane;
 use std::borrow::{Cow, ToOwned};
@@ -35,14 +36,19 @@ pub struct ModuleReloc {
 impl ModuleReloc {
     /// Converts a `MachReloc` produced from a `Function` into a `ModuleReloc`.
     pub fn from_mach_reloc(mach_reloc: &MachReloc, func: &Function) -> Self {
-        let name = match mach_reloc.name {
-            ir::ExternalName::User(reff) => {
+        let name = match mach_reloc.target {
+            RelocTarget::ExternalName(ExternalName::User(reff)) => {
                 let name = &func.params.user_named_funcs()[reff];
                 ModuleExtName::user(name.namespace, name.index)
             }
-            ir::ExternalName::TestCase(_) => unimplemented!(),
-            ir::ExternalName::LibCall(libcall) => ModuleExtName::LibCall(libcall),
-            ir::ExternalName::KnownSymbol(ks) => ModuleExtName::KnownSymbol(ks),
+            RelocTarget::ExternalName(ExternalName::TestCase(_)) => unimplemented!(),
+            RelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
+                ModuleExtName::LibCall(libcall)
+            }
+            RelocTarget::ExternalName(ExternalName::KnownSymbol(ks)) => {
+                ModuleExtName::KnownSymbol(ks)
+            }
+            RelocTarget::Label(_) => unimplemented!(),
         };
         Self {
             offset: mach_reloc.offset,
