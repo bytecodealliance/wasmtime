@@ -366,7 +366,7 @@ pub unsafe extern "C" fn wasi_ctx_push_file(
     let f = unsafe { File::from_raw_fd(host_fd as i32) };
     let f = cap_std::fs::File::from_std(f);
     let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
-    
+
     match ctx.push_file(Box::new(f), access_mode) {
         Ok(fd) => {
             *guest_fd = fd;
