@@ -115,7 +115,8 @@ Unreleased.
   [#6547](https://github.com/bytecodealliance/wasmtime/pull/6547)
 
 * Wasmtime's minimum supported Rust version (MSRV) is now 1.70.0. Wasmtime's
-  MSRV policy is now additionally documented.
+  MSRV policy of supporting the last three releases of Rust is now additionally
+  documented.
   [#6900](https://github.com/bytecodealliance/wasmtime/pull/6900)
 
 * Wasmtime's support for DWARF debugging information has seen some fixes for
