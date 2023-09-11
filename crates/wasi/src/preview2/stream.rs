@@ -109,7 +109,7 @@ pub trait HostOutputStream: Send + Sync {
     /// Prior to calling [`write`](Self::write)
     /// the caller must call [`write_ready`](Self::write_ready),
     /// which resolves to a non-zero permit
-    /// 
+    ///
     /// This method must never block.
     /// [`write_ready`](Self::write_ready) permit indicates the maximum amount of bytes that are
     /// permitted to be written in a single [`write`](Self::write) following the
@@ -124,7 +124,7 @@ pub trait HostOutputStream: Send + Sync {
     fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError>;
 
     /// Trigger a flush of any bytes buffered in this stream implementation.
-    /// 
+    ///
     /// This method may be called at any time and must never block.
     ///
     /// After this method is called, [`write_ready`](Self::write_ready) must pend until flush is
