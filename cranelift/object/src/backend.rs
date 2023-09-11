@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{self, ir, MachReloc};
+use cranelift_codegen::{self, ir, MachLabelSite, MachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
@@ -324,6 +324,7 @@ impl Module for ObjectModule {
             alignment,
             &code,
             ctx.compiled_code().unwrap().buffer.relocs(),
+            ctx.compiled_code().unwrap().buffer.labels(),
         )
     }
 
@@ -334,20 +335,18 @@ impl Module for ObjectModule {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
+        labels: &[MachLabelSite],
     ) -> ModuleResult<()> {
         info!("defining function {} with bytes", func_id);
         let decl = self.declarations.get_function_decl(func_id);
+        let decl_name = decl.linkage_name(func_id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(
-                decl.linkage_name(func_id).into_owned(),
-            ));
+            return Err(ModuleError::InvalidImportDefinition(decl_name.into_owned()));
         }
 
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(
-                decl.linkage_name(func_id).into_owned(),
-            ));
+            return Err(ModuleError::DuplicateDefinition(decl_name.into_owned()));
         }
         *defined = true;
 
@@ -377,6 +376,20 @@ impl Module for ObjectModule {
                 section,
                 offset,
                 relocs,
+            });
+        }
+
+        for label in labels {
+            let name = format!(".L{}_{}", decl_name, label.id);
+            self.object.add_symbol(Symbol {
+                name: name.as_bytes().to_vec(),
+                value: offset + label.offset as u64,
+                size: 0,
+                kind: SymbolKind::Label,
+                scope: SymbolScope::Compilation,
+                weak: false,
+                section: SymbolSection::Section(section),
+                flags: SymbolFlags::None,
             });
         }
 

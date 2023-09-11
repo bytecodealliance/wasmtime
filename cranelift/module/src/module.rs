@@ -12,8 +12,8 @@ use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::function::{Function, VersionMarker};
 use cranelift_codegen::settings::SetError;
-use cranelift_codegen::MachReloc;
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
+use cranelift_codegen::{MachLabelSite, MachReloc};
 use cranelift_control::ControlPlane;
 use std::borrow::{Cow, ToOwned};
 use std::string::String;
@@ -966,6 +966,7 @@ pub trait Module {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
+        labels: &[MachLabelSite],
     ) -> ModuleResult<()>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
@@ -1068,8 +1069,9 @@ impl<M: Module> Module for &mut M {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
+        labels: &[MachLabelSite],
     ) -> ModuleResult<()> {
-        (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
+        (**self).define_function_bytes(func_id, func, alignment, bytes, relocs, labels)
     }
 
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {

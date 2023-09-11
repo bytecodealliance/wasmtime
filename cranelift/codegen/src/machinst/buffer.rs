@@ -228,6 +228,15 @@ enum ForceVeneers {
     No,
 }
 
+/// Determines if a label should be emitted to the final binary object.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LabelVisibility {
+    /// Public labels are published in the final binary object.
+    Public,
+    /// Private labels are internal only.
+    Private,
+}
+
 /// A buffer of output to be produced, fixed up, and then emitted to a CodeSink
 /// in bulk.
 ///
@@ -266,6 +275,12 @@ pub struct MachBuffer<I: VCodeInst> {
     /// target (iteratively until a non-aliased label); if B is already
     /// aliased to A, then we cannot alias A back to B.
     label_aliases: SmallVec<[MachLabel; 16]>,
+    /// Label Visibility: If a label is visible, we publish it in the final binary
+    /// object, otherwise it is internal only.
+    ///
+    /// Public labels are the exception, so we only keep track of them and assume
+    /// all others are private.
+    label_is_public: SmallVec<[MachLabel; 4]>,
     /// Constants that must be emitted at some point.
     pending_constants: SmallVec<[VCodeConstant; 16]>,
     /// Byte size of all constants in `pending_constants`.
@@ -318,6 +333,7 @@ impl MachBufferFinalized<Stencil> {
         MachBufferFinalized {
             data: self.data,
             relocs: self.relocs,
+            labels: self.labels,
             traps: self.traps,
             call_sites: self.call_sites,
             srclocs: self
@@ -346,6 +362,8 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
     pub(crate) relocs: SmallVec<[MachReloc; 16]>,
+    /// Any published labels referring to this code.
+    pub(crate) labels: SmallVec<[MachLabelSite; 4]>,
     /// Any trap records referring to this code.
     pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
@@ -425,6 +443,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
+            label_is_public: SmallVec::new(),
             pending_constants: SmallVec::new(),
             pending_constants_size: 0,
             pending_traps: SmallVec::new(),
@@ -629,6 +648,20 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.optimize_branches(ctrl_plane);
 
         // Post-invariant: by `optimize_branches()` (see argument there).
+    }
+
+    /// Set the visibility of a label. The label must have been bound already.
+    pub fn set_label_visiblity(&mut self, label: MachLabel, visibility: LabelVisibility) {
+        trace!(
+            "MachBuffer: set label {:?} visibility to {:?}",
+            label,
+            visibility
+        );
+        debug_assert_ne!(self.resolve_label_offset(label), UNKNOWN_LABEL_OFFSET);
+        match visibility {
+            LabelVisibility::Public => self.label_is_public.push(label),
+            LabelVisibility::Private => self.label_is_public.retain(|l| *l != label),
+        }
     }
 
     /// Lazily clear `labels_at_tail` if the tail offset has moved beyond the
@@ -1451,12 +1484,23 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         let alignment = self.finish_constants(constants);
 
+        let labels = self
+            .label_is_public
+            .iter()
+            .enumerate()
+            .map(|(id, label)| MachLabelSite {
+                offset: self.resolve_label_offset(*label),
+                id: id as u32,
+            })
+            .collect();
+
         let mut srclocs = self.srclocs;
         srclocs.sort_by_key(|entry| entry.start);
 
         MachBufferFinalized {
             data: self.data,
             relocs: self.relocs,
+            labels,
             traps: self.traps,
             call_sites: self.call_sites,
             srclocs,
@@ -1626,6 +1670,11 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         &self.relocs[..]
     }
 
+    /// Get the list of published labels for this code.
+    pub fn labels(&self) -> &[MachLabelSite] {
+        &self.labels[..]
+    }
+
     /// Get the list of trap records for this code.
     pub fn traps(&self) -> &[MachTrap] {
         &self.traps[..]
@@ -1727,6 +1776,21 @@ pub struct MachReloc {
     pub name: ExternalName,
     /// The addend to add to the symbol value.
     pub addend: i64,
+}
+
+/// A label resulting from a compilation.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct MachLabelSite {
+    /// The offset at which the relocation applies, *relative to the
+    /// containing section*.
+    pub offset: CodeOffset,
+    /// The id of the label. This is unrelated to the id assigned during
+    /// compilation.
+    pub id: u32,
 }
 
 /// A trap record resulting from a compilation.
