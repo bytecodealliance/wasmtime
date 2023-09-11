@@ -305,30 +305,30 @@ pub extern "C" fn wasm_bench_create(
                     .with_context(|| format!("failed to create {}", stdout_path.display()))?;
                 let stdout = cap_std::fs::File::from_std(stdout);
                 let stdout = wasi_cap_std_sync::file::File::from_cap_std(stdout);
-                cx = cx.stdout(Box::new(stdout));
+                cx.stdout(Box::new(stdout));
 
                 let stderr = std::fs::File::create(&stderr_path)
                     .with_context(|| format!("failed to create {}", stderr_path.display()))?;
                 let stderr = cap_std::fs::File::from_std(stderr);
                 let stderr = wasi_cap_std_sync::file::File::from_cap_std(stderr);
-                cx = cx.stderr(Box::new(stderr));
+                cx.stderr(Box::new(stderr));
 
                 if let Some(stdin_path) = &stdin_path {
                     let stdin = std::fs::File::open(stdin_path)
                         .with_context(|| format!("failed to open {}", stdin_path.display()))?;
                     let stdin = cap_std::fs::File::from_std(stdin);
                     let stdin = wasi_cap_std_sync::file::File::from_cap_std(stdin);
-                    cx = cx.stdin(Box::new(stdin));
+                    cx.stdin(Box::new(stdin));
                 }
 
                 // Allow access to the working directory so that the benchmark can read
                 // its input workload(s).
-                cx = cx.preopened_dir(working_dir.try_clone()?, ".")?;
+                cx.preopened_dir(working_dir.try_clone()?, ".")?;
 
                 // Pass this env var along so that the benchmark program can use smaller
                 // input workload(s) if it has them and that has been requested.
                 if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
-                    cx = cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
+                    cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
                 }
 
                 Ok(cx.build())
@@ -467,7 +467,7 @@ impl BenchState {
 
         #[cfg(feature = "wasi-nn")]
         if wasi_modules.wasi_nn {
-            wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
+            wasmtime_wasi_nn::witx::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
         }
 
         Ok(Self {
@@ -509,7 +509,10 @@ impl BenchState {
         let host = HostState {
             wasi: (self.make_wasi_cx)().context("failed to create a WASI context")?,
             #[cfg(feature = "wasi-nn")]
-            wasi_nn: wasmtime_wasi_nn::WasiNnCtx::new()?,
+            wasi_nn: {
+                let (backends, registry) = wasmtime_wasi_nn::preload(&[])?;
+                wasmtime_wasi_nn::WasiNnCtx::new(backends, registry)
+            },
         };
 
         // NB: Start measuring instantiation time *after* we've created the WASI

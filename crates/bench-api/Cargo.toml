@@ -12,7 +12,6 @@ publish = false
 [lib]
 name = "wasmtime_bench_api"
 crate-type = ["cdylib"]
-test = false
 doctest = false
 
 [dependencies]
