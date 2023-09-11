@@ -1492,10 +1492,10 @@ impl<I: VCodeInst> MachBuffer<I> {
         let labels = self
             .label_is_public
             .iter()
-            .enumerate()
-            .map(|(id, label)| MachLabelSite {
-                offset: self.resolve_label_offset(*label),
-                id: id as u32,
+            .copied()
+            .map(|label| MachLabelSite {
+                offset: self.resolve_label_offset(label),
+                label,
             })
             .collect();
 
@@ -1838,9 +1838,8 @@ pub struct MachLabelSite {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
     pub offset: CodeOffset,
-    /// The id of the label. This is unrelated to the id assigned during
-    /// compilation.
-    pub id: u32,
+    /// The label.
+    pub label: MachLabel,
 }
 
 /// A trap record resulting from a compilation.

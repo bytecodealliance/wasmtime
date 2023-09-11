@@ -1,6 +1,6 @@
 use cranelift_codegen::binemit::Reloc;
-use cranelift_module::ModuleExtName;
 use cranelift_module::ModuleReloc;
+use cranelift_module::ModuleRelocTarget;
 use std::convert::TryFrom;
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
@@ -21,9 +21,9 @@ pub(crate) struct CompiledBlob {
 impl CompiledBlob {
     pub(crate) fn perform_relocations(
         &self,
-        get_address: impl Fn(&ModuleExtName) -> *const u8,
-        get_got_entry: impl Fn(&ModuleExtName) -> *const u8,
-        get_plt_entry: impl Fn(&ModuleExtName) -> *const u8,
+        get_address: impl Fn(&ModuleRelocTarget) -> *const u8,
+        get_got_entry: impl Fn(&ModuleRelocTarget) -> *const u8,
+        get_plt_entry: impl Fn(&ModuleRelocTarget) -> *const u8,
     ) {
         use std::ptr::write_unaligned;
 

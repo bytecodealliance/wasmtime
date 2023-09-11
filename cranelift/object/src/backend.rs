@@ -3,12 +3,13 @@
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
+use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{self, ir, MachLabelSite, MachReloc};
+use cranelift_codegen::{self, ir, MachLabel, MachLabelSite, MachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
-    ModuleExtName, ModuleReloc, ModuleResult,
+    ModuleReloc, ModuleRelocTarget, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -130,6 +131,7 @@ pub struct ObjectModule {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
+    known_labels: HashMap<(UserFuncName, MachLabel), SymbolId>,
     per_function_section: bool,
 }
 
@@ -149,6 +151,7 @@ impl ObjectModule {
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
             known_symbols: HashMap::new(),
+            known_labels: HashMap::new(),
             per_function_section: builder.per_function_section,
         }
     }
@@ -379,11 +382,11 @@ impl Module for ObjectModule {
             });
         }
 
-        for label in labels {
-            let name = format!(".L{}_{}", decl_name, label.id);
-            self.object.add_symbol(Symbol {
+        for label_site in labels {
+            let name = format!(".L{}_{}", func_id.as_u32(), label_site.label.as_u32());
+            let symbol_id = self.object.add_symbol(Symbol {
                 name: name.as_bytes().to_vec(),
-                value: offset + label.offset as u64,
+                value: offset + label_site.offset as u64,
                 size: 0,
                 kind: SymbolKind::Label,
                 scope: SymbolScope::Compilation,
@@ -391,6 +394,9 @@ impl Module for ObjectModule {
                 section: SymbolSection::Section(section),
                 flags: SymbolFlags::None,
             });
+
+            self.known_labels
+                .insert((func.name.clone(), label_site.label), symbol_id);
         }
 
         Ok(())
@@ -541,9 +547,9 @@ impl ObjectModule {
 
     /// This should only be called during finish because it creates
     /// symbols for missing libcalls.
-    fn get_symbol(&mut self, name: &ModuleExtName) -> SymbolId {
+    fn get_symbol(&mut self, name: &ModuleRelocTarget) -> SymbolId {
         match *name {
-            ModuleExtName::User { .. } => {
+            ModuleRelocTarget::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let id = FuncId::from_name(name);
                     self.functions[id].unwrap().0
@@ -552,7 +558,7 @@ impl ObjectModule {
                     self.data_objects[id].unwrap().0
                 }
             }
-            ModuleExtName::LibCall(ref libcall) => {
+            ModuleRelocTarget::LibCall(ref libcall) => {
                 let name = (self.libcall_names)(*libcall);
                 if let Some(symbol) = self.object.symbol_id(name.as_bytes()) {
                     symbol
@@ -575,7 +581,7 @@ impl ObjectModule {
             }
             // These are "magic" names well-known to the linker.
             // They require special treatment.
-            ModuleExtName::KnownSymbol(ref known_symbol) => {
+            ModuleRelocTarget::KnownSymbol(ref known_symbol) => {
                 if let Some(symbol) = self.known_symbols.get(known_symbol) {
                     *symbol
                 } else {
@@ -605,6 +611,14 @@ impl ObjectModule {
                     symbol
                 }
             }
+
+            // All of these function labels should exist, since they are inserted when the function is
+            // first defined.
+            ModuleRelocTarget::FunctionLabel(ref fname, label) => self
+                .known_labels
+                .get(&(fname.clone(), label))
+                .copied()
+                .expect("Unknown function label"),
         }
     }
 
@@ -859,7 +873,7 @@ struct SymbolRelocs {
 #[derive(Clone)]
 struct ObjectRelocRecord {
     offset: CodeOffset,
-    name: ModuleExtName,
+    name: ModuleRelocTarget,
     kind: RelocationKind,
     encoding: RelocationEncoding,
     size: u8,
