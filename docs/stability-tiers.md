@@ -27,9 +27,21 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-unknown-linux-gnu`                 |
 | WASI Proposal        | `wasi_snapshot_preview1`                   |
 | WASI Proposal        | `wasi_unstable`                            |
-| WebAssembly Proposal | `bulk-memory`                              |
-| WebAssembly Proposal | `reference-types`                          |
-| WebAssembly Proposal | `simd`                                     |
+| WebAssembly Proposal | [`mutable-globals`]                        |
+| WebAssembly Proposal | [`sign-extension-ops`]                     |
+| WebAssembly Proposal | [`nontrapping-float-to-int-conversion`]    |
+| WebAssembly Proposal | [`multi-value`]                            |
+| WebAssembly Proposal | [`bulk-memory`]                            |
+| WebAssembly Proposal | [`reference-types`]                        |
+| WebAssembly Proposal | [`simd`]                                   |
+
+[`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md
+[`sign-extension-ops`]: https://github.com/WebAssembly/spec/blob/master/proposals/sign-extension-ops/Overview.md
+[`nontrapping-float-to-int-conversion`]: https://github.com/WebAssembly/spec/blob/master/proposals/nontrapping-float-to-int-conversion/Overview.md
+[`multi-value`]: https://github.com/WebAssembly/spec/blob/master/proposals/multi-value/Overview.md
+[`bulk-memory`]: https://github.com/WebAssembly/bulk-memory-operations/blob/master/proposals/bulk-memory-operations/Overview.md
+[`reference-types`]: https://github.com/WebAssembly/reference-types/blob/master/proposals/reference-types/Overview.md
+[`simd`]: https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md
 
 #### Tier 2
 
@@ -38,8 +50,21 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-unknown-linux-gnu`| Continuous fuzzing          |
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
-| WebAssembly Proposal | `memory64`                 | Unstable wasm proposal      |
-| WebAssembly Proposal | `multi-memory`             | Unstable wasm proposal      |
+| WebAssembly Proposal | [`memory64`]]              | Unstable wasm proposal      |
+| WebAssembly Proposal | [`multi-memory`]           | Unstable wasm proposal      |
+| WebAssembly Proposal | [`threads`]                | Unstable wasm proposal      |
+| WebAssembly Proposal | [`component-model`]        | Unstable wasm proposal      |
+| WebAssembly Proposal | [`tail-call`]              | Unstable wasm proposal, performance work |
+| WebAssembly Proposal | [`relaxed-simd`]           | Unstable wasm proposal      |
+| WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
+
+[`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
+[`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
+[`threads`]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
+[`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
+[`tail-call`]: https://github.com/WebAssembly/tail-call/blob/main/proposals/tail-call/Overview.md
+[`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
+[`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md
 
 #### Tier 3
 
@@ -49,8 +74,6 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-pc-windows-msvc`         | CI testing, unwinding, full-time maintainer |
 | Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
 | WASI Proposal        | `wasi-nn`                         | More expansive CI testing   |
-| WebAssembly Proposal | `threads`                         | Complete implementation     |
-| WebAssembly Proposal | `component-model`                 | Complete implementation     |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
 | *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
 
