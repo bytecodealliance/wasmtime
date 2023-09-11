@@ -90,6 +90,33 @@ support is currently best-effort. Additionally there are known shortcomings
 and bugs. At this time there's no developer time to improve the situation here
 as well.
 
+#### Unsupported features and platforms
+
+While this is not an exhaustive list, Wasmtime does not currently have support
+for the following features. Note that this is intended to document Wasmtime's
+current state and does not mean Wasmtime does not want to ever support these
+features; rather design discussion and PRs are welcome for many of the below
+features to figure out how best to implement them and at least move them to Tier
+3 above.
+
+* Target: ARM 32-bit
+* Target: WebAssembly (compiling Wasmtime to WebAssembly itself)
+* Target: [FreeBSD](https://github.com/bytecodealliance/wasmtime/issues/5499)
+* Target: [NetBSD/OpenBSD](https://github.com/bytecodealliance/wasmtime/issues/6962)
+* Target: [i686 (32-bit Intel targets)](https://github.com/bytecodealliance/wasmtime/issues/1980)
+* Target: Android
+* Target: MIPS
+* Target: SPARC
+* Target: PowerPC
+* Target: RISC-V 32-bit
+* [WebAssembly proposal: `branch-hinting`](https://github.com/WebAssembly/branch-hinting)
+* [WebAssembly proposal: `exception-handling`](https://github.com/WebAssembly/exception-handling)
+* [WebAssembly proposal: `extended-const`](https://github.com/WebAssembly/extended-const)
+* [WebAssembly proposal: `flexible-vectors`](https://github.com/WebAssembly/flexible-vectors)
+* [WebAssembly proposal: `gc`](https://github.com/WebAssembly/gc)
+* [WebAssembly proposal: `memory-control`](https://github.com/WebAssembly/memory-control)
+* [WebAssembly proposal: `stack-switching`](https://github.com/WebAssembly/stack-switching)
+
 ## Tier Details
 
 Wasmtime's precise definitions of tiers are not guaranteed to be constant over
