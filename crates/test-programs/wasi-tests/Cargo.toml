@@ -9,3 +9,6 @@ publish = false
 libc = "0.2.65"
 wasi = "0.11.0"
 once_cell = "1.12"
+wit-bindgen = { workspace = true, default-features = false, features = [
+    "macros",
+] }

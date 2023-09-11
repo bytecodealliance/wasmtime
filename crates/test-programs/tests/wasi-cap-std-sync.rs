@@ -250,6 +250,11 @@ fn sched_yield() {
     run("sched_yield", true).unwrap()
 }
 #[test_log::test]
+#[should_panic]
+fn sleep() {
+    run("sleep", true).unwrap()
+}
+#[test_log::test]
 fn stdio() {
     run("stdio", true).unwrap()
 }

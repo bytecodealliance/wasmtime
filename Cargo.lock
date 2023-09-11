@@ -3077,6 +3077,7 @@ dependencies = [
  "libc",
  "once_cell",
  "wasi",
+ "wit-bindgen",
 ]
 
 [[package]]

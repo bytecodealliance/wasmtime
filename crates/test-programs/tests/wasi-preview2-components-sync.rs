@@ -272,6 +272,10 @@ fn sched_yield() {
     run("sched_yield", false).unwrap()
 }
 #[test_log::test]
+fn sleep() {
+    run("sleep", false).unwrap()
+}
+#[test_log::test]
 fn stdio() {
     run("stdio", false).unwrap()
 }
