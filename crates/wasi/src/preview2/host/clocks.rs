@@ -64,7 +64,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
                 })))?)
         } else {
             let duration = if absolute {
-                Duration::from_nanos(clock_now - when)
+                Duration::from_nanos(when - clock_now)
             } else {
                 Duration::from_nanos(when)
             };
