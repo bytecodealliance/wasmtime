@@ -256,6 +256,11 @@ async fn sched_yield() {
     run("sched_yield", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[should_panic]
+async fn sleep() {
+    run("sleep", true).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdio() {
     run("stdio", true).await.unwrap()
 }
