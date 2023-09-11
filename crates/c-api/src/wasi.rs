@@ -1,14 +1,17 @@
 //! The WASI embedding API definitions for Wasmtime.
 
-use crate::wasm_byte_vec_t;
-use anyhow::Result;
+use crate::{wasm_byte_vec_t, wasmtime_error_t};
+use anyhow::{anyhow, Result};
 use cap_std::ambient_authority;
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::fs::File;
+use std::os::fd::FromRawFd;
 use std::os::raw::{c_char, c_int};
 use std::path::{Path, PathBuf};
 use std::slice;
+use wasi_cap_std_sync::file::File as WasiStdFile;
+use wasi_common::file::FileAccessMode;
 use wasi_common::pipe::ReadPipe;
 use wasmtime_wasi::{
     sync::{Dir, TcpListener, WasiCtxBuilder},
@@ -41,6 +44,8 @@ pub struct wasi_config_t {
     stderr: WasiConfigWritePipe,
     preopen_dirs: Vec<(Dir, PathBuf)>,
     preopen_sockets: HashMap<u32, TcpListener>,
+    preopen_files: HashMap<u32, (File, FileAccessMode)>,
+    next_open_fd: u32,
     inherit_args: bool,
     inherit_env: bool,
 }
@@ -136,13 +141,26 @@ impl wasi_config_t {
         for (fd_num, listener) in self.preopen_sockets {
             builder.preopened_socket(fd_num, listener)?;
         }
-        Ok(builder.build())
+
+        let ctx = builder.build();
+
+        for (fd_num, (file, access_mode)) in self.preopen_files {
+            let file = cap_std::fs::File::from_std(file);
+            let file: WasiStdFile = wasi_cap_std_sync::file::File::from_cap_std(file);
+            ctx.insert_file(fd_num, Box::new(file), access_mode);
+        }
+
+        Ok(ctx)
     }
 }
 
 #[no_mangle]
 pub extern "C" fn wasi_config_new() -> Box<wasi_config_t> {
-    Box::new(wasi_config_t::default())
+    // init next_open_fd to 3 because 0, 1 and 2 are reserved for stdio
+    Box::new(wasi_config_t {
+        next_open_fd: 3,
+        ..Default::default()
+    })
 }
 
 #[no_mangle]
@@ -315,4 +333,49 @@ pub unsafe extern "C" fn wasi_config_preopen_socket(
         .insert(fd_num, TcpListener::from_std(listener));
 
     true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasi_ctx_insert_file(
+    ctx: &mut WasiCtx,
+    guest_fd: u32,
+    host_fd: u32,
+    access_mode: u32,
+) {
+    let access_mode = FileAccessMode::from_bits_truncate(access_mode);
+
+    // SAFETY: no other functions should call `from_raw_fd`, so there is only
+    // one owner for the file descriptor.
+    let f = unsafe { File::from_raw_fd(host_fd as i32) };
+    let f = cap_std::fs::File::from_std(f);
+    let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
+    ctx.insert_file(guest_fd, Box::new(f), access_mode);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasi_ctx_push_file(
+    ctx: &mut WasiCtx,
+    host_fd: u32,
+    access_mode: u32,
+    guest_fd: &mut u32,
+) -> Option<Box<wasmtime_error_t>> {
+    let access_mode = FileAccessMode::from_bits_truncate(access_mode);
+
+    // SAFETY: no other functions should call `from_raw_fd`, so there is only
+    // one owner for the file descriptor.
+    let f = unsafe { File::from_raw_fd(host_fd as i32) };
+    let f = cap_std::fs::File::from_std(f);
+    let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
+    
+    match ctx.push_file(Box::new(f), access_mode) {
+        Ok(fd) => {
+            *guest_fd = fd;
+            None
+        }
+        Err(e) => {
+            // extract the error message
+            let msg = format!("{}", e);
+            Some(Box::new(wasmtime_error_t::from(anyhow!(msg))))
+        }
+    }
 }

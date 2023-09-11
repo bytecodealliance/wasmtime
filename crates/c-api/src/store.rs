@@ -6,6 +6,10 @@ use wasmtime::{
     AsContext, AsContextMut, Store, StoreContext, StoreContextMut, StoreLimits, StoreLimitsBuilder,
     UpdateDeadline, Val,
 };
+use wasmtime_wasi::{
+    sync::WasiCtxBuilder,
+    WasiCtx,
+};
 
 /// This representation of a `Store` is used to implement the `wasm.h` API.
 ///
@@ -201,6 +205,30 @@ pub extern "C" fn wasmtime_context_set_wasi(
     crate::handle_result(wasi.into_wasi_ctx(), |wasi| {
         context.data_mut().wasi = Some(wasi);
     })
+}
+
+#[cfg(feature = "wasi")]
+#[no_mangle]
+pub extern "C" fn wasmtime_context_set_default_wasi_if_not_exist(
+    mut context: CStoreContextMut<'_>,
+) -> bool {
+    let wasi = WasiCtxBuilder::new().build();
+
+    match context.data_mut().wasi.as_mut() {
+        Some(_) => false,
+        None => {
+            context.data_mut().wasi = Some(wasi);
+            true
+        }
+    }
+}
+
+#[cfg(feature = "wasi")]
+#[no_mangle]
+pub extern "C" fn wasmtime_context_get_wasi_ctx(
+    context: CStoreContext<'_>,
+) -> Box<WasiCtx> {
+    Box::new(context.data().wasi.as_ref().unwrap().clone())
 }
 
 #[no_mangle]

@@ -218,6 +218,30 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_consume_fuel(wasmtime_context
 WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
 
 /**
+ * \brief Configures default WASI state if it is not set. 
+ * 
+ * This function is required if #wasmtime_context_set_wasi is not guaranteed to 
+ * be called at an earlier time. This will configure the WASI state for instances
+ * defined within this store to the default (empty) configuration.
+ * 
+ * This function does not take ownership of `context`. It is created to be used in
+ * conjunction with #wasmtime_context_get_wasi_ctx.
+ */
+WASM_API_EXTERN bool wasmtime_context_set_default_wasi_if_not_exist(wasmtime_context_t *context);
+
+/**
+ * \brief Returns the WASI state for this store.
+ *
+ * This function returns the WASI state for this store, if it has been
+ * configured. If it has not been configured then the program will panic.
+ *
+ * The returned `context` is owned by the store, which effectively makes this 
+ * function unsafe. This function should be called only after calling 
+ * #wasmtime_context_set_wasi or #wasmtime_context_set_default_wasi_if_not_exist.
+ */
+WASM_API_EXTERN wasi_ctx_t *wasmtime_context_get_wasi_ctx(wasmtime_context_t *context);
+
+/**
  * \brief Configures the relative deadline at which point WebAssembly code will
  * trap or invoke the callback function.
  *
