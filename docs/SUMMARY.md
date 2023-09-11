@@ -2,7 +2,6 @@
 
 - [Introduction](./introduction.md)
 - [Examples](./examples.md)
-  - [Markdown Parser](./examples-markdown.md)
   - [Debugging WebAssembly](./examples-debugging.md)
   - [Profiling WebAssembly](./examples-profiling.md)
     - [Profiling with Perf](./examples-profiling-perf.md)
