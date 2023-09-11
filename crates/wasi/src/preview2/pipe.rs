@@ -469,16 +469,18 @@ mod test {
     use super::*;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-    #[cfg(target_arch = "riscv64")]
+    // This is a gross way to handle CI running under qemu for non-x86 architectures.
+    #[cfg(not(target_arch = "x86_64"))]
     const TEST_ITERATIONS: usize = 10;
 
-    #[cfg(target_arch = "riscv64")]
-    const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(100);
+    // This is a gross way to handle CI running under qemu for non-x86 architectures.
+    #[cfg(not(target_arch = "x86_64"))]
+    const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(200);
 
-    #[cfg(not(target_arch = "riscv64"))]
+    #[cfg(target_arch = "x86_64")]
     const TEST_ITERATIONS: usize = 100;
 
-    #[cfg(not(target_arch = "riscv64"))]
+    #[cfg(target_arch = "x86_64")]
     const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(10);
 
     async fn resolves_immediately<F, O>(fut: F) -> O
