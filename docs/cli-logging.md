@@ -19,7 +19,7 @@ Hello, world!
 ```
 
 Wasmtime can also redirect the log messages into log files, with the
-`--log-to-files` option. It creates one file per thread within Wasmtime, with
+`-D log-to-files` option. It creates one file per thread within Wasmtime, with
 the files named `wasmtime.dbg.*`.
 
 [`log`]: https://crates.io/crates/log

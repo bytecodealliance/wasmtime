@@ -2,7 +2,7 @@
 
 The following steps describe how to debug using Wasm coredump in Wasmtime:
 
-1. Compile your WebAssembly with debug info enabled; for example: 
+1. Compile your WebAssembly with debug info enabled; for example:
 
     ```sh
     $ rustc foo.rs --target=wasm32-wasi -C debuginfo=2
@@ -31,7 +31,7 @@ The following steps describe how to debug using Wasm coredump in Wasmtime:
 2. Run with Wasmtime and Wasm coredump enabled:
 
     ```sh
-    $ wasmtime --coredump-on-trap=/tmp/coredump foo.wasm
+    $ wasmtime -D coredump=/tmp/coredump foo.wasm
 
     thread 'main' panicked at 'attempt to subtract with overflow', foo.rs:10:7
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
