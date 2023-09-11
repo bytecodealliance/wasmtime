@@ -4,7 +4,9 @@ One of WebAssembly (and Wasmtime's) main goals is to execute untrusted code in
 a safe manner inside of a sandbox. WebAssembly is inherently sandboxed by design
 (must import all functionality, etc). This document is intended to cover the
 various sandboxing implementation strategies that Wasmtime has as they are
-developed.
+developed. This has also been documented in a [historical blog post] too.
+
+[historical blog post]: https://bytecodealliance.org/articles/security-and-correctness-in-wasmtime
 
 At this time Wasmtime implements what's necessary for the WebAssembly
 specification, for example memory isolation between instances. Additionally the
