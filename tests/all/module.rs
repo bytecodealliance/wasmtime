@@ -216,3 +216,26 @@ fn missing_sse_and_floats_still_works() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn large_add_chain_no_stack_overflow() -> Result<()> {
+    let mut config = Config::new();
+    config.cranelift_opt_level(OptLevel::None);
+    let engine = Engine::new(&config)?;
+    let mut wat = String::from(
+        "
+        (module
+            (func (result i64)
+                (i64.const 1)
+        ",
+    );
+    for _ in 0..20_000 {
+        wat.push_str("(i64.add (i64.const 1))\n");
+    }
+
+    wat.push_str(")\n)");
+    Module::new(&engine, &wat)?;
+
+    Ok(())
+}
