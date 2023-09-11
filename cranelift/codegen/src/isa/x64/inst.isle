@@ -171,7 +171,7 @@
 
        ;; Immediate store.
        (MovImmM (size OperandSize)
-		(simm64 u64)
+		(simm32 i32)
 		(dst SyntheticAmode))
 
        ;; Integer stores: mov (b w l q) reg addr.
@@ -2367,6 +2367,11 @@
 (rule (x64_movrm ty addr data)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
+
+(decl x64_movimm_m (Type SyntheticAmode i32) SideEffectNoResult)
+(rule (x64_movimm_m ty addr imm)
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (SideEffectNoResult.Inst (MInst.MovImmM size imm addr))))
 
 (decl xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
 (rule (xmm_movrm op addr data)

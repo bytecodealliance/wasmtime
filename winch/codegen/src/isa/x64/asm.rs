@@ -251,13 +251,13 @@ impl Assembler {
     }
 
     /// Immediate-to-memory move.
-    pub fn mov_im(&mut self, src: u64, addr: &Address, size: OperandSize) {
+    pub fn mov_im(&mut self, src: i32, addr: &Address, size: OperandSize) {
         assert!(addr.is_offset());
         let dst =
             Self::to_synthetic_amode(addr, &mut self.pool, &mut self.constants, &mut self.buffer);
         self.emit(Inst::MovImmM {
             size: size.into(),
-            simm64: src,
+            simm32: src,
             dst,
         });
     }

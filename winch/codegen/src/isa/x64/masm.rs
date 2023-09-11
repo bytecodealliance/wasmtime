@@ -114,8 +114,13 @@ impl Masm for MacroAssembler {
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
         match src {
             RegImm::Imm(imm) => match imm {
-                I::I32(v) => self.asm.mov_im(v as u64, &dst, size),
-                I::I64(v) => self.asm.mov_im(v, &dst, size),
+                I::I32(v) => self.asm.mov_im(v as i32, &dst, size),
+                I::I64(v) => match v.try_into() {
+                    Ok(v) => self.asm.mov_im(v, &dst, size),
+                    Err(_) => {
+                        panic!("Immediate-to-memory moves require immediate operand to sign-extend to 64 bits.");
+                    }
+                },
                 // Immediate to memory moves are currently only used
                 // to zero a memory range, which only involves
                 // ints. See [`MacroAssembler::zero_mem_range`].

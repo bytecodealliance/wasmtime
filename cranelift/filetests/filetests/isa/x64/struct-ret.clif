@@ -12,8 +12,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $42, %eax
-;   movq    %rax, 0(%rdi)
+;   movq    $42, 0(%rdi)
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -24,8 +23,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x2a, %eax
-;   movq %rax, (%rdi) ; trap: heap_oob
+;   movq $0x2a, (%rdi) ; trap: heap_oob
 ;   movq %rdi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
