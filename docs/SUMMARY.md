@@ -1,9 +1,6 @@
 # Summary
 
 - [Introduction](./introduction.md)
-- [Tutorial](./tutorial.md)
-  - [Creating `hello-world.wasm`](./tutorial-create-hello-world.md)
-  - [Running `hello-world.wasm`](./tutorial-run-hello-world.md)
 - [Examples](./examples.md)
   - [Markdown Parser](./examples-markdown.md)
   - [Debugging WebAssembly](./examples-debugging.md)
@@ -42,11 +39,6 @@
   - [CLI Options](./cli-options.md)
   - [CLI Logging](./cli-logging.md)
   - [Cache Configuration](./cli-cache.md)
-- [Writing WebAssembly](./wasm.md)
-  - [Rust](./wasm-rust.md)
-  - [C/C++](./wasm-c.md)
-  - [AssemblyScript](./wasm-assemblyscript.md)
-  - [WebAssembly Text Format (`*.wat`)](./wasm-wat.md)
 - [Stability](stability.md)
   - [Release Process](./stability-release.md)
   - [Tiers of support](./stability-tiers.md)
