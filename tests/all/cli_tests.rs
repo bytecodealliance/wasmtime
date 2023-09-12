@@ -739,7 +739,7 @@ fn wasi_misaligned_pointer() -> Result<()> {
 }
 
 #[test]
-#[ignore] // FIXME(#6811) currently is flaky and may produce no output
+#[cfg_attr(not(feature = "component-model"), ignore)]
 fn hello_with_preview2() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
     let stdout = run_wasmtime(&[
