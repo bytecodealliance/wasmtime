@@ -90,8 +90,11 @@
     (Args
       (args VecArgPair))
 
-    (Ret (rets VecRetPair)
-         (stack_bytes_to_pop u32))
+    ;; A pseudo-instruction that moves vregs to return registers.
+    (Rets
+      (rets VecRetPair))
+
+    (Ret)
 
      (Extend
       (rd WritableReg)

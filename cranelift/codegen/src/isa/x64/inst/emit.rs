@@ -1722,15 +1722,13 @@ pub(crate) fn emit(
         }
 
         Inst::Args { .. } => {}
+        Inst::Rets { .. } => {}
 
         Inst::Ret {
             stack_bytes_to_pop: 0,
-            ..
         } => sink.put1(0xC3),
 
-        Inst::Ret {
-            stack_bytes_to_pop, ..
-        } => {
+        Inst::Ret { stack_bytes_to_pop } => {
             sink.put1(0xC2);
             sink.put2(u16::try_from(*stack_bytes_to_pop).unwrap());
         }

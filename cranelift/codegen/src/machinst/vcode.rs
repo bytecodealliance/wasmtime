@@ -790,11 +790,7 @@ impl<I: VCodeInst> VCode<I> {
         let clobbers = self.compute_clobbers(regalloc);
         self.abi.set_num_spillslots(regalloc.num_spillslots);
         self.abi.set_clobbered(clobbers);
-
-        // We need to generate the prologue in order to get the ABI
-        // object into the right state first. We'll emit it when we
-        // hit the right block below.
-        let prologue_insts = self.abi.gen_prologue(&self.sigs);
+        self.abi.compute_frame_layout(&self.sigs);
 
         // Emit blocks.
         let mut cur_srcloc = None;
@@ -863,7 +859,7 @@ impl<I: VCodeInst> VCode<I> {
                 trace!(" -> entry block");
                 buffer.start_srcloc(Default::default());
                 state.pre_sourceloc(Default::default());
-                for inst in &prologue_insts {
+                for inst in &self.abi.gen_prologue() {
                     do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                 }
                 buffer.end_srcloc();
@@ -974,7 +970,7 @@ impl<I: VCodeInst> VCode<I> {
                         // (and don't emit the return; the actual
                         // epilogue will contain it).
                         if self.insts[iix.index()].is_term() == MachTerminator::Ret {
-                            for inst in self.abi.gen_epilogue(&self.sigs) {
+                            for inst in self.abi.gen_epilogue() {
                                 do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                             }
                         } else {

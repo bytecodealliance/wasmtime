@@ -37,28 +37,11 @@ fn test_aarch64_binemit() {
     // Then:
     //
     //      $ echo "mov x1, x2" | aarch64inst.sh
-    insns.push((
-        Inst::Ret {
-            rets: vec![],
-            stack_bytes_to_pop: 0,
-        },
-        "C0035FD6",
-        "ret",
-    ));
-    insns.push((
-        Inst::Ret {
-            rets: vec![],
-            stack_bytes_to_pop: 16,
-        },
-        "FF430091C0035FD6",
-        "add sp, sp, #16 ; ret",
-    ));
+    insns.push((Inst::Ret {}, "C0035FD6", "ret"));
     insns.push((
         Inst::AuthenticatedRet {
             key: APIKey::ASP,
             is_hint: true,
-            rets: vec![],
-            stack_bytes_to_pop: 0,
         },
         "BF2303D5C0035FD6",
         "autiasp ; ret",
@@ -67,21 +50,9 @@ fn test_aarch64_binemit() {
         Inst::AuthenticatedRet {
             key: APIKey::BSP,
             is_hint: false,
-            rets: vec![],
-            stack_bytes_to_pop: 0,
         },
         "FF0F5FD6",
         "retabsp",
-    ));
-    insns.push((
-        Inst::AuthenticatedRet {
-            key: APIKey::ASP,
-            is_hint: false,
-            rets: vec![],
-            stack_bytes_to_pop: 16,
-        },
-        "FF430091FF0B5FD6",
-        "add sp, sp, #16 ; retaasp",
     ));
     insns.push((Inst::Paci { key: APIKey::BSP }, "7F2303D5", "pacibsp"));
     insns.push((Inst::Xpaclri, "FF2003D5", "xpaclri"));

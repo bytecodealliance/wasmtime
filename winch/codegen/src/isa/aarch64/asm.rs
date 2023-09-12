@@ -197,10 +197,7 @@ impl Assembler {
 
     /// Return instruction.
     pub fn ret(&mut self) {
-        self.emit(Inst::Ret {
-            rets: vec![],
-            stack_bytes_to_pop: 0,
-        });
+        self.emit(Inst::Ret {});
     }
 
     // Helpers for ALU operations.

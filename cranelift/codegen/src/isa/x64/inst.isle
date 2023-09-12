@@ -512,9 +512,12 @@
        (Args
         (args VecArgPair))
 
+       ;; A pseudo-instruction that moves vregs to return registers.
+       (Rets
+        (rets VecRetPair))
+
        ;; Return.
-       (Ret (rets VecRetPair)
-            (stack_bytes_to_pop u32))
+       (Ret (stack_bytes_to_pop u32))
 
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))

@@ -7018,25 +7018,7 @@ fn test_s390x_binemit() {
         "basr %r14, %r1",
     ));
 
-    insns.push((
-        Inst::Ret {
-            link: gpr(14),
-            rets: vec![],
-            stack_bytes_to_pop: 0,
-        },
-        "07FE",
-        "br %r14",
-    ));
-
-    insns.push((
-        Inst::Ret {
-            link: gpr(14),
-            rets: vec![],
-            stack_bytes_to_pop: 16,
-        },
-        "A7FB001007FE",
-        "aghi %r15, 16 ; br %r14",
-    ));
+    insns.push((Inst::Ret { link: gpr(14) }, "07FE", "br %r14"));
 
     insns.push((Inst::Debugtrap, "0001", ".word 0x0001 # debugtrap"));
 
