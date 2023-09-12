@@ -113,8 +113,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let request = self
             .table()
             .get_request(request_id)
-            .context("[handle_async] getting request")?
-            .clone();
+            .context("[handle_async] getting request")?;
         tracing::debug!("http request retrieved from table");
 
         let method = match request.method() {
@@ -324,6 +323,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let (stream_id, stream) = self
             .table_mut()
             .push_stream(Bytes::from(buf), response_id)
+            .await
             .context("[handle_async] pushing stream")?;
         let response = self
             .table_mut()
