@@ -32,6 +32,30 @@ unsafe fn test_readlink(dir_fd: wasi::Fd) {
     wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
 }
 
+unsafe fn test_incremental_readlink(dir_fd: wasi::Fd) {
+    let filename = "Действие";
+    create_file(dir_fd, filename);
+
+    wasi::path_symlink(filename, dir_fd, "symlink").expect("creating a symlink");
+
+    let mut buf = Vec::new();
+    loop {
+        if buf.capacity() > 2 * filename.len() {
+            panic!()
+        }
+        let bufused = wasi::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.capacity())
+            .expect("readlink should succeed");
+        buf.set_len(bufused);
+        if buf.capacity() > filename.len() {
+            assert!(buf.starts_with(filename.as_bytes()));
+            break;
+        }
+        buf = Vec::with_capacity(buf.capacity() + 1);
+    }
+    wasi::path_unlink_file(dir_fd, filename).expect("removing a file");
+    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -53,4 +77,5 @@ fn main() {
 
     // Run the tests.
     unsafe { test_readlink(dir_fd) }
+    unsafe { test_incremental_readlink(dir_fd) }
 }

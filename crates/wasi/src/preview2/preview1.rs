@@ -1675,7 +1675,8 @@ impl<
         );
         let mut buf = *buf;
         let mut cap = buf_len;
-        for (ref entry, mut path) in head.into_iter().chain(dir.into_iter()).skip(cookie) {
+        for (ref entry, path) in head.into_iter().chain(dir.into_iter()).skip(cookie) {
+            let mut path = path.into_bytes();
             assert_eq!(
                 1,
                 size_of_val(&entry.d_type),
@@ -1904,11 +1905,15 @@ impl<
     ) -> Result<types::Size, types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
-        let mut path = self.readlink_at(dirfd, path).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `readlink-at`")
-                .unwrap_or_else(types::Error::trap)
-        })?;
+        let mut path = self
+            .readlink_at(dirfd, path)
+            .await
+            .map_err(|e| {
+                e.try_into()
+                    .context("failed to call `readlink-at`")
+                    .unwrap_or_else(types::Error::trap)
+            })?
+            .into_bytes();
         if let Ok(buf_len) = buf_len.try_into() {
             // `path` cannot be longer than `usize`, only truncate if `buf_len` fits in `usize`
             path.truncate(buf_len);
