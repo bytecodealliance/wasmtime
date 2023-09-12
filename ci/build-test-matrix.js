@@ -101,7 +101,7 @@ const array = [
     // Tokio. Updating rustc seems to do the trick, so without doing a full
     // rigorous investigation this uses beta for now but Rust 1.73 should be
     // good to go for this.
-    "rust": "beta",
+    "rust": "beta-2023-09-10",
   }
 ];
 
