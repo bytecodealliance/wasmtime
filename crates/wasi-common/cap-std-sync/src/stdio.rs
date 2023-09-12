@@ -1,10 +1,8 @@
 use crate::file::convert_systimespec;
 use fs_set_times::SetTimes;
-use io_lifetimes::AsFilelike;
 use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
-use std::fs::File;
 use std::io;
 use std::io::{Read, Write};
 use system_interface::io::ReadReady;
@@ -50,7 +48,7 @@ impl WasiFile for Stdin {
         }
     }
     async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
-        let n = (&*self.0.as_filelike_view::<File>()).read_vectored(bufs)?;
+        let n = self.0.lock().read_vectored(bufs)?;
         Ok(n.try_into().map_err(|_| Error::range())?)
     }
     async fn read_vectored_at<'a>(
@@ -128,7 +126,7 @@ macro_rules! wasi_file_write_impl {
                 Ok(FdFlags::APPEND)
             }
             async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                let n = (&*self.0.as_filelike_view::<File>()).write_vectored(bufs)?;
+                let n = self.0.lock().write_vectored(bufs)?;
                 Ok(n.try_into().map_err(|_| {
                     Error::range().context("converting write_vectored total length")
                 })?)
