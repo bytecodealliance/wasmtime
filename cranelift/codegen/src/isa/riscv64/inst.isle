@@ -734,6 +734,11 @@
   (CJ)
 ))
 
+;; Opcodes for the CI compressed instruction format
+(type CiOp (enum
+  (CAddi)
+))
+
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR

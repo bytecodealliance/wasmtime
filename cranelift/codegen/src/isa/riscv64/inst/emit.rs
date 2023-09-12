@@ -3,7 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CrOp};
+use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CiOp, CrOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -574,6 +574,21 @@ impl Inst {
                 sink.put2(0x0000);
             }
 
+            // c.addi
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd,
+                rs,
+                imm12,
+            } if has_zca
+                && rd.to_reg() == rs
+                && rs != zero_reg()
+                && imm12.as_i16() != 0
+                && Imm6::maybe_from_imm12(imm12).is_some() =>
+            {
+                let imm6 = Imm6::maybe_from_imm12(imm12).unwrap();
+                sink.put2(encode_ci_type(CiOp::CAddi, rd, imm6));
+            }
             _ => return false,
         }
 

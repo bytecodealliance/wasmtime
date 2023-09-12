@@ -167,6 +167,38 @@ impl Display for Imm5 {
     }
 }
 
+/// A Signed 6-bit immediate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Imm6 {
+    value: i8,
+}
+
+impl Imm6 {
+    /// Create an signed 6-bit immediate from an i16
+    pub fn maybe_from_i16(value: i16) -> Option<Self> {
+        if value >= -32 && value <= 31 {
+            Some(Self { value: value as i8 })
+        } else {
+            None
+        }
+    }
+
+    pub fn maybe_from_imm12(value: Imm12) -> Option<Self> {
+        Imm6::maybe_from_i16(value.as_i16())
+    }
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u8 {
+        self.value as u8 & 0x3f
+    }
+}
+
+impl Display for Imm6 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 impl Inst {
     pub(crate) fn imm_min() -> i64 {
         let imm20_max: i64 = (1 << 19) << 12;
