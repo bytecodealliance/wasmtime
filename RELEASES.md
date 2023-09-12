@@ -87,6 +87,11 @@ Unreleased.
   be turned off.
   [#6547](https://github.com/bytecodealliance/wasmtime/pull/6547)
 
+* WASI Preview 2 output-stream has been redesigned with changes to
+  backpressure and flushing. The `HostOutputStream` trait has changed
+  substantially.
+  [#6877](https://github.com/bytecodealliance/wasmtime/pull/6877)
+
 ### Removed
 
 * Wasmtime's experimental implementation of wasi-crypto has been removed. More
