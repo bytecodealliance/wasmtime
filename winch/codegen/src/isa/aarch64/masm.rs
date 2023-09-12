@@ -147,9 +147,9 @@ impl Masm for MacroAssembler {
         self.asm.finalize()
     }
 
-    fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
+    fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
         match (src, dst) {
-            (RegImm::Imm(v), RegImm::Reg(rd)) => {
+            (RegImm::Imm(v), rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
@@ -160,10 +160,9 @@ impl Masm for MacroAssembler {
                 self.asm.load_constant(imm as u64, scratch);
                 self.asm.mov_rr(scratch, rd, size);
             }
-            (RegImm::Reg(rs), RegImm::Reg(rd)) => {
+            (RegImm::Reg(rs), rd) => {
                 self.asm.mov_rr(rs, rd, size);
             }
-            _ => Self::handle_invalid_two_form_operand_combination(src, dst),
         }
     }
 
@@ -171,9 +170,9 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
-            (RegImm::Imm(v), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+            (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
@@ -183,16 +182,15 @@ impl Masm for MacroAssembler {
                 self.asm.add_ir(imm, rn, rd, size);
             }
 
-            (RegImm::Reg(rm), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+            (RegImm::Reg(rm), rn, rd) => {
                 self.asm.add_rrr(rm, rn, rd, size);
             }
-            _ => Self::handle_invalid_three_form_operand_combination(dst, lhs, rhs),
         }
     }
 
-    fn sub(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
-            (RegImm::Imm(v), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+            (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
@@ -202,16 +200,15 @@ impl Masm for MacroAssembler {
                 self.asm.sub_ir(imm, rn, rd, size);
             }
 
-            (RegImm::Reg(rm), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+            (RegImm::Reg(rm), rn, rd) => {
                 self.asm.sub_rrr(rm, rn, rd, size);
             }
-            _ => Self::handle_invalid_three_form_operand_combination(dst, lhs, rhs),
         }
     }
 
-    fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn mul(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         match (rhs, lhs, dst) {
-            (RegImm::Imm(v), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+            (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
@@ -221,30 +218,29 @@ impl Masm for MacroAssembler {
                 self.asm.mul_ir(imm, rn, rd, size);
             }
 
-            (RegImm::Reg(rm), RegImm::Reg(rn), RegImm::Reg(rd)) => {
+            (RegImm::Reg(rm), rn, rd) => {
                 self.asm.mul_rrr(rm, rn, rd, size);
             }
-            _ => Self::handle_invalid_three_form_operand_combination(dst, lhs, rhs),
         }
     }
 
-    fn float_neg(&mut self, _dst: Reg, _src: RegImm, _size: OperandSize) {
+    fn float_neg(&mut self, _dst: Reg, _size: OperandSize) {
         todo!()
     }
 
-    fn float_abs(&mut self, _dst: Reg, _src: RegImm, _size: OperandSize) {
+    fn float_abs(&mut self, _dst: Reg, _size: OperandSize) {
         todo!()
     }
 
-    fn and(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+    fn and(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
         todo!()
     }
 
-    fn or(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+    fn or(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
         todo!()
     }
 
-    fn xor(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+    fn xor(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
         todo!()
     }
 
@@ -350,16 +346,5 @@ impl MacroAssembler {
         let sp = regs::sp();
         let shadow_sp = regs::shadow_sp();
         self.asm.mov_rr(sp, shadow_sp, OperandSize::S64);
-    }
-
-    fn handle_invalid_two_form_operand_combination(src: RegImm, dst: RegImm) {
-        panic!("Invalid operand combination; src={:?}, dst={:?}", src, dst);
-    }
-
-    fn handle_invalid_three_form_operand_combination(dst: RegImm, lhs: RegImm, rhs: RegImm) {
-        panic!(
-            "Invalid operand combination; dst={:?}, lhs={:?}, rhs={:?}",
-            dst, lhs, rhs
-        );
     }
 }

@@ -179,14 +179,14 @@ impl Masm for MacroAssembler {
         self.asm.xor_rr(reg, reg, OperandSize::S32);
     }
 
-    fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize) {
+    fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize) {
         match (src, dst) {
-            rr @ (RegImm::Reg(src), RegImm::Reg(dst)) => match (src.class(), dst.class()) {
+            rr @ (RegImm::Reg(src), dst) => match (src.class(), dst.class()) {
                 (RegClass::Int, RegClass::Int) => self.asm.mov_rr(src, dst, size),
                 (RegClass::Float, RegClass::Float) => self.asm.xmm_mov_rr(src, dst, size),
                 _ => Self::handle_invalid_operand_combination(rr.0, rr.1),
             },
-            (RegImm::Imm(imm), RegImm::Reg(dst)) => match imm {
+            (RegImm::Imm(imm), dst) => match imm {
                 I::I32(v) => self.asm.mov_ir(v as u64, dst, size),
                 I::I64(v) => self.asm.mov_ir(v as u64, dst, size),
                 I::F32(v) => {
@@ -198,7 +198,6 @@ impl Masm for MacroAssembler {
                     self.asm.xmm_mov_mr(&addr, dst, size);
                 }
             },
-            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -206,14 +205,14 @@ impl Masm for MacroAssembler {
         match (src.class(), dst.class()) {
             (RegClass::Int, RegClass::Int) => self.asm.cmov(src, dst, cc, size),
             (RegClass::Float, RegClass::Float) => self.asm.xmm_cmov(src, dst, cc, size),
-            _ => Self::handle_invalid_operand_combination(src.into(), dst.into()),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
-    fn add(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+            (RegImm::Imm(imm), reg) => {
                 if let Some(v) = imm.to_i32() {
                     self.asm.add_ir(v, reg, size);
                 } else {
@@ -223,17 +222,16 @@ impl Masm for MacroAssembler {
                 }
             }
 
-            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+            (RegImm::Reg(src), dst) => {
                 self.asm.add_rr(src, dst, size);
             }
-            _ => Self::handle_invalid_operand_combination(rhs, dst),
         }
     }
 
-    fn sub(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn sub(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+            (RegImm::Imm(imm), reg) => {
                 if let Some(v) = imm.to_i32() {
                     self.asm.sub_ir(v, reg, size);
                 } else {
@@ -243,17 +241,16 @@ impl Masm for MacroAssembler {
                 }
             }
 
-            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+            (RegImm::Reg(src), dst) => {
                 self.asm.sub_rr(src, dst, size);
             }
-            _ => Self::handle_invalid_operand_combination(rhs, dst),
         }
     }
 
-    fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn mul(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+            (RegImm::Imm(imm), reg) => {
                 if let Some(v) = imm.to_i32() {
                     self.asm.mul_ir(v, reg, size);
                 } else {
@@ -263,15 +260,13 @@ impl Masm for MacroAssembler {
                 }
             }
 
-            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+            (RegImm::Reg(src), dst) => {
                 self.asm.mul_rr(src, dst, size);
             }
-            _ => Self::handle_invalid_operand_combination(rhs, dst),
         }
     }
 
-    fn float_neg(&mut self, dst: Reg, src: RegImm, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst.into(), &src);
+    fn float_neg(&mut self, dst: Reg, size: OperandSize) {
         assert_eq!(dst.class(), RegClass::Float);
         let mask = match size {
             OperandSize::S32 => I::I32(0x80000000),
@@ -285,8 +280,7 @@ impl Masm for MacroAssembler {
         self.asm.xor_rr(scratch_xmm, dst, size);
     }
 
-    fn float_abs(&mut self, dst: Reg, src: RegImm, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst.into(), &src);
+    fn float_abs(&mut self, dst: Reg, size: OperandSize) {
         assert_eq!(dst.class(), RegClass::Float);
         let mask = match size {
             OperandSize::S32 => I::I32(0x7fffffff),
@@ -300,10 +294,10 @@ impl Masm for MacroAssembler {
         self.asm.and_rr(scratch_xmm, dst, size);
     }
 
-    fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+            (RegImm::Imm(imm), reg) => {
                 if let Some(v) = imm.to_i32() {
                     self.asm.and_ir(v, reg, size);
                 } else {
@@ -313,17 +307,16 @@ impl Masm for MacroAssembler {
                 }
             }
 
-            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+            (RegImm::Reg(src), dst) => {
                 self.asm.and_rr(src, dst, size);
             }
-            _ => Self::handle_invalid_operand_combination(rhs, dst),
         }
     }
 
-    fn or(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn or(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+            (RegImm::Imm(imm), reg) => {
                 if let Some(v) = imm.to_i32() {
                     self.asm.or_ir(v, reg, size);
                 } else {
@@ -333,17 +326,16 @@ impl Masm for MacroAssembler {
                 }
             }
 
-            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+            (RegImm::Reg(src), dst) => {
                 self.asm.or_rr(src, dst, size);
             }
-            _ => Self::handle_invalid_operand_combination(rhs, dst),
         }
     }
 
-    fn xor(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+    fn xor(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {
-            (RegImm::Imm(imm), RegImm::Reg(reg)) => {
+            (RegImm::Imm(imm), reg) => {
                 if let Some(v) = imm.to_i32() {
                     self.asm.xor_ir(v, reg, size);
                 } else {
@@ -353,10 +345,9 @@ impl Masm for MacroAssembler {
                 }
             }
 
-            (RegImm::Reg(src), RegImm::Reg(dst)) => {
+            (RegImm::Reg(src), dst) => {
                 self.asm.xor_rr(src, dst, size);
             }
-            _ => Self::handle_invalid_operand_combination(rhs, dst),
         }
     }
 
@@ -590,7 +581,7 @@ impl Masm for MacroAssembler {
 
             // x -= (x >> 1) & m1;
             self.asm.shift_ir(1u8, dst.into(), ShiftKind::ShrU, size);
-            let lhs = dst.reg.into();
+            let lhs = dst.reg;
             self.and(lhs, lhs, RegImm::i64(masks[0]), size);
             self.asm.sub_rr(dst.into(), tmp, size);
 
@@ -679,11 +670,15 @@ impl MacroAssembler {
         }
     }
 
-    fn handle_invalid_operand_combination<T>(src: RegImm, dst: RegImm) -> T {
-        panic!("Invalid operand combination; src={:?}, dst={:?}", src, dst);
+    fn handle_invalid_operand_combination<T>(src: impl Into<RegImm>, dst: impl Into<RegImm>) -> T {
+        panic!(
+            "Invalid operand combination; src={:?}, dst={:?}",
+            src.into(),
+            dst.into()
+        );
     }
 
-    fn ensure_two_argument_form(dst: &RegImm, lhs: &RegImm) {
+    fn ensure_two_argument_form(dst: &Reg, lhs: &Reg) {
         assert!(
             dst == lhs,
             "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
