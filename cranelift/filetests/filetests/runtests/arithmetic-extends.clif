@@ -5,6 +5,7 @@ target s390x
 target x86_64
 target riscv64
 target riscv64 has_zba
+target riscv64 has_c has_zcb
 
 ;; Various runtests intended to target the instructions encoded by the RISC-V `Zba` Extension
 ;; Although other targets may also benefit from these tests and may implement similar optimizations

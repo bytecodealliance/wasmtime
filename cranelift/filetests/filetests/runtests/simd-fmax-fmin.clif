@@ -3,7 +3,8 @@ target aarch64
 target s390x
 target x86_64
 target x86_64 skylake
-target riscv64gc has_v
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %fmax_f64x2(f64x2, f64x2) -> f64x2 {
 block0(v0: f64x2, v1: f64x2):

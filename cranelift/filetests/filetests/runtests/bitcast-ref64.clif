@@ -3,6 +3,7 @@ target aarch64
 target x86_64
 target s390x
 target riscv64gc
+target riscv64 has_c has_zcb
 ; the interpreter does not support bitcasting to/from references
 
 function %bitcast_ir64(i64) -> i8 {

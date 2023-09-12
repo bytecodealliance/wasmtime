@@ -5,6 +5,7 @@ target s390x
 target x86_64
 target x86_64 skylake
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %imul_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0:i16x8, v1:i16x8):

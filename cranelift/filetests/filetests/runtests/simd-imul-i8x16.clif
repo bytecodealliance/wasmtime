@@ -3,6 +3,7 @@ test run
 target aarch64
 target s390x
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 
 function %imul_i8x16(i8x16, i8x16) -> i8x16 {

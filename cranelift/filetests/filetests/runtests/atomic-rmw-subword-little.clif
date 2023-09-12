@@ -6,6 +6,7 @@ target aarch64
 target aarch64 has_lse
 target x86_64
 target riscv64
+target riscv64 has_c has_zcb
 
 ; We can't test that these instructions are right regarding atomicity, but we can
 ; test if they perform their operation correctly

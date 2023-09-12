@@ -3,6 +3,7 @@ target aarch64
 target s390x
 target x86_64
 target riscv64
+target riscv64 has_c has_zcb
 
 function %i8_iconst_0() -> i8 {
 block0:

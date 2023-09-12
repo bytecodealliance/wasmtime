@@ -3,6 +3,7 @@ target x86_64 has_avx has_fma
 target x86_64 has_avx=false has_fma=false
 target aarch64
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 ;; This file is not enabled in the interpreter since SIMD fneg is currently broken
 ;; there.

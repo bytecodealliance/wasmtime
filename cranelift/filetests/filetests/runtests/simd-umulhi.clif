@@ -1,6 +1,7 @@
 test interpret
 test run
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 ; x86_64 only supports `i16`, `i32`, and `i64`
 
 function %umulhi_i8(i8, i8) -> i8 {

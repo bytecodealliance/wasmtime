@@ -28,13 +28,12 @@ macro_rules! define_zvl_ext {
 pub(crate) fn define() -> TargetIsa {
     let mut setting = SettingGroupBuilder::new("riscv64");
 
-    // We target a minimum of riscv64gc. That means that we have the following extensions by default:
+    // We target a minimum of riscv64g. That means that we have the following extensions by default:
     //
     // * M (integer multiplication and division)
     // * A (atomic instructions)
     // * F (single-precision floating point)
     // * D (double-precision floating point)
-    // * C (compressed instructions)
     // * Zicsr (control and status register instructions)
     // * Zifencei (instruction-fetch fence)
 
@@ -63,7 +62,31 @@ pub(crate) fn define() -> TargetIsa {
         "Vector instruction support",
         false,
     );
-    let _has_c = setting.add_bool("has_c", "has extension C?", "Compressed instructions", true);
+
+    let has_zca = setting.add_bool(
+        "has_zca",
+        "has extension Zca?",
+        "Zca is the C extension without floating point loads",
+        false,
+    );
+    let has_zcd = setting.add_bool(
+        "has_zcd",
+        "has extension Zcd?",
+        "Zcd contains only the double precision floating point loads from the C extension",
+        false,
+    );
+    setting.add_preset(
+        "has_c",
+        "Support for compressed instructions",
+        preset!(has_zca && has_zcd),
+    );
+
+    let _has_zcb = setting.add_bool(
+        "has_zcb",
+        "has extension Zcb?",
+        "Zcb: Extra compressed instructions",
+        false,
+    );
 
     let _has_zbkb = setting.add_bool(
         "has_zbkb",

@@ -6,6 +6,7 @@ target x86_64
 target riscv64
 target riscv64 has_zbb
 target riscv64 has_zbb has_zbs
+target riscv64 has_c has_zcb
 
 function %ctz_i128(i128) -> i128 {
 block0(v0: i128):

@@ -10,6 +10,7 @@ target x86_64 sse42 has_avx
 target x86_64 sse42 has_avx has_avx2
 target x86_64 sse42 has_avx has_avx2 has_avx512f has_avx512vl
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 
 function %sshr_i8x16(i8x16, i32) -> i8x16 {

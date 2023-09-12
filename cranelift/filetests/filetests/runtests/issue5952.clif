@@ -4,6 +4,7 @@ target aarch64
 target x86_64
 target s390x
 target riscv64
+target riscv64 has_c has_zcb
 
 function %a(i16 uext) -> f32 {
 block0(v0: i16):

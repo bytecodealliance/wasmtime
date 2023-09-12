@@ -1,6 +1,7 @@
 test interpret
 test run
 target riscv64
+target riscv64 has_c has_zcb
 
 function %a(i128, i8, i8, i8, i16, i32, i8, i8, i64, i8) -> i8, i8, i8, i128, i8, i8, i64, i128, i8 system_v {
     ss0 = explicit_slot 90

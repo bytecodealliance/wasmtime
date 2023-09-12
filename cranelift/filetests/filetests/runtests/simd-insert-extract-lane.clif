@@ -6,6 +6,7 @@ target x86_64 sse41
 target x86_64 sse42
 target x86_64 sse42 has_avx
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %insertlane_preserves_upper_bits(f64) -> i64 fast {
 block0(v5: f64):

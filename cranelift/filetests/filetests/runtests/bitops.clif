@@ -3,6 +3,7 @@ set opt_level=none
 target aarch64
 target s390x
 target riscv64
+target riscv64 has_c has_zcb
 target s390x has_mie2
 target x86_64
 
@@ -10,6 +11,7 @@ set opt_level=speed
 target aarch64
 target s390x
 target riscv64
+target riscv64 has_c has_zcb
 target s390x has_mie2
 target x86_64
 

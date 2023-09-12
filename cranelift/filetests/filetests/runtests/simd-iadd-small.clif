@@ -1,6 +1,7 @@
 test interpret
 test run
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 ;; We only test 64bit values here since the interpreter does not support anything smaller.
 

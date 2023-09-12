@@ -4,6 +4,7 @@ target s390x
 target x86_64
 target x86_64 skylake
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 ;; These tests test integer fused multiply add/subtract instructions.
 

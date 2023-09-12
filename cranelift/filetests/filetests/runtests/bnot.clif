@@ -4,6 +4,8 @@ target x86_64
 target x86_64 has_bmi1
 target aarch64
 target s390x
+target riscv64
+target riscv64 has_c has_zcb
 
 function %bnot_i8(i8) -> i8 {
 block0(v0: i8):
