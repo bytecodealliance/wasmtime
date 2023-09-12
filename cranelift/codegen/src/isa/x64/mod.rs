@@ -7,7 +7,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::ir::{types, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
-use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
+use crate::isa::x64::settings as x64_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
 use crate::machinst::{
     compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
@@ -18,7 +18,6 @@ use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use regalloc2::MachineEnv;
 use target_lexicon::Triple;
 
 mod abi;
@@ -32,18 +31,15 @@ pub(crate) struct X64Backend {
     triple: Triple,
     flags: Flags,
     x64_flags: x64_settings::Flags,
-    reg_env: MachineEnv,
 }
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
     fn new_with_flags(triple: Triple, flags: Flags, x64_flags: x64_settings::Flags) -> Self {
-        let reg_env = create_reg_env_systemv(&flags);
         Self {
             triple,
             flags,
             x64_flags,
-            reg_env,
         }
     }
 
@@ -97,10 +93,6 @@ impl TargetIsa for X64Backend {
 
     fn flags(&self) -> &Flags {
         &self.flags
-    }
-
-    fn machine_env(&self) -> &MachineEnv {
-        &self.reg_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {

@@ -15,7 +15,6 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 
 // New backend:
@@ -24,8 +23,6 @@ pub(crate) mod inst;
 mod lower;
 mod settings;
 
-use inst::create_machine_env;
-
 use self::inst::EmitInfo;
 
 /// A IBM Z backend.
@@ -33,7 +30,6 @@ pub struct S390xBackend {
     triple: Triple,
     flags: shared_settings::Flags,
     isa_flags: s390x_settings::Flags,
-    machine_env: MachineEnv,
 }
 
 impl S390xBackend {
@@ -43,12 +39,10 @@ impl S390xBackend {
         flags: shared_settings::Flags,
         isa_flags: s390x_settings::Flags,
     ) -> S390xBackend {
-        let machine_env = create_machine_env(&flags);
         S390xBackend {
             triple,
             flags,
             isa_flags,
-            machine_env,
         }
     }
 
@@ -111,10 +105,6 @@ impl TargetIsa for S390xBackend {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.flags
-    }
-
-    fn machine_env(&self) -> &MachineEnv {
-        &self.machine_env
     }
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {

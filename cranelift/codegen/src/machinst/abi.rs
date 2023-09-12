@@ -113,7 +113,7 @@ use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
-use regalloc2::{PReg, PRegSet};
+use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -599,6 +599,9 @@ pub trait ABIMachineSpec {
 
     /// Get the "nominal SP to FP" offset from an instruction-emission state.
     fn get_nominal_sp_to_fp(s: &<Self::I as MachInstEmit>::State) -> i64;
+
+    /// Get the ABI-dependent MachineEnv for managing register allocation.
+    fn get_machine_env(flags: &settings::Flags, call_conv: isa::CallConv) -> &MachineEnv;
 
     /// Get all caller-save registers, that is, registers that we expect
     /// not to be saved across a call to a callee with the given ABI.
@@ -1456,6 +1459,11 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// Get the calling convention implemented by this ABI object.
     pub fn call_conv(&self, sigs: &SigSet) -> isa::CallConv {
         sigs[self.sig].call_conv
+    }
+
+    /// Get the ABI-dependent MachineEnv for managing register allocation.
+    pub fn machine_env(&self, sigs: &SigSet) -> &MachineEnv {
+        M::get_machine_env(&self.flags, self.call_conv(sigs))
     }
 
     /// The offsets of all sized stack slots (not spill slots) for debuginfo purposes.

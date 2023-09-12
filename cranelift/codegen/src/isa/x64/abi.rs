@@ -11,9 +11,10 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
-use regalloc2::{PReg, PRegSet, VReg};
+use regalloc2::{MachineEnv, PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
+use std::sync::OnceLock;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
@@ -786,6 +787,16 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         s.nominal_sp_to_fp()
     }
 
+    fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
+        if flags.enable_pinned_reg() {
+            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
+            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(true))
+        } else {
+            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
+            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(false))
+        }
+    }
+
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         if call_conv_of_callee == isa::CallConv::Tail {
             TAIL_CLOBBERS
@@ -1211,4 +1222,70 @@ const fn tail_clobbers() -> PRegSet {
         .with(regs::fpr_preg(13))
         .with(regs::fpr_preg(14))
         .with(regs::fpr_preg(15))
+}
+
+fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
+    fn preg(r: Reg) -> PReg {
+        r.to_real_reg().unwrap().into()
+    }
+
+    let mut env = MachineEnv {
+        preferred_regs_by_class: [
+            // Preferred GPRs: caller-saved in the SysV ABI.
+            vec![
+                preg(regs::rsi()),
+                preg(regs::rdi()),
+                preg(regs::rax()),
+                preg(regs::rcx()),
+                preg(regs::rdx()),
+                preg(regs::r8()),
+                preg(regs::r9()),
+                preg(regs::r10()),
+                preg(regs::r11()),
+            ],
+            // Preferred XMMs: all of them.
+            vec![
+                preg(regs::xmm0()),
+                preg(regs::xmm1()),
+                preg(regs::xmm2()),
+                preg(regs::xmm3()),
+                preg(regs::xmm4()),
+                preg(regs::xmm5()),
+                preg(regs::xmm6()),
+                preg(regs::xmm7()),
+                preg(regs::xmm8()),
+                preg(regs::xmm9()),
+                preg(regs::xmm10()),
+                preg(regs::xmm11()),
+                preg(regs::xmm12()),
+                preg(regs::xmm13()),
+                preg(regs::xmm14()),
+                preg(regs::xmm15()),
+            ],
+            // The Vector Regclass is unused
+            vec![],
+        ],
+        non_preferred_regs_by_class: [
+            // Non-preferred GPRs: callee-saved in the SysV ABI.
+            vec![
+                preg(regs::rbx()),
+                preg(regs::r12()),
+                preg(regs::r13()),
+                preg(regs::r14()),
+            ],
+            // Non-preferred XMMs: none.
+            vec![],
+            // The Vector Regclass is unused
+            vec![],
+        ],
+        fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
+    };
+
+    debug_assert_eq!(regs::r15(), regs::pinned_reg());
+    if !enable_pinned_reg {
+        env.non_preferred_regs_by_class[0].push(preg(regs::r15()));
+    }
+
+    env
 }
