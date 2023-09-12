@@ -70,8 +70,8 @@ async fn instantiate_component(
 }
 
 async fn run(name: &str) -> anyhow::Result<()> {
-    let stdout = MemoryOutputPipe::new();
-    let stderr = MemoryOutputPipe::new();
+    let stdout = MemoryOutputPipe::new(4096);
+    let stderr = MemoryOutputPipe::new(4096);
     let r = {
         let mut table = Table::new();
         let component = get_component(name);

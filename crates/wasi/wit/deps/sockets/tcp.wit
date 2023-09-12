@@ -81,6 +81,9 @@ interface tcp {
 	/// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
 	/// - <https://man.freebsd.org/cgi/man.cgi?connect>
 	start-connect: func(this: tcp-socket, network: network, remote-address: ip-socket-address) -> result<_, error-code>
+	/// Note: the returned `input-stream` and `output-stream` are child
+	/// resources of the `tcp-socket`. Implementations may trap if the
+	/// `tcp-socket` is dropped before both of these streams are dropped.
 	finish-connect: func(this: tcp-socket) -> result<tuple<input-stream, output-stream>, error-code>
 
 	/// Start listening for new connections.
@@ -116,6 +119,10 @@ interface tcp {
 	/// 
 	/// On success, this function returns the newly accepted client socket along with
 	/// a pair of streams that can be used to read & write to the connection.
+	///
+	/// Note: the returned `input-stream` and `output-stream` are child
+	/// resources of the returned `tcp-socket`. Implementations may trap if the
+	/// `tcp-socket` is dropped before its child streams are dropped.
 	/// 
 	/// # Typical errors
 	/// - `not-listening`: Socket is not in the Listener state. (EINVAL)
@@ -223,6 +230,10 @@ interface tcp {
 
 	/// Create a `pollable` which will resolve once the socket is ready for I/O.
 	/// 
+	/// The created `pollable` is a child resource of the `tcp-socket`.
+	/// Implementations may trap if the `tcp-socket` is dropped before all
+	/// derived `pollable`s created with this function are dropped.
+	///
 	/// Note: this function is here for WASI Preview2 only.
 	/// It's planned to be removed when `future` is natively supported in Preview3.
 	subscribe: func(this: tcp-socket) -> pollable
