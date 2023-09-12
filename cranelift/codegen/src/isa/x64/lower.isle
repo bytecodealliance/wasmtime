@@ -347,21 +347,42 @@
 
 ;; Specialization of `blsr` for BMI1
 
-(rule 12 (lower (has_type (ty_32_or_64 ty) (band (isub x (iconst (u64_from_imm64 1))) x)))
+(decl pure partial val_minus_one (Value) Value)
+(rule 0 (val_minus_one (isub x (u64_from_iconst 1))) x)
+(rule 0 (val_minus_one (iadd x (i64_from_iconst -1))) x)
+(rule 1 (val_minus_one (iadd (i64_from_iconst -1) x)) x)
+
+(rule 12 (lower (has_type (ty_32_or_64 ty) (band x y)))
          (if-let $true (use_bmi1))
+         (if-let x (val_minus_one y))
          (x64_blsr ty x))
-(rule 13 (lower (has_type (ty_32_or_64 ty) (band x (isub x (iconst (u64_from_imm64 1))))))
+(rule 13 (lower (has_type (ty_32_or_64 ty) (band y x)))
          (if-let $true (use_bmi1))
+         (if-let x (val_minus_one y))
          (x64_blsr ty x))
 
 ;; Specialization of `blsi` for BMI1
 
-(rule 12 (lower (has_type (ty_32_or_64 ty) (band (ineg x) x)))
+(rule 14 (lower (has_type (ty_32_or_64 ty) (band (ineg x) x)))
          (if-let $true (use_bmi1))
          (x64_blsi ty x))
-(rule 13 (lower (has_type (ty_32_or_64 ty) (band x (ineg x))))
+(rule 15 (lower (has_type (ty_32_or_64 ty) (band x (ineg x))))
          (if-let $true (use_bmi1))
          (x64_blsi ty x))
+
+;; Specialization of `bzhi` for BMI2
+;;
+;; The `bzhi` instruction clears all bits indexed by the second operand of the
+;; first operand. This is pattern-matched here with a `band` against a mask
+;; which is generated to be N bits large. Note that if the index is larger than
+;; the bit-width of the type then `bzhi` doesn't have the same semantics as
+;; `ishl`, so an `and` instruction is required to mask the index to match the
+;; semantics of Cranelift's `ishl`.
+
+(rule 16 (lower (has_type (ty_32_or_64 ty) (band x y)))
+         (if-let $true (use_bmi2))
+         (if-let (ishl (u64_from_iconst 1) index) (val_minus_one y))
+         (x64_bzhi ty x (x64_and ty index (RegMemImm.Imm (u32_sub (ty_bits ty) 1)))))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -459,11 +480,13 @@
 
 ;; Specialization of `blsmsk` for BMI1
 
-(rule 8 (lower (has_type (ty_32_or_64 ty) (bxor (isub x (iconst (u64_from_imm64 1))) x)))
+(rule 8 (lower (has_type (ty_32_or_64 ty) (bxor x y)))
         (if-let $true (use_bmi1))
+        (if-let x (val_minus_one y))
         (x64_blsmsk ty x))
-(rule 9 (lower (has_type (ty_32_or_64 ty) (bxor x (isub x (iconst (u64_from_imm64 1))))))
+(rule 9 (lower (has_type (ty_32_or_64 ty) (bxor y x)))
         (if-let $true (use_bmi1))
+        (if-let x (val_minus_one y))
         (x64_blsmsk ty x))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

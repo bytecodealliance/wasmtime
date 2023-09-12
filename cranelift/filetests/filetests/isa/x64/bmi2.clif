@@ -1,172 +1,9 @@
 test compile precise-output
-target x86_64 has_bmi1
+target x86_64 has_bmi2
 
-function %blsr_i32(i32) -> i32 {
-block0(v0: i32):
-  v1 = iconst.i32 1
-  v2 = isub v0, v1
-  v3 = band v0, v2
-  return v3
-}
-
-; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   blsrl   %edi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-; block1: ; offset 0x4
-;   blsrl %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-
-function %blsr_i32_alt(i32) -> i32 {
-block0(v0: i32):
-  v1 = iconst.i32 -1
-  v2 = iadd v0, v1
-  v3 = band v0, v2
-  return v3
-}
-
-; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   blsrl   %edi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-; block1: ; offset 0x4
-;   blsrl %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-
-function %blsr_i32_alt2(i32) -> i32 {
-block0(v0: i32):
-  v1 = iconst.i32 -1
-  v2 = iadd v1, v0
-  v3 = band v0, v2
-  return v3
-}
-
-; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   blsrl   %edi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-; block1: ; offset 0x4
-;   blsrl %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-
-function %blsr_i64(i64) -> i64 {
-block0(v0: i64):
-  v1 = iconst.i64 1
-  v2 = isub v0, v1
-  v3 = band v0, v2
-  return v3
-}
-
-; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   blsrq   %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-; block1: ; offset 0x4
-;   blsrq %rdi, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-
-function %blsr_alt_i32(i32) -> i32 {
-block0(v0: i32):
-  v1 = iconst.i32 1
-  v2 = isub v0, v1
-  v3 = band v2, v0
-  return v3
-}
-
-; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   blsrl   %edi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-; block1: ; offset 0x4
-;   blsrl %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-
-function %blsr_alt_i64(i64) -> i64 {
-block0(v0: i64):
-  v1 = iconst.i64 1
-  v2 = isub v0, v1
-  v3 = band v2, v0
-  return v3
-}
-
-; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-; block0:
-;   blsrq   %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-; block1: ; offset 0x4
-;   blsrq %rdi, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-
-function %blsi_i32(i32) -> i32 {
-block0(v0: i32):
-  v1 = ineg v0
-  v2 = band v0, v1
+function %sarx_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = sshr v0, v1
   return v2
 }
 
@@ -174,7 +11,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   blsil   %edi, %eax
+;   sarx    %edi, %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -184,15 +21,14 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   blsil %edi, %eax
+;   sarxl %esi, %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %blsi_i64(i64) -> i64 {
-block0(v0: i64):
-  v1 = ineg v0
-  v2 = band v0, v1
+function %sarx_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sshr v0, v1
   return v2
 }
 
@@ -200,7 +36,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   blsiq   %rdi, %rax
+;   sarx    %rdi, %rsi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -210,15 +46,14 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   blsiq %rdi, %rax
+;   sarxq %rsi, %rdi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %blsi_alt_i32(i32) -> i32 {
-block0(v0: i32):
-  v1 = ineg v0
-  v2 = band v1, v0
+function %shrx_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = ushr v0, v1
   return v2
 }
 
@@ -226,7 +61,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   blsil   %edi, %eax
+;   shrx    %edi, %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -236,15 +71,14 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   blsil %edi, %eax
+;   shrxl %esi, %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %blsi_alt_i64(i64) -> i64 {
-block0(v0: i64):
-  v1 = ineg v0
-  v2 = band v1, v0
+function %shrx_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = ushr v0, v1
   return v2
 }
 
@@ -252,7 +86,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   blsiq   %rdi, %rax
+;   shrx    %rdi, %rsi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -262,24 +96,73 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   blsiq %rdi, %rax
+;   shrxq %rsi, %rdi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %blsmsk_i32(i32) -> i32 {
+function %shlx_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = ishl v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shlx    %edi, %esi, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   shlxl %esi, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %shlx_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = ishl v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   shlx    %rdi, %rsi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   shlxq %rsi, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %rorx_i32(i32) -> i32 {
 block0(v0: i32):
-  v1 = iconst.i32 1
-  v2 = isub v0, v1
-  v3 = bxor v0, v2
-  return v3
+  v1 = iconst.i32 3
+  v2 = rotr v0, v1
+  return v2
 }
 
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   blsmskl %edi, %eax
+;   rorxl   $3, %edi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -289,24 +172,23 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   blsmskl %edi, %eax
+;   rorxl $3, %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %blsmsk_i64(i64) -> i64 {
+function %rorx_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = iconst.i64 1
-  v2 = isub v0, v1
-  v3 = bxor v0, v2
-  return v3
+  v1 = iconst.i64 3
+  v2 = rotr v0, v1
+  return v2
 }
 
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   blsmskq %rdi, %rax
+;   rorxq   $3, %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -316,24 +198,23 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   blsmskq %rdi, %rax
+;   rorxq $3, %rdi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %blsmsk_alt_i32(i32) -> i32 {
+function %rorx_alt_i32(i32) -> i32 {
 block0(v0: i32):
-  v1 = iconst.i32 1
-  v2 = isub v0, v1
-  v3 = bxor v2, v0
-  return v3
+  v1 = iconst.i32 3
+  v2 = rotl v0, v1
+  return v2
 }
 
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   blsmskl %edi, %eax
+;   rorxl   $29, %edi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -343,24 +224,23 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   blsmskl %edi, %eax
+;   rorxl $0x1d, %edi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %blsmsk_alt_i64(i64) -> i64 {
+function %rorx_alt_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = iconst.i64 1
-  v2 = isub v0, v1
-  v3 = bxor v2, v0
-  return v3
+  v1 = iconst.i64 3
+  v2 = rotl v0, v1
+  return v2
 }
 
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   blsmskq %rdi, %rax
+;   rorxq   $61, %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -370,7 +250,104 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   blsmskq %rdi, %rax
+;   rorxq $0x3d, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bzhi32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iconst.i32 1
+  v3 = ishl v2, v1
+  v4 = isub v3, v2
+  v5 = band v0, v4
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andl    %ecx, $31, %ecx
+;   bzhi    %edi, %ecx, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rcx
+;   andl $0x1f, %ecx
+;   bzhil %ecx, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bzhi64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 1
+  v3 = ishl v2, v1
+  v4 = isub v3, v2
+  v5 = band v0, v4
+  return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andq    %rcx, $63, %rcx
+;   bzhi    %rdi, %rcx, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rcx
+;   andq $0x3f, %rcx
+;   bzhiq %rcx, %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %bzhi32_mem(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = iconst.i32 1
+  v3 = ishl v2, v1
+  v4 = isub v3, v2
+  v5 = load.i32 v0+20
+  v6 = band v5, v4
+  return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rsi, %rcx
+;   andl    %ecx, $31, %ecx
+;   bzhi    20(%rdi), %ecx, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rsi, %rcx
+;   andl $0x1f, %ecx
+;   bzhil %ecx, 0x14(%rdi), %eax ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
