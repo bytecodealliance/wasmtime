@@ -589,6 +589,21 @@ impl Inst {
                 let imm6 = Imm6::maybe_from_imm12(imm12).unwrap();
                 sink.put2(encode_ci_type(CiOp::CAddi, rd, imm6));
             }
+
+            // c.addi / c.sext.w
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addiw,
+                rd,
+                rs,
+                imm12,
+            } if has_zca
+                && rd.to_reg() == rs
+                && rs != zero_reg()
+                && Imm6::maybe_from_imm12(imm12).is_some() =>
+            {
+                let imm6 = Imm6::maybe_from_imm12(imm12).unwrap();
+                sink.put2(encode_ci_type(CiOp::CAddiw, rd, imm6));
+            }
             _ => return false,
         }
 

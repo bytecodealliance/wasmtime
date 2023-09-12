@@ -314,3 +314,36 @@ block0(v0: i64):
 ;   c.addi a0, -0x20
 ;   c.jr ra
 
+function %c_sext_w(i32) -> i64 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   sext.w a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addiw a0, 0
+;   c.jr ra
+
+function %c_addiw(i32) -> i64 {
+block0(v0: i32):
+  v1 = iadd_imm.i32 v0, -32
+  v2 = sextend.i64 v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   addiw a0,a0,-32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addiw a0, -0x20
+;   c.jr ra
+
