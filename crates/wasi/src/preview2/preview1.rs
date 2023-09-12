@@ -779,7 +779,7 @@ type Result<T, E = types::Error> = std::result::Result<T, E>;
 
 fn write_bytes<'a>(
     ptr: impl Borrow<GuestPtr<'a, u8>>,
-    buf: impl AsRef<[u8]>,
+    buf: &[u8],
 ) -> Result<GuestPtr<'a, u8>, types::Error> {
     // NOTE: legacy implementation always returns Inval errno
 
@@ -870,7 +870,7 @@ impl<
                 argv.write(argv_buf)?;
                 let argv = argv.add(1)?;
 
-                let argv_buf = write_bytes(argv_buf, arg)?;
+                let argv_buf = write_bytes(argv_buf, arg.as_bytes())?;
                 let argv_buf = write_byte(argv_buf, 0)?;
 
                 Ok((argv, argv_buf))
@@ -910,9 +910,9 @@ impl<
                     environ.write(environ_buf)?;
                     let environ = environ.add(1)?;
 
-                    let environ_buf = write_bytes(environ_buf, k)?;
+                    let environ_buf = write_bytes(environ_buf, k.as_bytes())?;
                     let environ_buf = write_byte(environ_buf, b'=')?;
-                    let environ_buf = write_bytes(environ_buf, v)?;
+                    let environ_buf = write_bytes(environ_buf, v.as_bytes())?;
                     let environ_buf = write_byte(environ_buf, 0)?;
 
                     Ok((environ, environ_buf))
@@ -1517,7 +1517,7 @@ impl<
             if p.len() > path_max_len {
                 return Err(types::Errno::Nametoolong.into());
             }
-            write_bytes(path, p)?;
+            write_bytes(path, p.as_bytes())?;
             return Ok(());
         }
         Err(types::Errno::Notdir.into()) // NOTE: legacy implementation returns NOTDIR here
@@ -1696,7 +1696,7 @@ impl<
                 path.truncate(cap);
             }
             cap = cap.checked_sub(path.len() as _).unwrap();
-            buf = write_bytes(buf, path)?;
+            buf = write_bytes(buf, &path)?;
             if cap == 0 {
                 return Ok(buf_len);
             }
@@ -2039,7 +2039,7 @@ impl<
             .get_random_bytes(buf_len.into())
             .context("failed to call `get-random-bytes`")
             .map_err(types::Error::trap)?;
-        write_bytes(buf, rand)?;
+        write_bytes(buf, &rand)?;
         Ok(())
     }
 
