@@ -514,6 +514,14 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_addr32(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I32 | R32 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
         fn u64_from_imm64(&mut self, imm: Imm64) -> u64 {
             imm.bits() as u64
         }

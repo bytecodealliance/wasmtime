@@ -469,6 +469,9 @@
 (decl ty_addr64 (Type) Type)
 (extern extractor ty_addr64 ty_addr64)
 
+(decl ty_addr32 (Type) Type)
+(extern extractor ty_addr32 ty_addr32)
+
 ;; A pure constructor that matches everything except vectors with size 32X2.
 (decl pure partial not_vec32x2 (Type) Type)
 (extern constructor not_vec32x2 not_vec32x2)

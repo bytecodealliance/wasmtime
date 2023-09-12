@@ -1282,7 +1282,7 @@
   (gen_load p offset (int_load_op $true 32) flags $I64))
 
 (rule
-  (lower (has_type ty (load flags p @ (value_type (ty_addr64 _)) offset)))
+  (lower (has_type ty (load flags p @ (value_type (ty_addr32 _)) offset)))
   (gen_load p offset (load_op ty) flags ty)
 )
 ;;;; for I128
@@ -1356,7 +1356,7 @@
 
 ;;;;;  Rules for `store`;;;;;;;;;
 (rule
-  (lower (store flags x @ (value_type ty) p @ (value_type (ty_addr64 _)) offset))
+  (lower (store flags x @ (value_type ty) p @ (value_type (ty_addr32 _)) offset))
   (gen_store p offset (store_op ty) flags x))
 
 ;;; special for I128
