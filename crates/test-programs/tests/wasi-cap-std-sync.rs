@@ -291,3 +291,7 @@ fn unlink_file_trailing_slashes() {
 fn path_open_preopen() {
     run("path_open_preopen", true).unwrap()
 }
+#[test_log::test]
+fn unicode_output() {
+    run("unicode_output", true).unwrap()
+}
