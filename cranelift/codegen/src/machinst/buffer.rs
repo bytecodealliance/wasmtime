@@ -281,7 +281,7 @@ pub struct MachBuffer<I: VCodeInst> {
     ///
     /// Public labels are the exception, so we only keep track of them and assume
     /// all others are private.
-    label_is_public: SmallVec<[MachLabel; 4]>,
+    public_labels: SmallVec<[MachLabel; 4]>,
     /// Constants that must be emitted at some point.
     pending_constants: SmallVec<[VCodeConstant; 16]>,
     /// Byte size of all constants in `pending_constants`.
@@ -448,7 +448,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
-            label_is_public: SmallVec::new(),
+            public_labels: SmallVec::new(),
             pending_constants: SmallVec::new(),
             pending_constants_size: 0,
             pending_traps: SmallVec::new(),
@@ -664,8 +664,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         debug_assert_ne!(self.resolve_label_offset(label), UNKNOWN_LABEL_OFFSET);
         match visibility {
-            LabelVisibility::Public => self.label_is_public.push(label),
-            LabelVisibility::Private => self.label_is_public.retain(|l| *l != label),
+            LabelVisibility::Public => self.public_labels.push(label),
+            LabelVisibility::Private => self.public_labels.retain(|l| *l != label),
         }
     }
 
@@ -1490,7 +1490,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         let alignment = self.finish_constants(constants);
 
         let labels = self
-            .label_is_public
+            .public_labels
             .iter()
             .copied()
             .map(|label| MachLabelSite {
