@@ -113,8 +113,7 @@ impl<T: WasiHttpView> WasiHttpViewExt for T {
         let request = self
             .table()
             .get_request(request_id)
-            .context("[handle_async] getting request")?
-            .clone();
+            .context("[handle_async] getting request")?;
         tracing::debug!("http request retrieved from table");
 
         let method = match request.method() {
