@@ -376,7 +376,7 @@ jobs:
     env:
       QEMU_BUILD_VERSION: 8.0.4
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
     - uses: actions/checkout@v3
@@ -464,12 +464,6 @@ jobs:
         diff -ru crates/wasi/wit crates/wasi-http/wit
 
     # Build and test all features
-    - run: cargo test -p wasmtime-wasi --lib -- --nocapture --test-threads=1
-
-      env:
-        RUST_BACKTRACE: 1
-      if: matrix.isa == 'riscv64'
-
     - run: ./ci/run-tests.sh --locked
       env:
         RUST_BACKTRACE: 1
