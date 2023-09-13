@@ -1425,6 +1425,7 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn typed_v128() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
@@ -1493,6 +1494,7 @@ fn typed_v128() -> anyhow::Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn typed_v128_imports() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
