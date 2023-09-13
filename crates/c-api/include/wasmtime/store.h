@@ -255,7 +255,7 @@ WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(wasmtime_store_t *st
  * be known in WASM and the `host_fd` is the number of the file descriptor on
  * the host.
  */
-WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, uint32_t guest_fd, uint32_t host_fd, uint32_t access_mode);
+WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, uint32_t guest_fd, void *host_fd, uint32_t access_mode);
 
 /**
  * \brief Push a file descriptor into the underlying WASI context.
@@ -268,7 +268,7 @@ WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, u
  * The `host_fd` argument is the number of the file descriptor on the host and the
  * `access_mode` is the access mode of the file descriptor.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_context_push_file(wasmtime_context_t *context, uint32_t host_fd, uint32_t access_mode, uint32_t *guest_fd);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_push_file(wasmtime_context_t *context, void *host_fd, uint32_t access_mode, uint32_t *guest_fd);
 
 #ifdef __cplusplus
 }  // extern "C"
