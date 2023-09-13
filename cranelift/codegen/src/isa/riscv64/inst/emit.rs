@@ -731,7 +731,7 @@ impl Inst {
                             rd,
                             imm: Imm20::from_bits(0),
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit_uncompressed(sink, emit_info, state, start_off);
 
                         // Emit a relocation for the load. This patches the offset into the instruction.
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
@@ -873,7 +873,7 @@ impl Inst {
                             0,
                         )
                         .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
                     }
                     ExternalName::LibCall(..)
                     | ExternalName::TestCase { .. }
@@ -899,7 +899,7 @@ impl Inst {
                             base: spilltmp_reg2(),
                             offset: Imm12::zero(),
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit_uncompressed(sink, emit_info, state, start_off);
                     }
                 }
 
@@ -923,7 +923,7 @@ impl Inst {
                     base: info.rn,
                     offset: Imm12::zero(),
                 }
-                .emit(&[], sink, emit_info, state);
+                .emit_uncompressed(sink, emit_info, state, start_off);
 
                 let callee_pop_size = i64::from(info.callee_pop_size);
                 state.virtual_sp_offset -= callee_pop_size;
@@ -949,7 +949,7 @@ impl Inst {
                 sink.add_reloc(Reloc::RiscvCall, &callee, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
@@ -1124,7 +1124,7 @@ impl Inst {
                 sink.use_label_at_offset(sink.cur_offset(), default_target, LabelUse::PCRel32);
                 Inst::construct_auipc_and_jalr(None, tmp2, 0)
                     .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 // Compute the jump table offset.
                 // We need to emit a PC relative offset,
@@ -1281,7 +1281,7 @@ impl Inst {
                             rd,
                             imm: Imm20::from_bits(0),
                         };
-                        inst.emit(&[], sink, emit_info, state);
+                        inst.emit_uncompressed(sink, emit_info, state, start_off);
 
                         // Emit an add to the address with a relocation.
                         // This later gets patched up with the correct offset.
@@ -1292,7 +1292,7 @@ impl Inst {
                             rs: rd.to_reg(),
                             imm12: Imm12::zero(),
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit_uncompressed(sink, emit_info, state, start_off);
                     }
                     (amode, _, _) => {
                         unimplemented!("LoadAddr: {:?}", amode);
