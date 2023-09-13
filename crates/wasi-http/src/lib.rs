@@ -1,9 +1,7 @@
-pub use crate::http_impl::WasiHttpViewExt;
 pub use crate::types::{WasiHttpCtx, WasiHttpView};
 use core::fmt::Formatter;
 use std::fmt::{self, Display};
 
-pub mod component_impl;
 pub mod http_impl;
 pub mod incoming_handler;
 pub mod proxy;
@@ -49,18 +47,6 @@ pub mod bindings {
     }
 
     pub use self::_internal_rest::wasi::http;
-}
-
-pub fn add_to_linker<T: WasiHttpView>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()> {
-    crate::component_impl::add_component_to_linker::<T>(linker, |t| t)
-}
-
-pub mod sync {
-    use crate::types::WasiHttpView;
-
-    pub fn add_to_linker<T: WasiHttpView>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()> {
-        crate::component_impl::sync::add_component_to_linker::<T>(linker, |t| t)
-    }
 }
 
 impl std::error::Error for crate::bindings::http::types::Error {}

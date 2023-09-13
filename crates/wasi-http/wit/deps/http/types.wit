@@ -53,18 +53,6 @@ interface types {
   type headers = fields
   type trailers = fields
 
-  // The following block defines stream types which corresponds to the HTTP
-  // standard Contents and Trailers. With Preview3, all of these fields can be
-  // replaced by a stream<u8, option<trailers>>. In the interim, we need to
-  // build on separate resource types defined by `wasi:io/streams`. The
-  // `finish-` functions emulate the stream's result value and MUST be called
-  // exactly once after the final read/write from/to the stream before dropping
-  // the stream.
-  type incoming-stream = input-stream
-  type outgoing-stream = output-stream
-  finish-incoming-stream: func(s: incoming-stream) -> option<trailers>
-  finish-outgoing-stream: func(s: outgoing-stream, trailers: option<trailers>)
-
   // The following block defines the `incoming-request` and `outgoing-request`
   // resource types that correspond to HTTP standard Requests. Soon, when
   // resource types are added, the `u32` type aliases can be replaced by
@@ -82,7 +70,9 @@ interface types {
   incoming-request-scheme: func(request: incoming-request) -> option<scheme>
   incoming-request-authority: func(request: incoming-request) -> option<string>
   incoming-request-headers: func(request: incoming-request) -> headers
-  incoming-request-consume: func(request: incoming-request) -> result<incoming-stream>
+  incoming-request-consume: func(request: incoming-request) -> result<input-stream>
+
+  /// Consumes the headers.
   new-outgoing-request: func(
     method: method,
     path-with-query: option<string>,
@@ -90,7 +80,9 @@ interface types {
     authority: option<string>,
     headers: headers
   ) -> outgoing-request
-  outgoing-request-write: func(request: outgoing-request) -> result<outgoing-stream>
+
+  /// Mutates the request.
+  outgoing-request-write: func(request: outgoing-request) -> result<output-stream>
 
   // Additional optional parameters that can be set when making a request.
   record request-options {
@@ -134,12 +126,16 @@ interface types {
   drop-outgoing-response: func(response: outgoing-response)
   incoming-response-status: func(response: incoming-response) -> status-code
   incoming-response-headers: func(response: incoming-response) -> headers
-  incoming-response-consume: func(response: incoming-response) -> result<incoming-stream>
+  incoming-response-consume: func(response: incoming-response) -> result<input-stream>
+
+  /// Consumes the headers.
   new-outgoing-response: func(
     status-code: status-code,
     headers: headers
   ) -> outgoing-response
-  outgoing-response-write: func(response: outgoing-response) -> result<outgoing-stream>
+
+  /// Consumes the response.
+  outgoing-response-write: func(response: outgoing-response) -> result<output-stream>
 
   // The following block defines a special resource type used by the
   // `wasi:http/outgoing-handler` interface to emulate

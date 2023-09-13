@@ -83,6 +83,8 @@ interface types {
   incoming-request-authority: func(request: incoming-request) -> option<string>
   incoming-request-headers: func(request: incoming-request) -> headers
   incoming-request-consume: func(request: incoming-request) -> result<incoming-stream>
+
+  /// Consumes the headers.
   new-outgoing-request: func(
     method: method,
     path-with-query: option<string>,
@@ -90,6 +92,8 @@ interface types {
     authority: option<string>,
     headers: headers
   ) -> outgoing-request
+
+  /// Consumes the outgoing request.
   outgoing-request-write: func(request: outgoing-request) -> result<outgoing-stream>
 
   // Additional optional parameters that can be set when making a request.
