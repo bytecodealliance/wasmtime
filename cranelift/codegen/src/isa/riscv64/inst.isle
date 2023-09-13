@@ -738,6 +738,7 @@
 (type CiOp (enum
   (CAddi)
   (CAddiw)
+  (CAddi16sp)
 ))
 
 

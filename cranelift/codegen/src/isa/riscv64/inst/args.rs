@@ -1982,13 +1982,14 @@ impl CiOp {
         match self {
             CiOp::CAddi => 0b000,
             CiOp::CAddiw => 0b001,
+            CiOp::CAddi16sp => 0b011,
         }
     }
 
     pub fn op(&self) -> COpcodeSpace {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CiOp::CAddi | CiOp::CAddiw => COpcodeSpace::C1,
+            CiOp::CAddi | CiOp::CAddiw | CiOp::CAddi16sp => COpcodeSpace::C1,
         }
     }
 }

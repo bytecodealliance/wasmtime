@@ -574,6 +574,29 @@ impl Inst {
                 sink.put2(0x0000);
             }
 
+            // c.addi16sp
+            //
+            // c.addi16sp shares the opcode with c.lui, but has a destination field of x2.
+            // c.addi16sp adds the non-zero sign-extended 6-bit immediate to the value in the stack pointer (sp=x2),
+            // where the immediate is scaled to represent multiples of 16 in the range (-512,496). c.addi16sp is used
+            // to adjust the stack pointer in procedure prologues and epilogues. It expands into addi x2, x2, nzimm. c.addi16sp
+            // is only valid when nzimm≠0; the code point with nzimm=0 is reserved.
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd,
+                rs,
+                imm12,
+            } if has_zca
+                && rd.to_reg() == rs
+                && rs == stack_reg()
+                && imm12.as_i16() != 0
+                && (imm12.as_i16() % 16) == 0
+                && Imm6::maybe_from_i16(imm12.as_i16() / 16).is_some() =>
+            {
+                let imm6 = Imm6::maybe_from_i16(imm12.as_i16() / 16).unwrap();
+                sink.put2(encode_c_addi16sp(imm6));
+            }
+
             // c.addi
             Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Addi,
