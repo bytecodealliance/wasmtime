@@ -1,6 +1,6 @@
 test run
 target aarch64
-; target s390x FIXME: This currently fails under qemu due to a qemu bug
+target s390x
 target x86_64
 target x86_64 skylake
 target riscv64 has_v
