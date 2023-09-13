@@ -9,8 +9,8 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR,
-    VecElementWidth, VecOpCategory, VecOpMasking,
+    CaOp, CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5,
+    VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -335,5 +335,19 @@ pub fn encode_cr_type(op: CrOp, rd: WritableReg, rs2: Reg) -> u16 {
     bits |= reg_to_gpr_num(rs2) << 2;
     bits |= reg_to_gpr_num(rd.to_reg()) << 7;
     bits |= unsigned_field_width(op.funct4(), 4) << 12;
+    bits.try_into().unwrap()
+}
+
+// Encode a CA type instruction.
+//
+// 0--1-2-----4-5--------6-7--------9-10------15
+// |op |  rs2  |  funct2  |  rd/rs1  | funct6 |
+pub fn encode_ca_type(op: CaOp, rd: WritableReg, rs2: Reg) -> u16 {
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= reg_to_compressed_gpr_num(rs2) << 2;
+    bits |= unsigned_field_width(op.funct2(), 2) << 5;
+    bits |= reg_to_compressed_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(op.funct6(), 6) << 10;
     bits.try_into().unwrap()
 }

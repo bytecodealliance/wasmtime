@@ -3,7 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::CrOp;
+use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CrOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -28,6 +28,13 @@ impl EmitInfo {
 
 pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
+}
+
+pub(crate) fn reg_to_compressed_gpr_num(m: Reg) -> u32 {
+    let real_reg = m.to_real_reg().unwrap().hw_enc();
+    debug_assert!(real_reg >= 8 && real_reg < 16);
+    let compressed_reg = real_reg - 8;
+    u32::try_from(compressed_reg).unwrap()
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -458,6 +465,12 @@ impl Inst {
     ) -> bool {
         let has_zca = emit_info.isa_flags.has_zca();
 
+        fn reg_is_compressible(r: Reg) -> bool {
+            r.to_real_reg()
+                .map(|r| r.hw_enc() >= 8 && r.hw_enc() < 16)
+                .unwrap_or(false)
+        }
+
         match *self {
             // C.ADD
             Inst::AluRRR {
@@ -482,6 +495,36 @@ impl Inst {
                 && imm12.as_i16() == 0 =>
             {
                 sink.put2(encode_cr_type(CrOp::CMv, rd, rs));
+            }
+
+            // CA Ops
+            Inst::AluRRR {
+                alu_op:
+                    alu_op @ (AluOPRRR::And
+                    | AluOPRRR::Or
+                    | AluOPRRR::Xor
+                    | AluOPRRR::Sub
+                    | AluOPRRR::Addw
+                    | AluOPRRR::Subw),
+                rd,
+                rs1,
+                rs2,
+            } if has_zca
+                && rd.to_reg() == rs1
+                && reg_is_compressible(rs1)
+                && reg_is_compressible(rs2) =>
+            {
+                let op = match alu_op {
+                    AluOPRRR::And => CaOp::CAnd,
+                    AluOPRRR::Or => CaOp::COr,
+                    AluOPRRR::Xor => CaOp::CXor,
+                    AluOPRRR::Sub => CaOp::CSub,
+                    AluOPRRR::Addw => CaOp::CAddw,
+                    AluOPRRR::Subw => CaOp::CSubw,
+                    _ => unreachable!(),
+                };
+
+                sink.put2(encode_ca_type(op, rd, rs2));
             }
             _ => return false,
         }

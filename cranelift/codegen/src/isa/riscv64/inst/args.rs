@@ -6,7 +6,7 @@ use super::*;
 use crate::ir::condcodes::CondCode;
 
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
-use crate::isa::riscv64::lower::isle::generated_code::{COpcodeSpace, CrOp};
+use crate::isa::riscv64::lower::isle::generated_code::{COpcodeSpace, CaOp, CrOp};
 use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
@@ -1923,6 +1923,37 @@ impl CrOp {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
             CrOp::CMv | CrOp::CAdd => COpcodeSpace::C2,
+        }
+    }
+}
+
+impl CaOp {
+    pub fn funct2(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CaOp::CAnd => 0b11,
+            CaOp::COr => 0b10,
+            CaOp::CXor => 0b01,
+            CaOp::CSub => 0b00,
+            CaOp::CAddw => 0b01,
+            CaOp::CSubw => 0b00,
+        }
+    }
+
+    pub fn funct6(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CaOp::CAnd | CaOp::COr | CaOp::CXor | CaOp::CSub => 0b100_011,
+            CaOp::CSubw | CaOp::CAddw => 0b100_111,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CaOp::CAnd | CaOp::COr | CaOp::CXor | CaOp::CSub | CaOp::CAddw | CaOp::CSubw => {
+                COpcodeSpace::C1
+            }
         }
     }
 }
