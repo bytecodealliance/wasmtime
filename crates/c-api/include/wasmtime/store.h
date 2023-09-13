@@ -248,6 +248,8 @@ WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(wasmtime_store_t *st
  * 
  * This is used to dynamically bind a file descriptor from the host to a file 
  * descriptor in an already-built WASI context to make it available to WASI APIs.
+ * And it requires that the WASI context has been configured correctly prior to
+ * calling this function.
  * 
  * The `guest_fd` argument is the number of the file descriptor by which it will
  * be known in WASM and the `host_fd` is the number of the file descriptor on
@@ -260,7 +262,8 @@ WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, u
  * 
  * This is used to dynamically bind a file descriptor from the host to the next 
  * available file descriptor in an already-built WASI context to make it available 
- * to WASI APIs.
+ * to WASI APIs. And it requires that the WASI context has been configured correctly
+ * prior to calling this function.
  * 
  * The `host_fd` argument is the number of the file descriptor on the host and the
  * `access_mode` is the access mode of the file descriptor.
