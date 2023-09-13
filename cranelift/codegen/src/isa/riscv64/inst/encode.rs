@@ -334,6 +334,6 @@ pub fn encode_cr_type(op: CrOp, rd: WritableReg, rs2: Reg) -> u16 {
     bits |= unsigned_field_width(op.op().bits(), 2);
     bits |= reg_to_gpr_num(rs2) << 2;
     bits |= reg_to_gpr_num(rd.to_reg()) << 7;
-    bits |= unsigned_field_width(op.funct4(), 5) << 12;
+    bits |= unsigned_field_width(op.funct4(), 4) << 12;
     bits.try_into().unwrap()
 }
