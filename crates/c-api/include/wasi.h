@@ -9,7 +9,6 @@
 
 #include <stdint.h>
 #include "wasm.h"
-#include <wasmtime/error.h>
 
 #ifndef WASI_API_EXTERN
 #ifdef _WIN32
