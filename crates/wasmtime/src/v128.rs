@@ -40,7 +40,8 @@ cfg_if::cfg_if! {
         // RISC-V currently always passes all vector arguments indirectly in the
         // ABI. Currently Rust has no stable means of representing this meaning
         // that a 128-bit representation is chosen here but it can't be passed
-        // to WebAssembly for example.
+        // directly to WebAssembly, for example, and must instead be passed
+        // through an array-call trampoline.
         type Abi = u128;
     } else if #[cfg(target_arch = "s390x")] {
         // Currently Rust has no stable means of representing vector registers
