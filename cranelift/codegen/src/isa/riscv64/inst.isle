@@ -742,6 +742,11 @@
   (CSlli)
 ))
 
+;; Opcodes for the CIW compressed instruction format
+(type CiwOp (enum
+  (CAddi4spn)
+))
+
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR

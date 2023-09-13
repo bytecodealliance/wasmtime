@@ -7,7 +7,9 @@ use crate::ir::condcodes::CondCode;
 
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
 
-use crate::isa::riscv64::lower::isle::generated_code::{COpcodeSpace, CaOp, CiOp, CjOp, CrOp};
+use crate::isa::riscv64::lower::isle::generated_code::{
+    COpcodeSpace, CaOp, CiOp, CiwOp, CjOp, CrOp,
+};
 use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
@@ -1991,6 +1993,22 @@ impl CiOp {
         match self {
             CiOp::CAddi | CiOp::CAddiw | CiOp::CAddi16sp => COpcodeSpace::C1,
             CiOp::CSlli => COpcodeSpace::C2,
+        }
+    }
+}
+
+impl CiwOp {
+    pub fn funct3(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CiwOp::CAddi4spn => 0b000,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CiwOp::CAddi4spn => COpcodeSpace::C0,
         }
     }
 }

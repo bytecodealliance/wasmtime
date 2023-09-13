@@ -3,7 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CiOp, CrOp};
+use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CiOp, CiwOp, CrOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -595,6 +595,29 @@ impl Inst {
             {
                 let imm6 = Imm6::maybe_from_i16(imm12.as_i16() / 16).unwrap();
                 sink.put2(encode_c_addi16sp(imm6));
+            }
+
+            // c.addi4spn
+            //
+            // c.addi4spn is a CIW-format instruction that adds a zero-extended non-zero
+            // immediate, scaled by 4, to the stack pointer, x2, and writes the result to
+            // rd. This instruction is used to generate pointers to stack-allocated variables
+            // and expands to addi rd, x2, nzuimm. c.addi4spn is only valid when nzuimm≠0;
+            // the code points with nzuimm=0 are reserved.
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd,
+                rs,
+                imm12,
+            } if has_zca
+                && reg_is_compressible(rd.to_reg())
+                && rs == stack_reg()
+                && imm12.as_i16() != 0
+                && (imm12.as_i16() % 4) == 0
+                && u8::try_from(imm12.as_i16() / 4).is_ok() =>
+            {
+                let imm = u8::try_from(imm12.as_i16() / 4).unwrap();
+                sink.put2(encode_ciw_type(CiwOp::CAddi4spn, rd, imm));
             }
 
             // c.addi
