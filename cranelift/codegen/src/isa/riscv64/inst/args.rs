@@ -1980,7 +1980,7 @@ impl CiOp {
     pub fn funct3(&self) -> u32 {
         // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
         match self {
-            CiOp::CAddi => 0b000,
+            CiOp::CAddi | CiOp::CSlli => 0b000,
             CiOp::CAddiw => 0b001,
             CiOp::CAddi16sp => 0b011,
         }
@@ -1990,6 +1990,7 @@ impl CiOp {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
             CiOp::CAddi | CiOp::CAddiw | CiOp::CAddi16sp => COpcodeSpace::C1,
+            CiOp::CSlli => COpcodeSpace::C2,
         }
     }
 }

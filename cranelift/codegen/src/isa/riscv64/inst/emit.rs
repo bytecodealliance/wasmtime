@@ -627,6 +627,19 @@ impl Inst {
                 let imm6 = Imm6::maybe_from_imm12(imm12).unwrap();
                 sink.put2(encode_ci_type(CiOp::CAddiw, rd, imm6));
             }
+
+            // c.slli
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Slli,
+                rd,
+                rs,
+                imm12,
+            } if has_zca && rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
+                // The shift amount is unsigned, but we encode it as signed.
+                let shift = imm12.as_i16() & 0x3f;
+                let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
+                sink.put2(encode_ci_type(CiOp::CSlli, rd, imm6));
+            }
             _ => return false,
         }
 

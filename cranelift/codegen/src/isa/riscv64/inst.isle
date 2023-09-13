@@ -739,6 +739,7 @@
   (CAddi)
   (CAddiw)
   (CAddi16sp)
+  (CSlli)
 ))
 
 
