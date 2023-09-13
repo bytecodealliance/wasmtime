@@ -392,7 +392,8 @@ impl TableHttpExt for Table {
                 .await
                 .map_err(|_| TableError::NotPresent)?;
 
-            let chunk = content.split_to(permit as usize);
+            let len = content.len().min(permit);
+            let chunk = content.split_to(len);
 
             output_stream
                 .write(chunk)
