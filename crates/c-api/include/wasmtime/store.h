@@ -218,30 +218,6 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_consume_fuel(wasmtime_context
 WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
 
 /**
- * \brief Configures default WASI state if it is not set. 
- * 
- * This function is required if #wasmtime_context_set_wasi is not guaranteed to 
- * be called at an earlier time. This will configure the WASI state for instances
- * defined within this store to the default (empty) configuration.
- * 
- * This function does not take ownership of `context`. It is created to be used in
- * conjunction with #wasmtime_context_get_wasi_ctx.
- */
-WASM_API_EXTERN bool wasmtime_context_set_default_wasi_if_not_exist(wasmtime_context_t *context);
-
-/**
- * \brief Returns the WASI state for this store.
- *
- * This function returns the WASI state for this store, if it has been
- * configured. If it has not been configured then the program will panic.
- *
- * The returned `context` is owned by the store, which effectively makes this 
- * function unsafe. This function should be called only after calling 
- * #wasmtime_context_set_wasi or #wasmtime_context_set_default_wasi_if_not_exist.
- */
-WASM_API_EXTERN wasi_ctx_t *wasmtime_context_get_wasi_ctx(wasmtime_context_t *context);
-
-/**
  * \brief Configures the relative deadline at which point WebAssembly code will
  * trap or invoke the callback function.
  *
@@ -266,6 +242,30 @@ WASM_API_EXTERN void wasmtime_context_set_epoch_deadline(wasmtime_context_t *con
  * #wasmtime_context_set_epoch_deadline.
  */
 WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(wasmtime_store_t *store, wasmtime_error_t* (*func)(wasmtime_context_t*, void*, uint64_t*), void *data);
+
+/**
+ * \brief Insert a file descriptor into the underlying WASI context. 
+ * 
+ * This is used to dynamically bind a file descriptor from the host to a file 
+ * descriptor in an already-built WASI context to make it available to WASI APIs.
+ * 
+ * The `guest_fd` argument is the number of the file descriptor by which it will
+ * be known in WASM and the `host_fd` is the number of the file descriptor on
+ * the host.
+ */
+WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, uint32_t guest_fd, uint32_t host_fd, uint32_t access_mode);
+
+/**
+ * \brief Push a file descriptor into the underlying WASI context.
+ * 
+ * This is used to dynamically bind a file descriptor from the host to the next 
+ * available file descriptor in an already-built WASI context to make it available 
+ * to WASI APIs.
+ * 
+ * The `host_fd` argument is the number of the file descriptor on the host and the
+ * `access_mode` is the access mode of the file descriptor.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_push_file(wasmtime_context_t *context, uint32_t host_fd, uint32_t access_mode, uint32_t *guest_fd);
 
 #ifdef __cplusplus
 }  // extern "C"

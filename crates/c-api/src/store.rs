@@ -1,12 +1,15 @@
 use crate::{wasm_engine_t, wasmtime_error_t, wasmtime_val_t, ForeignData};
+use anyhow::anyhow;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
+use std::fs::File;
+use std::os::fd::FromRawFd;
 use std::sync::Arc;
+use wasi_common::file::FileAccessMode;
 use wasmtime::{
     AsContext, AsContextMut, Store, StoreContext, StoreContextMut, StoreLimits, StoreLimitsBuilder,
     UpdateDeadline, Val,
 };
-use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
 /// This representation of a `Store` is used to implement the `wasm.h` API.
 ///
@@ -204,28 +207,6 @@ pub extern "C" fn wasmtime_context_set_wasi(
     })
 }
 
-#[cfg(feature = "wasi")]
-#[no_mangle]
-pub extern "C" fn wasmtime_context_set_default_wasi_if_not_exist(
-    mut context: CStoreContextMut<'_>,
-) -> bool {
-    let wasi = WasiCtxBuilder::new().build();
-
-    match context.data_mut().wasi.as_mut() {
-        Some(_) => false,
-        None => {
-            context.data_mut().wasi = Some(wasi);
-            true
-        }
-    }
-}
-
-#[cfg(feature = "wasi")]
-#[no_mangle]
-pub extern "C" fn wasmtime_context_get_wasi_ctx(context: CStoreContext<'_>) -> Box<WasiCtx> {
-    Box::new(context.data().wasi.as_ref().unwrap().clone())
-}
-
 #[no_mangle]
 pub extern "C" fn wasmtime_context_gc(mut context: CStoreContextMut<'_>) {
     context.gc();
@@ -281,4 +262,60 @@ pub extern "C" fn wasmtime_context_set_epoch_deadline(
     ticks_beyond_current: u64,
 ) {
     store.set_epoch_deadline(ticks_beyond_current);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_context_insert_file(
+    context: CStoreContextMut,
+    guest_fd: u32,
+    host_fd: u32,
+    access_mode: u32,
+) {
+    let access_mode = FileAccessMode::from_bits_truncate(access_mode);
+
+    // SAFETY: no other functions should call `from_raw_fd`, so there is only
+    // one owner for the file descriptor.
+    let f = unsafe { File::from_raw_fd(host_fd as i32) };
+    let f = cap_std::fs::File::from_std(f);
+    let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
+    context
+        .data()
+        .wasi
+        .as_ref()
+        .unwrap()
+        .insert_file(guest_fd, Box::new(f), access_mode);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_context_push_file(
+    context: CStoreContextMut,
+    host_fd: u32,
+    access_mode: u32,
+    guest_fd: &mut u32, // out
+) -> Option<Box<wasmtime_error_t>> {
+    let access_mode = FileAccessMode::from_bits_truncate(access_mode);
+
+    // SAFETY: no other functions should call `from_raw_fd`, so there is only
+    // one owner for the file descriptor.
+    let f = unsafe { File::from_raw_fd(host_fd as i32) };
+    let f = cap_std::fs::File::from_std(f);
+    let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
+
+    match context
+        .data()
+        .wasi
+        .as_ref()
+        .unwrap()
+        .push_file(Box::new(f), access_mode)
+    {
+        Ok(fd) => {
+            *guest_fd = fd;
+            None
+        }
+        Err(e) => {
+            // extract the error message
+            let msg = format!("{}", e);
+            Some(Box::new(wasmtime_error_t::from(anyhow!(msg))))
+        }
+    }
 }
