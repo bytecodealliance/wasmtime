@@ -3,8 +3,8 @@
     (func $__wasi_proc_exit (param i32)))
   (import "wasi:io/streams" "write"
     (func $__wasi_io_streams_write (param i32 i32 i32 i32)))
-  (import "wasi:io/streams" "blocking-write"
-    (func $__wasi_io_streams_blocking_write (param i32 i32 i32 i32)))
+  (import "wasi:io/streams" "blocking-write-and-flush"
+    (func $__wasi_io_streams_blocking_write_and_flush (param i32 i32 i32 i32)))
   (import "wasi:io/streams" "subscribe-to-output-stream"
     (func $__wasi_io_streams_subscribe_to_output_stream (param i32) (result i32)))
   (import "wasi:http/types" "new-fields"
@@ -70,7 +70,7 @@
 
   ;; A helper function for printing ptr-len strings.
   (func $print (param $ptr i32) (param $len i32)
-    (call $__wasi_io_streams_blocking_write
+    (call $__wasi_io_streams_blocking_write_and_flush
       i32.const 4 ;; Value for stdout
       local.get $ptr
       local.get $len

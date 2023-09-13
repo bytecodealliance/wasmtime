@@ -3,8 +3,20 @@ wit_bindgen::generate!("test-reactor" in "../../wasi/wit");
 export_test_reactor!(T);
 
 struct T;
+use wasi::io::streams;
+use wasi::poll::poll;
 
 static mut STATE: Vec<String> = Vec::new();
+
+struct DropPollable {
+    pollable: poll::Pollable,
+}
+
+impl Drop for DropPollable {
+    fn drop(&mut self) {
+        poll::drop_pollable(self.pollable);
+    }
+}
 
 impl TestReactor for T {
     fn add_strings(ss: Vec<String>) -> u32 {
@@ -24,10 +36,38 @@ impl TestReactor for T {
     }
 
     fn write_strings_to(o: OutputStream) -> Result<(), ()> {
+        let sub = DropPollable {
+            pollable: streams::subscribe_to_output_stream(o),
+        };
         unsafe {
             for s in STATE.iter() {
-                wasi::io::streams::write(o, s.as_bytes()).map_err(|_| ())?;
+                let mut out = s.as_bytes();
+                while !out.is_empty() {
+                    poll::poll_oneoff(&[sub.pollable]);
+                    let n = match streams::check_write(o) {
+                        Ok(n) => n,
+                        Err(_) => return Err(()),
+                    };
+
+                    let len = (n as usize).min(out.len());
+                    match streams::write(o, &out[..len]) {
+                        Ok(_) => out = &out[len..],
+                        Err(_) => return Err(()),
+                    }
+                }
             }
+
+            match streams::flush(o) {
+                Ok(_) => {}
+                Err(_) => return Err(()),
+            }
+
+            poll::poll_oneoff(&[sub.pollable]);
+            match streams::check_write(o) {
+                Ok(_) => {}
+                Err(_) => return Err(()),
+            }
+
             Ok(())
         }
     }

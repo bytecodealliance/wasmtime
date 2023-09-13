@@ -1,13 +1,12 @@
-use crate::preview2::{HostInputStream, HostOutputStream, StreamState, Table, TableError};
-use bytes::{Bytes, BytesMut};
+use super::{HostInputStream, HostOutputStream, OutputStreamError};
+use crate::preview2::{
+    with_ambient_tokio_runtime, AbortOnDropJoinHandle, StreamState, Table, TableError,
+};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
-use cap_std::net::{TcpListener, TcpStream};
+use cap_std::net::TcpListener;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
-use io_lifetimes::AsSocketlike;
 use std::io;
 use std::sync::Arc;
-use system_interface::io::IoExt;
-use tokio::io::Interest;
 
 /// The state of a TCP socket.
 ///
@@ -47,15 +46,171 @@ pub(crate) enum HostTcpState {
 pub(crate) struct HostTcpSocket {
     /// The part of a `HostTcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
-    pub(crate) inner: Arc<HostTcpSocketInner>,
+    pub(crate) inner: Arc<tokio::net::TcpStream>,
 
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: HostTcpState,
 }
 
-/// The inner reference-counted state of a `HostTcpSocket`.
-pub(crate) struct HostTcpSocketInner {
-    pub(crate) tcp_socket: tokio::net::TcpStream,
+pub(crate) struct TcpReadStream {
+    stream: Arc<tokio::net::TcpStream>,
+    closed: bool,
+}
+
+impl TcpReadStream {
+    fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+        Self {
+            stream,
+            closed: false,
+        }
+    }
+    fn stream_state(&self) -> StreamState {
+        if self.closed {
+            StreamState::Closed
+        } else {
+            StreamState::Open
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl HostInputStream for TcpReadStream {
+    fn read(&mut self, size: usize) -> Result<(bytes::Bytes, StreamState), anyhow::Error> {
+        if size == 0 || self.closed {
+            return Ok((bytes::Bytes::new(), self.stream_state()));
+        }
+
+        let mut buf = bytes::BytesMut::with_capacity(size);
+        let n = match self.stream.try_read_buf(&mut buf) {
+            // A 0-byte read indicates that the stream has closed.
+            Ok(0) => {
+                self.closed = true;
+                0
+            }
+            Ok(n) => n,
+
+            // Failing with `EWOULDBLOCK` is how we differentiate between a closed channel and no
+            // data to read right now.
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => 0,
+
+            Err(e) => {
+                tracing::debug!("unexpected error on TcpReadStream read: {e:?}");
+                self.closed = true;
+                0
+            }
+        };
+
+        buf.truncate(n);
+        Ok((buf.freeze(), self.stream_state()))
+    }
+
+    async fn ready(&mut self) -> Result<(), anyhow::Error> {
+        if self.closed {
+            return Ok(());
+        }
+        self.stream.readable().await?;
+        Ok(())
+    }
+}
+
+const SOCKET_READY_SIZE: usize = 1024 * 1024 * 1024;
+
+pub(crate) struct TcpWriteStream {
+    stream: Arc<tokio::net::TcpStream>,
+    write_handle: Option<AbortOnDropJoinHandle<anyhow::Result<()>>>,
+}
+
+impl TcpWriteStream {
+    pub(crate) fn new(stream: Arc<tokio::net::TcpStream>) -> Self {
+        Self {
+            stream,
+            write_handle: None,
+        }
+    }
+
+    /// Write `bytes` in a background task, remembering the task handle for use in a future call to
+    /// `write_ready`
+    fn background_write(&mut self, mut bytes: bytes::Bytes) {
+        assert!(self.write_handle.is_none());
+
+        let stream = self.stream.clone();
+        self.write_handle
+            .replace(crate::preview2::spawn(async move {
+                // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
+                // primitive try_write, which goes directly to attempt a write with mio. This has
+                // two advantages: 1. this operation takes a &TcpStream instead of a &mut TcpStream
+                // required to AsyncWrite, and 2. it eliminates any buffering in tokio we may need
+                // to flush.
+                while !bytes.is_empty() {
+                    stream.writable().await?;
+                    match stream.try_write(&bytes) {
+                        Ok(n) => {
+                            let _ = bytes.split_to(n);
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+                        Err(e) => return Err(e.into()),
+                    }
+                }
+
+                Ok(())
+            }));
+    }
+}
+
+#[async_trait::async_trait]
+impl HostOutputStream for TcpWriteStream {
+    fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), OutputStreamError> {
+        if self.write_handle.is_some() {
+            return Err(OutputStreamError::Trap(anyhow::anyhow!(
+                "unpermitted: cannot write while background write ongoing"
+            )));
+        }
+        while !bytes.is_empty() {
+            match self.stream.try_write(&bytes) {
+                Ok(n) => {
+                    let _ = bytes.split_to(n);
+                }
+
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    // As `try_write` indicated that it would have blocked, we'll perform the write
+                    // in the background to allow us to return immediately.
+                    self.background_write(bytes);
+
+                    return Ok(());
+                }
+
+                Err(e) => return Err(OutputStreamError::LastOperationFailed(e.into())),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        // `flush` is a no-op here, as we're not managing any internal buffer. Additionally,
+        // `write_ready` will join the background write task if it's active, so following `flush`
+        // with `write_ready` will have the desired effect.
+        Ok(())
+    }
+
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        if let Some(handle) = &mut self.write_handle {
+            handle
+                .await
+                .map_err(|e| OutputStreamError::LastOperationFailed(e.into()))?;
+
+            // Only clear out the write handle once the task has exited, to ensure that
+            // `write_ready` remains cancel-safe.
+            self.write_handle = None;
+        }
+
+        self.stream
+            .writable()
+            .await
+            .map_err(|e| OutputStreamError::LastOperationFailed(e.into()))?;
+
+        Ok(SOCKET_READY_SIZE)
+    }
 }
 
 impl HostTcpSocket {
@@ -63,100 +218,38 @@ impl HostTcpSocket {
     pub fn new(family: AddressFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
-        let tcp_socket = TcpListener::new(family, Blocking::No)?;
-
-        let std_socket =
-            unsafe { std::net::TcpStream::from_raw_socketlike(tcp_socket.into_raw_socketlike()) };
-
-        let tokio_tcp_socket = crate::preview2::with_ambient_tokio_runtime(|| {
-            tokio::net::TcpStream::try_from(std_socket).unwrap()
-        });
-
-        Ok(Self {
-            inner: Arc::new(HostTcpSocketInner {
-                tcp_socket: tokio_tcp_socket,
-            }),
-            tcp_state: HostTcpState::Default,
-        })
+        let tcp_listener = TcpListener::new(family, Blocking::No)?;
+        Self::from_tcp_listener(tcp_listener)
     }
 
     /// Create a `HostTcpSocket` from an existing socket.
     ///
     /// The socket must be in non-blocking mode.
     pub fn from_tcp_stream(tcp_socket: cap_std::net::TcpStream) -> io::Result<Self> {
-        let fd = rustix::fd::OwnedFd::from(tcp_socket);
-        let tcp_socket = TcpListener::from(fd);
+        let tcp_listener = TcpListener::from(rustix::fd::OwnedFd::from(tcp_socket));
+        Self::from_tcp_listener(tcp_listener)
+    }
 
-        let std_tcp_socket =
-            unsafe { std::net::TcpStream::from_raw_socketlike(tcp_socket.into_raw_socketlike()) };
-        let tokio_tcp_socket = crate::preview2::with_ambient_tokio_runtime(|| {
-            tokio::net::TcpStream::try_from(std_tcp_socket).unwrap()
-        });
+    pub fn from_tcp_listener(tcp_listener: cap_std::net::TcpListener) -> io::Result<Self> {
+        let fd = tcp_listener.into_raw_socketlike();
+        let std_stream = unsafe { std::net::TcpStream::from_raw_socketlike(fd) };
+        let stream = with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))?;
 
         Ok(Self {
-            inner: Arc::new(HostTcpSocketInner {
-                tcp_socket: tokio_tcp_socket,
-            }),
+            inner: Arc::new(stream),
             tcp_state: HostTcpState::Default,
         })
     }
 
     pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        self.inner.tcp_socket()
+        &self.inner
     }
 
-    pub fn clone_inner(&self) -> Arc<HostTcpSocketInner> {
-        Arc::clone(&self.inner)
-    }
-}
-
-impl HostTcpSocketInner {
-    pub fn tcp_socket(&self) -> &tokio::net::TcpStream {
-        let tcp_socket = &self.tcp_socket;
-
-        tcp_socket
-    }
-}
-
-#[async_trait::async_trait]
-impl HostInputStream for Arc<HostTcpSocketInner> {
-    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
-        if size == 0 {
-            return Ok((Bytes::new(), StreamState::Open));
-        }
-        let mut buf = BytesMut::zeroed(size);
-        let socket = self.tcp_socket();
-        let r = socket.try_io(Interest::READABLE, || {
-            socket.as_socketlike_view::<TcpStream>().read(&mut buf)
-        });
-        let (n, state) = read_result(r)?;
-        buf.truncate(n);
-        Ok((buf.freeze(), state))
-    }
-
-    async fn ready(&mut self) -> anyhow::Result<()> {
-        self.tcp_socket.readable().await?;
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl HostOutputStream for Arc<HostTcpSocketInner> {
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
-        if buf.is_empty() {
-            return Ok((0, StreamState::Open));
-        }
-        let socket = self.tcp_socket();
-        let r = socket.try_io(Interest::WRITABLE, || {
-            socket.as_socketlike_view::<TcpStream>().write(buf.as_ref())
-        });
-        let (n, state) = write_result(r)?;
-        Ok((n, state))
-    }
-
-    async fn ready(&mut self) -> anyhow::Result<()> {
-        self.tcp_socket.writable().await?;
-        Ok(())
+    /// Create the input/output stream pair for a tcp socket.
+    pub fn as_split(&self) -> (Box<impl HostInputStream>, Box<impl HostOutputStream>) {
+        let input = Box::new(TcpReadStream::new(self.inner.clone()));
+        let output = Box::new(TcpWriteStream::new(self.inner.clone()));
+        (input, output)
     }
 }
 
@@ -183,33 +276,5 @@ impl TableTcpSocketExt for Table {
     }
     fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocket, TableError> {
         self.get_mut(fd)
-    }
-}
-
-pub(crate) fn read_result(r: io::Result<usize>) -> io::Result<(usize, StreamState)> {
-    match r {
-        Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n, StreamState::Open)),
-        Err(e)
-            if e.kind() == io::ErrorKind::Interrupted || e.kind() == io::ErrorKind::WouldBlock =>
-        {
-            Ok((0, StreamState::Open))
-        }
-        Err(e) => Err(e),
-    }
-}
-
-pub(crate) fn write_result(r: io::Result<usize>) -> io::Result<(usize, StreamState)> {
-    match r {
-        // We special-case zero-write stores ourselves, so if we get a zero
-        // back from a `write`, it means the stream is closed on some
-        // platforms.
-        Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n, StreamState::Open)),
-        #[cfg(not(windows))]
-        Err(e) if e.raw_os_error() == Some(rustix::io::Errno::PIPE.raw_os_error()) => {
-            Ok((0, StreamState::Closed))
-        }
-        Err(e) => Err(e),
     }
 }

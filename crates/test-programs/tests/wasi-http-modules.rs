@@ -74,8 +74,8 @@ async fn instantiate_module(module: Module, ctx: Ctx) -> Result<(Store<Ctx>, Fun
 }
 
 async fn run(name: &str) -> anyhow::Result<()> {
-    let stdout = MemoryOutputPipe::new();
-    let stderr = MemoryOutputPipe::new();
+    let stdout = MemoryOutputPipe::new(4096);
+    let stderr = MemoryOutputPipe::new(4096);
     let r = {
         let mut table = Table::new();
         let module = get_module(name);
