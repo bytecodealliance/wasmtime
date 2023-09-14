@@ -28,8 +28,8 @@ use crate::CodegenError;
 use crate::{LabelValueLoc, ValueLocRange};
 use cranelift_control::ControlPlane;
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PRegSet,
-    RegClass, VReg,
+    Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand, OperandKind,
+    PRegSet, RegClass, VReg,
 };
 
 use alloc::vec::Vec;
@@ -532,7 +532,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             .sort_unstable_by_key(|(vreg, _, _, _)| *vreg);
     }
 
-    fn collect_operands(&mut self, allocatable: PRegSet) {
+    fn collect_operands(&mut self) {
         for (i, insn) in self.vcode.insts.iter().enumerate() {
             // Push operands from the instruction onto the operand list.
             //
@@ -546,6 +546,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             // its register fields (which is slow, branchy code) once.
 
             let vreg_aliases = &self.vcode.vreg_aliases;
+            let allocatable = PRegSet::from(self.vcode.machine_env());
             let mut op_collector =
                 OperandCollector::new(&mut self.vcode.operands, allocatable, |vreg| {
                     Self::resolve_vreg_alias_impl(vreg_aliases, vreg)
@@ -583,14 +584,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Build the final VCode.
-    pub fn build(mut self, allocatable: PRegSet, vregs: VRegAllocator<I>) -> VCode<I> {
+    pub fn build(mut self, vregs: VRegAllocator<I>) -> VCode<I> {
         self.vcode.vreg_types = vregs.vreg_types;
         self.vcode.reftyped_vregs = vregs.reftyped_vregs;
 
         if self.direction == VCodeBuildDirection::Backward {
             self.reverse_and_finalize();
         }
-        self.collect_operands(allocatable);
+        self.collect_operands();
 
         // Apply register aliases to the `reftyped_vregs` list since this list
         // will be returned directly to `regalloc2` eventually and all
@@ -654,6 +655,11 @@ impl<I: VCodeInst> VCode<I> {
             debug_value_labels: vec![],
             vreg_aliases: FxHashMap::with_capacity_and_hasher(10 * n_blocks, Default::default()),
         }
+    }
+
+    /// Get the ABI-dependent MachineEnv for managing register allocation.
+    pub fn machine_env(&self) -> &MachineEnv {
+        self.abi.machine_env(&self.sigs)
     }
 
     /// Get the number of blocks. Block indices will be in the range `0 ..
@@ -790,11 +796,7 @@ impl<I: VCodeInst> VCode<I> {
         let clobbers = self.compute_clobbers(regalloc);
         self.abi.set_num_spillslots(regalloc.num_spillslots);
         self.abi.set_clobbered(clobbers);
-
-        // We need to generate the prologue in order to get the ABI
-        // object into the right state first. We'll emit it when we
-        // hit the right block below.
-        let prologue_insts = self.abi.gen_prologue(&self.sigs);
+        self.abi.compute_frame_layout(&self.sigs);
 
         // Emit blocks.
         let mut cur_srcloc = None;
@@ -863,7 +865,7 @@ impl<I: VCodeInst> VCode<I> {
                 trace!(" -> entry block");
                 buffer.start_srcloc(Default::default());
                 state.pre_sourceloc(Default::default());
-                for inst in &prologue_insts {
+                for inst in &self.abi.gen_prologue() {
                     do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                 }
                 buffer.end_srcloc();
@@ -974,7 +976,7 @@ impl<I: VCodeInst> VCode<I> {
                         // (and don't emit the return; the actual
                         // epilogue will contain it).
                         if self.insts[iix.index()].is_term() == MachTerminator::Ret {
-                            for inst in self.abi.gen_epilogue(&self.sigs) {
+                            for inst in self.abi.gen_epilogue() {
                                 do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                             }
                         } else {

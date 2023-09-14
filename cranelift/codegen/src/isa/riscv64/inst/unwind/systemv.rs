@@ -16,7 +16,7 @@ pub fn create_cie() -> CommonInformationEntry {
             format: Format::Dwarf32,
             version: 1,
         },
-        4,  // Code alignment factor
+        2,  // Code alignment factor
         -8, // Data alignment factor
         Register(regs::link_reg().to_real_reg().unwrap().hw_enc() as u16),
     );

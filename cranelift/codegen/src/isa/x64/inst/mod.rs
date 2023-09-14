@@ -11,7 +11,6 @@ use crate::isa::{CallConv, FunctionAlignment};
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
@@ -140,6 +139,7 @@ impl Inst {
             | Inst::Push64 { .. }
             | Inst::StackProbeLoop { .. }
             | Inst::Args { .. }
+            | Inst::Rets { .. }
             | Inst::Ret { .. }
             | Inst::Setcc { .. }
             | Inst::ShiftR { .. }
@@ -163,6 +163,7 @@ impl Inst {
             Inst::AluRmRVex { op, .. } => op.available_from(),
             Inst::UnaryRmR { op, .. } => op.available_from(),
             Inst::UnaryRmRVex { op, .. } => op.available_from(),
+            Inst::UnaryRmRImmVex { op, .. } => op.available_from(),
 
             // These use dynamic SSE opcodes.
             Inst::GprToXmm { op, .. }
@@ -585,11 +586,8 @@ impl Inst {
         }
     }
 
-    pub(crate) fn ret(rets: Vec<RetPair>, stack_bytes_to_pop: u32) -> Inst {
-        Inst::Ret {
-            rets,
-            stack_bytes_to_pop,
-        }
+    pub(crate) fn ret(stack_bytes_to_pop: u32) -> Inst {
+        Inst::Ret { stack_bytes_to_pop }
     }
 
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
@@ -767,7 +765,7 @@ impl PrettyPrint for Inst {
                 let size_bytes = size.to_bytes();
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src1 = pretty_print_reg(src1.to_reg(), size_bytes, allocs);
-                let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
+                let src2 = src2.pretty_print(size_bytes, allocs);
                 let op = ljustify2(op.to_string(), String::new());
                 format!("{op} {src2}, {src1}, {dst}")
             }
@@ -783,6 +781,21 @@ impl PrettyPrint for Inst {
                 let src = src.pretty_print(size.to_bytes(), allocs);
                 let op = ljustify2(op.to_string(), suffix_bwlq(*size));
                 format!("{op} {src}, {dst}")
+            }
+
+            Inst::UnaryRmRImmVex {
+                src,
+                dst,
+                op,
+                size,
+                imm,
+            } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
+                let src = src.pretty_print(size.to_bytes(), allocs);
+                format!(
+                    "{} ${imm}, {src}, {dst}",
+                    ljustify2(op.to_string(), suffix_bwlq(*size))
+                )
             }
 
             Inst::Not { size, src, dst } => {
@@ -1668,18 +1681,20 @@ impl PrettyPrint for Inst {
                 s
             }
 
-            Inst::Ret {
-                rets,
-                stack_bytes_to_pop,
-            } => {
-                let mut s = "ret".to_string();
-                if *stack_bytes_to_pop != 0 {
-                    write!(&mut s, " {stack_bytes_to_pop}").unwrap();
-                }
+            Inst::Rets { rets } => {
+                let mut s = "rets".to_string();
                 for ret in rets {
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
                     write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
+            }
+
+            Inst::Ret { stack_bytes_to_pop } => {
+                let mut s = "ret".to_string();
+                if *stack_bytes_to_pop != 0 {
+                    write!(&mut s, " {stack_bytes_to_pop}").unwrap();
                 }
                 s
             }
@@ -1885,7 +1900,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             collector.reg_def(dst.to_writable_reg());
             collector.reg_use(src1.to_reg());
-            collector.reg_use(src2.to_reg());
+            src2.get_operands(collector);
         }
         Inst::Not { src, dst, .. } => {
             collector.reg_use(src.to_reg());
@@ -1970,7 +1985,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
                 }
             }
         }
-        Inst::UnaryRmR { src, dst, .. } | Inst::UnaryRmRVex { src, dst, .. } => {
+        Inst::UnaryRmR { src, dst, .. }
+        | Inst::UnaryRmRVex { src, dst, .. }
+        | Inst::UnaryRmRImmVex { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
@@ -2389,10 +2406,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
 
-        Inst::Ret {
-            rets,
-            stack_bytes_to_pop: _,
-        } => {
+        Inst::Rets { rets } => {
             // The return value(s) are live-out; we represent this
             // with register uses on the return instruction.
             for ret in rets.iter() {
@@ -2403,6 +2417,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         Inst::JmpKnown { .. }
         | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
+        | Inst::Ret { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
@@ -2513,7 +2528,7 @@ impl MachInst for Inst {
     fn is_term(&self) -> MachTerminator {
         match self {
             // Interesting cases.
-            &Self::Ret { .. } => MachTerminator::Ret,
+            &Self::Rets { .. } => MachTerminator::Ret,
             &Self::ReturnCallKnown { .. } | &Self::ReturnCallUnknown { .. } => {
                 MachTerminator::RetCall
             }

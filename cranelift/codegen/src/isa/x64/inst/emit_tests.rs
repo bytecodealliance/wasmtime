@@ -4215,8 +4215,8 @@ fn test_x64_emit() {
 
     // ========================================================
     // Ret
-    insns.push((Inst::ret(vec![], 0), "C3", "ret"));
-    insns.push((Inst::ret(vec![], 8), "C20800", "ret 8"));
+    insns.push((Inst::ret(0), "C3", "ret"));
+    insns.push((Inst::ret(8), "C20800", "ret 8"));
 
     // ========================================================
     // JmpKnown skipped for now

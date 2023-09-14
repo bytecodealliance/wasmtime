@@ -5,6 +5,7 @@ target x86_64 has_avx
 target s390x
 target aarch64
 target riscv64
+target riscv64 has_c has_zcb
 
 
 function %fpromote(f32) -> f64 {

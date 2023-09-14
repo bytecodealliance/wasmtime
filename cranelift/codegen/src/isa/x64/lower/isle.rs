@@ -271,6 +271,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn use_bmi2(&mut self) -> bool {
+        self.backend.x64_flags.use_bmi2()
+    }
+
+    #[inline]
     fn use_popcnt(&mut self) -> bool {
         self.backend.x64_flags.use_popcnt()
     }
@@ -583,6 +588,20 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn imm8_to_imm8_gpr(&mut self, imm: u8) -> Imm8Gpr {
         Imm8Gpr::new(Imm8Reg::Imm8 { imm }).unwrap()
+    }
+
+    fn gpr_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<Gpr> {
+        match val.clone().to_imm8_reg() {
+            Imm8Reg::Reg { reg } => Some(Gpr::new(reg).unwrap()),
+            Imm8Reg::Imm8 { .. } => None,
+        }
+    }
+
+    fn imm8_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<u8> {
+        match val.clone().to_imm8_reg() {
+            Imm8Reg::Imm8 { imm } => Some(imm),
+            Imm8Reg::Reg { .. } => None,
+        }
     }
 
     #[inline]

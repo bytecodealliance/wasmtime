@@ -254,9 +254,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
 
-    /// Get the ISA-dependent MachineEnv for managing register allocation.
-    fn machine_env(&self) -> &regalloc2::MachineEnv;
-
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 

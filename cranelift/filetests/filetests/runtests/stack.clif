@@ -6,6 +6,7 @@ target x86_64
 target s390x
 target aarch64
 target riscv64
+target riscv64 has_c has_zcb
 
 function %stack_simple(i64) -> i64 {
     ss0 = explicit_slot 8

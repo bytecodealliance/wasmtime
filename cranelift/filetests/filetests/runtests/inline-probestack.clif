@@ -7,10 +7,15 @@ set probestack_strategy=inline
 set probestack_size_log2=12
 target x86_64
 target aarch64
+target riscv64
+target riscv64 has_c has_zcb
+
 ; Test also with 64k pages
 set probestack_size_log2=16
 target x86_64
 target aarch64
+target riscv64
+target riscv64 has_c has_zcb
 
 ; Create a huge stack slot (1MB), way larger than PAGE_SIZE and touch the end of it.
 ; This guarantees that we bypass the guard page, cause a page fault the OS isn't expecting

@@ -5,7 +5,7 @@ use crate::ir::{MemFlags, RelSourceLoc, TrapCode};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::machinst::{ABIMachineSpec, Reg, RegClass};
+use crate::machinst::{Reg, RegClass};
 use crate::trace;
 use core::convert::TryFrom;
 use cranelift_control::ControlPlane;
@@ -3545,19 +3545,9 @@ impl Inst {
                 }
             }
             &Inst::Args { .. } => {}
-            &Inst::Ret {
-                link,
-                stack_bytes_to_pop,
-                ..
-            } => {
+            &Inst::Rets { .. } => {}
+            &Inst::Ret { link } => {
                 debug_assert_eq!(link, gpr(14));
-
-                for inst in
-                    S390xMachineDeps::gen_sp_reg_adjust(i32::try_from(stack_bytes_to_pop).unwrap())
-                {
-                    inst.emit(&[], sink, emit_info, state);
-                }
-
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));
             }

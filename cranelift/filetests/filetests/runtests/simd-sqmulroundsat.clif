@@ -7,6 +7,7 @@ target x86_64 ssse3
 target x86_64 sse41
 target x86_64 sse41 has_avx
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %sqmulrs_i16x8(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):

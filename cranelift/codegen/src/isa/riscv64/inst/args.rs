@@ -6,6 +6,7 @@ use super::*;
 use crate::ir::condcodes::CondCode;
 
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
+use crate::isa::riscv64::lower::isle::generated_code::{COpcodeSpace, CrOp};
 use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
@@ -1896,5 +1897,32 @@ impl CSR {
 impl Display for CSR {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.name())
+    }
+}
+
+impl COpcodeSpace {
+    pub fn bits(&self) -> u32 {
+        match self {
+            COpcodeSpace::C0 => 0b00,
+            COpcodeSpace::C1 => 0b01,
+            COpcodeSpace::C2 => 0b10,
+        }
+    }
+}
+
+impl CrOp {
+    pub fn funct4(&self) -> u32 {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CrOp::CMv => 0b1000,
+            CrOp::CAdd => 0b1001,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CrOp::CMv | CrOp::CAdd => COpcodeSpace::C2,
+        }
     }
 }

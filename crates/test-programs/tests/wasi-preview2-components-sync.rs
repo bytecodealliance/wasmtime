@@ -30,8 +30,8 @@ pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
 
 fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     let workspace = prepare_workspace(name)?;
-    let stdout = MemoryOutputPipe::new();
-    let stderr = MemoryOutputPipe::new();
+    let stdout = MemoryOutputPipe::new(4096);
+    let stderr = MemoryOutputPipe::new(4096);
     let r = {
         let mut linker = Linker::new(&ENGINE);
         add_to_linker(&mut linker)?;
@@ -311,4 +311,8 @@ fn unlink_file_trailing_slashes() {
 #[test_log::test]
 fn path_open_preopen() {
     run("path_open_preopen", false).unwrap()
+}
+#[test_log::test]
+fn unicode_output() {
+    run("unicode_output", true).unwrap()
 }

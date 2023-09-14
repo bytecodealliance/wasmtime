@@ -901,13 +901,15 @@
     (Args
       (args VecArgPair))
 
+    ;; A pseudo-instruction that moves vregs to return registers.
+    (Rets
+      (rets VecRetPair))
+
     ;; ---- branches (exactly one must appear at end of BB) ----
 
     ;; A machine return instruction.
     (Ret
-      (link Reg)
-      (rets VecRetPair)
-      (stack_bytes_to_pop u32))
+      (link Reg))
 
     ;; An unconditional branch.
     (Jump

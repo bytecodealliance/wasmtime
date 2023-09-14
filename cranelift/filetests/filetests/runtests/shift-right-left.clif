@@ -4,7 +4,9 @@ test interpret
 test run
 target aarch64
 target x86_64
+target x86_64 has_bmi2
 target riscv64
+target riscv64 has_c has_zcb
 target s390x
 
 function %unsigned_shift_right_shift_left_i8(i8) -> i8 {

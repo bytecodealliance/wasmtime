@@ -3,7 +3,8 @@ test run
 target s390x
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
-target riscv64gc has_v
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %vhighbits_f32x4(f32x4) -> i8 {
 block0(v0: f32x4):

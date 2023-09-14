@@ -358,9 +358,16 @@ pub(crate) fn emit(
             src2,
         } => {
             use AluRmROpcode::*;
+            use LegacyPrefixes as LP;
+
             let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
-            let src2 = allocs.next(src2.to_reg());
+            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
 
             let w = match size {
                 OperandSize::Size32 => false,
@@ -370,16 +377,21 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
-            let opcode = match op {
-                Andn => 0xf2,
+            let (prefix, opcode) = match op {
+                Andn => (LP::None, 0xf2),
+                Sarx => (LP::_F3, 0xf7),
+                Shrx => (LP::_F2, 0xf7),
+                Shlx => (LP::_66, 0xf7),
+                Bzhi => (LP::None, 0xf5),
             };
 
             VexInstruction::new()
+                .prefix(prefix)
                 .map(OpcodeMap::_0F38)
                 .w(w)
                 .reg(dst.to_real_reg().unwrap().hw_enc())
                 .vvvv(src1.to_real_reg().unwrap().hw_enc())
-                .rm(src2.to_real_reg().unwrap().hw_enc())
+                .rm(src2)
                 .opcode(opcode)
                 .encode(sink);
         }
@@ -442,6 +454,36 @@ pub(crate) fn emit(
                 .reg(opcode_ext)
                 .vvvv(dst.to_real_reg().unwrap().hw_enc())
                 .rm(src)
+                .encode(sink);
+        }
+
+        Inst::UnaryRmRImmVex {
+            size,
+            op,
+            src,
+            dst,
+            imm,
+        } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let opcode = match op {
+                UnaryRmRImmVexOpcode::Rorx => 0xF0,
+            };
+
+            VexInstruction::new()
+                .prefix(LegacyPrefixes::_F2)
+                .map(OpcodeMap::_0F3A)
+                .w(*size == OperandSize::Size64)
+                .opcode(opcode)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src)
+                .imm(*imm)
                 .encode(sink);
         }
 
@@ -1680,15 +1722,13 @@ pub(crate) fn emit(
         }
 
         Inst::Args { .. } => {}
+        Inst::Rets { .. } => {}
 
         Inst::Ret {
             stack_bytes_to_pop: 0,
-            ..
         } => sink.put1(0xC3),
 
-        Inst::Ret {
-            stack_bytes_to_pop, ..
-        } => {
+        Inst::Ret { stack_bytes_to_pop } => {
             sink.put1(0xC2);
             sink.put2(u16::try_from(*stack_bytes_to_pop).unwrap());
         }

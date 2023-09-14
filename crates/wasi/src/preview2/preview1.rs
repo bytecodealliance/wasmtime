@@ -5,6 +5,7 @@ use crate::preview2::bindings::cli::{
 use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
 use crate::preview2::bindings::io::streams;
+use crate::preview2::bindings::poll;
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::host::filesystem::TableReaddirExt;
 use crate::preview2::{bindings, IsATTY, TableError, WasiView};
@@ -18,7 +19,7 @@ use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use wiggle::tracing::instrument;
-use wiggle::{GuestError, GuestPtr, GuestSliceMut, GuestStrCow, GuestType};
+use wiggle::{GuestError, GuestPtr, GuestSlice, GuestSliceMut, GuestStrCow, GuestType};
 
 #[derive(Clone, Debug)]
 struct File {
@@ -31,10 +32,95 @@ struct File {
     /// In append mode, all writes append to the file.
     append: bool,
 
-    /// In blocking mode, read and write calls dispatch to blocking_read and
-    /// blocking_write on the underlying streams. When false, read and write
-    /// dispatch to stream's plain read and write.
-    blocking: bool,
+    /// When blocking, read and write calls dispatch to blocking_read and
+    /// blocking_check_write on the underlying streams. When false, read and write
+    /// dispatch to stream's plain read and check_write.
+    blocking_mode: BlockingMode,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum BlockingMode {
+    Blocking,
+    NonBlocking,
+}
+impl BlockingMode {
+    fn from_fdflags(flags: &types::Fdflags) -> Self {
+        if flags.contains(types::Fdflags::NONBLOCK) {
+            BlockingMode::NonBlocking
+        } else {
+            BlockingMode::Blocking
+        }
+    }
+    async fn read(
+        &self,
+        host: &mut impl streams::Host,
+        input_stream: streams::InputStream,
+        max_size: usize,
+    ) -> Result<(Vec<u8>, streams::StreamStatus), types::Error> {
+        let max_size = max_size.try_into().unwrap_or(u64::MAX);
+        match self {
+            BlockingMode::Blocking => {
+                stream_res(streams::Host::blocking_read(host, input_stream, max_size).await)
+            }
+            BlockingMode::NonBlocking => {
+                stream_res(streams::Host::read(host, input_stream, max_size).await)
+            }
+        }
+    }
+    async fn write(
+        &self,
+        host: &mut (impl streams::Host + poll::poll::Host),
+        output_stream: streams::OutputStream,
+        mut bytes: &[u8],
+    ) -> Result<usize, types::Error> {
+        use streams::Host as Streams;
+
+        match self {
+            BlockingMode::Blocking => {
+                let total = bytes.len();
+                while !bytes.is_empty() {
+                    // NOTE: blocking_write_and_flush takes at most one 4k buffer.
+                    let len = bytes.len().min(4096);
+                    let (chunk, rest) = bytes.split_at(len);
+                    bytes = rest;
+
+                    Streams::blocking_write_and_flush(host, output_stream, Vec::from(chunk)).await?
+                }
+
+                Ok(total)
+            }
+            BlockingMode::NonBlocking => {
+                let n = match Streams::check_write(host, output_stream).await {
+                    Ok(n) => n,
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => 0,
+                    Err(e) => Err(e)?,
+                };
+
+                let len = bytes.len().min(n as usize);
+                if len == 0 {
+                    return Ok(0);
+                }
+
+                match Streams::write(host, output_stream, bytes[..len].to_vec()).await {
+                    Ok(()) => {}
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => {
+                        return Ok(0)
+                    }
+                    Err(e) => Err(e)?,
+                }
+
+                match Streams::blocking_flush(host, output_stream).await {
+                    Ok(()) => {}
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => {
+                        return Ok(0)
+                    }
+                    Err(e) => Err(e)?,
+                };
+
+                Ok(len)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -452,6 +538,18 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
+impl From<streams::Error> for types::Error {
+    fn from(err: streams::Error) -> Self {
+        match err.downcast() {
+            Ok(streams::WriteError::Closed | streams::WriteError::LastOperationFailed) => {
+                types::Errno::Io.into()
+            }
+
+            Err(t) => types::Error::trap(t),
+        }
+    }
+}
+
 fn stream_res<A>(r: anyhow::Result<Result<A, ()>>) -> Result<A, types::Error> {
     match r {
         Ok(Ok(a)) => Ok(a),
@@ -711,13 +809,15 @@ fn read_string<'a>(ptr: impl Borrow<GuestPtr<'a, str>>) -> Result<String> {
 }
 
 // Find first non-empty buffer.
-fn first_non_empty_ciovec(ciovs: &types::CiovecArray<'_>) -> Result<Option<Vec<u8>>> {
+fn first_non_empty_ciovec<'a, 'b>(
+    ciovs: &'a types::CiovecArray<'b>,
+) -> Result<Option<GuestSlice<'a, u8>>> {
     for iov in ciovs.iter() {
         let iov = iov?.read()?;
         if iov.buf_len == 0 {
             continue;
         }
-        return Ok(Some(iov.buf.as_array(iov.buf_len).to_vec()?));
+        return Ok(iov.buf.as_array(iov.buf_len).as_slice()?);
     }
     Ok(None)
 }
@@ -1013,14 +1113,11 @@ impl<
             }
             Descriptor::File(File {
                 fd,
-                blocking,
+                blocking_mode,
                 append,
                 ..
-            }) => (*fd, *blocking, *append),
+            }) => (*fd, *blocking_mode, *append),
         };
-
-        // TODO: use `try_join!` to poll both futures async, unfortunately that is not currently
-        // possible, because `bindgen` generates methods with `&mut self` receivers.
         let flags = self.get_flags(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `get-flags`")
@@ -1056,7 +1153,7 @@ impl<
         if append {
             fs_flags |= types::Fdflags::APPEND;
         }
-        if !blocking {
+        if matches!(blocking, BlockingMode::NonBlocking) {
             fs_flags |= types::Fdflags::NONBLOCK;
         }
         Ok(types::Fdstat {
@@ -1077,7 +1174,9 @@ impl<
     ) -> Result<(), types::Error> {
         let mut st = self.transact()?;
         let File {
-            append, blocking, ..
+            append,
+            blocking_mode,
+            ..
         } = st.get_file_mut(fd)?;
 
         // Only support changing the NONBLOCK or APPEND flags.
@@ -1088,7 +1187,7 @@ impl<
             return Err(types::Errno::Inval.into());
         }
         *append = flags.contains(types::Fdflags::APPEND);
-        *blocking = !flags.contains(types::Fdflags::NONBLOCK);
+        *blocking_mode = BlockingMode::from_fdflags(&flags);
         Ok(())
     }
 
@@ -1214,7 +1313,7 @@ impl<
         let (mut buf, read, state) = match desc {
             Descriptor::File(File {
                 fd,
-                blocking,
+                blocking_mode,
                 position,
                 ..
             }) if self.table().is_file(fd) => {
@@ -1228,13 +1327,7 @@ impl<
                         .context("failed to call `read-via-stream`")
                         .unwrap_or_else(types::Error::trap)
                 })?;
-                let max = buf.len().try_into().unwrap_or(u64::MAX);
-                let (read, state) = if blocking {
-                    stream_res(streams::Host::blocking_read(self, stream, max).await)?
-                } else {
-                    stream_res(streams::Host::read(self, stream, max).await)?
-                };
-
+                let (read, state) = blocking_mode.read(self, stream, buf.len()).await?;
                 let n = read.len().try_into()?;
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
                 position.store(pos, Ordering::Relaxed);
@@ -1280,7 +1373,9 @@ impl<
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
         let (mut buf, read, state) = match desc {
-            Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
+            Descriptor::File(File {
+                fd, blocking_mode, ..
+            }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0);
                 };
@@ -1290,13 +1385,7 @@ impl<
                         .context("failed to call `read-via-stream`")
                         .unwrap_or_else(types::Error::trap)
                 })?;
-                let max = buf.len().try_into().unwrap_or(u64::MAX);
-                let (read, state) = if blocking {
-                    stream_res(streams::Host::blocking_read(self, stream, max).await)?
-                } else {
-                    stream_res(streams::Host::read(self, stream, max).await)?
-                };
-
+                let (read, state) = blocking_mode.read(self, stream, buf.len()).await?;
                 (buf, read, state)
             }
             Descriptor::Stdin { .. } => {
@@ -1326,10 +1415,10 @@ impl<
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
-        let n = match desc {
+        match desc {
             Descriptor::File(File {
                 fd,
-                blocking,
+                blocking_mode,
                 append,
                 position,
             }) if self.table().is_file(fd) => {
@@ -1352,29 +1441,24 @@ impl<
                     })?;
                     (stream, position)
                 };
-                let (n, _stat) = if blocking {
-                    stream_res(streams::Host::blocking_write(self, stream, buf).await)?
-                } else {
-                    stream_res(streams::Host::write(self, stream, buf).await)?
-                };
+                let n = blocking_mode.write(self, stream, &buf).await?;
                 if !append {
-                    let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
+                    let pos = pos.checked_add(n as u64).ok_or(types::Errno::Overflow)?;
                     position.store(pos, Ordering::Relaxed);
                 }
-                n
+                Ok(n.try_into()?)
             }
             Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0);
                 };
-                let (n, _stat) =
-                    stream_res(streams::Host::blocking_write(self, output_stream, buf).await)?;
-                n
+                Ok(BlockingMode::Blocking
+                    .write(self, output_stream, &buf)
+                    .await?
+                    .try_into()?)
             }
-            _ => return Err(types::Errno::Badf.into()),
-        };
-        let n = n.try_into()?;
-        Ok(n)
+            _ => Err(types::Errno::Badf.into()),
+        }
     }
 
     /// Write to a file descriptor, without using and updating the file descriptor's offset.
@@ -1387,8 +1471,10 @@ impl<
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
-        let (n, _stat) = match desc {
-            Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
+        let n = match desc {
+            Descriptor::File(File {
+                fd, blocking_mode, ..
+            }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0);
                 };
@@ -1397,11 +1483,7 @@ impl<
                         .context("failed to call `write-via-stream`")
                         .unwrap_or_else(types::Error::trap)
                 })?;
-                if blocking {
-                    stream_res(streams::Host::blocking_write(self, stream, buf).await)?
-                } else {
-                    stream_res(streams::Host::write(self, stream, buf).await)?
-                }
+                blocking_mode.write(self, stream, &buf).await?
             }
             Descriptor::Stdout { .. } | Descriptor::Stderr { .. } => {
                 // NOTE: legacy implementation returns SPIPE here
@@ -1409,8 +1491,7 @@ impl<
             }
             _ => return Err(types::Errno::Badf.into()),
         };
-        let n = n.try_into()?;
-        Ok(n)
+        Ok(n.try_into()?)
     }
 
     /// Return a description of the given preopened file descriptor.
@@ -1806,7 +1887,7 @@ impl<
             fd,
             position: Default::default(),
             append: fdflags.contains(types::Fdflags::APPEND),
-            blocking: !fdflags.contains(types::Fdflags::NONBLOCK),
+            blocking_mode: BlockingMode::from_fdflags(&fdflags),
         })?;
         Ok(fd.into())
     }
@@ -1939,7 +2020,7 @@ impl<
 
     #[instrument(skip(self))]
     fn sched_yield(&mut self) -> Result<(), types::Error> {
-        // TODO: This is not yet covered in Preview2.
+        // No such thing in preview 2. Intentionally left empty.
         Ok(())
     }
 

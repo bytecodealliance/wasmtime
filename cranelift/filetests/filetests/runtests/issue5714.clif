@@ -3,6 +3,7 @@ test run
 target aarch64
 target s390x
 target riscv64
+target riscv64 has_c has_zcb
 
 function %a(i32 sext, f64, f32, i64 uext) -> f32, i8, i8 system_v {
 block0(v0: i32, v1: f64, v2: f32, v3: i64):

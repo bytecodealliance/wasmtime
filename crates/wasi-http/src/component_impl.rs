@@ -609,14 +609,90 @@ pub fn add_component_to_linker<T: WasiHttpView>(
             })
         },
     )?;
+    linker.func_wrap2_async(
+        "wasi:io/streams",
+        "check-write",
+        move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
+            Box::new(async move {
+                let memory: Memory = memory_get(&mut caller)?;
+                let ctx = get_cx(caller.data_mut());
+
+                let result = match io::streams::Host::check_write(ctx, stream).await {
+                    // 0 == outer result tag (success)
+                    // 1 == result value (u64 lower 32 bits)
+                    // 2 == result value (u64 upper 32 bits)
+                    Ok(len) => [0, len as u32, (len >> 32) as u32],
+
+                    // 0 == outer result tag (failure)
+                    // 1 == result value (u64 lower 32 bits)
+                    // 2 == result value (unused)
+                    Err(_) => todo!("how do we extract runtime error cases?"),
+                };
+
+                let raw = u32_array_to_u8(&result);
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "wasi:io/streams",
+        "flush",
+        move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+
+                let result: [u32; 2] = match io::streams::Host::flush(ctx, stream).await {
+                    // 0 == outer result tag
+                    // 1 == unused
+                    Ok(_) => [0, 0],
+
+                    // 0 == outer result tag
+                    // 1 == inner result tag
+                    Err(_) => todo!("how do we extract runtime error cases?"),
+                };
+
+                let raw = u32_array_to_u8(&result);
+                let memory: Memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
+        },
+    )?;
+    linker.func_wrap2_async(
+        "wasi:io/streams",
+        "blocking-flush",
+        move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+
+                let result: [u32; 2] = match io::streams::Host::blocking_flush(ctx, stream).await {
+                    // 0 == outer result tag
+                    // 1 == unused
+                    Ok(_) => [0, 0],
+
+                    // 0 == outer result tag
+                    // 1 == inner result tag
+                    Err(_) => todo!("how do we extract runtime error cases?"),
+                };
+
+                let raw = u32_array_to_u8(&result);
+                let memory: Memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            })
+        },
+    )?;
     linker.func_wrap4_async(
         "wasi:io/streams",
         "write",
         move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
             Box::new(async move {
-                let memory = memory_get(&mut caller)?;
-                let body =
-                    string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+                let memory: Memory = memory_get(&mut caller)?;
+                let body = slice_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
 
                 let ctx = get_cx(caller.data_mut());
                 tracing::trace!(
@@ -629,19 +705,11 @@ pub fn add_component_to_linker<T: WasiHttpView>(
                     "[module='wasi:io/streams' function='write'] return result={:?}",
                     result
                 );
-                let (len, status) = result?.map_err(|_| anyhow!("write failed"))?;
-
-                let written: u32 = len.try_into()?;
-                let done: u32 = match status {
-                    io::streams::StreamStatus::Open => 0,
-                    io::streams::StreamStatus::Ended => 1,
-                };
+                result?;
 
                 // First == is_err
                 // Second == {ok: is_err = false, tag: is_err = true}
-                // Third == amount of bytes written
-                // Fifth == enum status
-                let result: [u32; 5] = [0, 0, written, 0, done];
+                let result: [u32; 2] = [0, 0];
                 let raw = u32_array_to_u8(&result);
 
                 memory.write(caller.as_context_mut(), ptr as _, &raw)?;
@@ -652,37 +720,28 @@ pub fn add_component_to_linker<T: WasiHttpView>(
     )?;
     linker.func_wrap4_async(
         "wasi:io/streams",
-        "blocking-write",
+        "blocking-write-and-flush",
         move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
             Box::new(async move {
-                let memory = memory_get(&mut caller)?;
-                let body =
-                    string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
+                let memory: Memory = memory_get(&mut caller)?;
+                let body = slice_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
 
                 let ctx = get_cx(caller.data_mut());
                 tracing::trace!(
-                    "[module='wasi:io/streams' function='blocking-write'] call stream={:?} body={:?}",
+                    "[module='wasi:io/streams' function='blocking-write-and-flush'] call stream={:?} body={:?}",
                     stream,
                     body
                 );
-                let result = io::streams::Host::blocking_write(ctx, stream, body.into()).await;
+                let result = io::streams::Host::blocking_write_and_flush(ctx, stream, body.into()).await;
                 tracing::trace!(
-                    "[module='wasi:io/streams' function='blocking-write'] return result={:?}",
+                    "[module='wasi:io/streams' function='blocking-write-and-flush'] return result={:?}",
                     result
                 );
-                let (len, status) = result?.map_err(|_| anyhow!("write failed"))?;
-
-                let written: u32 = len.try_into()?;
-                let done: u32 = match status {
-                    io::streams::StreamStatus::Open => 0,
-                    io::streams::StreamStatus::Ended => 1,
-                };
+                result?;
 
                 // First == is_err
                 // Second == {ok: is_err = false, tag: is_err = true}
-                // Third == amount of bytes written
-                // Fifth == enum status
-                let result: [u32; 5] = [0, 0, written, 0, done];
+                let result: [u32; 2] = [0, 0];
                 let raw = u32_array_to_u8(&result);
 
                 memory.write(caller.as_context_mut(), ptr as _, &raw)?;
@@ -1437,19 +1496,11 @@ pub mod sync {
                     "[module='wasi:io/streams' function='write'] return result={:?}",
                     result
                 );
-                let (len, status) = result?.map_err(|_| anyhow!("write failed"))?;
-
-                let written: u32 = len.try_into()?;
-                let done: u32 = match status {
-                    io::streams::StreamStatus::Open => 0,
-                    io::streams::StreamStatus::Ended => 1,
-                };
+                result?;
 
                 // First == is_err
                 // Second == {ok: is_err = false, tag: is_err = true}
-                // Third == amount of bytes written
-                // Fifth == enum status
-                let result: [u32; 5] = [0, 0, written, 0, done];
+                let result: [u32; 2] = [0, 0];
                 let raw = u32_array_to_u8(&result);
 
                 memory.write(caller.as_context_mut(), ptr as _, &raw)?;
@@ -1459,7 +1510,7 @@ pub mod sync {
         )?;
         linker.func_wrap(
             "wasi:io/streams",
-            "blocking-write",
+            "blocking-write-and-flush",
             move |mut caller: Caller<'_, T>,
                   stream: u32,
                   body_ptr: u32,
@@ -1472,30 +1523,47 @@ pub mod sync {
 
                 let ctx = get_cx(caller.data_mut());
                 tracing::trace!(
-                    "[module='wasi:io/streams' function='blocking-write'] call stream={:?} body={:?}",
+                    "[module='wasi:io/streams' function='blocking-write-and-flush'] call stream={:?} body={:?}",
                     stream,
                     body
                 );
-                let result = io::streams::Host::blocking_write(ctx, stream, body.into());
+                let result = io::streams::Host::blocking_write_and_flush(ctx, stream, body.into());
                 tracing::trace!(
-                    "[module='wasi:io/streams' function='blocking-write'] return result={:?}",
+                    "[module='wasi:io/streams' function='blocking-write-and-flush'] return result={:?}",
                     result
                 );
-                let (len, status) = result?.map_err(|_| anyhow!("write failed"))?;
-
-                let written: u32 = len.try_into()?;
-                let done: u32 = match status {
-                    io::streams::StreamStatus::Open => 0,
-                    io::streams::StreamStatus::Ended => 1,
-                };
+                result?;
 
                 // First == is_err
                 // Second == {ok: is_err = false, tag: is_err = true}
-                // Third == amount of bytes written
-                // Fifth == enum status
-                let result: [u32; 5] = [0, 0, written, 0, done];
+                let result: [u32; 2] = [0, 0];
                 let raw = u32_array_to_u8(&result);
 
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+
+                Ok(())
+            },
+        )?;
+        linker.func_wrap(
+            "wasi:io/streams",
+            "check-write",
+            move |mut caller: Caller<'_, T>, stream: u32, ptr: u32| {
+                let memory = memory_get(&mut caller)?;
+                let ctx = get_cx(caller.data_mut());
+
+                let result = match io::streams::Host::check_write(ctx, stream) {
+                    // 0 == outer result tag (success)
+                    // 1 == result value (u64 lower 32 bits)
+                    // 2 == result value (u64 upper 32 bits)
+                    Ok(len) => [0, len as u32, (len >> 32) as u32],
+
+                    // 0 == outer result tag (failure)
+                    // 1 == result value (u64 lower 32 bits)
+                    // 2 == result value (unused)
+                    Err(_) => todo!("how do we extract runtime error cases?"),
+                };
+
+                let raw = u32_array_to_u8(&result);
                 memory.write(caller.as_context_mut(), ptr as _, &raw)?;
 
                 Ok(())

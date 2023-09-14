@@ -213,10 +213,13 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::bindings::http::types::Host for T
             .table()
             .get_request(request)
             .context("[outgoing_request_write] getting request")?;
-        let stream_id = req.body().unwrap_or_else(|| {
+        let stream_id = if let Some(stream_id) = req.body() {
+            stream_id
+        } else {
             let (new, stream) = self
                 .table_mut()
                 .push_stream(Bytes::new(), request)
+                .await
                 .expect("[outgoing_request_write] valid output stream");
             self.http_ctx_mut().streams.insert(new, stream);
             let req = self
@@ -225,7 +228,7 @@ impl<T: WasiHttpView + WasiHttpViewExt> crate::bindings::http::types::Host for T
                 .expect("[outgoing_request_write] request to be found");
             req.set_body(new);
             new
-        });
+        };
         let stream = self
             .table()
             .get_stream(stream_id)

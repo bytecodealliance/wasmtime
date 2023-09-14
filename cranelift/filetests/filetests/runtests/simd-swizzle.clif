@@ -6,7 +6,8 @@ target x86_64
 target x86_64 ssse3
 target x86_64 sse41
 target x86_64 sse41 has_avx
-target riscv64gc has_v
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %swizzle_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):

@@ -3,6 +3,7 @@ test interpret
 target x86_64
 target aarch64
 target riscv64
+target riscv64 has_c has_zcb
 target s390x
 
 ; NOTE: we don't currently have infrastructure for testing for traps, so these

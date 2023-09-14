@@ -1,6 +1,7 @@
 test interpret
 test run
 target riscv64
+target riscv64 has_c has_zcb
 
 function %a(f32) -> i8 system_v {
 block0(v0: f32):

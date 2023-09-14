@@ -2,8 +2,10 @@ test interpret
 test run
 target aarch64
 target x86_64
+target x86_64 has_bmi2
 target s390x
 target riscv64
+target riscv64 has_c has_zcb
 
 function %ishl_i64_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):

@@ -3,6 +3,7 @@ test run
 target aarch64
 ; x86_64 panics: `not implemented: unable to move type: f32x2`
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %fma_f32x2(f32x2, f32x2, f32x2) -> f32x2 {
 block0(v0: f32x2, v1: f32x2, v2: f32x2):

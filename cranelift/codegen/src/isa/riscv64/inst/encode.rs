@@ -9,7 +9,7 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR,
+    CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR,
     VecElementWidth, VecOpCategory, VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
@@ -323,4 +323,17 @@ pub fn encode_csr_imm(op: CsrImmOP, rd: WritableReg, csr: CSR, imm: UImm5) -> u3
         imm.bits(),
         csr.bits().as_u32(),
     )
+}
+
+// Encode a CR type instruction.
+//
+// 0--1-2-----6-7-------11-12-------15
+// |op |  rs2  |  rd/rs1  |  funct4  |
+pub fn encode_cr_type(op: CrOp, rd: WritableReg, rs2: Reg) -> u16 {
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= reg_to_gpr_num(rs2) << 2;
+    bits |= reg_to_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(op.funct4(), 5) << 12;
+    bits.try_into().unwrap()
 }

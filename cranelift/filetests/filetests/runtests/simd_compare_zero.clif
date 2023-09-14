@@ -1,6 +1,8 @@
 test run
 target aarch64
 target s390x
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %simd_icmp_eq_i8(i8x16) -> i8x16 {
 block0(v0: i8x16):
