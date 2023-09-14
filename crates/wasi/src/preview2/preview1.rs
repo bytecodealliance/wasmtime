@@ -1019,17 +1019,14 @@ impl<
         match desc {
             Descriptor::Stdin { input_stream, .. } => {
                 streams::Host::drop_input_stream(self, input_stream)
-                    .await
                     .context("failed to call `drop-input-stream`")
             }
             Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
                 streams::Host::drop_output_stream(self, output_stream)
-                    .await
                     .context("failed to call `drop-output-stream`")
             }
             Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => self
                 .drop_descriptor(fd)
-                .await
                 .context("failed to call `drop-descriptor`"),
         }
         .map_err(types::Error::trap)
@@ -1322,7 +1319,7 @@ impl<
                 };
 
                 let pos = position.load(Ordering::Relaxed);
-                let stream = self.read_via_stream(fd, pos).await.map_err(|e| {
+                let stream = self.read_via_stream(fd, pos).map_err(|e| {
                     e.try_into()
                         .context("failed to call `read-via-stream`")
                         .unwrap_or_else(types::Error::trap)
@@ -1380,7 +1377,7 @@ impl<
                     return Ok(0);
                 };
 
-                let stream = self.read_via_stream(fd, offset).await.map_err(|e| {
+                let stream = self.read_via_stream(fd, offset).map_err(|e| {
                     e.try_into()
                         .context("failed to call `read-via-stream`")
                         .unwrap_or_else(types::Error::trap)
@@ -1426,7 +1423,7 @@ impl<
                     return Ok(0);
                 };
                 let (stream, pos) = if append {
-                    let stream = self.append_via_stream(fd).await.map_err(|e| {
+                    let stream = self.append_via_stream(fd).map_err(|e| {
                         e.try_into()
                             .context("failed to call `append-via-stream`")
                             .unwrap_or_else(types::Error::trap)
@@ -1434,7 +1431,7 @@ impl<
                     (stream, 0)
                 } else {
                     let position = position.load(Ordering::Relaxed);
-                    let stream = self.write_via_stream(fd, position).await.map_err(|e| {
+                    let stream = self.write_via_stream(fd, position).map_err(|e| {
                         e.try_into()
                             .context("failed to call `write-via-stream`")
                             .unwrap_or_else(types::Error::trap)
@@ -1478,7 +1475,7 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0);
                 };
-                let stream = self.write_via_stream(fd, offset).await.map_err(|e| {
+                let stream = self.write_via_stream(fd, offset).map_err(|e| {
                     e.try_into()
                         .context("failed to call `write-via-stream`")
                         .unwrap_or_else(types::Error::trap)
