@@ -878,7 +878,7 @@ impl RunCommand {
             let value = match value {
                 Some(value) => value.clone(),
                 None => std::env::var(key)
-                    .map_err(|_| anyhow!("environment varialbe `{key}` not found"))?,
+                    .map_err(|_| anyhow!("environment variable `{key}` not found"))?,
             };
             builder.env(key, &value)?;
         }
@@ -910,7 +910,7 @@ impl RunCommand {
             let value = match value {
                 Some(value) => value.clone(),
                 None => std::env::var(key)
-                    .map_err(|_| anyhow!("environment varialbe `{key}` not found"))?,
+                    .map_err(|_| anyhow!("environment variable `{key}` not found"))?,
             };
             builder.env(key, &value);
         }
