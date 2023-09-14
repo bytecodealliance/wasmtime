@@ -1955,8 +1955,8 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::PCRelLo12I | LabelUse::PCRelHi20 | LabelUse::PCRel32 => {
                 Inst::imm_max() as CodeOffset
             }
-            // RVCJump has the same range as B12 since the offset is multiplied by 2
-            LabelUse::RVCJump | LabelUse::B12 => ((1 << 11) - 1) * 2,
+            LabelUse::B12 => ((1 << 11) - 1) * 2,
+            LabelUse::RVCJump => ((1 << 10) - 1) * 2,
         }
     }
 
