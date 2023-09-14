@@ -5,34 +5,17 @@ use crate::bindings::http::types::{
     OutgoingRequest, OutgoingResponse, ResponseOutparam, Scheme, StatusCode,
 };
 use crate::types::{
-    HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest, TableHttpExt,
+    HeadersRef, HostFields, HostFutureIncomingResponse, HostIncomingBody, HostIncomingResponse,
+    HostOutgoingRequest, TableHttpExt,
 };
 use crate::WasiHttpView;
 use anyhow::{anyhow, bail, Context};
-use bytes::Bytes;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
     bindings::poll::poll::Pollable,
     pipe::pipe,
-    HostInputStream, HostPollable, PollableFuture, StreamState, TablePollableExt,
+    HostPollable, PollableFuture, TablePollableExt, TableStreamExt,
 };
-use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, TableStreamExt};
-
-struct HostIncoming {
-    body: hyper::body::Incoming,
-    worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
-}
-
-#[async_trait::async_trait]
-impl HostInputStream for HostIncoming {
-    fn read(&mut self, _size: usize) -> anyhow::Result<(Bytes, StreamState)> {
-        todo!()
-    }
-
-    async fn ready(&mut self) -> anyhow::Result<()> {
-        todo!()
-    }
-}
 
 #[async_trait::async_trait]
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
@@ -251,9 +234,17 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     ) -> wasmtime::Result<Headers> {
         let r = self
             .table()
-            .get_incoming_response(response)
+            .get_incoming_response_mut(response)
             .context("[incoming_response_headers] getting response")?;
-        Ok(r.headers)
+
+        let hdrs = match r.headers {
+            HeadersRef::Value(ref mut hdrs) => std::mem::take(hdrs),
+            HeadersRef::Resource(id) => return Ok(id),
+        };
+
+        let id = self.table().push_fields(HostFields::from(hdrs))?;
+        self.table().get_incoming_response_mut(response)?.headers = HeadersRef::Resource(id);
+        Ok(id)
     }
     async fn incoming_response_consume(
         &mut self,
@@ -261,9 +252,17 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     ) -> wasmtime::Result<Result<InputStream, ()>> {
         let table = self.table();
         let r = table
-            .get_incoming_response(response)
+            .get_incoming_response_mut(response)
             .context("[incoming_response_consume] getting response")?;
-        todo!()
+
+        match r.body.take() {
+            Some(body) => {
+                let id = self.table().push_input_stream(body)?;
+                Ok(Ok(id))
+            }
+
+            None => Ok(Err(())),
+        }
     }
     async fn new_outgoing_response(
         &mut self,
@@ -280,7 +279,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     }
     async fn drop_future_incoming_response(
         &mut self,
-        future: FutureIncomingResponse,
+        _future: FutureIncomingResponse,
     ) -> wasmtime::Result<()> {
         todo!()
     }
@@ -305,19 +304,15 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             }
         };
 
-        let status = resp.resp.status().as_u16();
-
-        let headers = self.table().push_fields(resp.resp.headers().into())?;
-
-        let body = self.table().push_input_stream(Box::new(HostIncoming {
-            body: resp.resp.into_body(),
-            worker: resp.worker,
-        }))?;
+        let (parts, body) = resp.resp.into_parts();
 
         let resp = self.table().push_incoming_response(HostIncomingResponse {
-            status,
-            headers,
-            body,
+            status: parts.status.as_u16(),
+            headers: HeadersRef::Value(parts.headers),
+            body: Some(Box::new(HostIncomingBody {
+                body,
+                worker: resp.worker,
+            })),
         })?;
 
         Ok(Some(Ok(resp)))

@@ -1,8 +1,9 @@
 //! Implements the base structure (i.e. [WasiHttpCtx]) that will provide the
 //! implementation of the wasi-http API.
 
-use crate::bindings::http::types::{Method, Scheme};
+use crate::bindings::http::types::{Headers, Method, Scheme};
 use bytes::Bytes;
+use wasmtime_wasi::preview2::StreamState;
 use std::collections::HashMap;
 use std::task;
 use std::{any::Any, pin::Pin};
@@ -33,11 +34,31 @@ pub struct HostOutgoingRequest {
     pub body: Option<AsyncReadStream>,
 }
 
-#[derive(Clone, Debug)]
 pub struct HostIncomingResponse {
     pub status: u16,
-    pub headers: u32,
-    pub body: u32,
+    pub headers: HeadersRef,
+    pub body: Option<Box<HostIncomingBody>>,
+}
+
+pub enum HeadersRef {
+    Value(hyper::HeaderMap),
+    Resource(Headers),
+}
+
+pub struct HostIncomingBody {
+    pub body: hyper::body::Incoming,
+    pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
+}
+
+#[async_trait::async_trait]
+impl HostInputStream for HostIncomingBody {
+    fn read(&mut self, _size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+        todo!()
+    }
+
+    async fn ready(&mut self) -> anyhow::Result<()> {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -49,9 +70,11 @@ impl HostFields {
     }
 }
 
-impl From<&hyper::HeaderMap> for HostFields {
-    fn from(headers: &hyper::HeaderMap) -> Self {
-        todo!()
+impl From<hyper::HeaderMap> for HostFields {
+    fn from(headers: hyper::HeaderMap) -> Self {
+        Self(
+
+            )
     }
 }
 
