@@ -6,7 +6,8 @@ use super::{
 };
 
 use crate::masm::{
-    CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm, RemKind, ShiftKind,
+    CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode,
+    ShiftKind,
 };
 use crate::{abi::ABI, masm::StackSlot};
 use crate::{
@@ -292,6 +293,14 @@ impl Masm for MacroAssembler {
         let scratch_xmm = regs::scratch_xmm();
         self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
         self.asm.and_rr(scratch_xmm, dst, size);
+    }
+
+    fn float_round(&mut self, mode: RoundingMode, dst: Reg, src: RegImm, size: OperandSize) {
+        if self.flags.has_sse41() {
+            self.asm.rounds(src.get_reg().unwrap(), dst, mode, size);
+        } else {
+            todo!("libcall fallback for rounding is not implemented")
+        }
     }
 
     fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
