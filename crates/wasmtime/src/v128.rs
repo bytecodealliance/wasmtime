@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(any(target_arch = "x86_64", target_arch = "aarch64")),
+    allow(unused_imports)
+)]
+
 use crate::store::StoreOpaque;
 use crate::{ValRaw, ValType, WasmTy};
 use std::cmp::Ordering;
