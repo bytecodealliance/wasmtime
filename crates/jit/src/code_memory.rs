@@ -251,7 +251,7 @@ impl CodeMemory {
             // Switch the executable portion from readonly to read/execute.
             self.mmap
                 .make_executable(self.text.clone(), self.enable_branch_protection)
-                .expect("unable to make memory executable");
+                .context("unable to make memory executable")?;
 
             // Flush any in-flight instructions from the pipeline
             icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
