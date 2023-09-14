@@ -411,6 +411,7 @@ mod store;
 mod trampoline;
 mod trap;
 mod types;
+mod v128;
 mod values;
 
 pub use crate::config::*;
@@ -433,6 +434,7 @@ pub use crate::store::{
 };
 pub use crate::trap::*;
 pub use crate::types::*;
+pub use crate::v128::V128;
 pub use crate::values::*;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.

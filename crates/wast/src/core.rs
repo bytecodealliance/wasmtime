@@ -13,7 +13,7 @@ pub fn val(v: &WastArgCore<'_>) -> Result<Val> {
         I64(x) => Val::I64(*x),
         F32(x) => Val::F32(x.bits),
         F64(x) => Val::F64(x.bits),
-        V128(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes())),
+        V128(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes()).into()),
         RefNull(HeapType::Extern) => Val::ExternRef(None),
         RefNull(HeapType::Func) => Val::FuncRef(None),
         RefExtern(x) => Val::ExternRef(Some(ExternRef::new(*x))),
@@ -53,7 +53,7 @@ pub fn match_val(actual: &Val, expected: &WastRetCore) -> Result<()> {
         // values, so we're testing for bit-for-bit equivalence
         (Val::F32(a), WastRetCore::F32(b)) => match_f32(*a, b),
         (Val::F64(a), WastRetCore::F64(b)) => match_f64(*a, b),
-        (Val::V128(a), WastRetCore::V128(b)) => match_v128(*a, b),
+        (Val::V128(a), WastRetCore::V128(b)) => match_v128(a.as_u128(), b),
         (Val::ExternRef(x), WastRetCore::RefNull(Some(HeapType::Extern))) => {
             if let Some(x) = x {
                 let x = x

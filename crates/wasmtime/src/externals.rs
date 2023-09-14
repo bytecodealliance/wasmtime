@@ -287,7 +287,7 @@ impl Global {
                 ValType::FuncRef => {
                     Val::FuncRef(Func::from_raw(store, definition.as_func_ref().cast()))
                 }
-                ValType::V128 => Val::V128(*definition.as_u128()),
+                ValType::V128 => Val::V128((*definition.as_u128()).into()),
             }
         }
     }
@@ -332,7 +332,7 @@ impl Global {
                     let old = mem::replace(definition.as_externref_mut(), x.map(|x| x.inner));
                     drop(old);
                 }
-                Val::V128(i) => *definition.as_u128_mut() = i,
+                Val::V128(i) => *definition.as_u128_mut() = i.into(),
             }
         }
         Ok(())
