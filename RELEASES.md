@@ -1,5 +1,22 @@
 --------------------------------------------------------------------------------
 
+## 12.0.2
+
+Released 2023-09-14.
+
+### Fixed
+
+* [CVE-2023-41880] - Miscompilation of wasm `i64x2.shr_s` instruction with
+  constant input on x86\_64
+
+* Long chains of constant additions with optimizations disabled no longer stack
+  overflow on x86\_64.
+  [#6997](https://github.com/bytecodealliance/wasmtime/pull/6997)
+
+[CVE-2023-41880]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gw5p-q8mj-p7gh
+
+--------------------------------------------------------------------------------
+
 ## 12.0.1
 
 Released 2023-08-24
