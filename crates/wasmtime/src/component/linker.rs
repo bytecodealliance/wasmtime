@@ -31,7 +31,20 @@ pub struct Linker<T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-#[derive(Default)]
+impl<T> Clone for Linker<T> {
+    fn clone(&self) -> Linker<T> {
+        Linker {
+            engine: self.engine.clone(),
+            strings: self.strings.clone(),
+            map: self.map.clone(),
+            path: self.path.clone(),
+            allow_shadowing: self.allow_shadowing,
+            _marker: self._marker,
+        }
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct Strings {
     string2idx: HashMap<Arc<str>, usize>,
     strings: Vec<Arc<str>>,
