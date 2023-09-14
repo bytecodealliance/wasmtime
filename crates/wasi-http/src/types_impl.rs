@@ -309,10 +309,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let resp = self.table().push_incoming_response(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers: HeadersRef::Value(parts.headers),
-            body: Some(Box::new(HostIncomingBody {
-                body,
-                worker: resp.worker,
-            })),
+            body: Some(Box::new(HostIncomingBody::new(body, resp.worker))),
         })?;
 
         Ok(Some(Ok(resp)))

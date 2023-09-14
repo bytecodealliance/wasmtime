@@ -50,6 +50,15 @@ pub struct HostIncomingBody {
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
 
+impl HostIncomingBody {
+    pub fn new(
+        body: hyper::body::Incoming,
+        worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
+    ) -> Self {
+        Self { body, worker }
+    }
+}
+
 #[async_trait::async_trait]
 impl HostInputStream for HostIncomingBody {
     fn read(&mut self, _size: usize) -> anyhow::Result<(Bytes, StreamState)> {
