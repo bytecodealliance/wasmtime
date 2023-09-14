@@ -337,7 +337,7 @@ pub unsafe extern "C" fn wasmtime_context_insert_file(
 
     // SAFETY: no other functions should call `from_raw_fd`, so there is only
     // one owner for the file descriptor.
-    let f = unsafe { File::from_raw_handle(host_handle as HANDLE) };
+    let f = unsafe { File::from_raw_handle(host_fd as HANDLE) };
     let f = cap_std::fs::File::from_std(f);
     let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
     context
