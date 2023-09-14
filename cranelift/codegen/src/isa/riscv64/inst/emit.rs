@@ -1096,6 +1096,20 @@ impl Inst {
                 let default_target = targets[0];
                 let targets = &targets[1..];
 
+                // We are going to potentially emit a large amount of instructions, so ensure that we emit an island
+                // now if we need one.
+                //
+                // The worse case PC calculations are 12 instructions. And each entry in the jump table is 2 instructions.
+                // Check if we need to emit a jump table here to support that jump.
+                let inst_count = 12 + (targets.len() * 2);
+                let distance = (inst_count * Inst::UNCOMPRESSED_INSTRUCTION_SIZE as usize) as u32;
+                if sink.island_needed(distance) {
+                    let jump_around_label = sink.get_label();
+                    Inst::gen_jump(jump_around_label).emit(&[], sink, emit_info, state);
+                    sink.emit_island(distance + 4, &mut state.ctrl_plane);
+                    sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+                }
+
                 // We emit a bounds check on the index, if the index is larger than the number of
                 // jump table entries, we jump to the default block.  Otherwise we compute a jump
                 // offset by multiplying the index by 8 (the size of each entry) and then jump to
@@ -1203,16 +1217,8 @@ impl Inst {
 
                 // Emit the jump table.
                 //
-                // Each entry is a aupc + jalr to the target block. We also start with a island
+                // Each entry is a auipc + jalr to the target block. We also start with a island
                 // if necessary.
-
-                // Each entry in the jump table is 2 instructions, so 8 bytes. Check if
-                // we need to emit a jump table here to support that jump.
-                let distance =
-                    (targets.len() * 2 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE as usize) as u32;
-                if sink.island_needed(distance) {
-                    sink.emit_island(distance, &mut state.ctrl_plane);
-                }
 
                 // Emit the jumps back to back
                 for target in targets.iter() {
