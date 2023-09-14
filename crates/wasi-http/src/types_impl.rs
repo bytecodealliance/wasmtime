@@ -5,7 +5,7 @@ use crate::bindings::http::types::{
     OutgoingRequest, OutgoingResponse, ResponseOutparam, Scheme, StatusCode,
 };
 use crate::types::{
-    HostFields, HostIncomingResponse, HostOutgoingRequest, IncomingResponseInternal, TableHttpExt, HostFutureIncomingResponse,
+    HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest, TableHttpExt,
 };
 use crate::WasiHttpView;
 use anyhow::{anyhow, bail, Context};
@@ -25,7 +25,7 @@ struct HostIncoming {
 
 #[async_trait::async_trait]
 impl HostInputStream for HostIncoming {
-    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+    fn read(&mut self, _size: usize) -> anyhow::Result<(Bytes, StreamState)> {
         todo!()
     }
 
@@ -288,16 +288,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         &mut self,
         id: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>> {
-        if let futures::future::MaybeDone::Future(_) =
-            self.table().get_future_incoming_response(id)?.handle
-        {
+        if !self.table().get_future_incoming_response(id)?.is_ready() {
             return Ok(None);
         }
 
-        let mut fut = self.table().delete_future_incoming_response(id)?;
-        let resp = match std::pin::Pin::new(&mut fut.handle)
-            .take_output()
-            .expect("future output only taken once")
+        let resp = match self
+            .table()
+            .delete_future_incoming_response(id)?
+            .unwrap_ready()
         {
             Ok(resp) => resp,
             Err(e) => {
@@ -331,14 +329,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let _ = self.table().get_future_incoming_response(id)?;
 
         fn make_future<'a>(elem: &'a mut dyn Any) -> PollableFuture<'a> {
-            let resp = elem
-                .downcast_mut::<HostFutureIncomingResponse>()
-                .expect("parent resource is HostFutureIncomingResponse");
-
-            Box::pin(async move {
-                let _ = resp.handle.await;
-                Ok(())
-            })
+            Box::pin(
+                elem.downcast_mut::<HostFutureIncomingResponse>()
+                    .expect("parent resource is HostFutureIncomingResponse"),
+            )
         }
 
         let pollable = self.table().push_host_pollable(HostPollable::TableEntry {

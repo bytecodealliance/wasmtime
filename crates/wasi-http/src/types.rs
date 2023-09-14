@@ -3,8 +3,9 @@
 
 use crate::bindings::http::types::{Method, Scheme};
 use bytes::Bytes;
-use std::any::Any;
 use std::collections::HashMap;
+use std::task;
+use std::{any::Any, pin::Pin};
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
     pipe::{AsyncReadStream, AsyncWriteStream},
@@ -54,21 +55,52 @@ impl From<&hyper::HeaderMap> for HostFields {
     }
 }
 
-pub(crate) struct IncomingResponseInternal {
+pub struct IncomingResponseInternal {
     pub resp: hyper::Response<hyper::body::Incoming>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
 
 type FutureIncomingResponseHandle = AbortOnDropJoinHandle<anyhow::Result<IncomingResponseInternal>>;
 
-pub struct HostFutureIncomingResponse {
-    pub handle: futures::future::MaybeDone<FutureIncomingResponseHandle>,
+pub enum HostFutureIncomingResponse {
+    Pending(FutureIncomingResponseHandle),
+    Ready(anyhow::Result<IncomingResponseInternal>),
 }
 
 impl HostFutureIncomingResponse {
     pub fn new(handle: FutureIncomingResponseHandle) -> Self {
-        Self {
-            handle: futures::future::maybe_done(handle),
+        Self::Pending(handle)
+    }
+
+    pub fn is_ready(&self) -> bool {
+        matches!(self, Self::Pending(_))
+    }
+
+    pub fn unwrap_ready(self) -> anyhow::Result<IncomingResponseInternal> {
+        match self {
+            Self::Ready(res) => res,
+            Self::Pending(_) => {
+                panic!("unwrap_ready called on a pending HostFutureIncomingResponse")
+            }
+        }
+    }
+}
+
+impl std::future::Future for HostFutureIncomingResponse {
+    type Output = anyhow::Result<()>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
+        let s = self.get_mut();
+        match s {
+            Self::Pending(ref mut handle) => match Pin::new(handle).poll(cx) {
+                task::Poll::Pending => task::Poll::Pending,
+                task::Poll::Ready(r) => {
+                    *s = Self::Ready(r);
+                    task::Poll::Ready(Ok(()))
+                }
+            },
+
+            Self::Ready(_) => task::Poll::Ready(Ok(())),
         }
     }
 }

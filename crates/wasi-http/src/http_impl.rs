@@ -1,7 +1,9 @@
 use crate::bindings::http::types::{
     FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme,
 };
-use crate::types::{HostFutureIncomingResponse, HostIncomingResponse, TableHttpExt, IncomingResponseInternal};
+use crate::types::{
+    HostFutureIncomingResponse, HostIncomingResponse, IncomingResponseInternal, TableHttpExt,
+};
 use crate::WasiHttpView;
 use anyhow::Context;
 use bytes::{Bytes, BytesMut};
