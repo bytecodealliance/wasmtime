@@ -10,6 +10,9 @@ use crate::preview2::{
     HostPollable, TableError, TablePollableExt, WasiView,
 };
 use std::any::Any;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 impl From<StreamState> for streams::StreamStatus {
     fn from(state: StreamState) -> Self {
@@ -241,14 +244,17 @@ impl<T: WasiView> streams::Host for T {
      *
      * -------------------------------------------------------------- */
 
-    async fn check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
+    fn check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
-        match futures::future::poll_immediate(s.write_ready()).await {
-            Some(Ok(permit)) => Ok(permit as u64),
-            Some(Err(e)) => Err(e.into()),
-            None => Ok(0),
+        let mut ready = s.write_ready();
+        let mut task = Context::from_waker(futures::task::noop_waker_ref());
+        match Pin::new(&mut ready).poll(&mut task) {
+            Poll::Ready(Ok(permit)) => Ok(permit as u64),
+            Poll::Ready(Err(e)) => Err(e.into()),
+            Poll::Pending => Ok(0),
         }
     }
+
     async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
         HostOutputStream::write(s, bytes.into())?;
@@ -304,13 +310,13 @@ impl<T: WasiView> streams::Host for T {
         Ok(())
     }
 
-    async fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
+    fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
         HostOutputStream::write_zeroes(s, len as usize)?;
         Ok(())
     }
 
-    async fn flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
+    fn flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
         HostOutputStream::flush(s)?;
         Ok(())
@@ -465,9 +471,7 @@ pub mod sync {
         }
 
         fn check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
-            Ok(in_tokio(async {
-                AsyncHost::check_write(self, stream).await
-            })?)
+            Ok(AsyncHost::check_write(self, stream)?)
         }
         fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<(), streams::Error> {
             Ok(in_tokio(async {
@@ -487,13 +491,11 @@ pub mod sync {
             AsyncHost::subscribe_to_output_stream(self, stream)
         }
         fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
-            Ok(in_tokio(async {
-                AsyncHost::write_zeroes(self, stream, len).await
-            })?)
+            Ok(AsyncHost::write_zeroes(self, stream, len)?)
         }
 
         fn flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
-            Ok(in_tokio(async { AsyncHost::flush(self, stream).await })?)
+            Ok(AsyncHost::flush(self, stream)?)
         }
         fn blocking_flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
             Ok(in_tokio(async {

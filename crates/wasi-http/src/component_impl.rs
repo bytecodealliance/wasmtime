@@ -617,7 +617,7 @@ pub fn add_component_to_linker<T: WasiHttpView>(
                 let memory: Memory = memory_get(&mut caller)?;
                 let ctx = get_cx(caller.data_mut());
 
-                let result = match io::streams::Host::check_write(ctx, stream).await {
+                let result = match io::streams::Host::check_write(ctx, stream) {
                     // 0 == outer result tag (success)
                     // 1 == result value (u64 lower 32 bits)
                     // 2 == result value (u64 upper 32 bits)
@@ -643,7 +643,7 @@ pub fn add_component_to_linker<T: WasiHttpView>(
             Box::new(async move {
                 let ctx = get_cx(caller.data_mut());
 
-                let result: [u32; 2] = match io::streams::Host::flush(ctx, stream).await {
+                let result: [u32; 2] = match io::streams::Host::flush(ctx, stream) {
                     // 0 == outer result tag
                     // 1 == unused
                     Ok(_) => [0, 0],

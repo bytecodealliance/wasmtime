@@ -90,7 +90,7 @@ impl BlockingMode {
                 Ok(total)
             }
             BlockingMode::NonBlocking => {
-                let n = match Streams::check_write(host, output_stream).await {
+                let n = match Streams::check_write(host, output_stream) {
                     Ok(n) => n,
                     Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => 0,
                     Err(e) => Err(e)?,
