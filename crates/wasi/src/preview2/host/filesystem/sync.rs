@@ -102,9 +102,7 @@ impl<T: async_filesystem::Host> sync_filesystem::Host for T {
         &mut self,
         stream: sync_filesystem::DirectoryEntryStream,
     ) -> anyhow::Result<()> {
-        Ok(in_tokio(async {
-            async_filesystem::Host::drop_directory_entry_stream(self, stream).await
-        })?)
+        async_filesystem::Host::drop_directory_entry_stream(self, stream)
     }
 
     fn sync(&mut self, fd: sync_filesystem::Descriptor) -> Result<(), sync_filesystem::Error> {
@@ -209,9 +207,7 @@ impl<T: async_filesystem::Host> sync_filesystem::Host for T {
     }
 
     fn drop_descriptor(&mut self, fd: sync_filesystem::Descriptor) -> anyhow::Result<()> {
-        Ok(in_tokio(async {
-            async_filesystem::Host::drop_descriptor(self, fd).await
-        })?)
+        async_filesystem::Host::drop_descriptor(self, fd)
     }
 
     fn readlink_at(
@@ -365,9 +361,7 @@ impl<T: async_filesystem::Host> sync_filesystem::Host for T {
         fd: sync_filesystem::Descriptor,
         offset: sync_filesystem::Filesize,
     ) -> Result<streams::InputStream, sync_filesystem::Error> {
-        Ok(in_tokio(async {
-            async_filesystem::Host::read_via_stream(self, fd, offset).await
-        })?)
+        Ok(async_filesystem::Host::read_via_stream(self, fd, offset)?)
     }
 
     fn write_via_stream(
@@ -375,18 +369,14 @@ impl<T: async_filesystem::Host> sync_filesystem::Host for T {
         fd: sync_filesystem::Descriptor,
         offset: sync_filesystem::Filesize,
     ) -> Result<streams::OutputStream, sync_filesystem::Error> {
-        Ok(in_tokio(async {
-            async_filesystem::Host::write_via_stream(self, fd, offset).await
-        })?)
+        Ok(async_filesystem::Host::write_via_stream(self, fd, offset)?)
     }
 
     fn append_via_stream(
         &mut self,
         fd: sync_filesystem::Descriptor,
     ) -> Result<streams::OutputStream, sync_filesystem::Error> {
-        Ok(in_tokio(async {
-            async_filesystem::Host::append_via_stream(self, fd).await
-        })?)
+        Ok(async_filesystem::Host::append_via_stream(self, fd)?)
     }
 
     fn is_same_object(

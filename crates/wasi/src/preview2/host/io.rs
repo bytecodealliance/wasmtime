@@ -40,12 +40,12 @@ impl From<OutputStreamError> for streams::Error {
 
 #[async_trait::async_trait]
 impl<T: WasiView> streams::Host for T {
-    async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
+    fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
         self.table_mut().delete_internal_input_stream(stream)?;
         Ok(())
     }
 
-    async fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
+    fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
         self.table_mut().delete_output_stream(stream)?;
         Ok(())
     }
@@ -207,7 +207,7 @@ impl<T: WasiView> streams::Host for T {
         }
     }
 
-    async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
+    fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
         // Ensure that table element is an input-stream:
         let pollable = match self.table_mut().get_internal_input_stream_mut(stream)? {
             InternalInputStream::Host(_) => {
@@ -255,10 +255,7 @@ impl<T: WasiView> streams::Host for T {
         Ok(())
     }
 
-    async fn subscribe_to_output_stream(
-        &mut self,
-        stream: OutputStream,
-    ) -> anyhow::Result<Pollable> {
+    fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
         // Ensure that table element is an output-stream:
         let _ = self.table_mut().get_output_stream_mut(stream)?;
 
@@ -444,11 +441,11 @@ pub mod sync {
 
     impl<T: WasiView> streams::Host for T {
         fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
-            in_tokio(async { AsyncHost::drop_input_stream(self, stream).await })
+            AsyncHost::drop_input_stream(self, stream)
         }
 
         fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
-            in_tokio(async { AsyncHost::drop_output_stream(self, stream).await })
+            AsyncHost::drop_output_stream(self, stream)
         }
 
         fn read(
@@ -487,7 +484,7 @@ pub mod sync {
             })?)
         }
         fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-            in_tokio(async { AsyncHost::subscribe_to_output_stream(self, stream).await })
+            AsyncHost::subscribe_to_output_stream(self, stream)
         }
         fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
             Ok(in_tokio(async {
@@ -547,7 +544,7 @@ pub mod sync {
         }
 
         fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-            in_tokio(async { AsyncHost::subscribe_to_input_stream(self, stream).await })
+            AsyncHost::subscribe_to_input_stream(self, stream)
         }
     }
 }

@@ -397,7 +397,7 @@ pub fn add_component_to_linker<T: WasiHttpView>(
                     "[module='wasi:poll/poll' function='drop-pollable'] call id={:?}",
                     id
                 );
-                let result = poll::poll::Host::drop_pollable(ctx, id).await;
+                let result = poll::poll::Host::drop_pollable(ctx, id);
                 tracing::trace!(
                     "[module='wasi:poll/poll' function='drop-pollable'] return result={:?}",
                     result
@@ -465,7 +465,7 @@ pub fn add_component_to_linker<T: WasiHttpView>(
                     "[module='wasi:io/streams' function='drop-input-stream'] call id={:?}",
                     id
                 );
-                let result = io::streams::Host::drop_input_stream(ctx, id).await;
+                let result = io::streams::Host::drop_input_stream(ctx, id);
                 tracing::trace!(
                     "[module='wasi:io/streams' function='drop-input-stream'] return result={:?}",
                     result
@@ -484,7 +484,7 @@ pub fn add_component_to_linker<T: WasiHttpView>(
                     "[module='wasi:io/streams' function='drop-output-stream'] call id={:?}",
                     id
                 );
-                let result = io::streams::Host::drop_output_stream(ctx, id).await;
+                let result = io::streams::Host::drop_output_stream(ctx, id);
                 tracing::trace!(
                     "[module='wasi:io/streams' function='drop-output-stream'] return result={:?}",
                     result
@@ -581,7 +581,7 @@ pub fn add_component_to_linker<T: WasiHttpView>(
                     "[module='wasi:io/streams' function='subscribe-to-input-stream'] call stream={:?}",
                     stream
                 );
-                let result = io::streams::Host::subscribe_to_input_stream(ctx, stream).await;
+                let result = io::streams::Host::subscribe_to_input_stream(ctx, stream);
                 tracing::trace!(
                     "[module='wasi:io/streams' function='subscribe-to-input-stream'] return result={:?}",
                     result
@@ -600,7 +600,7 @@ pub fn add_component_to_linker<T: WasiHttpView>(
                     "[module='wasi:io/streams' function='subscribe-to-output-stream'] call stream={:?}",
                     stream
                 );
-                let result = io::streams::Host::subscribe_to_output_stream(ctx, stream).await;
+                let result = io::streams::Host::subscribe_to_output_stream(ctx, stream);
                 tracing::trace!(
                     "[module='wasi:io/streams' function='subscribe-to-output-stream'] return result={:?}",
                     result

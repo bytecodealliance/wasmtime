@@ -53,7 +53,7 @@ impl TablePollableExt for Table {
 
 #[async_trait::async_trait]
 impl<T: WasiView> poll::Host for T {
-    async fn drop_pollable(&mut self, pollable: Pollable) -> Result<()> {
+    fn drop_pollable(&mut self, pollable: Pollable) -> Result<()> {
         self.table_mut().delete_host_pollable(pollable)?;
         Ok(())
     }
@@ -138,7 +138,7 @@ pub mod sync {
 
     impl<T: WasiView> poll::Host for T {
         fn drop_pollable(&mut self, pollable: Pollable) -> Result<()> {
-            in_tokio(async { AsyncHost::drop_pollable(self, pollable).await })
+            AsyncHost::drop_pollable(self, pollable)
         }
 
         fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<bool>> {
