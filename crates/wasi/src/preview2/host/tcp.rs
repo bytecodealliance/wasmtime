@@ -7,7 +7,7 @@ use crate::preview2::bindings::{
 use crate::preview2::network::TableNetworkExt;
 use crate::preview2::poll::TablePollableExt;
 use crate::preview2::stream::TableStreamExt;
-use crate::preview2::tcp::{HostTcpSocket, HostTcpState, TableTcpSocketExt};
+use crate::preview2::tcp::{HostTcpSocketState, HostTcpState, TableTcpSocketExt};
 use crate::preview2::{HostPollable, PollableFuture, WasiView};
 use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
 use cap_std::net::TcpListener;
@@ -202,7 +202,7 @@ impl<T: WasiView> tcp::Host for T {
                 .as_socketlike_view::<TcpListener>()
                 .accept_with(Blocking::No)
         })?;
-        let mut tcp_socket = HostTcpSocket::from_tcp_stream(connection)?;
+        let mut tcp_socket = HostTcpSocketState::from_tcp_stream(connection)?;
 
         // Mark the socket as connected so that we can exit early from methods like `start-bind`.
         tcp_socket.tcp_state = HostTcpState::Connected;
@@ -415,7 +415,7 @@ impl<T: WasiView> tcp::Host for T {
     fn subscribe(&mut self, this: tcp::TcpSocket) -> anyhow::Result<Pollable> {
         fn make_tcp_socket_future<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
             let socket = stream
-                .downcast_mut::<HostTcpSocket>()
+                .downcast_mut::<HostTcpSocketState>()
                 .expect("downcast to HostTcpSocket failed");
 
             // Some states are ready immediately.

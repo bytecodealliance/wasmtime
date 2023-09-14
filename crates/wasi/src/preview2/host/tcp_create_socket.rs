@@ -3,7 +3,7 @@ use crate::preview2::bindings::{
     sockets::tcp::TcpSocket,
     sockets::tcp_create_socket,
 };
-use crate::preview2::tcp::{HostTcpSocket, TableTcpSocketExt};
+use crate::preview2::tcp::{HostTcpSocketState, TableTcpSocketExt};
 use crate::preview2::WasiView;
 
 impl<T: WasiView> tcp_create_socket::Host for T {
@@ -11,7 +11,7 @@ impl<T: WasiView> tcp_create_socket::Host for T {
         &mut self,
         address_family: IpAddressFamily,
     ) -> Result<TcpSocket, network::Error> {
-        let socket = HostTcpSocket::new(address_family.into())?;
+        let socket = HostTcpSocketState::new(address_family.into())?;
         let socket = self.table_mut().push_tcp_socket(socket)?;
         Ok(socket)
     }

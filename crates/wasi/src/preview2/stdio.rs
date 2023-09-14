@@ -103,25 +103,27 @@ impl<T: WasiView> stderr::Host for T {
     }
 }
 
-struct HostTerminalInput;
-struct HostTerminalOutput;
+struct HostTerminalInputState;
+struct HostTerminalOutputState;
 
 impl<T: WasiView> terminal_input::Host for T {
     fn drop_terminal_input(&mut self, r: terminal_input::TerminalInput) -> anyhow::Result<()> {
-        self.table_mut().delete::<HostTerminalInput>(r)?;
+        self.table_mut().delete::<HostTerminalInputState>(r)?;
         Ok(())
     }
 }
 impl<T: WasiView> terminal_output::Host for T {
     fn drop_terminal_output(&mut self, r: terminal_output::TerminalOutput) -> anyhow::Result<()> {
-        self.table_mut().delete::<HostTerminalOutput>(r)?;
+        self.table_mut().delete::<HostTerminalOutputState>(r)?;
         Ok(())
     }
 }
 impl<T: WasiView> terminal_stdin::Host for T {
     fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<terminal_input::TerminalInput>> {
         if let IsATTY::Yes = self.ctx().stdin.isatty {
-            Ok(Some(self.table_mut().push(Box::new(HostTerminalInput))?))
+            Ok(Some(
+                self.table_mut().push(Box::new(HostTerminalInputState))?,
+            ))
         } else {
             Ok(None)
         }
@@ -130,7 +132,9 @@ impl<T: WasiView> terminal_stdin::Host for T {
 impl<T: WasiView> terminal_stdout::Host for T {
     fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<terminal_output::TerminalOutput>> {
         if let IsATTY::Yes = self.ctx().stdout.isatty {
-            Ok(Some(self.table_mut().push(Box::new(HostTerminalOutput))?))
+            Ok(Some(
+                self.table_mut().push(Box::new(HostTerminalOutputState))?,
+            ))
         } else {
             Ok(None)
         }
@@ -139,7 +143,9 @@ impl<T: WasiView> terminal_stdout::Host for T {
 impl<T: WasiView> terminal_stderr::Host for T {
     fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<terminal_output::TerminalOutput>> {
         if let IsATTY::Yes = self.ctx().stderr.isatty {
-            Ok(Some(self.table_mut().push(Box::new(HostTerminalOutput))?))
+            Ok(Some(
+                self.table_mut().push(Box::new(HostTerminalOutputState))?,
+            ))
         } else {
             Ok(None)
         }

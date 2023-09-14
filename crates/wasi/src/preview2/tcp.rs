@@ -43,8 +43,8 @@ pub(crate) enum HostTcpState {
 ///
 /// The inner state is wrapped in an Arc because the same underlying socket is
 /// used for implementing the stream types.
-pub(crate) struct HostTcpSocket {
-    /// The part of a `HostTcpSocket` which is reference-counted so that we
+pub(crate) struct HostTcpSocketState {
+    /// The part of a `HostTcpSocketState` which is reference-counted so that we
     /// can pass it to async tasks.
     pub(crate) inner: Arc<tokio::net::TcpStream>,
 
@@ -213,7 +213,7 @@ impl HostOutputStream for TcpWriteStream {
     }
 }
 
-impl HostTcpSocket {
+impl HostTcpSocketState {
     /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
@@ -222,7 +222,7 @@ impl HostTcpSocket {
         Self::from_tcp_listener(tcp_listener)
     }
 
-    /// Create a `HostTcpSocket` from an existing socket.
+    /// Create a `HostTcpSocketState` from an existing socket.
     ///
     /// The socket must be in non-blocking mode.
     pub fn from_tcp_stream(tcp_socket: cap_std::net::TcpStream) -> io::Result<Self> {
@@ -254,27 +254,27 @@ impl HostTcpSocket {
 }
 
 pub(crate) trait TableTcpSocketExt {
-    fn push_tcp_socket(&mut self, tcp_socket: HostTcpSocket) -> Result<u32, TableError>;
-    fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocket, TableError>;
+    fn push_tcp_socket(&mut self, tcp_socket: HostTcpSocketState) -> Result<u32, TableError>;
+    fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocketState, TableError>;
     fn is_tcp_socket(&self, fd: u32) -> bool;
-    fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocket, TableError>;
-    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocket, TableError>;
+    fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocketState, TableError>;
+    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocketState, TableError>;
 }
 
 impl TableTcpSocketExt for Table {
-    fn push_tcp_socket(&mut self, tcp_socket: HostTcpSocket) -> Result<u32, TableError> {
+    fn push_tcp_socket(&mut self, tcp_socket: HostTcpSocketState) -> Result<u32, TableError> {
         self.push(Box::new(tcp_socket))
     }
-    fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocket, TableError> {
+    fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocketState, TableError> {
         self.delete(fd)
     }
     fn is_tcp_socket(&self, fd: u32) -> bool {
-        self.is::<HostTcpSocket>(fd)
+        self.is::<HostTcpSocketState>(fd)
     }
-    fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocket, TableError> {
+    fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocketState, TableError> {
         self.get(fd)
     }
-    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocket, TableError> {
+    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocketState, TableError> {
         self.get_mut(fd)
     }
 }
