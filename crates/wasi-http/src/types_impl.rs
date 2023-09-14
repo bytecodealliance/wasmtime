@@ -1,17 +1,38 @@
+use std::any::Any;
+
 use crate::bindings::http::types::{
     Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse, Method,
     OutgoingRequest, OutgoingResponse, ResponseOutparam, Scheme, StatusCode,
 };
-use crate::types::{HostFields, HostOutgoingRequest, TableHttpExt};
+use crate::types::{
+    HostFields, HostIncomingResponse, HostOutgoingRequest, IncomingResponseInternal, TableHttpExt, HostFutureIncomingResponse,
+};
 use crate::WasiHttpView;
 use anyhow::{anyhow, bail, Context};
 use bytes::Bytes;
-use wasmtime_wasi::preview2::TableStreamExt;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
     bindings::poll::poll::Pollable,
-    pipe::pipe, HostPollable, TablePollableExt,
+    pipe::pipe,
+    HostInputStream, HostPollable, PollableFuture, StreamState, TablePollableExt,
 };
+use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, TableStreamExt};
+
+struct HostIncoming {
+    body: hyper::body::Incoming,
+    worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
+}
+
+#[async_trait::async_trait]
+impl HostInputStream for HostIncoming {
+    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+        todo!()
+    }
+
+    async fn ready(&mut self) -> anyhow::Result<()> {
+        todo!()
+    }
+}
 
 #[async_trait::async_trait]
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
@@ -222,7 +243,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .table()
             .get_incoming_response(response)
             .context("[incoming_response_status] getting response")?;
-        Ok(r.status())
+        Ok(r.status)
     }
     async fn incoming_response_headers(
         &mut self,
@@ -232,7 +253,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .table()
             .get_incoming_response(response)
             .context("[incoming_response_headers] getting response")?;
-        Ok(r.headers().unwrap_or(0 as Headers))
+        Ok(r.headers)
     }
     async fn incoming_response_consume(
         &mut self,
@@ -265,14 +286,66 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     }
     async fn future_incoming_response_get(
         &mut self,
-        future: FutureIncomingResponse,
+        id: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>> {
-        todo!()
+        if let futures::future::MaybeDone::Future(_) =
+            self.table().get_future_incoming_response(id)?.handle
+        {
+            return Ok(None);
+        }
+
+        let mut fut = self.table().delete_future_incoming_response(id)?;
+        let resp = match std::pin::Pin::new(&mut fut.handle)
+            .take_output()
+            .expect("future output only taken once")
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                // Trapping if it's not possible to downcast to an wasi-http error
+                let e = e.downcast::<Error>()?;
+                return Ok(Some(Err(e)));
+            }
+        };
+
+        let status = resp.resp.status().as_u16();
+
+        let headers = self.table().push_fields(resp.resp.headers().into())?;
+
+        let body = self.table().push_input_stream(Box::new(HostIncoming {
+            body: resp.resp.into_body(),
+            worker: resp.worker,
+        }))?;
+
+        let resp = self.table().push_incoming_response(HostIncomingResponse {
+            status,
+            headers,
+            body,
+        })?;
+
+        Ok(Some(Ok(resp)))
     }
     async fn listen_to_future_incoming_response(
         &mut self,
-        future: FutureIncomingResponse,
+        id: FutureIncomingResponse,
     ) -> wasmtime::Result<Pollable> {
-        todo!()
+        let _ = self.table().get_future_incoming_response(id)?;
+
+        fn make_future<'a>(elem: &'a mut dyn Any) -> PollableFuture<'a> {
+            let resp = elem
+                .downcast_mut::<HostFutureIncomingResponse>()
+                .expect("parent resource is HostFutureIncomingResponse");
+
+            Box::pin(async move {
+                let _ = resp.handle.await;
+                Ok(())
+            })
+        }
+
+        let pollable = self.table().push_host_pollable(HostPollable::TableEntry {
+            index: id,
+            make_future,
+        })?;
+
+        Ok(pollable)
     }
 }

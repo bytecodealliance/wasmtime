@@ -34,51 +34,9 @@ pub struct HostOutgoingRequest {
 
 #[derive(Clone, Debug)]
 pub struct HostIncomingResponse {
-    pub active: bool,
     pub status: u16,
-    pub headers: Option<u32>,
-    pub body: Option<u32>,
-    pub trailers: Option<u32>,
-}
-
-impl HostIncomingResponse {
-    pub fn new() -> Self {
-        Self {
-            active: false,
-            status: 0,
-            headers: None,
-            body: None,
-            trailers: None,
-        }
-    }
-
-    pub fn status(&self) -> u16 {
-        self.status
-    }
-
-    pub fn headers(&self) -> Option<u32> {
-        self.headers
-    }
-
-    pub fn set_headers(&mut self, headers: u32) {
-        self.headers = Some(headers);
-    }
-
-    pub fn body(&self) -> Option<u32> {
-        self.body
-    }
-
-    pub fn set_body(&mut self, body: u32) {
-        self.body = Some(body);
-    }
-
-    pub fn trailers(&self) -> Option<u32> {
-        self.trailers
-    }
-
-    pub fn set_trailers(&mut self, trailers: u32) {
-        self.trailers = Some(trailers);
-    }
+    pub headers: u32,
+    pub body: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -90,13 +48,28 @@ impl HostFields {
     }
 }
 
+impl From<&hyper::HeaderMap> for HostFields {
+    fn from(headers: &hyper::HeaderMap) -> Self {
+        todo!()
+    }
+}
+
+pub(crate) struct IncomingResponseInternal {
+    pub resp: hyper::Response<hyper::body::Incoming>,
+    pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
+}
+
+type FutureIncomingResponseHandle = AbortOnDropJoinHandle<anyhow::Result<IncomingResponseInternal>>;
+
 pub struct HostFutureIncomingResponse {
-    handle: futures::future::MaybeDone<AbortOnDropJoinHandle<HostIncomingResponse>>,
+    pub handle: futures::future::MaybeDone<FutureIncomingResponseHandle>,
 }
 
 impl HostFutureIncomingResponse {
-    pub fn new(handle: AbortOnDropJoinHandle<HostIncomingResponse>) -> Self {
-        Self { handle: futures::future::maybe_done(handle) }
+    pub fn new(handle: FutureIncomingResponseHandle) -> Self {
+        Self {
+            handle: futures::future::maybe_done(handle),
+        }
     }
 }
 
@@ -134,7 +107,10 @@ pub trait TableHttpExt {
         &mut self,
         id: u32,
     ) -> Result<&mut HostFutureIncomingResponse, TableError>;
-    fn delete_future_incoming_response(&mut self, id: u32) -> Result<(), TableError>;
+    fn delete_future_incoming_response(
+        &mut self,
+        id: u32,
+    ) -> Result<HostFutureIncomingResponse, TableError>;
 }
 
 #[async_trait::async_trait]
@@ -208,8 +184,10 @@ impl TableHttpExt for Table {
     ) -> Result<&mut HostFutureIncomingResponse, TableError> {
         self.get_mut::<HostFutureIncomingResponse>(id)
     }
-    fn delete_future_incoming_response(&mut self, id: u32) -> Result<(), TableError> {
-        let _ = self.delete::<HostFutureIncomingResponse>(id)?;
-        Ok(())
+    fn delete_future_incoming_response(
+        &mut self,
+        id: u32,
+    ) -> Result<HostFutureIncomingResponse, TableError> {
+        self.delete(id)
     }
 }
