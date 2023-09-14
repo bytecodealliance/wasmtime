@@ -9,8 +9,6 @@ fn main() {
 
     let sock = tcp_create_socket::create_tcp_socket(IpAddressFamily::Ipv4).unwrap();
 
-    tcp::set_listen_backlog_size(sock, 32).unwrap();
-
     let addr = IpSocketAddress::Ipv4(Ipv4SocketAddress {
         port: 0,                 // use any free port
         address: (127, 0, 0, 1), // localhost

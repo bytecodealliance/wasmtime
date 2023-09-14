@@ -65,6 +65,8 @@ pub fn example_body(net: tcp::Network, sock: tcp::TcpSocket, family: network::Ip
 
     let sub = tcp::subscribe(sock);
 
+    tcp::set_listen_backlog_size(sock, 32).unwrap();
+
     tcp::start_listen(sock).unwrap();
     wait(sub);
     tcp::finish_listen(sock).unwrap();
