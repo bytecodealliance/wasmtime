@@ -72,7 +72,21 @@ impl HostFields {
 
 impl From<hyper::HeaderMap> for HostFields {
     fn from(headers: hyper::HeaderMap) -> Self {
-        Self(todo!())
+        use std::collections::hash_map::Entry;
+
+        let mut res: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
+
+        for (k, v) in headers.iter() {
+            let v = v.as_bytes().to_vec();
+            match res.entry(k.as_str().to_string()) {
+                Entry::Occupied(mut vs) => vs.get_mut().push(v),
+                Entry::Vacant(e) => {
+                    e.insert(vec![v]);
+                }
+            }
+        }
+
+        Self(res)
     }
 }
 
