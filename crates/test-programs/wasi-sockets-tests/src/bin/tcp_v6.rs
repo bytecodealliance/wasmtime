@@ -23,6 +23,8 @@ fn main() {
 
     let sock = tcp_create_socket::create_tcp_socket(IpAddressFamily::Ipv6).unwrap();
 
+    tcp::set_listen_backlog_size(sock, 32).unwrap();
+
     let addr = IpSocketAddress::Ipv6(Ipv6SocketAddress {
         port: 0,                           // use any free port
         address: (0, 0, 0, 0, 0, 0, 0, 1), // localhost

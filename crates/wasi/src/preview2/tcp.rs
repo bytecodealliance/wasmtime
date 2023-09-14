@@ -51,6 +51,9 @@ pub(crate) struct HostTcpSocket {
 
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: HostTcpState,
+    
+    /// The desired listen queue size.
+    pub(crate) listen_backlog_size: i32,
 }
 
 /// The inner reference-counted state of a `HostTcpSocket`.
@@ -59,6 +62,23 @@ pub(crate) struct HostTcpSocketInner {
 }
 
 impl HostTcpSocket {
+
+    // The following DEFAULT_BACKLOG logic is from
+    // <https://github.com/rust-lang/rust/blob/master/library/std/src/sys_common/net.rs>
+    // at revision defa2456246a8272ceace9c1cdccdf2e4c36175e.
+
+    // The 3DS doesn't support a big connection backlog. Sometimes
+    // it allows up to about 37, but other times it doesn't even
+    // accept 32. There may be a global limitation causing this.
+    #[cfg(target_os = "horizon")]
+    const DEFAULT_BACKLOG: i32 = 20;
+
+    // The default for all other platforms
+    #[cfg(not(target_os = "horizon"))]
+    const DEFAULT_BACKLOG: i32 = 128;
+
+
+
     /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
@@ -77,6 +97,7 @@ impl HostTcpSocket {
                 tcp_socket: tokio_tcp_socket,
             }),
             tcp_state: HostTcpState::Default,
+            listen_backlog_size: Self::DEFAULT_BACKLOG,
         })
     }
 
@@ -98,6 +119,7 @@ impl HostTcpSocket {
                 tcp_socket: tokio_tcp_socket,
             }),
             tcp_state: HostTcpState::Default,
+            listen_backlog_size: Self::DEFAULT_BACKLOG,
         })
     }
 
