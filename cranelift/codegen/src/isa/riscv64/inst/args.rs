@@ -1093,7 +1093,7 @@ impl AluOPRRI {
     }
 
     pub(crate) fn imm12(self, imm12: Imm12) -> u32 {
-        let x = imm12.as_u32();
+        let x = imm12.bits();
         if let Some(func) = self.option_funct6() {
             func << 6 | (x & 0b11_1111)
         } else if let Some(func) = self.option_funct7() {
@@ -1770,19 +1770,19 @@ impl FloatSelectOP {
     // move qnan bits into int register.
     pub(crate) fn snan_bits(self, rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
-        insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
+        insts.push(Inst::load_imm12(rd, Imm12::from_i16(-1)));
         let x = if ty == F32 { 22 } else { 51 };
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Srli,
             rd: rd,
             rs: rd.to_reg(),
-            imm12: Imm12::from_bits(x),
+            imm12: Imm12::from_i16(x),
         });
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Slli,
             rd: rd,
             rs: rd.to_reg(),
-            imm12: Imm12::from_bits(x),
+            imm12: Imm12::from_i16(x),
         });
         insts
     }
@@ -1882,7 +1882,7 @@ impl Display for CsrImmOP {
 
 impl CSR {
     pub(crate) fn bits(self) -> Imm12 {
-        Imm12::from_bits(match self {
+        Imm12::from_i16(match self {
             CSR::Frm => 0x0002,
         })
     }

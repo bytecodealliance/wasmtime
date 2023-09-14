@@ -263,7 +263,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
 
     fn imm12_and(&mut self, imm: Imm12, x: u64) -> Imm12 {
-        Imm12::from_bits(imm.as_i16() & (x as i16))
+        Imm12::from_i16(imm.as_i16() & (x as i16))
     }
 
     fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
@@ -298,7 +298,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     #[inline]
     fn imm12_is_zero(&mut self, imm: Imm12) -> Option<()> {
-        if imm.as_u32() == 0 {
+        if imm.as_i16() == 0 {
             Some(())
         } else {
             None
@@ -307,7 +307,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     #[inline]
     fn imm20_is_zero(&mut self, imm: Imm20) -> Option<()> {
-        if imm.as_u32() == 0 {
+        if imm.as_i32() == 0 {
             Some(())
         } else {
             None
@@ -396,19 +396,20 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     //
     fn gen_shamt(&mut self, ty: Type, shamt: XReg) -> ValueRegs {
         let ty_bits = if ty.bits() > 64 { 64 } else { ty.bits() };
+        let ty_bits = i16::try_from(ty_bits).unwrap();
         let shamt = {
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRImm12 {
                 alu_op: AluOPRRI::Andi,
                 rd: tmp,
                 rs: shamt.to_reg(),
-                imm12: Imm12::from_bits((ty_bits - 1) as i16),
+                imm12: Imm12::from_i16(ty_bits - 1),
             });
             tmp.to_reg()
         };
         let len_sub_shamt = {
             let tmp = self.temp_writable_reg(I64);
-            self.emit(&MInst::load_imm12(tmp, Imm12::from_bits(ty_bits as i16)));
+            self.emit(&MInst::load_imm12(tmp, Imm12::from_i16(ty_bits)));
             let len_sub_shamt = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRR {
                 alu_op: AluOPRRR::Sub,
@@ -540,7 +541,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             alu_op: AluOPRRI::Slli,
             rd: tmp,
             rs: v.to_reg(),
-            imm12: Imm12::from_bits((64 - ty.bits()) as i16),
+            imm12: Imm12::from_i16((64 - ty.bits()) as i16),
         });
 
         self.xreg_new(tmp.to_reg())

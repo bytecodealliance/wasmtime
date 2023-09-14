@@ -12,8 +12,8 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui a5,1048574
-;   addi a1,a5,3532
+;   lui a5,-2
+;   addi a1,a5,-564
 ;   slli a2,a1,48
 ;   srli a4,a2,48
 ;   slli a0,a1,48

@@ -40,7 +40,7 @@
 ;; function u0:0:
 ;; block0:
 ;;   lui a3,65535
-;;   addi a5,a3,4092
+;;   addi a5,a3,-4
 ;;   ugt a4,a0,a5##ty=i64
 ;;   bne a4,zero,taken(label3),not_taken(label1)
 ;; block1:
@@ -58,7 +58,7 @@
 ;; function u0:1:
 ;; block0:
 ;;   lui a3,65535
-;;   addi a5,a3,4092
+;;   addi a5,a3,-4
 ;;   ugt a4,a0,a5##ty=i64
 ;;   bne a4,zero,taken(label3),not_taken(label1)
 ;; block1:

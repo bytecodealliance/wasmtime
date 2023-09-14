@@ -42,7 +42,7 @@
 ;;   slli a3,a0,32
 ;;   srli a5,a3,32
 ;;   lui a3,65536
-;;   addi a0,a3,4095
+;;   addi a0,a3,-1
 ;;   ugt a4,a5,a0##ty=i64
 ;;   bne a4,zero,taken(label3),not_taken(label1)
 ;; block1:
@@ -60,7 +60,7 @@
 ;;   slli a3,a0,32
 ;;   srli a5,a3,32
 ;;   lui a3,65536
-;;   addi a0,a3,4095
+;;   addi a0,a3,-1
 ;;   ugt a4,a5,a0##ty=i64
 ;;   bne a4,zero,taken(label3),not_taken(label1)
 ;; block1:
