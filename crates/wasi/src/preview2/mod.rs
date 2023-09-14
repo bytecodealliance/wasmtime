@@ -97,9 +97,7 @@ pub mod bindings {
                 "blocking-write-and-flush",
                 "change-directory-permissions-at",
                 "change-file-permissions-at",
-                "check-write",
                 "create-directory-at",
-                "flush",
                 "forward",
                 "get-flags",
                 "get-type",
@@ -132,7 +130,6 @@ pub mod bindings {
                 "unlink-file-at",
                 "unlock",
                 "write",
-                "write-zeroes",
             ],
         },
         trappable_error_type: {
