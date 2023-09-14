@@ -1,5 +1,6 @@
-use crate::bindings::http::types::{
-    FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme,
+use crate::bindings::http::{
+    outgoing_handler,
+    types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme},
 };
 use crate::types::{
     HostFutureIncomingResponse, HostIncomingResponse, IncomingResponseInternal, TableHttpExt,
@@ -19,12 +20,12 @@ use tokio_rustls::rustls::{self, OwnedTrustAnchor};
 use wasmtime_wasi::preview2::{self, StreamState, TableStreamExt};
 
 #[async_trait::async_trait]
-impl<T: WasiHttpView> crate::bindings::http::outgoing_handler::Host for T {
+impl<T: WasiHttpView> outgoing_handler::Host for T {
     async fn handle(
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
-    ) -> wasmtime::Result<FutureIncomingResponse> {
+    ) -> wasmtime::Result<Result<FutureIncomingResponse, outgoing_handler::Error>> {
         let connect_timeout = Duration::from_millis(
             options
                 .and_then(|opts| opts.connect_timeout_ms)
@@ -56,10 +57,9 @@ impl<T: WasiHttpView> crate::bindings::http::outgoing_handler::Host for T {
             crate::bindings::http::types::Method::Trace => Method::TRACE,
             crate::bindings::http::types::Method::Patch => Method::PATCH,
             crate::bindings::http::types::Method::Other(method) => {
-                return Err(crate::bindings::http::types::Error::InvalidUrl(format!(
+                return Ok(Err(outgoing_handler::Error::Invalid(format!(
                     "unknown method {method}"
-                ))
-                .into());
+                ))));
             }
         };
 
@@ -67,10 +67,9 @@ impl<T: WasiHttpView> crate::bindings::http::outgoing_handler::Host for T {
             Scheme::Http => (false, "http://", 80),
             Scheme::Https => (true, "https://", 443),
             Scheme::Other(scheme) => {
-                return Err(crate::bindings::http::types::Error::InvalidUrl(format!(
+                return Ok(Err(outgoing_handler::Error::Invalid(format!(
                     "unsupported scheme {scheme}"
-                ))
-                .into())
+                ))))
             }
         };
 
@@ -138,7 +137,7 @@ impl<T: WasiHttpView> crate::bindings::http::outgoing_handler::Host for T {
             .table()
             .push_future_incoming_response(HostFutureIncomingResponse::new(handle))?;
 
-        Ok(fut)
+        Ok(Ok(fut))
     }
 }
 
