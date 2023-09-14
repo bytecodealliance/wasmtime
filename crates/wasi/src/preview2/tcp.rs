@@ -50,7 +50,7 @@ pub(crate) struct HostTcpSocket {
 
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: HostTcpState,
-    
+
     /// The desired listen queue size.
     pub(crate) listen_backlog_size: i32,
 }
@@ -217,7 +217,6 @@ impl HostOutputStream for TcpWriteStream {
 }
 
 impl HostTcpSocket {
-
     // The following DEFAULT_BACKLOG logic is from
     // <https://github.com/rust-lang/rust/blob/master/library/std/src/sys_common/net.rs>
     // at revision defa2456246a8272ceace9c1cdccdf2e4c36175e.
@@ -231,8 +230,6 @@ impl HostTcpSocket {
     // The default for all other platforms
     #[cfg(not(target_os = "horizon"))]
     const DEFAULT_BACKLOG: i32 = 128;
-
-
 
     /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {

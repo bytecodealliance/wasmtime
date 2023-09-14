@@ -309,31 +309,33 @@ impl<T: WasiView> tcp::Host for T {
         let socket = table.get_tcp_socket_mut(this)?;
 
         // Silently clamp backlog size. This is OK for us to do, because operating systems do this too.
-        let value = value.try_into().unwrap_or(i32::MAX).clamp(MIN_BACKLOG, MAX_BACKLOG);
+        let value = value
+            .try_into()
+            .unwrap_or(i32::MAX)
+            .clamp(MIN_BACKLOG, MAX_BACKLOG);
 
         match socket.tcp_state {
-            HostTcpState::Default
-            | HostTcpState::BindStarted
-            | HostTcpState::Bound => {
+            HostTcpState::Default | HostTcpState::BindStarted | HostTcpState::Bound => {
                 // Socket not listening yet. Stash value for first invocation to `listen`.
                 socket.listen_backlog_size = value;
 
                 Ok(())
-            },
+            }
             HostTcpState::Listening => {
                 // Try to update the backlog by calling `listen` again.
                 // Not all platforms support this. We'll only update our own value if the OS supports changing the backlog size after the fact.
 
-                rustix::net::listen(socket.tcp_socket(), value).map_err(|_| ErrorCode::AlreadyListening)?;
+                rustix::net::listen(socket.tcp_socket(), value)
+                    .map_err(|_| ErrorCode::AlreadyListening)?;
 
                 socket.listen_backlog_size = value;
 
                 Ok(())
-            },
+            }
             HostTcpState::Connected => Err(ErrorCode::AlreadyConnected.into()),
-            HostTcpState::Connecting
-            | HostTcpState::ConnectReady
-            | HostTcpState::ListenStarted => Err(ErrorCode::ConcurrencyConflict.into()),
+            HostTcpState::Connecting | HostTcpState::ConnectReady | HostTcpState::ListenStarted => {
+                Err(ErrorCode::ConcurrencyConflict.into())
+            }
         }
     }
 
