@@ -10,9 +10,10 @@ Unreleased.
   instead of at compile time.
   [#6807](https://github.com/bytecodealliance/wasmtime/pull/6807)
 
-* `Engine::detect_precompiled` can be used to to determine whether some bytes
-  look like a precompiled module or a component.
+* `Engine::detect_precompiled{,_file}` can be used to to determine whether some
+  bytes or a file look like a precompiled module or a component.
   [#6832](https://github.com/bytecodealliance/wasmtime/pull/6832)
+  [#6937](https://github.com/bytecodealliance/wasmtime/pull/6937)
 
 * A new feature "wmemcheck" has been added to enable Valgrind-like detection of
   use-after-free within a WebAssembly guest module.
@@ -28,9 +29,25 @@ Unreleased.
 * Wasmtime's implementation of the wasi-nn proposal now supports named models.
   [#6854](https://github.com/bytecodealliance/wasmtime/pull/6854)
 
-* The C API now supports configuring `native_unwind_info` and
-  `dynamic_memory_reserved_for_growth`.
+* The C API now supports configuring `native_unwind_info`,
+  `dynamic_memory_reserved_for_growth`, `target`, and Cranelift settings.
   [#6896](https://github.com/bytecodealliance/wasmtime/pull/6896)
+  [#6934](https://github.com/bytecodealliance/wasmtime/pull/6934)
+
+* The `wasmtime` crate now has initial support for component model bindings
+  generation for the WIT `resource` type.
+  [#6886](https://github.com/bytecodealliance/wasmtime/pull/6886)
+
+* Cranelift's RISC-V backend now has a complete implementation of the
+  WebAssembly SIMD proposal. Many thanks to Afonso Bordado for all their
+  contributions!
+  [#6920](https://github.com/bytecodealliance/wasmtime/pull/6920)
+  [#6924](https://github.com/bytecodealliance/wasmtime/pull/6924)
+
+* The `bindgen!` macro in the `wasmtime` crate now supports conditional
+  configuration for which imports should be `async` and which should be
+  synchronous.
+  [#6942](https://github.com/bytecodealliance/wasmtime/pull/6942)
 
 ### Changed
 
@@ -80,7 +97,7 @@ Unreleased.
   These methods do not affect the size of the pre-allocated pool.
   [#6835](https://github.com/bytecodealliance/wasmtime/pull/6835)
 
-* Builder methods for WASI contexts onw use `&mut self` instead of `self`.
+* Builder methods for WASI contexts now use `&mut self` instead of `self`.
   [#6770](https://github.com/bytecodealliance/wasmtime/pull/6770)
 
 * Native unwinding information is now properly disabled when it is configured to
@@ -91,6 +108,16 @@ Unreleased.
   backpressure and flushing. The `HostOutputStream` trait has changed
   substantially.
   [#6877](https://github.com/bytecodealliance/wasmtime/pull/6877)
+
+* Wasmtime's minimum supported Rust version (MSRV) is now 1.70.0. Wasmtime's
+  MSRV policy of supporting the last three releases of Rust (N-2) is now
+  additionally documented. More discussion can additionally be found on the PR
+  itself.
+  [#6900](https://github.com/bytecodealliance/wasmtime/pull/6900)
+
+* Wasmtime's support for DWARF debugging information has seen some fixes for
+  previously reported crashes.
+  [#6931](https://github.com/bytecodealliance/wasmtime/pull/6931)
 
 ### Removed
 
