@@ -826,7 +826,7 @@ block0(v0: i64x2):
 ;   pshufd  $237, %xmm2, %xmm4
 ;   movdqa  %xmm0, %xmm6
 ;   psrad   %xmm6, $22, %xmm6
-;   pshufd  $233, %xmm6, %xmm0
+;   pshufd  $237, %xmm6, %xmm0
 ;   punpckldq %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -842,7 +842,7 @@ block0(v0: i64x2):
 ;   pshufd $0xed, %xmm2, %xmm4
 ;   movdqa %xmm0, %xmm6
 ;   psrad $0x16, %xmm6
-;   pshufd $0xe9, %xmm6, %xmm0
+;   pshufd $0xed, %xmm6, %xmm0
 ;   punpckldq %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -864,7 +864,7 @@ block0(v0: i64x2):
 ;   pshufd  $237, %xmm2, %xmm4
 ;   movdqa  %xmm0, %xmm6
 ;   psrad   %xmm6, $4, %xmm6
-;   pshufd  $233, %xmm6, %xmm0
+;   pshufd  $237, %xmm6, %xmm0
 ;   punpckldq %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -880,7 +880,7 @@ block0(v0: i64x2):
 ;   pshufd $0xed, %xmm2, %xmm4
 ;   movdqa %xmm0, %xmm6
 ;   psrad $4, %xmm6
-;   pshufd $0xe9, %xmm6, %xmm0
+;   pshufd $0xed, %xmm6, %xmm0
 ;   punpckldq %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
