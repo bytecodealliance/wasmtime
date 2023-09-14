@@ -459,9 +459,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
         }
-        &Inst::TrapIf { test, .. } => {
-            collector.reg_use(test);
-        }
         &Inst::Jal { .. } => {
             // JAL technically has a rd register, but we currently always
             // hardcode it to x0.
@@ -603,7 +600,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
-        &Inst::TrapIfC { rs1, rs2, .. } => {
+        &Inst::TrapIf { rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
         }
@@ -1635,10 +1632,7 @@ impl Inst {
                 }
                 s
             }
-            &MInst::TrapIf { test, trap_code } => {
-                format!("trap_if {},{}", format_reg(test, allocs), trap_code,)
-            }
-            &MInst::TrapIfC {
+            &MInst::TrapIf {
                 rs1,
                 rs2,
                 cc,
@@ -1646,7 +1640,7 @@ impl Inst {
             } => {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
-                format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
+                format!("trap_if {trap_code}##({rs1} {cc} {rs2})")
             }
             &MInst::Jal { label } => {
                 format!("j {}", label.to_string())

@@ -44,7 +44,7 @@
 ;;   ld a3,[const(1)]
 ;;   add a5,a0,a3
 ;;   ult a3,a5,a0##ty=i64
-;;   trap_if a3,heap_oob
+;;   trap_if heap_oob##(a3 ne zero)
 ;;   ld a3,8(a2)
 ;;   ugt a3,a5,a3##ty=i64
 ;;   bne a3,zero,taken(label3),not_taken(label1)
@@ -65,7 +65,7 @@
 ;;   ld a2,[const(1)]
 ;;   add a5,a0,a2
 ;;   ult a2,a5,a0##ty=i64
-;;   trap_if a2,heap_oob
+;;   trap_if heap_oob##(a2 ne zero)
 ;;   ld a2,8(a1)
 ;;   ugt a2,a5,a2##ty=i64
 ;;   bne a2,zero,taken(label3),not_taken(label1)

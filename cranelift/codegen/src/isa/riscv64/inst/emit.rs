@@ -339,7 +339,6 @@ impl Inst {
             | Inst::CallInd { .. }
             | Inst::ReturnCall { .. }
             | Inst::ReturnCallInd { .. }
-            | Inst::TrapIf { .. }
             | Inst::Jal { .. }
             | Inst::CondBr { .. }
             | Inst::LoadExtName { .. }
@@ -365,7 +364,7 @@ impl Inst {
             | Inst::AtomicStore { .. }
             | Inst::AtomicLoad { .. }
             | Inst::AtomicRmwLoop { .. }
-            | Inst::TrapIfC { .. }
+            | Inst::TrapIf { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
             | Inst::FloatRound { .. }
@@ -1824,7 +1823,9 @@ impl Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::TrapIf {
-                        test: rd.to_reg(),
+                        cc: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
                         trap_code: TrapCode::IntegerOverflow,
                     }
                     .emit(&[], sink, emit_info, state);
@@ -1852,7 +1853,9 @@ impl Inst {
                     .emit(&[], sink, emit_info, state);
 
                     Inst::TrapIf {
-                        test: rd.to_reg(),
+                        cc: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
                         trap_code: TrapCode::IntegerOverflow,
                     }
                     .emit(&[], sink, emit_info, state);
@@ -2013,44 +2016,21 @@ impl Inst {
                 .emit_uncompressed(sink, emit_info, state, start_off);
             }
 
-            &Inst::TrapIfC {
+            &Inst::TrapIf {
                 rs1,
                 rs2,
                 cc,
                 trap_code,
             } => {
-                let label_trap = sink.get_label();
                 let label_jump_over = sink.get_label();
+                let cmp = IntegerCompare { kind: cc, rs1, rs2 };
                 Inst::CondBr {
-                    taken: CondBrTarget::Label(label_trap),
-                    not_taken: CondBrTarget::Label(label_jump_over),
-                    kind: IntegerCompare { kind: cc, rs1, rs2 },
+                    taken: CondBrTarget::Label(label_jump_over),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: cmp.inverse(),
                 }
                 .emit(&[], sink, emit_info, state);
-                // trap
-                sink.bind_label(label_trap, &mut state.ctrl_plane);
                 Inst::Udf { trap_code }.emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
-            &Inst::TrapIf { test, trap_code } => {
-                let label_trap = sink.get_label();
-                let label_jump_over = sink.get_label();
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_trap),
-                    not_taken: CondBrTarget::Label(label_jump_over),
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: test,
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // trap
-                sink.bind_label(label_trap, &mut state.ctrl_plane);
-                Inst::Udf {
-                    trap_code: trap_code,
-                }
-                .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::Udf { trap_code } => {
@@ -3334,20 +3314,15 @@ impl Inst {
                 Inst::ElfTlsGetAddr { rd, name }
             }
 
-            Inst::TrapIfC {
+            Inst::TrapIf {
                 rs1,
                 rs2,
                 cc,
                 trap_code,
-            } => Inst::TrapIfC {
+            } => Inst::TrapIf {
                 rs1: allocs.next(rs1),
                 rs2: allocs.next(rs2),
                 cc,
-                trap_code,
-            },
-
-            Inst::TrapIf { test, trap_code } => Inst::TrapIf {
-                test: allocs.next(test),
                 trap_code,
             },
 
