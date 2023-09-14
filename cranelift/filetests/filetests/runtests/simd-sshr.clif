@@ -119,4 +119,6 @@ block0(v0: i64x2):
 ; run: %i64x2_sshr_const3([0x10000000000 0]) == [1 0]
 ; run: %i64x2_sshr_const3([-1 -1]) == [-1 -1]
 ; run: %i64x2_sshr_const3([0x8000000080000000 0x8000000080000000]) == [0xffffffffff800000 0xffffffffff800000]
+; run: %i64x2_sshr_const3([0x2424242424244424 0x8b1b1b1bffffff24]) == [0x242424 0xffffffffff8b1b1b]
+; run: %i64x2_sshr_const3([0x2424242424244424 0x1b1b1b1bffffff24]) == [0x242424 0x1b1b1b]
 

@@ -833,7 +833,7 @@
           (high32 Xmm (x64_psrad vec (xmi_imm 31)))
           (high32 Xmm (x64_pshufd high32 0b11_10_11_01))
           (low32  Xmm (x64_psrad vec (xmi_imm (u32_sub imm 32))))
-          (low32  Xmm (x64_pshufd low32 0b11_10_10_01))
+          (low32  Xmm (x64_pshufd low32 0b11_10_11_01))
         )
         (x64_punpckldq low32 high32)))
 
