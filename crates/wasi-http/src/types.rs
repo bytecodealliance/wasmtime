@@ -3,10 +3,10 @@
 
 use crate::bindings::http::types::{Headers, Method, Scheme};
 use bytes::Bytes;
-use wasmtime_wasi::preview2::StreamState;
 use std::collections::HashMap;
 use std::task;
 use std::{any::Any, pin::Pin};
+use wasmtime_wasi::preview2::StreamState;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
     pipe::{AsyncReadStream, AsyncWriteStream},
@@ -72,9 +72,7 @@ impl HostFields {
 
 impl From<hyper::HeaderMap> for HostFields {
     fn from(headers: hyper::HeaderMap) -> Self {
-        Self(
-
-            )
+        Self(todo!())
     }
 }
 
