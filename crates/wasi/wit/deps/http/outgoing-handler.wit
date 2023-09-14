@@ -8,11 +8,20 @@
 interface outgoing-handler {
   use types.{outgoing-request, request-options, future-incoming-response}
 
+  // FIXME: we would want to use the types.error here but there is a
+  // wasmtime-wit-bindgen bug that prevents us from using the same error in
+  // the two different interfaces, right now...
+  variant error {
+    invalid(string)
+  }
+
   // The parameter and result types of the `handle` function allow the caller
   // to concurrently stream the bodies of the outgoing request and the incoming
   // response.
+  // Consumes the outgoing-request. Gives an error if the outgoing-request
+  // is invalid or cannot be satisfied by this handler.
   handle: func(
     request: outgoing-request,
     options: option<request-options>
-  ) -> future-incoming-response
+  ) -> result<future-incoming-response, error>
 }
