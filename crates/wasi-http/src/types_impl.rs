@@ -264,6 +264,18 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             None => Ok(Err(())),
         }
     }
+    async fn incoming_response_subscribe_trailers(
+        &mut self,
+        _response: IncomingResponse,
+    ) -> wasmtime::Result<Pollable> {
+        todo!()
+    }
+    async fn incoming_response_get_trailers(
+        &mut self,
+        _response: IncomingResponse,
+    ) -> wasmtime::Result<Option<Trailers>> {
+        todo!()
+    }
     async fn new_outgoing_response(
         &mut self,
         _status_code: StatusCode,
