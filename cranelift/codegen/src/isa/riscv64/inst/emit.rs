@@ -3,7 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::CrOp;
+use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CrOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -28,6 +28,13 @@ impl EmitInfo {
 
 pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
+}
+
+pub(crate) fn reg_to_compressed_gpr_num(m: Reg) -> u32 {
+    let real_reg = m.to_real_reg().unwrap().hw_enc();
+    debug_assert!(real_reg >= 8 && real_reg < 16);
+    let compressed_reg = real_reg - 8;
+    u32::try_from(compressed_reg).unwrap()
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -454,9 +461,15 @@ impl Inst {
         sink: &mut MachBuffer<Inst>,
         emit_info: &EmitInfo,
         _state: &mut EmitState,
-        _start_off: &mut u32,
+        start_off: &mut u32,
     ) -> bool {
         let has_zca = emit_info.isa_flags.has_zca();
+
+        fn reg_is_compressible(r: Reg) -> bool {
+            r.to_real_reg()
+                .map(|r| r.hw_enc() >= 8 && r.hw_enc() < 16)
+                .unwrap_or(false)
+        }
 
         match *self {
             // C.ADD
@@ -483,6 +496,66 @@ impl Inst {
             {
                 sink.put2(encode_cr_type(CrOp::CMv, rd, rs));
             }
+
+            // CA Ops
+            Inst::AluRRR {
+                alu_op:
+                    alu_op @ (AluOPRRR::And
+                    | AluOPRRR::Or
+                    | AluOPRRR::Xor
+                    | AluOPRRR::Sub
+                    | AluOPRRR::Addw
+                    | AluOPRRR::Subw),
+                rd,
+                rs1,
+                rs2,
+            } if has_zca
+                && rd.to_reg() == rs1
+                && reg_is_compressible(rs1)
+                && reg_is_compressible(rs2) =>
+            {
+                let op = match alu_op {
+                    AluOPRRR::And => CaOp::CAnd,
+                    AluOPRRR::Or => CaOp::COr,
+                    AluOPRRR::Xor => CaOp::CXor,
+                    AluOPRRR::Sub => CaOp::CSub,
+                    AluOPRRR::Addw => CaOp::CAddw,
+                    AluOPRRR::Subw => CaOp::CSubw,
+                    _ => unreachable!(),
+                };
+
+                sink.put2(encode_ca_type(op, rd, rs2));
+            }
+
+            // c.j
+            //
+            // We don't have a separate JAL as that is only availabile in RV32C
+            Inst::Jal { label } if has_zca => {
+                sink.use_label_at_offset(*start_off, label, LabelUse::RVCJump);
+                sink.add_uncond_branch(*start_off, *start_off + 2, label);
+                sink.put2(encode_cj_type(CjOp::CJ, Imm12::zero()));
+            }
+
+            // c.jr
+            Inst::Jalr { rd, base, offset }
+                if has_zca
+                    && rd.to_reg() == zero_reg()
+                    && base != zero_reg()
+                    && offset.as_i16() == 0 =>
+            {
+                sink.put2(encode_cr2_type(CrOp::CJr, base));
+            }
+
+            // c.jalr
+            Inst::Jalr { rd, base, offset }
+                if has_zca
+                    && rd.to_reg() == link_reg()
+                    && base != zero_reg()
+                    && offset.as_i16() == 0 =>
+            {
+                sink.put2(encode_cr2_type(CrOp::CJalr, base));
+            }
+
             _ => return false,
         }
 
@@ -678,7 +751,7 @@ impl Inst {
                             rd,
                             imm: Imm20::from_bits(0),
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit_uncompressed(sink, emit_info, state, start_off);
 
                         // Emit a relocation for the load. This patches the offset into the instruction.
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
@@ -735,9 +808,14 @@ impl Inst {
                 // only to constrain registers at a certain point.
             }
             &Inst::Ret {} => {
-                //jalr x0, x1, 0
-                let x: u32 = (0b1100111) | (1 << 15);
-                sink.put4(x);
+                // RISC-V does not have a dedicated ret instruction, instead we emit the equivalent
+                // `jalr x0, x1, 0` that jumps to the return address.
+                Inst::Jalr {
+                    rd: writable_zero_reg(),
+                    base: link_reg(),
+                    offset: Imm12::zero(),
+                }
+                .emit(&[], sink, emit_info, state);
             }
 
             &Inst::Extend {
@@ -820,7 +898,7 @@ impl Inst {
                             0,
                         )
                         .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
                     }
                     ExternalName::LibCall(..)
                     | ExternalName::TestCase { .. }
@@ -834,17 +912,21 @@ impl Inst {
                         }
                         .emit(&[], sink, emit_info, state);
 
-                        if let Some(s) = state.take_stack_map() {
-                            sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                        }
-                        if info.opcode.is_call() {
-                            sink.add_call_site(info.opcode);
-                        }
                         // call
-                        Inst::Jalr {
-                            rd: writable_link_reg(),
-                            base: spilltmp_reg2(),
-                            offset: Imm12::zero(),
+                        Inst::CallInd {
+                            info: Box::new(CallIndInfo {
+                                rn: spilltmp_reg2(),
+                                // This doesen't really matter but we might as well send
+                                // the correct info.
+                                uses: info.uses.clone(),
+                                defs: info.defs.clone(),
+                                clobbers: info.clobbers,
+                                opcode: Opcode::CallIndirect,
+                                caller_callconv: info.caller_callconv,
+                                callee_callconv: info.callee_callconv,
+                                // Send this as 0 to avoid updating the pop size twice.
+                                callee_pop_size: 0,
+                            }),
                         }
                         .emit(&[], sink, emit_info, state);
                     }
@@ -858,19 +940,22 @@ impl Inst {
                 );
             }
             &Inst::CallInd { ref info } => {
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                }
+                let start_offset = sink.cur_offset();
 
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
                 Inst::Jalr {
                     rd: writable_link_reg(),
                     base: info.rn,
                     offset: Imm12::zero(),
                 }
                 .emit(&[], sink, emit_info, state);
+
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
+                }
+
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.opcode);
+                }
 
                 let callee_pop_size = i64::from(info.callee_pop_size);
                 state.virtual_sp_offset -= callee_pop_size;
@@ -896,7 +981,7 @@ impl Inst {
                 sink.add_reloc(Reloc::RiscvCall, &callee, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
@@ -1071,7 +1156,7 @@ impl Inst {
                 sink.use_label_at_offset(sink.cur_offset(), default_target, LabelUse::PCRel32);
                 Inst::construct_auipc_and_jalr(None, tmp2, 0)
                     .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 // Compute the jump table offset.
                 // We need to emit a PC relative offset,
@@ -1228,7 +1313,7 @@ impl Inst {
                             rd,
                             imm: Imm20::from_bits(0),
                         };
-                        inst.emit(&[], sink, emit_info, state);
+                        inst.emit_uncompressed(sink, emit_info, state, start_off);
 
                         // Emit an add to the address with a relocation.
                         // This later gets patched up with the correct offset.
@@ -1239,7 +1324,7 @@ impl Inst {
                             rs: rd.to_reg(),
                             imm12: Imm12::zero(),
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit_uncompressed(sink, emit_info, state, start_off);
                     }
                     (amode, _, _) => {
                         unimplemented!("LoadAddr: {:?}", amode);

@@ -6,7 +6,7 @@ use super::*;
 use crate::ir::condcodes::CondCode;
 
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
-use crate::isa::riscv64::lower::isle::generated_code::{COpcodeSpace, CrOp};
+use crate::isa::riscv64::lower::isle::generated_code::{COpcodeSpace, CaOp, CjOp, CrOp};
 use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
@@ -1914,15 +1914,63 @@ impl CrOp {
     pub fn funct4(&self) -> u32 {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CrOp::CMv => 0b1000,
-            CrOp::CAdd => 0b1001,
+            // `c.jr` has the same op/funct4 as C.MV, but RS2 is 0, which is illegal for mv.
+            CrOp::CMv | CrOp::CJr => 0b1000,
+            CrOp::CAdd | CrOp::CJalr => 0b1001,
         }
     }
 
     pub fn op(&self) -> COpcodeSpace {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CrOp::CMv | CrOp::CAdd => COpcodeSpace::C2,
+            CrOp::CMv | CrOp::CAdd | CrOp::CJr | CrOp::CJalr => COpcodeSpace::C2,
+        }
+    }
+}
+
+impl CaOp {
+    pub fn funct2(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CaOp::CAnd => 0b11,
+            CaOp::COr => 0b10,
+            CaOp::CXor => 0b01,
+            CaOp::CSub => 0b00,
+            CaOp::CAddw => 0b01,
+            CaOp::CSubw => 0b00,
+        }
+    }
+
+    pub fn funct6(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CaOp::CAnd | CaOp::COr | CaOp::CXor | CaOp::CSub => 0b100_011,
+            CaOp::CSubw | CaOp::CAddw => 0b100_111,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CaOp::CAnd | CaOp::COr | CaOp::CXor | CaOp::CSub | CaOp::CAddw | CaOp::CSubw => {
+                COpcodeSpace::C1
+            }
+        }
+    }
+}
+
+impl CjOp {
+    pub fn funct3(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CjOp::CJ => 0b101,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CjOp::CJ => COpcodeSpace::C1,
         }
     }
 }
