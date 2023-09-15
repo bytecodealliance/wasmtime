@@ -399,6 +399,12 @@ impl TableHttpExt for Table {
                 .write(chunk)
                 .map_err(|_| TableError::NotPresent)?;
         }
+        output_stream.flush().map_err(|_| TableError::NotPresent)?;
+        let readiness = tokio::time::timeout(
+            std::time::Duration::from_millis(10),
+            output_stream.write_ready(),
+        )
+        .await;
 
         let input_stream = Box::new(input_stream);
         let output_id = self.push_output_stream(Box::new(output_stream))?;
