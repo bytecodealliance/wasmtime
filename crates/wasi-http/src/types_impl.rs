@@ -1,8 +1,9 @@
 use std::any::Any;
 
 use crate::bindings::http::types::{
-    Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse, Method,
-    OutgoingRequest, OutgoingResponse, ResponseOutparam, Scheme, StatusCode,
+    Error, Fields, FutureIncomingResponse, FutureTrailers, Headers, IncomingRequest,
+    IncomingResponse, Method, OutgoingRequest, OutgoingResponse, ResponseOutparam, Scheme,
+    StatusCode, Trailers,
 };
 use crate::types::{
     HeadersRef, HostFields, HostFutureIncomingResponse, HostIncomingBody, HostIncomingResponse,
@@ -249,7 +250,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     async fn incoming_response_consume(
         &mut self,
         response: IncomingResponse,
-    ) -> wasmtime::Result<Result<InputStream, ()>> {
+    ) -> wasmtime::Result<Result<(InputStream, FutureTrailers), ()>> {
         let table = self.table();
         let r = table
             .get_incoming_response_mut(response)
@@ -257,22 +258,25 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         match r.body.take() {
             Some(body) => {
-                let id = self.table().push_input_stream(body)?;
-                Ok(Ok(id))
+                let (handle, reader, future) = body.spawn();
+                todo!();
+                // let stream = self.table().push_input_stream(data_stream)?;
+                // let trailers = self.table().push_future_trailers(trailers)?;
+                // Ok(Ok((stream, trailers)))
             }
 
             None => Ok(Err(())),
         }
     }
-    async fn incoming_response_subscribe_trailers(
+    async fn future_trailers_subscribe(
         &mut self,
-        _response: IncomingResponse,
+        _response: FutureTrailers,
     ) -> wasmtime::Result<Pollable> {
         todo!()
     }
-    async fn incoming_response_get_trailers(
+    async fn future_trailers_get(
         &mut self,
-        _response: IncomingResponse,
+        _response: FutureTrailers,
     ) -> wasmtime::Result<Option<Trailers>> {
         todo!()
     }
