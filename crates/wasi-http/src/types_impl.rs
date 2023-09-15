@@ -261,11 +261,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         match r.body.take() {
             Some(body) => {
-                let (handle, reader, future) = body.spawn();
-                todo!();
-                // let stream = self.table().push_input_stream(data_stream)?;
-                // let trailers = self.table().push_future_trailers(trailers)?;
-                // Ok(Ok((stream, trailers)))
+                let id = self
+                    .table()
+                    .push_incoming_body(HostIncomingBody::new(body))?;
+                Ok(Ok(id))
             }
 
             None => Ok(Err(())),
@@ -332,7 +331,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let resp = self.table().push_incoming_response(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers: HeadersRef::Value(parts.headers),
-            body: Some(Box::new(HostIncomingBody::new(body))),
+            body: Some(body),
             worker: resp.worker,
         })?;
 

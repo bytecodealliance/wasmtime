@@ -163,7 +163,7 @@ interface types {
   future-trailers-subscribe: func(this: /* borrow */ future-trailers) -> /* child */ pollable
 
   /// Retrieve reference to trailers, if they are ready.
-  future-trailers-get: func(response: /* borrow */ future-trailers) -> option</* child */ trailers>
+  future-trailers-get: func(response: /* borrow */ future-trailers) -> option<result</* child */ trailers, error>>
 
   type outgoing-response = u32
   drop-outgoing-response: func(response: /* own */ outgoing-response)

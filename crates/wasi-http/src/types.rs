@@ -2,7 +2,7 @@
 //! implementation of the wasi-http API.
 
 use crate::{
-    bindings::http::types::{Headers, Method, Scheme},
+    bindings::http::types::{Headers, IncomingBody, Method, Scheme},
     body::HostIncomingBody,
 };
 use std::collections::HashMap;
@@ -47,7 +47,7 @@ pub struct HostOutgoingRequest {
 pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: HeadersRef,
-    pub body: Option<Box<HostIncomingBody>>,
+    pub body: Option<hyper::body::Incoming>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
 
@@ -173,6 +173,10 @@ pub trait TableHttpExt {
         &mut self,
         id: u32,
     ) -> Result<HostFutureIncomingResponse, TableError>;
+
+    fn push_incoming_body(&mut self, body: HostIncomingBody) -> Result<IncomingBody, TableError>;
+    fn get_incoming_body(&mut self, id: IncomingBody) -> Result<&mut HostIncomingBody, TableError>;
+    fn delete_incoming_body(&mut self, id: IncomingBody) -> Result<HostIncomingBody, TableError>;
 }
 
 #[async_trait::async_trait]
@@ -250,6 +254,18 @@ impl TableHttpExt for Table {
         &mut self,
         id: u32,
     ) -> Result<HostFutureIncomingResponse, TableError> {
+        self.delete(id)
+    }
+
+    fn push_incoming_body(&mut self, body: HostIncomingBody) -> Result<IncomingBody, TableError> {
+        self.push(Box::new(body))
+    }
+
+    fn get_incoming_body(&mut self, id: IncomingBody) -> Result<&mut HostIncomingBody, TableError> {
+        self.get_mut(id)
+    }
+
+    fn delete_incoming_body(&mut self, id: IncomingBody) -> Result<HostIncomingBody, TableError> {
         self.delete(id)
     }
 }

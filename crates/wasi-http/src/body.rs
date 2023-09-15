@@ -2,30 +2,18 @@ use crate::bindings::http::types::{Headers, Method, Scheme};
 use std::{pin, task};
 use wasmtime_wasi::preview2::{self, AbortOnDropJoinHandle, HostInputStream, StreamState};
 
-pub type DataReceiver = tokio::sync::mpsc::Receiver<bytes::Bytes>;
-
-pub type HostFutureTrailers = tokio::sync::oneshot::Receiver<hyper::HeaderMap>;
-
 pub struct HostIncomingBody {
-    pub body: hyper::body::Incoming,
+    pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
+    pub receiver: tokio::sync::mpsc::Receiver<bytes::Bytes>,
+    pub trailers: tokio::sync::oneshot::Receiver<hyper::HeaderMap>,
 }
 
 impl HostIncomingBody {
-    pub fn new(body: hyper::body::Incoming) -> Self {
-        Self { body }
-    }
-
     /// Consume the state held in the [`HostIncomingBody`] to spawn a task that will drive the
     /// streaming body to completion. Data segments will be communicated out over the
     /// [`DataReceiver`] channel, and a [`HostFutureTrailers`] gives a way to block on/retrieve the
     /// trailers.
-    pub fn spawn(
-        mut self,
-    ) -> (
-        AbortOnDropJoinHandle<anyhow::Result<()>>,
-        DataReceiver,
-        HostFutureTrailers,
-    ) {
+    pub fn new(mut body: hyper::body::Incoming) -> Self {
         use hyper::body::{Body, Frame};
 
         struct FrameFut<'a> {
@@ -53,11 +41,11 @@ impl HostIncomingBody {
             }
         }
 
-        let (writer, reader) = tokio::sync::mpsc::channel(1);
-        let (trailer_writer, trailer_reader) = tokio::sync::oneshot::channel();
+        let (writer, receiver) = tokio::sync::mpsc::channel(1);
+        let (trailer_writer, trailers) = tokio::sync::oneshot::channel();
 
-        let handle = preview2::spawn(async move {
-            while let Some(frame) = FrameFut::new(&mut self.body).await {
+        let worker = preview2::spawn(async move {
+            while let Some(frame) = FrameFut::new(&mut body).await {
                 // TODO: we need to actually handle errors here, right now we'll exit the loop
                 // early without signaling properly to either channel that we're done.
                 let frame = frame?;
@@ -93,7 +81,11 @@ impl HostIncomingBody {
             Ok(())
         });
 
-        (handle, reader, trailer_reader)
+        Self {
+            worker,
+            receiver,
+            trailers,
+        }
     }
 }
 
