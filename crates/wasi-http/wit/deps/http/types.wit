@@ -126,14 +126,15 @@ interface types {
   drop-outgoing-response: func(response: outgoing-response)
   incoming-response-status: func(response: incoming-response) -> status-code
   incoming-response-headers: func(response: incoming-response) -> headers
-  incoming-response-consume: func(response: incoming-response) -> result<input-stream>
+
+  incoming-response-consume: func(response: incoming-response) -> result<(input-stream, future-trailers)>
 
   /// Pollable that resolves when the body has been fully read, and the trailers
   /// are ready to be consumed.
-  incoming-response-subscribe-trailers: func(response: incoming-response) -> pollable
+  future-trailers-subscribe: func(response: incoming-response) -> pollable
 
   /// Retrieve reference to trailers, if they are ready.
-  incoming-response-get-trailers: func(response: incoming-response) -> option<trailers>
+  future-trailers-get: func(response: incoming-response) -> option<trailers>
 
   /// Consumes the headers.
   new-outgoing-response: func(
