@@ -2022,16 +2022,13 @@ impl Inst {
                 cc,
                 trap_code,
             } => {
-                let label_jump_over = sink.get_label();
-                let cmp = IntegerCompare { kind: cc, rs1, rs2 };
+                let trap_label = sink.defer_trap(trap_code, state.take_stack_map());
                 Inst::CondBr {
-                    taken: CondBrTarget::Label(label_jump_over),
+                    taken: CondBrTarget::Label(trap_label),
                     not_taken: CondBrTarget::Fallthrough,
-                    kind: cmp.inverse(),
+                    kind: IntegerCompare { kind: cc, rs1, rs2 },
                 }
                 .emit(&[], sink, emit_info, state);
-                Inst::Udf { trap_code }.emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
