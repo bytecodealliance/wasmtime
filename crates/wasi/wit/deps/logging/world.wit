@@ -1,0 +1,5 @@
+package wasi:logging
+
+world imports {
+    import logging
+}

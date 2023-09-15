@@ -3,7 +3,7 @@
 // imported and exported interfaces.
 interface types {
   use wasi:io/streams.{input-stream, output-stream}
-  use wasi:poll/poll.{pollable}
+  use wasi:io/poll.{pollable}
 
   // This type corresponds to HTTP standard Methods.
   variant method {
@@ -100,7 +100,7 @@ interface types {
   // Additional optional parameters that can be set when making a request.
   record request-options {
     // The following timeouts are specific to the HTTP protocol and work
-    // independently of the overall timeouts passed to `io.poll.poll-oneoff`.
+    // independently of the overall timeouts passed to `io.poll.poll-list`.
 
     // The timeout for the initial connect.
     connect-timeout-ms: option<u32>,
@@ -191,7 +191,7 @@ interface types {
   /// `future-incoming-response`, the client can call the non-blocking `get`
   /// method to get the result if it is available. If the result is not available,
   /// the client can call `listen` to get a `pollable` that can be passed to
-  /// `io.poll.poll-oneoff`.
+  /// `wasi:io/poll.poll-list`.
   type future-incoming-response = u32
   drop-future-incoming-response: func(f: /* own */ future-incoming-response)
   /// option indicates readiness.
