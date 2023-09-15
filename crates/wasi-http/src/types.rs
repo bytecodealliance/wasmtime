@@ -400,7 +400,7 @@ impl TableHttpExt for Table {
                 .map_err(|_| TableError::NotPresent)?;
         }
         output_stream.flush().map_err(|_| TableError::NotPresent)?;
-        let readiness = tokio::time::timeout(
+        let _readiness = tokio::time::timeout(
             std::time::Duration::from_millis(10),
             output_stream.write_ready(),
         )
