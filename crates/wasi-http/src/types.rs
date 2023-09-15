@@ -392,12 +392,19 @@ impl TableHttpExt for Table {
                 .await
                 .map_err(|_| TableError::NotPresent)?;
 
-            let chunk = content.split_to(permit as usize);
+            let len = content.len().min(permit);
+            let chunk = content.split_to(len);
 
             output_stream
                 .write(chunk)
                 .map_err(|_| TableError::NotPresent)?;
         }
+        output_stream.flush().map_err(|_| TableError::NotPresent)?;
+        let _readiness = tokio::time::timeout(
+            std::time::Duration::from_millis(10),
+            output_stream.write_ready(),
+        )
+        .await;
 
         let input_stream = Box::new(input_stream);
         let output_id = self.push_output_stream(Box::new(output_stream))?;
@@ -437,6 +444,6 @@ mod test {
 
     #[test]
     fn instantiate() {
-        WasiHttpCtx::new().unwrap();
+        WasiHttpCtx::new();
     }
 }

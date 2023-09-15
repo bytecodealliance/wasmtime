@@ -90,11 +90,11 @@ pub async fn request(
             poll::poll_oneoff(&[sub.pollable]);
 
             let permit = match streams::check_write(request_body) {
-                Ok(n) => usize::try_from(n)?,
+                Ok(n) => n,
                 Err(_) => anyhow::bail!("output stream error"),
             };
 
-            let len = buf.len().min(permit);
+            let len = buf.len().min(permit as usize);
             let (chunk, rest) = buf.split_at(len);
             buf = rest;
 
