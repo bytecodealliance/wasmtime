@@ -1,8 +1,7 @@
 use super::clocks::host::{monotonic_clock, wall_clock};
-use crate::preview2::bindings::filesystem::types::Descriptor;
 use crate::preview2::{
     clocks::{self, HostMonotonicClock, HostWallClock},
-    filesystem::{Dir, TableFsExt},
+    filesystem::Dir,
     pipe, random, stdio,
     stdio::{StdioInput, StdioOutput},
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
@@ -14,7 +13,6 @@ use cap_std::net::Pool;
 use cap_std::{ambient_authority, AmbientAuthority};
 use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use wasmtime::component::Resource;
 
 pub struct WasiCtxBuilder {
     stdin: (Box<dyn HostInputStream>, IsATTY),
@@ -297,16 +295,6 @@ impl WasiCtxBuilder {
         let stdout_ix = table.push_output_stream(stdout.0).context("stdout")?;
         let stderr_ix = table.push_output_stream(stderr.0).context("stderr")?;
 
-        let preopens = preopens
-            .into_iter()
-            .map(|(dir, path)| {
-                let dirfd = table
-                    .push_dir(dir)
-                    .with_context(|| format!("preopen {path:?}"))?;
-                Ok((dirfd, path))
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
         Ok(WasiCtx {
             stdin: StdioInput {
                 input_stream: stdin_ix,
@@ -348,7 +336,7 @@ pub struct WasiCtx {
     pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
-    pub(crate) preopens: Vec<(Resource<Descriptor>, String)>,
+    pub(crate) preopens: Vec<(Dir, String)>,
     pub(crate) stdin: StdioInput,
     pub(crate) stdout: StdioOutput,
     pub(crate) stderr: StdioOutput,
