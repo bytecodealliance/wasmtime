@@ -1,9 +1,9 @@
 use std::any::Any;
 
 use crate::bindings::http::types::{
-    Error, Fields, FutureIncomingResponse, FutureTrailers, Headers, IncomingRequest,
-    IncomingResponse, Method, OutgoingRequest, OutgoingResponse, ResponseOutparam, Scheme,
-    StatusCode, Trailers,
+    self, Error, Fields, FutureIncomingResponse, FutureTrailers, Headers, IncomingBody,
+    IncomingRequest, IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse,
+    ResponseOutparam, Scheme, StatusCode, Trailers,
 };
 use crate::types::{
     HeadersRef, HostFields, HostFutureIncomingResponse, HostIncomingBody, HostIncomingResponse,
@@ -26,10 +26,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[drop_fields] deleting fields")?;
         Ok(())
     }
-    async fn new_fields(&mut self, entries: Vec<(String, String)>) -> wasmtime::Result<Fields> {
+    async fn new_fields(&mut self, entries: Vec<(String, Vec<u8>)>) -> wasmtime::Result<Fields> {
         let mut map = HostFields::new();
         for (key, value) in entries {
-            map.0.insert(key, vec![value.clone().into_bytes()]);
+            map.0.insert(key, vec![value.clone()]);
         }
 
         let id = self
@@ -204,7 +204,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         &mut self,
         _outparam: ResponseOutparam,
         _response: Result<OutgoingResponse, Error>,
-    ) -> wasmtime::Result<Result<(), ()>> {
+    ) -> wasmtime::Result<()> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
     async fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
@@ -250,7 +250,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     async fn incoming_response_consume(
         &mut self,
         response: IncomingResponse,
-    ) -> wasmtime::Result<Result<(InputStream, FutureTrailers), ()>> {
+    ) -> wasmtime::Result<Result<IncomingBody, ()>> {
         let table = self.table();
         let r = table
             .get_incoming_response_mut(response)
@@ -268,6 +268,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             None => Ok(Err(())),
         }
     }
+    async fn drop_future_trailers(&mut self, id: FutureTrailers) -> wasmtime::Result<()> {
+        todo!()
+    }
+
     async fn future_trailers_subscribe(
         &mut self,
         _response: FutureTrailers,
@@ -302,7 +306,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     async fn future_incoming_response_get(
         &mut self,
         id: FutureIncomingResponse,
-    ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>> {
+    ) -> wasmtime::Result<Option<Result<Result<IncomingResponse, Error>, ()>>> {
         if !self.table().get_future_incoming_response(id)?.is_ready() {
             return Ok(None);
         }
@@ -316,7 +320,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             Err(e) => {
                 // Trapping if it's not possible to downcast to an wasi-http error
                 let e = e.downcast::<Error>()?;
-                return Ok(Some(Err(e)));
+                return Ok(Some(Ok(Err(e))));
             }
         };
 
@@ -328,7 +332,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             body: Some(Box::new(HostIncomingBody::new(body, resp.worker))),
         })?;
 
-        Ok(Some(Ok(resp)))
+        Ok(Some(Ok(Ok(resp))))
     }
     async fn listen_to_future_incoming_response(
         &mut self,
@@ -349,5 +353,35 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         })?;
 
         Ok(pollable)
+    }
+
+    async fn incoming_body_stream(
+        &mut self,
+        id: IncomingBody,
+    ) -> wasmtime::Result<Result<InputStream, ()>> {
+        todo!()
+    }
+
+    async fn incoming_body_finish(&mut self, id: IncomingBody) -> wasmtime::Result<FutureTrailers> {
+        todo!()
+    }
+
+    async fn drop_incoming_body(&mut self, id: IncomingBody) -> wasmtime::Result<()> {
+        todo!()
+    }
+
+    async fn outgoing_body_write(
+        &mut self,
+        id: OutgoingBody,
+    ) -> wasmtime::Result<Result<OutputStream, ()>> {
+        todo!()
+    }
+
+    async fn outgoing_body_write_trailers(&mut self, id: IncomingBody, ts: Trailers) -> wasmtime::Result<()> {
+        todo!()
+    }
+
+    async fn drop_outgoing_body(&mut self, id: OutgoingBody) -> wasmtime::Result<()> {
+        todo!()
     }
 }
