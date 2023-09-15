@@ -133,7 +133,6 @@ async fn outbound_request_post() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[ignore = "test is currently flaky in ci and needs to be debugged"]
 async fn outbound_request_large_post() {
     setup_http1(run("outbound_request_large_post"))
         .await

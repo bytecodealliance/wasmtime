@@ -121,7 +121,6 @@ fn outbound_request_post() {
 }
 
 #[test_log::test]
-#[ignore = "test is currently flaky in ci and needs to be debugged"]
 fn outbound_request_large_post() {
     setup_http1_sync(|| run("outbound_request_large_post")).unwrap();
 }
