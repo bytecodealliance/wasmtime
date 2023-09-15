@@ -1,15 +1,18 @@
 use std::any::Any;
 
 use crate::bindings::http::types::{
-    self, Error, Fields, FutureIncomingResponse, FutureTrailers, Headers, IncomingBody,
-    IncomingRequest, IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse,
-    ResponseOutparam, Scheme, StatusCode, Trailers,
-};
-use crate::types::{
-    HeadersRef, HostFields, HostFutureIncomingResponse, HostIncomingBody, HostIncomingResponse,
-    HostOutgoingRequest, TableHttpExt,
+    Error, Fields, FutureIncomingResponse, FutureTrailers, Headers, IncomingBody, IncomingRequest,
+    IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse, ResponseOutparam,
+    Scheme, StatusCode, Trailers,
 };
 use crate::WasiHttpView;
+use crate::{
+    body::HostIncomingBody,
+    types::{
+        HeadersRef, HostFields, HostFutureIncomingResponse, HostIncomingResponse,
+        HostOutgoingRequest, TableHttpExt,
+    },
+};
 use anyhow::{anyhow, bail, Context};
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
@@ -329,7 +332,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let resp = self.table().push_incoming_response(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers: HeadersRef::Value(parts.headers),
-            body: Some(Box::new(HostIncomingBody::new(body, resp.worker))),
+            body: Some(Box::new(HostIncomingBody::new(body))),
+            worker: resp.worker,
         })?;
 
         Ok(Some(Ok(Ok(resp))))
@@ -377,7 +381,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         todo!()
     }
 
-    async fn outgoing_body_write_trailers(&mut self, id: IncomingBody, ts: Trailers) -> wasmtime::Result<()> {
+    async fn outgoing_body_write_trailers(
+        &mut self,
+        id: IncomingBody,
+        ts: Trailers,
+    ) -> wasmtime::Result<()> {
         todo!()
     }
 

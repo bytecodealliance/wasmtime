@@ -7,6 +7,7 @@ pub mod incoming_handler;
 pub mod proxy;
 pub mod types;
 pub mod types_impl;
+pub mod body;
 
 pub mod bindings {
     #[cfg(feature = "sync")]
