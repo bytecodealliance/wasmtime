@@ -17,6 +17,11 @@
 /// `..` and symbolic link steps, reaches a directory outside of the base
 /// directory, or reaches a symlink to an absolute or rooted path in the
 /// underlying filesystem, the function fails with `error-code::not-permitted`.
+///
+/// For more information about WASI path resolution and sandboxing, see
+/// [WASI filesystem path resolution].
+///
+/// [WASI filesystem path resolution]: https://github.com/WebAssembly/wasi-filesystem/blob/main/path-resolution.md
 interface types {
     use wasi:io/streams.{input-stream, output-stream}
     use wasi:clocks/wall-clock.{datetime}
@@ -102,11 +107,20 @@ interface types {
         /// length in bytes of the pathname contained in the symbolic link.
         size: filesize,
         /// Last data access timestamp.
-        data-access-timestamp: datetime,
+        ///
+        /// If the `option` is none, the platform doesn't maintain an access
+        /// timestamp for this file.
+        data-access-timestamp: option<datetime>,
         /// Last data modification timestamp.
-        data-modification-timestamp: datetime,
-        /// Last file status change timestamp.
-        status-change-timestamp: datetime,
+        ///
+        /// If the `option` is none, the platform doesn't maintain a
+        /// modification timestamp for this file.
+        data-modification-timestamp: option<datetime>,
+        /// Last file status-change timestamp.
+        ///
+        /// If the `option` is none, the platform doesn't maintain a
+        /// status-change timestamp for this file.
+        status-change-timestamp: option<datetime>,
     }
 
     /// Flags determining the method of how paths are resolved.
@@ -277,13 +291,6 @@ interface types {
         no-reuse,
     }
 
-    /// A descriptor is a reference to a filesystem object, which may be a file,
-    /// directory, named pipe, special file, or other object on which filesystem
-    /// calls may be made.
-    ///
-    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
-    type descriptor = u32
-
     /// A 128-bit hash value, split into parts because wasm doesn't have a
     /// 128-bit integer type.
     record metadata-hash-value {
@@ -293,532 +300,499 @@ interface types {
        upper: u64,
     }
 
-    /// Return a stream for reading from a file, if available.
-    ///
-    /// May fail with an error-code describing why the file cannot be read.
-    ///
-    /// Multiple read, write, and append streams may be active on the same open
-    /// file and they do not interfere with each other.
-    ///
-    /// Note: This allows using `read-stream`, which is similar to `read` in POSIX.
-    read-via-stream: func(
-        this: descriptor,
-        /// The offset within the file at which to start reading.
-        offset: filesize,
-    ) -> result<input-stream, error-code>
+    /// A descriptor is a reference to a filesystem object, which may be a file,
+    /// directory, named pipe, special file, or other object on which filesystem
+    /// calls may be made.
+    resource descriptor {
+        /// Return a stream for reading from a file, if available.
+        ///
+        /// May fail with an error-code describing why the file cannot be read.
+        ///
+        /// Multiple read, write, and append streams may be active on the same open
+        /// file and they do not interfere with each other.
+        ///
+        /// Note: This allows using `read-stream`, which is similar to `read` in POSIX.
+        read-via-stream: func(
+            /// The offset within the file at which to start reading.
+            offset: filesize,
+        ) -> result<input-stream, error-code>
 
-    /// Return a stream for writing to a file, if available.
-    ///
-    /// May fail with an error-code describing why the file cannot be written.
-    ///
-    /// Note: This allows using `write-stream`, which is similar to `write` in
-    /// POSIX.
-    write-via-stream: func(
-        this: descriptor,
-        /// The offset within the file at which to start writing.
-        offset: filesize,
-    ) -> result<output-stream, error-code>
+        /// Return a stream for writing to a file, if available.
+        ///
+        /// May fail with an error-code describing why the file cannot be written.
+        ///
+        /// Note: This allows using `write-stream`, which is similar to `write` in
+        /// POSIX.
+        write-via-stream: func(
+            /// The offset within the file at which to start writing.
+            offset: filesize,
+        ) -> result<output-stream, error-code>
 
-    /// Return a stream for appending to a file, if available.
-    ///
-    /// May fail with an error-code describing why the file cannot be appended.
-    ///
-    /// Note: This allows using `write-stream`, which is similar to `write` with
-    /// `O_APPEND` in in POSIX.
-    append-via-stream: func(
-        this: descriptor,
-    ) -> result<output-stream, error-code>
+        /// Return a stream for appending to a file, if available.
+        ///
+        /// May fail with an error-code describing why the file cannot be appended.
+        ///
+        /// Note: This allows using `write-stream`, which is similar to `write` with
+        /// `O_APPEND` in in POSIX.
+        append-via-stream: func() -> result<output-stream, error-code>
 
-    /// Provide file advisory information on a descriptor.
-    ///
-    /// This is similar to `posix_fadvise` in POSIX.
-    advise: func(
-        this: descriptor,
-        /// The offset within the file to which the advisory applies.
-        offset: filesize,
-        /// The length of the region to which the advisory applies.
-        length: filesize,
-        /// The advice.
-        advice: advice
-    ) -> result<_, error-code>
+        /// Provide file advisory information on a descriptor.
+        ///
+        /// This is similar to `posix_fadvise` in POSIX.
+        advise: func(
+            /// The offset within the file to which the advisory applies.
+            offset: filesize,
+            /// The length of the region to which the advisory applies.
+            length: filesize,
+            /// The advice.
+            advice: advice
+        ) -> result<_, error-code>
 
-    /// Synchronize the data of a file to disk.
-    ///
-    /// This function succeeds with no effect if the file descriptor is not
-    /// opened for writing.
-    ///
-    /// Note: This is similar to `fdatasync` in POSIX.
-    sync-data: func(this: descriptor) -> result<_, error-code>
+        /// Synchronize the data of a file to disk.
+        ///
+        /// This function succeeds with no effect if the file descriptor is not
+        /// opened for writing.
+        ///
+        /// Note: This is similar to `fdatasync` in POSIX.
+        sync-data: func() -> result<_, error-code>
 
-    /// Get flags associated with a descriptor.
-    ///
-    /// Note: This returns similar flags to `fcntl(fd, F_GETFL)` in POSIX.
-    ///
-    /// Note: This returns the value that was the `fs_flags` value returned
-    /// from `fdstat_get` in earlier versions of WASI.
-    get-flags: func(this: descriptor) -> result<descriptor-flags, error-code>
+        /// Get flags associated with a descriptor.
+        ///
+        /// Note: This returns similar flags to `fcntl(fd, F_GETFL)` in POSIX.
+        ///
+        /// Note: This returns the value that was the `fs_flags` value returned
+        /// from `fdstat_get` in earlier versions of WASI.
+        get-flags: func() -> result<descriptor-flags, error-code>
 
-    /// Get the dynamic type of a descriptor.
-    ///
-    /// Note: This returns the same value as the `type` field of the `fd-stat`
-    /// returned by `stat`, `stat-at` and similar.
-    ///
-    /// Note: This returns similar flags to the `st_mode & S_IFMT` value provided
-    /// by `fstat` in POSIX.
-    ///
-    /// Note: This returns the value that was the `fs_filetype` value returned
-    /// from `fdstat_get` in earlier versions of WASI.
-    get-type: func(this: descriptor) -> result<descriptor-type, error-code>
+        /// Get the dynamic type of a descriptor.
+        ///
+        /// Note: This returns the same value as the `type` field of the `fd-stat`
+        /// returned by `stat`, `stat-at` and similar.
+        ///
+        /// Note: This returns similar flags to the `st_mode & S_IFMT` value provided
+        /// by `fstat` in POSIX.
+        ///
+        /// Note: This returns the value that was the `fs_filetype` value returned
+        /// from `fdstat_get` in earlier versions of WASI.
+        get-type: func() -> result<descriptor-type, error-code>
 
-    /// Adjust the size of an open file. If this increases the file's size, the
-    /// extra bytes are filled with zeros.
-    ///
-    /// Note: This was called `fd_filestat_set_size` in earlier versions of WASI.
-    set-size: func(this: descriptor, size: filesize) -> result<_, error-code>
+        /// Adjust the size of an open file. If this increases the file's size, the
+        /// extra bytes are filled with zeros.
+        ///
+        /// Note: This was called `fd_filestat_set_size` in earlier versions of WASI.
+        set-size: func(size: filesize) -> result<_, error-code>
 
-    /// Adjust the timestamps of an open file or directory.
-    ///
-    /// Note: This is similar to `futimens` in POSIX.
-    ///
-    /// Note: This was called `fd_filestat_set_times` in earlier versions of WASI.
-    set-times: func(
-        this: descriptor,
-        /// The desired values of the data access timestamp.
-        data-access-timestamp: new-timestamp,
-        /// The desired values of the data modification timestamp.
-        data-modification-timestamp: new-timestamp,
-    ) -> result<_, error-code>
+        /// Adjust the timestamps of an open file or directory.
+        ///
+        /// Note: This is similar to `futimens` in POSIX.
+        ///
+        /// Note: This was called `fd_filestat_set_times` in earlier versions of WASI.
+        set-times: func(
+            /// The desired values of the data access timestamp.
+            data-access-timestamp: new-timestamp,
+            /// The desired values of the data modification timestamp.
+            data-modification-timestamp: new-timestamp,
+        ) -> result<_, error-code>
 
-    /// Read from a descriptor, without using and updating the descriptor's offset.
-    ///
-    /// This function returns a list of bytes containing the data that was
-    /// read, along with a bool which, when true, indicates that the end of the
-    /// file was reached. The returned list will contain up to `length` bytes; it
-    /// may return fewer than requested, if the end of the file is reached or
-    /// if the I/O operation is interrupted.
-    ///
-    /// In the future, this may change to return a `stream<u8, error-code>`.
-    ///
-    /// Note: This is similar to `pread` in POSIX.
-    read: func(
-        this: descriptor,
-        /// The maximum number of bytes to read.
-        length: filesize,
-        /// The offset within the file at which to read.
-        offset: filesize,
-    ) -> result<tuple<list<u8>, bool>, error-code>
+        /// Read from a descriptor, without using and updating the descriptor's offset.
+        ///
+        /// This function returns a list of bytes containing the data that was
+        /// read, along with a bool which, when true, indicates that the end of the
+        /// file was reached. The returned list will contain up to `length` bytes; it
+        /// may return fewer than requested, if the end of the file is reached or
+        /// if the I/O operation is interrupted.
+        ///
+        /// In the future, this may change to return a `stream<u8, error-code>`.
+        ///
+        /// Note: This is similar to `pread` in POSIX.
+        read: func(
+            /// The maximum number of bytes to read.
+            length: filesize,
+            /// The offset within the file at which to read.
+            offset: filesize,
+        ) -> result<tuple<list<u8>, bool>, error-code>
 
-    /// Write to a descriptor, without using and updating the descriptor's offset.
-    ///
-    /// It is valid to write past the end of a file; the file is extended to the
-    /// extent of the write, with bytes between the previous end and the start of
-    /// the write set to zero.
-    ///
-    /// In the future, this may change to take a `stream<u8, error-code>`.
-    ///
-    /// Note: This is similar to `pwrite` in POSIX.
-    write: func(
-        this: descriptor,
-        /// Data to write
-        buffer: list<u8>,
-        /// The offset within the file at which to write.
-        offset: filesize,
-    ) -> result<filesize, error-code>
+        /// Write to a descriptor, without using and updating the descriptor's offset.
+        ///
+        /// It is valid to write past the end of a file; the file is extended to the
+        /// extent of the write, with bytes between the previous end and the start of
+        /// the write set to zero.
+        ///
+        /// In the future, this may change to take a `stream<u8, error-code>`.
+        ///
+        /// Note: This is similar to `pwrite` in POSIX.
+        write: func(
+            /// Data to write
+            buffer: list<u8>,
+            /// The offset within the file at which to write.
+            offset: filesize,
+        ) -> result<filesize, error-code>
 
-    /// Read directory entries from a directory.
-    ///
-    /// On filesystems where directories contain entries referring to themselves
-    /// and their parents, often named `.` and `..` respectively, these entries
-    /// are omitted.
-    ///
-    /// This always returns a new stream which starts at the beginning of the
-    /// directory. Multiple streams may be active on the same directory, and they
-    /// do not interfere with each other.
-    read-directory: func(
-        this: descriptor
-    ) -> result<directory-entry-stream, error-code>
+        /// Read directory entries from a directory.
+        ///
+        /// On filesystems where directories contain entries referring to themselves
+        /// and their parents, often named `.` and `..` respectively, these entries
+        /// are omitted.
+        ///
+        /// This always returns a new stream which starts at the beginning of the
+        /// directory. Multiple streams may be active on the same directory, and they
+        /// do not interfere with each other.
+        read-directory: func() -> result<directory-entry-stream, error-code>
 
-    /// Synchronize the data and metadata of a file to disk.
-    ///
-    /// This function succeeds with no effect if the file descriptor is not
-    /// opened for writing.
-    ///
-    /// Note: This is similar to `fsync` in POSIX.
-    sync: func(this: descriptor) -> result<_, error-code>
+        /// Synchronize the data and metadata of a file to disk.
+        ///
+        /// This function succeeds with no effect if the file descriptor is not
+        /// opened for writing.
+        ///
+        /// Note: This is similar to `fsync` in POSIX.
+        sync: func() -> result<_, error-code>
 
-    /// Create a directory.
-    ///
-    /// Note: This is similar to `mkdirat` in POSIX.
-    create-directory-at: func(
-        this: descriptor,
-        /// The relative path at which to create the directory.
-        path: string,
-    ) -> result<_, error-code>
+        /// Create a directory.
+        ///
+        /// Note: This is similar to `mkdirat` in POSIX.
+        create-directory-at: func(
+            /// The relative path at which to create the directory.
+            path: string,
+        ) -> result<_, error-code>
 
-    /// Return the attributes of an open file or directory.
-    ///
-    /// Note: This is similar to `fstat` in POSIX, except that it does not return
-    /// device and inode information. For testing whether two descriptors refer to
-    /// the same underlying filesystem object, use `is-same-object`. To obtain
-    /// additional data that can be used do determine whether a file has been
-    /// modified, use `metadata-hash`.
-    ///
-    /// Note: This was called `fd_filestat_get` in earlier versions of WASI.
-    stat: func(this: descriptor) -> result<descriptor-stat, error-code>
+        /// Return the attributes of an open file or directory.
+        ///
+        /// Note: This is similar to `fstat` in POSIX, except that it does not return
+        /// device and inode information. For testing whether two descriptors refer to
+        /// the same underlying filesystem object, use `is-same-object`. To obtain
+        /// additional data that can be used do determine whether a file has been
+        /// modified, use `metadata-hash`.
+        ///
+        /// Note: This was called `fd_filestat_get` in earlier versions of WASI.
+        stat: func() -> result<descriptor-stat, error-code>
 
-    /// Return the attributes of a file or directory.
-    ///
-    /// Note: This is similar to `fstatat` in POSIX, except that it does not
-    /// return device and inode information. See the `stat` description for a
-    /// discussion of alternatives.
-    ///
-    /// Note: This was called `path_filestat_get` in earlier versions of WASI.
-    stat-at: func(
-        this: descriptor,
-        /// Flags determining the method of how the path is resolved.
-        path-flags: path-flags,
-        /// The relative path of the file or directory to inspect.
-        path: string,
-    ) -> result<descriptor-stat, error-code>
+        /// Return the attributes of a file or directory.
+        ///
+        /// Note: This is similar to `fstatat` in POSIX, except that it does not
+        /// return device and inode information. See the `stat` description for a
+        /// discussion of alternatives.
+        ///
+        /// Note: This was called `path_filestat_get` in earlier versions of WASI.
+        stat-at: func(
+            /// Flags determining the method of how the path is resolved.
+            path-flags: path-flags,
+            /// The relative path of the file or directory to inspect.
+            path: string,
+        ) -> result<descriptor-stat, error-code>
 
-    /// Adjust the timestamps of a file or directory.
-    ///
-    /// Note: This is similar to `utimensat` in POSIX.
-    ///
-    /// Note: This was called `path_filestat_set_times` in earlier versions of
-    /// WASI.
-    set-times-at: func(
-        this: descriptor,
-        /// Flags determining the method of how the path is resolved.
-        path-flags: path-flags,
-        /// The relative path of the file or directory to operate on.
-        path: string,
-        /// The desired values of the data access timestamp.
-        data-access-timestamp: new-timestamp,
-        /// The desired values of the data modification timestamp.
-        data-modification-timestamp: new-timestamp,
-    ) -> result<_, error-code>
+        /// Adjust the timestamps of a file or directory.
+        ///
+        /// Note: This is similar to `utimensat` in POSIX.
+        ///
+        /// Note: This was called `path_filestat_set_times` in earlier versions of
+        /// WASI.
+        set-times-at: func(
+            /// Flags determining the method of how the path is resolved.
+            path-flags: path-flags,
+            /// The relative path of the file or directory to operate on.
+            path: string,
+            /// The desired values of the data access timestamp.
+            data-access-timestamp: new-timestamp,
+            /// The desired values of the data modification timestamp.
+            data-modification-timestamp: new-timestamp,
+        ) -> result<_, error-code>
 
-    /// Create a hard link.
-    ///
-    /// Note: This is similar to `linkat` in POSIX.
-    link-at: func(
-        this: descriptor,
-        /// Flags determining the method of how the path is resolved.
-        old-path-flags: path-flags,
-        /// The relative source path from which to link.
-        old-path: string,
-        /// The base directory for `new-path`.
-        new-descriptor: descriptor,
-        /// The relative destination path at which to create the hard link.
-        new-path: string,
-    ) -> result<_, error-code>
+        /// Create a hard link.
+        ///
+        /// Note: This is similar to `linkat` in POSIX.
+        link-at: func(
+            /// Flags determining the method of how the path is resolved.
+            old-path-flags: path-flags,
+            /// The relative source path from which to link.
+            old-path: string,
+            /// The base directory for `new-path`.
+            new-descriptor: descriptor,
+            /// The relative destination path at which to create the hard link.
+            new-path: string,
+        ) -> result<_, error-code>
 
-    /// Open a file or directory.
-    ///
-    /// The returned descriptor is not guaranteed to be the lowest-numbered
-    /// descriptor not currently open/ it is randomized to prevent applications
-    /// from depending on making assumptions about indexes, since this is
-    /// error-prone in multi-threaded contexts. The returned descriptor is
-    /// guaranteed to be less than 2**31.
-    ///
-    /// If `flags` contains `descriptor-flags::mutate-directory`, and the base
-    /// descriptor doesn't have `descriptor-flags::mutate-directory` set,
-    /// `open-at` fails with `error-code::read-only`.
-    ///
-    /// If `flags` contains `write` or `mutate-directory`, or `open-flags`
-    /// contains `truncate` or `create`, and the base descriptor doesn't have
-    /// `descriptor-flags::mutate-directory` set, `open-at` fails with
-    /// `error-code::read-only`.
-    ///
-    /// Note: This is similar to `openat` in POSIX.
-    open-at: func(
-        this: descriptor,
-        /// Flags determining the method of how the path is resolved.
-        path-flags: path-flags,
-        /// The relative path of the object to open.
-        path: string,
-        /// The method by which to open the file.
-        open-flags: open-flags,
-        /// Flags to use for the resulting descriptor.
-        %flags: descriptor-flags,
-        /// Permissions to use when creating a new file.
-        modes: modes
-    ) -> result<descriptor, error-code>
+        /// Open a file or directory.
+        ///
+        /// The returned descriptor is not guaranteed to be the lowest-numbered
+        /// descriptor not currently open/ it is randomized to prevent applications
+        /// from depending on making assumptions about indexes, since this is
+        /// error-prone in multi-threaded contexts. The returned descriptor is
+        /// guaranteed to be less than 2**31.
+        ///
+        /// If `flags` contains `descriptor-flags::mutate-directory`, and the base
+        /// descriptor doesn't have `descriptor-flags::mutate-directory` set,
+        /// `open-at` fails with `error-code::read-only`.
+        ///
+        /// If `flags` contains `write` or `mutate-directory`, or `open-flags`
+        /// contains `truncate` or `create`, and the base descriptor doesn't have
+        /// `descriptor-flags::mutate-directory` set, `open-at` fails with
+        /// `error-code::read-only`.
+        ///
+        /// Note: This is similar to `openat` in POSIX.
+        open-at: func(
+            /// Flags determining the method of how the path is resolved.
+            path-flags: path-flags,
+            /// The relative path of the object to open.
+            path: string,
+            /// The method by which to open the file.
+            open-flags: open-flags,
+            /// Flags to use for the resulting descriptor.
+            %flags: descriptor-flags,
+            /// Permissions to use when creating a new file.
+            modes: modes
+        ) -> result<descriptor, error-code>
 
-    /// Read the contents of a symbolic link.
-    ///
-    /// If the contents contain an absolute or rooted path in the underlying
-    /// filesystem, this function fails with `error-code::not-permitted`.
-    ///
-    /// Note: This is similar to `readlinkat` in POSIX.
-    readlink-at: func(
-        this: descriptor,
-        /// The relative path of the symbolic link from which to read.
-        path: string,
-    ) -> result<string, error-code>
+        /// Read the contents of a symbolic link.
+        ///
+        /// If the contents contain an absolute or rooted path in the underlying
+        /// filesystem, this function fails with `error-code::not-permitted`.
+        ///
+        /// Note: This is similar to `readlinkat` in POSIX.
+        readlink-at: func(
+            /// The relative path of the symbolic link from which to read.
+            path: string,
+        ) -> result<string, error-code>
 
-    /// Remove a directory.
-    ///
-    /// Return `error-code::not-empty` if the directory is not empty.
-    ///
-    /// Note: This is similar to `unlinkat(fd, path, AT_REMOVEDIR)` in POSIX.
-    remove-directory-at: func(
-        this: descriptor,
-        /// The relative path to a directory to remove.
-        path: string,
-    ) -> result<_, error-code>
+        /// Remove a directory.
+        ///
+        /// Return `error-code::not-empty` if the directory is not empty.
+        ///
+        /// Note: This is similar to `unlinkat(fd, path, AT_REMOVEDIR)` in POSIX.
+        remove-directory-at: func(
+            /// The relative path to a directory to remove.
+            path: string,
+        ) -> result<_, error-code>
 
-    /// Rename a filesystem object.
-    ///
-    /// Note: This is similar to `renameat` in POSIX.
-    rename-at: func(
-        this: descriptor,
-        /// The relative source path of the file or directory to rename.
-        old-path: string,
-        /// The base directory for `new-path`.
-        new-descriptor: descriptor,
-        /// The relative destination path to which to rename the file or directory.
-        new-path: string,
-    ) -> result<_, error-code>
+        /// Rename a filesystem object.
+        ///
+        /// Note: This is similar to `renameat` in POSIX.
+        rename-at: func(
+            /// The relative source path of the file or directory to rename.
+            old-path: string,
+            /// The base directory for `new-path`.
+            new-descriptor: descriptor,
+            /// The relative destination path to which to rename the file or directory.
+            new-path: string,
+        ) -> result<_, error-code>
 
-    /// Create a symbolic link (also known as a "symlink").
-    ///
-    /// If `old-path` starts with `/`, the function fails with
-    /// `error-code::not-permitted`.
-    ///
-    /// Note: This is similar to `symlinkat` in POSIX.
-    symlink-at: func(
-        this: descriptor,
-        /// The contents of the symbolic link.
-        old-path: string,
-        /// The relative destination path at which to create the symbolic link.
-        new-path: string,
-    ) -> result<_, error-code>
+        /// Create a symbolic link (also known as a "symlink").
+        ///
+        /// If `old-path` starts with `/`, the function fails with
+        /// `error-code::not-permitted`.
+        ///
+        /// Note: This is similar to `symlinkat` in POSIX.
+        symlink-at: func(
+            /// The contents of the symbolic link.
+            old-path: string,
+            /// The relative destination path at which to create the symbolic link.
+            new-path: string,
+        ) -> result<_, error-code>
 
-    /// Check accessibility of a filesystem path.
-    ///
-    /// Check whether the given filesystem path names an object which is
-    /// readable, writable, or executable, or whether it exists.
-    ///
-    /// This does not a guarantee that subsequent accesses will succeed, as
-    /// filesystem permissions may be modified asynchronously by external
-    /// entities.
-    ///
-    /// Note: This is similar to `faccessat` with the `AT_EACCESS` flag in POSIX.
-    access-at: func(
-        this: descriptor,
-        /// Flags determining the method of how the path is resolved.
-        path-flags: path-flags,
-        /// The relative path to check.
-        path: string,
-        /// The type of check to perform.
-        %type: access-type
-    ) -> result<_, error-code>
+        /// Check accessibility of a filesystem path.
+        ///
+        /// Check whether the given filesystem path names an object which is
+        /// readable, writable, or executable, or whether it exists.
+        ///
+        /// This does not a guarantee that subsequent accesses will succeed, as
+        /// filesystem permissions may be modified asynchronously by external
+        /// entities.
+        ///
+        /// Note: This is similar to `faccessat` with the `AT_EACCESS` flag in POSIX.
+        access-at: func(
+            /// Flags determining the method of how the path is resolved.
+            path-flags: path-flags,
+            /// The relative path to check.
+            path: string,
+            /// The type of check to perform.
+            %type: access-type
+        ) -> result<_, error-code>
 
-    /// Unlink a filesystem object that is not a directory.
-    ///
-    /// Return `error-code::is-directory` if the path refers to a directory.
-    /// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
-    unlink-file-at: func(
-        this: descriptor,
-        /// The relative path to a file to unlink.
-        path: string,
-    ) -> result<_, error-code>
+        /// Unlink a filesystem object that is not a directory.
+        ///
+        /// Return `error-code::is-directory` if the path refers to a directory.
+        /// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
+        unlink-file-at: func(
+            /// The relative path to a file to unlink.
+            path: string,
+        ) -> result<_, error-code>
 
-    /// Change the permissions of a filesystem object that is not a directory.
-    ///
-    /// Note that the ultimate meanings of these permissions is
-    /// filesystem-specific.
-    ///
-    /// Note: This is similar to `fchmodat` in POSIX.
-    change-file-permissions-at: func(
-        this: descriptor,
-        /// Flags determining the method of how the path is resolved.
-        path-flags: path-flags,
-        /// The relative path to operate on.
-        path: string,
-        /// The new permissions for the filesystem object.
-        modes: modes,
-    ) -> result<_, error-code>
+        /// Change the permissions of a filesystem object that is not a directory.
+        ///
+        /// Note that the ultimate meanings of these permissions is
+        /// filesystem-specific.
+        ///
+        /// Note: This is similar to `fchmodat` in POSIX.
+        change-file-permissions-at: func(
+            /// Flags determining the method of how the path is resolved.
+            path-flags: path-flags,
+            /// The relative path to operate on.
+            path: string,
+            /// The new permissions for the filesystem object.
+            modes: modes,
+        ) -> result<_, error-code>
 
-    /// Change the permissions of a directory.
-    ///
-    /// Note that the ultimate meanings of these permissions is
-    /// filesystem-specific.
-    ///
-    /// Unlike in POSIX, the `executable` flag is not reinterpreted as a "search"
-    /// flag. `read` on a directory implies readability and searchability, and
-    /// `execute` is not valid for directories.
-    ///
-    /// Note: This is similar to `fchmodat` in POSIX.
-    change-directory-permissions-at: func(
-        this: descriptor,
-        /// Flags determining the method of how the path is resolved.
-        path-flags: path-flags,
-        /// The relative path to operate on.
-        path: string,
-        /// The new permissions for the directory.
-        modes: modes,
-    ) -> result<_, error-code>
+        /// Change the permissions of a directory.
+        ///
+        /// Note that the ultimate meanings of these permissions is
+        /// filesystem-specific.
+        ///
+        /// Unlike in POSIX, the `executable` flag is not reinterpreted as a "search"
+        /// flag. `read` on a directory implies readability and searchability, and
+        /// `execute` is not valid for directories.
+        ///
+        /// Note: This is similar to `fchmodat` in POSIX.
+        change-directory-permissions-at: func(
+            /// Flags determining the method of how the path is resolved.
+            path-flags: path-flags,
+            /// The relative path to operate on.
+            path: string,
+            /// The new permissions for the directory.
+            modes: modes,
+        ) -> result<_, error-code>
 
-    /// Request a shared advisory lock for an open file.
-    ///
-    /// This requests a *shared* lock; more than one shared lock can be held for
-    /// a file at the same time.
-    ///
-    /// If the open file has an exclusive lock, this function downgrades the lock
-    /// to a shared lock. If it has a shared lock, this function has no effect.
-    ///
-    /// This requests an *advisory* lock, meaning that the file could be accessed
-    /// by other programs that don't hold the lock.
-    ///
-    /// It is unspecified how shared locks interact with locks acquired by
-    /// non-WASI programs.
-    ///
-    /// This function blocks until the lock can be acquired.
-    ///
-    /// Not all filesystems support locking; on filesystems which don't support
-    /// locking, this function returns `error-code::unsupported`.
-    ///
-    /// Note: This is similar to `flock(fd, LOCK_SH)` in Unix.
-    lock-shared: func(this: descriptor) -> result<_, error-code>
+        /// Request a shared advisory lock for an open file.
+        ///
+        /// This requests a *shared* lock; more than one shared lock can be held for
+        /// a file at the same time.
+        ///
+        /// If the open file has an exclusive lock, this function downgrades the lock
+        /// to a shared lock. If it has a shared lock, this function has no effect.
+        ///
+        /// This requests an *advisory* lock, meaning that the file could be accessed
+        /// by other programs that don't hold the lock.
+        ///
+        /// It is unspecified how shared locks interact with locks acquired by
+        /// non-WASI programs.
+        ///
+        /// This function blocks until the lock can be acquired.
+        ///
+        /// Not all filesystems support locking; on filesystems which don't support
+        /// locking, this function returns `error-code::unsupported`.
+        ///
+        /// Note: This is similar to `flock(fd, LOCK_SH)` in Unix.
+        lock-shared: func() -> result<_, error-code>
 
-    /// Request an exclusive advisory lock for an open file.
-    ///
-    /// This requests an *exclusive* lock; no other locks may be held for the
-    /// file while an exclusive lock is held.
-    ///
-    /// If the open file has a shared lock and there are no exclusive locks held
-    /// for the file, this function upgrades the lock to an exclusive lock. If the
-    /// open file already has an exclusive lock, this function has no effect.
-    ///
-    /// This requests an *advisory* lock, meaning that the file could be accessed
-    /// by other programs that don't hold the lock.
-    ///
-    /// It is unspecified whether this function succeeds if the file descriptor
-    /// is not opened for writing. It is unspecified how exclusive locks interact
-    /// with locks acquired by non-WASI programs.
-    ///
-    /// This function blocks until the lock can be acquired.
-    ///
-    /// Not all filesystems support locking; on filesystems which don't support
-    /// locking, this function returns `error-code::unsupported`.
-    ///
-    /// Note: This is similar to `flock(fd, LOCK_EX)` in Unix.
-    lock-exclusive: func(this: descriptor) -> result<_, error-code>
+        /// Request an exclusive advisory lock for an open file.
+        ///
+        /// This requests an *exclusive* lock; no other locks may be held for the
+        /// file while an exclusive lock is held.
+        ///
+        /// If the open file has a shared lock and there are no exclusive locks held
+        /// for the file, this function upgrades the lock to an exclusive lock. If the
+        /// open file already has an exclusive lock, this function has no effect.
+        ///
+        /// This requests an *advisory* lock, meaning that the file could be accessed
+        /// by other programs that don't hold the lock.
+        ///
+        /// It is unspecified whether this function succeeds if the file descriptor
+        /// is not opened for writing. It is unspecified how exclusive locks interact
+        /// with locks acquired by non-WASI programs.
+        ///
+        /// This function blocks until the lock can be acquired.
+        ///
+        /// Not all filesystems support locking; on filesystems which don't support
+        /// locking, this function returns `error-code::unsupported`.
+        ///
+        /// Note: This is similar to `flock(fd, LOCK_EX)` in Unix.
+        lock-exclusive: func() -> result<_, error-code>
 
-    /// Request a shared advisory lock for an open file.
-    ///
-    /// This requests a *shared* lock; more than one shared lock can be held for
-    /// a file at the same time.
-    ///
-    /// If the open file has an exclusive lock, this function downgrades the lock
-    /// to a shared lock. If it has a shared lock, this function has no effect.
-    ///
-    /// This requests an *advisory* lock, meaning that the file could be accessed
-    /// by other programs that don't hold the lock.
-    ///
-    /// It is unspecified how shared locks interact with locks acquired by
-    /// non-WASI programs.
-    ///
-    /// This function returns `error-code::would-block` if the lock cannot be
-    /// acquired.
-    ///
-    /// Not all filesystems support locking; on filesystems which don't support
-    /// locking, this function returns `error-code::unsupported`.
-    ///
-    /// Note: This is similar to `flock(fd, LOCK_SH | LOCK_NB)` in Unix.
-    try-lock-shared: func(this: descriptor) -> result<_, error-code>
+        /// Request a shared advisory lock for an open file.
+        ///
+        /// This requests a *shared* lock; more than one shared lock can be held for
+        /// a file at the same time.
+        ///
+        /// If the open file has an exclusive lock, this function downgrades the lock
+        /// to a shared lock. If it has a shared lock, this function has no effect.
+        ///
+        /// This requests an *advisory* lock, meaning that the file could be accessed
+        /// by other programs that don't hold the lock.
+        ///
+        /// It is unspecified how shared locks interact with locks acquired by
+        /// non-WASI programs.
+        ///
+        /// This function returns `error-code::would-block` if the lock cannot be
+        /// acquired.
+        ///
+        /// Not all filesystems support locking; on filesystems which don't support
+        /// locking, this function returns `error-code::unsupported`.
+        ///
+        /// Note: This is similar to `flock(fd, LOCK_SH | LOCK_NB)` in Unix.
+        try-lock-shared: func() -> result<_, error-code>
 
-    /// Request an exclusive advisory lock for an open file.
-    ///
-    /// This requests an *exclusive* lock; no other locks may be held for the
-    /// file while an exclusive lock is held.
-    ///
-    /// If the open file has a shared lock and there are no exclusive locks held
-    /// for the file, this function upgrades the lock to an exclusive lock. If the
-    /// open file already has an exclusive lock, this function has no effect.
-    ///
-    /// This requests an *advisory* lock, meaning that the file could be accessed
-    /// by other programs that don't hold the lock.
-    ///
-    /// It is unspecified whether this function succeeds if the file descriptor
-    /// is not opened for writing. It is unspecified how exclusive locks interact
-    /// with locks acquired by non-WASI programs.
-    ///
-    /// This function returns `error-code::would-block` if the lock cannot be
-    /// acquired.
-    ///
-    /// Not all filesystems support locking; on filesystems which don't support
-    /// locking, this function returns `error-code::unsupported`.
-    ///
-    /// Note: This is similar to `flock(fd, LOCK_EX | LOCK_NB)` in Unix.
-    try-lock-exclusive: func(this: descriptor) -> result<_, error-code>
+        /// Request an exclusive advisory lock for an open file.
+        ///
+        /// This requests an *exclusive* lock; no other locks may be held for the
+        /// file while an exclusive lock is held.
+        ///
+        /// If the open file has a shared lock and there are no exclusive locks held
+        /// for the file, this function upgrades the lock to an exclusive lock. If the
+        /// open file already has an exclusive lock, this function has no effect.
+        ///
+        /// This requests an *advisory* lock, meaning that the file could be accessed
+        /// by other programs that don't hold the lock.
+        ///
+        /// It is unspecified whether this function succeeds if the file descriptor
+        /// is not opened for writing. It is unspecified how exclusive locks interact
+        /// with locks acquired by non-WASI programs.
+        ///
+        /// This function returns `error-code::would-block` if the lock cannot be
+        /// acquired.
+        ///
+        /// Not all filesystems support locking; on filesystems which don't support
+        /// locking, this function returns `error-code::unsupported`.
+        ///
+        /// Note: This is similar to `flock(fd, LOCK_EX | LOCK_NB)` in Unix.
+        try-lock-exclusive: func() -> result<_, error-code>
 
-    /// Release a shared or exclusive lock on an open file.
-    ///
-    /// Note: This is similar to `flock(fd, LOCK_UN)` in Unix.
-    unlock: func(this: descriptor) -> result<_, error-code>
+        /// Release a shared or exclusive lock on an open file.
+        ///
+        /// Note: This is similar to `flock(fd, LOCK_UN)` in Unix.
+        unlock: func() -> result<_, error-code>
 
-    /// Dispose of the specified `descriptor`, after which it may no longer
-    /// be used.
-    drop-descriptor: func(this: descriptor)
+        /// Test whether two descriptors refer to the same filesystem object.
+        ///
+        /// In POSIX, this corresponds to testing whether the two descriptors have the
+        /// same device (`st_dev`) and inode (`st_ino` or `d_ino`) numbers.
+        /// wasi-filesystem does not expose device and inode numbers, so this function
+        /// may be used instead.
+        is-same-object: func(other: descriptor) -> bool
+
+        /// Return a hash of the metadata associated with a filesystem object referred
+        /// to by a descriptor.
+        ///
+        /// This returns a hash of the last-modification timestamp and file size, and
+        /// may also include the inode number, device number, birth timestamp, and
+        /// other metadata fields that may change when the file is modified or
+        /// replaced. It may also include a secret value chosen by the
+        /// implementation and not otherwise exposed.
+        ///
+        /// Implementations are encourated to provide the following properties:
+        ///
+        ///  - If the file is not modified or replaced, the computed hash value should
+        ///    usually not change.
+        ///  - If the object is modified or replaced, the computed hash value should
+        ///    usually change.
+        ///  - The inputs to the hash should not be easily computable from the
+        ///    computed hash.
+        ///
+        /// However, none of these is required.
+        metadata-hash: func() -> result<metadata-hash-value, error-code>
+
+        /// Return a hash of the metadata associated with a filesystem object referred
+        /// to by a directory descriptor and a relative path.
+        ///
+        /// This performs the same hash computation as `metadata-hash`.
+        metadata-hash-at: func(
+            /// Flags determining the method of how the path is resolved.
+            path-flags: path-flags,
+            /// The relative path of the file or directory to inspect.
+            path: string,
+        ) -> result<metadata-hash-value, error-code>
+    }
 
     /// A stream of directory entries.
-    ///
-    /// This [represents a stream of `dir-entry`](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Streams).
-    type directory-entry-stream = u32
-
-    /// Read a single directory entry from a `directory-entry-stream`.
-    read-directory-entry: func(
-        this: directory-entry-stream
-    ) -> result<option<directory-entry>, error-code>
-
-    /// Dispose of the specified `directory-entry-stream`, after which it may no longer
-    /// be used.
-    drop-directory-entry-stream: func(this: directory-entry-stream)
-
-    /// Test whether two descriptors refer to the same filesystem object.
-    ///
-    /// In POSIX, this corresponds to testing whether the two descriptors have the
-    /// same device (`st_dev`) and inode (`st_ino` or `d_ino`) numbers.
-    /// wasi-filesystem does not expose device and inode numbers, so this function
-    /// may be used instead.
-    is-same-object: func(this: descriptor, other: descriptor) -> bool
-
-    /// Return a hash of the metadata associated with a filesystem object referred
-    /// to by a descriptor.
-    ///
-    /// This returns a hash of the last-modification timestamp and file size, and
-    /// may also include the inode number, device number, birth timestamp, and
-    /// other metadata fields that may change when the file is modified or
-    /// replaced. It may also include a secret value chosen by the
-    /// implementation and not otherwise exposed.
-    ///
-    /// Implementations are encourated to provide the following properties:
-    ///
-    ///  - If the file is not modified or replaced, the computed hash value should
-    ///    usually not change.
-    ///  - If the object is modified or replaced, the computed hash value should
-    ///    usually change.
-    ///  - The inputs to the hash should not be easily computable from the
-    ///    computed hash.
-    ///
-    /// However, none of these is required.
-    metadata-hash: func(
-        this: descriptor,
-    ) -> result<metadata-hash-value, error-code>
-
-    /// Return a hash of the metadata associated with a filesystem object referred
-    /// to by a directory descriptor and a relative path.
-    ///
-    /// This performs the same hash computation as `metadata-hash`.
-    metadata-hash-at: func(
-        this: descriptor,
-        /// Flags determining the method of how the path is resolved.
-        path-flags: path-flags,
-        /// The relative path of the file or directory to inspect.
-        path: string,
-    ) -> result<metadata-hash-value, error-code>
+    resource directory-entry-stream {
+        /// Read a single directory entry from a `directory-entry-stream`.
+        read-directory-entry: func() -> result<option<directory-entry>, error-code>
+    }
 }

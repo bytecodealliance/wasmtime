@@ -19,7 +19,7 @@ world test-reactor {
 }
 
 world test-command {
-  import wasi:poll/poll
+  import wasi:io/poll
   import wasi:io/streams
   import wasi:cli/environment
   import wasi:cli/stdin
@@ -28,7 +28,7 @@ world test-command {
 }
 
 world test-command-with-sockets {
-  import wasi:poll/poll
+  import wasi:io/poll
   import wasi:io/streams
   import wasi:cli/environment
   import wasi:cli/stdin
