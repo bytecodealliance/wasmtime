@@ -283,7 +283,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     async fn future_trailers_get(
         &mut self,
         _response: FutureTrailers,
-    ) -> wasmtime::Result<Option<Trailers>> {
+    ) -> wasmtime::Result<Option<Result<Trailers, Error>>> {
         todo!()
     }
     async fn new_outgoing_response(
