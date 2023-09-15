@@ -129,35 +129,16 @@ impl<T: WasiView> poll::Host for T {
     }
 
     async fn poll_one(&mut self, pollable: Resource<Pollable>) -> Result<()> {
+        use anyhow::Context;
+
         let table = self.table_mut();
 
-        let closure_future: PollableFuture<'_>;
-        match table.get_host_pollable_mut(&pollable)? {
-            HostPollable::Closure(f) => closure_future = f(),
-            HostPollable::TableEntry { index, make_future } => {
-                closure_future = make_future(index);
-            }
-        }
+        let closure_future = match table.get_host_pollable_mut(&pollable)? {
+            HostPollable::Closure(f) => f(),
+            HostPollable::TableEntry { index, make_future } => make_future(index),
+        };
 
-        struct PollOne<'a> {
-            elem: PollableFuture<'a>,
-        }
-        impl<'a> Future for PollOne<'a> {
-            type Output = Result<()>;
-
-            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                match self.elem.as_mut().poll(cx) {
-                    Poll::Ready(Ok(())) => Poll::Ready(Ok(())),
-                    Poll::Ready(Err(e)) => Poll::Ready(Err(e.context("poll_one"))),
-                    Poll::Pending => Poll::Pending,
-                }
-            }
-        }
-
-        Ok(PollOne {
-            elem: closure_future,
-        }
-        .await?)
+        closure_future.await.context("poll_one")
     }
 }
 
