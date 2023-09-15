@@ -2878,10 +2878,15 @@
 (rule (gen_trapif cc a b trap_code)
   (side_effect (SideEffectNoResult.Inst (MInst.TrapIf a b cc trap_code))))
 
+;; Builds an instruction sequence that traps if the input is non-zero.
+(decl gen_trapnz (XReg TrapCode) InstOutput)
+(rule (gen_trapnz test trap_code)
+  (gen_trapif (IntCC.NotEqual) test (zero_reg) trap_code))
+
 ;; Builds an instruction sequence that traps if the input is zero.
 (decl gen_trapz (XReg TrapCode) InstOutput)
 (rule (gen_trapz test trap_code)
-  (gen_trapif (IntCC.NotEqual) test (zero_reg) trap_code))
+  (gen_trapif (IntCC.Equal) test (zero_reg) trap_code))
 
 
 (decl shift_int_to_most_significant (XReg Type) XReg)
@@ -2889,21 +2894,18 @@
 
 ;;; generate div overflow.
 (decl gen_div_overflow (XReg XReg Type) InstOutput)
-(rule
-  (gen_div_overflow rs1 rs2 ty)
-  (let
-    ((r_const_neg_1 XReg (imm $I64 (i64_as_u64 -1)))
-      (r_const_min XReg (rv_slli (imm $I64 1) (imm12_const 63)))
-      (tmp_rs1 XReg (shift_int_to_most_significant rs1 ty))
-      (t1 XReg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
-      (t2 XReg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
-      (test XReg (rv_and t1 t2)))
-    (gen_trapz test (TrapCode.IntegerOverflow))))
+(rule (gen_div_overflow rs1 rs2 ty)
+  (let ((r_const_neg_1 XReg (imm $I64 (i64_as_u64 -1)))
+        (r_const_min XReg (rv_slli (imm $I64 1) (imm12_const 63)))
+        (tmp_rs1 XReg (shift_int_to_most_significant rs1 ty))
+        (t1 XReg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
+        (t2 XReg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
+        (test XReg (rv_and t1 t2)))
+    (gen_trapnz test (TrapCode.IntegerOverflow))))
 
 (decl gen_div_by_zero (XReg) InstOutput)
-(rule
-  (gen_div_by_zero r)
-  (gen_trapif (IntCC.Equal) (zero_reg) r (TrapCode.IntegerDivisionByZero)))
+(rule (gen_div_by_zero r)
+  (gen_trapz r (TrapCode.IntegerDivisionByZero)))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
