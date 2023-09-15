@@ -127,7 +127,9 @@ interface types {
   incoming-response-status: func(response: incoming-response) -> status-code
   incoming-response-headers: func(response: incoming-response) -> headers
 
-  incoming-response-consume: func(response: incoming-response) -> result<(input-stream, future-trailers)>
+  type future-trailers = u32
+
+  incoming-response-consume: func(response: incoming-response) -> result<tuple<input-stream, future-trailers>>
 
   /// Pollable that resolves when the body has been fully read, and the trailers
   /// are ready to be consumed.
