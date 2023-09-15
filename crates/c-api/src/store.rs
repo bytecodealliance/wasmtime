@@ -4,9 +4,9 @@ use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::fs::File;
 #[cfg(unix)]
-use std::os::fd::FromRawFd;
+use std::os::fd::{FromRawFd, RawFd};
 #[cfg(windows)]
-use std::os::windows::{io::FromRawHandle, raw::HANDLE};
+use std::os::windows::io::{FromRawHandle, RawHandle};
 use std::sync::Arc;
 use wasi_common::file::FileAccessMode;
 use wasmtime::{
@@ -272,14 +272,14 @@ pub extern "C" fn wasmtime_context_set_epoch_deadline(
 pub unsafe extern "C" fn wasmtime_context_insert_file(
     context: CStoreContextMut,
     guest_fd: u32,
-    host_fd: *mut c_void, // i32
+    host_fd: RawFd, // int
     access_mode: u32,
 ) {
     let access_mode = FileAccessMode::from_bits_truncate(access_mode);
 
     // SAFETY: no other functions should call `from_raw_fd`, so there is only
     // one owner for the file descriptor.
-    let f = unsafe { File::from_raw_fd(host_fd as i32) };
+    let f = unsafe { File::from_raw_fd(host_fd) };
     let f = cap_std::fs::File::from_std(f);
     let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
     context
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn wasmtime_context_insert_file(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_context_push_file(
     context: CStoreContextMut,
-    host_fd: *mut c_void, // i32
+    host_fd: RawFd, // int
     access_mode: u32,
     guest_fd: &mut u32, // output
 ) -> Option<Box<wasmtime_error_t>> {
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn wasmtime_context_push_file(
 
     // SAFETY: no other functions should call `from_raw_fd`, so there is only
     // one owner for the file descriptor.
-    let f = unsafe { File::from_raw_fd(host_fd as i32) };
+    let f = unsafe { File::from_raw_fd(host_fd) };
     let f = cap_std::fs::File::from_std(f);
     let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
 
@@ -330,14 +330,14 @@ pub unsafe extern "C" fn wasmtime_context_push_file(
 pub unsafe extern "C" fn wasmtime_context_insert_file(
     context: CStoreContextMut,
     guest_fd: u32,
-    host_fd: *mut c_void, // HANDLE
+    host_handle: RawHandle, // HANDLE
     access_mode: u32,
 ) {
     let access_mode = FileAccessMode::from_bits_truncate(access_mode);
 
     // SAFETY: no other functions should call `from_raw_fd`, so there is only
     // one owner for the file descriptor.
-    let f = unsafe { File::from_raw_handle(host_fd as HANDLE) };
+    let f = unsafe { File::from_raw_handle(host_handle) };
     let f = cap_std::fs::File::from_std(f);
     let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
     context
@@ -352,7 +352,7 @@ pub unsafe extern "C" fn wasmtime_context_insert_file(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_context_push_file(
     context: CStoreContextMut,
-    host_fd: *mut c_void, // HANDLE
+    host_handle: RawHandle, // HANDLE
     access_mode: u32,
     guest_fd: &mut u32, // output
 ) -> Option<Box<wasmtime_error_t>> {
@@ -360,7 +360,7 @@ pub unsafe extern "C" fn wasmtime_context_push_file(
 
     // SAFETY: no other functions should call `from_raw_fd`, so there is only
     // one owner for the file descriptor.
-    let f = unsafe { File::from_raw_handle(host_fd as HANDLE) };
+    let f = unsafe { File::from_raw_handle(host_handle) };
     let f = cap_std::fs::File::from_std(f);
     let f = wasmtime_wasi::sync::file::File::from_cap_std(f);
 
@@ -381,26 +381,4 @@ pub unsafe extern "C" fn wasmtime_context_push_file(
             Some(Box::new(wasmtime_error_t::from(anyhow!(msg))))
         }
     }
-}
-
-#[cfg(not(any(unix, windows)))]
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_context_insert_file(
-    context: CStoreContextMut,
-    guest_fd: u32,
-    host_fd: *mut c_void, // i32
-    access_mode: u32,
-) {
-    unimplemented!("wasmtime_context_insert_file")
-}
-
-#[cfg(not(any(unix, windows)))]
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_context_push_file(
-    context: CStoreContextMut,
-    host_fd: *mut c_void, // i32
-    access_mode: u32,
-    guest_fd: &mut u32, // output
-) -> Option<Box<wasmtime_error_t>> {
-    unimplemented!("wasmtime_context_push_file")
 }

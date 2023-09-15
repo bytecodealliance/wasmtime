@@ -11,6 +11,16 @@
 #include <wasi.h>
 #include <wasmtime/error.h>
 
+#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
+#ifndef WINDOWS
+#define WINDOWS
+#endif // WINDOWS
+#elif __unix__ || __unix || __APPLE__
+#ifndef UNIX
+#define UNIX
+#endif // UNIX
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -253,9 +263,15 @@ WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(wasmtime_store_t *st
  * 
  * The `guest_fd` argument is the number of the file descriptor by which it will
  * be known in WASM and the `host_fd` is the number of the file descriptor on
- * the host.
+ * the host and the `access_mode` is the access mode of the file descriptor. 
+ * The enumeration of access modes aligns with FileAccessMode in the WASI spec 
+ * and as follows: READ = 0b1, WRITE = 0b10.
  */
-WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, uint32_t guest_fd, void *host_fd, uint32_t access_mode);
+#if defined(UNIX)
+WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, uint32_t guest_fd, int host_fd, uint32_t access_mode);
+#elif defined(WINDOWS)
+WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, uint32_t guest_fd, void *host_handle, uint32_t access_mode);
+#endif
 
 /**
  * \brief Push a file descriptor into the underlying WASI context.
@@ -266,9 +282,15 @@ WASM_API_EXTERN void wasmtime_context_insert_file(wasmtime_context_t *context, u
  * prior to calling this function.
  * 
  * The `host_fd` argument is the number of the file descriptor on the host and the
- * `access_mode` is the access mode of the file descriptor.
+ * `access_mode` is the access mode of the file descriptor. The enumeration of 
+ * access modes aligns with FileAccessMode in the WASI spec and as follows: 
+ * READ = 0b1, WRITE = 0b10.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_context_push_file(wasmtime_context_t *context, void *host_fd, uint32_t access_mode, uint32_t *guest_fd);
+#if defined(UNIX)
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_push_file(wasmtime_context_t *context, int host_fd, uint32_t access_mode, uint32_t *guest_fd);
+#elif defined(WINDOWS)
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_push_file(wasmtime_context_t *context, void *host_handle, uint32_t access_mode, uint32_t *guest_fd);
+#endif
 
 #ifdef __cplusplus
 }  // extern "C"
