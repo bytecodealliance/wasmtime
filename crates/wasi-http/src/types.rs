@@ -2,8 +2,8 @@
 //! implementation of the wasi-http API.
 
 use crate::{
-    bindings::http::types::{Headers, IncomingBody, Method, Scheme},
-    body::HostIncomingBody,
+    bindings::http::types::{Headers, IncomingBody, Method, Scheme, FutureTrailers},
+    body::{HostIncomingBody, HostFutureTrailers},
 };
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -177,6 +177,10 @@ pub trait TableHttpExt {
     fn push_incoming_body(&mut self, body: HostIncomingBody) -> Result<IncomingBody, TableError>;
     fn get_incoming_body(&mut self, id: IncomingBody) -> Result<&mut HostIncomingBody, TableError>;
     fn delete_incoming_body(&mut self, id: IncomingBody) -> Result<HostIncomingBody, TableError>;
+
+    fn push_future_trailers(&mut self, trailers: HostFutureTrailers) -> Result<FutureTrailers, TableError>;
+    fn get_future_trailers(&mut self, id: FutureTrailers) -> Result<&mut HostFutureTrailers, TableError>;
+    fn delete_future_trailers(&mut self, id: FutureTrailers) -> Result<HostFutureTrailers, TableError>;
 }
 
 #[async_trait::async_trait]
@@ -266,6 +270,18 @@ impl TableHttpExt for Table {
     }
 
     fn delete_incoming_body(&mut self, id: IncomingBody) -> Result<HostIncomingBody, TableError> {
+        self.delete(id)
+    }
+
+    fn push_future_trailers(&mut self, trailers: HostFutureTrailers) -> Result<FutureTrailers, TableError> {
+        self.push(Box::new(trailers))
+    }
+
+    fn get_future_trailers(&mut self, id: FutureTrailers) -> Result<&mut HostFutureTrailers, TableError> {
+        self.get_mut(id)
+    }
+
+    fn delete_future_trailers(&mut self, id: FutureTrailers) -> Result<HostFutureTrailers, TableError> {
         self.delete(id)
     }
 }

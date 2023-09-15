@@ -1,4 +1,4 @@
-use crate::bindings::http::types::{Headers, Method, Scheme};
+use crate::bindings::http::types::{self, Headers, Method, Scheme};
 use bytes::Bytes;
 use std::{pin, task};
 use tokio::sync::{mpsc, oneshot};
@@ -6,7 +6,7 @@ use wasmtime_wasi::preview2::{self, AbortOnDropJoinHandle, HostInputStream, Stre
 
 pub struct HostIncomingBody {
     pub worker: AbortOnDropJoinHandle<()>,
-    pub body: Option<HostIncomingBodyStream>,
+    pub stream: Option<HostIncomingBodyStream>,
     pub trailers: oneshot::Receiver<Result<hyper::HeaderMap, hyper::Error>>,
 }
 
@@ -40,22 +40,72 @@ impl HostIncomingBodyStream {
 
 #[async_trait::async_trait]
 impl HostInputStream for HostIncomingBodyStream {
-    fn read(&mut self, size: usize) -> anyhow::Result<(bytes::Bytes, StreamState)> {
+    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+        use mpsc::error::TryRecvError;
+
         if !self.buffer.is_empty() {
             let len = size.min(self.buffer.len());
+            let chunk = self.buffer.split_to(len);
+            return Ok((chunk, StreamState::Open));
         }
-        todo!()
+
+        // TODO: we need to check self.error and report it, once we have the means to do so through
+        // the streams interface.
+
+        if !self.open {
+            return Ok((Bytes::new(), StreamState::Closed));
+        }
+
+        match self.receiver.try_recv() {
+            Ok(Ok(mut bytes)) => {
+                let len = bytes.len().min(size);
+                let chunk = bytes.split_to(len);
+                if !bytes.is_empty() {
+                    self.buffer = bytes;
+                }
+
+                return Ok((chunk, StreamState::Open));
+            }
+
+            Ok(Err(e)) => {
+                self.open = false;
+                self.error = Some(e);
+                return Ok((Bytes::new(), StreamState::Closed));
+            }
+
+            Err(TryRecvError::Empty) => {
+                return Ok((Bytes::new(), StreamState::Open));
+            }
+
+            Err(TryRecvError::Disconnected) => {
+                self.open = false;
+                return Ok((Bytes::new(), StreamState::Closed));
+            }
+        }
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
-        todo!()
-    }
-}
+        if !self.buffer.is_empty() {
+            return Ok(());
+        }
 
-pub struct HostFutureTrailers {
-    pub worker: AbortOnDropJoinHandle<()>,
-    pub received: Option<hyper::HeaderMap>,
-    pub receiver: oneshot::Receiver<Result<hyper::HeaderMap, hyper::Error>>,
+        if !self.open {
+            return Ok(());
+        }
+
+        match self.receiver.recv().await {
+            Some(Ok(bytes)) => self.buffer = bytes,
+
+            Some(Err(e)) => {
+                self.error = Some(e);
+                self.open = false;
+            }
+
+            None => self.open = false,
+        }
+
+        Ok(())
+    }
 }
 
 impl HostIncomingBody {
@@ -142,8 +192,56 @@ impl HostIncomingBody {
 
         Self {
             worker,
-            body: Some(HostIncomingBodyStream::new(body_receiver)),
+            stream: Some(HostIncomingBodyStream::new(body_receiver)),
             trailers,
         }
+    }
+}
+
+pub struct HostFutureTrailers {
+    pub worker: AbortOnDropJoinHandle<()>,
+    pub received: Option<Result<hyper::HeaderMap, types::Error>>,
+    pub receiver: oneshot::Receiver<Result<hyper::HeaderMap, hyper::Error>>,
+}
+
+impl HostFutureTrailers {
+    pub fn ready(&mut self) -> impl std::future::Future<Output = anyhow::Result<()>> + '_ {
+        use std::future::Future;
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        struct TrailersReady<'a>(&'a mut HostFutureTrailers);
+
+        impl<'a> Future for TrailersReady<'a> {
+            type Output = anyhow::Result<()>;
+
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+                if self.0.received.is_some() {
+                    return Poll::Ready(Ok(()));
+                }
+
+                match Pin::new(&mut self.0.receiver).poll(cx) {
+                    Poll::Ready(Ok(Ok(headers))) => self.0.received = Some(Ok(headers)),
+
+                    Poll::Ready(Ok(Err(e))) => {
+                        self.0.received = Some(Err(types::Error::ProtocolError(format!(
+                            "hyper error: {e:?}"
+                        ))))
+                    }
+
+                    Poll::Ready(Err(_)) => {
+                        self.0.received = Some(Err(types::Error::ProtocolError(
+                            "stream hung up before trailers were received".to_string(),
+                        )))
+                    }
+
+                    Poll::Pending => return Poll::Pending,
+                }
+
+                Poll::Ready(Ok(()))
+            }
+        }
+
+        TrailersReady(self)
     }
 }

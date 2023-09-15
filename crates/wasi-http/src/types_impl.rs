@@ -276,14 +276,16 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
     async fn future_trailers_subscribe(
         &mut self,
-        _response: FutureTrailers,
+        id: FutureTrailers,
     ) -> wasmtime::Result<Pollable> {
+        let trailers = self.table().get_future_trailers(id)?;
         todo!()
     }
     async fn future_trailers_get(
         &mut self,
-        _response: FutureTrailers,
+        id: FutureTrailers,
     ) -> wasmtime::Result<Option<Result<Trailers, Error>>> {
+        let trailers = self.table().get_future_trailers(id)?;
         todo!()
     }
     async fn new_outgoing_response(
@@ -362,33 +364,43 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         &mut self,
         id: IncomingBody,
     ) -> wasmtime::Result<Result<InputStream, ()>> {
-        todo!()
+        let body = self.table().get_incoming_body(id)?;
+
+        if let Some(stream) = body.stream.take() {
+            let stream = self.table().push_input_stream_child(Box::new(stream), id)?;
+            return Ok(Ok(stream));
+        }
+
+        Ok(Err(()))
     }
 
     async fn incoming_body_finish(&mut self, id: IncomingBody) -> wasmtime::Result<FutureTrailers> {
-        todo!()
+        let body = self.table().delete_incoming_body(id)?;
+        let trailers = self.table().push_future_trailers(body.into_future_trailers())?;
+        Ok(trailers)
     }
 
     async fn drop_incoming_body(&mut self, id: IncomingBody) -> wasmtime::Result<()> {
-        todo!()
+        let _ = self.table().delete_incoming_body(id)?;
+        Ok(())
     }
 
     async fn outgoing_body_write(
         &mut self,
-        id: OutgoingBody,
+        _id: OutgoingBody,
     ) -> wasmtime::Result<Result<OutputStream, ()>> {
         todo!()
     }
 
     async fn outgoing_body_write_trailers(
         &mut self,
-        id: IncomingBody,
-        ts: Trailers,
+        _id: IncomingBody,
+        _ts: Trailers,
     ) -> wasmtime::Result<()> {
         todo!()
     }
 
-    async fn drop_outgoing_body(&mut self, id: OutgoingBody) -> wasmtime::Result<()> {
+    async fn drop_outgoing_body(&mut self, _id: OutgoingBody) -> wasmtime::Result<()> {
         todo!()
     }
 }
