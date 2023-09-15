@@ -312,7 +312,7 @@ impl Wasmtime {
                 assert!(gen.src.is_empty());
                 self.exports.funcs.push(body);
                 (
-                    func.name.to_snake_case(),
+                    func_field_name(resolve, func),
                     "wasmtime::component::Func".to_string(),
                     getter,
                 )
@@ -334,7 +334,7 @@ impl Wasmtime {
                     uwriteln!(
                         gen.src,
                         "{}: wasmtime::component::Func,",
-                        func.name.to_snake_case()
+                        func_field_name(resolve, func)
                     );
                 }
                 uwriteln!(gen.src, "}}");
@@ -1721,7 +1721,7 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn extract_typed_function(&mut self, func: &Function) -> (String, String) {
         let prev = mem::take(&mut self.src);
-        let snake = func.name.to_snake_case();
+        let snake = func_field_name(self.resolve, func);
         uwrite!(self.src, "*__exports.typed_func::<(");
         for (_, ty) in func.params.iter() {
             self.print_ty(ty, TypeMode::AllBorrowed("'_"));
@@ -1818,7 +1818,7 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(
             self.src,
             ")>::new_unchecked(self{projection_to_func}.{})",
-            func.name.to_snake_case()
+            func_field_name(self.resolve, func),
         );
         self.src.push_str("};\n");
         self.src.push_str("let (");
@@ -1978,6 +1978,30 @@ fn rust_function_name(func: &Function) -> String {
         FunctionKind::Constructor(_) => "new".to_string(),
         FunctionKind::Freestanding => to_rust_ident(&func.name),
     }
+}
+
+fn func_field_name(resolve: &Resolve, func: &Function) -> String {
+    let mut name = String::new();
+    match func.kind {
+        FunctionKind::Method(id) => {
+            name.push_str("method-");
+            name.push_str(resolve.types[id].name.as_ref().unwrap());
+            name.push_str("-");
+        }
+        FunctionKind::Static(id) => {
+            name.push_str("static-");
+            name.push_str(resolve.types[id].name.as_ref().unwrap());
+            name.push_str("-");
+        }
+        FunctionKind::Constructor(id) => {
+            name.push_str("constructor-");
+            name.push_str(resolve.types[id].name.as_ref().unwrap());
+            name.push_str("-");
+        }
+        FunctionKind::Freestanding => {}
+    }
+    name.push_str(func.item_name());
+    name.to_snake_case()
 }
 
 fn get_resources<'a>(resolve: &'a Resolve, id: InterfaceId) -> impl Iterator<Item = &'a str> + 'a {
