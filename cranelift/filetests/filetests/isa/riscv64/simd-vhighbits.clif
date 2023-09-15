@@ -19,7 +19,7 @@ block0(v0: i8x16):
 ;   vmslt.vx v10,v8,zero #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vmv.x.s a4,v10 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   lui a0,16
-;   addi a2,a0,4095
+;   addi a2,a0,-1
 ;   and a0,a4,a2
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)

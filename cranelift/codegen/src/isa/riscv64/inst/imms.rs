@@ -7,12 +7,15 @@ use std::fmt::{Debug, Display, Formatter, Result};
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Imm12 {
-    pub bits: i16,
+    /// 16-bit container where the low 12 bits are the data payload.
+    ///
+    /// Acquiring the underlying value requires sign-extending the 12th bit.
+    bits: u16,
 }
 
 impl Imm12 {
-    pub(crate) const FALSE: Self = Self { bits: 0 };
-    pub(crate) const TRUE: Self = Self { bits: 1 };
+    pub(crate) const ZERO: Self = Self { bits: 0 };
+    pub(crate) const ONE: Self = Self { bits: 1 };
 
     pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
         Self::maybe_from_i64(val as i64)
@@ -20,74 +23,79 @@ impl Imm12 {
 
     pub fn maybe_from_i64(val: i64) -> Option<Imm12> {
         if val >= -2048 && val <= 2047 {
-            Some(Imm12 { bits: val as i16 })
+            Some(Imm12 {
+                bits: val as u16 & 0xfff,
+            })
         } else {
             None
         }
     }
 
     #[inline]
-    pub fn from_bits(bits: i16) -> Self {
-        Self { bits: bits & 0xfff }
+    pub fn from_i16(bits: i16) -> Self {
+        assert!(bits >= -2048 && bits <= 2047);
+        Self {
+            bits: (bits & 0xfff) as u16,
+        }
     }
-    /// Create a zero immediate of this format.
-    #[inline]
-    pub fn zero() -> Self {
-        Imm12 { bits: 0 }
-    }
+
     #[inline]
     pub fn as_i16(self) -> i16 {
-        self.bits
+        (self.bits << 4) as i16 >> 4
     }
+
     #[inline]
-    pub fn as_u32(&self) -> u32 {
-        (self.bits as u32) & 0xfff
+    pub fn bits(&self) -> u32 {
+        self.bits.into()
     }
 }
 
 impl Into<i64> for Imm12 {
     fn into(self) -> i64 {
-        self.bits as i64
+        self.as_i16().into()
     }
 }
 
 impl Display for Imm12 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{:+}", self.bits)
-    }
-}
-
-impl std::ops::Neg for Imm12 {
-    type Output = Self;
-    fn neg(self) -> Self::Output {
-        Self { bits: -self.bits }
+        write!(f, "{:+}", self.as_i16())
     }
 }
 
 // singed
 #[derive(Clone, Copy, Default)]
 pub struct Imm20 {
-    /// The immediate bits.
-    pub bits: i32,
+    /// 32-bit container where the low 20 bits are the data payload.
+    ///
+    /// Acquiring the underlying value requires sign-extending the 20th bit.
+    bits: u32,
 }
 
 impl Imm20 {
+    pub(crate) const ZERO: Self = Self { bits: 0 };
+
     #[inline]
-    pub fn from_bits(bits: i32) -> Self {
+    pub fn from_i32(bits: i32) -> Self {
+        assert!(bits >= -(0x7_ffff + 1) && bits <= 0x7_ffff);
         Self {
-            bits: bits & 0xf_ffff,
+            bits: (bits as u32) & 0xf_ffff,
         }
     }
 
     #[inline]
-    pub fn as_u32(&self) -> u32 {
-        (self.bits as u32) & 0xf_ffff
+    pub fn as_i32(&self) -> i32 {
+        ((self.bits << 12) as i32) >> 12
+    }
+
+    #[inline]
+    pub fn bits(&self) -> u32 {
+        self.bits
     }
 }
 
 impl Debug for Imm20 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.bits)
+        write!(f, "{}", self.as_i32())
     }
 }
 
@@ -179,7 +187,7 @@ impl Inst {
     pub(crate) fn generate_imm(value: u64) -> Option<(Imm20, Imm12)> {
         if let Some(imm12) = Imm12::maybe_from_u64(value) {
             // can be load using single imm12.
-            return Some((Imm20::from_bits(0), imm12));
+            return Some((Imm20::ZERO, imm12));
         }
         let value = value as i64;
         if !(value >= Self::imm_min() && value <= Self::imm_max()) {
@@ -209,12 +217,10 @@ impl Inst {
             }
             (imm20, imm12)
         };
-        assert!(imm20 >= -(0x7_ffff + 1) && imm20 <= 0x7_ffff);
         assert!(imm20 != 0 || imm12 != 0);
-        Some((
-            Imm20::from_bits(imm20 as i32),
-            Imm12::from_bits(imm12 as i16),
-        ))
+        let imm20 = i32::try_from(imm20).unwrap();
+        let imm12 = i16::try_from(imm12).unwrap();
+        Some((Imm20::from_i32(imm20), Imm12::from_i16(imm12)))
     }
 }
 
@@ -223,8 +229,8 @@ mod test {
     use super::*;
     #[test]
     fn test_imm12() {
-        let x = Imm12::zero();
-        assert_eq!(0, x.as_u32());
+        let x = Imm12::ZERO;
+        assert_eq!(0, x.bits());
         Imm12::maybe_from_u64(0xffff_ffff_ffff_ffff).unwrap();
     }
 

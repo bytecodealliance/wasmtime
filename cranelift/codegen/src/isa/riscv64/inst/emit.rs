@@ -120,10 +120,10 @@ impl Inst {
         assert!(ty.is_int() && ty.bits() <= 64);
         match ty {
             I64 => {
-                insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
+                insts.push(Inst::load_imm12(rd, Imm12::from_i16(-1)));
             }
             I32 | I16 => {
-                insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
+                insts.push(Inst::load_imm12(rd, Imm12::from_i16(-1)));
                 insts.push(Inst::Extend {
                     rd: rd,
                     rn: rd.to_reg(),
@@ -133,7 +133,7 @@ impl Inst {
                 });
             }
             I8 => {
-                insts.push(Inst::load_imm12(rd, Imm12::from_bits(255)));
+                insts.push(Inst::load_imm12(rd, Imm12::from_i16(255)));
             }
             _ => unreachable!("ty:{:?}", ty),
         }
@@ -145,7 +145,7 @@ impl Inst {
             alu_op: AluOPRRI::Xori,
             rd,
             rs,
-            imm12: Imm12::from_bits(-1),
+            imm12: Imm12::from_i16(-1),
         }
     }
 
@@ -201,7 +201,7 @@ impl Inst {
             alu_op: AluOPRRI::Andi,
             rd: tmp,
             rs: tmp.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_zero_bits() as i16),
+            imm12: Imm12::from_i16(FClassResult::is_zero_bits() as i16),
         });
         insts.push(Inst::CondBr {
             taken,
@@ -533,7 +533,7 @@ impl Inst {
             Inst::Jal { label } if has_zca => {
                 sink.use_label_at_offset(*start_off, label, LabelUse::RVCJump);
                 sink.add_uncond_branch(*start_off, *start_off + 2, label);
-                sink.put2(encode_cj_type(CjOp::CJ, Imm12::zero()));
+                sink.put2(encode_cj_type(CjOp::CJ, Imm12::ZERO));
             }
 
             // c.jr
@@ -579,7 +579,7 @@ impl Inst {
                     alu_op: AluOPRRI::Addi,
                     rd: Writable::from_reg(zero_reg()),
                     rs: zero_reg(),
-                    imm12: Imm12::zero(),
+                    imm12: Imm12::ZERO,
                 };
                 x.emit(&[], sink, emit_info, state)
             }
@@ -593,7 +593,7 @@ impl Inst {
                 sink.put_data(&data[..]);
             }
             &Inst::Lui { rd, ref imm } => {
-                let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
+                let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.bits() << 12);
                 sink.put4(x);
             }
             &Inst::LoadInlineConst { rd, ty, imm } => {
@@ -737,7 +737,7 @@ impl Inst {
                     (Some(_), None, None) => {
                         let tmp = writable_spilltmp_reg();
                         Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
-                        (tmp.to_reg(), Imm12::zero())
+                        (tmp.to_reg(), Imm12::ZERO)
                     }
 
                     // If the AMode contains a label we can emit an internal relocation that gets
@@ -749,7 +749,7 @@ impl Inst {
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
                         Inst::Auipc {
                             rd,
-                            imm: Imm20::from_bits(0),
+                            imm: Imm20::ZERO,
                         }
                         .emit_uncompressed(sink, emit_info, state, start_off);
 
@@ -757,7 +757,7 @@ impl Inst {
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
 
                         // Imm12 here is meaningless since it's going to get replaced.
-                        (rd.to_reg(), Imm12::zero())
+                        (rd.to_reg(), Imm12::ZERO)
                     }
 
                     // These cases are impossible with the current AModes that we have. We either
@@ -791,7 +791,7 @@ impl Inst {
                     _ => {
                         let tmp = writable_spilltmp_reg();
                         Inst::LoadAddr { rd: tmp, mem: to }.emit(&[], sink, emit_info, state);
-                        (tmp.to_reg(), Imm12::zero())
+                        (tmp.to_reg(), Imm12::ZERO)
                     }
                 };
 
@@ -813,7 +813,7 @@ impl Inst {
                 Inst::Jalr {
                     rd: writable_zero_reg(),
                     base: link_reg(),
-                    offset: Imm12::zero(),
+                    offset: Imm12::ZERO,
                 }
                 .emit(&[], sink, emit_info, state);
             }
@@ -834,14 +834,14 @@ impl Inst {
                         alu_op: AluOPRRI::Andi,
                         rd,
                         rs: rn,
-                        imm12: Imm12::from_bits(255),
+                        imm12: Imm12::from_i16(255),
                     });
                 } else {
                     insts.push(Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
                         rd,
                         rs: rn,
-                        imm12: Imm12::from_bits(shift_bits),
+                        imm12: Imm12::from_i16(shift_bits),
                     });
                     insts.push(Inst::AluRRImm12 {
                         alu_op: if signed {
@@ -851,7 +851,7 @@ impl Inst {
                         },
                         rd,
                         rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(shift_bits),
+                        imm12: Imm12::from_i16(shift_bits),
                     });
                 }
                 insts
@@ -945,7 +945,7 @@ impl Inst {
                 Inst::Jalr {
                     rd: writable_link_reg(),
                     base: info.rn,
-                    offset: Imm12::zero(),
+                    offset: Imm12::ZERO,
                 }
                 .emit(&[], sink, emit_info, state);
 
@@ -1001,7 +1001,7 @@ impl Inst {
                 Inst::Jalr {
                     rd: writable_zero_reg(),
                     base: callee,
-                    offset: Imm12::zero(),
+                    offset: Imm12::ZERO,
                 }
                 .emit(&[], sink, emit_info, state);
 
@@ -1050,7 +1050,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: rd,
                         rs: rm,
-                        imm12: Imm12::zero(),
+                        imm12: Imm12::ZERO,
                     },
                     RegClass::Float => Inst::FpuRRR {
                         alu_op: if ty == F32 {
@@ -1165,7 +1165,7 @@ impl Inst {
                 // Get the current PC.
                 Inst::Auipc {
                     rd: tmp1,
-                    imm: Imm20::from_bits(0),
+                    imm: Imm20::ZERO,
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
@@ -1178,7 +1178,7 @@ impl Inst {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp2,
                     rs: ext_index.to_reg(),
-                    imm12: Imm12::from_bits(3),
+                    imm12: Imm12::from_i16(3),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
@@ -1197,7 +1197,7 @@ impl Inst {
                 Inst::Jalr {
                     rd: writable_zero_reg(),
                     base: tmp1.to_reg(),
-                    offset: Imm12::from_bits((4 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE) as i16),
+                    offset: Imm12::from_i16((4 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE) as i16),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
@@ -1311,7 +1311,7 @@ impl Inst {
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
                         let inst = Inst::Auipc {
                             rd,
-                            imm: Imm20::from_bits(0),
+                            imm: Imm20::ZERO,
                         };
                         inst.emit_uncompressed(sink, emit_info, state, start_off);
 
@@ -1322,7 +1322,7 @@ impl Inst {
                             alu_op: AluOPRRI::Addi,
                             rd,
                             rs: rd.to_reg(),
-                            imm12: Imm12::zero(),
+                            imm12: Imm12::ZERO,
                         }
                         .emit_uncompressed(sink, emit_info, state, start_off);
                     }
@@ -1390,10 +1390,10 @@ impl Inst {
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
 
                 sink.bind_label(label_true, &mut state.ctrl_plane);
-                Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(rd, Imm12::ONE).emit(&[], sink, emit_info, state);
                 Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_false, &mut state.ctrl_plane);
-                Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(rd, Imm12::ZERO).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::AtomicCas {
@@ -1890,14 +1890,14 @@ impl Inst {
                         alu_op: AluOPRRI::Srli,
                         rd: rd,
                         rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(31),
+                        imm12: Imm12::from_i16(31),
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
                         rd: rd,
                         rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(if 16 == out_type.bits() {
+                        imm12: Imm12::from_i16(if 16 == out_type.bits() {
                             15
                         } else {
                             // I8
@@ -1920,7 +1920,7 @@ impl Inst {
                 // here is nan , move 0 into rd register
                 sink.bind_label(label_nan, &mut state.ctrl_plane);
                 if is_sat {
-                    Inst::load_imm12(rd, Imm12::from_bits(0)).emit(&[], sink, emit_info, state);
+                    Inst::load_imm12(rd, Imm12::ZERO).emit(&[], sink, emit_info, state);
                 } else {
                     // here is ud2.
                     Inst::Udf {
@@ -2303,19 +2303,19 @@ impl Inst {
                 // load 0 to sum , init.
                 Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 // load
-                Inst::load_imm12(step, Imm12::from_bits(ty.bits() as i16)).emit(
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
                 //
-                Inst::load_imm12(tmp, Imm12::from_bits(1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp,
                     rs: tmp.to_reg(),
-                    imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+                    imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                 }
                 .emit(&[], sink, emit_info, state);
                 let label_done = sink.get_label();
@@ -2355,7 +2355,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: sum,
                         rs: sum.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                     sink.bind_label(label_over, &mut state.ctrl_plane);
@@ -2366,14 +2366,14 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: step,
                         rs: step.to_reg(),
-                        imm12: Imm12::from_bits(-1),
+                        imm12: Imm12::from_i16(-1),
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Srli,
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
@@ -2385,7 +2385,7 @@ impl Inst {
                 Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 Inst::gen_move(tmp, rs, I64).emit(&[], sink, emit_info, state);
                 // load 56 to step.
-                Inst::load_imm12(step, Imm12::from_bits(56)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(step, Imm12::from_i16(56)).emit(&[], sink, emit_info, state);
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
                 sink.bind_label(label_loop, &mut state.ctrl_plane);
@@ -2403,7 +2403,7 @@ impl Inst {
                     alu_op: AluOPRRI::Andi,
                     rd: writable_spilltmp_reg(),
                     rs: tmp.to_reg(),
-                    imm12: Imm12::from_bits(255),
+                    imm12: Imm12::from_i16(255),
                 }
                 .emit(&[], sink, emit_info, state);
                 Inst::AluRRR {
@@ -2428,7 +2428,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: step,
                         rs: step.to_reg(),
-                        imm12: Imm12::from_bits(-8),
+                        imm12: Imm12::from_i16(-8),
                     }
                     .emit(&[], sink, emit_info, state);
                     //reset tmp.
@@ -2436,7 +2436,7 @@ impl Inst {
                         alu_op: AluOPRRI::Srli,
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(8),
+                        imm12: Imm12::from_i16(8),
                     }
                     .emit(&[], sink, emit_info, state);
                     // loop.
@@ -2456,20 +2456,20 @@ impl Inst {
                 // load 0 to sum , init.
                 Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 // load
-                Inst::load_imm12(step, Imm12::from_bits(ty.bits() as i16)).emit(
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
                 //
-                Inst::load_imm12(tmp, Imm12::from_bits(1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
                 if leading {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+                        imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                     }
                     .emit(&[], sink, emit_info, state);
                 }
@@ -2509,7 +2509,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: sum,
                         rs: sum.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                 }
@@ -2519,7 +2519,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: step,
                         rs: step.to_reg(),
-                        imm12: Imm12::from_bits(-1),
+                        imm12: Imm12::from_i16(-1),
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::AluRRImm12 {
@@ -2530,7 +2530,7 @@ impl Inst {
                         },
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
@@ -2546,27 +2546,27 @@ impl Inst {
                 rd,
             } => {
                 Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
-                Inst::load_imm12(step, Imm12::from_bits(ty.bits() as i16)).emit(
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
                 //
-                Inst::load_imm12(tmp, Imm12::from_bits(1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp,
                     rs: tmp.to_reg(),
-                    imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+                    imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                 }
                 .emit(&[], sink, emit_info, state);
-                Inst::load_imm12(tmp2, Imm12::from_bits(1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp2, Imm12::ONE).emit(&[], sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp2,
                     rs: tmp2.to_reg(),
-                    imm12: Imm12::from_bits((ty.bits() - 8) as i16),
+                    imm12: Imm12::from_i16((ty.bits() - 8) as i16),
                 }
                 .emit(&[], sink, emit_info, state);
 
@@ -2618,14 +2618,14 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: step,
                         rs: step.to_reg(),
-                        imm12: Imm12::from_bits(-1),
+                        imm12: Imm12::from_i16(-1),
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Srli,
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                     {
@@ -2634,7 +2634,7 @@ impl Inst {
                         // if (step %=8 != 0) then tmp2 = tmp2 << 1
                         let label_over = sink.get_label();
                         let label_sll_1 = sink.get_label();
-                        Inst::load_imm12(writable_spilltmp_reg2(), Imm12::from_bits(8)).emit(
+                        Inst::load_imm12(writable_spilltmp_reg2(), Imm12::from_i16(8)).emit(
                             &[],
                             sink,
                             emit_info,
@@ -2661,7 +2661,7 @@ impl Inst {
                             alu_op: AluOPRRI::Srli,
                             rd: tmp2,
                             rs: tmp2.to_reg(),
-                            imm12: Imm12::from_bits(15),
+                            imm12: Imm12::from_i16(15),
                         }
                         .emit(&[], sink, emit_info, state);
                         Inst::gen_jump(label_over).emit(&[], sink, emit_info, state);
@@ -2670,7 +2670,7 @@ impl Inst {
                             alu_op: AluOPRRI::Slli,
                             rd: tmp2,
                             rs: tmp2.to_reg(),
-                            imm12: Imm12::from_bits(1),
+                            imm12: Imm12::ONE,
                         }
                         .emit(&[], sink, emit_info, state);
                         sink.bind_label(label_over, &mut state.ctrl_plane);

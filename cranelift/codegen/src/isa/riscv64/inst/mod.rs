@@ -136,7 +136,7 @@ impl Display for CondBrTarget {
 }
 
 pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
-    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
+    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.bits() << 12;
     x
 }
 
@@ -145,7 +145,7 @@ pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
         | reg_to_gpr_num(rd.to_reg()) << 7
         | 0b000 << 12
         | reg_to_gpr_num(base) << 15
-        | offset.as_u32() << 20;
+        | offset.bits() << 20;
     x
 }
 
@@ -182,7 +182,7 @@ impl Inst {
         Inst::generate_imm(value).map(|(imm20, imm12)| {
             let mut insts = SmallVec::new();
 
-            let imm20_is_zero = imm20.as_u32() == 0;
+            let imm20_is_zero = imm20.as_i32() == 0;
             let imm12_is_zero = imm12.as_i16() == 0;
 
             let rs = if !imm20_is_zero {
@@ -1357,16 +1357,21 @@ impl Inst {
                     "{} {},{}",
                     "auipc",
                     format_reg(rd.to_reg(), allocs),
-                    imm.bits
+                    imm.as_i32(),
                 )
             }
             &Inst::Jalr { rd, base, offset } => {
                 let base = format_reg(base, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}({})", "jalr", rd, offset.bits, base)
+                format!("{} {},{}({})", "jalr", rd, offset.as_i16(), base)
             }
             &Inst::Lui { rd, ref imm } => {
-                format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
+                format!(
+                    "{} {},{}",
+                    "lui",
+                    format_reg(rd.to_reg(), allocs),
+                    imm.as_i32()
+                )
             }
             &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -2024,14 +2029,14 @@ impl MachInstLabelUse for LabelUse {
     ) -> (CodeOffset, LabelUse) {
         let base = writable_spilltmp_reg();
         {
-            let x = enc_auipc(base, Imm20::from_bits(0)).to_le_bytes();
+            let x = enc_auipc(base, Imm20::ZERO).to_le_bytes();
             buffer[0] = x[0];
             buffer[1] = x[1];
             buffer[2] = x[2];
             buffer[3] = x[3];
         }
         {
-            let x = enc_jalr(writable_zero_reg(), base.to_reg(), Imm12::from_bits(0)).to_le_bytes();
+            let x = enc_jalr(writable_zero_reg(), base.to_reg(), Imm12::ZERO).to_le_bytes();
             buffer[4] = x[0];
             buffer[5] = x[1];
             buffer[6] = x[2];
@@ -2135,7 +2140,7 @@ impl LabelUse {
 
                 buffer[0..2].clone_from_slice(&u16::to_le_bytes(encode_cj_type(
                     CjOp::CJ,
-                    Imm12::from_bits(i16::try_from(offset).unwrap()),
+                    Imm12::from_i16(i16::try_from(offset).unwrap()),
                 )));
             }
         }

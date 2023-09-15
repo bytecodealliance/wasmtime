@@ -73,7 +73,7 @@ pub fn encode_i_type(opcode: u32, rd: WritableReg, width: u32, rs1: Reg, offset:
         reg_to_gpr_num(rd.to_reg()),
         width,
         reg_to_gpr_num(rs1),
-        offset.as_u32(),
+        offset.bits(),
     )
 }
 
@@ -85,11 +85,11 @@ pub fn encode_i_type(opcode: u32, rd: WritableReg, width: u32, rs1: Reg, offset:
 pub fn encode_s_type(opcode: u32, width: u32, base: Reg, src: Reg, offset: Imm12) -> u32 {
     let mut bits = 0;
     bits |= unsigned_field_width(opcode, 7);
-    bits |= (offset.as_u32() & 0b11111) << 7;
+    bits |= (offset.bits() & 0b11111) << 7;
     bits |= unsigned_field_width(width, 3) << 12;
     bits |= reg_to_gpr_num(base) << 15;
     bits |= reg_to_gpr_num(src) << 20;
-    bits |= unsigned_field_width(offset.as_u32() >> 5, 7) << 25;
+    bits |= unsigned_field_width(offset.bits() >> 5, 7) << 25;
     bits
 }
 
@@ -321,7 +321,7 @@ pub fn encode_csr_imm(op: CsrImmOP, rd: WritableReg, csr: CSR, imm: UImm5) -> u3
         reg_to_gpr_num(rd.to_reg()),
         op.funct3(),
         imm.bits(),
-        csr.bits().as_u32(),
+        csr.bits().bits(),
     )
 }
 
@@ -367,7 +367,7 @@ pub fn encode_ca_type(op: CaOp, rd: WritableReg, rs2: Reg) -> u16 {
 // 0--1-2-----12-13--------15
 // |op |  imm   |  funct3  |
 pub fn encode_cj_type(op: CjOp, imm: Imm12) -> u16 {
-    let imm = imm.as_u32();
+    let imm = imm.bits();
     debug_assert!(imm & 1 == 0);
 
     // The offset bits are in rather weird positions.

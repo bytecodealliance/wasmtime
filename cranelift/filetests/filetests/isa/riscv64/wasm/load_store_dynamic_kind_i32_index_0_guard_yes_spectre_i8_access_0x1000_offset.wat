@@ -44,8 +44,8 @@
 ;;   slli a3,a0,32
 ;;   srli a5,a3,32
 ;;   ld a4,8(a2)
-;;   lui a3,1048575
-;;   addi a0,a3,4095
+;;   lui a3,-1
+;;   addi a0,a3,-1
 ;;   add a4,a4,a0
 ;;   ugt a0,a5,a4##ty=i64
 ;;   ld a4,0(a2)
@@ -70,8 +70,8 @@
 ;;   slli a3,a0,32
 ;;   srli a5,a3,32
 ;;   ld a4,8(a1)
-;;   lui a3,1048575
-;;   addi a0,a3,4095
+;;   lui a3,-1
+;;   addi a0,a3,-1
 ;;   add a4,a4,a0
 ;;   ugt a0,a5,a4##ty=i64
 ;;   ld a4,0(a1)

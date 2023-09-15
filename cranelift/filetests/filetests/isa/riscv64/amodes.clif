@@ -232,7 +232,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   lui a4,244141
-;   addi a1,a4,2560
+;   addi a1,a4,-1536
 ;   add a5,a0,a1
 ;   lw a0,0(a5)
 ;   ret
@@ -299,8 +299,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   lui a1,1048575
-;   addi a3,a1,4094
+;   lui a1,-1
+;   addi a3,a1,-2
 ;   slli a1,a3,32
 ;   srli a3,a1,32
 ;   lh a0,0(a3)
@@ -351,8 +351,8 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   lui a0,1048575
-;   addi a2,a0,4094
+;   lui a0,-1
+;   addi a2,a0,-2
 ;   sext.w a1,a2
 ;   lh a0,0(a1)
 ;   ret

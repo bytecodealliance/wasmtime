@@ -59,7 +59,7 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,16
-;   addi a0,a0,4095
+;   addi a0,a0,-1
 ;   ret
 ;
 ; Disassembled:
@@ -152,7 +152,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui a0,1048560
+;   lui a0,-16
 ;   ret
 ;
 ; Disassembled:
@@ -491,7 +491,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui a0,792576
+;   lui a0,-256000
 ;   fmv.w.x fa0,a0
 ;   ret
 ;
@@ -510,7 +510,7 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,1
-;   addi a0,a0,4095
+;   addi a0,a0,-1
 ;   ret
 ;
 ; Disassembled:
@@ -528,7 +528,7 @@ block0:
 ; VCode:
 ; block0:
 ;   lui a0,1
-;   addi a0,a0,2048
+;   addi a0,a0,-2048
 ;   ret
 ;
 ; Disassembled:
