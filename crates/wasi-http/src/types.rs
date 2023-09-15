@@ -444,6 +444,6 @@ mod test {
 
     #[test]
     fn instantiate() {
-        WasiHttpCtx::new().unwrap();
+        WasiHttpCtx::new();
     }
 }

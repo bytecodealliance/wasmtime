@@ -1,8 +1,6 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
 use std::io::{self, Read};
 use wasi_http_tests::bindings::wasi::http::types::{Method, Scheme};
-
-struct Component;
 
 fn main() {
     wasi_http_tests::in_tokio(async { run().await })
