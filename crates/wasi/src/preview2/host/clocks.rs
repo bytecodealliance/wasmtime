@@ -2,12 +2,13 @@
 
 use crate::preview2::bindings::{
     clocks::monotonic_clock::{self, Instant},
-    clocks::timezone::{self, Timezone, TimezoneDisplay},
+    clocks::timezone::{self, TimezoneDisplay},
     clocks::wall_clock::{self, Datetime},
-    poll::poll::Pollable,
+    io::poll::Pollable,
 };
 use crate::preview2::{HostPollable, TablePollableExt, WasiView};
 use cap_std::time::SystemTime;
+use wasmtime::component::Resource;
 
 impl TryFrom<SystemTime> for Datetime {
     type Error = anyhow::Error;
@@ -50,7 +51,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
         Ok(self.ctx().monotonic_clock.resolution())
     }
 
-    fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Pollable> {
+    fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Resource<Pollable>> {
         use std::time::Duration;
         // Calculate time relative to clock object, which may not have the same zero
         // point as tokio Inst::now()
@@ -93,15 +94,11 @@ impl<T: WasiView> monotonic_clock::Host for T {
 }
 
 impl<T: WasiView> timezone::Host for T {
-    fn display(&mut self, timezone: Timezone, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
+    fn display(&mut self, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
         todo!("timezone display is not implemented")
     }
 
-    fn utc_offset(&mut self, timezone: Timezone, when: Datetime) -> anyhow::Result<i32> {
+    fn utc_offset(&mut self, when: Datetime) -> anyhow::Result<i32> {
         todo!("timezone utc_offset is not implemented")
-    }
-
-    fn drop_timezone(&mut self, timezone: Timezone) -> anyhow::Result<()> {
-        todo!("timezone drop is not implemented")
     }
 }

@@ -1,8 +1,10 @@
+use crate::preview2::bindings::io::streams::{InputStream, OutputStream};
 use crate::preview2::filesystem::FileInputStream;
 use crate::preview2::{Table, TableError};
 use anyhow::Error;
 use bytes::Bytes;
 use std::fmt;
+use wasmtime::component::Resource;
 
 /// An error which should be reported to Wasm as a runtime error, rather than
 /// an error which should trap Wasm execution. The definition for runtime
@@ -175,94 +177,128 @@ pub(crate) trait InternalTableStreamExt {
     fn push_internal_input_stream(
         &mut self,
         istream: InternalInputStream,
-    ) -> Result<u32, TableError>;
-    fn push_internal_input_stream_child(
+    ) -> Result<Resource<InputStream>, TableError>;
+    fn push_internal_input_stream_child<T: 'static>(
         &mut self,
         istream: InternalInputStream,
-        parent: u32,
-    ) -> Result<u32, TableError>;
+        parent: Resource<T>,
+    ) -> Result<Resource<InputStream>, TableError>;
     fn get_internal_input_stream_mut(
         &mut self,
-        fd: u32,
+        fd: &Resource<InputStream>,
     ) -> Result<&mut InternalInputStream, TableError>;
-    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError>;
+    fn delete_internal_input_stream(
+        &mut self,
+        fd: Resource<InputStream>,
+    ) -> Result<InternalInputStream, TableError>;
 }
 impl InternalTableStreamExt for Table {
     fn push_internal_input_stream(
         &mut self,
         istream: InternalInputStream,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(istream))
+    ) -> Result<Resource<InputStream>, TableError> {
+        Ok(Resource::new_own(self.push(Box::new(istream))?))
     }
-    fn push_internal_input_stream_child(
+    fn push_internal_input_stream_child<T: 'static>(
         &mut self,
         istream: InternalInputStream,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        self.push_child(Box::new(istream), parent)
+        parent: Resource<T>,
+    ) -> Result<Resource<InputStream>, TableError> {
+        Ok(Resource::new_own(
+            self.push_child(Box::new(istream), parent.rep())?,
+        ))
     }
     fn get_internal_input_stream_mut(
         &mut self,
-        fd: u32,
+        fd: &Resource<InputStream>,
     ) -> Result<&mut InternalInputStream, TableError> {
-        self.get_mut(fd)
+        self.get_mut(fd.rep())
     }
-    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError> {
-        self.delete(fd)
+    fn delete_internal_input_stream(
+        &mut self,
+        fd: Resource<InputStream>,
+    ) -> Result<InternalInputStream, TableError> {
+        self.delete(fd.rep())
     }
 }
 
 /// Extension trait for managing [`HostInputStream`]s and [`HostOutputStream`]s in the [`Table`].
 pub trait TableStreamExt {
     /// Push a [`HostInputStream`] into a [`Table`], returning the table index.
-    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
+    fn push_input_stream(
+        &mut self,
+        istream: Box<dyn HostInputStream>,
+    ) -> Result<Resource<InputStream>, TableError>;
     /// Same as [`push_input_stream`](Self::push_output_stream) except assigns a parent resource to
     /// the input-stream created.
-    fn push_input_stream_child(
+    fn push_input_stream_child<T: 'static>(
         &mut self,
         istream: Box<dyn HostInputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError>;
+        parent: Resource<T>,
+    ) -> Result<Resource<InputStream>, TableError>;
     /// Get a mutable reference to a [`HostInputStream`] in a [`Table`].
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError>;
+    fn get_input_stream_mut(
+        &mut self,
+        fd: &Resource<InputStream>,
+    ) -> Result<&mut dyn HostInputStream, TableError>;
     /// Remove [`HostInputStream`] from table:
-    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError>;
+    fn delete_input_stream(
+        &mut self,
+        fd: Resource<InputStream>,
+    ) -> Result<Box<dyn HostInputStream>, TableError>;
 
     /// Push a [`HostOutputStream`] into a [`Table`], returning the table index.
-    fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
-        -> Result<u32, TableError>;
-    /// Same as [`push_output_stream`](Self::push_output_stream) except assigns a parent resource
-    /// to the output-stream created.
-    fn push_output_stream_child(
+    fn push_output_stream(
         &mut self,
         ostream: Box<dyn HostOutputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError>;
+    ) -> Result<Resource<OutputStream>, TableError>;
+    /// Same as [`push_output_stream`](Self::push_output_stream) except assigns a parent resource
+    /// to the output-stream created.
+    fn push_output_stream_child<T: 'static>(
+        &mut self,
+        ostream: Box<dyn HostOutputStream>,
+        parent: Resource<T>,
+    ) -> Result<Resource<OutputStream>, TableError>;
     /// Get a mutable reference to a [`HostOutputStream`] in a [`Table`].
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError>;
+    fn get_output_stream_mut(
+        &mut self,
+        fd: &Resource<OutputStream>,
+    ) -> Result<&mut dyn HostOutputStream, TableError>;
 
     /// Remove [`HostOutputStream`] from table:
-    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError>;
+    fn delete_output_stream(
+        &mut self,
+        fd: Resource<OutputStream>,
+    ) -> Result<Box<dyn HostOutputStream>, TableError>;
 }
 impl TableStreamExt for Table {
-    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
-        self.push_internal_input_stream(InternalInputStream::Host(istream))
-    }
-    fn push_input_stream_child(
+    fn push_input_stream(
         &mut self,
         istream: Box<dyn HostInputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError> {
+    ) -> Result<Resource<InputStream>, TableError> {
+        self.push_internal_input_stream(InternalInputStream::Host(istream))
+    }
+    fn push_input_stream_child<T: 'static>(
+        &mut self,
+        istream: Box<dyn HostInputStream>,
+        parent: Resource<T>,
+    ) -> Result<Resource<InputStream>, TableError> {
         self.push_internal_input_stream_child(InternalInputStream::Host(istream), parent)
     }
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError> {
+    fn get_input_stream_mut(
+        &mut self,
+        fd: &Resource<InputStream>,
+    ) -> Result<&mut dyn HostInputStream, TableError> {
         match self.get_internal_input_stream_mut(fd)? {
             InternalInputStream::Host(ref mut h) => Ok(h.as_mut()),
             _ => Err(TableError::WrongType),
         }
     }
-    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError> {
-        let occ = self.entry(fd)?;
+    fn delete_input_stream(
+        &mut self,
+        fd: Resource<InputStream>,
+    ) -> Result<Box<dyn HostInputStream>, TableError> {
+        let occ = self.entry(fd.rep())?;
         match occ.get().downcast_ref::<InternalInputStream>() {
             Some(InternalInputStream::Host(_)) => {
                 let any = occ.remove_entry()?;
@@ -278,22 +314,30 @@ impl TableStreamExt for Table {
     fn push_output_stream(
         &mut self,
         ostream: Box<dyn HostOutputStream>,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(ostream))
+    ) -> Result<Resource<OutputStream>, TableError> {
+        Ok(Resource::new_own(self.push(Box::new(ostream))?))
     }
-    fn push_output_stream_child(
+    fn push_output_stream_child<T: 'static>(
         &mut self,
         ostream: Box<dyn HostOutputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        self.push_child(Box::new(ostream), parent)
+        parent: Resource<T>,
+    ) -> Result<Resource<OutputStream>, TableError> {
+        Ok(Resource::new_own(
+            self.push_child(Box::new(ostream), parent.rep())?,
+        ))
     }
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError> {
-        let boxed: &mut Box<dyn HostOutputStream> = self.get_mut(fd)?;
+    fn get_output_stream_mut(
+        &mut self,
+        fd: &Resource<OutputStream>,
+    ) -> Result<&mut dyn HostOutputStream, TableError> {
+        let boxed: &mut Box<dyn HostOutputStream> = self.get_mut(fd.rep())?;
         Ok(boxed.as_mut())
     }
-    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError> {
-        self.delete(fd)
+    fn delete_output_stream(
+        &mut self,
+        fd: Resource<OutputStream>,
+    ) -> Result<Box<dyn HostOutputStream>, TableError> {
+        self.delete(fd.rep())
     }
 }
 

@@ -1748,7 +1748,7 @@ pub unsafe extern "C" fn poll_oneoff(
             });
         }
 
-        #[link(wasm_import_module = "wasi:poll/poll")]
+        #[link(wasm_import_module = "wasi:io/poll")]
         extern "C" {
             #[link_name = "poll-oneoff"]
             fn poll_oneoff_import(pollables: *const Pollable, len: usize, rval: *mut BoolList);

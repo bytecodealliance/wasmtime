@@ -1,3 +1,4 @@
+use crate::preview2::bindings::filesystem::types::Descriptor;
 use crate::preview2::{
     AbortOnDropJoinHandle, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
     Table, TableError,
@@ -6,6 +7,7 @@ use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use futures::future::{maybe_done, MaybeDone};
 use std::sync::Arc;
+use wasmtime::component::Resource;
 
 bitflags::bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -44,42 +46,42 @@ impl File {
     }
 }
 pub(crate) trait TableFsExt {
-    fn push_file(&mut self, file: File) -> Result<u32, TableError>;
-    fn delete_file(&mut self, fd: u32) -> Result<File, TableError>;
-    fn is_file(&self, fd: u32) -> bool;
-    fn get_file(&self, fd: u32) -> Result<&File, TableError>;
+    fn push_file(&mut self, file: File) -> Result<Resource<Descriptor>, TableError>;
+    fn delete_file(&mut self, fd: Resource<Descriptor>) -> Result<File, TableError>;
+    fn is_file(&self, fd: &Resource<Descriptor>) -> bool;
+    fn get_file(&self, fd: &Resource<Descriptor>) -> Result<&File, TableError>;
 
-    fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError>;
-    fn delete_dir(&mut self, fd: u32) -> Result<Dir, TableError>;
-    fn is_dir(&self, fd: u32) -> bool;
-    fn get_dir(&self, fd: u32) -> Result<&Dir, TableError>;
+    fn push_dir(&mut self, dir: Dir) -> Result<Resource<Descriptor>, TableError>;
+    fn delete_dir(&mut self, fd: Resource<Descriptor>) -> Result<Dir, TableError>;
+    fn is_dir(&self, fd: &Resource<Descriptor>) -> bool;
+    fn get_dir(&self, fd: &Resource<Descriptor>) -> Result<&Dir, TableError>;
 }
 
 impl TableFsExt for Table {
-    fn push_file(&mut self, file: File) -> Result<u32, TableError> {
-        self.push(Box::new(file))
+    fn push_file(&mut self, file: File) -> Result<Resource<Descriptor>, TableError> {
+        Ok(Resource::new_own(self.push(Box::new(file))?))
     }
-    fn delete_file(&mut self, fd: u32) -> Result<File, TableError> {
-        self.delete(fd)
+    fn delete_file(&mut self, fd: Resource<Descriptor>) -> Result<File, TableError> {
+        self.delete(fd.rep())
     }
-    fn is_file(&self, fd: u32) -> bool {
-        self.is::<File>(fd)
+    fn is_file(&self, fd: &Resource<Descriptor>) -> bool {
+        self.is::<File>(fd.rep())
     }
-    fn get_file(&self, fd: u32) -> Result<&File, TableError> {
-        self.get(fd)
+    fn get_file(&self, fd: &Resource<Descriptor>) -> Result<&File, TableError> {
+        self.get(fd.rep())
     }
 
-    fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError> {
-        self.push(Box::new(dir))
+    fn push_dir(&mut self, dir: Dir) -> Result<Resource<Descriptor>, TableError> {
+        Ok(Resource::new_own(self.push(Box::new(dir))?))
     }
-    fn delete_dir(&mut self, fd: u32) -> Result<Dir, TableError> {
-        self.delete(fd)
+    fn delete_dir(&mut self, fd: Resource<Descriptor>) -> Result<Dir, TableError> {
+        self.delete(fd.rep())
     }
-    fn is_dir(&self, fd: u32) -> bool {
-        self.is::<Dir>(fd)
+    fn is_dir(&self, fd: &Resource<Descriptor>) -> bool {
+        self.is::<Dir>(fd.rep())
     }
-    fn get_dir(&self, fd: u32) -> Result<&Dir, TableError> {
-        self.get(fd)
+    fn get_dir(&self, fd: &Resource<Descriptor>) -> Result<&Dir, TableError> {
+        self.get(fd.rep())
     }
 }
 

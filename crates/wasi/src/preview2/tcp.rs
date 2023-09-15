@@ -1,4 +1,5 @@
 use super::{HostInputStream, HostOutputStream, OutputStreamError};
+use crate::preview2::bindings::sockets::tcp::TcpSocket;
 use crate::preview2::{
     with_ambient_tokio_runtime, AbortOnDropJoinHandle, StreamState, Table, TableError,
 };
@@ -7,6 +8,7 @@ use cap_std::net::TcpListener;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::sync::Arc;
+use wasmtime::component::Resource;
 
 /// The state of a TCP socket.
 ///
@@ -254,27 +256,45 @@ impl HostTcpSocketState {
 }
 
 pub(crate) trait TableTcpSocketExt {
-    fn push_tcp_socket(&mut self, tcp_socket: HostTcpSocketState) -> Result<u32, TableError>;
-    fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocketState, TableError>;
-    fn is_tcp_socket(&self, fd: u32) -> bool;
-    fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocketState, TableError>;
-    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocketState, TableError>;
+    fn push_tcp_socket(
+        &mut self,
+        tcp_socket: HostTcpSocketState,
+    ) -> Result<Resource<TcpSocket>, TableError>;
+    fn delete_tcp_socket(
+        &mut self,
+        fd: Resource<TcpSocket>,
+    ) -> Result<HostTcpSocketState, TableError>;
+    fn is_tcp_socket(&self, fd: &Resource<TcpSocket>) -> bool;
+    fn get_tcp_socket(&self, fd: &Resource<TcpSocket>) -> Result<&HostTcpSocketState, TableError>;
+    fn get_tcp_socket_mut(
+        &mut self,
+        fd: &Resource<TcpSocket>,
+    ) -> Result<&mut HostTcpSocketState, TableError>;
 }
 
 impl TableTcpSocketExt for Table {
-    fn push_tcp_socket(&mut self, tcp_socket: HostTcpSocketState) -> Result<u32, TableError> {
-        self.push(Box::new(tcp_socket))
+    fn push_tcp_socket(
+        &mut self,
+        tcp_socket: HostTcpSocketState,
+    ) -> Result<Resource<TcpSocket>, TableError> {
+        Ok(Resource::new_own(self.push(Box::new(tcp_socket))?))
     }
-    fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocketState, TableError> {
-        self.delete(fd)
+    fn delete_tcp_socket(
+        &mut self,
+        fd: Resource<TcpSocket>,
+    ) -> Result<HostTcpSocketState, TableError> {
+        self.delete(fd.rep())
     }
-    fn is_tcp_socket(&self, fd: u32) -> bool {
-        self.is::<HostTcpSocketState>(fd)
+    fn is_tcp_socket(&self, fd: &Resource<TcpSocket>) -> bool {
+        self.is::<HostTcpSocketState>(fd.rep())
     }
-    fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocketState, TableError> {
-        self.get(fd)
+    fn get_tcp_socket(&self, fd: &Resource<TcpSocket>) -> Result<&HostTcpSocketState, TableError> {
+        self.get(fd.rep())
     }
-    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocketState, TableError> {
-        self.get_mut(fd)
+    fn get_tcp_socket_mut(
+        &mut self,
+        fd: &Resource<TcpSocket>,
+    ) -> Result<&mut HostTcpSocketState, TableError> {
+        self.get_mut(fd.rep())
     }
 }

@@ -4,8 +4,8 @@ use crate::preview2::bindings::cli::{
 };
 use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
 use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
+use crate::preview2::bindings::io::poll;
 use crate::preview2::bindings::io::streams;
-use crate::preview2::bindings::poll;
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::host::filesystem::TableReaddirExt;
 use crate::preview2::{bindings, IsATTY, TableError, WasiView};
@@ -18,13 +18,14 @@ use std::ops::{Deref, DerefMut};
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use wasmtime::component::Resource;
 use wiggle::tracing::instrument;
 use wiggle::{GuestError, GuestPtr, GuestSlice, GuestSliceMut, GuestStrCow, GuestType};
 
 #[derive(Clone, Debug)]
 struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
-    fd: filesystem::Descriptor,
+    fd: u32,
 
     /// The current-position pointer.
     position: Arc<AtomicU64>,
@@ -54,26 +55,26 @@ impl BlockingMode {
     async fn read(
         &self,
         host: &mut impl streams::Host,
-        input_stream: streams::InputStream,
+        input_stream: Resource<streams::InputStream>,
         max_size: usize,
     ) -> Result<(Vec<u8>, streams::StreamStatus), types::Error> {
         let max_size = max_size.try_into().unwrap_or(u64::MAX);
         match self {
-            BlockingMode::Blocking => {
-                stream_res(streams::Host::blocking_read(host, input_stream, max_size).await)
-            }
+            BlockingMode::Blocking => stream_res(
+                streams::HostInputStream::blocking_read(host, input_stream, max_size).await,
+            ),
             BlockingMode::NonBlocking => {
-                stream_res(streams::Host::read(host, input_stream, max_size).await)
+                stream_res(streams::HostInputStream::read(host, input_stream, max_size).await)
             }
         }
     }
     async fn write(
         &self,
-        host: &mut (impl streams::Host + poll::poll::Host),
-        output_stream: streams::OutputStream,
+        host: &mut (impl streams::Host + poll::Host),
+        output_stream: Resource<streams::OutputStream>,
         mut bytes: &[u8],
     ) -> Result<usize, types::Error> {
-        use streams::Host as Streams;
+        use streams::HostOutputStream as Streams;
 
         match self {
             BlockingMode::Blocking => {
@@ -84,13 +85,15 @@ impl BlockingMode {
                     let (chunk, rest) = bytes.split_at(len);
                     bytes = rest;
 
-                    Streams::blocking_write_and_flush(host, output_stream, Vec::from(chunk)).await?
+                    let borrow = Resource::new_borrow(output_stream.rep());
+                    Streams::blocking_write_and_flush(host, borrow, Vec::from(chunk)).await?
                 }
 
                 Ok(total)
             }
             BlockingMode::NonBlocking => {
-                let n = match Streams::check_write(host, output_stream) {
+                let borrow = Resource::new_borrow(output_stream.rep());
+                let n = match Streams::check_write(host, borrow) {
                     Ok(n) => n,
                     Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => 0,
                     Err(e) => Err(e)?,
@@ -101,7 +104,8 @@ impl BlockingMode {
                     return Ok(0);
                 }
 
-                match Streams::write(host, output_stream, bytes[..len].to_vec()).await {
+                let borrow = Resource::new_borrow(output_stream.rep());
+                match Streams::write(host, borrow, bytes[..len].to_vec()) {
                     Ok(()) => {}
                     Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => {
                         return Ok(0)
@@ -109,7 +113,8 @@ impl BlockingMode {
                     Err(e) => Err(e)?,
                 }
 
-                match Streams::blocking_flush(host, output_stream).await {
+                let borrow = Resource::new_borrow(output_stream.rep());
+                match Streams::blocking_flush(host, borrow).await {
                     Ok(()) => {}
                     Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => {
                         return Ok(0)
@@ -125,19 +130,10 @@ impl BlockingMode {
 
 #[derive(Clone, Debug)]
 enum Descriptor {
-    Stdin {
-        input_stream: streams::InputStream,
-        isatty: IsATTY,
-    },
-    Stdout {
-        output_stream: streams::OutputStream,
-        isatty: IsATTY,
-    },
-    Stderr {
-        output_stream: streams::OutputStream,
-        isatty: IsATTY,
-    },
-    PreopenDirectory((filesystem::Descriptor, String)),
+    Stdin { input_stream: u32, isatty: IsATTY },
+    Stdout { output_stream: u32, isatty: IsATTY },
+    Stderr { output_stream: u32, isatty: IsATTY },
+    PreopenDirectory((u32, String)),
     File(File),
 }
 
@@ -185,13 +181,14 @@ impl Descriptors {
             input_stream: host
                 .get_stdin()
                 .context("failed to call `get-stdin`")
-                .map_err(types::Error::trap)?,
+                .map_err(types::Error::trap)?
+                .rep(),
             isatty: if let Some(term_in) = host
                 .get_terminal_stdin()
                 .context("failed to call `get-terminal-stdin`")
                 .map_err(types::Error::trap)?
             {
-                host.drop_terminal_input(term_in)
+                terminal_input::HostTerminalInput::drop(host, term_in)
                     .context("failed to call `drop-terminal-input`")
                     .map_err(types::Error::trap)?;
                 IsATTY::Yes
@@ -203,13 +200,14 @@ impl Descriptors {
             output_stream: host
                 .get_stdout()
                 .context("failed to call `get-stdout`")
-                .map_err(types::Error::trap)?,
+                .map_err(types::Error::trap)?
+                .rep(),
             isatty: if let Some(term_out) = host
                 .get_terminal_stdout()
                 .context("failed to call `get-terminal-stdout`")
                 .map_err(types::Error::trap)?
             {
-                host.drop_terminal_output(term_out)
+                terminal_output::HostTerminalOutput::drop(host, term_out)
                     .context("failed to call `drop-terminal-output`")
                     .map_err(types::Error::trap)?;
                 IsATTY::Yes
@@ -221,13 +219,14 @@ impl Descriptors {
             output_stream: host
                 .get_stderr()
                 .context("failed to call `get-stderr`")
-                .map_err(types::Error::trap)?,
+                .map_err(types::Error::trap)?
+                .rep(),
             isatty: if let Some(term_out) = host
                 .get_terminal_stderr()
                 .context("failed to call `get-terminal-stderr`")
                 .map_err(types::Error::trap)?
             {
-                host.drop_terminal_output(term_out)
+                terminal_output::HostTerminalOutput::drop(host, term_out)
                     .context("failed to call `drop-terminal-output`")
                     .map_err(types::Error::trap)?;
                 IsATTY::Yes
@@ -241,7 +240,7 @@ impl Descriptors {
             .context("failed to call `get-directories`")
             .map_err(types::Error::trap)?
         {
-            descriptors.push(Descriptor::PreopenDirectory(dir))?;
+            descriptors.push(Descriptor::PreopenDirectory((dir.0.rep(), dir.1)))?;
         }
         Ok(descriptors)
     }
@@ -349,7 +348,9 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     fn get_file(&mut self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get_mut().get(&fd) {
-            Some(Descriptor::File(file @ File { fd, .. })) if self.view.table().is_file(*fd) => {
+            Some(Descriptor::File(file @ File { fd, .. }))
+                if self.view.table().is_file(&Resource::new_borrow(*fd)) =>
+            {
                 Ok(file)
             }
             _ => Err(types::Errno::Badf.into()),
@@ -361,7 +362,11 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     fn get_file_mut(&mut self, fd: types::Fd) -> Result<&mut File> {
         let fd = fd.into();
         match self.descriptors.get_mut().get_mut(&fd) {
-            Some(Descriptor::File(file)) if self.view.table().is_file(file.fd) => Ok(file),
+            Some(Descriptor::File(file))
+                if self.view.table().is_file(&Resource::new_borrow(file.fd)) =>
+            {
+                Ok(file)
+            }
             _ => Err(types::Errno::Badf.into()),
         }
     }
@@ -375,7 +380,9 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     fn get_seekable(&mut self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get_mut().get(&fd) {
-            Some(Descriptor::File(file @ File { fd, .. })) if self.view.table().is_file(*fd) => {
+            Some(Descriptor::File(file @ File { fd, .. }))
+                if self.view.table().is_file(&Resource::new_borrow(*fd)) =>
+            {
                 Ok(file)
             }
             Some(
@@ -389,31 +396,35 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
-    fn get_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor> {
+    fn get_fd(&mut self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         match self.get_descriptor(fd)? {
-            Descriptor::File(File { fd, .. }) => Ok(*fd),
-            Descriptor::PreopenDirectory((fd, _)) => Ok(*fd),
-            Descriptor::Stdin { input_stream, .. } => Ok(*input_stream),
-            Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
-                Ok(*output_stream)
+            Descriptor::File(File { fd, .. }) => Ok(Resource::new_borrow(*fd)),
+            Descriptor::PreopenDirectory((fd, _)) => Ok(Resource::new_borrow(*fd)),
+            Descriptor::Stdin { .. } | Descriptor::Stdout { .. } | Descriptor::Stderr { .. } => {
+                Err(types::Errno::Badf.into())
             }
         }
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
-    fn get_file_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor> {
-        self.get_file(fd).map(|File { fd, .. }| *fd)
+    fn get_file_fd(&mut self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
+        self.get_file(fd)
+            .map(|File { fd, .. }| Resource::new_borrow(*fd))
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
     /// of [`crate::preview2::filesystem::Dir`] type
-    fn get_dir_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor> {
+    fn get_dir_fd(&mut self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         let fd = fd.into();
         match self.descriptors.get_mut().get(&fd) {
-            Some(Descriptor::File(File { fd, .. })) if self.view.table().is_dir(*fd) => Ok(*fd),
-            Some(Descriptor::PreopenDirectory((fd, _))) => Ok(*fd),
+            Some(Descriptor::File(File { fd, .. }))
+                if self.view.table().is_dir(&Resource::new_borrow(*fd)) =>
+            {
+                Ok(Resource::new_borrow(*fd))
+            }
+            Some(Descriptor::PreopenDirectory((fd, _))) => Ok(Resource::new_borrow(*fd)),
             _ => Err(types::Errno::Badf.into()),
         }
     }
@@ -448,7 +459,7 @@ trait WasiPreview1ViewExt:
 
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
-    fn get_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
+    fn get_fd(&mut self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>, types::Error> {
         let mut st = self.transact()?;
         let fd = st.get_fd(fd)?;
         Ok(fd)
@@ -457,7 +468,10 @@ trait WasiPreview1ViewExt:
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
-    fn get_file_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
+    fn get_file_fd(
+        &mut self,
+        fd: types::Fd,
+    ) -> Result<Resource<filesystem::Descriptor>, types::Error> {
         let mut st = self.transact()?;
         let fd = st.get_file_fd(fd)?;
         Ok(fd)
@@ -467,7 +481,10 @@ trait WasiPreview1ViewExt:
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
     /// of [`crate::preview2::filesystem::Dir`] type
-    fn get_dir_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
+    fn get_dir_fd(
+        &mut self,
+        fd: types::Fd,
+    ) -> Result<Resource<filesystem::Descriptor>, types::Error> {
         let mut st = self.transact()?;
         let fd = st.get_dir_fd(fd)?;
         Ok(fd)
@@ -476,13 +493,13 @@ trait WasiPreview1ViewExt:
 
 impl<T: WasiPreview1View + preopens::Host> WasiPreview1ViewExt for T {}
 
-pub fn add_to_linker_async<T: WasiPreview1View>(
+pub fn add_to_linker_async<T: WasiPreview1View + Sync>(
     linker: &mut wasmtime::Linker<T>,
 ) -> anyhow::Result<()> {
     wasi_snapshot_preview1::add_to_linker(linker, |t| t)
 }
 
-pub fn add_to_linker_sync<T: WasiPreview1View>(
+pub fn add_to_linker_sync<T: WasiPreview1View + Sync>(
     linker: &mut wasmtime::Linker<T>,
 ) -> anyhow::Result<()> {
     sync::add_wasi_snapshot_preview1_to_linker(linker, |t| t)
@@ -849,7 +866,7 @@ impl<
             + bindings::cli::exit::Host
             + bindings::filesystem::preopens::Host
             + bindings::filesystem::types::Host
-            + bindings::poll::poll::Host
+            + bindings::io::poll::Host
             + bindings::random::random::Host
             + bindings::io::streams::Host
             + bindings::clocks::monotonic_clock::Host
@@ -1018,16 +1035,17 @@ impl<
             .clone();
         match desc {
             Descriptor::Stdin { input_stream, .. } => {
-                streams::Host::drop_input_stream(self, input_stream)
+                streams::HostInputStream::drop(self, Resource::new_own(input_stream))
                     .context("failed to call `drop-input-stream`")
             }
             Descriptor::Stdout { output_stream, .. } | Descriptor::Stderr { output_stream, .. } => {
-                streams::Host::drop_output_stream(self, output_stream)
+                streams::HostOutputStream::drop(self, Resource::new_own(output_stream))
                     .context("failed to call `drop-output-stream`")
             }
-            Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => self
-                .drop_descriptor(fd)
-                .context("failed to call `drop-descriptor`"),
+            Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => {
+                filesystem::HostDescriptor::drop(self, Resource::new_own(fd))
+                    .context("failed to call `drop-descriptor`")
+            }
         }
         .map_err(types::Error::trap)
     }
@@ -1115,13 +1133,16 @@ impl<
                 ..
             }) => (*fd, *blocking_mode, *append),
         };
-        let flags = self.get_flags(fd).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `get-flags`")
-                .unwrap_or_else(types::Error::trap)
-        })?;
+        let flags = self
+            .get_flags(Resource::new_borrow(fd))
+            .await
+            .map_err(|e| {
+                e.try_into()
+                    .context("failed to call `get-flags`")
+                    .unwrap_or_else(types::Error::trap)
+            })?;
         let fs_filetype = self
-            .get_type(fd)
+            .get_type(Resource::new_borrow(fd))
             .await
             .map_err(|e| {
                 e.try_into()
@@ -1225,20 +1246,27 @@ impl<
                     data_access_timestamp,
                     data_modification_timestamp,
                     status_change_timestamp,
-                } = self.stat(fd).await.map_err(|e| {
+                } = self.stat(Resource::new_borrow(fd)).await.map_err(|e| {
                     e.try_into()
                         .context("failed to call `stat`")
                         .unwrap_or_else(types::Error::trap)
                 })?;
-                let metadata_hash = self.metadata_hash(fd).await.map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `metadata_hash`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
+                let metadata_hash =
+                    self.metadata_hash(Resource::new_borrow(fd))
+                        .await
+                        .map_err(|e| {
+                            e.try_into()
+                                .context("failed to call `metadata_hash`")
+                                .unwrap_or_else(types::Error::trap)
+                        })?;
                 let filetype = type_.try_into().map_err(types::Error::trap)?;
-                let atim = data_access_timestamp.try_into()?;
-                let mtim = data_modification_timestamp.try_into()?;
-                let ctim = status_change_timestamp.try_into()?;
+                let zero = wall_clock::Datetime {
+                    seconds: 0,
+                    nanoseconds: 0,
+                };
+                let atim = data_access_timestamp.unwrap_or(zero).try_into()?;
+                let mtim = data_modification_timestamp.unwrap_or(zero).try_into()?;
+                let ctim = status_change_timestamp.unwrap_or(zero).try_into()?;
                 Ok(types::Filestat {
                     dev: 1,
                     ino: metadata_hash.lower,
@@ -1313,17 +1341,19 @@ impl<
                 blocking_mode,
                 position,
                 ..
-            }) if self.table().is_file(fd) => {
+            }) if self.table().is_file(&Resource::new_borrow(fd)) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0);
                 };
 
                 let pos = position.load(Ordering::Relaxed);
-                let stream = self.read_via_stream(fd, pos).map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `read-via-stream`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
+                let stream = self
+                    .read_via_stream(Resource::new_borrow(fd), pos)
+                    .map_err(|e| {
+                        e.try_into()
+                            .context("failed to call `read-via-stream`")
+                            .unwrap_or_else(types::Error::trap)
+                    })?;
                 let (read, state) = blocking_mode.read(self, stream, buf.len()).await?;
                 let n = read.len().try_into()?;
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
@@ -1336,9 +1366,9 @@ impl<
                     return Ok(0);
                 };
                 let (read, state) = stream_res(
-                    streams::Host::blocking_read(
+                    streams::HostInputStream::read(
                         self,
-                        input_stream,
+                        Resource::new_borrow(input_stream),
                         buf.len().try_into().unwrap_or(u64::MAX),
                     )
                     .await,
@@ -1372,16 +1402,18 @@ impl<
         let (mut buf, read, state) = match desc {
             Descriptor::File(File {
                 fd, blocking_mode, ..
-            }) if self.table().is_file(fd) => {
+            }) if self.table().is_file(&Resource::new_borrow(fd)) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0);
                 };
 
-                let stream = self.read_via_stream(fd, offset).map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `read-via-stream`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
+                let stream = self
+                    .read_via_stream(Resource::new_borrow(fd), offset)
+                    .map_err(|e| {
+                        e.try_into()
+                            .context("failed to call `read-via-stream`")
+                            .unwrap_or_else(types::Error::trap)
+                    })?;
                 let (read, state) = blocking_mode.read(self, stream, buf.len()).await?;
                 (buf, read, state)
             }
@@ -1418,24 +1450,28 @@ impl<
                 blocking_mode,
                 append,
                 position,
-            }) if self.table().is_file(fd) => {
+            }) if self.table().is_file(&Resource::new_borrow(fd)) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0);
                 };
                 let (stream, pos) = if append {
-                    let stream = self.append_via_stream(fd).map_err(|e| {
-                        e.try_into()
-                            .context("failed to call `append-via-stream`")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
+                    let stream = self
+                        .append_via_stream(Resource::new_borrow(fd))
+                        .map_err(|e| {
+                            e.try_into()
+                                .context("failed to call `append-via-stream`")
+                                .unwrap_or_else(types::Error::trap)
+                        })?;
                     (stream, 0)
                 } else {
                     let position = position.load(Ordering::Relaxed);
-                    let stream = self.write_via_stream(fd, position).map_err(|e| {
-                        e.try_into()
-                            .context("failed to call `write-via-stream`")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
+                    let stream = self
+                        .write_via_stream(Resource::new_borrow(fd), position)
+                        .map_err(|e| {
+                            e.try_into()
+                                .context("failed to call `write-via-stream`")
+                                .unwrap_or_else(types::Error::trap)
+                        })?;
                     (stream, position)
                 };
                 let n = blocking_mode.write(self, stream, &buf).await?;
@@ -1450,7 +1486,7 @@ impl<
                     return Ok(0);
                 };
                 Ok(BlockingMode::Blocking
-                    .write(self, output_stream, &buf)
+                    .write(self, Resource::new_borrow(output_stream), &buf)
                     .await?
                     .try_into()?)
             }
@@ -1471,15 +1507,17 @@ impl<
         let n = match desc {
             Descriptor::File(File {
                 fd, blocking_mode, ..
-            }) if self.table().is_file(fd) => {
+            }) if self.table().is_file(&Resource::new_borrow(fd)) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0);
                 };
-                let stream = self.write_via_stream(fd, offset).map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `write-via-stream`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
+                let stream = self
+                    .write_via_stream(Resource::new_borrow(fd), offset)
+                    .map_err(|e| {
+                        e.try_into()
+                            .context("failed to call `write-via-stream`")
+                            .unwrap_or_else(types::Error::trap)
+                    })?;
                 blocking_mode.write(self, stream, &buf).await?
             }
             Descriptor::Stdout { .. } | Descriptor::Stderr { .. } => {
@@ -1551,11 +1589,12 @@ impl<
                 .checked_add_signed(offset)
                 .ok_or(types::Errno::Inval)?,
             types::Whence::End => {
-                let filesystem::DescriptorStat { size, .. } = self.stat(fd).await.map_err(|e| {
-                    e.try_into()
-                        .context("failed to call `stat`")
-                        .unwrap_or_else(types::Error::trap)
-                })?;
+                let filesystem::DescriptorStat { size, .. } =
+                    self.stat(Resource::new_borrow(fd)).await.map_err(|e| {
+                        e.try_into()
+                            .context("failed to call `stat`")
+                            .unwrap_or_else(types::Error::trap)
+                    })?;
                 size.checked_add_signed(offset).ok_or(types::Errno::Inval)?
             }
             _ => return Err(types::Errno::Inval.into()),
@@ -1596,16 +1635,22 @@ impl<
         cookie: types::Dircookie,
     ) -> Result<types::Size, types::Error> {
         let fd = self.get_dir_fd(fd)?;
-        let stream = self.read_directory(fd).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `read-directory`")
-                .unwrap_or_else(types::Error::trap)
-        })?;
-        let dir_metadata_hash = self.metadata_hash(fd).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `metadata-hash`")
-                .unwrap_or_else(types::Error::trap)
-        })?;
+        let stream = self
+            .read_directory(Resource::new_borrow(fd.rep()))
+            .await
+            .map_err(|e| {
+                e.try_into()
+                    .context("failed to call `read-directory`")
+                    .unwrap_or_else(types::Error::trap)
+            })?;
+        let dir_metadata_hash = self
+            .metadata_hash(Resource::new_borrow(fd.rep()))
+            .await
+            .map_err(|e| {
+                e.try_into()
+                    .context("failed to call `metadata-hash`")
+                    .unwrap_or_else(types::Error::trap)
+            })?;
         let cookie = cookie.try_into().map_err(|_| types::Errno::Overflow)?;
 
         let head = [
@@ -1643,7 +1688,11 @@ impl<
                     .unwrap_or_else(types::Error::trap)
             })?;
             let metadata_hash = self
-                .metadata_hash_at(fd, filesystem::PathFlags::empty(), name.clone())
+                .metadata_hash_at(
+                    Resource::new_borrow(fd.rep()),
+                    filesystem::PathFlags::empty(),
+                    name.clone(),
+                )
                 .await
                 .map_err(|e| {
                     e.try_into()
@@ -1709,7 +1758,8 @@ impl<
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
-        self.create_directory_at(dirfd, path).await.map_err(|e| {
+        let borrow = Resource::new_borrow(dirfd.rep());
+        self.create_directory_at(borrow, path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `create-directory-at`")
                 .unwrap_or_else(types::Error::trap)
@@ -1735,7 +1785,11 @@ impl<
             data_modification_timestamp,
             status_change_timestamp,
         } = self
-            .stat_at(dirfd, flags.into(), path.clone())
+            .stat_at(
+                Resource::new_borrow(dirfd.rep()),
+                flags.into(),
+                path.clone(),
+            )
             .await
             .map_err(|e| {
                 e.try_into()
@@ -1751,9 +1805,13 @@ impl<
                     .unwrap_or_else(types::Error::trap)
             })?;
         let filetype = type_.try_into().map_err(types::Error::trap)?;
-        let atim = data_access_timestamp.try_into()?;
-        let mtim = data_modification_timestamp.try_into()?;
-        let ctim = status_change_timestamp.try_into()?;
+        let zero = wall_clock::Datetime {
+            seconds: 0,
+            nanoseconds: 0,
+        };
+        let atim = data_access_timestamp.unwrap_or(zero).try_into()?;
+        let mtim = data_modification_timestamp.unwrap_or(zero).try_into()?;
+        let ctim = status_change_timestamp.unwrap_or(zero).try_into()?;
         Ok(types::Filestat {
             dev: 1,
             ino: metadata_hash.lower,
@@ -1859,8 +1917,10 @@ impl<
         let desc = self.transact()?.get_descriptor(dirfd)?.clone();
         let dirfd = match desc {
             Descriptor::PreopenDirectory((fd, _)) => fd,
-            Descriptor::File(File { fd, .. }) if self.table().is_dir(fd) => fd,
-            Descriptor::File(File { fd, .. }) if !self.table().is_dir(fd) => {
+            Descriptor::File(File { fd, .. }) if self.table().is_dir(&Resource::new_borrow(fd)) => {
+                fd
+            }
+            Descriptor::File(File { fd: _, .. }) => {
                 // NOTE: Unlike most other methods, legacy implementation returns `NOTDIR` here
                 return Err(types::Errno::Notdir.into());
             }
@@ -1868,7 +1928,7 @@ impl<
         };
         let fd = self
             .open_at(
-                dirfd,
+                Resource::new_borrow(dirfd),
                 dirflags.into(),
                 path,
                 oflags.into(),
@@ -1882,7 +1942,7 @@ impl<
                     .unwrap_or_else(types::Error::trap)
             })?;
         let fd = self.transact()?.descriptors.get_mut().push_file(File {
-            fd,
+            fd: fd.rep(),
             position: Default::default(),
             append: fdflags.contains(types::Fdflags::APPEND),
             blocking_mode: BlockingMode::from_fdflags(&fdflags),
@@ -1968,7 +2028,8 @@ impl<
         let dirfd = self.get_dir_fd(dirfd)?;
         let src_path = read_string(src_path)?;
         let dest_path = read_string(dest_path)?;
-        self.symlink_at(dirfd, src_path, dest_path)
+        let borrow = Resource::new_borrow(dirfd.rep());
+        self.symlink_at(borrow, src_path, dest_path)
             .await
             .map_err(|e| {
                 e.try_into()
@@ -1985,7 +2046,8 @@ impl<
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = path.as_cow()?.to_string();
-        self.unlink_file_at(dirfd, path).await.map_err(|e| {
+        let borrow = Resource::new_borrow(dirfd.rep());
+        self.unlink_file_at(borrow, path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `unlink-file-at`")
                 .unwrap_or_else(types::Error::trap)

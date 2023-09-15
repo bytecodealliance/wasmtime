@@ -1,4 +1,5 @@
 use super::clocks::host::{monotonic_clock, wall_clock};
+use crate::preview2::bindings::filesystem::types::Descriptor;
 use crate::preview2::{
     clocks::{self, HostMonotonicClock, HostWallClock},
     filesystem::{Dir, TableFsExt},
@@ -13,6 +14,7 @@ use cap_std::net::Pool;
 use cap_std::{ambient_authority, AmbientAuthority};
 use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use wasmtime::component::Resource;
 
 pub struct WasiCtxBuilder {
     stdin: (Box<dyn HostInputStream>, IsATTY),
@@ -346,7 +348,7 @@ pub struct WasiCtx {
     pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
-    pub(crate) preopens: Vec<(u32, String)>,
+    pub(crate) preopens: Vec<(Resource<Descriptor>, String)>,
     pub(crate) stdin: StdioInput,
     pub(crate) stdout: StdioOutput,
     pub(crate) stderr: StdioOutput,
