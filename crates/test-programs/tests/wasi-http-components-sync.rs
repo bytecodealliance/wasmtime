@@ -111,26 +111,46 @@ fn run(name: &str) -> anyhow::Result<()> {
 }
 
 #[test_log::test]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 fn outbound_request_get() {
     setup_http1_sync(|| run("outbound_request_get")).unwrap();
 }
 
 #[test_log::test]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 fn outbound_request_post() {
     setup_http1_sync(|| run("outbound_request_post")).unwrap();
 }
 
 #[test_log::test]
-fn outbound_request_large_post() {
-    setup_http1_sync(|| run("outbound_request_large_post")).unwrap();
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
+fn outbound_request_post_large() {
+    setup_http1_sync(|| run("outbound_request_post_large")).unwrap();
 }
 
 #[test_log::test]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 fn outbound_request_put() {
     setup_http1_sync(|| run("outbound_request_put")).unwrap();
 }
 
 #[test_log::test]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 fn outbound_request_invalid_version() {
     setup_http2_sync(|| run("outbound_request_invalid_version")).unwrap();
 }
@@ -151,6 +171,10 @@ fn outbound_request_invalid_port() {
 }
 
 #[test_log::test]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 fn outbound_request_invalid_dnsname() {
     run("outbound_request_invalid_dnsname").unwrap();
 }

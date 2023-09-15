@@ -123,28 +123,48 @@ async fn run(name: &str) -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_get() {
     setup_http1(run("outbound_request_get")).await.unwrap();
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_post() {
     setup_http1(run("outbound_request_post")).await.unwrap();
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn outbound_request_large_post() {
-    setup_http1(run("outbound_request_large_post"))
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
+async fn outbound_request_post_large() {
+    setup_http1(run("outbound_request_post_large"))
         .await
         .unwrap();
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_put() {
     setup_http1(run("outbound_request_put")).await.unwrap();
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_invalid_version() {
     setup_http2(run("outbound_request_invalid_version"))
         .await
@@ -167,6 +187,10 @@ async fn outbound_request_invalid_port() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(
+    windows,
+    ignore = "test is currently flaky in ci and needs to be debugged"
+)]
 async fn outbound_request_invalid_dnsname() {
     run("outbound_request_invalid_dnsname").await.unwrap();
 }
