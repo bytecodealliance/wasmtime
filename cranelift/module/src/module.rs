@@ -13,8 +13,9 @@ use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::function::{Function, VersionMarker};
 use cranelift_codegen::ir::{ExternalName, UserFuncName};
 use cranelift_codegen::settings::SetError;
-use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context, MachLabel, RelocTarget};
-use cranelift_codegen::{MachLabelSite, MachReloc};
+use cranelift_codegen::{
+    ir, isa, CodegenError, CompileError, Context, FinalizedMachReloc, FinalizedRelocTarget,
+};
 use cranelift_control::ControlPlane;
 use std::borrow::{Cow, ToOwned};
 use std::string::String;
@@ -34,21 +35,23 @@ pub struct ModuleReloc {
 }
 
 impl ModuleReloc {
-    /// Converts a `MachReloc` produced from a `Function` into a `ModuleReloc`.
-    pub fn from_mach_reloc(mach_reloc: &MachReloc, func: &Function) -> Self {
+    /// Converts a `FinalizedMachReloc` produced from a `Function` into a `ModuleReloc`.
+    pub fn from_mach_reloc(mach_reloc: &FinalizedMachReloc, func: &Function) -> Self {
         let name = match mach_reloc.target {
-            RelocTarget::ExternalName(ExternalName::User(reff)) => {
+            FinalizedRelocTarget::ExternalName(ExternalName::User(reff)) => {
                 let name = &func.params.user_named_funcs()[reff];
                 ModuleRelocTarget::user(name.namespace, name.index)
             }
-            RelocTarget::ExternalName(ExternalName::TestCase(_)) => unimplemented!(),
-            RelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
+            FinalizedRelocTarget::ExternalName(ExternalName::TestCase(_)) => unimplemented!(),
+            FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
                 ModuleRelocTarget::LibCall(libcall)
             }
-            RelocTarget::ExternalName(ExternalName::KnownSymbol(ks)) => {
+            FinalizedRelocTarget::ExternalName(ExternalName::KnownSymbol(ks)) => {
                 ModuleRelocTarget::KnownSymbol(ks)
             }
-            RelocTarget::Label(label) => ModuleRelocTarget::FunctionLabel(func.name.clone(), label),
+            FinalizedRelocTarget::Func(offset) => {
+                ModuleRelocTarget::FunctionOffset(func.name.clone(), offset)
+            }
         };
         Self {
             offset: mach_reloc.offset,
@@ -426,8 +429,8 @@ pub enum ModuleRelocTarget {
     LibCall(ir::LibCall),
     /// Symbols known to the linker.
     KnownSymbol(ir::KnownSymbol),
-    /// A label inside a function
-    FunctionLabel(UserFuncName, MachLabel),
+    /// A offset inside a function
+    FunctionOffset(UserFuncName, CodeOffset),
 }
 
 impl ModuleRelocTarget {
@@ -443,7 +446,7 @@ impl Display for ModuleRelocTarget {
             Self::User { namespace, index } => write!(f, "u{}:{}", namespace, index),
             Self::LibCall(lc) => write!(f, "%{}", lc),
             Self::KnownSymbol(ks) => write!(f, "{}", ks),
-            Self::FunctionLabel(fname, label) => write!(f, ".L{}_{}", fname, label.as_u32()),
+            Self::FunctionOffset(fname, offset) => write!(f, "{fname}+{offset}"),
         }
     }
 }
@@ -700,7 +703,7 @@ impl ModuleDeclarations {
             ModuleRelocTarget::User { namespace, .. } => *namespace == 0,
             ModuleRelocTarget::LibCall(_)
             | ModuleRelocTarget::KnownSymbol(_)
-            | ModuleRelocTarget::FunctionLabel(..) => {
+            | ModuleRelocTarget::FunctionOffset(..) => {
                 panic!("unexpected module ext name")
             }
         }
@@ -976,8 +979,7 @@ pub trait Module {
         func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[MachReloc],
-        labels: &[MachLabelSite],
+        relocs: &[FinalizedMachReloc],
     ) -> ModuleResult<()>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
@@ -1079,10 +1081,9 @@ impl<M: Module> Module for &mut M {
         func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[MachReloc],
-        labels: &[MachLabelSite],
+        relocs: &[FinalizedMachReloc],
     ) -> ModuleResult<()> {
-        (**self).define_function_bytes(func_id, func, alignment, bytes, relocs, labels)
+        (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
     }
 
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {

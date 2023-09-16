@@ -5,7 +5,7 @@ use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{self, ir, MachLabel, MachLabelSite, MachReloc};
+use cranelift_codegen::{self, ir, FinalizedMachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
@@ -18,6 +18,7 @@ use object::write::{
 use object::{
     RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::mem;
 use target_lexicon::PointerWidth;
@@ -131,7 +132,7 @@ pub struct ObjectModule {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
-    known_labels: HashMap<(UserFuncName, MachLabel), SymbolId>,
+    known_labels: HashMap<(UserFuncName, CodeOffset), SymbolId>,
     per_function_section: bool,
 }
 
@@ -327,7 +328,6 @@ impl Module for ObjectModule {
             alignment,
             &code,
             ctx.compiled_code().unwrap().buffer.relocs(),
-            ctx.compiled_code().unwrap().buffer.labels(),
         )
     }
 
@@ -337,8 +337,7 @@ impl Module for ObjectModule {
         func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[MachReloc],
-        labels: &[MachLabelSite],
+        relocs: &[FinalizedMachReloc],
     ) -> ModuleResult<()> {
         info!("defining function {} with bytes", func_id);
         let decl = self.declarations.get_function_decl(func_id);
@@ -380,23 +379,6 @@ impl Module for ObjectModule {
                 offset,
                 relocs,
             });
-        }
-
-        for label_site in labels {
-            let name = format!(".L{}_{}", func_id.as_u32(), label_site.label.as_u32());
-            let symbol_id = self.object.add_symbol(Symbol {
-                name: name.as_bytes().to_vec(),
-                value: offset + label_site.offset as u64,
-                size: 0,
-                kind: SymbolKind::Label,
-                scope: SymbolScope::Compilation,
-                weak: false,
-                section: SymbolSection::Section(section),
-                flags: SymbolFlags::None,
-            });
-
-            self.known_labels
-                .insert((func.name.clone(), label_site.label), symbol_id);
         }
 
         Ok(())
@@ -612,13 +594,35 @@ impl ObjectModule {
                 }
             }
 
-            // All of these function labels should exist, since they are inserted when the function is
-            // first defined.
-            ModuleRelocTarget::FunctionLabel(ref fname, label) => self
-                .known_labels
-                .get(&(fname.clone(), label))
-                .copied()
-                .expect("Unknown function label"),
+            ModuleRelocTarget::FunctionOffset(ref fname, offset) => {
+                match self.known_labels.entry((fname.clone(), offset)) {
+                    Entry::Occupied(o) => *o.get(),
+                    Entry::Vacant(v) => {
+                        let func_user_name = fname.get_user().unwrap();
+                        let func_id = FuncId::from_name(&ModuleRelocTarget::user(
+                            func_user_name.namespace,
+                            func_user_name.index,
+                        ));
+                        let func_symbol_id = self.functions[func_id].unwrap().0;
+                        let func_symbol = self.object.symbol(func_symbol_id);
+
+                        let name = format!(".L{}_{}", func_id.as_u32(), offset);
+                        let symbol_id = self.object.add_symbol(Symbol {
+                            name: name.as_bytes().to_vec(),
+                            value: func_symbol.value + offset as u64,
+                            size: 0,
+                            kind: SymbolKind::Label,
+                            scope: SymbolScope::Compilation,
+                            weak: false,
+                            section: SymbolSection::Section(func_symbol.section.id().unwrap()),
+                            flags: SymbolFlags::None,
+                        });
+
+                        v.insert(symbol_id);
+                        symbol_id
+                    }
+                }
+            }
         }
     }
 

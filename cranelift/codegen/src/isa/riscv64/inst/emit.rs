@@ -1976,16 +1976,15 @@ impl Inst {
                 //
                 // https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic
 
-                // Create a lable that is going to be published to the final binary object.
+                // Create the lable that is going to be published to the final binary object.
                 let auipc_label = sink.get_label();
                 sink.bind_label(auipc_label, &mut state.ctrl_plane);
-                sink.set_label_visiblity(auipc_label, LabelVisibility::Public);
 
                 // Get the current PC.
                 sink.add_reloc(Reloc::RiscvTlsGdHi20, &**name, 0);
                 Inst::Auipc {
                     rd: rd,
-                    imm: Imm20::from_bits(0),
+                    imm: Imm20::from_i32(0),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
@@ -1995,7 +1994,7 @@ impl Inst {
                     alu_op: AluOPRRI::Addi,
                     rd: rd,
                     rs: rd.to_reg(),
-                    imm12: Imm12::from_bits(0),
+                    imm12: Imm12::from_i16(0),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
 

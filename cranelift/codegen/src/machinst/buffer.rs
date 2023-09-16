@@ -229,15 +229,6 @@ enum ForceVeneers {
     No,
 }
 
-/// Determines if a label should be emitted to the final binary object.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LabelVisibility {
-    /// Public labels are published in the final binary object.
-    Public,
-    /// Private labels are internal only.
-    Private,
-}
-
 /// A buffer of output to be produced, fixed up, and then emitted to a CodeSink
 /// in bulk.
 ///
@@ -276,12 +267,6 @@ pub struct MachBuffer<I: VCodeInst> {
     /// target (iteratively until a non-aliased label); if B is already
     /// aliased to A, then we cannot alias A back to B.
     label_aliases: SmallVec<[MachLabel; 16]>,
-    /// Label Visibility: If a label is visible, we publish it in the final binary
-    /// object, otherwise it is internal only.
-    ///
-    /// Public labels are the exception, so we only keep track of them and assume
-    /// all others are private.
-    public_labels: SmallVec<[MachLabel; 4]>,
     /// Constants that must be emitted at some point.
     pending_constants: SmallVec<[VCodeConstant; 16]>,
     /// Byte size of all constants in `pending_constants`.
@@ -334,7 +319,6 @@ impl MachBufferFinalized<Stencil> {
         MachBufferFinalized {
             data: self.data,
             relocs: self.relocs,
-            labels: self.labels,
             traps: self.traps,
             call_sites: self.call_sites,
             srclocs: self
@@ -362,9 +346,7 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// Any relocations referring to this code. Note that only *external*
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
-    pub(crate) relocs: SmallVec<[MachReloc; 16]>,
-    /// Any published labels referring to this code.
-    pub(crate) labels: SmallVec<[MachLabelSite; 4]>,
+    pub(crate) relocs: SmallVec<[FinalizedMachReloc; 16]>,
     /// Any trap records referring to this code.
     pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
@@ -391,10 +373,6 @@ const LABEL_LIST_THRESHOLD: usize = 100;
 /// for references to the label, and will come back and patch the code
 /// appropriately when the label's location is eventually known.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(
-    feature = "enable-serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
 pub struct MachLabel(u32);
 entity_impl!(MachLabel);
 
@@ -448,7 +426,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
-            public_labels: SmallVec::new(),
             pending_constants: SmallVec::new(),
             pending_constants_size: 0,
             pending_traps: SmallVec::new(),
@@ -653,20 +630,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.optimize_branches(ctrl_plane);
 
         // Post-invariant: by `optimize_branches()` (see argument there).
-    }
-
-    /// Set the visibility of a label. The label must have been bound already.
-    pub fn set_label_visiblity(&mut self, label: MachLabel, visibility: LabelVisibility) {
-        trace!(
-            "MachBuffer: set label {:?} visibility to {:?}",
-            label,
-            visibility
-        );
-        debug_assert_ne!(self.resolve_label_offset(label), UNKNOWN_LABEL_OFFSET);
-        match visibility {
-            LabelVisibility::Public => self.public_labels.push(label),
-            LabelVisibility::Private => self.public_labels.retain(|l| *l != label),
-        }
     }
 
     /// Lazily clear `labels_at_tail` if the tail offset has moved beyond the
@@ -1489,13 +1452,22 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         let alignment = self.finish_constants(constants);
 
-        let labels = self
-            .public_labels
+        // Resolve all labels to their offsets.
+        let finalized_relocs = self
+            .relocs
             .iter()
-            .copied()
-            .map(|label| MachLabelSite {
-                offset: self.resolve_label_offset(label),
-                label,
+            .map(|reloc| FinalizedMachReloc {
+                offset: reloc.offset,
+                kind: reloc.kind,
+                addend: reloc.addend,
+                target: match &reloc.target {
+                    RelocTarget::ExternalName(name) => {
+                        FinalizedRelocTarget::ExternalName(name.clone())
+                    }
+                    RelocTarget::Label(label) => {
+                        FinalizedRelocTarget::Func(self.resolve_label_offset(*label))
+                    }
+                },
             })
             .collect();
 
@@ -1504,8 +1476,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         MachBufferFinalized {
             data: self.data,
-            relocs: self.relocs,
-            labels,
+            relocs: finalized_relocs,
             traps: self.traps,
             call_sites: self.call_sites,
             srclocs,
@@ -1676,13 +1647,8 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     }
 
     /// Get the list of external relocations for this code.
-    pub fn relocs(&self) -> &[MachReloc] {
+    pub fn relocs(&self) -> &[FinalizedMachReloc] {
         &self.relocs[..]
-    }
-
-    /// Get the list of published labels for this code.
-    pub fn labels(&self) -> &[MachLabelSite] {
-        &self.labels[..]
     }
 
     /// Get the list of trap records for this code.
@@ -1776,24 +1742,25 @@ impl<I: VCodeInst> Ord for MachLabelFixup<I> {
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
-pub struct MachReloc {
+pub struct MachRelocBase<T> {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
     pub offset: CodeOffset,
     /// The kind of relocation.
     pub kind: Reloc,
     /// The external symbol / name to which this relocation refers.
-    pub target: RelocTarget,
+    pub target: T,
     /// The addend to add to the symbol value.
     pub addend: i64,
 }
 
+type MachReloc = MachRelocBase<RelocTarget>;
+
+/// A relocation resulting from a compilation.
+pub type FinalizedMachReloc = MachRelocBase<FinalizedRelocTarget>;
+
 /// A Relocation target
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(
-    feature = "enable-serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
 pub enum RelocTarget {
     /// Points to an [ExternalName] outside the current function.
     ExternalName(ExternalName),
@@ -1817,29 +1784,28 @@ impl From<MachLabel> for RelocTarget {
     }
 }
 
-impl RelocTarget {
-    /// Returns a display for the current `RelocTarget`, with extra context to prettify the
-    /// output.
-    pub fn display<'a>(&'a self, params: Option<&'a FunctionParameters>) -> String {
-        match self {
-            RelocTarget::ExternalName(name) => format!("{}", name.display(params)),
-            RelocTarget::Label(label) => format!(".L{}", label.as_u32()),
-        }
-    }
-}
-
-/// A label resulting from a compilation.
-#[derive(Clone, Debug, PartialEq)]
+/// A Relocation target
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
-pub struct MachLabelSite {
-    /// The offset at which the relocation applies, *relative to the
-    /// containing section*.
-    pub offset: CodeOffset,
-    /// The label.
-    pub label: MachLabel,
+pub enum FinalizedRelocTarget {
+    /// Points to an [ExternalName] outside the current function.
+    ExternalName(ExternalName),
+    /// Points to a [CodeOffset] from the start of the current function.
+    Func(CodeOffset),
+}
+
+impl FinalizedRelocTarget {
+    /// Returns a display for the current [FinalizedRelocTarget], with extra context to prettify the
+    /// output.
+    pub fn display<'a>(&'a self, params: Option<&'a FunctionParameters>) -> String {
+        match self {
+            FinalizedRelocTarget::ExternalName(name) => format!("{}", name.display(params)),
+            FinalizedRelocTarget::Func(offset) => format!("func+{offset}"),
+        }
+    }
 }
 
 /// A trap record resulting from a compilation.

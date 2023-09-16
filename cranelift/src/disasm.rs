@@ -2,12 +2,12 @@ use anyhow::Result;
 use cfg_if::cfg_if;
 use cranelift_codegen::ir::function::FunctionParameters;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{MachReloc, MachStackMap, MachTrap};
+use cranelift_codegen::{FinalizedMachReloc, MachStackMap, MachTrap};
 use std::fmt::Write;
 
-fn print_relocs(func_params: &FunctionParameters, relocs: &[MachReloc]) -> String {
+fn print_relocs(func_params: &FunctionParameters, relocs: &[FinalizedMachReloc]) -> String {
     let mut text = String::new();
-    for &MachReloc {
+    for &FinalizedMachReloc {
         kind,
         offset,
         ref target,
@@ -121,7 +121,7 @@ pub fn print_all(
     mem: &[u8],
     code_size: u32,
     print: bool,
-    relocs: &[MachReloc],
+    relocs: &[FinalizedMachReloc],
     traps: &[MachTrap],
     stack_maps: &[MachStackMap],
 ) -> Result<()> {
