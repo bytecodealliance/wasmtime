@@ -161,7 +161,7 @@ impl<T: WasiView> tcp::Host for T {
         socket
             .tcp_socket()
             .as_socketlike_view::<TcpListener>()
-            .listen(Some(socket.listen_backlog_size))?;
+            .listen(socket.listen_backlog_size)?;
 
         socket.tcp_state = HostTcpState::ListenStarted;
 
@@ -317,7 +317,7 @@ impl<T: WasiView> tcp::Host for T {
         match socket.tcp_state {
             HostTcpState::Default | HostTcpState::BindStarted | HostTcpState::Bound => {
                 // Socket not listening yet. Stash value for first invocation to `listen`.
-                socket.listen_backlog_size = value;
+                socket.listen_backlog_size = Some(value);
 
                 Ok(())
             }
@@ -328,7 +328,7 @@ impl<T: WasiView> tcp::Host for T {
                 rustix::net::listen(socket.tcp_socket(), value)
                     .map_err(|_| ErrorCode::AlreadyListening)?;
 
-                socket.listen_backlog_size = value;
+                socket.listen_backlog_size = Some(value);
 
                 Ok(())
             }
