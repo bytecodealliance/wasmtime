@@ -5,6 +5,7 @@ use crate::preview2::bindings::cli::{
 use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe::AsyncWriteStream;
 use crate::preview2::{HostOutputStream, OutputStreamError, WasiView};
+use anyhow::bail;
 use bytes::Bytes;
 use is_terminal::IsTerminal;
 use wasmtime::component::Resource;
@@ -76,36 +77,37 @@ pub enum IsATTY {
     No,
 }
 
-pub(crate) struct StdioInput {
-    pub input_stream: Resource<streams::InputStream>,
-    pub isatty: IsATTY,
-}
-
-pub(crate) struct StdioOutput {
-    pub output_stream: Resource<streams::OutputStream>,
-    pub isatty: IsATTY,
-}
-
 impl<T: WasiView> stdin::Host for T {
     fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
-        Ok(Resource::new_borrow(self.ctx().stdin.input_stream.rep()))
+        match self.ctx_mut().stdin.take() {
+            Some(stdin) => Ok(stdin),
+            None => bail!("stdin has already been consumed"),
+        }
     }
 }
 
 impl<T: WasiView> stdout::Host for T {
     fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
-        Ok(Resource::new_borrow(self.ctx().stdout.output_stream.rep()))
+        match self.ctx_mut().stdout.take() {
+            Some(stdout) => Ok(stdout),
+            None => bail!("stdout has already been consumed"),
+        }
     }
 }
 
 impl<T: WasiView> stderr::Host for T {
     fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
-        Ok(Resource::new_borrow(self.ctx().stderr.output_stream.rep()))
+        match self.ctx_mut().stderr.take() {
+            Some(stderr) => Ok(stderr),
+            None => {
+                bail!("stderr has already been consumed")
+            }
+        }
     }
 }
 
-struct HostTerminalInputState;
-struct HostTerminalOutputState;
+pub struct HostTerminalInputState;
+pub struct HostTerminalOutputState;
 
 impl<T: WasiView> terminal_input::Host for T {}
 impl<T: WasiView> crate::preview2::bindings::cli::terminal_input::HostTerminalInput for T {
@@ -126,12 +128,9 @@ impl<T: WasiView> terminal_stdin::Host for T {
     fn get_terminal_stdin(
         &mut self,
     ) -> anyhow::Result<Option<Resource<terminal_input::TerminalInput>>> {
-        if let IsATTY::Yes = self.ctx().stdin.isatty {
-            Ok(Some(Resource::new_own(
-                self.table_mut().push(Box::new(HostTerminalInputState))?,
-            )))
-        } else {
-            Ok(None)
+        match self.ctx_mut().stdin_terminal.take() {
+            Some(stdin_terminal) => Ok(stdin_terminal),
+            None => bail!("stdin terminal has already been consumed"),
         }
     }
 }
@@ -139,12 +138,9 @@ impl<T: WasiView> terminal_stdout::Host for T {
     fn get_terminal_stdout(
         &mut self,
     ) -> anyhow::Result<Option<Resource<terminal_output::TerminalOutput>>> {
-        if let IsATTY::Yes = self.ctx().stdout.isatty {
-            Ok(Some(Resource::new_own(
-                self.table_mut().push(Box::new(HostTerminalOutputState))?,
-            )))
-        } else {
-            Ok(None)
+        match self.ctx_mut().stdout_terminal.take() {
+            Some(stdout_terminal) => Ok(stdout_terminal),
+            None => bail!("stdout terminal has already been consumed"),
         }
     }
 }
@@ -152,12 +148,9 @@ impl<T: WasiView> terminal_stderr::Host for T {
     fn get_terminal_stderr(
         &mut self,
     ) -> anyhow::Result<Option<Resource<terminal_output::TerminalOutput>>> {
-        if let IsATTY::Yes = self.ctx().stderr.isatty {
-            Ok(Some(Resource::new_own(
-                self.table_mut().push(Box::new(HostTerminalOutputState))?,
-            )))
-        } else {
-            Ok(None)
+        match self.ctx_mut().stderr_terminal.take() {
+            Some(stderr_terminal) => Ok(stderr_terminal),
+            None => bail!("stderr terminal has already been consumed"),
         }
     }
 }

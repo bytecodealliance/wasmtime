@@ -737,7 +737,7 @@ fn component_missing_feature() -> Result<()> {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("cannot execute a component without `--wasm-features component-model`"),
+        stderr.contains("cannot execute a component without `--wasm component-model`"),
         "bad stderr: {stderr}"
     );
 
@@ -749,7 +749,7 @@ fn component_missing_feature() -> Result<()> {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("cannot execute a component without `--wasm-features component-model`"),
+        stderr.contains("cannot execute a component without `--wasm component-model`"),
         "bad stderr: {stderr}"
     );
 

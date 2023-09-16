@@ -11,6 +11,7 @@ use std::any::Any;
 use std::pin::Pin;
 use std::task;
 use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Table, TableError};
+use wasmtime::component::Resource;
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx;

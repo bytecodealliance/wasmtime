@@ -12,8 +12,8 @@ use std::fmt;
 use std::sync::OnceLock;
 
 use bindings::wasi::http::{outgoing_handler, types as http_types};
+use bindings::wasi::io::poll;
 use bindings::wasi::io::streams;
-use bindings::wasi::poll::poll;
 
 pub struct Response {
     pub status: http_types::StatusCode,
@@ -81,7 +81,7 @@ pub async fn request(
 
         let pollable = streams::subscribe_to_output_stream(request_body);
         while !buf.is_empty() {
-            poll::poll_oneoff(&[pollable]);
+            poll::poll_list(&[pollable]);
 
             let permit = match streams::check_write(request_body) {
                 Ok(n) => n,

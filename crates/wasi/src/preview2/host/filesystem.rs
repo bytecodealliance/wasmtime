@@ -6,8 +6,6 @@ use crate::preview2::bindings::filesystem::{preopens, types};
 use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::{Dir, File, TableFsExt};
 use crate::preview2::{DirPerms, FilePerms, Table, TableError, WasiView};
-use anyhow::Context;
-use std::sync::Arc;
 use wasmtime::component::Resource;
 
 use types::ErrorCode;
@@ -24,31 +22,12 @@ impl<T: WasiView> preopens::Host for T {
     fn get_directories(
         &mut self,
     ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
-        let preopens = self
-            .ctx()
+        Ok(self
+            .ctx_mut()
             .preopens
-            .iter()
-            .map(|(dir, name)| {
-                (
-                    Dir {
-                        dir: Arc::clone(&dir.dir),
-                        perms: dir.perms,
-                        file_perms: dir.file_perms,
-                    },
-                    name.clone(),
-                )
-            })
-            .collect::<Vec<(Dir, String)>>();
-        preopens
-            .into_iter()
-            .map(|(dir, name)| {
-                let dirfd = self
-                    .table_mut()
-                    .push_dir(dir)
-                    .with_context(|| format!("preopen {name:?}"))?;
-                Ok((dirfd, name))
-            })
-            .collect::<Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error>>()
+            .drain(..)
+            .map(|(fd, name)| (Resource::new_own(fd.rep()), name.clone()))
+            .collect())
     }
 }
 
@@ -1206,8 +1185,7 @@ mod test {
         let ix = table
             .push_readdir(ReaddirIterator::new(std::iter::empty()))
             .unwrap();
-        let _ = table.get_readdir(ix).unwrap();
+        let _ = table.get_readdir(&ix).unwrap();
         table.delete_readdir(ix).unwrap();
-        let _ = table.get_readdir(ix).err().unwrap();
     }
 }

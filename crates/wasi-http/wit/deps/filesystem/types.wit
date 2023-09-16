@@ -506,7 +506,7 @@ interface types {
             /// The relative source path from which to link.
             old-path: string,
             /// The base directory for `new-path`.
-            new-descriptor: descriptor,
+            new-descriptor: borrow<descriptor>,
             /// The relative destination path at which to create the hard link.
             new-path: string,
         ) -> result<_, error-code>
@@ -570,7 +570,7 @@ interface types {
             /// The relative source path of the file or directory to rename.
             old-path: string,
             /// The base directory for `new-path`.
-            new-descriptor: descriptor,
+            new-descriptor: borrow<descriptor>,
             /// The relative destination path to which to rename the file or directory.
             new-path: string,
         ) -> result<_, error-code>
@@ -755,7 +755,7 @@ interface types {
         /// same device (`st_dev`) and inode (`st_ino` or `d_ino`) numbers.
         /// wasi-filesystem does not expose device and inode numbers, so this function
         /// may be used instead.
-        is-same-object: func(other: descriptor) -> bool
+        is-same-object: func(other: borrow<descriptor>) -> bool
 
         /// Return a hash of the metadata associated with a filesystem object referred
         /// to by a descriptor.

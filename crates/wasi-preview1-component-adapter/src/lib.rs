@@ -1,18 +1,15 @@
-#![allow(unused_variables)] // TODO: remove this when more things are implemented
-
 use crate::bindings::wasi::cli::exit;
 use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
 use crate::bindings::wasi::filesystem::types as filesystem;
+use crate::bindings::wasi::io::poll;
 use crate::bindings::wasi::io::streams;
-use crate::bindings::wasi::poll::poll;
 use crate::bindings::wasi::random::random;
 use crate::bindings::wasi::sockets::network;
-use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
+use core::cell::{Cell, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
 use core::hint::black_box;
 use core::mem::{self, align_of, forget, size_of, ManuallyDrop, MaybeUninit};
-use core::ops::{Deref, DerefMut};
 use core::ptr::{self, null_mut};
 use core::slice;
 use poll::Pollable;
@@ -40,7 +37,7 @@ pub mod bindings {
         // can't support in these special core-wasm adapters.
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
-        skip: ["run", "get-environment", "poll-oneoff"],
+        skip: ["run", "get-environment", "poll-list"],
     });
 
     #[cfg(feature = "reactor")]
@@ -55,7 +52,7 @@ pub mod bindings {
         // can't support in these special core-wasm adapters.
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
-        skip: ["get-environment", "poll-oneoff"],
+        skip: ["get-environment", "poll-list"],
     });
 }
 
@@ -88,6 +85,28 @@ impl<T> TrappingUnwrap<T> for Option<T> {
 
 impl<T, E> TrappingUnwrap<T> for Result<T, E> {
     fn trapping_unwrap(self) -> T {
+        match self {
+            Ok(t) => t,
+            Err(_) => unreachable!(),
+        }
+    }
+}
+
+trait TrappingUnwrapRef<T> {
+    fn trapping_unwrap_ref(&self) -> &T;
+}
+
+impl<T> TrappingUnwrapRef<T> for Option<T> {
+    fn trapping_unwrap_ref(&self) -> &T {
+        match self {
+            Some(t) => t,
+            None => unreachable!(),
+        }
+    }
+}
+
+impl<T, E> TrappingUnwrapRef<T> for Result<T, E> {
+    fn trapping_unwrap_ref(&self) -> &T {
         match self {
             Ok(t) => t,
             Err(_) => unreachable!(),
@@ -422,7 +441,7 @@ pub unsafe extern "C" fn fd_advise(
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_seekable_file(fd)?;
-        filesystem::advise(file.fd, offset, len, advice)?;
+        file.fd.advise(offset, len, advice)?;
         Ok(())
     })
 }
@@ -444,7 +463,7 @@ pub unsafe extern "C" fn fd_allocate(fd: Fd, offset: Filesize, len: Filesize) ->
 /// Note: This is similar to `close` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
-    State::with(|state| {
+    State::with_mut(|state| {
         // If there's a dirent cache entry for this file descriptor then drop
         // it since the descriptor is being closed and future calls to
         // `fd_readdir` should return an error.
@@ -464,7 +483,7 @@ pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_file(fd)?;
-        filesystem::sync_data(file.fd)?;
+        file.fd.sync_data()?;
         Ok(())
     })
 }
@@ -478,8 +497,8 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             type_: StreamType::File(file),
             ..
         }) => {
-            let flags = filesystem::get_flags(file.fd)?;
-            let type_ = filesystem::get_type(file.fd)?;
+            let flags = file.fd.get_flags()?;
+            let type_ = file.fd.get_type()?;
             match type_ {
                 filesystem::DescriptorType::Directory => {
                     // Hard-coded set of rights expected by many userlands:
@@ -568,10 +587,10 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
         }) => {
             let fs_flags = 0;
             let mut fs_rights_base = 0;
-            if input.get().is_some() {
+            if (*input.get()).is_some() {
                 fs_rights_base |= RIGHTS_FD_READ;
             }
-            if output.get().is_some() {
+            if (*output.get()).is_some() {
                 fs_rights_base |= RIGHTS_FD_WRITE;
             }
             let fs_rights_inheriting = fs_rights_base;
@@ -585,8 +604,8 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
         }
         Descriptor::Closed(_) => Err(ERRNO_BADF),
         Descriptor::Streams(Streams {
-            input,
-            output,
+            input: _,
+            output: _,
             type_: StreamType::Socket(_),
         }) => unreachable!(),
     })
@@ -601,7 +620,7 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
         return wasi::ERRNO_INVAL;
     }
 
-    State::with(|state| {
+    State::with_mut(|state| {
         let mut ds = state.descriptors_mut();
         let file = match ds.get_mut(fd)? {
             Descriptor::Streams(Streams {
@@ -643,8 +662,8 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
                 type_: StreamType::File(file),
                 ..
             }) => {
-                let stat = filesystem::stat(file.fd)?;
-                let metadata_hash = filesystem::metadata_hash(file.fd)?;
+                let stat = file.fd.stat()?;
+                let metadata_hash = file.fd.metadata_hash()?;
                 let filetype = stat.type_.into();
                 *buf = Filestat {
                     dev: 1,
@@ -687,7 +706,7 @@ pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_file(fd)?;
-        filesystem::set_size(file.fd, size)?;
+        file.fd.set_size(size)?;
         Ok(())
     })
 }
@@ -729,7 +748,7 @@ pub unsafe extern "C" fn fd_filestat_set_times(
         )?;
         let ds = state.descriptors();
         let file = ds.get_file(fd)?;
-        filesystem::set_times(file.fd, atim, mtim)?;
+        file.fd.set_times(atim, mtim)?;
         Ok(())
     })
 }
@@ -762,7 +781,7 @@ pub unsafe extern "C" fn fd_pread(
         let file = ds.get_file(fd)?;
         let (data, end) = state
             .import_alloc
-            .with_buffer(ptr, len, || filesystem::read(file.fd, len as u64, offset))?;
+            .with_buffer(ptr, len, || file.fd.read(len as u64, offset))?;
         assert_eq!(data.as_ptr(), ptr);
         assert!(data.len() <= len);
 
@@ -848,7 +867,7 @@ pub unsafe extern "C" fn fd_pwrite(
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_seekable_file(fd)?;
-        let bytes = filesystem::write(file.fd, slice::from_raw_parts(ptr, len), offset)?;
+        let bytes = file.fd.write(slice::from_raw_parts(ptr, len), offset)?;
         *nwritten = bytes as usize;
         Ok(())
     })
@@ -880,6 +899,7 @@ pub unsafe extern "C" fn fd_read(
         match state.descriptors().get(fd)? {
             Descriptor::Streams(streams) => {
                 let blocking_mode = if let StreamType::File(file) = &streams.type_ {
+                    // FIXME: Why are files different here?
                     file.blocking_mode
                 } else {
                     BlockingMode::Blocking
@@ -970,7 +990,7 @@ pub unsafe extern "C" fn fd_readdir(
                     state,
                     cookie,
                     use_cache: true,
-                    dir_descriptor: dir.fd,
+                    dir_descriptor: &dir.fd,
                 }
             }
 
@@ -984,8 +1004,8 @@ pub unsafe extern "C" fn fd_readdir(
                     state,
                     cookie: wasi::DIRCOOKIE_START,
                     use_cache: false,
-                    stream: DirectoryEntryStream(filesystem::read_directory(dir.fd)?),
-                    dir_descriptor: dir.fd,
+                    stream: DirectoryEntryStream(dir.fd.read_directory()?),
+                    dir_descriptor: &dir.fd,
                 };
 
                 // Skip to the entry that is requested by the `cookie`
@@ -1064,7 +1084,7 @@ pub unsafe extern "C" fn fd_readdir(
         use_cache: bool,
         cookie: Dircookie,
         stream: DirectoryEntryStream,
-        dir_descriptor: filesystem::Descriptor,
+        dir_descriptor: &'a filesystem::Descriptor,
     }
 
     impl<'a> Iterator for DirectoryEntryIterator<'a> {
@@ -1081,7 +1101,7 @@ pub unsafe extern "C" fn fd_readdir(
             // Preview2 excludes them, so re-add them.
             match current_cookie {
                 0 => {
-                    let metadata_hash = match filesystem::metadata_hash(self.dir_descriptor) {
+                    let metadata_hash = match self.dir_descriptor.metadata_hash() {
                         Ok(h) => h,
                         Err(e) => return Some(Err(e.into())),
                     };
@@ -1119,7 +1139,7 @@ pub unsafe extern "C" fn fd_readdir(
             let entry = self.state.import_alloc.with_buffer(
                 self.state.path_buf.get().cast(),
                 PATH_MAX,
-                || filesystem::read_directory_entry(self.stream.0),
+                || self.stream.0.read_directory_entry(),
             );
             let entry = match entry {
                 Ok(Some(entry)) => entry,
@@ -1128,13 +1148,11 @@ pub unsafe extern "C" fn fd_readdir(
             };
 
             let filesystem::DirectoryEntry { type_, name } = entry;
-            let d_ino = filesystem::metadata_hash_at(
-                self.dir_descriptor,
-                filesystem::PathFlags::empty(),
-                &name,
-            )
-            .map(|h| h.lower)
-            .unwrap_or(0);
+            let d_ino = self
+                .dir_descriptor
+                .metadata_hash_at(filesystem::PathFlags::empty(), &name)
+                .map(|h| h.lower)
+                .unwrap_or(0);
             let name = ManuallyDrop::new(name);
             let dirent = wasi::Dirent {
                 d_next: self.cookie,
@@ -1163,7 +1181,7 @@ pub unsafe extern "C" fn fd_readdir(
 /// would disappear if `dup2()` were to be removed entirely.
 #[no_mangle]
 pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
-    State::with(|state| state.descriptors_mut().renumber(fd, to))
+    State::with_mut(|state| state.descriptors_mut().renumber(fd, to))
 }
 
 /// Move the offset of a file descriptor.
@@ -1192,14 +1210,14 @@ pub unsafe extern "C" fn fd_seek(
                     Some(pos) if pos >= 0 => pos,
                     _ => return Err(ERRNO_INVAL),
                 },
-                WHENCE_END => match (filesystem::stat(file.fd)?.size as i64).checked_add(offset) {
+                WHENCE_END => match (file.fd.stat()?.size as i64).checked_add(offset) {
                     Some(pos) if pos >= 0 => pos,
                     _ => return Err(ERRNO_INVAL),
                 },
                 _ => return Err(ERRNO_INVAL),
             };
-            stream.input.set(None);
-            stream.output.set(None);
+            *stream.input.get() = None;
+            *stream.output.get() = None;
             file.position.set(from as filesystem::Filesize);
             *newoffset = from as filesystem::Filesize;
             Ok(())
@@ -1216,7 +1234,7 @@ pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_file(fd)?;
-        filesystem::sync(file.fd)?;
+        file.fd.sync()?;
         Ok(())
     })
 }
@@ -1267,6 +1285,7 @@ pub unsafe extern "C" fn fd_write(
                     let wasi_stream = streams.get_write_stream()?;
 
                     let nbytes = if let StreamType::File(file) = &streams.type_ {
+                        // FIXME: Why are files different here?
                         file.blocking_mode.write(wasi_stream, bytes)?
                     } else {
                         // Use blocking writes on non-file streams (stdout, stderr, as sockets
@@ -1309,7 +1328,7 @@ pub unsafe extern "C" fn path_create_directory(
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
-        filesystem::create_directory_at(file.fd, path)?;
+        file.fd.create_directory_at(path)?;
         Ok(())
     })
 }
@@ -1330,8 +1349,8 @@ pub unsafe extern "C" fn path_filestat_get(
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
-        let stat = filesystem::stat_at(file.fd, at_flags, path)?;
-        let metadata_hash = filesystem::metadata_hash_at(file.fd, at_flags, path)?;
+        let stat = file.fd.stat_at(at_flags, path)?;
+        let metadata_hash = file.fd.metadata_hash_at(at_flags, path)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
             dev: 1,
@@ -1376,7 +1395,7 @@ pub unsafe extern "C" fn path_filestat_set_times(
 
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
-        filesystem::set_times_at(file.fd, at_flags, path, atim, mtim)?;
+        file.fd.set_times_at(at_flags, path, atim, mtim)?;
         Ok(())
     })
 }
@@ -1398,9 +1417,10 @@ pub unsafe extern "C" fn path_link(
     let at_flags = at_flags_from_lookupflags(old_flags);
 
     State::with(|state| {
-        let old = state.descriptors().get_dir(old_fd)?.fd;
-        let new = state.descriptors().get_dir(new_fd)?.fd;
-        filesystem::link_at(old, at_flags, old_path, new, new_path)?;
+        let ds = state.descriptors();
+        let old = &ds.get_dir(old_fd)?.fd;
+        let new = &ds.get_dir(new_fd)?.fd;
+        old.link_at(at_flags, old_path, new, new_path)?;
         Ok(())
     })
 }
@@ -1433,14 +1453,14 @@ pub unsafe extern "C" fn path_open(
     let mode = filesystem::Modes::READABLE | filesystem::Modes::WRITABLE;
     let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
-    State::with(|state| {
+    State::with_mut(|state| {
         let mut ds = state.descriptors_mut();
         let file = ds.get_dir(fd)?;
-        let result = filesystem::open_at(file.fd, at_flags, path, o_flags, flags, mode)?;
-        let descriptor_type = filesystem::get_type(result)?;
+        let result = file.fd.open_at(at_flags, path, o_flags, flags, mode)?;
+        let descriptor_type = result.get_type()?;
         let desc = Descriptor::Streams(Streams {
-            input: Cell::new(None),
-            output: Cell::new(None),
+            input: UnsafeCell::new(None),
+            output: UnsafeCell::new(None),
             type_: StreamType::File(File {
                 fd: result,
                 descriptor_type,
@@ -1485,12 +1505,12 @@ pub unsafe extern "C" fn path_readlink(
             state
                 .import_alloc
                 .with_buffer(state.path_buf.get().cast(), PATH_MAX, || {
-                    filesystem::readlink_at(file.fd, path)
+                    file.fd.readlink_at(path)
                 })?
         } else {
             state
                 .import_alloc
-                .with_buffer(buf, buf_len, || filesystem::readlink_at(file.fd, path))?
+                .with_buffer(buf, buf_len, || file.fd.readlink_at(path))?
         };
 
         if use_state_buf {
@@ -1525,7 +1545,7 @@ pub unsafe extern "C" fn path_remove_directory(
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
-        filesystem::remove_directory_at(file.fd, path)?;
+        file.fd.remove_directory_at(path)?;
         Ok(())
     })
 }
@@ -1546,9 +1566,9 @@ pub unsafe extern "C" fn path_rename(
 
     State::with(|state| {
         let ds = state.descriptors();
-        let old = ds.get_dir(old_fd)?.fd;
-        let new = ds.get_dir(new_fd)?.fd;
-        filesystem::rename_at(old, old_path, new, new_path)?;
+        let old = &ds.get_dir(old_fd)?.fd;
+        let new = &ds.get_dir(new_fd)?.fd;
+        old.rename_at(old_path, new, new_path)?;
         Ok(())
     })
 }
@@ -1569,7 +1589,7 @@ pub unsafe extern "C" fn path_symlink(
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
-        filesystem::symlink_at(file.fd, old_path, new_path)?;
+        file.fd.symlink_at(old_path, new_path)?;
         Ok(())
     })
 }
@@ -1584,7 +1604,7 @@ pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len:
     State::with(|state| {
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
-        filesystem::unlink_file_at(file.fd, path)?;
+        file.fd.unlink_file_at(path)?;
         Ok(())
     })
 }
@@ -1598,15 +1618,21 @@ struct Pollables {
 impl Pollables {
     unsafe fn push(&mut self, pollable: Pollable) {
         assert!(self.index < self.length);
-        *self.pointer.add(self.index) = pollable;
+        // Use `ptr::write` instead of `*... = pollable` because `ptr::write`
+        // doesn't call drop on the old memory.
+        self.pointer.add(self.index).write(pollable);
         self.index += 1;
     }
 }
 
+// We create new pollable handles for each `poll_oneoff` call, so drop them all
+// after the call.
 impl Drop for Pollables {
     fn drop(&mut self) {
-        for i in 0..self.index {
-            poll::drop_pollable(unsafe { *self.pointer.add(i) })
+        for i in 0..self.length {
+            unsafe {
+                drop(self.pointer.add(i).read());
+            }
         }
     }
 }
@@ -1649,7 +1675,7 @@ pub unsafe extern "C" fn poll_oneoff(
     //
     // First, we assert that this is possible:
     assert!(align_of::<Event>() >= align_of::<Pollable>());
-    assert!(align_of::<Pollable>() >= align_of::<u8>());
+    assert!(align_of::<Pollable>() >= align_of::<u32>());
     assert!(
         nsubscriptions
             .checked_mul(size_of::<Event>())
@@ -1659,7 +1685,7 @@ pub unsafe extern "C" fn poll_oneoff(
                 .trapping_unwrap()
                 .checked_add(
                     nsubscriptions
-                        .checked_mul(size_of::<u8>())
+                        .checked_mul(size_of::<u32>())
                         .trapping_unwrap()
                 )
                 .trapping_unwrap()
@@ -1667,7 +1693,7 @@ pub unsafe extern "C" fn poll_oneoff(
     // Store the pollable handles at the beginning, and the bool results at the
     // end, so that we don't clobber the bool results when writting the events.
     let pollables = out as *mut c_void as *mut Pollable;
-    let results = out.add(nsubscriptions).cast::<u8>().sub(nsubscriptions);
+    let results = out.add(nsubscriptions).cast::<u32>().sub(nsubscriptions);
 
     // Indefinite sleeping is not supported in preview1.
     if nsubscriptions == 0 {
@@ -1724,7 +1750,10 @@ pub unsafe extern "C" fn poll_oneoff(
                             monotonic_clock::subscribe(timeout, false)
                         }
 
-                        CLOCKID_MONOTONIC => monotonic_clock::subscribe(clock.timeout, absolute),
+                        CLOCKID_MONOTONIC => {
+                            let s = monotonic_clock::subscribe(clock.timeout, absolute);
+                            s
+                        }
 
                         _ => return Err(ERRNO_INVAL),
                     }
@@ -1734,14 +1763,14 @@ pub unsafe extern "C" fn poll_oneoff(
                     let stream = state
                         .descriptors()
                         .get_read_stream(subscription.u.u.fd_read.file_descriptor)?;
-                    streams::subscribe_to_input_stream(stream)
+                    stream.subscribe()
                 }
 
                 EVENTTYPE_FD_WRITE => {
                     let stream = state
                         .descriptors()
                         .get_write_stream(subscription.u.u.fd_write.file_descriptor)?;
-                    streams::subscribe_to_output_stream(stream)
+                    stream.subscribe()
                 }
 
                 _ => return Err(ERRNO_INVAL),
@@ -1750,41 +1779,40 @@ pub unsafe extern "C" fn poll_oneoff(
 
         #[link(wasm_import_module = "wasi:io/poll")]
         extern "C" {
-            #[link_name = "poll-oneoff"]
-            fn poll_oneoff_import(pollables: *const Pollable, len: usize, rval: *mut BoolList);
+            #[link_name = "poll-list"]
+            fn poll_list_import(pollables: *const Pollable, len: usize, rval: *mut ReadyList);
         }
-        let mut ready_list = BoolList {
+        let mut ready_list = ReadyList {
             base: std::ptr::null(),
             len: 0,
         };
 
         state.import_alloc.with_buffer(
-            results,
+            results.cast(),
             nsubscriptions
-                .checked_mul(size_of::<bool>())
+                .checked_mul(size_of::<u32>())
                 .trapping_unwrap(),
             || {
-                poll_oneoff_import(
+                poll_list_import(
                     pollables.pointer,
                     pollables.length,
                     &mut ready_list as *mut _,
-                )
+                );
             },
         );
 
-        assert_eq!(ready_list.len, nsubscriptions);
-        assert_eq!(ready_list.base, results as *const bool);
+        assert!(ready_list.len <= nsubscriptions);
+        assert_eq!(ready_list.base, results as *const u32);
 
         drop(pollables);
 
-        let ready = subscriptions
-            .iter()
-            .enumerate()
-            .filter_map(|(i, s)| (*ready_list.base.add(i)).then_some(s));
+        let ready = std::slice::from_raw_parts(ready_list.base, ready_list.len);
 
         let mut count = 0;
 
         for subscription in ready {
+            let subscription = *subscriptions.as_ptr().add(*subscription as usize);
+
             let error;
             let type_;
             let nbytes;
@@ -1806,7 +1834,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match &streams.type_ {
-                            StreamType::File(file) => match filesystem::stat(file.fd) {
+                            StreamType::File(file) => match file.fd.stat() {
                                 Ok(stat) => {
                                     error = ERRNO_SUCCESS;
                                     nbytes = stat.size.saturating_sub(file.position.get());
@@ -1859,7 +1887,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         .get(subscription.u.u.fd_write.file_descriptor)
                         .trapping_unwrap();
                     match desc {
-                        Descriptor::Streams(streams) => match streams.type_ {
+                        Descriptor::Streams(streams) => match &streams.type_ {
                             StreamType::File(_) | StreamType::Stdio(_) => {
                                 error = ERRNO_SUCCESS;
                                 nbytes = 1;
@@ -2009,8 +2037,12 @@ pub unsafe extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
     unreachable!()
 }
 
-fn datetime_to_timestamp(datetime: filesystem::Datetime) -> Timestamp {
-    u64::from(datetime.nanoseconds).saturating_add(datetime.seconds.saturating_mul(1_000_000_000))
+fn datetime_to_timestamp(datetime: Option<filesystem::Datetime>) -> Timestamp {
+    match datetime {
+        Some(datetime) => u64::from(datetime.nanoseconds)
+            .saturating_add(datetime.seconds.saturating_mul(1_000_000_000)),
+        None => 0,
+    }
 }
 
 fn at_flags_from_lookupflags(flags: Lookupflags) -> filesystem::PathFlags {
@@ -2135,15 +2167,19 @@ impl BlockingMode {
     // breaking our fragile linking scheme
     fn read(
         self,
-        input_stream: streams::InputStream,
+        input_stream: &streams::InputStream,
         read_len: u64,
     ) -> Result<(Vec<u8>, streams::StreamStatus), ()> {
         match self {
-            BlockingMode::NonBlocking => streams::read(input_stream, read_len),
-            BlockingMode::Blocking => streams::blocking_read(input_stream, read_len),
+            BlockingMode::NonBlocking => input_stream.read(read_len),
+            BlockingMode::Blocking => input_stream.blocking_read(read_len),
         }
     }
-    fn write(self, output_stream: streams::OutputStream, mut bytes: &[u8]) -> Result<usize, Errno> {
+    fn write(
+        self,
+        output_stream: &streams::OutputStream,
+        mut bytes: &[u8],
+    ) -> Result<usize, Errno> {
         match self {
             BlockingMode::Blocking => {
                 let total = bytes.len();
@@ -2151,7 +2187,7 @@ impl BlockingMode {
                     let len = bytes.len().min(4096);
                     let (chunk, rest) = bytes.split_at(len);
                     bytes = rest;
-                    match streams::blocking_write_and_flush(output_stream, chunk) {
+                    match output_stream.blocking_write_and_flush(chunk) {
                         Ok(()) => {}
                         Err(_) => return Err(ERRNO_IO),
                     }
@@ -2160,7 +2196,7 @@ impl BlockingMode {
             }
 
             BlockingMode::NonBlocking => {
-                let permit = match streams::check_write(output_stream) {
+                let permit = match output_stream.check_write() {
                     Ok(n) => n,
                     Err(streams::WriteError::Closed) => 0,
                     Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
@@ -2171,13 +2207,13 @@ impl BlockingMode {
                     return Ok(0);
                 }
 
-                match streams::write(output_stream, &bytes[..len]) {
+                match output_stream.write(&bytes[..len]) {
                     Ok(_) => {}
                     Err(streams::WriteError::Closed) => return Ok(0),
                     Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
                 }
 
-                match streams::blocking_flush(output_stream) {
+                match output_stream.blocking_flush() {
                     Ok(_) => {}
                     Err(streams::WriteError::Closed) => return Ok(0),
                     Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
@@ -2245,7 +2281,7 @@ struct State {
     ///
     /// Do not use this member directly - use State::descriptors() to ensure
     /// lazy initialization happens.
-    descriptors: RefCell<Option<Descriptors>>,
+    descriptors: UnsafeCell<Option<Descriptors>>,
 
     /// Auxiliary storage to handle the `path_readlink` function.
     path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
@@ -2288,12 +2324,6 @@ struct DirentCache {
 
 struct DirectoryEntryStream(filesystem::DirectoryEntryStream);
 
-impl Drop for DirectoryEntryStream {
-    fn drop(&mut self) {
-        filesystem::drop_directory_entry_stream(self.0);
-    }
-}
-
 #[repr(C)]
 pub struct WasmStr {
     ptr: *const u8,
@@ -2321,8 +2351,8 @@ pub struct StrTupleList {
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub struct BoolList {
-    base: *const bool,
+pub struct ReadyList {
+    base: *const u32,
     len: usize,
 }
 
@@ -2337,7 +2367,7 @@ const fn bump_arena_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 16 * size_of::<usize>();
+    start -= 12 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2348,7 +2378,7 @@ const fn bump_arena_size() -> usize {
 // below.
 #[cfg(target_arch = "wasm32")]
 const _: () = {
-    let _size_assert: [(); PAGE_SIZE] = [(); size_of::<RefCell<State>>()];
+    let _size_assert: [(); PAGE_SIZE] = [(); size_of::<UnsafeCell<State>>()];
 };
 
 #[allow(unused)]
@@ -2363,28 +2393,36 @@ enum AllocationState {
 
 #[allow(improper_ctypes)]
 extern "C" {
-    fn get_state_ptr() -> *const RefCell<State>;
-    fn set_state_ptr(state: *const RefCell<State>);
+    fn get_state_ptr() -> *const UnsafeCell<State>;
+    fn set_state_ptr(state: *const UnsafeCell<State>);
     fn get_allocation_state() -> AllocationState;
     fn set_allocation_state(state: AllocationState);
-    fn get_stderr_stream() -> Fd;
-    fn set_stderr_stream(fd: Fd);
 }
 
 impl State {
     fn with(f: impl FnOnce(&State) -> Result<(), Errno>) -> Errno {
-        let ptr = State::ptr();
-        let ptr = ptr.try_borrow().unwrap_or_else(|_| unreachable!());
-        assert_eq!(ptr.magic1, MAGIC);
-        assert_eq!(ptr.magic2, MAGIC);
-        let ret = f(&*ptr);
+        let state_ref = unsafe { &*State::ptr().get() };
+        assert_eq!(state_ref.magic1, MAGIC);
+        assert_eq!(state_ref.magic2, MAGIC);
+        let ret = f(state_ref);
         match ret {
             Ok(()) => ERRNO_SUCCESS,
             Err(err) => err,
         }
     }
 
-    fn ptr() -> &'static RefCell<State> {
+    fn with_mut(f: impl FnOnce(&mut State) -> Result<(), Errno>) -> Errno {
+        let state_ref = unsafe { &mut *State::ptr().get() };
+        assert_eq!(state_ref.magic1, MAGIC);
+        assert_eq!(state_ref.magic2, MAGIC);
+        let ret = f(state_ref);
+        match ret {
+            Ok(()) => ERRNO_SUCCESS,
+            Err(err) => err,
+        }
+    }
+
+    fn ptr() -> &'static UnsafeCell<State> {
         unsafe {
             let mut ptr = get_state_ptr();
             if ptr.is_null() {
@@ -2396,7 +2434,7 @@ impl State {
     }
 
     #[cold]
-    fn new() -> &'static RefCell<State> {
+    fn new() -> &'static UnsafeCell<State> {
         #[link(wasm_import_module = "__main_module__")]
         extern "C" {
             fn cabi_realloc(
@@ -2418,19 +2456,19 @@ impl State {
             cabi_realloc(
                 ptr::null_mut(),
                 0,
-                mem::align_of::<RefCell<State>>(),
-                mem::size_of::<RefCell<State>>(),
-            ) as *mut RefCell<State>
+                mem::align_of::<UnsafeCell<State>>(),
+                mem::size_of::<UnsafeCell<State>>(),
+            ) as *mut UnsafeCell<State>
         };
 
         unsafe { set_allocation_state(AllocationState::StateAllocated) };
 
         unsafe {
-            ret.write(RefCell::new(State {
+            ret.write(UnsafeCell::new(State {
                 magic1: MAGIC,
                 magic2: MAGIC,
                 import_alloc: ImportAlloc::new(),
-                descriptors: RefCell::new(None),
+                descriptors: UnsafeCell::new(None),
                 path_buf: UnsafeCell::new(MaybeUninit::uninit()),
                 long_lived_arena: BumpArena::new(),
                 args: Cell::new(None),
@@ -2454,27 +2492,32 @@ impl State {
     }
 
     /// Accessor for the descriptors member that ensures it is properly initialized
-    fn descriptors<'a>(&'a self) -> impl Deref<Target = Descriptors> + 'a {
-        let mut d = self
-            .descriptors
-            .try_borrow_mut()
-            .unwrap_or_else(|_| unreachable!());
-        if d.is_none() {
-            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
+    fn descriptors(&self) -> &Descriptors {
+        let descriptors: &mut Option<Descriptors> = unsafe { &mut *self.descriptors.get() };
+        match descriptors {
+            None => {
+                *descriptors = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
+            }
+            Some(descriptors) => {}
         }
-        RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
+        match descriptors {
+            Some(descriptors) => descriptors,
+            None => unreachable!(),
+        }
     }
 
-    /// Mut accessor for the descriptors member that ensures it is properly initialized
-    fn descriptors_mut<'a>(&'a self) -> impl DerefMut + Deref<Target = Descriptors> + 'a {
-        let mut d = self
-            .descriptors
-            .try_borrow_mut()
-            .unwrap_or_else(|_| unreachable!());
-        if d.is_none() {
-            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
+    fn descriptors_mut(&mut self) -> &mut Descriptors {
+        let descriptors: &mut Option<Descriptors> = unsafe { &mut *self.descriptors.get() };
+        match descriptors {
+            None => {
+                *descriptors = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
+            }
+            Some(descriptors) => {}
         }
-        RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
+        match descriptors {
+            Some(descriptors) => descriptors,
+            None => unreachable!(),
+        }
     }
 
     fn get_environment(&self) -> &[StrTuple] {

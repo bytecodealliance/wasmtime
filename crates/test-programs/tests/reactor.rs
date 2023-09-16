@@ -116,20 +116,20 @@ async fn reactor_tests() -> Result<()> {
     // Show that the `with` invocation in the macro means we get to re-use the
     // type definitions from inside the `host` crate for these structures:
     let ds = filesystem::DescriptorStat {
-        data_access_timestamp: wall_clock::Datetime {
+        data_access_timestamp: Some(wall_clock::Datetime {
             nanoseconds: 123,
             seconds: 45,
-        },
-        data_modification_timestamp: wall_clock::Datetime {
+        }),
+        data_modification_timestamp: Some(wall_clock::Datetime {
             nanoseconds: 789,
             seconds: 10,
-        },
+        }),
         link_count: 0,
         size: 0,
-        status_change_timestamp: wall_clock::Datetime {
+        status_change_timestamp: Some(wall_clock::Datetime {
             nanoseconds: 0,
             seconds: 1,
-        },
+        }),
         type_: filesystem::DescriptorType::Unknown,
     };
     let expected = format!("{ds:?}");

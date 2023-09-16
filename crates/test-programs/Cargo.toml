@@ -41,7 +41,7 @@ cap-std = { workspace = true }
 cap-rand = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
-wasmtime-wasi-http = { workspace = true, features = ["sync"] }
+#wasmtime-wasi-http = { workspace = true, features = ["sync"] }
 
 [features]
 test_programs = []

@@ -18,6 +18,7 @@ world reactor {
   import wasi:random/insecure-seed
   import wasi:io/poll
   import wasi:io/streams
+  import wasi:logging/logging
 
   import environment
   import exit

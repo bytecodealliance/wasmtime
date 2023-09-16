@@ -1,9 +1,12 @@
 use super::clocks::host::{monotonic_clock, wall_clock};
 use crate::preview2::{
+    bindings::cli::{terminal_input, terminal_output},
+    bindings::filesystem::types::Descriptor,
+    bindings::io::streams,
     clocks::{self, HostMonotonicClock, HostWallClock},
-    filesystem::Dir,
+    filesystem::{Dir, TableFsExt},
     pipe, random, stdio,
-    stdio::{StdioInput, StdioOutput},
+    stdio::{HostTerminalInputState, HostTerminalOutputState},
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
     DirPerms, FilePerms, IsATTY, Table,
 };
@@ -13,6 +16,7 @@ use cap_std::net::Pool;
 use cap_std::{ambient_authority, AmbientAuthority};
 use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
+use wasmtime::component::Resource;
 
 pub struct WasiCtxBuilder {
     stdin: (Box<dyn HostInputStream>, IsATTY),
@@ -291,23 +295,48 @@ impl WasiCtxBuilder {
         } = mem::replace(self, Self::new());
         self.built = true;
 
-        let stdin_ix = table.push_input_stream(stdin.0).context("stdin")?;
-        let stdout_ix = table.push_output_stream(stdout.0).context("stdout")?;
-        let stderr_ix = table.push_output_stream(stderr.0).context("stderr")?;
+        let stdin_terminal = Some(if let IsATTY::Yes = stdin.1 {
+            Some(Resource::new_own(
+                table.push(Box::new(HostTerminalInputState))?,
+            ))
+        } else {
+            None
+        });
+        let stdout_terminal = Some(if let IsATTY::Yes = stdout.1 {
+            Some(Resource::new_own(
+                table.push(Box::new(HostTerminalOutputState))?,
+            ))
+        } else {
+            None
+        });
+        let stderr_terminal = Some(if let IsATTY::Yes = stderr.1 {
+            Some(Resource::new_own(
+                table.push(Box::new(HostTerminalOutputState))?,
+            ))
+        } else {
+            None
+        });
+        let stdin = Some(table.push_input_stream(stdin.0).context("stdin")?);
+        let stdout = Some(table.push_output_stream(stdout.0).context("stdout")?);
+        let stderr = Some(table.push_output_stream(stderr.0).context("stderr")?);
+
+        let preopens = preopens
+            .into_iter()
+            .map(|(dir, path)| {
+                let dirfd = table
+                    .push_dir(dir)
+                    .with_context(|| format!("preopen {path:?}"))?;
+                Ok((dirfd, path))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
 
         Ok(WasiCtx {
-            stdin: StdioInput {
-                input_stream: stdin_ix,
-                isatty: stdin.1,
-            },
-            stdout: StdioOutput {
-                output_stream: stdout_ix,
-                isatty: stdout.1,
-            },
-            stderr: StdioOutput {
-                output_stream: stderr_ix,
-                isatty: stderr.1,
-            },
+            stdin,
+            stdin_terminal,
+            stdout,
+            stdout_terminal,
+            stderr,
+            stderr_terminal,
             env,
             args,
             preopens,
@@ -336,9 +365,12 @@ pub struct WasiCtx {
     pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
-    pub(crate) preopens: Vec<(Dir, String)>,
-    pub(crate) stdin: StdioInput,
-    pub(crate) stdout: StdioOutput,
-    pub(crate) stderr: StdioOutput,
+    pub(crate) preopens: Vec<(Resource<Descriptor>, String)>,
+    pub(crate) stdin: Option<Resource<streams::InputStream>>,
+    pub(crate) stdout: Option<Resource<streams::OutputStream>>,
+    pub(crate) stderr: Option<Resource<streams::OutputStream>>,
+    pub(crate) stdin_terminal: Option<Option<Resource<terminal_input::TerminalInput>>>,
+    pub(crate) stdout_terminal: Option<Option<Resource<terminal_output::TerminalOutput>>>,
+    pub(crate) stderr_terminal: Option<Option<Resource<terminal_output::TerminalOutput>>>,
     pub(crate) pool: Pool,
 }

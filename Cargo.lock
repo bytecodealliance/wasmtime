@@ -2679,7 +2679,6 @@ dependencies = [
  "wasi-common",
  "wasmtime",
  "wasmtime-wasi",
- "wasmtime-wasi-http",
  "wit-component",
 ]
 

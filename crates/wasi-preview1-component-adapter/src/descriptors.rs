@@ -1,12 +1,11 @@
 use crate::bindings::wasi::cli::{
-    stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
-    terminal_stdout,
+    stderr, stdin, stdout, terminal_stderr, terminal_stdin, terminal_stdout,
 };
 use crate::bindings::wasi::filesystem::types as filesystem;
-use crate::bindings::wasi::io::streams::{self, InputStream, OutputStream};
+use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
 use crate::bindings::wasi::sockets::tcp;
 use crate::{
-    set_stderr_stream, BlockingMode, BumpArena, File, ImportAlloc, TrappingUnwrap, WasmStr,
+    BlockingMode, BumpArena, File, ImportAlloc, TrappingUnwrap, TrappingUnwrapRef, WasmStr,
 };
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
@@ -24,36 +23,15 @@ pub enum Descriptor {
     Streams(Streams),
 }
 
-impl Drop for Descriptor {
-    fn drop(&mut self) {
-        match self {
-            Descriptor::Streams(stream) => {
-                if let Some(input) = stream.input.get() {
-                    streams::drop_input_stream(input);
-                }
-                if let Some(output) = stream.output.get() {
-                    streams::drop_output_stream(output);
-                }
-                match &stream.type_ {
-                    StreamType::File(file) => filesystem::drop_descriptor(file.fd),
-                    StreamType::Socket(_) => unreachable!(),
-                    StreamType::Stdio(_) => {}
-                }
-            }
-            Descriptor::Closed(_) => {}
-        }
-    }
-}
-
 /// Input and/or output wasi-streams, along with a stream type that
 /// identifies what kind of stream they are and possibly supporting
 /// type-specific operations like seeking.
 pub struct Streams {
     /// The input stream, if present.
-    pub input: Cell<Option<InputStream>>,
+    pub input: UnsafeCell<Option<InputStream>>,
 
     /// The output stream, if present.
-    pub output: Cell<Option<OutputStream>>,
+    pub output: UnsafeCell<Option<OutputStream>>,
 
     /// Information about the source of the stream.
     pub type_: StreamType,
@@ -61,59 +39,69 @@ pub struct Streams {
 
 impl Streams {
     /// Return the input stream, initializing it on the fly if needed.
-    pub fn get_read_stream(&self) -> Result<InputStream, Errno> {
-        match &self.input.get() {
-            Some(wasi_stream) => Ok(*wasi_stream),
-            None => match &self.type_ {
-                // For directories, preview 1 behavior was to return ERRNO_BADF on attempts to read
-                // or write.
-                StreamType::File(File {
-                    descriptor_type: filesystem::DescriptorType::Directory,
-                    ..
-                }) => Err(wasi::ERRNO_BADF),
-                // For files, we may have adjusted the position for seeking, so
-                // create a new stream.
-                StreamType::File(file) => {
-                    let input = filesystem::read_via_stream(file.fd, file.position.get())?;
-                    self.input.set(Some(input));
-                    Ok(input)
+    pub fn get_read_stream(&self) -> Result<&InputStream, Errno> {
+        match unsafe { &*self.input.get() } {
+            Some(wasi_stream) => Ok(wasi_stream),
+            None => {
+                let input = match &self.type_ {
+                    // For directories, preview 1 behavior was to return ERRNO_BADF on attempts to read
+                    // or write.
+                    StreamType::File(File {
+                        descriptor_type: filesystem::DescriptorType::Directory,
+                        ..
+                    }) => return Err(wasi::ERRNO_BADF),
+                    // For files, we may have adjusted the position for seeking, so
+                    // create a new stream.
+                    StreamType::File(file) => {
+                        let input = file.fd.read_via_stream(file.position.get())?;
+                        input
+                    }
+                    _ => return Err(wasi::ERRNO_BADF),
+                };
+                unsafe {
+                    *self.input.get() = Some(input);
+                    Ok((*self.input.get()).trapping_unwrap_ref())
                 }
-                _ => Err(wasi::ERRNO_BADF),
-            },
+            }
         }
     }
 
     /// Return the output stream, initializing it on the fly if needed.
-    pub fn get_write_stream(&self) -> Result<OutputStream, Errno> {
-        match &self.output.get() {
-            Some(wasi_stream) => Ok(*wasi_stream),
-            None => match &self.type_ {
-                // For directories, preview 1 behavior was to return ERRNO_BADF on attempts to read
-                // or write.
-                StreamType::File(File {
-                    descriptor_type: filesystem::DescriptorType::Directory,
-                    ..
-                }) => Err(wasi::ERRNO_BADF),
-                // For files, we may have adjusted the position for seeking, so
-                // create a new stream.
-                StreamType::File(file) => {
-                    let output = if file.append {
-                        filesystem::append_via_stream(file.fd)?
-                    } else {
-                        filesystem::write_via_stream(file.fd, file.position.get())?
-                    };
-                    self.output.set(Some(output));
-                    Ok(output)
+    pub fn get_write_stream(&self) -> Result<&OutputStream, Errno> {
+        match unsafe { &*self.output.get() } {
+            Some(wasi_stream) => Ok(wasi_stream),
+            None => {
+                let output = match &self.type_ {
+                    // For directories, preview 1 behavior was to return ERRNO_BADF on attempts to read
+                    // or write.
+                    StreamType::File(File {
+                        descriptor_type: filesystem::DescriptorType::Directory,
+                        ..
+                    }) => return Err(wasi::ERRNO_BADF),
+                    // For files, we may have adjusted the position for seeking, so
+                    // create a new stream.
+                    StreamType::File(file) => {
+                        let output = if file.append {
+                            file.fd.append_via_stream()?
+                        } else {
+                            file.fd.write_via_stream(file.position.get())?
+                        };
+                        output
+                    }
+                    _ => return Err(wasi::ERRNO_BADF),
+                };
+                unsafe {
+                    *self.output.get() = Some(output);
+                    Ok((*self.output.get()).trapping_unwrap_ref())
                 }
-                _ => Err(wasi::ERRNO_BADF),
-            },
+            }
         }
     }
 }
 
 #[allow(dead_code)] // until Socket is implemented
 pub enum StreamType {
-    /// Stream is used for implementing stdio.
+    /// Streams for implementing stdio.
     Stdio(IsATTY),
 
     /// Streaming data with a file.
@@ -161,47 +149,34 @@ impl Descriptors {
             preopens: Cell::new(None),
         };
 
-        let stdin = stdin::get_stdin();
         let stdin_isatty = match terminal_stdin::get_terminal_stdin() {
-            Some(t) => {
-                terminal_input::drop_terminal_input(t);
-                IsATTY::Yes
-            }
+            Some(t) => IsATTY::Yes,
             None => IsATTY::No,
         };
-        let stdout = stdout::get_stdout();
         let stdout_isatty = match terminal_stdout::get_terminal_stdout() {
-            Some(t) => {
-                terminal_output::drop_terminal_output(t);
-                IsATTY::Yes
-            }
+            Some(t) => IsATTY::Yes,
             None => IsATTY::No,
         };
-        let stderr = stderr::get_stderr();
-        unsafe { set_stderr_stream(stderr) };
         let stderr_isatty = match terminal_stderr::get_terminal_stderr() {
-            Some(t) => {
-                terminal_output::drop_terminal_output(t);
-                IsATTY::Yes
-            }
+            Some(t) => IsATTY::Yes,
             None => IsATTY::No,
         };
 
         d.push(Descriptor::Streams(Streams {
-            input: Cell::new(Some(stdin)),
-            output: Cell::new(None),
+            input: UnsafeCell::new(Some(stdin::get_stdin())),
+            output: UnsafeCell::new(None),
             type_: StreamType::Stdio(stdin_isatty),
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
-            input: Cell::new(None),
-            output: Cell::new(Some(stdout)),
+            input: UnsafeCell::new(None),
+            output: UnsafeCell::new(Some(stdout::get_stdout())),
             type_: StreamType::Stdio(stdout_isatty),
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
-            input: Cell::new(None),
-            output: Cell::new(Some(stderr)),
+            input: UnsafeCell::new(None),
+            output: UnsafeCell::new(Some(stderr::get_stderr())),
             type_: StreamType::Stdio(stderr_isatty),
         }))
         .trapping_unwrap();
@@ -224,14 +199,18 @@ impl Descriptors {
             std::slice::from_raw_parts(list.base, list.len)
         };
         for preopen in preopens {
+            // Acquire ownership of the descriptor, leaving the rest of the
+            // `Preopen` struct in place.
+            let descriptor = unsafe { preopen.descriptor.assume_init_read() };
             // Expectation is that the descriptor index is initialized with
             // stdio (0,1,2) and no others, so that preopens are 3..
+            let descriptor_type = descriptor.get_type().trapping_unwrap();
             d.push(Descriptor::Streams(Streams {
-                input: Cell::new(None),
-                output: Cell::new(None),
+                input: UnsafeCell::new(None),
+                output: UnsafeCell::new(None),
                 type_: StreamType::File(File {
-                    fd: preopen.descriptor,
-                    descriptor_type: filesystem::get_type(preopen.descriptor).trapping_unwrap(),
+                    fd: descriptor,
+                    descriptor_type,
                     position: Cell::new(0),
                     append: false,
                     blocking_mode: BlockingMode::Blocking,
@@ -387,12 +366,12 @@ impl Descriptors {
     }
 
     #[allow(dead_code)] // until Socket is implemented
-    pub fn get_socket(&self, fd: Fd) -> Result<tcp::TcpSocket, Errno> {
+    pub fn get_socket(&self, fd: Fd) -> Result<&tcp::TcpSocket, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
                 type_: StreamType::Socket(socket),
                 ..
-            }) => Ok(*socket),
+            }) => Ok(&*socket),
             Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
             _ => Err(wasi::ERRNO_INVAL),
         }
@@ -435,14 +414,14 @@ impl Descriptors {
         self.get_stream_with_error(fd, wasi::ERRNO_SPIPE)
     }
 
-    pub fn get_read_stream(&self, fd: Fd) -> Result<InputStream, Errno> {
+    pub fn get_read_stream(&self, fd: Fd) -> Result<&InputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_read_stream(),
             Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
         }
     }
 
-    pub fn get_write_stream(&self, fd: Fd) -> Result<OutputStream, Errno> {
+    pub fn get_write_stream(&self, fd: Fd) -> Result<&OutputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_write_stream(),
             Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
@@ -452,7 +431,9 @@ impl Descriptors {
 
 #[repr(C)]
 pub struct Preopen {
-    pub descriptor: u32,
+    /// This is `MaybeUninit` because we take ownership of the `Descriptor` to
+    /// put it in or own table.
+    pub descriptor: MaybeUninit<filesystem::Descriptor>,
     pub path: WasmStr,
 }
 

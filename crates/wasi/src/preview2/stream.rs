@@ -352,19 +352,9 @@ mod test {
         // Put it into the table:
         let ix = table.push_input_stream(Box::new(dummy)).unwrap();
         // Get a mut ref to it:
-        let _ = table.get_input_stream_mut(ix).unwrap();
-        // Fails at wrong type:
-        assert!(matches!(
-            table.get_output_stream_mut(ix),
-            Err(TableError::WrongType)
-        ));
+        let _ = table.get_input_stream_mut(&ix).unwrap();
         // Delete it:
         let _ = table.delete_input_stream(ix).unwrap();
-        // Now absent from table:
-        assert!(matches!(
-            table.get_input_stream_mut(ix),
-            Err(TableError::NotPresent)
-        ));
     }
 
     #[test]
@@ -374,18 +364,8 @@ mod test {
         // Put it in the table:
         let ix = table.push_output_stream(Box::new(dummy)).unwrap();
         // Get a mut ref to it:
-        let _ = table.get_output_stream_mut(ix).unwrap();
-        // Fails at wrong type:
-        assert!(matches!(
-            table.get_input_stream_mut(ix),
-            Err(TableError::WrongType)
-        ));
+        let _ = table.get_output_stream_mut(&ix).unwrap();
         // Delete it:
         let _ = table.delete_output_stream(ix).unwrap();
-        // Now absent:
-        assert!(matches!(
-            table.get_output_stream_mut(ix),
-            Err(TableError::NotPresent)
-        ));
     }
 }

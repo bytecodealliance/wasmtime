@@ -2,6 +2,7 @@
 world test-reactor {
 
   import wasi:cli/environment
+  import wasi:io/poll
   import wasi:io/streams
   import wasi:filesystem/types
   import wasi:filesystem/preopens

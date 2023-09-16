@@ -10,7 +10,7 @@ use wit_component::ComponentEncoder;
 // NB: this is set to `false` when a breaking change to WIT is made since the
 // wasi-http WIT is currently a submodule and can't be updated atomically with
 // the rest of Wasmtime.
-const BUILD_WASI_HTTP_TESTS: bool = true;
+const BUILD_WASI_HTTP_TESTS: bool = false;
 
 fn main() {
     #[cfg(feature = "test_programs")]
