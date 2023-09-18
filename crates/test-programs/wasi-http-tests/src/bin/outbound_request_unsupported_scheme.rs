@@ -18,6 +18,6 @@ async fn run() {
     let error = res.unwrap_err();
     assert_eq!(
         error.to_string(),
-        "Error::InvalidUrl(\"unsupported scheme WS\")"
+        "Error::Invalid(\"unsupported scheme WS\")"
     );
 }
