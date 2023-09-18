@@ -281,7 +281,7 @@ async fn sched_yield() {
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn sleep() {
-    run("sleep", true).await.unwrap() // FIXME: temporarily enable stdio for debugging
+    run("sleep", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdio() {

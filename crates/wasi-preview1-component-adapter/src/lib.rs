@@ -899,7 +899,6 @@ pub unsafe extern "C" fn fd_read(
         match state.descriptors().get(fd)? {
             Descriptor::Streams(streams) => {
                 let blocking_mode = if let StreamType::File(file) = &streams.type_ {
-                    // FIXME: Why are files different here?
                     file.blocking_mode
                 } else {
                     BlockingMode::Blocking
@@ -1285,7 +1284,6 @@ pub unsafe extern "C" fn fd_write(
                     let wasi_stream = streams.get_write_stream()?;
 
                     let nbytes = if let StreamType::File(file) = &streams.type_ {
-                        // FIXME: Why are files different here?
                         file.blocking_mode.write(wasi_stream, bytes)?
                     } else {
                         // Use blocking writes on non-file streams (stdout, stderr, as sockets
