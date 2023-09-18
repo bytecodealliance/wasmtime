@@ -188,11 +188,11 @@ block0(v0: i8):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi sp, sp, -0x10
+;   c.addi16sp sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   c.mv s0, sp
-; block1: ; offset 0xe
+; block1: ; offset 0xc
 ;   auipc a2, 0
 ;   ld a2, 0xa(a2)
 ;   c.j 0xa
@@ -241,14 +241,200 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi sp, sp, -0x10
+;   c.addi16sp sp, -0x10
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   c.mv s0, sp
-; block1: ; offset 0xe
+; block1: ; offset 0xc
 ;   c.jalr a1
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+function %c_ebreak() {
+block0:
+  debugtrap
+  return
+}
+
+; VCode:
+; block0:
+;   ebreak
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.ebreak
+;   c.jr ra
+
+function %c_unimp() {
+block0:
+  trap user0
+}
+
+; VCode:
+; block0:
+;   udf##trap_code=user0
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.unimp ; trap: user0
+
+
+function %c_addi_max(i64) -> i64 {
+block0(v0: i64):
+  v2 = iadd_imm.i64 v0, 31
+  return v2
+}
+
+; VCode:
+; block0:
+;   addi a0,a0,31
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi a0, 0x1f
+;   c.jr ra
+
+function %c_addi_min(i64) -> i64 {
+block0(v0: i64):
+  v2 = iadd_imm.i64 v0, -32
+  return v2
+}
+
+; VCode:
+; block0:
+;   addi a0,a0,-32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi a0, -0x20
+;   c.jr ra
+
+function %c_sext_w(i32) -> i64 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   sext.w a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addiw a0, 0
+;   c.jr ra
+
+function %c_addiw(i32) -> i64 {
+block0(v0: i32):
+  v1 = iadd_imm.i32 v0, -32
+  v2 = sextend.i64 v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   addiw a0,a0,-32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addiw a0, -0x20
+;   c.jr ra
+
+function %c_addi16sp() -> i64 {
+  ss0 = explicit_slot 8
+
+block0:
+  v0 = stack_addr.i64 ss0
+  return v0
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   add sp,-16
+; block0:
+;   load_addr a0,0(nominal_sp)
+;   add sp,+16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x10
+; block1: ; offset 0xe
+;   c.mv a0, sp
+;   c.addi16sp sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+function %c_slli(i64) -> i64 {
+block0(v0: i64):
+  v1 = ishl_imm.i64 v0, 63
+  return v1
+}
+
+; VCode:
+; block0:
+;   slli a0,a0,63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.slli a0, 0x3f
+;   c.jr ra
+
+
+function %c_addi4spn() -> i64 {
+  ss0 = explicit_slot 64
+
+block0:
+  v0 = stack_addr.i64 ss0+24
+  return v0
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   add sp,-64
+; block0:
+;   load_addr a0,24(nominal_sp)
+;   add sp,+64
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x40
+; block1: ; offset 0xe
+;   c.addi4spn a0, sp, 0x18
+;   c.addi16sp sp, 0x40
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   c.addi16sp sp, 0x10
 ;   c.jr ra
 

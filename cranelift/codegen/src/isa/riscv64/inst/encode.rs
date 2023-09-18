@@ -9,8 +9,8 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CjOp, CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5,
-    VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
+    CaOp, CiOp, CiwOp, CjOp, CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR,
+    VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -385,6 +385,60 @@ pub fn encode_cj_type(op: CjOp, imm: Imm12) -> u16 {
     let mut bits = 0;
     bits |= unsigned_field_width(op.op().bits(), 2);
     bits |= unsigned_field_width(imm_field, 11) << 2;
+    bits |= unsigned_field_width(op.funct3(), 3) << 13;
+    bits.try_into().unwrap()
+}
+
+// Encode a CI type instruction.
+//
+// The imm field is a 6 bit signed immediate.
+//
+// 0--1-2-------6-7-------11-12-----12-13-----15
+// |op | imm[4:0] |   src   | imm[5]  | funct3  |
+pub fn encode_ci_type(op: CiOp, rd: WritableReg, imm: Imm6) -> u16 {
+    let imm = imm.bits();
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= unsigned_field_width((imm & 0x1f) as u32, 5) << 2;
+    bits |= reg_to_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(((imm >> 5) & 1) as u32, 1) << 12;
+    bits |= unsigned_field_width(op.funct3(), 3) << 13;
+    bits.try_into().unwrap()
+}
+
+/// c.addi16sp is a regular CI op, but the immediate field is encoded in a weird way
+pub fn encode_c_addi16sp(imm: Imm6) -> u16 {
+    let imm = imm.bits();
+
+    // [6|1|3|5:4|2]
+    let mut enc_imm = 0;
+    enc_imm |= ((imm >> 5) & 1) << 5;
+    enc_imm |= ((imm >> 0) & 1) << 4;
+    enc_imm |= ((imm >> 2) & 1) << 3;
+    enc_imm |= ((imm >> 3) & 3) << 1;
+    enc_imm |= ((imm >> 1) & 1) << 0;
+    let enc_imm = Imm6::maybe_from_i16((enc_imm as i16) << 10 >> 10).unwrap();
+
+    encode_ci_type(CiOp::CAddi16sp, writable_stack_reg(), enc_imm)
+}
+
+// Encode a CIW type instruction.
+//
+// 0--1-2------4-5------12-13--------15
+// |op |   rd   |   imm   |  funct3  |
+pub fn encode_ciw_type(op: CiwOp, rd: WritableReg, imm: u8) -> u16 {
+    // [3:2|7:4|0|1]
+    let mut imm_field = 0;
+    imm_field |= ((imm >> 1) & 1) << 0;
+    imm_field |= ((imm >> 0) & 1) << 1;
+    imm_field |= ((imm >> 4) & 7) << 2;
+    imm_field |= ((imm >> 2) & 3) << 6;
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= reg_to_compressed_gpr_num(rd.to_reg()) << 2;
+    bits |= unsigned_field_width(imm_field as u32, 8) << 5;
     bits |= unsigned_field_width(op.funct3(), 3) << 13;
     bits.try_into().unwrap()
 }
