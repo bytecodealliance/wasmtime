@@ -636,7 +636,7 @@ impl Inst {
                 sink.put2(encode_ci_type(CiOp::CAddi, rd, imm6));
             }
 
-            // c.addi / c.sext.w
+            // c.addiw
             Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Addiw,
                 rd,
