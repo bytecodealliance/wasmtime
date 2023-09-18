@@ -73,8 +73,9 @@ block0(v0: i64):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   bltu sp, a0, 0x2c
-; block1: ; offset 0x14
+;   bgeu sp, a0, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
+; block1: ; offset 0x18
 ;   auipc a2, 0
 ;   ld a2, 0xc(a2)
 ;   j 0xc
@@ -85,7 +86,6 @@ block0(v0: i64):
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 
 function %stack_limit_gv_call_zero(i64 vmctx) {
     gv0 = vmctx
@@ -122,8 +122,9 @@ block0(v0: i64):
 ;   mv s0, sp
 ;   ld t6, 0(a0)
 ;   ld t6, 4(t6)
-;   bltu sp, t6, 0x2c
-; block1: ; offset 0x1c
+;   bgeu sp, t6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
+; block1: ; offset 0x20
 ;   auipc a2, 0
 ;   ld a2, 0xc(a2)
 ;   j 0xc
@@ -134,7 +135,6 @@ block0(v0: i64):
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 
 function %stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 168
@@ -164,15 +164,15 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ;   addi t6, a0, 0xb0
-;   bltu sp, t6, 0x1c
+;   bgeu sp, t6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   addi sp, sp, -0xb0
-; block1: ; offset 0x1c
+; block1: ; offset 0x20
 ;   addi sp, sp, 0xb0
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 
 function %huge_stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 400000
@@ -207,11 +207,13 @@ block0(v0: i64):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   bltu sp, a0, 0x5c
+;   bgeu sp, a0, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   lui t5, 0x62
 ;   addi t5, t5, -0x580
 ;   add t6, t5, a0
-;   bltu sp, t6, 0x50
+;   bgeu sp, t6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   lui a0, 0x62
 ;   addi a0, a0, -0x580
 ;   auipc t5, 0
@@ -223,7 +225,7 @@ block0(v0: i64):
 ;   lui t6, 0xfff9e
 ;   addi t6, t6, 0x580
 ;   add sp, t6, sp
-; block1: ; offset 0x50
+; block1: ; offset 0x58
 ;   lui t6, 0x62
 ;   addi t6, t6, -0x580
 ;   add sp, t6, sp
@@ -231,8 +233,6 @@ block0(v0: i64):
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 
 function %limit_preamble(i64 vmctx) {
     gv0 = vmctx
@@ -270,15 +270,15 @@ block0(v0: i64):
 ;   ld t6, 0(a0)
 ;   ld t6, 4(t6)
 ;   addi t6, t6, 0x20
-;   bltu sp, t6, 0x1c
+;   bgeu sp, t6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   addi sp, sp, -0x20
-; block1: ; offset 0x24
+; block1: ; offset 0x28
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 
 function %limit_preamble_huge(i64 vmctx) {
     gv0 = vmctx
@@ -321,11 +321,13 @@ block0(v0: i64):
 ;   mv s0, sp
 ;   ld t6, 0(a0)
 ;   ld t6, 4(t6)
-;   bltu sp, t6, 0x5c
+;   bgeu sp, t6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   lui t5, 0x62
 ;   addi t5, t5, -0x580
 ;   add t6, t5, t6
-;   bltu sp, t6, 0x50
+;   bgeu sp, t6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   lui a0, 0x62
 ;   addi a0, a0, -0x580
 ;   auipc t5, 0
@@ -337,7 +339,7 @@ block0(v0: i64):
 ;   lui t6, 0xfff9e
 ;   addi t6, t6, 0x580
 ;   add sp, t6, sp
-; block1: ; offset 0x58
+; block1: ; offset 0x60
 ;   lui t6, 0x62
 ;   addi t6, t6, -0x580
 ;   add sp, t6, sp
@@ -345,8 +347,6 @@ block0(v0: i64):
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 
 function %limit_preamble_huge_offset(i64 vmctx) {
     gv0 = vmctx
@@ -384,13 +384,13 @@ block0(v0: i64):
 ;   add t6, t6, a0
 ;   ld t6, 0(t6)
 ;   addi t6, t6, 0x20
-;   bltu sp, t6, 0x1c
+;   bgeu sp, t6, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 ;   addi sp, sp, -0x20
-; block1: ; offset 0x2c
+; block1: ; offset 0x30
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: stk_ovf
 

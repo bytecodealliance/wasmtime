@@ -29,9 +29,9 @@ block0(v0: i32):
 ;   srli a3, a1, 0x20
 ;   add a0, a5, a3
 ;   srli a1, a0, 0x20
-;   bnez a1, 8
-;   ret
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   ret
 
 function %f1(i32) -> i32 {
 block0(v0: i32):
@@ -61,9 +61,9 @@ block0(v0: i32):
 ;   srli a3, a1, 0x20
 ;   add a0, a5, a3
 ;   srli a1, a0, 0x20
-;   bnez a1, 8
-;   ret
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   ret
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -90,9 +90,9 @@ block0(v0: i32, v1: i32):
 ;   srli a3, a1, 0x20
 ;   add a0, a5, a3
 ;   srli a1, a0, 0x20
-;   bnez a1, 8
-;   ret
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   ret
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
@@ -119,9 +119,9 @@ block0(v0: i64):
 ;   addi a5, zero, 1
 ;   j 8
 ;   mv a5, zero
-;   bnez a5, 8
-;   ret
+;   beqz a5, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   ret
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
@@ -146,9 +146,9 @@ block0(v0: i64):
 ;   addi a5, zero, 1
 ;   j 8
 ;   mv a5, zero
-;   bnez a5, 8
-;   ret
+;   beqz a5, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   ret
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -174,7 +174,7 @@ block0(v0: i64, v1: i64):
 ;   j 8
 ;   mv a5, zero
 ;   mv a0, a1
-;   bnez a5, 8
-;   ret
+;   beqz a5, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+;   ret
 

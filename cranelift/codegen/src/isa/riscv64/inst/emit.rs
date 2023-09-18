@@ -2028,13 +2028,19 @@ impl Inst {
                 cc,
                 trap_code,
             } => {
-                let trap_label = sink.defer_trap(trap_code, state.take_stack_map());
+                let label_end = sink.get_label();
+                let cond = IntegerCompare { kind: cc, rs1, rs2 };
+
+                // Jump over the trap if we the condition is false.
                 Inst::CondBr {
-                    taken: CondBrTarget::Label(trap_label),
+                    taken: CondBrTarget::Label(label_end),
                     not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare { kind: cc, rs1, rs2 },
+                    kind: cond.inverse(),
                 }
                 .emit(&[], sink, emit_info, state);
+                Inst::Udf { trap_code }.emit(&[], sink, emit_info, state);
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
