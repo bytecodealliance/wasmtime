@@ -1,0 +1,102 @@
+name: Build and Release every tag
+on:
+  # run on every tag push
+  push:
+    tags:
+      - '*'
+defaults:
+  run:
+    shell: bash
+
+# Cancel any in-flight jobs for the same PR/branch so there's only one active
+# at a time
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
+  # of platforms and architectures and then uploads the release artifacts to
+  # this workflow run's list of artifacts.
+  build:
+    name: Build for ${{ matrix.build }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+        - build: x86_64-linux
+          os: ubuntu-latest
+        - build: x86_64-macos
+          os: macos-latest
+        - build: aarch64-macos
+          os: macos-latest
+          target: aarch64-apple-darwin
+        - build: x86_64-windows
+          os: windows-latest
+        - build: x86_64-mingw
+          os: windows-latest
+          target: x86_64-pc-windows-gnu
+        - build: aarch64-linux
+          os: ubuntu-latest
+          target: aarch64-unknown-linux-gnu
+        # - build: s390x-linux
+        #   os: ubuntu-latest
+        #   target: s390x-unknown-linux-gnu
+        # - build: riscv64gc-linux
+        #   os: ubuntu-latest
+        #   target: riscv64gc-unknown-linux-gnu
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - uses: ./.github/actions/binary-compatible-builds
+      with:
+        name: ${{ matrix.build }}
+    - run: |
+        echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+        rustup target add ${{ matrix.target }}
+      if: matrix.target != ''
+
+    # # Build `wasmtime` and executables. Note that we include some non-default
+    # # features so the # release artifacts can be maximally feature-ful.
+    # - run: $CENTOS cargo build --release --bin wasmtime --features all-arch,component-model
+
+    # Build `libwasmtime.so`
+    - run: cargo build --release --manifest-path crates/c-api/Cargo.toml
+
+    # Assemble release artifats appropriate for this platform, then upload them
+    # unconditionally to this workflow's files so we have a copy of them.
+    - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
+    - uses: actions/upload-artifact@v3
+      with:
+        name: artifacts-${{ matrix.build }}
+        path: dist
+        retention-days: 1
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+  # Create release, download the release artifacts from the `build` job and then 
+  # upload them to the tag's release on GitHub.
+  release:
+    needs: build
+    name: Release for new tag ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps: 
+      - name: Checkout
+        uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          # name: bins-${{ matrix.build }} # all artifacts
+          path: release-${{ github.ref_name }} # all artifacts
+      - name: Release
+        uses: softprops/action-gh-release@v1
+      #   if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            release-${{ github.ref_name }}/artifacts-*/wasmtime-*-c-api.tar.xz
+            release-${{ github.ref_name }}/artifacts-*/wasmtime-*-c-api.zip 

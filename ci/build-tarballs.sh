@@ -21,35 +21,25 @@ mkdir tmp
 mkdir -p dist
 
 tag=dev
-if [[ $GITHUB_REF == refs/heads/release-* ]]; then
-  tag=v$(./ci/print-current-version.sh)
+if [[ $GITHUB_REF == refs/tags/* ]]; then
+  # overwrite tag with the tag name, dropping the `refs/tags/` prefix
+  tag=$GITHUB_REF_NAME # ${GITHUB_REF#refs/tags/}
 fi
 
-bin_pkgname=wasmtime-$tag-$platform
 api_pkgname=wasmtime-$tag-$platform-c-api
 
 mkdir tmp/$api_pkgname
 mkdir tmp/$api_pkgname/lib
 mkdir tmp/$api_pkgname/include
-mkdir tmp/$bin_pkgname
 cp LICENSE README.md tmp/$api_pkgname
-cp LICENSE README.md tmp/$bin_pkgname
 cp -r crates/c-api/include tmp/$api_pkgname
 cp crates/c-api/wasm-c-api/include/wasm.h tmp/$api_pkgname/include
 
 fmt=tar
 if [ "$platform" = "x86_64-windows" ]; then
-  cp target/release/wasmtime.exe tmp/$bin_pkgname
   cp target/release/{wasmtime.dll,wasmtime.lib,wasmtime.dll.lib} tmp/$api_pkgname/lib
   fmt=zip
-
-  # Generate a `*.msi` installer for Windows as well
-  export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
-  "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj ci/wasmtime.wxs
-  "$WIX/bin/light" -out dist/$bin_pkgname.msi target/wasmtime.wixobj -ext WixUtilExtension
-  rm dist/$bin_pkgname.wixpdb
 elif [ "$platform" = "x86_64-mingw" ]; then
-  cp target/x86_64-pc-windows-gnu/release/wasmtime.exe tmp/$bin_pkgname
   cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a,libwasmtime.dll.a} tmp/$api_pkgname/lib
   fmt=zip
 elif [ "$platform" = "x86_64-macos" ]; then
@@ -57,17 +47,13 @@ elif [ "$platform" = "x86_64-macos" ]; then
   # directive than the default one that comes out of the linker when typically
   # doing `cargo build`. For more info see #984
   install_name_tool -id "@rpath/libwasmtime.dylib" target/release/libwasmtime.dylib
-  cp target/release/wasmtime tmp/$bin_pkgname
   cp target/release/libwasmtime.{a,dylib} tmp/$api_pkgname/lib
 elif [ "$platform" = "aarch64-macos" ]; then
   install_name_tool -id "@rpath/libwasmtime.dylib" target/aarch64-apple-darwin/release/libwasmtime.dylib
-  cp target/aarch64-apple-darwin/release/wasmtime tmp/$bin_pkgname
   cp target/aarch64-apple-darwin/release/libwasmtime.{a,dylib} tmp/$api_pkgname/lib
 elif [ "$target" = "" ]; then
-  cp target/release/wasmtime tmp/$bin_pkgname
   cp target/release/libwasmtime.{a,so} tmp/$api_pkgname/lib
 else
-  cp target/$target/release/wasmtime tmp/$bin_pkgname
   cp target/$target/release/libwasmtime.{a,so} tmp/$api_pkgname/lib
 fi
 
@@ -86,4 +72,3 @@ mktarball() {
 }
 
 mktarball $api_pkgname
-mktarball $bin_pkgname
