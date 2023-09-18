@@ -465,6 +465,12 @@ impl Inst {
     ) -> bool {
         let has_zca = emit_info.isa_flags.has_zca();
 
+        // Currently all compressed extensions (Zcb, Zcd, Zcmp, Zcmt, etc..) require Zca
+        // to be enabled, so check it early.
+        if !has_zca {
+            return false;
+        }
+
         fn reg_is_compressible(r: Reg) -> bool {
             r.to_real_reg()
                 .map(|r| r.hw_enc() >= 8 && r.hw_enc() < 16)
@@ -478,7 +484,7 @@ impl Inst {
                 rd,
                 rs1,
                 rs2,
-            } if has_zca && rd.to_reg() == rs1 && rs1 != zero_reg() && rs2 != zero_reg() => {
+            } if rd.to_reg() == rs1 && rs1 != zero_reg() && rs2 != zero_reg() => {
                 sink.put2(encode_cr_type(CrOp::CAdd, rd, rs2));
             }
 
@@ -488,8 +494,7 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if has_zca
-                && rd.to_reg() != rs
+            } if rd.to_reg() != rs
                 && rd.to_reg() != zero_reg()
                 && rs != zero_reg()
                 && imm12.as_i16() == 0 =>
@@ -509,11 +514,7 @@ impl Inst {
                 rd,
                 rs1,
                 rs2,
-            } if has_zca
-                && rd.to_reg() == rs1
-                && reg_is_compressible(rs1)
-                && reg_is_compressible(rs2) =>
-            {
+            } if rd.to_reg() == rs1 && reg_is_compressible(rs1) && reg_is_compressible(rs2) => {
                 let op = match alu_op {
                     AluOPRRR::And => CaOp::CAnd,
                     AluOPRRR::Or => CaOp::COr,
@@ -530,7 +531,7 @@ impl Inst {
             // c.j
             //
             // We don't have a separate JAL as that is only availabile in RV32C
-            Inst::Jal { label } if has_zca => {
+            Inst::Jal { label } => {
                 sink.use_label_at_offset(*start_off, label, LabelUse::RVCJump);
                 sink.add_uncond_branch(*start_off, *start_off + 2, label);
                 sink.put2(encode_cj_type(CjOp::CJ, Imm12::ZERO));
@@ -538,26 +539,20 @@ impl Inst {
 
             // c.jr
             Inst::Jalr { rd, base, offset }
-                if has_zca
-                    && rd.to_reg() == zero_reg()
-                    && base != zero_reg()
-                    && offset.as_i16() == 0 =>
+                if rd.to_reg() == zero_reg() && base != zero_reg() && offset.as_i16() == 0 =>
             {
                 sink.put2(encode_cr2_type(CrOp::CJr, base));
             }
 
             // c.jalr
             Inst::Jalr { rd, base, offset }
-                if has_zca
-                    && rd.to_reg() == link_reg()
-                    && base != zero_reg()
-                    && offset.as_i16() == 0 =>
+                if rd.to_reg() == link_reg() && base != zero_reg() && offset.as_i16() == 0 =>
             {
                 sink.put2(encode_cr2_type(CrOp::CJalr, base));
             }
 
             // c.ebreak
-            Inst::EBreak if has_zca => {
+            Inst::EBreak => {
                 sink.put2(encode_cr_type(
                     CrOp::CEbreak,
                     writable_zero_reg(),
@@ -566,7 +561,7 @@ impl Inst {
             }
 
             // c.unimp
-            Inst::Udf { trap_code } if has_zca => {
+            Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
@@ -586,8 +581,7 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if has_zca
-                && rd.to_reg() == rs
+            } if rd.to_reg() == rs
                 && rs == stack_reg()
                 && imm12.as_i16() != 0
                 && (imm12.as_i16() % 16) == 0
@@ -609,8 +603,7 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if has_zca
-                && reg_is_compressible(rd.to_reg())
+            } if reg_is_compressible(rd.to_reg())
                 && rs == stack_reg()
                 && imm12.as_i16() != 0
                 && (imm12.as_i16() % 4) == 0
@@ -626,8 +619,7 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if has_zca
-                && rd.to_reg() == rs
+            } if rd.to_reg() == rs
                 && rs != zero_reg()
                 && imm12.as_i16() != 0
                 && Imm6::maybe_from_imm12(imm12).is_some() =>
@@ -642,8 +634,7 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if has_zca
-                && rd.to_reg() == rs
+            } if rd.to_reg() == rs
                 && rs != zero_reg()
                 && Imm6::maybe_from_imm12(imm12).is_some() =>
             {
@@ -657,7 +648,7 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if has_zca && rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
+            } if rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
                 // The shift amount is unsigned, but we encode it as signed.
                 let shift = imm12.as_i16() & 0x3f;
                 let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
