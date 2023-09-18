@@ -2503,7 +2503,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(r);
         }
 
-        Operator::I31New | Operator::I31GetS | Operator::I31GetU => {
+        Operator::RefI31 | Operator::I31GetS | Operator::I31GetU => {
             unimplemented!("GC operators not yet implemented")
         }
     };
