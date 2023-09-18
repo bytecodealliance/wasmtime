@@ -3,12 +3,13 @@
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
+use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{self, ir, MachReloc};
+use cranelift_codegen::{self, ir, FinalizedMachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
-    ModuleExtName, ModuleReloc, ModuleResult,
+    ModuleReloc, ModuleRelocTarget, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -17,6 +18,7 @@ use object::write::{
 use object::{
     RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::mem;
 use target_lexicon::PointerWidth;
@@ -130,6 +132,7 @@ pub struct ObjectModule {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
+    known_labels: HashMap<(UserFuncName, CodeOffset), SymbolId>,
     per_function_section: bool,
 }
 
@@ -149,6 +152,7 @@ impl ObjectModule {
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
             known_symbols: HashMap::new(),
+            known_labels: HashMap::new(),
             per_function_section: builder.per_function_section,
         }
     }
@@ -333,21 +337,18 @@ impl Module for ObjectModule {
         func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[MachReloc],
+        relocs: &[FinalizedMachReloc],
     ) -> ModuleResult<()> {
         info!("defining function {} with bytes", func_id);
         let decl = self.declarations.get_function_decl(func_id);
+        let decl_name = decl.linkage_name(func_id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(
-                decl.linkage_name(func_id).into_owned(),
-            ));
+            return Err(ModuleError::InvalidImportDefinition(decl_name.into_owned()));
         }
 
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(
-                decl.linkage_name(func_id).into_owned(),
-            ));
+            return Err(ModuleError::DuplicateDefinition(decl_name.into_owned()));
         }
         *defined = true;
 
@@ -528,9 +529,9 @@ impl ObjectModule {
 
     /// This should only be called during finish because it creates
     /// symbols for missing libcalls.
-    fn get_symbol(&mut self, name: &ModuleExtName) -> SymbolId {
+    fn get_symbol(&mut self, name: &ModuleRelocTarget) -> SymbolId {
         match *name {
-            ModuleExtName::User { .. } => {
+            ModuleRelocTarget::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let id = FuncId::from_name(name);
                     self.functions[id].unwrap().0
@@ -539,7 +540,7 @@ impl ObjectModule {
                     self.data_objects[id].unwrap().0
                 }
             }
-            ModuleExtName::LibCall(ref libcall) => {
+            ModuleRelocTarget::LibCall(ref libcall) => {
                 let name = (self.libcall_names)(*libcall);
                 if let Some(symbol) = self.object.symbol_id(name.as_bytes()) {
                     symbol
@@ -562,7 +563,7 @@ impl ObjectModule {
             }
             // These are "magic" names well-known to the linker.
             // They require special treatment.
-            ModuleExtName::KnownSymbol(ref known_symbol) => {
+            ModuleRelocTarget::KnownSymbol(ref known_symbol) => {
                 if let Some(symbol) = self.known_symbols.get(known_symbol) {
                     *symbol
                 } else {
@@ -590,6 +591,36 @@ impl ObjectModule {
                     });
                     self.known_symbols.insert(*known_symbol, symbol);
                     symbol
+                }
+            }
+
+            ModuleRelocTarget::FunctionOffset(ref fname, offset) => {
+                match self.known_labels.entry((fname.clone(), offset)) {
+                    Entry::Occupied(o) => *o.get(),
+                    Entry::Vacant(v) => {
+                        let func_user_name = fname.get_user().unwrap();
+                        let func_id = FuncId::from_name(&ModuleRelocTarget::user(
+                            func_user_name.namespace,
+                            func_user_name.index,
+                        ));
+                        let func_symbol_id = self.functions[func_id].unwrap().0;
+                        let func_symbol = self.object.symbol(func_symbol_id);
+
+                        let name = format!(".L{}_{}", func_id.as_u32(), offset);
+                        let symbol_id = self.object.add_symbol(Symbol {
+                            name: name.as_bytes().to_vec(),
+                            value: func_symbol.value + offset as u64,
+                            size: 0,
+                            kind: SymbolKind::Label,
+                            scope: SymbolScope::Compilation,
+                            weak: false,
+                            section: SymbolSection::Section(func_symbol.section.id().unwrap()),
+                            flags: SymbolFlags::None,
+                        });
+
+                        v.insert(symbol_id);
+                        symbol_id
+                    }
                 }
             }
         }
@@ -776,6 +807,30 @@ impl ObjectModule {
                     0,
                 )
             }
+            Reloc::RiscvTlsGdHi20 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvTlsGdHi20 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_TLS_GD_HI20),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
+            Reloc::RiscvPCRelLo12I => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvPCRelLo12I is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_PCREL_LO12_I),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };
@@ -846,7 +901,7 @@ struct SymbolRelocs {
 #[derive(Clone)]
 struct ObjectRelocRecord {
     offset: CodeOffset,
-    name: ModuleExtName,
+    name: ModuleRelocTarget,
     kind: RelocationKind,
     encoding: RelocationEncoding,
     size: u8,

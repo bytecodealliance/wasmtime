@@ -1,0 +1,58 @@
+test compile precise-output
+set tls_model=elf_gd
+target riscv64
+
+function u0:0(i32) -> i32, i64 {
+gv0 = symbol colocated tls u1:0
+
+block0(v0: i32):
+    v1 = global_value.i64 gv0
+    return v0, v1
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s1,-8(sp)
+;   add sp,-16
+; block0:
+;   mv s1,a0
+;   elf_tls_get_addr a0,userextname0
+;   mv a1,a0
+;   mv a0,s1
+;   add sp,+16
+;   ld s1,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s1, -8(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x18
+;   mv s1, a0
+;   auipc a0, 0 ; reloc_external RiscvTlsGdHi20 u1:0 0
+;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+28 0
+;   auipc t5, 0
+;   ld t5, 0xc(t5)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %ElfTlsGetAddr 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr t5
+;   mv a1, a0
+;   mv a0, s1
+;   addi sp, sp, 0x10
+;   ld s1, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
