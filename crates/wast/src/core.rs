@@ -65,19 +65,19 @@ pub fn match_val(actual: &Val, expected: &WastRetCore) -> Result<()> {
                 Ok(())
             }
         }
-        (Val::ExternRef(x), WastRetCore::RefExtern(y)) => {
-            if let Some(x) = x {
-                let x = x
-                    .data()
-                    .downcast_ref::<u32>()
-                    .expect("only u32 externrefs created in wast test suites");
-                if x == y {
-                    Ok(())
-                } else {
-                    bail!("expected {} found {}", y, x);
-                }
+        (Val::ExternRef(_), WastRetCore::RefExtern(None)) => Ok(()),
+        (Val::ExternRef(None), WastRetCore::RefExtern(Some(_))) => {
+            bail!("expected non-null externref, found null")
+        }
+        (Val::ExternRef(Some(x)), WastRetCore::RefExtern(Some(y))) => {
+            let x = x
+                .data()
+                .downcast_ref::<u32>()
+                .expect("only u32 externrefs created in wast test suites");
+            if x == y {
+                Ok(())
             } else {
-                bail!("expected non-null externref, found null")
+                bail!("expected {} found {}", y, x);
             }
         }
         (Val::FuncRef(actual), WastRetCore::RefNull(expected)) => match (actual, expected) {

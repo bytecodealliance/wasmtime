@@ -1,6 +1,6 @@
 (module
   (func $main (local i32)
-    (set_local 0 (i32.const 0))
+    (local.set 0 (i32.const 0))
     (drop (call $inc))
   )
   (func $inc (result i32)
