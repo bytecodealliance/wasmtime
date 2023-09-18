@@ -5,6 +5,7 @@ use crate::bindings::http::types::{
     IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
+use crate::body::HostFutureTrailers;
 use crate::WasiHttpView;
 use crate::{
     body::HostIncomingBody,
@@ -271,23 +272,61 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         }
     }
     async fn drop_future_trailers(&mut self, id: FutureTrailers) -> wasmtime::Result<()> {
-        todo!()
+        let _ = self.table().delete_future_trailers(id)?;
+        Ok(())
     }
 
     async fn future_trailers_subscribe(
         &mut self,
-        id: FutureTrailers,
+        index: FutureTrailers,
     ) -> wasmtime::Result<Pollable> {
-        let trailers = self.table().get_future_trailers(id)?;
-        todo!()
+        // Eagerly force errors about the validity of the index.
+        let _ = self.table().get_future_trailers(index)?;
+
+        fn make_future(elem: &mut dyn Any) -> PollableFuture {
+            Box::pin(elem.downcast_mut::<HostFutureTrailers>().unwrap().ready())
+        }
+
+        let id = self
+            .table()
+            .push_host_pollable(HostPollable::TableEntry { index, make_future })?;
+
+        Ok(id)
     }
+
     async fn future_trailers_get(
         &mut self,
         id: FutureTrailers,
     ) -> wasmtime::Result<Option<Result<Trailers, Error>>> {
         let trailers = self.table().get_future_trailers(id)?;
-        todo!()
+
+        if trailers.received.is_none() {
+            return Ok(None);
+        }
+
+        let res = trailers.received.as_mut().unwrap();
+        if let Err(e) = res {
+            return Ok(Some(Err(e.clone())));
+        }
+
+        let hdrs = match res.unwrap() {
+            HeadersRef::Resource(id) => return Ok(Some(Ok(id))),
+            HeadersRef::Value(ref mut hdrs) => std::mem::take(hdrs),
+        };
+
+        drop(res);
+        drop(trailers);
+
+        let hdrs = self.table().push_fields(HostFields::from(hdrs))?;
+
+        self.table()
+            .get_future_trailers(id)?
+            .received
+            .replace(Ok(HeadersRef::Resource(hdrs)));
+
+        Ok(Some(Ok(hdrs)))
     }
+
     async fn new_outgoing_response(
         &mut self,
         _status_code: StatusCode,
@@ -376,7 +415,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
     async fn incoming_body_finish(&mut self, id: IncomingBody) -> wasmtime::Result<FutureTrailers> {
         let body = self.table().delete_incoming_body(id)?;
-        let trailers = self.table().push_future_trailers(body.into_future_trailers())?;
+        let trailers = self
+            .table()
+            .push_future_trailers(body.into_future_trailers())?;
         Ok(trailers)
     }
 

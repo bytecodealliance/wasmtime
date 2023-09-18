@@ -1,4 +1,4 @@
-use crate::bindings::http::types::{self, Headers, Method, Scheme};
+use crate::bindings::http::types::{self, Headers, HeadersRef, Method, Scheme};
 use bytes::Bytes;
 use std::{pin, task};
 use tokio::sync::{mpsc, oneshot};
@@ -200,7 +200,7 @@ impl HostIncomingBody {
 
 pub struct HostFutureTrailers {
     pub worker: AbortOnDropJoinHandle<()>,
-    pub received: Option<Result<hyper::HeaderMap, types::Error>>,
+    pub received: Option<Result<HeadersRef, types::Error>>,
     pub receiver: oneshot::Receiver<Result<hyper::HeaderMap, hyper::Error>>,
 }
 
