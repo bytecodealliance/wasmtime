@@ -272,7 +272,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         }
     }
     async fn drop_future_trailers(&mut self, id: FutureTrailers) -> wasmtime::Result<()> {
-        let _ = self.table().delete_future_trailers(id)?;
+        self.table()
+            .delete_future_trailers(id)
+            .context("[drop future-trailers] deleting future-trailers")?;
         Ok(())
     }
 
