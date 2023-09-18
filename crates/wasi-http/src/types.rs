@@ -31,19 +31,6 @@ pub struct HostOutgoingRequest {
     pub body: Option<AsyncReadStream>,
 }
 
-// TODO:
-//
-// 1. HostIncomingBody needs a new method to spawn a task and return two things:
-//   a. a channel that streams `Bytes` out for the response body
-//   b. a one-shot channel that writes the trailer fields out
-// 2. In incoming_response_consume, we need to consume channel 1.a, sticking it in the table as
-//    something that implementes HostInputStream
-// 3. In either of the trailers methods, we need to consume 1.b and decide the return value based
-//    on its state.
-//
-// The method defined in 1 needs to be called in both 2 and 3 if either encounter the unspawned
-// task state.
-
 pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: FieldMap,
