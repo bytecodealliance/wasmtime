@@ -92,28 +92,6 @@ impl<T, E> TrappingUnwrap<T> for Result<T, E> {
     }
 }
 
-trait TrappingUnwrapRef<T> {
-    fn trapping_unwrap_ref(&self) -> &T;
-}
-
-impl<T> TrappingUnwrapRef<T> for Option<T> {
-    fn trapping_unwrap_ref(&self) -> &T {
-        match self {
-            Some(t) => t,
-            None => unreachable!(),
-        }
-    }
-}
-
-impl<T, E> TrappingUnwrapRef<T> for Result<T, E> {
-    fn trapping_unwrap_ref(&self) -> &T {
-        match self {
-            Ok(t) => t,
-            Err(_) => unreachable!(),
-        }
-    }
-}
-
 #[no_mangle]
 pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,

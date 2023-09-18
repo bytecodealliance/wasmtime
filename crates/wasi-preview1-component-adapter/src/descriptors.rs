@@ -4,9 +4,7 @@ use crate::bindings::wasi::cli::{
 use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
 use crate::bindings::wasi::sockets::tcp;
-use crate::{
-    BlockingMode, BumpArena, File, ImportAlloc, TrappingUnwrap, TrappingUnwrapRef, WasmStr,
-};
+use crate::{BlockingMode, BumpArena, File, ImportAlloc, TrappingUnwrap, WasmStr};
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
 use wasi::{Errno, Fd};
@@ -60,7 +58,7 @@ impl Streams {
                 };
                 unsafe {
                     *self.input.get() = Some(input);
-                    Ok((*self.input.get()).trapping_unwrap_ref())
+                    Ok((*self.input.get()).as_ref().trapping_unwrap())
                 }
             }
         }
@@ -92,7 +90,7 @@ impl Streams {
                 };
                 unsafe {
                     *self.output.get() = Some(output);
-                    Ok((*self.output.get()).trapping_unwrap_ref())
+                    Ok((*self.output.get()).as_ref().trapping_unwrap())
                 }
             }
         }
