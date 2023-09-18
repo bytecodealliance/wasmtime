@@ -174,6 +174,15 @@ impl Table {
         }
     }
 
+    /// Get a mutable reference to the underlying untyped cell for an entry in the table.
+    pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, TableError> {
+        if let Some(r) = self.map.get_mut(&key) {
+            Ok(&mut *r.entry)
+        } else {
+            Err(TableError::NotPresent)
+        }
+    }
+
     /// Get an immutable reference to a resource of a given type at a given index. Multiple
     /// immutable references can be borrowed at any given time. Borrow failure
     /// results in a trapping error.
@@ -203,7 +212,7 @@ impl Table {
     /// remove or replace the entry based on its contents. The methods available are a subset of
     /// [`std::collections::hash_map::OccupiedEntry`] - it does not give access to the key, it
     /// restricts replacing the entry to items of the same type, and it does not allow for deletion.
-    pub fn entry(&mut self, index: u32) -> Result<OccupiedEntry, TableError> {
+    pub fn entry<'a>(&'a mut self, index: u32) -> Result<OccupiedEntry<'a>, TableError> {
         if self.map.contains_key(&index) {
             Ok(OccupiedEntry { table: self, index })
         } else {

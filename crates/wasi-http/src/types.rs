@@ -2,13 +2,15 @@
 //! implementation of the wasi-http API.
 
 use crate::{
-    bindings::http::types::{Headers, IncomingBody, Method, Scheme, FutureTrailers},
-    body::{HostIncomingBody, HostFutureTrailers},
+    bindings::http::types::{FutureTrailers, Headers, IncomingBody, Method, Scheme},
+    body::{HostFutureTrailers, HostIncomingBody},
 };
-use std::collections::HashMap;
 use std::pin::Pin;
 use std::task;
-use wasmtime_wasi::preview2::{pipe::AsyncReadStream, AbortOnDropJoinHandle, Table, TableError};
+use std::{any::Any, collections::HashMap};
+use wasmtime_wasi::preview2::{
+    pipe::AsyncReadStream, AbortOnDropJoinHandle, OccupiedEntry, Table, TableError,
+};
 
 const MAX_BUF_SIZE: usize = 65_536;
 
@@ -20,14 +22,12 @@ pub trait WasiHttpView: Send {
     fn table(&mut self) -> &mut Table;
 }
 
-pub type FieldsMap = HashMap<String, Vec<Vec<u8>>>;
-
 pub struct HostOutgoingRequest {
     pub method: Method,
     pub scheme: Option<Scheme>,
     pub path_with_query: String,
     pub authority: String,
-    pub headers: HostFields,
+    pub headers: FieldMap,
     pub body: Option<AsyncReadStream>,
 }
 
@@ -46,26 +46,15 @@ pub struct HostOutgoingRequest {
 
 pub struct HostIncomingResponse {
     pub status: u16,
-    pub headers: HeadersRef,
+    pub headers: FieldMap,
     pub body: Option<hyper::body::Incoming>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
 
-pub enum HeadersRef {
-    Value(hyper::HeaderMap),
-    Resource(Headers),
-}
+#[derive(Clone)]
+pub struct FieldMap(pub HashMap<String, Vec<Vec<u8>>>);
 
-#[derive(Clone, Debug)]
-pub struct HostFields(pub HashMap<String, Vec<Vec<u8>>>);
-
-impl HostFields {
-    pub fn new() -> Self {
-        Self(FieldsMap::new())
-    }
-}
-
-impl From<hyper::HeaderMap> for HostFields {
+impl From<hyper::HeaderMap> for FieldMap {
     fn from(headers: hyper::HeaderMap) -> Self {
         use std::collections::hash_map::Entry;
 
@@ -83,6 +72,21 @@ impl From<hyper::HeaderMap> for HostFields {
 
         Self(res)
     }
+}
+
+pub enum HostFields {
+    Ref {
+        parent: u32,
+
+        // NOTE: there's not failure in the result here because we assume that HostFields will
+        // always be registered as a child of the entry with the `parent` id. This ensures that the
+        // entry will always exist while this `HostFields::Ref` entry exists in the table, thus we
+        // don't need to account for failure when fetching the fields ref from the parent.
+        get_fields: for<'a> fn(elem: &'a mut (dyn Any + 'static)) -> &'a mut FieldMap,
+    },
+    Owned {
+        fields: FieldMap,
+    },
 }
 
 pub struct IncomingResponseInternal {
@@ -153,8 +157,7 @@ pub trait TableHttpExt {
     fn delete_incoming_response(&mut self, id: u32) -> Result<HostIncomingResponse, TableError>;
 
     fn push_fields(&mut self, fields: HostFields) -> Result<u32, TableError>;
-    fn get_fields(&self, id: u32) -> Result<&HostFields, TableError>;
-    fn get_fields_mut(&mut self, id: u32) -> Result<&mut HostFields, TableError>;
+    fn get_fields(&mut self, id: u32) -> Result<&mut FieldMap, TableError>;
     fn delete_fields(&mut self, id: u32) -> Result<HostFields, TableError>;
 
     fn push_future_incoming_response(
@@ -178,9 +181,18 @@ pub trait TableHttpExt {
     fn get_incoming_body(&mut self, id: IncomingBody) -> Result<&mut HostIncomingBody, TableError>;
     fn delete_incoming_body(&mut self, id: IncomingBody) -> Result<HostIncomingBody, TableError>;
 
-    fn push_future_trailers(&mut self, trailers: HostFutureTrailers) -> Result<FutureTrailers, TableError>;
-    fn get_future_trailers(&mut self, id: FutureTrailers) -> Result<&mut HostFutureTrailers, TableError>;
-    fn delete_future_trailers(&mut self, id: FutureTrailers) -> Result<HostFutureTrailers, TableError>;
+    fn push_future_trailers(
+        &mut self,
+        trailers: HostFutureTrailers,
+    ) -> Result<FutureTrailers, TableError>;
+    fn get_future_trailers(
+        &mut self,
+        id: FutureTrailers,
+    ) -> Result<&mut HostFutureTrailers, TableError>;
+    fn delete_future_trailers(
+        &mut self,
+        id: FutureTrailers,
+    ) -> Result<HostFutureTrailers, TableError>;
 }
 
 #[async_trait::async_trait]
@@ -223,13 +235,21 @@ impl TableHttpExt for Table {
     }
 
     fn push_fields(&mut self, fields: HostFields) -> Result<u32, TableError> {
-        self.push(Box::new(fields))
+        match fields {
+            HostFields::Ref { parent, .. } => self.push_child(Box::new(fields), parent),
+            HostFields::Owned { .. } => self.push(Box::new(fields)),
+        }
     }
-    fn get_fields(&self, id: u32) -> Result<&HostFields, TableError> {
-        self.get::<HostFields>(id)
-    }
-    fn get_fields_mut(&mut self, id: u32) -> Result<&mut HostFields, TableError> {
-        self.get_mut::<HostFields>(id)
+    fn get_fields(&mut self, id: u32) -> Result<&mut FieldMap, TableError> {
+        match self.get_mut::<HostFields>(id)? {
+            HostFields::Ref { parent, get_fields } => {
+                let parent = *parent;
+                let get_fields = *get_fields;
+                let entry = self.get_any_mut(parent)?;
+                Ok(get_fields(entry))
+            }
+            HostFields::Owned { fields } => Ok(fields),
+        }
     }
     fn delete_fields(&mut self, id: u32) -> Result<HostFields, TableError> {
         let fields = self.delete::<HostFields>(id)?;
@@ -273,15 +293,24 @@ impl TableHttpExt for Table {
         self.delete(id)
     }
 
-    fn push_future_trailers(&mut self, trailers: HostFutureTrailers) -> Result<FutureTrailers, TableError> {
+    fn push_future_trailers(
+        &mut self,
+        trailers: HostFutureTrailers,
+    ) -> Result<FutureTrailers, TableError> {
         self.push(Box::new(trailers))
     }
 
-    fn get_future_trailers(&mut self, id: FutureTrailers) -> Result<&mut HostFutureTrailers, TableError> {
+    fn get_future_trailers(
+        &mut self,
+        id: FutureTrailers,
+    ) -> Result<&mut HostFutureTrailers, TableError> {
         self.get_mut(id)
     }
 
-    fn delete_future_trailers(&mut self, id: FutureTrailers) -> Result<HostFutureTrailers, TableError> {
+    fn delete_future_trailers(
+        &mut self,
+        id: FutureTrailers,
+    ) -> Result<HostFutureTrailers, TableError> {
         self.delete(id)
     }
 }

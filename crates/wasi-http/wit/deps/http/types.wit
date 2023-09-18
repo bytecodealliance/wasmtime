@@ -90,7 +90,7 @@ interface types {
     path-with-query: option<string>,
     scheme: option<scheme>,
     authority: option<string>,
-    headers: /* own */ headers
+    headers: /* borrow */ headers
   ) -> outgoing-request
 
   // Will return the outgoing-body child at most once. If called more than
@@ -169,7 +169,7 @@ interface types {
   drop-outgoing-response: func(response: /* own */ outgoing-response)
   new-outgoing-response: func(
     status-code: status-code,
-    headers: /* own */ headers
+    headers: /* borrow */ headers
   ) -> outgoing-response
 
   /// Will give the child outgoing-response at most once. subsequent calls will

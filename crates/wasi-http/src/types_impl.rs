@@ -6,12 +6,13 @@ use crate::bindings::http::types::{
     Scheme, StatusCode, Trailers,
 };
 use crate::body::HostFutureTrailers;
+use crate::types::FieldMap;
 use crate::WasiHttpView;
 use crate::{
     body::HostIncomingBody,
     types::{
-        HeadersRef, HostFields, HostFutureIncomingResponse, HostIncomingResponse,
-        HostOutgoingRequest, TableHttpExt,
+        HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest,
+        TableHttpExt,
     },
 };
 use anyhow::{anyhow, bail, Context};
@@ -31,14 +32,24 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(())
     }
     async fn new_fields(&mut self, entries: Vec<(String, Vec<u8>)>) -> wasmtime::Result<Fields> {
-        let mut map = HostFields::new();
+        use std::collections::{hash_map::Entry, HashMap};
+
+        let mut map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
+
         for (key, value) in entries {
-            map.0.insert(key, vec![value.clone()]);
+            match map.entry(key) {
+                Entry::Occupied(mut entry) => entry.get_mut().push(value),
+                Entry::Vacant(entry) => {
+                    entry.insert(vec![value]);
+                }
+            }
         }
 
         let id = self
             .table()
-            .push_fields(map)
+            .push_fields(HostFields::Owned {
+                fields: FieldMap(map),
+            })
             .context("[new_fields] pushing fields")?;
         Ok(id)
     }
@@ -59,12 +70,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         name: String,
         value: Vec<Vec<u8>>,
     ) -> wasmtime::Result<()> {
-        let m = self.table().get_fields_mut(fields)?;
+        let m = self.table().get_fields(fields)?;
         m.0.insert(name, value.clone());
         Ok(())
     }
     async fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
-        let m = self.table().get_fields_mut(fields)?;
+        let m = self.table().get_fields(fields)?;
         m.0.remove(&name);
         Ok(())
     }
@@ -76,7 +87,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     ) -> wasmtime::Result<()> {
         let m = self
             .table()
-            .get_fields_mut(fields)
+            .get_fields(fields)
             .context("[fields_append] getting mutable fields")?;
         match m.0.get_mut(&name) {
             Some(v) => v.push(value),
@@ -99,12 +110,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(result)
     }
     async fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields> {
-        let table = self.table();
-        let m = table
+        let fields = self
+            .table()
             .get_fields(fields)
-            .context("[fields_clone] getting fields")?;
-        let id = table
-            .push_fields(m.clone())
+            .context("[fields_clone] getting fields")?
+            .clone();
+        let id = self
+            .table()
+            .push_fields(HostFields::Owned { fields })
             .context("[fields_clone] pushing fields")?;
         Ok(id)
     }
@@ -159,8 +172,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         authority: Option<String>,
         headers: Headers,
     ) -> wasmtime::Result<OutgoingRequest> {
-        // We're taking ownership of the header data, so remove it from the table.
-        let headers = self.table().delete_fields(headers)?;
+        let headers = self.table().get_fields(headers)?.clone();
+
         let req = HostOutgoingRequest {
             path_with_query: path_with_query.unwrap_or("".to_string()),
             authority: authority.unwrap_or("".to_string()),
@@ -237,18 +250,19 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Headers> {
-        let r = self
+        let _ = self
             .table()
             .get_incoming_response_mut(response)
             .context("[incoming_response_headers] getting response")?;
 
-        let hdrs = match r.headers {
-            HeadersRef::Value(ref mut hdrs) => std::mem::take(hdrs),
-            HeadersRef::Resource(id) => return Ok(id),
-        };
+        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
+            &mut elem.downcast_mut::<HostIncomingResponse>().unwrap().headers
+        }
 
-        let id = self.table().push_fields(HostFields::from(hdrs))?;
-        self.table().get_incoming_response_mut(response)?.headers = HeadersRef::Resource(id);
+        let id = self.table().push_fields(HostFields::Ref {
+            parent: response,
+            get_fields,
+        })?;
         Ok(id)
     }
     async fn incoming_response_consume(
@@ -311,20 +325,18 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             return Ok(Some(Err(e.clone())));
         }
 
-        let hdrs = match res.unwrap() {
-            HeadersRef::Resource(id) => return Ok(Some(Ok(id))),
-            HeadersRef::Value(ref mut hdrs) => std::mem::take(hdrs),
-        };
-
         drop(res);
         drop(trailers);
 
-        let hdrs = self.table().push_fields(HostFields::from(hdrs))?;
+        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
+            let trailers = elem.downcast_mut::<HostFutureTrailers>().unwrap();
+            trailers.received.as_mut().unwrap().as_mut().unwrap()
+        }
 
-        self.table()
-            .get_future_trailers(id)?
-            .received
-            .replace(Ok(HeadersRef::Resource(hdrs)));
+        let hdrs = self.table().push_fields(HostFields::Ref {
+            parent: id,
+            get_fields,
+        })?;
 
         Ok(Some(Ok(hdrs)))
     }
@@ -373,7 +385,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         let resp = self.table().push_incoming_response(HostIncomingResponse {
             status: parts.status.as_u16(),
-            headers: HeadersRef::Value(parts.headers),
+            headers: FieldMap::from(parts.headers),
             body: Some(body),
             worker: resp.worker,
         })?;

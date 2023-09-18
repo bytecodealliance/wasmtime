@@ -1,4 +1,7 @@
-use crate::bindings::http::types::{self, Headers, HeadersRef, Method, Scheme};
+use crate::{
+    bindings::http::types,
+    types::FieldMap,
+};
 use bytes::Bytes;
 use std::{pin, task};
 use tokio::sync::{mpsc, oneshot};
@@ -200,7 +203,7 @@ impl HostIncomingBody {
 
 pub struct HostFutureTrailers {
     pub worker: AbortOnDropJoinHandle<()>,
-    pub received: Option<Result<HeadersRef, types::Error>>,
+    pub received: Option<Result<FieldMap, types::Error>>,
     pub receiver: oneshot::Receiver<Result<hyper::HeaderMap, hyper::Error>>,
 }
 
@@ -221,7 +224,9 @@ impl HostFutureTrailers {
                 }
 
                 match Pin::new(&mut self.0.receiver).poll(cx) {
-                    Poll::Ready(Ok(Ok(headers))) => self.0.received = Some(Ok(headers)),
+                    Poll::Ready(Ok(Ok(headers))) => {
+                        self.0.received = Some(Ok(FieldMap::from(headers)))
+                    }
 
                     Poll::Ready(Ok(Err(e))) => {
                         self.0.received = Some(Err(types::Error::ProtocolError(format!(
