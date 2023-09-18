@@ -234,7 +234,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         &mut self,
         _response: OutgoingResponse,
     ) -> wasmtime::Result<()> {
-        bail!("unimplemented: drop_outgoing_response")
+        todo!("we haven't implemented the server side of wasi-http yet")
     }
     async fn incoming_response_status(
         &mut self,
