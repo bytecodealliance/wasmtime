@@ -1607,7 +1607,7 @@ impl Drop for Pollables {
     fn drop(&mut self) {
         for i in 0..self.length {
             unsafe {
-                drop(self.pointer.add(i).read());
+                core::ptr::drop_in_place(self.pointer.add(i));
             }
         }
     }
