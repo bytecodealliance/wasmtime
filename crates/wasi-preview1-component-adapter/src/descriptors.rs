@@ -430,7 +430,7 @@ impl Descriptors {
 #[repr(C)]
 pub struct Preopen {
     /// This is `MaybeUninit` because we take ownership of the `Descriptor` to
-    /// put it in or own table.
+    /// put it in our own table.
     pub descriptor: MaybeUninit<filesystem::Descriptor>,
     pub path: WasmStr,
 }

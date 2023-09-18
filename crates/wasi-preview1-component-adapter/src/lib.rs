@@ -441,7 +441,7 @@ pub unsafe extern "C" fn fd_allocate(fd: Fd, offset: Filesize, len: Filesize) ->
 /// Note: This is similar to `close` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
-    State::with_mut(|state| {
+    State::with(|state| {
         // If there's a dirent cache entry for this file descriptor then drop
         // it since the descriptor is being closed and future calls to
         // `fd_readdir` should return an error.
@@ -598,7 +598,7 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
         return wasi::ERRNO_INVAL;
     }
 
-    State::with_mut(|state| {
+    State::with(|state| {
         let mut ds = state.descriptors_mut();
         let file = match ds.get_mut(fd)? {
             Descriptor::Streams(Streams {
@@ -1158,7 +1158,7 @@ pub unsafe extern "C" fn fd_readdir(
 /// would disappear if `dup2()` were to be removed entirely.
 #[no_mangle]
 pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
-    State::with_mut(|state| state.descriptors_mut().renumber(fd, to))
+    State::with(|state| state.descriptors_mut().renumber(fd, to))
 }
 
 /// Move the offset of a file descriptor.
@@ -1429,7 +1429,7 @@ pub unsafe extern "C" fn path_open(
     let mode = filesystem::Modes::READABLE | filesystem::Modes::WRITABLE;
     let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
-    State::with_mut(|state| {
+    State::with(|state| {
         let mut ds = state.descriptors_mut();
         let file = ds.get_dir(fd)?;
         let result = file.fd.open_at(at_flags, path, o_flags, flags, mode)?;
@@ -2387,17 +2387,6 @@ impl State {
         }
     }
 
-    fn with_mut(f: impl FnOnce(&mut State) -> Result<(), Errno>) -> Errno {
-        let state_ref = unsafe { &mut *State::ptr().get() };
-        assert_eq!(state_ref.magic1, MAGIC);
-        assert_eq!(state_ref.magic2, MAGIC);
-        let ret = f(state_ref);
-        match ret {
-            Ok(()) => ERRNO_SUCCESS,
-            Err(err) => err,
-        }
-    }
-
     fn ptr() -> &'static UnsafeCell<State> {
         unsafe {
             let mut ptr = get_state_ptr();
@@ -2482,7 +2471,7 @@ impl State {
         }
     }
 
-    fn descriptors_mut(&mut self) -> &mut Descriptors {
+    fn descriptors_mut(&self) -> &mut Descriptors {
         let descriptors: &mut Option<Descriptors> = unsafe { &mut *self.descriptors.get() };
         match descriptors {
             None => {
