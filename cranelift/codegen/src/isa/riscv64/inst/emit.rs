@@ -619,12 +619,12 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if rd.to_reg() == rs
-                && rs != zero_reg()
-                && imm12.as_i16() != 0
-                && Imm6::maybe_from_imm12(imm12).is_some() =>
-            {
-                let imm6 = Imm6::maybe_from_imm12(imm12).unwrap();
+            } if rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
+                let imm6 = match Imm6::maybe_from_imm12(imm12) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
+
                 sink.put2(encode_ci_type(CiOp::CAddi, rd, imm6));
             }
 
@@ -634,11 +634,11 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if rd.to_reg() == rs
-                && rs != zero_reg()
-                && Imm6::maybe_from_imm12(imm12).is_some() =>
-            {
-                let imm6 = Imm6::maybe_from_imm12(imm12).unwrap();
+            } if rd.to_reg() == rs && rs != zero_reg() => {
+                let imm6 = match Imm6::maybe_from_imm12(imm12) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
                 sink.put2(encode_ci_type(CiOp::CAddiw, rd, imm6));
             }
 
