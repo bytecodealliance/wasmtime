@@ -89,12 +89,7 @@ async fn run(name: &str) -> anyhow::Result<()> {
 
         let (mut store, command) =
             instantiate_component(component, Ctx { table, wasi, http }).await?;
-        command
-            .wasi_cli_run()
-            .call_run(&mut store)
-            .await?
-            .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
-        Ok(())
+        command.wasi_cli_run().call_run(&mut store).await
     };
     r.map_err(move |trap: anyhow::Error| {
         let stdout = stdout.try_into_inner().expect("single ref to stdout");
@@ -109,7 +104,8 @@ async fn run(name: &str) -> anyhow::Result<()> {
             "error while testing wasi-tests {} with http-components",
             name
         ))
-    })?;
+    })?
+    .map_err(|()| anyhow::anyhow!("run returned an error"))?;
     Ok(())
 }
 
