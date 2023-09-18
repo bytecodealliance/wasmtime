@@ -314,7 +314,7 @@ mod tests {
             "
                 (module
                     (func $small2 (param i32) (result i32)
-                        (i32.add (get_local 0) (i32.const 1))
+                        (i32.add (local.get 0) (i32.const 1))
                     )
                 )
             ",
@@ -349,7 +349,7 @@ mod tests {
             "
                 (module
                     (func $small2 (param i32) (result i32)
-                        (return (i32.add (get_local 0) (i32.const 1)))
+                        (return (i32.add (local.get 0) (i32.const 1)))
                     )
                 )
             ",
@@ -386,8 +386,8 @@ mod tests {
                     (func $infloop (result i32)
                         (local i32)
                         (loop (result i32)
-                            (i32.add (get_local 0) (i32.const 1))
-                            (set_local 0)
+                            (i32.add (local.get 0) (i32.const 1))
+                            (local.set 0)
                             (br 0)
                         )
                     )
