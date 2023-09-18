@@ -2369,15 +2369,15 @@ enum AllocationState {
 
 #[allow(improper_ctypes)]
 extern "C" {
-    fn get_state_ptr() -> *const UnsafeCell<State>;
-    fn set_state_ptr(state: *const UnsafeCell<State>);
+    fn get_state_ptr() -> *const State;
+    fn set_state_ptr(state: *const State);
     fn get_allocation_state() -> AllocationState;
     fn set_allocation_state(state: AllocationState);
 }
 
 impl State {
     fn with(f: impl FnOnce(&State) -> Result<(), Errno>) -> Errno {
-        let state_ref = unsafe { &*State::ptr().get() };
+        let state_ref = State::ptr();
         assert_eq!(state_ref.magic1, MAGIC);
         assert_eq!(state_ref.magic2, MAGIC);
         let ret = f(state_ref);
@@ -2387,7 +2387,7 @@ impl State {
         }
     }
 
-    fn ptr() -> &'static UnsafeCell<State> {
+    fn ptr() -> &'static State {
         unsafe {
             let mut ptr = get_state_ptr();
             if ptr.is_null() {
@@ -2399,7 +2399,7 @@ impl State {
     }
 
     #[cold]
-    fn new() -> &'static UnsafeCell<State> {
+    fn new() -> &'static State {
         #[link(wasm_import_module = "__main_module__")]
         extern "C" {
             fn cabi_realloc(
@@ -2423,13 +2423,13 @@ impl State {
                 0,
                 mem::align_of::<UnsafeCell<State>>(),
                 mem::size_of::<UnsafeCell<State>>(),
-            ) as *mut UnsafeCell<State>
+            ) as *mut State
         };
 
         unsafe { set_allocation_state(AllocationState::StateAllocated) };
 
         unsafe {
-            ret.write(UnsafeCell::new(State {
+            ret.write(State {
                 magic1: MAGIC,
                 magic2: MAGIC,
                 import_alloc: ImportAlloc::new(),
@@ -2451,7 +2451,7 @@ impl State {
                     path_data: UnsafeCell::new(MaybeUninit::uninit()),
                 },
                 dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
-            }));
+            });
             &*ret
         }
     }
