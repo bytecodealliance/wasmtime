@@ -325,9 +325,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             return Ok(Some(Err(e.clone())));
         }
 
-        drop(res);
-        drop(trailers);
-
         fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
             let trailers = elem.downcast_mut::<HostFutureTrailers>().unwrap();
             trailers.received.as_mut().unwrap().as_mut().unwrap()
