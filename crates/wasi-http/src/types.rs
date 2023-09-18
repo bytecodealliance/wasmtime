@@ -241,14 +241,18 @@ impl TableHttpExt for Table {
         }
     }
     fn get_fields(&mut self, id: u32) -> Result<&mut FieldMap, TableError> {
+        let fields = self.get_mut::<HostFields>(id)?;
+        if let HostFields::Ref { parent, get_fields } = *fields {
+            let entry = self.get_any_mut(parent)?;
+            return Ok(get_fields(entry));
+        }
+
         match self.get_mut::<HostFields>(id)? {
-            HostFields::Ref { parent, get_fields } => {
-                let parent = *parent;
-                let get_fields = *get_fields;
-                let entry = self.get_any_mut(parent)?;
-                Ok(get_fields(entry))
-            }
             HostFields::Owned { fields } => Ok(fields),
+            // NB: ideally the `if let` above would go here instead. That makes
+            // the borrow-checker unhappy. Unclear why. If you, dear reader, can
+            // refactor this to remove the `unreachable!` please do.
+            HostFields::Ref { .. } => unreachable!(),
         }
     }
     fn delete_fields(&mut self, id: u32) -> Result<HostFields, TableError> {
