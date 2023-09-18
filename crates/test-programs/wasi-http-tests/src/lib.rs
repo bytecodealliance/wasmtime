@@ -58,13 +58,16 @@ pub async fn request(
     authority: &str,
     path_with_query: &str,
     body: Option<&[u8]>,
-    additional_headers: Option<&[(String, String)]>,
+    additional_headers: Option<&[(String, Vec<u8>)]>,
 ) -> Result<Response> {
+    fn header_val(v: &str) -> Vec<u8> {
+        v.to_string().into_bytes()
+    }
     let headers = http_types::new_fields(
         &[
             &[
-                ("User-agent".to_string(), "WASI-HTTP/0.0.1".to_string()),
-                ("Content-type".to_string(), "application/json".to_string()),
+                ("User-agent".to_string(), header_val("WASI-HTTP/0.0.1")),
+                ("Content-type".to_string(), header_val("application/json")),
             ],
             additional_headers.unwrap_or(&[]),
         ]
@@ -117,15 +120,16 @@ pub async fn request(
         };
     }
 
-    let future_response = outgoing_handler::handle(request, None);
+    let future_response = outgoing_handler::handle(request, None)?;
 
     let incoming_response = match http_types::future_incoming_response_get(future_response) {
-        Some(result) => result,
+        Some(result) => result.map_err(|_| anyhow!("incoming response errored"))?,
         None => {
             let pollable = http_types::listen_to_future_incoming_response(future_response);
             let _ = poll::poll_oneoff(&[pollable]);
             http_types::future_incoming_response_get(future_response)
                 .expect("incoming response available")
+                .map_err(|_| anyhow!("incoming response errored"))?
         }
     }
     // TODO: maybe anything that appears in the Result<_, E> position should impl
