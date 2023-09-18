@@ -290,7 +290,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        insts.push(Inst::TrapIfC {
+        insts.push(Inst::TrapIf {
             cc: IntCC::UnsignedLessThan,
             rs1: stack_reg(),
             rs2: limit_reg,
