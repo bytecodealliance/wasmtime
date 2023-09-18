@@ -135,7 +135,11 @@ impl<T: WasiView> poll::Host for T {
 
         let closure_future = match table.get_host_pollable_mut(&pollable)? {
             HostPollable::Closure(f) => f(),
-            HostPollable::TableEntry { index, make_future } => make_future(index),
+            HostPollable::TableEntry { index, make_future } => {
+                let index = *index;
+                let make_future = *make_future;
+                make_future(table.get_as_any_mut(index)?)
+            }
         };
 
         closure_future.await.context("poll_one")

@@ -196,13 +196,21 @@ impl Table {
         }
     }
 
-    /// Get a mutable reference to a resource of a given type at a given index. Only one mutable
-    /// reference can be borrowed at any given time. Borrow failure results in a trapping error.
+    /// Get a mutable reference to a resource of a given type at a given index.
     pub fn get_mut<T: Any + Sized>(&mut self, key: u32) -> Result<&mut T, TableError> {
         if let Some(r) = self.map.get_mut(&key) {
             r.entry
                 .downcast_mut::<T>()
                 .ok_or_else(|| TableError::WrongType)
+        } else {
+            Err(TableError::NotPresent)
+        }
+    }
+
+    /// Get a mutable reference to a resource a a `&mut dyn Any`.
+    pub fn get_as_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, TableError> {
+        if let Some(r) = self.map.get_mut(&key) {
+            Ok(&mut *r.entry)
         } else {
             Err(TableError::NotPresent)
         }

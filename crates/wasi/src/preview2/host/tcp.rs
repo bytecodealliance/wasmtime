@@ -456,7 +456,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         fn make_tcp_socket_future<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
             let socket = stream
                 .downcast_mut::<HostTcpSocketState>()
-                .expect("downcast to HostTcpSocket failed");
+                .expect("downcast to HostTcpSocketState failed");
 
             // Some states are ready immediately.
             match socket.tcp_state {

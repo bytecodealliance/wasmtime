@@ -81,7 +81,7 @@ pub async fn request(
 
         let pollable = streams::subscribe_to_output_stream(request_body);
         while !buf.is_empty() {
-            poll::poll_list(&[pollable]);
+            test_programs::poll_list(&[pollable]);
 
             let permit = match streams::check_write(request_body) {
                 Ok(n) => n,
@@ -103,8 +103,7 @@ pub async fn request(
             _ => {}
         }
 
-        poll::poll_oneoff(&[pollable]);
-        poll::drop_pollable(pollable);
+        test_programs::poll_oneoff(&[pollable]);
 
         match streams::check_write(request_body) {
             Ok(_) => {}
@@ -125,8 +124,7 @@ pub async fn request(
         Some(result) => result.map_err(|_| anyhow!("incoming response errored"))?,
         None => {
             let pollable = http_types::listen_to_future_incoming_response(future_response);
-            let _ = poll::poll_oneoff(&[pollable]);
-            poll::drop_pollable(pollable);
+            let _ = test_programs::poll_oneoff(&[pollable]);
             http_types::future_incoming_response_get(future_response)
                 .expect("incoming response available")
                 .map_err(|_| anyhow!("incoming response errored"))?
