@@ -9,10 +9,10 @@ use crate::body::HostFutureTrailers;
 use crate::types::FieldMap;
 use crate::WasiHttpView;
 use crate::{
-    body::HostIncomingBody,
+    body::{HostIncomingBody, HostOutgoingBody, OutgoingBodyRepr},
     types::{
-        HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingBody,
-        HostOutgoingRequest, OutgoingBodyRepr, TableHttpExt,
+        HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest,
+        TableHttpExt,
     },
 };
 use anyhow::{anyhow, Context};

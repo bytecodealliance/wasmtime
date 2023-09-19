@@ -3,15 +3,12 @@
 
 use crate::{
     bindings::http::types::{FutureTrailers, IncomingBody, Method, OutgoingBody, Scheme},
-    body::{HostFutureTrailers, HostIncomingBody},
+    body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, OutgoingBodyRepr},
 };
-use bytes::Bytes;
-use http_body_util::combinators::BoxBody;
-use std::convert::Infallible;
 use std::pin::Pin;
 use std::task;
 use std::{any::Any, collections::HashMap};
-use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, HostOutputStream, Table, TableError};
+use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Table, TableError};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx;
@@ -28,81 +25,6 @@ pub struct HostOutgoingRequest {
     pub authority: String,
     pub headers: FieldMap,
     pub body: Option<OutgoingBodyRepr>,
-}
-
-pub struct HostOutgoingBody {
-    pub parent: u32,
-    pub get_body: for<'a> fn(&'a mut dyn Any) -> &mut OutgoingBodyRepr,
-}
-
-pub struct OutgoingBodyRepr {
-    pub body_output_stream: Option<Box<dyn HostOutputStream>>, // outgoing-body-write takes it out of this
-    // struct and puts it into the table.
-    pub trailers_sender: Option<tokio::sync::oneshot::Sender<hyper::HeaderMap>>, // oitgoing-body-write-trailers writes
-    // to this as its way of finishing
-    // the outgoing body
-    pub body_impl: BoxBody<Bytes, Infallible>,
-}
-impl OutgoingBodyRepr {
-    pub fn new() -> Self {
-        use http_body_util::BodyExt;
-        use hyper::{
-            body::{Body, Frame},
-            HeaderMap,
-        };
-        use std::future::Future;
-        use std::task::{Context, Poll};
-        use tokio::sync::mpsc;
-        use tokio::sync::oneshot::{self, error::RecvError};
-        struct BodyImpl {
-            body_receiver: mpsc::Receiver<Bytes>,
-            trailers_receiver: Option<oneshot::Receiver<HeaderMap>>,
-        }
-        impl Body for BodyImpl {
-            type Data = Bytes;
-            type Error = Infallible;
-            fn poll_frame(
-                mut self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-            ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-                match self.as_mut().body_receiver.poll_recv(cx) {
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(Some(frame)) => Poll::Ready(Some(Ok(Frame::data(frame)))),
-                    Poll::Ready(None) => {
-                        if let Some(mut trailers_receiver) = self.as_mut().trailers_receiver.take()
-                        {
-                            match Pin::new(&mut trailers_receiver).poll(cx) {
-                                Poll::Pending => {
-                                    self.as_mut().trailers_receiver = Some(trailers_receiver);
-                                    Poll::Pending
-                                }
-                                Poll::Ready(Ok(trailers)) => {
-                                    Poll::Ready(Some(Ok(Frame::trailers(trailers))))
-                                }
-                                Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),
-                            }
-                        } else {
-                            Poll::Ready(None)
-                        }
-                    }
-                }
-            }
-        }
-
-        // FIXME capacity here for backpressure eventaully???
-        let (body_sender, body_receiver) = mpsc::channel(1);
-        let (trailers_sender, trailers_receiver) = oneshot::channel();
-        let body_impl = BodyImpl {
-            body_receiver,
-            trailers_receiver: Some(trailers_receiver),
-        }
-        .boxed();
-        Self {
-            body_output_stream: Some(todo!("wrap around `body_sender` to impl HostOutputStream")),
-            trailers_sender: Some(trailers_sender),
-            body_impl,
-        }
-    }
 }
 
 pub struct HostIncomingResponse {
