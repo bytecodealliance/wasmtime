@@ -42,16 +42,6 @@ impl Response {
     }
 }
 
-struct DropPollable {
-    pollable: poll::Pollable,
-}
-
-impl Drop for DropPollable {
-    fn drop(&mut self) {
-        poll::drop_pollable(self.pollable);
-    }
-}
-
 pub async fn request(
     method: http_types::Method,
     scheme: http_types::Scheme,
@@ -82,15 +72,16 @@ pub async fn request(
         headers,
     );
 
-    let request_body = http_types::outgoing_request_write(request)
+    let outgoing_body = http_types::outgoing_request_write(request)
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
     if let Some(mut buf) = body {
-        let sub = DropPollable {
-            pollable: streams::subscribe_to_output_stream(request_body),
-        };
+        let request_body = http_types::outgoing_body_write(outgoing_body)
+            .map_err(|_| anyhow!("outgoing request write failed"))?;
+
+        let pollable = streams::subscribe_to_output_stream(request_body);
         while !buf.is_empty() {
-            poll::poll_oneoff(&[sub.pollable]);
+            poll::poll_oneoff(&[pollable]);
 
             let permit = match streams::check_write(request_body) {
                 Ok(n) => n,
@@ -112,15 +103,23 @@ pub async fn request(
             _ => {}
         }
 
-        poll::poll_oneoff(&[sub.pollable]);
+        poll::poll_oneoff(&[pollable]);
+        poll::drop_pollable(pollable);
 
         match streams::check_write(request_body) {
             Ok(_) => {}
             Err(_) => anyhow::bail!("output stream error"),
         };
+
+        streams::drop_output_stream(request_body);
     }
 
     let future_response = outgoing_handler::handle(request, None)?;
+
+    // TODO: The current implementation requires this drop after the request is sent.
+    // The ownership semantics are unclear in wasi-http we should clarify exactly what is
+    // supposed to happen here.
+    http_types::drop_outgoing_body(outgoing_body);
 
     let incoming_response = match http_types::future_incoming_response_get(future_response) {
         Some(result) => result.map_err(|_| anyhow!("incoming response errored"))?,
@@ -137,11 +136,6 @@ pub async fn request(
     // Error? anyway, just use its Debug here:
     .map_err(|e| anyhow!("{e:?}"))?;
 
-    // TODO: The current implementation requires this drop after the request is sent.
-    // The ownership semantics are unclear in wasi-http we should clarify exactly what is
-    // supposed to happen here.
-    http_types::drop_outgoing_body(request_body);
-
     let status = http_types::incoming_response_status(incoming_response);
 
     let headers_handle = http_types::incoming_response_headers(incoming_response);
@@ -157,8 +151,8 @@ pub async fn request(
     let mut body = Vec::new();
     let mut eof = streams::StreamStatus::Open;
     while eof != streams::StreamStatus::Ended {
-        let (mut body_chunk, stream_status) =
-            streams::read(input_stream, u64::MAX).map_err(|_| anyhow!("input_stream read failed"))?;
+        let (mut body_chunk, stream_status) = streams::read(input_stream, u64::MAX)
+            .map_err(|_| anyhow!("input_stream read failed"))?;
         eof = if body_chunk.is_empty() {
             streams::StreamStatus::Ended
         } else {
