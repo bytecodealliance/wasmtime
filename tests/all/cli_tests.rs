@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use tempfile::{NamedTempFile, TempDir};
 
 // Run the wasmtime CLI with the provided args and return the `Output`.
@@ -930,5 +930,89 @@ fn option_group_boolean_parsing() -> Result<()> {
         "-Wrelaxed-simd=false",
         "tests/all/cli_tests/simple.wat",
     ])?;
+    Ok(())
+}
+
+#[test]
+fn preview2_stdin() -> Result<()> {
+    let test = "tests/all/cli_tests/count-stdin.wat";
+    let cmd = || -> Result<_> {
+        let mut cmd = get_wasmtime_command()?;
+        cmd.arg("--invoke=count").arg("-Spreview2").arg(test);
+        Ok(cmd)
+    };
+
+    // read empty pipe is ok
+    let output = cmd()?.output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0\n");
+
+    // read itself is ok
+    let file = File::open(test)?;
+    let size = file.metadata()?.len();
+    let output = cmd()?.stdin(File::open(test)?).output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), format!("{size}\n"));
+
+    // read piped input ok is ok
+    let mut child = cmd()?
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    std::thread::spawn(move || {
+        stdin.write_all(b"hello").unwrap();
+    });
+    let output = child.wait_with_output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "5\n");
+
+    let count_up_to = |n: usize| -> Result<_> {
+        let mut child = get_wasmtime_command()?
+            .arg("--invoke=count-up-to")
+            .arg("-Spreview2")
+            .arg(test)
+            .arg(n.to_string())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let mut stdin = child.stdin.take().unwrap();
+        let t = std::thread::spawn(move || {
+            let mut written = 0;
+            let bytes = [0; 64 * 1024];
+            loop {
+                written += match stdin.write(&bytes) {
+                    Ok(n) => n,
+                    Err(_) => break written,
+                };
+            }
+        });
+        let output = child.wait_with_output()?;
+        assert!(output.status.success());
+        let written = t.join().unwrap();
+        let read = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<usize>()
+            .unwrap();
+        // The test reads in 1000 byte chunks so make sure that it doesn't read
+        // more than 1000 bytes than requested.
+        assert!(read < n + 1000, "test read too much {read}");
+        Ok(written)
+    };
+
+    // wasmtime shouldn't eat information that the guest never actually tried to
+    // read.
+    //
+    // NB: this may be a bit flaky. Exactly how much we wrote in the above
+    // helper thread depends on how much the OS buffers for us. For now give
+    // some some slop and assume that OSes are unlikely to buffer more than
+    // that.
+    let slop = 256 * 1024;
+    for amt in [0, 100, 100_000] {
+        let written = count_up_to(amt)?;
+        assert!(written < slop + amt, "wrote too much {written}");
+    }
     Ok(())
 }
