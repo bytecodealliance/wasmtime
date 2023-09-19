@@ -750,6 +750,13 @@
   (CAddi4spn)
 ))
 
+;; Opcodes for the CB compressed instruction format
+(type CbOp (enum
+  (CSrli)
+  (CSrai)
+  (CAndi)
+))
+
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR

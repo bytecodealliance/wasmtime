@@ -400,6 +400,37 @@ block0(v0: i64):
 ;   c.slli a0, 0x3f
 ;   c.jr ra
 
+function %c_srai(i64) -> i64 {
+block0(v0: i64):
+  v1 = sshr_imm.i64 v0, 63
+  return v1
+}
+
+; VCode:
+; block0:
+;   srai a0,a0,63
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.srai a0, 0x3f
+;   c.jr ra
+
+function %c_srli(i64) -> i64 {
+block0(v0: i64):
+  v1 = ushr_imm.i64 v0, 20
+  return v1
+}
+
+; VCode:
+; block0:
+;   srli a0,a0,20
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.srli a0, 0x14
+;   c.jr ra
 
 function %c_addi4spn() -> i64 {
   ss0 = explicit_slot 64
@@ -482,8 +513,6 @@ block0:
 ;   sd a4, 0(a2)
 ;   c.jr ra
 
-<<<<<<< Updated upstream
-=======
 function %c_andi_f(i64) -> i64 {
 block0(v0: i64):
   v1 = band_imm.i64 v0, 0xf
@@ -531,5 +560,3 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   c.andi a0, 0
 ;   c.jr ra
-
->>>>>>> Stashed changes

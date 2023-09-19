@@ -3,7 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CiOp, CiwOp, CrOp};
+use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CbOp, CiOp, CiwOp, CrOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -692,6 +692,40 @@ impl Inst {
                 let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
                 sink.put2(encode_ci_type(CiOp::CSlli, rd, imm6));
             }
+
+            // c.srli / c.srai
+            Inst::AluRRImm12 {
+                alu_op: op @ (AluOPRRI::Srli | AluOPRRI::Srai),
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() == rs && reg_is_compressible(rs) && imm12.as_i16() != 0 => {
+                let op = match op {
+                    AluOPRRI::Srli => CbOp::CSrli,
+                    AluOPRRI::Srai => CbOp::CSrai,
+                    _ => unreachable!(),
+                };
+
+                // The shift amount is unsigned, but we encode it as signed.
+                let shift = imm12.as_i16() & 0x3f;
+                let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
+                sink.put2(encode_cb_type(op, rd, imm6));
+            }
+
+            // c.andi
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Andi,
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() == rs && reg_is_compressible(rs) => {
+                let imm6 = match Imm6::maybe_from_imm12(imm12) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
+                sink.put2(encode_cb_type(CbOp::CAndi, rd, imm6));
+            }
+
             _ => return false,
         }
 
