@@ -99,9 +99,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(())
     }
     async fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
-        let result = self
-            .table()
-            .get_fields(fields)?
+        let fields = self.table().get_fields(fields)?;
+        let result = fields
             .0
             .iter()
             .map(|(name, value)| (name.clone(), value[0].clone()))
@@ -262,6 +261,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             parent: response,
             get_fields,
         })?;
+
         Ok(id)
     }
     async fn incoming_response_consume(

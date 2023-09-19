@@ -147,20 +147,24 @@ pub async fn request(
     let incoming_body = http_types::incoming_response_consume(incoming_response)
         .map_err(|()| anyhow!("incoming response has no body stream"))?;
 
+    http_types::drop_incoming_response(incoming_response);
+
     let input_stream = http_types::incoming_body_stream(incoming_body).unwrap();
     let input_stream_pollable = streams::subscribe_to_input_stream(input_stream);
 
     let mut body = Vec::new();
     let mut eof = streams::StreamStatus::Open;
     while eof != streams::StreamStatus::Ended {
-        let (mut body_chunk, stream_status) = streams::read(input_stream, u64::MAX)
+        poll::poll_oneoff(&[input_stream_pollable]);
+
+        let (mut body_chunk, stream_status) = streams::read(input_stream, 1024 * 1024)
             .map_err(|_| anyhow!("input_stream read failed"))?;
-        eof = if body_chunk.is_empty() {
-            streams::StreamStatus::Ended
-        } else {
-            stream_status
-        };
-        body.append(&mut body_chunk);
+
+        eof = stream_status;
+
+        if !body_chunk.is_empty() {
+            body.append(&mut body_chunk);
+        }
     }
 
     poll::drop_pollable(input_stream_pollable);

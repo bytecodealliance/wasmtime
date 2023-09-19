@@ -161,13 +161,13 @@ impl HostIncomingBody {
                     break;
                 }
 
-                assert!(frame.is_data());
+                assert!(frame.is_data(), "frame wasn't data");
 
                 let data = frame.into_data().unwrap();
 
                 // If the receiver no longer exists, thats ok - in that case we want to keep the
                 // loop running to relieve backpressure, so we get to the trailers.
-                let _ = body_writer.send(Ok(data));
+                let _ = body_writer.send(Ok(data)).await;
             }
         });
 
