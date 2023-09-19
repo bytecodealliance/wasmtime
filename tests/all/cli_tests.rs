@@ -1006,10 +1006,10 @@ fn preview2_stdin() -> Result<()> {
     // read.
     //
     // NB: this may be a bit flaky. Exactly how much we wrote in the above
-    // helper thread depends on how much the OS buffers for us. For now give up
-    // to 128k of slop and assume that OSes are unlikely to buffer more than
+    // helper thread depends on how much the OS buffers for us. For now give
+    // some some slop and assume that OSes are unlikely to buffer more than
     // that.
-    let slop = 128 * 1024;
+    let slop = 256 * 1024;
     for amt in [0, 100, 100_000] {
         let written = count_up_to(amt)?;
         assert!(written < slop + amt, "wrote too much {written}");
