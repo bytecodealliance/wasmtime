@@ -352,9 +352,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     }
     async fn drop_future_incoming_response(
         &mut self,
-        _future: FutureIncomingResponse,
+        id: FutureIncomingResponse,
     ) -> wasmtime::Result<()> {
-        todo!()
+        let _ = self.table().delete_future_incoming_response(id)?;
+        Ok(())
     }
     async fn future_incoming_response_get(
         &mut self,
