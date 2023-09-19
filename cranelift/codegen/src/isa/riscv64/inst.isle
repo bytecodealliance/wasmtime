@@ -741,6 +741,8 @@
   (CAddiw)
   (CAddi16sp)
   (CSlli)
+  (CLi)
+  (CLui)
 ))
 
 ;; Opcodes for the CIW compressed instruction format

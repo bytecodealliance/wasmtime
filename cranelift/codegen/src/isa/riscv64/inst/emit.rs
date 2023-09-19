@@ -613,6 +613,21 @@ impl Inst {
                 sink.put2(encode_ciw_type(CiwOp::CAddi4spn, rd, imm));
             }
 
+            // c.li
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() != zero_reg() && rs == zero_reg() && imm12.as_i16() != 0 => {
+                let imm6 = match Imm6::maybe_from_imm12(imm12) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
+
+                sink.put2(encode_ci_type(CiOp::CLi, rd, imm6));
+            }
+
             // c.addi
             Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Addi,
@@ -640,6 +655,29 @@ impl Inst {
                     None => return false,
                 };
                 sink.put2(encode_ci_type(CiOp::CAddiw, rd, imm6));
+            }
+
+            // c.lui
+            //
+            // c.lui loads the non-zero 6-bit immediate field into bits 17–12
+            // of the destination register, clears the bottom 12 bits, and
+            // sign-extends bit 17 into all higher bits of the destination.
+            Inst::Lui { rd, imm: imm20 }
+                if rd.to_reg() != zero_reg()
+                    && rd.to_reg() != stack_reg()
+                    && imm20.as_i32() != 0 =>
+            {
+                // Check that the top bits are sign extended
+                let imm = imm20.as_i32() << 14 >> 14;
+                if imm != imm20.as_i32() {
+                    return false;
+                }
+                let imm6 = match Imm6::maybe_from_i32(imm) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
+
+                sink.put2(encode_ci_type(CiOp::CLui, rd, imm6));
             }
 
             // c.slli

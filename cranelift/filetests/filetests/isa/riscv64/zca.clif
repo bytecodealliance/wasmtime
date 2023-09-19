@@ -438,3 +438,98 @@ block0:
 ;   c.addi16sp sp, 0x10
 ;   c.jr ra
 
+
+function %c_li() -> i64 {
+block0:
+  v0 = iconst.i64 1
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.li a0, 1
+;   c.jr ra
+
+
+function %c_lui() -> i64, i64, i64 {
+block0:
+  v0 = iconst.i64 0x4000
+  v1 = iconst.i64 0xffffffff_fffff000
+  v2 = iconst.i64 0xffffffff_fffe0000
+  return v0, v1, v2
+}
+
+; VCode:
+; block0:
+;   mv a2,a0
+;   lui a0,4
+;   lui a1,-1
+;   lui a4,-32
+;   sd a4,0(a2)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.mv a2, a0
+;   c.lui a0, 4
+;   c.lui a1, 0xfffff
+;   c.lui a4, 0xfffe0
+;   sd a4, 0(a2)
+;   c.jr ra
+
+<<<<<<< Updated upstream
+=======
+function %c_andi_f(i64) -> i64 {
+block0(v0: i64):
+  v1 = band_imm.i64 v0, 0xf
+  return v1
+}
+
+; VCode:
+; block0:
+;   andi a0,a0,15
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.andi a0, 0xf
+;   c.jr ra
+
+function %c_andi_neg_16(i64) -> i64 {
+block0(v0: i64):
+  v1 = band_imm.i64 v0, -16
+  return v1
+}
+
+; VCode:
+; block0:
+;   andi a0,a0,-16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.andi a0, -0x10
+;   c.jr ra
+
+function %c_andi_zero(i64) -> i64 {
+block0(v0: i64):
+  v1 = band_imm.i64 v0, 0
+  return v1
+}
+
+; VCode:
+; block0:
+;   andi a0,a0,0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.andi a0, 0
+;   c.jr ra
+
+>>>>>>> Stashed changes
