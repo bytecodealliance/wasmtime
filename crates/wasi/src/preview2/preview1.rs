@@ -1336,7 +1336,7 @@ impl<
                     return Ok(0);
                 };
                 let (read, state) = stream_res(
-                    streams::Host::read(
+                    streams::Host::blocking_read(
                         self,
                         input_stream,
                         buf.len().try_into().unwrap_or(u64::MAX),
