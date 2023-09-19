@@ -150,10 +150,10 @@ fn hyper_protocol_error(e: hyper::Error) -> anyhow::Error {
     ))
 }
 
-fn invalid_url(_: std::io::Error) -> anyhow::Error {
+fn invalid_url(e: std::io::Error) -> anyhow::Error {
     // TODO: DNS errors show up as a Custom io error, what subset of errors should we consider for
     // InvalidUrl here?
     anyhow::anyhow!(crate::bindings::http::types::Error::InvalidUrl(
-        "invalid dnsname".to_string()
+        e.to_string()
     ))
 }

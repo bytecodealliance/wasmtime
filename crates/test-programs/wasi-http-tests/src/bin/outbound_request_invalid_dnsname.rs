@@ -16,5 +16,5 @@ async fn run() {
     .await;
 
     let error = res.unwrap_err();
-    assert_eq!(error.to_string(), "Error::InvalidUrl(\"invalid dnsname\")");
+    assert_eq!(error.to_string(), "Error::InvalidUrl(\"failed to lookup address information: Temporary failure in name resolution\")");
 }
