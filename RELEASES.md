@@ -137,6 +137,19 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 12.0.2
+
+Released 2023-09-14.
+
+### Fixed
+
+* [CVE-2023-41880] - Miscompilation of wasm `i64x2.shr_s` instruction with
+  constant input on x86\_64
+
+[CVE-2023-41880]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gw5p-q8mj-p7gh
+
+--------------------------------------------------------------------------------
+
 ## 12.0.1
 
 Released 2023-08-24
@@ -211,6 +224,31 @@ Released 2023-08-21
 
 --------------------------------------------------------------------------------
 
+## 11.0.2
+
+Released 2023-09-14.
+
+### Fixed
+
+* [CVE-2023-41880] - Miscompilation of wasm `i64x2.shr_s` instruction with
+  constant input on x86\_64
+
+[CVE-2023-41880]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gw5p-q8mj-p7gh
+
+--------------------------------------------------------------------------------
+
+## 11.0.1
+
+Released 2023-07-24.
+
+### Fixed
+
+* Update some minimum version requirements for Wasmtime's dependencies to fix
+  building Wasmtime with historical versions of these dependencies.
+  [#6758](https://github.com/bytecodealliance/wasmtime/pull/6758)
+
+--------------------------------------------------------------------------------
+
 ## 11.0.0
 
 Released 2023-07-20
@@ -268,6 +306,19 @@ Released 2023-07-20
   behavior can be recovered through a combination of `swiden_low` and
   `fcvt_from_sint`
   [#6565](https://github.com/bytecodealliance/wasmtime/pull/6565)
+
+--------------------------------------------------------------------------------
+
+## 10.0.2
+
+Released 2023-09-14.
+
+### Fixed
+
+* [CVE-2023-41880] - Miscompilation of wasm `i64x2.shr_s` instruction with
+  constant input on x86\_64
+
+[CVE-2023-41880]: https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-gw5p-q8mj-p7gh
 
 --------------------------------------------------------------------------------
 

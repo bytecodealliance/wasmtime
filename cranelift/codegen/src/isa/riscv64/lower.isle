@@ -297,7 +297,7 @@
 (rule
   (lower (has_type (fits_in_64 ty) (uadd_overflow_trap x y tc)))
   (let ((res ValueRegs (lower_uadd_overflow x y ty))
-        (_ InstOutput (gen_trapif (value_regs_get res 1) tc)))
+        (_ InstOutput (gen_trapnz (value_regs_get res 1) tc)))
     (value_regs_get res 0)))
 
 
@@ -1674,6 +1674,11 @@
 (rule
    (lower (symbol_value (symbol_value_data name _ offset)))
    (load_ext_name name offset))
+
+;;;;;  Rules for `tls_value` ;;;;;;;;;;;;;;
+
+(rule (lower (has_type (tls_model (TlsModel.ElfGd)) (tls_value (symbol_value_data name _ _))))
+      (elf_tls_get_addr name))
 
 ;;;;;  Rules for `bitcast`;;;;;;;;;
 (rule

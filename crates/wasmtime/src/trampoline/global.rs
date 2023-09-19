@@ -51,7 +51,7 @@ pub fn generate_global_export(
             Val::I64(x) => *global.as_i64_mut() = x,
             Val::F32(x) => *global.as_f32_bits_mut() = x,
             Val::F64(x) => *global.as_f64_bits_mut() = x,
-            Val::V128(x) => *global.as_u128_mut() = x,
+            Val::V128(x) => *global.as_u128_mut() = x.into(),
             Val::FuncRef(f) => {
                 *global.as_func_ref_mut() = f.map_or(ptr::null_mut(), |f| {
                     f.caller_checked_func_ref(store).as_ptr()

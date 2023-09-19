@@ -430,7 +430,7 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
                         buf,
                         " ; reloc_external {} {} {}",
                         reloc.kind,
-                        reloc.name.display(params),
+                        reloc.target.display(params),
                         reloc.addend,
                     )?;
                 }

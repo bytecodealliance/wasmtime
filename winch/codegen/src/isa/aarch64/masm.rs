@@ -5,7 +5,7 @@ use crate::{
     isa::reg::Reg,
     masm::{
         CalleeKind, CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm,
-        RemKind, ShiftKind, StackSlot,
+        RemKind, RoundingMode, ShiftKind, StackSlot,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -230,6 +230,10 @@ impl Masm for MacroAssembler {
 
     fn float_abs(&mut self, _dst: Reg, _size: OperandSize) {
         todo!()
+    }
+
+    fn float_round(&mut self, _mode: RoundingMode, _dst: Reg, _src: RegImm, _size: OperandSize) {
+        todo!();
     }
 
     fn and(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {

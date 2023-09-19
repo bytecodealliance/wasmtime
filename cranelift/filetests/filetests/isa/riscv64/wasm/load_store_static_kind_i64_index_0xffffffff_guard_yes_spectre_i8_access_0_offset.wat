@@ -40,7 +40,7 @@
 ;; function u0:0:
 ;; block0:
 ;;   lui a3,65536
-;;   addi a5,a3,4095
+;;   addi a5,a3,-1
 ;;   ugt a5,a0,a5##ty=i64
 ;;   ld a4,0(a2)
 ;;   add a4,a4,a0
@@ -60,7 +60,7 @@
 ;; function u0:1:
 ;; block0:
 ;;   lui a3,65536
-;;   addi a5,a3,4095
+;;   addi a5,a3,-1
 ;;   ugt a5,a0,a5##ty=i64
 ;;   ld a4,0(a1)
 ;;   add a4,a4,a0

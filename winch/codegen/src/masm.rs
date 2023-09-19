@@ -225,6 +225,13 @@ impl From<Reg> for RegImm {
     }
 }
 
+pub enum RoundingMode {
+    Nearest,
+    Up,
+    Down,
+    Zero,
+}
+
 /// Generic MacroAssembler interface used by the code generation.
 ///
 /// The MacroAssembler trait aims to expose an interface, high-level enough,
@@ -322,6 +329,9 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a floating point negation operation.
     fn float_neg(&mut self, dst: Reg, size: OperandSize);
+
+    /// Perform a floating point floor operation.
+    fn float_round(&mut self, mode: RoundingMode, dst: Reg, src: RegImm, size: OperandSize);
 
     /// Perform logical and operation.
     fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);

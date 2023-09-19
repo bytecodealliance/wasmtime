@@ -122,12 +122,8 @@
       (callee Reg)
       (info BoxReturnCallInfo))
 
+    ;; Emits a trap with the given trap code if the comparison succeeds
     (TrapIf
-      (test Reg)
-      (trap_code TrapCode))
-
-    ;; use a simple compare to decide to cause trap or not.
-    (TrapIfC
       (rs1 Reg)
       (rs2 Reg)
       (cc IntCC)
@@ -147,6 +143,11 @@
       (rd WritableReg)
       (name BoxExternalName)
       (offset i64))
+
+    ;; Load a TLS symbol address
+    (ElfTlsGetAddr
+      (rd WritableReg)
+      (name BoxExternalName))
 
     ;; Load address referenced by `mem` into `rd`.
     (LoadAddr
@@ -708,11 +709,43 @@
   (C2)
 ))
 
-
 ;; Opcodes for the CR compressed instruction format
 (type CrOp (enum
   (CMv)
   (CAdd)
+  (CJr)
+  (CJalr)
+  ;; c.ebreak technically isn't a CR format instruction, but it's encoding
+  ;; lines up with this format.
+  (CEbreak)
+))
+
+;; Opcodes for the CA compressed instruction format
+(type CaOp (enum
+  (CAnd)
+  (COr)
+  (CXor)
+  (CSub)
+  (CAddw)
+  (CSubw)
+))
+
+;; Opcodes for the CJ compressed instruction format
+(type CjOp (enum
+  (CJ)
+))
+
+;; Opcodes for the CI compressed instruction format
+(type CiOp (enum
+  (CAddi)
+  (CAddiw)
+  (CAddi16sp)
+  (CSlli)
+))
+
+;; Opcodes for the CIW compressed instruction format
+(type CiwOp (enum
+  (CAddi4spn)
 ))
 
 
@@ -2609,6 +2642,12 @@
 (decl load_ext_name (ExternalName i64) Reg)
 (extern constructor load_ext_name load_ext_name)
 
+(decl elf_tls_get_addr (ExternalName) Reg)
+(rule (elf_tls_get_addr name)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ElfTlsGetAddr dst name))))
+        dst))
+
 (decl int_convert_2_float_op (Type bool Type) FpuOPRR)
 (extern constructor int_convert_2_float_op int_convert_2_float_op)
 
@@ -2850,36 +2889,39 @@
   (gen_select_reg (IntCC.SignedGreaterThan) x y x y))
 
 
-(decl gen_trapif (XReg TrapCode) InstOutput)
-(rule
-  (gen_trapif test trap_code)
-  (side_effect (SideEffectNoResult.Inst (MInst.TrapIf test trap_code))))
+;; Builds an instruction sequence that traps if the comparision succeeds.
+(decl gen_trapif (IntCC XReg XReg TrapCode) InstOutput)
+(rule (gen_trapif cc a b trap_code)
+  (side_effect (SideEffectNoResult.Inst (MInst.TrapIf a b cc trap_code))))
 
-(decl gen_trapifc (IntCC XReg XReg TrapCode) InstOutput)
-(rule
-  (gen_trapifc cc a b trap_code)
-  (side_effect (SideEffectNoResult.Inst (MInst.TrapIfC a b cc trap_code))))
+;; Builds an instruction sequence that traps if the input is non-zero.
+(decl gen_trapnz (XReg TrapCode) InstOutput)
+(rule (gen_trapnz test trap_code)
+  (gen_trapif (IntCC.NotEqual) test (zero_reg) trap_code))
+
+;; Builds an instruction sequence that traps if the input is zero.
+(decl gen_trapz (XReg TrapCode) InstOutput)
+(rule (gen_trapz test trap_code)
+  (gen_trapif (IntCC.Equal) test (zero_reg) trap_code))
+
 
 (decl shift_int_to_most_significant (XReg Type) XReg)
 (extern constructor shift_int_to_most_significant shift_int_to_most_significant)
 
 ;;; generate div overflow.
 (decl gen_div_overflow (XReg XReg Type) InstOutput)
-(rule
-  (gen_div_overflow rs1 rs2 ty)
-  (let
-    ((r_const_neg_1 XReg (imm $I64 (i64_as_u64 -1)))
-      (r_const_min XReg (rv_slli (imm $I64 1) (imm12_const 63)))
-      (tmp_rs1 XReg (shift_int_to_most_significant rs1 ty))
-      (t1 XReg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
-      (t2 XReg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
-      (test XReg (rv_and t1 t2)))
-    (gen_trapif test (TrapCode.IntegerOverflow))))
+(rule (gen_div_overflow rs1 rs2 ty)
+  (let ((r_const_neg_1 XReg (imm $I64 (i64_as_u64 -1)))
+        (r_const_min XReg (rv_slli (imm $I64 1) (imm12_const 63)))
+        (tmp_rs1 XReg (shift_int_to_most_significant rs1 ty))
+        (t1 XReg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
+        (t2 XReg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
+        (test XReg (rv_and t1 t2)))
+    (gen_trapnz test (TrapCode.IntegerOverflow))))
 
 (decl gen_div_by_zero (XReg) InstOutput)
-(rule
-  (gen_div_by_zero r)
-  (gen_trapifc (IntCC.Equal) (zero_reg) r (TrapCode.IntegerDivisionByZero)))
+(rule (gen_div_by_zero r)
+  (gen_trapz r (TrapCode.IntegerDivisionByZero)))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

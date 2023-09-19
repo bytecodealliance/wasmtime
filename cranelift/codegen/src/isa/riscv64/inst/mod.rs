@@ -58,7 +58,7 @@ pub use crate::isa::riscv64::lower::isle::generated_code::{
     FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, CSR,
     FRM,
 };
-use crate::isa::riscv64::lower::isle::generated_code::{MInst, VecAluOpRRImm5, VecAluOpRRR};
+use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -136,7 +136,7 @@ impl Display for CondBrTarget {
 }
 
 pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
-    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
+    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.bits() << 12;
     x
 }
 
@@ -145,7 +145,7 @@ pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
         | reg_to_gpr_num(rd.to_reg()) << 7
         | 0b000 << 12
         | reg_to_gpr_num(base) << 15
-        | offset.as_u32() << 20;
+        | offset.bits() << 20;
     x
 }
 
@@ -182,7 +182,7 @@ impl Inst {
         Inst::generate_imm(value).map(|(imm20, imm12)| {
             let mut insts = SmallVec::new();
 
-            let imm20_is_zero = imm20.as_u32() == 0;
+            let imm20_is_zero = imm20.as_i32() == 0;
             let imm12_is_zero = imm12.as_i16() == 0;
 
             let rs = if !imm20_is_zero {
@@ -459,9 +459,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
         }
-        &Inst::TrapIf { test, .. } => {
-            collector.reg_use(test);
-        }
         &Inst::Jal { .. } => {
             // JAL technically has a rd register, but we currently always
             // hardcode it to x0.
@@ -472,6 +469,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::LoadExtName { rd, .. } => {
             collector.reg_def(rd);
+        }
+        &Inst::ElfTlsGetAddr { rd, .. } => {
+            // x10 is a0 which is both the first argument and the first return value.
+            collector.reg_fixed_def(rd, a0());
+            let mut clobbers = Riscv64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
+            clobbers.remove(px_reg(10));
+            collector.reg_clobbers(clobbers);
         }
         &Inst::LoadAddr { rd, mem } => {
             if let Some(r) = mem.get_allocatable_register() {
@@ -596,7 +600,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
-        &Inst::TrapIfC { rs1, rs2, .. } => {
+        &Inst::TrapIf { rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
         }
@@ -1357,16 +1361,21 @@ impl Inst {
                     "{} {},{}",
                     "auipc",
                     format_reg(rd.to_reg(), allocs),
-                    imm.bits
+                    imm.as_i32(),
                 )
             }
             &Inst::Jalr { rd, base, offset } => {
                 let base = format_reg(base, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}({})", "jalr", rd, offset.bits, base)
+                format!("{} {},{}({})", "jalr", rd, offset.as_i16(), base)
             }
             &Inst::Lui { rd, ref imm } => {
-                format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
+                format!(
+                    "{} {},{}",
+                    "lui",
+                    format_reg(rd.to_reg(), allocs),
+                    imm.as_i32()
+                )
             }
             &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1623,10 +1632,7 @@ impl Inst {
                 }
                 s
             }
-            &MInst::TrapIf { test, trap_code } => {
-                format!("trap_if {},{}", format_reg(test, allocs), trap_code,)
-            }
-            &MInst::TrapIfC {
+            &MInst::TrapIf {
                 rs1,
                 rs2,
                 cc,
@@ -1634,7 +1640,7 @@ impl Inst {
             } => {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
-                format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
+                format!("trap_if {trap_code}##({rs1} {cc} {rs2})")
             }
             &MInst::Jal { label } => {
                 format!("j {}", label.to_string())
@@ -1685,6 +1691,10 @@ impl Inst {
             } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
+            }
+            &Inst::ElfTlsGetAddr { rd, ref name } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("elf_tls_get_addr {rd},{}", name.display(None))
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
                 let rs = mem.to_string_with_alloc(allocs);
@@ -1938,6 +1948,9 @@ pub enum LabelUse {
     /// Since we currently don't support offsets in labels, this relocation has
     /// an implicit offset of 4.
     PCRelLo12I,
+
+    /// 11-bit PC-relative jump offset. Equivalent to the `RVC_JUMP` relocation
+    RVCJump,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -1953,6 +1966,7 @@ impl MachInstLabelUse for LabelUse {
                 Inst::imm_max() as CodeOffset
             }
             LabelUse::B12 => ((1 << 11) - 1) * 2,
+            LabelUse::RVCJump => ((1 << 10) - 1) * 2,
         }
     }
 
@@ -1967,6 +1981,7 @@ impl MachInstLabelUse for LabelUse {
     /// Size of window into code needed to do the patch.
     fn patch_size(self) -> CodeOffset {
         match self {
+            LabelUse::RVCJump => 2,
             LabelUse::Jal20 | LabelUse::B12 | LabelUse::PCRelHi20 | LabelUse::PCRelLo12I => 4,
             LabelUse::PCRel32 => 8,
         }
@@ -1993,7 +2008,7 @@ impl MachInstLabelUse for LabelUse {
     /// Is a veneer supported for this label reference type?
     fn supports_veneer(self) -> bool {
         match self {
-            Self::Jal20 | Self::B12 => true,
+            Self::Jal20 | Self::B12 | Self::RVCJump => true,
             _ => false,
         }
     }
@@ -2001,7 +2016,7 @@ impl MachInstLabelUse for LabelUse {
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
         match self {
-            Self::B12 | Self::Jal20 => 8,
+            Self::B12 | Self::Jal20 | Self::RVCJump => 8,
             _ => unreachable!(),
         }
     }
@@ -2019,14 +2034,14 @@ impl MachInstLabelUse for LabelUse {
     ) -> (CodeOffset, LabelUse) {
         let base = writable_spilltmp_reg();
         {
-            let x = enc_auipc(base, Imm20::from_bits(0)).to_le_bytes();
+            let x = enc_auipc(base, Imm20::ZERO).to_le_bytes();
             buffer[0] = x[0];
             buffer[1] = x[1];
             buffer[2] = x[2];
             buffer[3] = x[3];
         }
         {
-            let x = enc_jalr(writable_zero_reg(), base.to_reg(), Imm12::from_bits(0)).to_le_bytes();
+            let x = enc_jalr(writable_zero_reg(), base.to_reg(), Imm12::ZERO).to_le_bytes();
             buffer[4] = x[0];
             buffer[5] = x[1];
             buffer[6] = x[2];
@@ -2051,7 +2066,11 @@ impl LabelUse {
     }
 
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
-        let insn = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        let insn = match self {
+            LabelUse::RVCJump => u16::from_le_bytes(buffer[..2].try_into().unwrap()) as u32,
+            _ => u32::from_le_bytes(buffer[..4].try_into().unwrap()),
+        };
+
         match self {
             LabelUse::Jal20 => {
                 let offset = offset as u32;
@@ -2116,6 +2135,18 @@ impl LabelUse {
                 let lo12 = (offset + 4) as u32 & 0xFFF;
                 let insn = (insn & 0xFFFFF) | (lo12 << 20);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
+            }
+            LabelUse::RVCJump => {
+                debug_assert!(offset & 1 == 0);
+
+                // We currently only support this for the C.J operation, so assert that is the opcode in
+                // the buffer.
+                debug_assert_eq!(insn & 0xFFFF, 0xA001);
+
+                buffer[0..2].clone_from_slice(&u16::to_le_bytes(encode_cj_type(
+                    CjOp::CJ,
+                    Imm12::from_i16(i16::try_from(offset).unwrap()),
+                )));
             }
         }
     }

@@ -48,15 +48,19 @@ pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 
 pub mod bindings {
+    // Generate traits for synchronous bindings.
+    //
+    // Note that this is only done for interfaces which can block, or those which
+    // have some functions in `only_imports` below for being async.
     pub mod sync_io {
         pub(crate) mod _internal {
             wasmtime::component::bindgen!({
                 path: "wit",
                 interfaces: "
-              import wasi:poll/poll
-              import wasi:io/streams
-              import wasi:filesystem/types
-            ",
+                    import wasi:poll/poll
+                    import wasi:io/streams
+                    import wasi:filesystem/types
+                ",
                 tracing: true,
                 trappable_error_type: {
                     "wasi:io/streams"::"write-error": Error,
@@ -70,82 +74,72 @@ pub mod bindings {
         pub use self::_internal::wasi::{filesystem, io, poll};
     }
 
-    pub(crate) mod _internal_clocks {
-        wasmtime::component::bindgen!({
+    wasmtime::component::bindgen!({
         path: "wit",
-        interfaces: "
-              import wasi:clocks/wall-clock
-              import wasi:clocks/monotonic-clock
-              import wasi:clocks/timezone
-            ",
+        interfaces: "include wasi:cli/reactor",
         tracing: true,
-        });
-    }
-    pub use self::_internal_clocks::wasi::clocks;
-
-    pub(crate) mod _internal_io {
-        wasmtime::component::bindgen!({
-            path: "wit",
-            interfaces: "
-              import wasi:poll/poll
-              import wasi:io/streams
-              import wasi:filesystem/types
-            ",
-            tracing: true,
-            async: true,
-            trappable_error_type: {
-                "wasi:io/streams"::"write-error": Error,
-                "wasi:filesystem/types"::"error-code": Error,
-            },
-            with: {
-                "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
-            }
-        });
-    }
-    pub use self::_internal_io::wasi::{io, poll};
-
-    pub(crate) mod _internal_rest {
-        wasmtime::component::bindgen!({
-        path: "wit",
-        interfaces: "
-              import wasi:filesystem/preopens
-              import wasi:random/random
-              import wasi:random/insecure
-              import wasi:random/insecure-seed
-              import wasi:cli/environment
-              import wasi:cli/exit
-              import wasi:cli/stdin
-              import wasi:cli/stdout
-              import wasi:cli/stderr
-              import wasi:cli/terminal-input
-              import wasi:cli/terminal-output
-              import wasi:cli/terminal-stdin
-              import wasi:cli/terminal-stdout
-              import wasi:cli/terminal-stderr
-              import wasi:sockets/tcp
-              import wasi:sockets/tcp-create-socket
-              import wasi:sockets/instance-network
-            ",
-        tracing: true,
+        async: {
+            // Only these functions are `async` and everything else is sync
+            // meaning that it basically doesn't need to block. These functions
+            // are the only ones that need to block.
+            //
+            // Note that at this time `only_imports` works on function names
+            // which in theory can be shared across interfaces, so this may
+            // need fancier syntax in the future.
+            only_imports: [
+                "access-at",
+                "advise",
+                "blocking-flush",
+                "blocking-read",
+                "blocking-skip",
+                "blocking-splice",
+                "blocking-write",
+                "blocking-write-and-flush",
+                "change-directory-permissions-at",
+                "change-file-permissions-at",
+                "create-directory-at",
+                "forward",
+                "get-flags",
+                "get-type",
+                "is-same-object",
+                "link-at",
+                "lock-exclusive",
+                "lock-shared",
+                "metadata-hash",
+                "metadata-hash-at",
+                "open-at",
+                "poll-oneoff",
+                "read",
+                "read-directory",
+                "read-directory-entry",
+                "readlink-at",
+                "remove-directory-at",
+                "rename-at",
+                "set-size",
+                "set-times",
+                "set-times-at",
+                "skip",
+                "splice",
+                "stat",
+                "stat-at",
+                "symlink-at",
+                "sync",
+                "sync-data",
+                "try-lock-exclusive",
+                "try-lock-shared",
+                "unlink-file-at",
+                "unlock",
+                "write",
+            ],
+        },
         trappable_error_type: {
             "wasi:io/streams"::"write-error": Error,
             "wasi:filesystem/types"::"error-code": Error,
             "wasi:sockets/network"::"error-code": Error,
         },
-        with: {
-            "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
-            "wasi:poll/poll": crate::preview2::bindings::poll::poll,
-            "wasi:io/streams": crate::preview2::bindings::io::streams,
-            "wasi:filesystem/types": crate::preview2::bindings::filesystem::types,
-        }
-        });
-    }
+    });
 
-    pub use self::_internal_rest::wasi::{cli, random, sockets};
-    pub mod filesystem {
-        pub use super::_internal_io::wasi::filesystem::types;
-        pub use super::_internal_rest::wasi::filesystem::preopens;
-    }
+    pub use wasi::*;
 }
 
 pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =

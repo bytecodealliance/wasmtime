@@ -319,7 +319,7 @@ impl<T: WasiView> types::Host for T {
         readdir.next()
     }
 
-    async fn drop_directory_entry_stream(
+    fn drop_directory_entry_stream(
         &mut self,
         stream: types::DirectoryEntryStream,
     ) -> anyhow::Result<()> {
@@ -590,7 +590,7 @@ impl<T: WasiView> types::Host for T {
         }
     }
 
-    async fn drop_descriptor(&mut self, fd: types::Descriptor) -> anyhow::Result<()> {
+    fn drop_descriptor(&mut self, fd: types::Descriptor) -> anyhow::Result<()> {
         let table = self.table_mut();
 
         // The Drop will close the file/dir, but if the close syscall
@@ -742,7 +742,7 @@ impl<T: WasiView> types::Host for T {
         todo!("filesystem unlock is not implemented")
     }
 
-    async fn read_via_stream(
+    fn read_via_stream(
         &mut self,
         fd: types::Descriptor,
         offset: types::Filesize,
@@ -772,7 +772,7 @@ impl<T: WasiView> types::Host for T {
         Ok(index)
     }
 
-    async fn write_via_stream(
+    fn write_via_stream(
         &mut self,
         fd: types::Descriptor,
         offset: types::Filesize,
@@ -798,7 +798,7 @@ impl<T: WasiView> types::Host for T {
         Ok(index)
     }
 
-    async fn append_via_stream(
+    fn append_via_stream(
         &mut self,
         fd: types::Descriptor,
     ) -> Result<streams::OutputStream, types::Error> {

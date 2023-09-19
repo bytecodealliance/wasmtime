@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::{Reg, RegClass},
-    masm::{CalleeKind, CmpKind, DivKind, OperandSize, RemKind, ShiftKind},
+    masm::{CalleeKind, CmpKind, DivKind, OperandSize, RemKind, RoundingMode, ShiftKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
@@ -821,6 +821,28 @@ impl Assembler {
             src: src.into(),
             dst: dst.into(),
         });
+    }
+
+    pub fn rounds(&mut self, src: Reg, dst: Reg, mode: RoundingMode, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Roundss,
+            OperandSize::S64 => SseOpcode::Roundsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        let imm: u8 = match mode {
+            RoundingMode::Nearest => 0x00,
+            RoundingMode::Down => 0x01,
+            RoundingMode::Up => 0x02,
+            RoundingMode::Zero => 0x03,
+        };
+
+        self.emit(Inst::XmmUnaryRmRImm {
+            op,
+            src: XmmMemAligned::from(Xmm::from(src)),
+            imm,
+            dst: dst.into(),
+        })
     }
 
     /// Emit a function call to a known or unknown location.

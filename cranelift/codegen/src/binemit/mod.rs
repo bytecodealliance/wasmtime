@@ -92,6 +92,18 @@ pub enum Reloc {
     /// jalr ra, ra, 0
     RiscvCall,
 
+    /// RISC-V TLS GD: High 20 bits of 32-bit PC-relative TLS GD GOT reference,
+    ///
+    /// This is the `R_RISCV_TLS_GD_HI20` relocation from the RISC-V ELF psABI document.
+    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic
+    RiscvTlsGdHi20,
+
+    /// Low 12 bits of a 32-bit PC-relative relocation (I-Type instruction)
+    ///
+    /// This is the `R_RISCV_PCREL_LO12_I` relocation from the RISC-V ELF psABI document.
+    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+    RiscvPCRelLo12I,
+
     /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT
     S390xTlsGd64,
     /// s390x TLS GDCall - marker to enable optimization of TLS calls
@@ -114,7 +126,8 @@ impl fmt::Display for Reloc {
             Self::X86SecRel => write!(f, "SecRel"),
             Self::Arm32Call | Self::Arm64Call => write!(f, "Call"),
             Self::RiscvCall => write!(f, "RiscvCall"),
-
+            Self::RiscvTlsGdHi20 => write!(f, "RiscvTlsGdHi20"),
+            Self::RiscvPCRelLo12I => write!(f, "RiscvPCRelLo12I"),
             Self::ElfX86_64TlsGd => write!(f, "ElfX86_64TlsGd"),
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
             Self::MachOAarch64TlsAdrPage21 => write!(f, "MachOAarch64TlsAdrPage21"),

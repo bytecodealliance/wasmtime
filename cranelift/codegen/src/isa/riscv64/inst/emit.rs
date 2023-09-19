@@ -1,9 +1,9 @@
 //! Riscv64 ISA: binary code emission.
 
 use crate::binemit::StackMap;
-use crate::ir::{self, RelSourceLoc, TrapCode};
+use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::CrOp;
+use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CiOp, CiwOp, CrOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -28,6 +28,13 @@ impl EmitInfo {
 
 pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
+}
+
+pub(crate) fn reg_to_compressed_gpr_num(m: Reg) -> u32 {
+    let real_reg = m.to_real_reg().unwrap().hw_enc();
+    debug_assert!(real_reg >= 8 && real_reg < 16);
+    let compressed_reg = real_reg - 8;
+    u32::try_from(compressed_reg).unwrap()
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -113,10 +120,10 @@ impl Inst {
         assert!(ty.is_int() && ty.bits() <= 64);
         match ty {
             I64 => {
-                insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
+                insts.push(Inst::load_imm12(rd, Imm12::from_i16(-1)));
             }
             I32 | I16 => {
-                insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
+                insts.push(Inst::load_imm12(rd, Imm12::from_i16(-1)));
                 insts.push(Inst::Extend {
                     rd: rd,
                     rn: rd.to_reg(),
@@ -126,7 +133,7 @@ impl Inst {
                 });
             }
             I8 => {
-                insts.push(Inst::load_imm12(rd, Imm12::from_bits(255)));
+                insts.push(Inst::load_imm12(rd, Imm12::from_i16(255)));
             }
             _ => unreachable!("ty:{:?}", ty),
         }
@@ -138,7 +145,7 @@ impl Inst {
             alu_op: AluOPRRI::Xori,
             rd,
             rs,
-            imm12: Imm12::from_bits(-1),
+            imm12: Imm12::from_i16(-1),
         }
     }
 
@@ -194,7 +201,7 @@ impl Inst {
             alu_op: AluOPRRI::Andi,
             rd: tmp,
             rs: tmp.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_zero_bits() as i16),
+            imm12: Imm12::from_i16(FClassResult::is_zero_bits() as i16),
         });
         insts.push(Inst::CondBr {
             taken,
@@ -332,10 +339,10 @@ impl Inst {
             | Inst::CallInd { .. }
             | Inst::ReturnCall { .. }
             | Inst::ReturnCallInd { .. }
-            | Inst::TrapIf { .. }
             | Inst::Jal { .. }
             | Inst::CondBr { .. }
             | Inst::LoadExtName { .. }
+            | Inst::ElfTlsGetAddr { .. }
             | Inst::LoadAddr { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::Mov { .. }
@@ -357,7 +364,7 @@ impl Inst {
             | Inst::AtomicStore { .. }
             | Inst::AtomicLoad { .. }
             | Inst::AtomicRmwLoop { .. }
-            | Inst::TrapIfC { .. }
+            | Inst::TrapIf { .. }
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
             | Inst::FloatRound { .. }
@@ -453,10 +460,22 @@ impl Inst {
         &self,
         sink: &mut MachBuffer<Inst>,
         emit_info: &EmitInfo,
-        _state: &mut EmitState,
-        _start_off: &mut u32,
+        state: &mut EmitState,
+        start_off: &mut u32,
     ) -> bool {
         let has_zca = emit_info.isa_flags.has_zca();
+
+        // Currently all compressed extensions (Zcb, Zcd, Zcmp, Zcmt, etc..) require Zca
+        // to be enabled, so check it early.
+        if !has_zca {
+            return false;
+        }
+
+        fn reg_is_compressible(r: Reg) -> bool {
+            r.to_real_reg()
+                .map(|r| r.hw_enc() >= 8 && r.hw_enc() < 16)
+                .unwrap_or(false)
+        }
 
         match *self {
             // C.ADD
@@ -465,7 +484,7 @@ impl Inst {
                 rd,
                 rs1,
                 rs2,
-            } if has_zca && rd.to_reg() == rs1 && rs1 != zero_reg() && rs2 != zero_reg() => {
+            } if rd.to_reg() == rs1 && rs1 != zero_reg() && rs2 != zero_reg() => {
                 sink.put2(encode_cr_type(CrOp::CAdd, rd, rs2));
             }
 
@@ -475,13 +494,165 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if has_zca
-                && rd.to_reg() != rs
+            } if rd.to_reg() != rs
                 && rd.to_reg() != zero_reg()
                 && rs != zero_reg()
                 && imm12.as_i16() == 0 =>
             {
                 sink.put2(encode_cr_type(CrOp::CMv, rd, rs));
+            }
+
+            // CA Ops
+            Inst::AluRRR {
+                alu_op:
+                    alu_op @ (AluOPRRR::And
+                    | AluOPRRR::Or
+                    | AluOPRRR::Xor
+                    | AluOPRRR::Sub
+                    | AluOPRRR::Addw
+                    | AluOPRRR::Subw),
+                rd,
+                rs1,
+                rs2,
+            } if rd.to_reg() == rs1 && reg_is_compressible(rs1) && reg_is_compressible(rs2) => {
+                let op = match alu_op {
+                    AluOPRRR::And => CaOp::CAnd,
+                    AluOPRRR::Or => CaOp::COr,
+                    AluOPRRR::Xor => CaOp::CXor,
+                    AluOPRRR::Sub => CaOp::CSub,
+                    AluOPRRR::Addw => CaOp::CAddw,
+                    AluOPRRR::Subw => CaOp::CSubw,
+                    _ => unreachable!(),
+                };
+
+                sink.put2(encode_ca_type(op, rd, rs2));
+            }
+
+            // c.j
+            //
+            // We don't have a separate JAL as that is only availabile in RV32C
+            Inst::Jal { label } => {
+                sink.use_label_at_offset(*start_off, label, LabelUse::RVCJump);
+                sink.add_uncond_branch(*start_off, *start_off + 2, label);
+                sink.put2(encode_cj_type(CjOp::CJ, Imm12::ZERO));
+            }
+
+            // c.jr
+            Inst::Jalr { rd, base, offset }
+                if rd.to_reg() == zero_reg() && base != zero_reg() && offset.as_i16() == 0 =>
+            {
+                sink.put2(encode_cr2_type(CrOp::CJr, base));
+            }
+
+            // c.jalr
+            Inst::Jalr { rd, base, offset }
+                if rd.to_reg() == link_reg() && base != zero_reg() && offset.as_i16() == 0 =>
+            {
+                sink.put2(encode_cr2_type(CrOp::CJalr, base));
+            }
+
+            // c.ebreak
+            Inst::EBreak => {
+                sink.put2(encode_cr_type(
+                    CrOp::CEbreak,
+                    writable_zero_reg(),
+                    zero_reg(),
+                ));
+            }
+
+            // c.unimp
+            Inst::Udf { trap_code } => {
+                sink.add_trap(trap_code);
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
+                }
+                sink.put2(0x0000);
+            }
+
+            // c.addi16sp
+            //
+            // c.addi16sp shares the opcode with c.lui, but has a destination field of x2.
+            // c.addi16sp adds the non-zero sign-extended 6-bit immediate to the value in the stack pointer (sp=x2),
+            // where the immediate is scaled to represent multiples of 16 in the range (-512,496). c.addi16sp is used
+            // to adjust the stack pointer in procedure prologues and epilogues. It expands into addi x2, x2, nzimm. c.addi16sp
+            // is only valid when nzimm≠0; the code point with nzimm=0 is reserved.
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() == rs
+                && rs == stack_reg()
+                && imm12.as_i16() != 0
+                && (imm12.as_i16() % 16) == 0
+                && Imm6::maybe_from_i16(imm12.as_i16() / 16).is_some() =>
+            {
+                let imm6 = Imm6::maybe_from_i16(imm12.as_i16() / 16).unwrap();
+                sink.put2(encode_c_addi16sp(imm6));
+            }
+
+            // c.addi4spn
+            //
+            // c.addi4spn is a CIW-format instruction that adds a zero-extended non-zero
+            // immediate, scaled by 4, to the stack pointer, x2, and writes the result to
+            // rd. This instruction is used to generate pointers to stack-allocated variables
+            // and expands to addi rd, x2, nzuimm. c.addi4spn is only valid when nzuimm≠0;
+            // the code points with nzuimm=0 are reserved.
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd,
+                rs,
+                imm12,
+            } if reg_is_compressible(rd.to_reg())
+                && rs == stack_reg()
+                && imm12.as_i16() != 0
+                && (imm12.as_i16() % 4) == 0
+                && u8::try_from(imm12.as_i16() / 4).is_ok() =>
+            {
+                let imm = u8::try_from(imm12.as_i16() / 4).unwrap();
+                sink.put2(encode_ciw_type(CiwOp::CAddi4spn, rd, imm));
+            }
+
+            // c.addi
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
+                let imm6 = match Imm6::maybe_from_imm12(imm12) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
+
+                sink.put2(encode_ci_type(CiOp::CAddi, rd, imm6));
+            }
+
+            // c.addiw
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addiw,
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() == rs && rs != zero_reg() => {
+                let imm6 = match Imm6::maybe_from_imm12(imm12) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
+                sink.put2(encode_ci_type(CiOp::CAddiw, rd, imm6));
+            }
+
+            // c.slli
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Slli,
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
+                // The shift amount is unsigned, but we encode it as signed.
+                let shift = imm12.as_i16() & 0x3f;
+                let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
+                sink.put2(encode_ci_type(CiOp::CSlli, rd, imm6));
             }
             _ => return false,
         }
@@ -506,7 +677,7 @@ impl Inst {
                     alu_op: AluOPRRI::Addi,
                     rd: Writable::from_reg(zero_reg()),
                     rs: zero_reg(),
-                    imm12: Imm12::zero(),
+                    imm12: Imm12::ZERO,
                 };
                 x.emit(&[], sink, emit_info, state)
             }
@@ -520,7 +691,7 @@ impl Inst {
                 sink.put_data(&data[..]);
             }
             &Inst::Lui { rd, ref imm } => {
-                let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.as_u32() << 12);
+                let x: u32 = 0b0110111 | reg_to_gpr_num(rd.to_reg()) << 7 | (imm.bits() << 12);
                 sink.put4(x);
             }
             &Inst::LoadInlineConst { rd, ty, imm } => {
@@ -664,7 +835,7 @@ impl Inst {
                     (Some(_), None, None) => {
                         let tmp = writable_spilltmp_reg();
                         Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
-                        (tmp.to_reg(), Imm12::zero())
+                        (tmp.to_reg(), Imm12::ZERO)
                     }
 
                     // If the AMode contains a label we can emit an internal relocation that gets
@@ -676,15 +847,15 @@ impl Inst {
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
                         Inst::Auipc {
                             rd,
-                            imm: Imm20::from_bits(0),
+                            imm: Imm20::ZERO,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit_uncompressed(sink, emit_info, state, start_off);
 
                         // Emit a relocation for the load. This patches the offset into the instruction.
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
 
                         // Imm12 here is meaningless since it's going to get replaced.
-                        (rd.to_reg(), Imm12::zero())
+                        (rd.to_reg(), Imm12::ZERO)
                     }
 
                     // These cases are impossible with the current AModes that we have. We either
@@ -718,7 +889,7 @@ impl Inst {
                     _ => {
                         let tmp = writable_spilltmp_reg();
                         Inst::LoadAddr { rd: tmp, mem: to }.emit(&[], sink, emit_info, state);
-                        (tmp.to_reg(), Imm12::zero())
+                        (tmp.to_reg(), Imm12::ZERO)
                     }
                 };
 
@@ -735,9 +906,14 @@ impl Inst {
                 // only to constrain registers at a certain point.
             }
             &Inst::Ret {} => {
-                //jalr x0, x1, 0
-                let x: u32 = (0b1100111) | (1 << 15);
-                sink.put4(x);
+                // RISC-V does not have a dedicated ret instruction, instead we emit the equivalent
+                // `jalr x0, x1, 0` that jumps to the return address.
+                Inst::Jalr {
+                    rd: writable_zero_reg(),
+                    base: link_reg(),
+                    offset: Imm12::ZERO,
+                }
+                .emit(&[], sink, emit_info, state);
             }
 
             &Inst::Extend {
@@ -756,14 +932,14 @@ impl Inst {
                         alu_op: AluOPRRI::Andi,
                         rd,
                         rs: rn,
-                        imm12: Imm12::from_bits(255),
+                        imm12: Imm12::from_i16(255),
                     });
                 } else {
                     insts.push(Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
                         rd,
                         rs: rn,
-                        imm12: Imm12::from_bits(shift_bits),
+                        imm12: Imm12::from_i16(shift_bits),
                     });
                     insts.push(Inst::AluRRImm12 {
                         alu_op: if signed {
@@ -773,7 +949,7 @@ impl Inst {
                         },
                         rd,
                         rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(shift_bits),
+                        imm12: Imm12::from_i16(shift_bits),
                     });
                 }
                 insts
@@ -820,7 +996,7 @@ impl Inst {
                             0,
                         )
                         .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
                     }
                     ExternalName::LibCall(..)
                     | ExternalName::TestCase { .. }
@@ -834,17 +1010,21 @@ impl Inst {
                         }
                         .emit(&[], sink, emit_info, state);
 
-                        if let Some(s) = state.take_stack_map() {
-                            sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                        }
-                        if info.opcode.is_call() {
-                            sink.add_call_site(info.opcode);
-                        }
                         // call
-                        Inst::Jalr {
-                            rd: writable_link_reg(),
-                            base: spilltmp_reg2(),
-                            offset: Imm12::zero(),
+                        Inst::CallInd {
+                            info: Box::new(CallIndInfo {
+                                rn: spilltmp_reg2(),
+                                // This doesen't really matter but we might as well send
+                                // the correct info.
+                                uses: info.uses.clone(),
+                                defs: info.defs.clone(),
+                                clobbers: info.clobbers,
+                                opcode: Opcode::CallIndirect,
+                                caller_callconv: info.caller_callconv,
+                                callee_callconv: info.callee_callconv,
+                                // Send this as 0 to avoid updating the pop size twice.
+                                callee_pop_size: 0,
+                            }),
                         }
                         .emit(&[], sink, emit_info, state);
                     }
@@ -858,19 +1038,22 @@ impl Inst {
                 );
             }
             &Inst::CallInd { ref info } => {
+                let start_offset = sink.cur_offset();
+
+                Inst::Jalr {
+                    rd: writable_link_reg(),
+                    base: info.rn,
+                    offset: Imm12::ZERO,
+                }
+                .emit(&[], sink, emit_info, state);
+
                 if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
+                    sink.add_stack_map(StackMapExtent::StartedAtOffset(start_offset), s);
                 }
 
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }
-                Inst::Jalr {
-                    rd: writable_link_reg(),
-                    base: info.rn,
-                    offset: Imm12::zero(),
-                }
-                .emit(&[], sink, emit_info, state);
 
                 let callee_pop_size = i64::from(info.callee_pop_size);
                 state.virtual_sp_offset -= callee_pop_size;
@@ -893,10 +1076,10 @@ impl Inst {
                 );
 
                 sink.add_call_site(ir::Opcode::ReturnCall);
-                sink.add_reloc(Reloc::RiscvCall, &callee, 0);
+                sink.add_reloc(Reloc::RiscvCall, &**callee, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
@@ -916,7 +1099,7 @@ impl Inst {
                 Inst::Jalr {
                     rd: writable_zero_reg(),
                     base: callee,
-                    offset: Imm12::zero(),
+                    offset: Imm12::ZERO,
                 }
                 .emit(&[], sink, emit_info, state);
 
@@ -965,7 +1148,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: rd,
                         rs: rm,
-                        imm12: Imm12::zero(),
+                        imm12: Imm12::ZERO,
                     },
                     RegClass::Float => Inst::FpuRRR {
                         alu_op: if ty == F32 {
@@ -1010,6 +1193,20 @@ impl Inst {
                 // separate it here for clarity.
                 let default_target = targets[0];
                 let targets = &targets[1..];
+
+                // We are going to potentially emit a large amount of instructions, so ensure that we emit an island
+                // now if we need one.
+                //
+                // The worse case PC calculations are 12 instructions. And each entry in the jump table is 2 instructions.
+                // Check if we need to emit a jump table here to support that jump.
+                let inst_count = 12 + (targets.len() * 2);
+                let distance = (inst_count * Inst::UNCOMPRESSED_INSTRUCTION_SIZE as usize) as u32;
+                if sink.island_needed(distance) {
+                    let jump_around_label = sink.get_label();
+                    Inst::gen_jump(jump_around_label).emit(&[], sink, emit_info, state);
+                    sink.emit_island(distance + 4, &mut state.ctrl_plane);
+                    sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+                }
 
                 // We emit a bounds check on the index, if the index is larger than the number of
                 // jump table entries, we jump to the default block.  Otherwise we compute a jump
@@ -1071,7 +1268,7 @@ impl Inst {
                 sink.use_label_at_offset(sink.cur_offset(), default_target, LabelUse::PCRel32);
                 Inst::construct_auipc_and_jalr(None, tmp2, 0)
                     .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 // Compute the jump table offset.
                 // We need to emit a PC relative offset,
@@ -1080,7 +1277,7 @@ impl Inst {
                 // Get the current PC.
                 Inst::Auipc {
                     rd: tmp1,
-                    imm: Imm20::from_bits(0),
+                    imm: Imm20::ZERO,
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
@@ -1093,7 +1290,7 @@ impl Inst {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp2,
                     rs: ext_index.to_reg(),
-                    imm12: Imm12::from_bits(3),
+                    imm12: Imm12::from_i16(3),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
@@ -1112,22 +1309,14 @@ impl Inst {
                 Inst::Jalr {
                     rd: writable_zero_reg(),
                     base: tmp1.to_reg(),
-                    offset: Imm12::from_bits((4 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE) as i16),
+                    offset: Imm12::from_i16((4 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE) as i16),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
 
                 // Emit the jump table.
                 //
-                // Each entry is a aupc + jalr to the target block. We also start with a island
+                // Each entry is a auipc + jalr to the target block. We also start with a island
                 // if necessary.
-
-                // Each entry in the jump table is 2 instructions, so 8 bytes. Check if
-                // we need to emit a jump table here to support that jump.
-                let distance =
-                    (targets.len() * 2 * Inst::UNCOMPRESSED_INSTRUCTION_SIZE as usize) as u32;
-                if sink.island_needed(distance) {
-                    sink.emit_island(distance, &mut state.ctrl_plane);
-                }
 
                 // Emit the jumps back to back
                 for target in targets.iter() {
@@ -1226,9 +1415,9 @@ impl Inst {
                         sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
                         let inst = Inst::Auipc {
                             rd,
-                            imm: Imm20::from_bits(0),
+                            imm: Imm20::ZERO,
                         };
-                        inst.emit(&[], sink, emit_info, state);
+                        inst.emit_uncompressed(sink, emit_info, state, start_off);
 
                         // Emit an add to the address with a relocation.
                         // This later gets patched up with the correct offset.
@@ -1237,9 +1426,9 @@ impl Inst {
                             alu_op: AluOPRRI::Addi,
                             rd,
                             rs: rd.to_reg(),
-                            imm12: Imm12::zero(),
+                            imm12: Imm12::ZERO,
                         }
-                        .emit(&[], sink, emit_info, state);
+                        .emit_uncompressed(sink, emit_info, state, start_off);
                     }
                     (amode, _, _) => {
                         unimplemented!("LoadAddr: {:?}", amode);
@@ -1305,10 +1494,10 @@ impl Inst {
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
 
                 sink.bind_label(label_true, &mut state.ctrl_plane);
-                Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(rd, Imm12::ONE).emit(&[], sink, emit_info, state);
                 Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_false, &mut state.ctrl_plane);
-                Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(rd, Imm12::ZERO).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::AtomicCas {
@@ -1738,7 +1927,9 @@ impl Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::TrapIf {
-                        test: rd.to_reg(),
+                        cc: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
                         trap_code: TrapCode::IntegerOverflow,
                     }
                     .emit(&[], sink, emit_info, state);
@@ -1766,7 +1957,9 @@ impl Inst {
                     .emit(&[], sink, emit_info, state);
 
                     Inst::TrapIf {
-                        test: rd.to_reg(),
+                        cc: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
                         trap_code: TrapCode::IntegerOverflow,
                     }
                     .emit(&[], sink, emit_info, state);
@@ -1805,14 +1998,14 @@ impl Inst {
                         alu_op: AluOPRRI::Srli,
                         rd: rd,
                         rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(31),
+                        imm12: Imm12::from_i16(31),
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
                         rd: rd,
                         rs: rd.to_reg(),
-                        imm12: Imm12::from_bits(if 16 == out_type.bits() {
+                        imm12: Imm12::from_i16(if 16 == out_type.bits() {
                             15
                         } else {
                             // I8
@@ -1835,7 +2028,7 @@ impl Inst {
                 // here is nan , move 0 into rd register
                 sink.bind_label(label_nan, &mut state.ctrl_plane);
                 if is_sat {
-                    Inst::load_imm12(rd, Imm12::from_bits(0)).emit(&[], sink, emit_info, state);
+                    Inst::load_imm12(rd, Imm12::ZERO).emit(&[], sink, emit_info, state);
                 } else {
                     // here is ud2.
                     Inst::Udf {
@@ -1873,50 +2066,87 @@ impl Inst {
 
                 sink.bind_label(label_end, &mut state.ctrl_plane);
             }
-            &Inst::TrapIfC {
+
+            &Inst::ElfTlsGetAddr { rd, ref name } => {
+                // RISC-V's TLS GD model is slightly different from other arches.
+                //
+                // We have a relocation (R_RISCV_TLS_GD_HI20) that loads the high 20 bits
+                // of the address relative to the GOT entry. This relocation points to
+                // the symbol as usual.
+                //
+                // However when loading the bottom 12bits of the address, we need to
+                // use a label that points to the previous AUIPC instruction.
+                //
+                // label:
+                //    auipc a0,0                    # R_RISCV_TLS_GD_HI20 (symbol)
+                //    addi  a0,a0,0                 # R_RISCV_PCREL_LO12_I (label)
+                //
+                // https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#global-dynamic
+
+                // Create the lable that is going to be published to the final binary object.
+                let auipc_label = sink.get_label();
+                sink.bind_label(auipc_label, &mut state.ctrl_plane);
+
+                // Get the current PC.
+                sink.add_reloc(Reloc::RiscvTlsGdHi20, &**name, 0);
+                Inst::Auipc {
+                    rd: rd,
+                    imm: Imm20::from_i32(0),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+
+                // The `addi` here, points to the `auipc` label instead of directly to the symbol.
+                sink.add_reloc(Reloc::RiscvPCRelLo12I, &auipc_label, 0);
+                Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Addi,
+                    rd: rd,
+                    rs: rd.to_reg(),
+                    imm12: Imm12::from_i16(0),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+
+                Inst::Call {
+                    info: Box::new(CallInfo {
+                        dest: ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        opcode: crate::ir::Opcode::TlsValue,
+                        caller_callconv: CallConv::SystemV,
+                        callee_callconv: CallConv::SystemV,
+                        callee_pop_size: 0,
+                        clobbers: PRegSet::empty(),
+                    }),
+                }
+                .emit_uncompressed(sink, emit_info, state, start_off);
+            }
+
+            &Inst::TrapIf {
                 rs1,
                 rs2,
                 cc,
                 trap_code,
             } => {
-                let label_trap = sink.get_label();
-                let label_jump_over = sink.get_label();
+                let label_end = sink.get_label();
+                let cond = IntegerCompare { kind: cc, rs1, rs2 };
+
+                // Jump over the trap if we the condition is false.
                 Inst::CondBr {
-                    taken: CondBrTarget::Label(label_trap),
-                    not_taken: CondBrTarget::Label(label_jump_over),
-                    kind: IntegerCompare { kind: cc, rs1, rs2 },
+                    taken: CondBrTarget::Label(label_end),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: cond.inverse(),
                 }
                 .emit(&[], sink, emit_info, state);
-                // trap
-                sink.bind_label(label_trap, &mut state.ctrl_plane);
                 Inst::Udf { trap_code }.emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
-            &Inst::TrapIf { test, trap_code } => {
-                let label_trap = sink.get_label();
-                let label_jump_over = sink.get_label();
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_trap),
-                    not_taken: CondBrTarget::Label(label_jump_over),
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: test,
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // trap
-                sink.bind_label(label_trap, &mut state.ctrl_plane);
-                Inst::Udf {
-                    trap_code: trap_code,
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
+                    sink.add_stack_map(
+                        StackMapExtent::UpcomingBytes(Inst::TRAP_OPCODE.len() as u32),
+                        s,
+                    );
                 }
                 sink.put_data(Inst::TRAP_OPCODE);
             }
@@ -2218,19 +2448,19 @@ impl Inst {
                 // load 0 to sum , init.
                 Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 // load
-                Inst::load_imm12(step, Imm12::from_bits(ty.bits() as i16)).emit(
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
                 //
-                Inst::load_imm12(tmp, Imm12::from_bits(1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp,
                     rs: tmp.to_reg(),
-                    imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+                    imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                 }
                 .emit(&[], sink, emit_info, state);
                 let label_done = sink.get_label();
@@ -2270,7 +2500,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: sum,
                         rs: sum.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                     sink.bind_label(label_over, &mut state.ctrl_plane);
@@ -2281,14 +2511,14 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: step,
                         rs: step.to_reg(),
-                        imm12: Imm12::from_bits(-1),
+                        imm12: Imm12::from_i16(-1),
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Srli,
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
@@ -2300,7 +2530,7 @@ impl Inst {
                 Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 Inst::gen_move(tmp, rs, I64).emit(&[], sink, emit_info, state);
                 // load 56 to step.
-                Inst::load_imm12(step, Imm12::from_bits(56)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(step, Imm12::from_i16(56)).emit(&[], sink, emit_info, state);
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
                 sink.bind_label(label_loop, &mut state.ctrl_plane);
@@ -2318,7 +2548,7 @@ impl Inst {
                     alu_op: AluOPRRI::Andi,
                     rd: writable_spilltmp_reg(),
                     rs: tmp.to_reg(),
-                    imm12: Imm12::from_bits(255),
+                    imm12: Imm12::from_i16(255),
                 }
                 .emit(&[], sink, emit_info, state);
                 Inst::AluRRR {
@@ -2343,7 +2573,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: step,
                         rs: step.to_reg(),
-                        imm12: Imm12::from_bits(-8),
+                        imm12: Imm12::from_i16(-8),
                     }
                     .emit(&[], sink, emit_info, state);
                     //reset tmp.
@@ -2351,7 +2581,7 @@ impl Inst {
                         alu_op: AluOPRRI::Srli,
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(8),
+                        imm12: Imm12::from_i16(8),
                     }
                     .emit(&[], sink, emit_info, state);
                     // loop.
@@ -2371,20 +2601,20 @@ impl Inst {
                 // load 0 to sum , init.
                 Inst::gen_move(sum, zero_reg(), I64).emit(&[], sink, emit_info, state);
                 // load
-                Inst::load_imm12(step, Imm12::from_bits(ty.bits() as i16)).emit(
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
                 //
-                Inst::load_imm12(tmp, Imm12::from_bits(1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
                 if leading {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Slli,
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+                        imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                     }
                     .emit(&[], sink, emit_info, state);
                 }
@@ -2424,7 +2654,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: sum,
                         rs: sum.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                 }
@@ -2434,7 +2664,7 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: step,
                         rs: step.to_reg(),
-                        imm12: Imm12::from_bits(-1),
+                        imm12: Imm12::from_i16(-1),
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::AluRRImm12 {
@@ -2445,7 +2675,7 @@ impl Inst {
                         },
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
@@ -2461,27 +2691,27 @@ impl Inst {
                 rd,
             } => {
                 Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
-                Inst::load_imm12(step, Imm12::from_bits(ty.bits() as i16)).emit(
+                Inst::load_imm12(step, Imm12::from_i16(ty.bits() as i16)).emit(
                     &[],
                     sink,
                     emit_info,
                     state,
                 );
                 //
-                Inst::load_imm12(tmp, Imm12::from_bits(1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp, Imm12::ONE).emit(&[], sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp,
                     rs: tmp.to_reg(),
-                    imm12: Imm12::from_bits((ty.bits() - 1) as i16),
+                    imm12: Imm12::from_i16((ty.bits() - 1) as i16),
                 }
                 .emit(&[], sink, emit_info, state);
-                Inst::load_imm12(tmp2, Imm12::from_bits(1)).emit(&[], sink, emit_info, state);
+                Inst::load_imm12(tmp2, Imm12::ONE).emit(&[], sink, emit_info, state);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Slli,
                     rd: tmp2,
                     rs: tmp2.to_reg(),
-                    imm12: Imm12::from_bits((ty.bits() - 8) as i16),
+                    imm12: Imm12::from_i16((ty.bits() - 8) as i16),
                 }
                 .emit(&[], sink, emit_info, state);
 
@@ -2533,14 +2763,14 @@ impl Inst {
                         alu_op: AluOPRRI::Addi,
                         rd: step,
                         rs: step.to_reg(),
-                        imm12: Imm12::from_bits(-1),
+                        imm12: Imm12::from_i16(-1),
                     }
                     .emit(&[], sink, emit_info, state);
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Srli,
                         rd: tmp,
                         rs: tmp.to_reg(),
-                        imm12: Imm12::from_bits(1),
+                        imm12: Imm12::ONE,
                     }
                     .emit(&[], sink, emit_info, state);
                     {
@@ -2549,7 +2779,7 @@ impl Inst {
                         // if (step %=8 != 0) then tmp2 = tmp2 << 1
                         let label_over = sink.get_label();
                         let label_sll_1 = sink.get_label();
-                        Inst::load_imm12(writable_spilltmp_reg2(), Imm12::from_bits(8)).emit(
+                        Inst::load_imm12(writable_spilltmp_reg2(), Imm12::from_i16(8)).emit(
                             &[],
                             sink,
                             emit_info,
@@ -2576,7 +2806,7 @@ impl Inst {
                             alu_op: AluOPRRI::Srli,
                             rd: tmp2,
                             rs: tmp2.to_reg(),
-                            imm12: Imm12::from_bits(15),
+                            imm12: Imm12::from_i16(15),
                         }
                         .emit(&[], sink, emit_info, state);
                         Inst::gen_jump(label_over).emit(&[], sink, emit_info, state);
@@ -2585,7 +2815,7 @@ impl Inst {
                             alu_op: AluOPRRI::Slli,
                             rd: tmp2,
                             rs: tmp2.to_reg(),
-                            imm12: Imm12::from_bits(1),
+                            imm12: Imm12::ONE,
                         }
                         .emit(&[], sink, emit_info, state);
                         sink.bind_label(label_over, &mut state.ctrl_plane);
@@ -3188,20 +3418,21 @@ impl Inst {
                 offset,
             },
 
-            Inst::TrapIfC {
+            Inst::ElfTlsGetAddr { rd, name } => {
+                let rd = allocs.next_writable(rd);
+                debug_assert_eq!(a0(), rd.to_reg());
+                Inst::ElfTlsGetAddr { rd, name }
+            }
+
+            Inst::TrapIf {
                 rs1,
                 rs2,
                 cc,
                 trap_code,
-            } => Inst::TrapIfC {
+            } => Inst::TrapIf {
                 rs1: allocs.next(rs1),
                 rs2: allocs.next(rs2),
                 cc,
-                trap_code,
-            },
-
-            Inst::TrapIf { test, trap_code } => Inst::TrapIf {
-                test: allocs.next(test),
                 trap_code,
             },
 

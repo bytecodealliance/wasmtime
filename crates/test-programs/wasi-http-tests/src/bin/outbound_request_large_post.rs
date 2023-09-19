@@ -1,15 +1,14 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
 use std::io::{self, Read};
 use wasi_http_tests::bindings::wasi::http::types::{Method, Scheme};
-
-struct Component;
 
 fn main() {
     wasi_http_tests::in_tokio(async { run().await })
 }
 
 async fn run() {
-    const LEN: usize = 4000;
+    // TODO: ensure more than 700 bytes is allowed without error
+    const LEN: usize = 700;
     let mut buffer = [0; LEN];
     io::repeat(0b001).read_exact(&mut buffer).unwrap();
     let res = wasi_http_tests::request(

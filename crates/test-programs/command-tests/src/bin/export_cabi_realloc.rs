@@ -24,6 +24,7 @@ unsafe extern "C" fn cabi_realloc(
         alloc::realloc(old_ptr, layout, new_len)
     };
     if ptr.is_null() {
+        #[cfg(target_arch = "wasm32")]
         core::arch::wasm32::unreachable();
     }
     return ptr;

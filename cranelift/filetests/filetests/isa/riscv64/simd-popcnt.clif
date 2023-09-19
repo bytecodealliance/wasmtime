@@ -96,7 +96,7 @@ block0(v0: i16x8):
 ;   vand.vx v14,v12,a4 #avl=8, #vtype=(e16, m1, ta, ma)
 ;   vadd.vv v8,v14,v13 #avl=8, #vtype=(e16, m1, ta, ma)
 ;   lui a2,1
-;   addi a4,a2,3855
+;   addi a4,a2,-241
 ;   vsrl.vi v14,v8,4 #avl=8, #vtype=(e16, m1, ta, ma)
 ;   vadd.vv v8,v8,v14 #avl=8, #vtype=(e16, m1, ta, ma)
 ;   vand.vx v10,v8,a4 #avl=8, #vtype=(e16, m1, ta, ma)
@@ -173,7 +173,7 @@ block0(v0: i32x4):
 ;   vand.vx v14,v12,a4 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vadd.vv v8,v14,v13 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   lui a2,61681
-;   addi a4,a2,3855
+;   addi a4,a2,-241
 ;   vsrl.vi v14,v8,4 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vadd.vv v8,v8,v14 #avl=4, #vtype=(e32, m1, ta, ma)
 ;   vand.vx v10,v8,a4 #avl=4, #vtype=(e32, m1, ta, ma)

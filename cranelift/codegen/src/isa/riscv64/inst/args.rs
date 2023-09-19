@@ -6,7 +6,10 @@ use super::*;
 use crate::ir::condcodes::CondCode;
 
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
-use crate::isa::riscv64::lower::isle::generated_code::{COpcodeSpace, CrOp};
+
+use crate::isa::riscv64::lower::isle::generated_code::{
+    COpcodeSpace, CaOp, CiOp, CiwOp, CjOp, CrOp,
+};
 use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
@@ -1093,7 +1096,7 @@ impl AluOPRRI {
     }
 
     pub(crate) fn imm12(self, imm12: Imm12) -> u32 {
-        let x = imm12.as_u32();
+        let x = imm12.bits();
         if let Some(func) = self.option_funct6() {
             func << 6 | (x & 0b11_1111)
         } else if let Some(func) = self.option_funct7() {
@@ -1770,19 +1773,19 @@ impl FloatSelectOP {
     // move qnan bits into int register.
     pub(crate) fn snan_bits(self, rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
-        insts.push(Inst::load_imm12(rd, Imm12::from_bits(-1)));
+        insts.push(Inst::load_imm12(rd, Imm12::from_i16(-1)));
         let x = if ty == F32 { 22 } else { 51 };
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Srli,
             rd: rd,
             rs: rd.to_reg(),
-            imm12: Imm12::from_bits(x),
+            imm12: Imm12::from_i16(x),
         });
         insts.push(Inst::AluRRImm12 {
             alu_op: AluOPRRI::Slli,
             rd: rd,
             rs: rd.to_reg(),
-            imm12: Imm12::from_bits(x),
+            imm12: Imm12::from_i16(x),
         });
         insts
     }
@@ -1882,7 +1885,7 @@ impl Display for CsrImmOP {
 
 impl CSR {
     pub(crate) fn bits(self) -> Imm12 {
-        Imm12::from_bits(match self {
+        Imm12::from_i16(match self {
             CSR::Frm => 0x0002,
         })
     }
@@ -1914,15 +1917,98 @@ impl CrOp {
     pub fn funct4(&self) -> u32 {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CrOp::CMv => 0b1000,
-            CrOp::CAdd => 0b1001,
+            // `c.jr` has the same op/funct4 as C.MV, but RS2 is 0, which is illegal for mv.
+            CrOp::CMv | CrOp::CJr => 0b1000,
+            CrOp::CAdd | CrOp::CJalr | CrOp::CEbreak => 0b1001,
         }
     }
 
     pub fn op(&self) -> COpcodeSpace {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CrOp::CMv | CrOp::CAdd => COpcodeSpace::C2,
+            CrOp::CMv | CrOp::CAdd | CrOp::CJr | CrOp::CJalr | CrOp::CEbreak => COpcodeSpace::C2,
+        }
+    }
+}
+
+impl CaOp {
+    pub fn funct2(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CaOp::CAnd => 0b11,
+            CaOp::COr => 0b10,
+            CaOp::CXor => 0b01,
+            CaOp::CSub => 0b00,
+            CaOp::CAddw => 0b01,
+            CaOp::CSubw => 0b00,
+        }
+    }
+
+    pub fn funct6(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CaOp::CAnd | CaOp::COr | CaOp::CXor | CaOp::CSub => 0b100_011,
+            CaOp::CSubw | CaOp::CAddw => 0b100_111,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CaOp::CAnd | CaOp::COr | CaOp::CXor | CaOp::CSub | CaOp::CAddw | CaOp::CSubw => {
+                COpcodeSpace::C1
+            }
+        }
+    }
+}
+
+impl CjOp {
+    pub fn funct3(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CjOp::CJ => 0b101,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CjOp::CJ => COpcodeSpace::C1,
+        }
+    }
+}
+
+impl CiOp {
+    pub fn funct3(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CiOp::CAddi | CiOp::CSlli => 0b000,
+            CiOp::CAddiw => 0b001,
+            CiOp::CAddi16sp => 0b011,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CiOp::CAddi | CiOp::CAddiw | CiOp::CAddi16sp => COpcodeSpace::C1,
+            CiOp::CSlli => COpcodeSpace::C2,
+        }
+    }
+}
+
+impl CiwOp {
+    pub fn funct3(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            CiwOp::CAddi4spn => 0b000,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            CiwOp::CAddi4spn => COpcodeSpace::C0,
         }
     }
 }

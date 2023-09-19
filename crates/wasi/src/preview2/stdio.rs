@@ -8,14 +8,7 @@ use crate::preview2::{HostOutputStream, OutputStreamError, WasiView};
 use bytes::Bytes;
 use is_terminal::IsTerminal;
 
-#[cfg(unix)]
-mod unix;
-#[cfg(unix)]
-pub use self::unix::{stdin, Stdin};
-
-#[allow(dead_code)]
 mod worker_thread_stdin;
-#[cfg(windows)]
 pub use self::worker_thread_stdin::{stdin, Stdin};
 
 // blocking-write-and-flush must accept 4k. It doesn't seem likely that we need to
