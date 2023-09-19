@@ -6,6 +6,7 @@ use std::{
     convert::Infallible,
     pin::Pin,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::preview2::{
@@ -15,7 +16,7 @@ use wasmtime_wasi::preview2::{
 pub struct HostIncomingBody {
     pub worker: AbortOnDropJoinHandle<()>,
     pub stream: Option<HostIncomingBodyStream>,
-    pub trailers: oneshot::Receiver<Result<hyper::HeaderMap, hyper::Error>>,
+    pub trailers: oneshot::Receiver<Result<hyper::HeaderMap, anyhow::Error>>,
 }
 
 impl HostIncomingBody {
@@ -30,13 +31,13 @@ impl HostIncomingBody {
 
 pub struct HostIncomingBodyStream {
     pub open: bool,
-    pub receiver: mpsc::Receiver<Result<Bytes, hyper::Error>>,
+    pub receiver: mpsc::Receiver<Result<Bytes, anyhow::Error>>,
     pub buffer: Bytes,
-    pub error: Option<hyper::Error>,
+    pub error: Option<anyhow::Error>,
 }
 
 impl HostIncomingBodyStream {
-    fn new(receiver: mpsc::Receiver<Result<Bytes, hyper::Error>>) -> Self {
+    fn new(receiver: mpsc::Receiver<Result<Bytes, anyhow::Error>>) -> Self {
         Self {
             open: true,
             receiver,
@@ -121,27 +122,51 @@ impl HostIncomingBody {
     /// streaming body to completion. Data segments will be communicated out over the
     /// [`DataReceiver`] channel, and a [`HostFutureTrailers`] gives a way to block on/retrieve the
     /// trailers.
-    pub fn new(mut body: hyper::body::Incoming) -> Self {
+    pub fn new(mut body: hyper::body::Incoming, between_bytes_timeout: Duration) -> Self {
         let (body_writer, body_receiver) = mpsc::channel(1);
         let (trailer_writer, trailers) = oneshot::channel();
 
         let worker = preview2::spawn(async move {
-            while let Some(frame) = http_body_util::BodyExt::frame(&mut body).await {
-                // TODO: we need to actually handle errors here, right now we'll exit the loop
-                // early without signaling properly to either channel that we're done.
-                if let Err(e) = frame {
-                    match body_writer.send(Err(e)).await {
-                        Ok(_) => {}
-                        // If the body read end has dropped, then we report this error with the
-                        // trailers. unwrap and rewrap Err because the Ok side of these two Results
-                        // are different.
-                        Err(e) => {
-                            let _ = trailer_writer.send(Err(e.0.unwrap_err()));
+            loop {
+                let frame = match tokio::time::timeout(
+                    between_bytes_timeout,
+                    http_body_util::BodyExt::frame(&mut body),
+                )
+                .await
+                {
+                    Ok(None) => break,
+
+                    Ok(Some(Ok(frame))) => frame,
+
+                    Ok(Some(Err(e))) => {
+                        match body_writer.send(Err(anyhow::anyhow!(e))).await {
+                            Ok(_) => {}
+                            // If the body read end has dropped, then we report this error with the
+                            // trailers. unwrap and rewrap Err because the Ok side of these two Results
+                            // are different.
+                            Err(e) => {
+                                let _ = trailer_writer.send(Err(e.0.unwrap_err()));
+                            }
                         }
+                        break;
                     }
-                    break;
-                }
-                let frame = frame.unwrap();
+
+                    Err(_) => {
+                        match body_writer
+                            .send(Err(types::Error::TimeoutError(
+                                "data frame timed out".to_string(),
+                            )
+                            .into()))
+                            .await
+                        {
+                            Ok(_) => {}
+                            Err(e) => {
+                                let _ = trailer_writer.send(Err(e.0.unwrap_err()));
+                            }
+                        }
+                        break;
+                    }
+                };
 
                 if frame.is_trailers() {
                     // We know we're not going to write any more data frames at this point, so we
@@ -182,7 +207,7 @@ impl HostIncomingBody {
 pub struct HostFutureTrailers {
     pub worker: AbortOnDropJoinHandle<()>,
     pub received: Option<Result<FieldMap, types::Error>>,
-    pub receiver: oneshot::Receiver<Result<hyper::HeaderMap, hyper::Error>>,
+    pub receiver: oneshot::Receiver<Result<hyper::HeaderMap, anyhow::Error>>,
 }
 
 impl HostFutureTrailers {

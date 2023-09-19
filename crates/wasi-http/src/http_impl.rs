@@ -32,7 +32,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 .unwrap_or(600 * 1000) as u64,
         );
 
-        let _between_bytes_timeout = Duration::from_millis(
+        let between_bytes_timeout = Duration::from_millis(
             options
                 .and_then(|opts| opts.between_bytes_timeout_ms)
                 .unwrap_or(600 * 1000) as u64,
@@ -121,7 +121,11 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 .map_err(|_| timeout_error("first byte"))?
                 .map_err(hyper_protocol_error)?;
 
-            Ok(IncomingResponseInternal { resp, worker })
+            Ok(IncomingResponseInternal {
+                resp,
+                worker,
+                between_bytes_timeout,
+            })
         });
 
         let fut = self

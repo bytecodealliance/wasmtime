@@ -274,10 +274,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[incoming_response_consume] getting response")?;
 
         match r.body.take() {
-            Some(body) => {
+            Some((body, duration)) => {
                 let id = self
                     .table()
-                    .push_incoming_body(HostIncomingBody::new(body))?;
+                    .push_incoming_body(HostIncomingBody::new(body, duration))?;
                 Ok(Ok(id))
             }
 
@@ -385,7 +385,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let resp = self.table().push_incoming_response(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers: FieldMap::from(parts.headers),
-            body: Some(body),
+            body: Some((body, resp.between_bytes_timeout)),
             worker: resp.worker,
         })?;
 
