@@ -107,7 +107,7 @@ impl HostFutureIncomingResponse {
     }
 
     pub fn is_ready(&self) -> bool {
-        matches!(self, Self::Pending(_))
+        matches!(self, Self::Ready(_))
     }
 
     pub fn unwrap_ready(self) -> anyhow::Result<IncomingResponseInternal> {

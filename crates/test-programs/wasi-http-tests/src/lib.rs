@@ -127,6 +127,7 @@ pub async fn request(
         None => {
             let pollable = http_types::listen_to_future_incoming_response(future_response);
             let _ = poll::poll_oneoff(&[pollable]);
+            poll::drop_pollable(pollable);
             http_types::future_incoming_response_get(future_response)
                 .expect("incoming response available")
                 .map_err(|_| anyhow!("incoming response errored"))?
@@ -139,11 +140,7 @@ pub async fn request(
     // TODO: The current implementation requires this drop after the request is sent.
     // The ownership semantics are unclear in wasi-http we should clarify exactly what is
     // supposed to happen here.
-    streams::drop_output_stream(request_body);
-
-    http_types::drop_outgoing_request(request);
-
-    http_types::drop_future_incoming_response(future_response);
+    http_types::drop_outgoing_body(request_body);
 
     let status = http_types::incoming_response_status(incoming_response);
 
@@ -151,15 +148,17 @@ pub async fn request(
     let headers = http_types::fields_entries(headers_handle);
     http_types::drop_fields(headers_handle);
 
-    let body_stream = http_types::incoming_response_consume(incoming_response)
+    let incoming_body = http_types::incoming_response_consume(incoming_response)
         .map_err(|()| anyhow!("incoming response has no body stream"))?;
-    let input_stream_pollable = streams::subscribe_to_input_stream(body_stream);
+
+    let input_stream = http_types::incoming_body_stream(incoming_body).unwrap();
+    let input_stream_pollable = streams::subscribe_to_input_stream(input_stream);
 
     let mut body = Vec::new();
     let mut eof = streams::StreamStatus::Open;
     while eof != streams::StreamStatus::Ended {
         let (mut body_chunk, stream_status) =
-            streams::read(body_stream, u64::MAX).map_err(|_| anyhow!("body_stream read failed"))?;
+            streams::read(input_stream, u64::MAX).map_err(|_| anyhow!("input_stream read failed"))?;
         eof = if body_chunk.is_empty() {
             streams::StreamStatus::Ended
         } else {
@@ -169,8 +168,8 @@ pub async fn request(
     }
 
     poll::drop_pollable(input_stream_pollable);
-    streams::drop_input_stream(body_stream);
-    http_types::drop_incoming_response(incoming_response);
+    streams::drop_input_stream(input_stream);
+    http_types::drop_incoming_body(incoming_body);
 
     Ok(Response {
         status,
