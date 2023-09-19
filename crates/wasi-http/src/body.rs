@@ -117,38 +117,11 @@ impl HostIncomingBody {
     /// [`DataReceiver`] channel, and a [`HostFutureTrailers`] gives a way to block on/retrieve the
     /// trailers.
     pub fn new(mut body: hyper::body::Incoming) -> Self {
-        use hyper::body::{Body, Frame};
-
-        struct FrameFut<'a> {
-            body: &'a mut hyper::body::Incoming,
-        }
-
-        impl<'a> FrameFut<'a> {
-            fn new(body: &'a mut hyper::body::Incoming) -> Self {
-                Self { body }
-            }
-        }
-
-        impl<'a> std::future::Future for FrameFut<'a> {
-            type Output = Option<Result<Frame<bytes::Bytes>, hyper::Error>>;
-
-            fn poll(
-                mut self: pin::Pin<&mut Self>,
-                cx: &mut task::Context<'_>,
-            ) -> task::Poll<Self::Output> {
-                if self.body.is_end_stream() {
-                    return task::Poll::Ready(None);
-                }
-
-                pin::Pin::new(&mut self.body).poll_frame(cx)
-            }
-        }
-
         let (body_writer, body_receiver) = mpsc::channel(1);
         let (trailer_writer, trailers) = oneshot::channel();
 
         let worker = preview2::spawn(async move {
-            while let Some(frame) = FrameFut::new(&mut body).await {
+            while let Some(frame) = http_body_util::BodyExt::frame(&mut body).await {
                 // TODO: we need to actually handle errors here, right now we'll exit the loop
                 // early without signaling properly to either channel that we're done.
                 if let Err(e) = frame {
