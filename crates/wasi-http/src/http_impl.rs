@@ -89,7 +89,10 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
         let request = builder.body(body).map_err(http_protocol_error)?;
 
         let handle = preview2::spawn(async move {
-            let tcp_stream = TcpStream::connect(authority.clone()).await?;
+            let tcp_stream = TcpStream::connect(authority.clone())
+                .await
+                .map_err(invalid_url)?;
+
             let (mut sender, conn) = if use_tls {
                 if cfg!(any(target_arch = "riscv64", target_arch = "s390x")) {
                     anyhow::bail!(crate::bindings::http::types::Error::UnexpectedError(
@@ -144,5 +147,13 @@ fn http_protocol_error(e: http::Error) -> anyhow::Error {
 fn hyper_protocol_error(e: hyper::Error) -> anyhow::Error {
     anyhow::anyhow!(crate::bindings::http::types::Error::ProtocolError(
         e.to_string()
+    ))
+}
+
+fn invalid_url(_: std::io::Error) -> anyhow::Error {
+    // TODO: DNS errors show up as a Custom io error, what subset of errors should we consider for
+    // InvalidUrl here?
+    anyhow::anyhow!(crate::bindings::http::types::Error::InvalidUrl(
+        "invalid dnsname".to_string()
     ))
 }
