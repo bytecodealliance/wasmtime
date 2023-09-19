@@ -99,6 +99,7 @@ type FutureIncomingResponseHandle = AbortOnDropJoinHandle<anyhow::Result<Incomin
 pub enum HostFutureIncomingResponse {
     Pending(FutureIncomingResponseHandle),
     Ready(anyhow::Result<IncomingResponseInternal>),
+    Consumed,
 }
 
 impl HostFutureIncomingResponse {
@@ -113,7 +114,7 @@ impl HostFutureIncomingResponse {
     pub fn unwrap_ready(self) -> anyhow::Result<IncomingResponseInternal> {
         match self {
             Self::Ready(res) => res,
-            Self::Pending(_) => {
+            Self::Pending(_) | Self::Consumed => {
                 panic!("unwrap_ready called on a pending HostFutureIncomingResponse")
             }
         }
@@ -134,7 +135,7 @@ impl std::future::Future for HostFutureIncomingResponse {
                 }
             },
 
-            Self::Ready(_) => task::Poll::Ready(Ok(())),
+            Self::Consumed | Self::Ready(_) => task::Poll::Ready(Ok(())),
         }
     }
 }

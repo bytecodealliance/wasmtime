@@ -136,6 +136,8 @@ pub async fn request(
     // Error? anyway, just use its Debug here:
     .map_err(|e| anyhow!("{e:?}"))?;
 
+    http_types::drop_future_incoming_response(future_response);
+
     let status = http_types::incoming_response_status(incoming_response);
 
     let headers_handle = http_types::incoming_response_headers(incoming_response);

@@ -360,22 +360,24 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         &mut self,
         id: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<Result<IncomingResponse, Error>, ()>>> {
-        if !self.table().get_future_incoming_response(id)?.is_ready() {
-            return Ok(None);
+        let resp = self.table().get_future_incoming_response_mut(id)?;
+
+        match resp {
+            HostFutureIncomingResponse::Pending(_) => return Ok(None),
+            HostFutureIncomingResponse::Consumed => return Ok(Some(Err(()))),
+            HostFutureIncomingResponse::Ready(_) => {}
         }
 
-        let resp = match self
-            .table()
-            .delete_future_incoming_response(id)?
-            .unwrap_ready()
-        {
-            Ok(resp) => resp,
-            Err(e) => {
-                // Trapping if it's not possible to downcast to an wasi-http error
-                let e = e.downcast::<Error>()?;
-                return Ok(Some(Ok(Err(e))));
-            }
-        };
+        let resp =
+            match std::mem::replace(resp, HostFutureIncomingResponse::Consumed).unwrap_ready() {
+                Err(e) => {
+                    // Trapping if it's not possible to downcast to an wasi-http error
+                    let e = e.downcast::<Error>()?;
+                    return Ok(Some(Ok(Err(e))));
+                }
+
+                Ok(resp) => resp,
+            };
 
         let (parts, body) = resp.resp.into_parts();
 
