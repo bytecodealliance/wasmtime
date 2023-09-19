@@ -3,7 +3,7 @@
 
 use crate::{
     bindings::http::types::{FutureTrailers, IncomingBody, Method, OutgoingBody, Scheme},
-    body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, OutgoingBodyRepr},
+    body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, HyperBody},
 };
 use std::pin::Pin;
 use std::task;
@@ -24,7 +24,7 @@ pub struct HostOutgoingRequest {
     pub path_with_query: String,
     pub authority: String,
     pub headers: FieldMap,
-    pub body: Option<OutgoingBodyRepr>,
+    pub body: Option<HyperBody>,
 }
 
 pub struct HostIncomingResponse {
@@ -182,7 +182,7 @@ pub trait TableHttpExt {
     fn delete_incoming_body(&mut self, id: IncomingBody) -> Result<HostIncomingBody, TableError>;
 
     fn push_outgoing_body(&mut self, body: HostOutgoingBody) -> Result<OutgoingBody, TableError>;
-    fn get_outgoing_body(&mut self, id: OutgoingBody) -> Result<&mut OutgoingBodyRepr, TableError>;
+    fn get_outgoing_body(&mut self, id: OutgoingBody) -> Result<&mut HostOutgoingBody, TableError>;
     fn delete_outgoing_body(&mut self, id: OutgoingBody) -> Result<HostOutgoingBody, TableError>;
 
     fn push_future_trailers(
@@ -302,13 +302,11 @@ impl TableHttpExt for Table {
     }
 
     fn push_outgoing_body(&mut self, body: HostOutgoingBody) -> Result<OutgoingBody, TableError> {
-        let parent = body.parent;
-        self.push_child(Box::new(body), parent)
+        self.push(Box::new(body))
     }
 
-    fn get_outgoing_body(&mut self, id: OutgoingBody) -> Result<&mut OutgoingBodyRepr, TableError> {
-        let HostOutgoingBody { parent, get_body } = *self.get(id)?;
-        Ok(get_body(self.get_any_mut(parent).unwrap()))
+    fn get_outgoing_body(&mut self, id: OutgoingBody) -> Result<&mut HostOutgoingBody, TableError> {
+        self.get_mut(id)
     }
 
     fn delete_outgoing_body(&mut self, id: OutgoingBody) -> Result<HostOutgoingBody, TableError> {

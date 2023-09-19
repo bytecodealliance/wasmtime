@@ -9,7 +9,7 @@ use crate::body::HostFutureTrailers;
 use crate::types::FieldMap;
 use crate::WasiHttpView;
 use crate::{
-    body::{HostIncomingBody, HostOutgoingBody, OutgoingBodyRepr},
+    body::{HostIncomingBody, HostOutgoingBody},
     types::{
         HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest,
         TableHttpExt,
@@ -199,18 +199,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         if req.body.is_some() {
             return Ok(Err(()));
         }
-        req.body = Some(OutgoingBodyRepr::new());
 
-        fn get_body(entry: &mut dyn Any) -> &mut OutgoingBodyRepr {
-            let req = entry.downcast_mut::<HostOutgoingRequest>().unwrap();
-            req.body.as_mut().unwrap()
-        }
+        let (host_body, hyper_body) = HostOutgoingBody::new();
+
+        req.body = Some(hyper_body);
+
         // The output stream will necessarily outlive the request, because we could be still
         // writing to the stream after `outgoing-handler.handle` is called.
-        let outgoing_body = self.table().push_outgoing_body(HostOutgoingBody {
-            parent: request,
-            get_body,
-        })?;
+        let outgoing_body = self.table().push_outgoing_body(host_body)?;
 
         Ok(Ok(outgoing_body))
     }
@@ -458,9 +454,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         id: OutgoingBody,
         ts: Trailers,
     ) -> wasmtime::Result<()> {
-        let HostOutgoingBody { parent, get_body } = self.table().delete_outgoing_body(id)?;
+        let mut body = self.table().delete_outgoing_body(id)?;
         let trailers = self.table().get_fields(ts)?.clone();
-        let body = get_body(self.table().get_any_mut(parent)?);
 
         match body
             .trailers_sender

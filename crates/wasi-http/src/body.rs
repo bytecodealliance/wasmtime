@@ -1,10 +1,15 @@
 use crate::{bindings::http::types, types::FieldMap};
+use anyhow::anyhow;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
-use std::{any::Any, convert::Infallible, pin::Pin};
+use std::{
+    convert::Infallible,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::preview2::{
-    self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamState,
+    self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, OutputStreamError, StreamState,
 };
 
 pub struct HostIncomingBody {
@@ -223,22 +228,15 @@ impl HostFutureTrailers {
     }
 }
 
+pub type HyperBody = BoxBody<Bytes, Infallible>;
+
 pub struct HostOutgoingBody {
-    pub parent: u32,
-    pub get_body: for<'a> fn(&'a mut dyn Any) -> &mut OutgoingBodyRepr,
+    pub body_output_stream: Option<Box<dyn HostOutputStream>>,
+    pub trailers_sender: Option<tokio::sync::oneshot::Sender<hyper::HeaderMap>>,
 }
 
-pub struct OutgoingBodyRepr {
-    pub body_output_stream: Option<Box<dyn HostOutputStream>>, // outgoing-body-write takes it out of this
-    // struct and puts it into the table.
-    pub trailers_sender: Option<tokio::sync::oneshot::Sender<hyper::HeaderMap>>, // oitgoing-body-write-trailers writes
-    // to this as its way of finishing
-    // the outgoing body
-    pub body_impl: BoxBody<Bytes, Infallible>,
-}
-
-impl OutgoingBodyRepr {
-    pub fn new() -> Self {
+impl HostOutgoingBody {
+    pub fn new() -> (Self, HyperBody) {
         use http_body_util::BodyExt;
         use hyper::{
             body::{Body, Frame},
@@ -261,6 +259,8 @@ impl OutgoingBodyRepr {
                 match self.as_mut().body_receiver.poll_recv(cx) {
                     Poll::Pending => Poll::Pending,
                     Poll::Ready(Some(frame)) => Poll::Ready(Some(Ok(Frame::data(frame)))),
+
+                    // This means that the `body_sender` end of the channel has been dropped.
                     Poll::Ready(None) => {
                         if let Some(mut trailers_receiver) = self.as_mut().trailers_receiver.take()
                         {
@@ -282,7 +282,6 @@ impl OutgoingBodyRepr {
             }
         }
 
-        // FIXME capacity here for backpressure eventaully???
         let (body_sender, body_receiver) = mpsc::channel(1);
         let (trailers_sender, trailers_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
@@ -290,10 +289,201 @@ impl OutgoingBodyRepr {
             trailers_receiver: Some(trailers_receiver),
         }
         .boxed();
-        Self {
-            body_output_stream: Some(todo!("wrap around `body_sender` to impl HostOutputStream")),
-            trailers_sender: Some(trailers_sender),
+        (
+            Self {
+                // TODO: this capacity constant is arbitrary, and should be configurable
+                body_output_stream: Some(Box::new(BodyWriteStream::new(1024 * 1024, body_sender))),
+                trailers_sender: Some(trailers_sender),
+            },
             body_impl,
+        )
+    }
+}
+
+// copied in from preview2::write_stream
+
+#[derive(Debug)]
+struct WorkerState {
+    alive: bool,
+    items: std::collections::VecDeque<Bytes>,
+    write_budget: usize,
+    flush_pending: bool,
+    error: Option<anyhow::Error>,
+}
+
+impl WorkerState {
+    fn check_error(&mut self) -> Result<(), OutputStreamError> {
+        if let Some(e) = self.error.take() {
+            return Err(OutputStreamError::LastOperationFailed(e));
+        }
+        if !self.alive {
+            return Err(OutputStreamError::Closed);
+        }
+        Ok(())
+    }
+}
+
+struct Worker {
+    state: Mutex<WorkerState>,
+    new_work: tokio::sync::Notify,
+    write_ready_changed: tokio::sync::Notify,
+}
+
+enum Job {
+    Flush,
+    Write(Bytes),
+}
+
+enum WriteStatus<'a> {
+    Done(Result<usize, OutputStreamError>),
+    Pending(tokio::sync::futures::Notified<'a>),
+}
+
+impl Worker {
+    fn new(write_budget: usize) -> Self {
+        Self {
+            state: Mutex::new(WorkerState {
+                alive: true,
+                items: std::collections::VecDeque::new(),
+                write_budget,
+                flush_pending: false,
+                error: None,
+            }),
+            new_work: tokio::sync::Notify::new(),
+            write_ready_changed: tokio::sync::Notify::new(),
+        }
+    }
+    fn check_write(&self) -> WriteStatus<'_> {
+        let mut state = self.state();
+        if let Err(e) = state.check_error() {
+            return WriteStatus::Done(Err(e));
+        }
+
+        if state.flush_pending || state.write_budget == 0 {
+            return WriteStatus::Pending(self.write_ready_changed.notified());
+        }
+
+        WriteStatus::Done(Ok(state.write_budget))
+    }
+    fn state(&self) -> std::sync::MutexGuard<WorkerState> {
+        self.state.lock().unwrap()
+    }
+    fn pop(&self) -> Option<Job> {
+        let mut state = self.state();
+        if state.items.is_empty() {
+            if state.flush_pending {
+                return Some(Job::Flush);
+            }
+        } else if let Some(bytes) = state.items.pop_front() {
+            return Some(Job::Write(bytes));
+        }
+
+        None
+    }
+    fn report_error(&self, e: std::io::Error) {
+        {
+            let mut state = self.state();
+            state.alive = false;
+            state.error = Some(e.into());
+            state.flush_pending = false;
+        }
+        self.write_ready_changed.notify_waiters();
+    }
+
+    async fn work(&self, writer: mpsc::Sender<Bytes>) {
+        loop {
+            let notified = self.new_work.notified();
+            while let Some(job) = self.pop() {
+                match job {
+                    Job::Flush => {
+                        self.state().flush_pending = false;
+                    }
+
+                    Job::Write(bytes) => {
+                        tracing::debug!("worker writing: {bytes:?}");
+                        let len = bytes.len();
+                        match writer.send(bytes).await {
+                            Err(_) => {
+                                self.report_error(std::io::Error::new(
+                                    std::io::ErrorKind::BrokenPipe,
+                                    "Outgoing stream body reader has dropped",
+                                ));
+                                return;
+                            }
+                            Ok(_) => {
+                                self.state().write_budget += len;
+                            }
+                        }
+                    }
+                }
+
+                self.write_ready_changed.notify_waiters();
+            }
+
+            notified.await;
+        }
+    }
+}
+
+/// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
+pub struct BodyWriteStream {
+    worker: Arc<Worker>,
+    _join_handle: preview2::AbortOnDropJoinHandle<()>,
+}
+
+impl BodyWriteStream {
+    /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
+    /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
+    pub fn new(write_budget: usize, writer: mpsc::Sender<Bytes>) -> Self {
+        let worker = Arc::new(Worker::new(write_budget));
+
+        let w = Arc::clone(&worker);
+        let join_handle = preview2::spawn(async move { w.work(writer).await });
+
+        BodyWriteStream {
+            worker,
+            _join_handle: join_handle,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl HostOutputStream for BodyWriteStream {
+    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
+        let mut state = self.worker.state();
+        state.check_error()?;
+        if state.flush_pending {
+            return Err(OutputStreamError::Trap(anyhow!(
+                "write not permitted while flush pending"
+            )));
+        }
+        match state.write_budget.checked_sub(bytes.len()) {
+            Some(remaining_budget) => {
+                state.write_budget = remaining_budget;
+                state.items.push_back(bytes);
+            }
+            None => return Err(OutputStreamError::Trap(anyhow!("write exceeded budget"))),
+        }
+        drop(state);
+        self.worker.new_work.notify_waiters();
+        Ok(())
+    }
+    fn flush(&mut self) -> Result<(), OutputStreamError> {
+        let mut state = self.worker.state();
+        state.check_error()?;
+
+        state.flush_pending = true;
+        self.worker.new_work.notify_waiters();
+
+        Ok(())
+    }
+
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        loop {
+            match self.worker.check_write() {
+                WriteStatus::Done(r) => return r,
+                WriteStatus::Pending(notifier) => notifier.await,
+            }
         }
     }
 }

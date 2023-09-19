@@ -84,11 +84,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             }
         }
 
-        let body = if let Some(body) = req.body {
-            body.body_impl
-        } else {
-            Empty::<Bytes>::new().boxed()
-        };
+        let body = req.body.unwrap_or_else(|| Empty::<Bytes>::new().boxed());
 
         let request = builder.body(body).map_err(http_protocol_error)?;
 

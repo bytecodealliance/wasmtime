@@ -23,6 +23,7 @@ mod filesystem;
 mod host;
 mod network;
 pub mod pipe;
+mod write_stream;
 mod poll;
 #[cfg(feature = "preview1-on-preview2")]
 pub mod preview1;
