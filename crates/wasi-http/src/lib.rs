@@ -2,12 +2,12 @@ pub use crate::types::{WasiHttpCtx, WasiHttpView};
 use core::fmt::Formatter;
 use std::fmt::{self, Display};
 
+pub mod body;
 pub mod http_impl;
 pub mod incoming_handler;
 pub mod proxy;
 pub mod types;
 pub mod types_impl;
-pub mod body;
 
 pub mod bindings {
     #[cfg(feature = "sync")]
