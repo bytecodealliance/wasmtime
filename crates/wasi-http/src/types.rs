@@ -2,17 +2,16 @@
 //! implementation of the wasi-http API.
 
 use crate::{
-    bindings::http::types::{FutureTrailers, Headers, IncomingBody, Method, Scheme},
+    bindings::http::types::{FutureTrailers, IncomingBody, Method, OutgoingBody, Scheme},
     body::{HostFutureTrailers, HostIncomingBody},
 };
+use bytes::Bytes;
+use http_body_util::combinators::BoxBody;
+use std::convert::Infallible;
 use std::pin::Pin;
 use std::task;
 use std::{any::Any, collections::HashMap};
-use wasmtime_wasi::preview2::{
-    pipe::AsyncReadStream, AbortOnDropJoinHandle, OccupiedEntry, Table, TableError,
-};
-
-const MAX_BUF_SIZE: usize = 65_536;
+use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, HostOutputStream, Table, TableError};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx;
@@ -28,7 +27,82 @@ pub struct HostOutgoingRequest {
     pub path_with_query: String,
     pub authority: String,
     pub headers: FieldMap,
-    pub body: Option<AsyncReadStream>,
+    pub body: Option<OutgoingBodyRepr>,
+}
+
+pub struct HostOutgoingBody {
+    pub parent: u32,
+    pub get_body: for<'a> fn(&'a mut dyn Any) -> &mut OutgoingBodyRepr,
+}
+
+pub struct OutgoingBodyRepr {
+    pub body_output_stream: Option<Box<dyn HostOutputStream>>, // outgoing-body-write takes it out of this
+    // struct and puts it into the table.
+    pub trailers_sender: Option<tokio::sync::oneshot::Sender<hyper::HeaderMap>>, // oitgoing-body-write-trailers writes
+    // to this as its way of finishing
+    // the outgoing body
+    pub body_impl: BoxBody<Bytes, Infallible>,
+}
+impl OutgoingBodyRepr {
+    pub fn new() -> Self {
+        use http_body_util::BodyExt;
+        use hyper::{
+            body::{Body, Frame},
+            HeaderMap,
+        };
+        use std::future::Future;
+        use std::task::{Context, Poll};
+        use tokio::sync::mpsc;
+        use tokio::sync::oneshot::{self, error::RecvError};
+        struct BodyImpl {
+            body_receiver: mpsc::Receiver<Bytes>,
+            trailers_receiver: Option<oneshot::Receiver<HeaderMap>>,
+        }
+        impl Body for BodyImpl {
+            type Data = Bytes;
+            type Error = Infallible;
+            fn poll_frame(
+                mut self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+            ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+                match self.as_mut().body_receiver.poll_recv(cx) {
+                    Poll::Pending => Poll::Pending,
+                    Poll::Ready(Some(frame)) => Poll::Ready(Some(Ok(Frame::data(frame)))),
+                    Poll::Ready(None) => {
+                        if let Some(mut trailers_receiver) = self.as_mut().trailers_receiver.take()
+                        {
+                            match Pin::new(&mut trailers_receiver).poll(cx) {
+                                Poll::Pending => {
+                                    self.as_mut().trailers_receiver = Some(trailers_receiver);
+                                    Poll::Pending
+                                }
+                                Poll::Ready(Ok(trailers)) => {
+                                    Poll::Ready(Some(Ok(Frame::trailers(trailers))))
+                                }
+                                Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),
+                            }
+                        } else {
+                            Poll::Ready(None)
+                        }
+                    }
+                }
+            }
+        }
+
+        // FIXME capacity here for backpressure eventaully???
+        let (body_sender, body_receiver) = mpsc::channel(1);
+        let (trailers_sender, trailers_receiver) = oneshot::channel();
+        let body_impl = BodyImpl {
+            body_receiver,
+            trailers_receiver: Some(trailers_receiver),
+        }
+        .boxed();
+        Self {
+            body_output_stream: Some(todo!("wrap around `body_sender` to impl HostOutputStream")),
+            trailers_sender: Some(trailers_sender),
+            body_impl,
+        }
+    }
 }
 
 pub struct HostIncomingResponse {
@@ -58,6 +132,23 @@ impl From<hyper::HeaderMap> for FieldMap {
         }
 
         Self(res)
+    }
+}
+
+impl From<FieldMap> for hyper::HeaderMap {
+    fn from(fm: FieldMap) -> Self {
+        let mut res = hyper::HeaderMap::new();
+        for (k, vs) in fm.0 {
+            let name = hyper::header::HeaderName::from_bytes(k.as_str().as_bytes()).expect("FIXME");
+            for v in vs {
+                res.append(
+                    name.clone(),
+                    hyper::header::HeaderValue::from_bytes(&v)
+                        .expect("FIXME: need to make this a TryFrom"),
+                );
+            }
+        }
+        res
     }
 }
 
@@ -167,6 +258,10 @@ pub trait TableHttpExt {
     fn push_incoming_body(&mut self, body: HostIncomingBody) -> Result<IncomingBody, TableError>;
     fn get_incoming_body(&mut self, id: IncomingBody) -> Result<&mut HostIncomingBody, TableError>;
     fn delete_incoming_body(&mut self, id: IncomingBody) -> Result<HostIncomingBody, TableError>;
+
+    fn push_outgoing_body(&mut self, body: HostOutgoingBody) -> Result<OutgoingBody, TableError>;
+    fn get_outgoing_body(&mut self, id: OutgoingBody) -> Result<&mut OutgoingBodyRepr, TableError>;
+    fn delete_outgoing_body(&mut self, id: OutgoingBody) -> Result<HostOutgoingBody, TableError>;
 
     fn push_future_trailers(
         &mut self,
@@ -281,6 +376,20 @@ impl TableHttpExt for Table {
     }
 
     fn delete_incoming_body(&mut self, id: IncomingBody) -> Result<HostIncomingBody, TableError> {
+        self.delete(id)
+    }
+
+    fn push_outgoing_body(&mut self, body: HostOutgoingBody) -> Result<OutgoingBody, TableError> {
+        let parent = body.parent;
+        self.push_child(Box::new(body), parent)
+    }
+
+    fn get_outgoing_body(&mut self, id: OutgoingBody) -> Result<&mut OutgoingBodyRepr, TableError> {
+        let HostOutgoingBody { parent, get_body } = *self.get(id)?;
+        Ok(get_body(self.get_any_mut(parent).unwrap()))
+    }
+
+    fn delete_outgoing_body(&mut self, id: OutgoingBody) -> Result<HostOutgoingBody, TableError> {
         self.delete(id)
     }
 

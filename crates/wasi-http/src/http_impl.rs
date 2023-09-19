@@ -2,22 +2,16 @@ use crate::bindings::http::{
     outgoing_handler,
     types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme},
 };
-use crate::types::{
-    HostFutureIncomingResponse, HostIncomingResponse, IncomingResponseInternal, TableHttpExt,
-};
+use crate::types::{HostFutureIncomingResponse, IncomingResponseInternal, TableHttpExt};
 use crate::WasiHttpView;
 use anyhow::Context;
-use bytes::{Bytes, BytesMut};
-use http_body_util::{BodyExt, Empty, Full};
-use hyper::{Method, Request};
-#[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
-use std::sync::Arc;
+use bytes::Bytes;
+use http_body_util::{BodyExt, Empty};
+use hyper::Method;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-#[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
-use tokio_rustls::rustls::{self, OwnedTrustAnchor};
-use wasmtime_wasi::preview2::{self, StreamState, TableStreamExt};
+use wasmtime_wasi::preview2;
 
 #[async_trait::async_trait]
 impl<T: WasiHttpView> outgoing_handler::Host for T {
@@ -38,13 +32,13 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 .unwrap_or(600 * 1000) as u64,
         );
 
-        let between_bytes_timeout = Duration::from_millis(
+        let _between_bytes_timeout = Duration::from_millis(
             options
                 .and_then(|opts| opts.between_bytes_timeout_ms)
                 .unwrap_or(600 * 1000) as u64,
         );
 
-        let mut req = self.table().delete_outgoing_request(request_id)?;
+        let req = self.table().delete_outgoing_request(request_id)?;
 
         let method = match req.method {
             crate::bindings::http::types::Method::Get => Method::GET,
@@ -90,10 +84,8 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             }
         }
 
-        // TODO: we should not use `pipe` here, and should instead construct a type that
-        // implements HostOutputStream and hyper::Body.
         let body = if let Some(body) = req.body {
-            todo!("finish implementing request body handling")
+            body.body_impl
         } else {
             Empty::<Bytes>::new().boxed()
         };

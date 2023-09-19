@@ -11,15 +11,14 @@ use crate::WasiHttpView;
 use crate::{
     body::HostIncomingBody,
     types::{
-        HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest,
-        TableHttpExt,
+        HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingBody,
+        HostOutgoingRequest, OutgoingBodyRepr, TableHttpExt,
     },
 };
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, Context};
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
     bindings::poll::poll::Pollable,
-    pipe::pipe,
     HostPollable, PollableFuture, TablePollableExt, TableStreamExt,
 };
 
@@ -191,7 +190,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     async fn outgoing_request_write(
         &mut self,
         request: OutgoingRequest,
-    ) -> wasmtime::Result<Result<OutputStream, ()>> {
+    ) -> wasmtime::Result<Result<OutgoingBody, ()>> {
         let req = self
             .table()
             .get_outgoing_request_mut(request)
@@ -200,16 +199,20 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         if req.body.is_some() {
             return Ok(Err(()));
         }
+        req.body = Some(OutgoingBodyRepr::new());
 
-        let (reader, writer) = pipe(1024 * 1024);
-
-        req.body.replace(reader);
-
+        fn get_body(entry: &mut dyn Any) -> &mut OutgoingBodyRepr {
+            let req = entry.downcast_mut::<HostOutgoingRequest>().unwrap();
+            req.body.as_mut().unwrap()
+        }
         // The output stream will necessarily outlive the request, because we could be still
         // writing to the stream after `outgoing-handler.handle` is called.
-        let writer = self.table().push_output_stream(Box::new(writer))?;
+        let outgoing_body = self.table().push_outgoing_body(HostOutgoingBody {
+            parent: request,
+            get_body,
+        })?;
 
-        Ok(Ok(writer))
+        Ok(Ok(outgoing_body))
     }
     async fn drop_response_outparam(
         &mut self,
@@ -439,20 +442,44 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
     async fn outgoing_body_write(
         &mut self,
-        _id: OutgoingBody,
+        id: OutgoingBody,
     ) -> wasmtime::Result<Result<OutputStream, ()>> {
-        todo!()
+        let body = self.table().get_outgoing_body(id)?;
+        if let Some(stream) = body.body_output_stream.take() {
+            let id = self.table().push_output_stream_child(stream, id)?;
+            Ok(Ok(id))
+        } else {
+            Ok(Err(()))
+        }
     }
 
     async fn outgoing_body_write_trailers(
         &mut self,
-        _id: IncomingBody,
-        _ts: Trailers,
+        id: OutgoingBody,
+        ts: Trailers,
     ) -> wasmtime::Result<()> {
-        todo!()
+        let HostOutgoingBody { parent, get_body } = self.table().delete_outgoing_body(id)?;
+        let trailers = self.table().get_fields(ts)?.clone();
+        let body = get_body(self.table().get_any_mut(parent)?);
+
+        match body
+            .trailers_sender
+            .take()
+            // Should be unreachable - this is the only place we take the trailers sender,
+            // at the end of the HostOutgoingBody's lifetime
+            .ok_or_else(|| anyhow!("trailers_sender missing"))?
+            .send(trailers.into())
+        {
+            Ok(()) => {}
+            Err(_) => {} // Ignoring failure: receiver died sending body, but we can't report that
+                         // here.
+        }
+
+        Ok(())
     }
 
-    async fn drop_outgoing_body(&mut self, _id: OutgoingBody) -> wasmtime::Result<()> {
-        todo!()
+    async fn drop_outgoing_body(&mut self, id: OutgoingBody) -> wasmtime::Result<()> {
+        let _ = self.table().delete_outgoing_body(id)?;
+        Ok(())
     }
 }
