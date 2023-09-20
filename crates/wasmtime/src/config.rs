@@ -1183,6 +1183,10 @@ impl Config {
     /// always be static memories, they are never dynamic. This setting
     /// configures the size of linear memory to reserve for each memory in the
     /// pooling allocator.
+    ///
+    /// Note that the pooling allocator can reduce the amount of memory needed
+    /// for pooling allocation by using memory protection; see
+    /// [`Config::memory_protection_keys`] for details.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
         let max_pages = max_size / u64::from(wasmtime_environ::WASM_PAGE_SIZE);
         self.tunables.static_memory_bound = max_pages;
@@ -1195,7 +1199,7 @@ impl Config {
     /// linear memories created within this `Config`. This means that all
     /// memories will be allocated up-front and will never move. Additionally
     /// this means that all memories are synthetically limited by the
-    /// [`Config::static_memory_maximum_size`] option, irregardless of what the
+    /// [`Config::static_memory_maximum_size`] option, regardless of what the
     /// actual maximum size is on the memory's original type.
     ///
     /// For the difference between static and dynamic memories, see the
@@ -1237,7 +1241,7 @@ impl Config {
     /// immediate offsets will generate bounds checks based on how big the guard
     /// page is.
     ///
-    /// For 32-bit memories a 4GB static memory is required to even start
+    /// For 32-bit wasm memories a 4GB static memory is required to even start
     /// removing bounds checks. A 4GB guard size will guarantee that the module
     /// has zero bounds checks for memory accesses. A 2GB guard size will
     /// eliminate all bounds checks with an immediate offset less than 2GB. A
@@ -2301,6 +2305,34 @@ impl PoolingAllocationConfig {
     /// configured static memory maximum size.
     pub fn memory_pages(&mut self, pages: u64) -> &mut Self {
         self.config.limits.memory_pages = pages;
+        self
+    }
+
+    /// Configures whether memory protection keys (MPK) should be used for more
+    /// efficient layout of pool-allocated memories.
+    ///
+    /// When using the pooling allocator (see [`Config::allocation_strategy`],
+    /// [`InstanceAllocationStrategy::Pooling`]), memory protection keys can
+    /// reduce the total amount of allocated memory by eliminating guard regions
+    /// between WebAssembly memories in the pool. It does so by "coloring"
+    /// memory regions with different memory keys and setting which regions are
+    /// accessible each time executions switches from host to guest (or vice
+    /// versa).
+    ///
+    /// MPK is only available on Linux (called `pku` there) and recent x86
+    /// systems. Checking for support at runtime is possible with
+    /// [`mpk::is_supported`][wasmtime_runtime::mpk::is_supported]. This
+    /// configuration setting can be in three states:
+    ///
+    /// - `auto`: if MPK support is available the guard regions are removed; if
+    ///   not, the guard regions remain
+    /// - `enable`: use MPK to eliminate guard regions; fail if MPK is not
+    ///   supported
+    /// - `disable`: never use MPK
+    ///
+    /// By default this value is `auto`.
+    pub fn memory_protection_keys(&mut self, enable: wasmtime_runtime::AutoEnabled) -> &mut Self {
+        self.config.memory_protection_keys = enable;
         self
     }
 }

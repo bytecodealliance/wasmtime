@@ -50,6 +50,7 @@ features = [
 
 [dev-dependencies]
 once_cell = { workspace = true }
+proptest = "1.2.0"
 
 [build-dependencies]
 cc = "1.0"
@@ -61,9 +62,6 @@ async = ["wasmtime-fiber"]
 # Enables support for the pooling instance allocator
 pooling-allocator = []
 
-component-model = [
-  "wasmtime-environ/component-model",
-  "dep:encoding_rs",
-]
+component-model = ["wasmtime-environ/component-model", "dep:encoding_rs"]
 
 wmemcheck = []
