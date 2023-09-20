@@ -848,22 +848,22 @@ impl RunCommand {
         }
 
         if self.common.wasi.http == Some(true) {
-            #[cfg(not(feature = "wasi-http"))]
+            #[cfg(not(all(feature = "wasi-http", feature = "component-model")))]
             {
                 bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
             }
-            #[cfg(feature = "wasi-http")]
+            #[cfg(all(feature = "wasi-http", feature = "component-model"))]
             {
                 match linker {
-                    CliLinker::Core(linker) => {
-                        wasmtime_wasi_http::sync::add_to_linker(linker)?;
+                    CliLinker::Core(_) => {
+                        bail!("Cannot enable wasi-http for core wasm modules");
                     }
-                    #[cfg(feature = "component-model")]
                     CliLinker::Component(linker) => {
                         wasmtime_wasi_http::proxy::sync::add_to_linker(linker)?;
                     }
                 }
-                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
+
+                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx {}));
             }
         }
 
@@ -998,13 +998,13 @@ impl preview2::preview1::WasiPreview1View for Host {
 
 #[cfg(feature = "wasi-http")]
 impl wasmtime_wasi_http::types::WasiHttpView for Host {
-    fn http_ctx(&self) -> &WasiHttpCtx {
-        self.wasi_http.as_ref().unwrap()
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        let ctx = self.wasi_http.as_mut().unwrap();
+        Arc::get_mut(ctx).expect("preview2 is not compatible with threads")
     }
 
-    fn http_ctx_mut(&mut self) -> &mut WasiHttpCtx {
-        let ctx = self.wasi_http.as_mut().unwrap();
-        Arc::get_mut(ctx).expect("wasi-http is not compatible with threads")
+    fn table(&mut self) -> &mut preview2::Table {
+        Arc::get_mut(&mut self.preview2_table).expect("preview2 is not compatible with threads")
     }
 }
 
