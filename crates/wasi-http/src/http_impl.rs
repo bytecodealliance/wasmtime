@@ -13,9 +13,8 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 use wasmtime_wasi::preview2;
 
-#[async_trait::async_trait]
 impl<T: WasiHttpView> outgoing_handler::Host for T {
-    async fn handle(
+    fn handle(
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
@@ -103,7 +102,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
 
                 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
                 {
-                    use tokio_rustls::rustls::{self, OwnedTrustAnchor};
+                    use tokio_rustls::rustls::OwnedTrustAnchor;
 
                     // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
                     let mut root_cert_store = rustls::RootCertStore::empty();

@@ -4,7 +4,7 @@ use wasmtime_wasi::preview2;
 wasmtime::component::bindgen!({
     world: "wasi:http/proxy",
     tracing: true,
-    async: true,
+    async: false,
     with: {
         "wasi:cli/stderr": preview2::bindings::cli::stderr,
         "wasi:cli/stdin": preview2::bindings::cli::stdin,

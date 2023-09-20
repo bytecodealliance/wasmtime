@@ -10,44 +10,22 @@ pub mod types;
 pub mod types_impl;
 
 pub mod bindings {
-    #[cfg(feature = "sync")]
-    pub mod sync {
-        pub(crate) mod _internal {
-            wasmtime::component::bindgen!({
-                path: "wit",
-                interfaces: "
-                    import wasi:http/incoming-handler
-                    import wasi:http/outgoing-handler
-                    import wasi:http/types
-                ",
-                tracing: true,
-                with: {
-                    "wasi:io/streams": wasmtime_wasi::preview2::bindings::sync_io::io::streams,
-                    "wasi:poll/poll": wasmtime_wasi::preview2::bindings::sync_io::poll::poll,
-                }
-            });
-        }
-        pub use self::_internal::wasi::http;
-    }
-
-    pub(crate) mod _internal_rest {
-        wasmtime::component::bindgen!({
-            path: "wit",
-            interfaces: "
+    wasmtime::component::bindgen!({
+        path: "wit",
+        interfaces: "
                 import wasi:http/incoming-handler
                 import wasi:http/outgoing-handler
                 import wasi:http/types
             ",
-            tracing: true,
-            async: true,
-            with: {
-                "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
-                "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
-            }
-        });
-    }
+        tracing: true,
+        async: false,
+        with: {
+            "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
+            "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
+        }
+    });
 
-    pub use self::_internal_rest::wasi::http;
+    pub use wasi::http;
 }
 
 impl std::error::Error for crate::bindings::http::types::Error {}

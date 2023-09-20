@@ -22,15 +22,14 @@ use wasmtime_wasi::preview2::{
     HostPollable, PollableFuture, TablePollableExt, TableStreamExt,
 };
 
-#[async_trait::async_trait]
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
-    async fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
+    fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
         self.table()
             .delete_fields(fields)
             .context("[drop_fields] deleting fields")?;
         Ok(())
     }
-    async fn new_fields(&mut self, entries: Vec<(String, Vec<u8>)>) -> wasmtime::Result<Fields> {
+    fn new_fields(&mut self, entries: Vec<(String, Vec<u8>)>) -> wasmtime::Result<Fields> {
         use std::collections::{hash_map::Entry, HashMap};
 
         let mut map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
@@ -52,7 +51,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[new_fields] pushing fields")?;
         Ok(id)
     }
-    async fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
+    fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
         let res = self
             .table()
             .get_fields(fields)
@@ -63,7 +62,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .clone();
         Ok(res)
     }
-    async fn fields_set(
+    fn fields_set(
         &mut self,
         fields: Fields,
         name: String,
@@ -73,12 +72,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         m.0.insert(name, value.clone());
         Ok(())
     }
-    async fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
+    fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
         let m = self.table().get_fields(fields)?;
         m.0.remove(&name);
         Ok(())
     }
-    async fn fields_append(
+    fn fields_append(
         &mut self,
         fields: Fields,
         name: String,
@@ -98,7 +97,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         };
         Ok(())
     }
-    async fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
+    fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
         let fields = self.table().get_fields(fields)?;
         let result = fields
             .0
@@ -107,7 +106,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .collect();
         Ok(result)
     }
-    async fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields> {
+    fn fields_clone(&mut self, fields: Fields) -> wasmtime::Result<Fields> {
         let fields = self
             .table()
             .get_fields(fields)
@@ -119,50 +118,44 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[fields_clone] pushing fields")?;
         Ok(id)
     }
-    async fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
+    fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
+    fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
         self.table().delete_outgoing_request(request)?;
         Ok(())
     }
-    async fn incoming_request_method(
-        &mut self,
-        _request: IncomingRequest,
-    ) -> wasmtime::Result<Method> {
+    fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn incoming_request_path_with_query(
+    fn incoming_request_path_with_query(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn incoming_request_scheme(
+    fn incoming_request_scheme(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<Scheme>> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn incoming_request_authority(
+    fn incoming_request_authority(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn incoming_request_headers(
-        &mut self,
-        _request: IncomingRequest,
-    ) -> wasmtime::Result<Headers> {
+    fn incoming_request_headers(&mut self, _request: IncomingRequest) -> wasmtime::Result<Headers> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn incoming_request_consume(
+    fn incoming_request_consume(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Result<InputStream, ()>> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn new_outgoing_request(
+    fn new_outgoing_request(
         &mut self,
         method: Method,
         path_with_query: Option<String>,
@@ -186,7 +179,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[new_outgoing_request] pushing request")?;
         Ok(id)
     }
-    async fn outgoing_request_write(
+    fn outgoing_request_write(
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingBody, ()>> {
@@ -209,32 +202,26 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         Ok(Ok(outgoing_body))
     }
-    async fn drop_response_outparam(
-        &mut self,
-        _response: ResponseOutparam,
-    ) -> wasmtime::Result<()> {
+    fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn set_response_outparam(
+    fn set_response_outparam(
         &mut self,
         _outparam: ResponseOutparam,
         _response: Result<OutgoingResponse, Error>,
     ) -> wasmtime::Result<()> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
+    fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
         self.table()
             .delete_incoming_response(response)
             .context("[drop_incoming_response] deleting response")?;
         Ok(())
     }
-    async fn drop_outgoing_response(
-        &mut self,
-        _response: OutgoingResponse,
-    ) -> wasmtime::Result<()> {
+    fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn incoming_response_status(
+    fn incoming_response_status(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<StatusCode> {
@@ -244,7 +231,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[incoming_response_status] getting response")?;
         Ok(r.status)
     }
-    async fn incoming_response_headers(
+    fn incoming_response_headers(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Headers> {
@@ -264,7 +251,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         Ok(id)
     }
-    async fn incoming_response_consume(
+    fn incoming_response_consume(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Result<IncomingBody, ()>> {
@@ -284,17 +271,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             None => Ok(Err(())),
         }
     }
-    async fn drop_future_trailers(&mut self, id: FutureTrailers) -> wasmtime::Result<()> {
+    fn drop_future_trailers(&mut self, id: FutureTrailers) -> wasmtime::Result<()> {
         self.table()
             .delete_future_trailers(id)
             .context("[drop future-trailers] deleting future-trailers")?;
         Ok(())
     }
 
-    async fn future_trailers_subscribe(
-        &mut self,
-        index: FutureTrailers,
-    ) -> wasmtime::Result<Pollable> {
+    fn future_trailers_subscribe(&mut self, index: FutureTrailers) -> wasmtime::Result<Pollable> {
         // Eagerly force errors about the validity of the index.
         let _ = self.table().get_future_trailers(index)?;
 
@@ -309,7 +293,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(id)
     }
 
-    async fn future_trailers_get(
+    fn future_trailers_get(
         &mut self,
         id: FutureTrailers,
     ) -> wasmtime::Result<Option<Result<Trailers, Error>>> {
@@ -337,27 +321,27 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(Some(Ok(hdrs)))
     }
 
-    async fn new_outgoing_response(
+    fn new_outgoing_response(
         &mut self,
         _status_code: StatusCode,
         _headers: Headers,
     ) -> wasmtime::Result<OutgoingResponse> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn outgoing_response_write(
+    fn outgoing_response_write(
         &mut self,
         _response: OutgoingResponse,
     ) -> wasmtime::Result<Result<OutputStream, ()>> {
         todo!("we haven't implemented the server side of wasi-http yet")
     }
-    async fn drop_future_incoming_response(
+    fn drop_future_incoming_response(
         &mut self,
         id: FutureIncomingResponse,
     ) -> wasmtime::Result<()> {
         let _ = self.table().delete_future_incoming_response(id)?;
         Ok(())
     }
-    async fn future_incoming_response_get(
+    fn future_incoming_response_get(
         &mut self,
         id: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<Result<IncomingResponse, Error>, ()>>> {
@@ -391,7 +375,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         Ok(Some(Ok(Ok(resp))))
     }
-    async fn listen_to_future_incoming_response(
+    fn listen_to_future_incoming_response(
         &mut self,
         id: FutureIncomingResponse,
     ) -> wasmtime::Result<Pollable> {
@@ -412,7 +396,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(pollable)
     }
 
-    async fn incoming_body_stream(
+    fn incoming_body_stream(
         &mut self,
         id: IncomingBody,
     ) -> wasmtime::Result<Result<InputStream, ()>> {
@@ -426,7 +410,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(Err(()))
     }
 
-    async fn incoming_body_finish(&mut self, id: IncomingBody) -> wasmtime::Result<FutureTrailers> {
+    fn incoming_body_finish(&mut self, id: IncomingBody) -> wasmtime::Result<FutureTrailers> {
         let body = self.table().delete_incoming_body(id)?;
         let trailers = self
             .table()
@@ -434,12 +418,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(trailers)
     }
 
-    async fn drop_incoming_body(&mut self, id: IncomingBody) -> wasmtime::Result<()> {
+    fn drop_incoming_body(&mut self, id: IncomingBody) -> wasmtime::Result<()> {
         let _ = self.table().delete_incoming_body(id)?;
         Ok(())
     }
 
-    async fn outgoing_body_write(
+    fn outgoing_body_write(
         &mut self,
         id: OutgoingBody,
     ) -> wasmtime::Result<Result<OutputStream, ()>> {
@@ -452,7 +436,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         }
     }
 
-    async fn outgoing_body_write_trailers(
+    fn outgoing_body_write_trailers(
         &mut self,
         id: OutgoingBody,
         ts: Trailers,
@@ -476,7 +460,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(())
     }
 
-    async fn drop_outgoing_body(&mut self, id: OutgoingBody) -> wasmtime::Result<()> {
+    fn drop_outgoing_body(&mut self, id: OutgoingBody) -> wasmtime::Result<()> {
         let _ = self.table().delete_outgoing_body(id)?;
         Ok(())
     }
