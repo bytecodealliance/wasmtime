@@ -7,7 +7,6 @@ use std::sync::OnceLock;
 /// Check if the MPK feature is supported.
 pub fn is_supported() -> bool {
     cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") && pkru::has_cpuid_bit_set()
-    // TODO: we cannot check CR4 due to privilege
 }
 
 /// Allocate all protection keys available to this process.
@@ -45,44 +44,28 @@ static KEYS: OnceLock<Vec<ProtectionKey>> = OnceLock::new();
 /// Any accesses to pages marked by another key will result in a `SIGSEGV`
 /// fault.
 pub fn allow(mask: ProtectionMask) {
-    let mut allowed = 0;
-    for i in 0..16 {
-        if mask.0 & (1 << i) == 1 {
-            allowed |= 0b11 << (i * 2);
-        }
-    }
-
     let previous = pkru::read();
-    pkru::write(pkru::DISABLE_ACCESS ^ allowed);
-    log::debug!("PKRU change: {:#034b} => {:#034b}", previous, pkru::read());
+    pkru::write(mask.0);
+    log::trace!("PKRU change: {:#034b} => {:#034b}", previous, pkru::read());
 }
 
 /// An MPK protection key.
 ///
 /// The expected usage is:
-/// - allocate a new key with [`Pkey::new`]
-/// - mark some regions of memory as accessible with [`Pkey::protect`]
+/// - receive system-allocated keys from [`keys`]
+/// - mark some regions of memory as accessible with [`ProtectionKey::protect`]
 /// - [`allow`] or disallow access to the memory regions using a
 ///   [`ProtectionMask`]; any accesses to unmarked pages result in a fault
 /// - drop the key
-///
-/// Since this kernel is allocated from the kernel, we must inform the kernel
-/// when it is dropped. Similarly, to retrieve all available protection keys,
-/// one must request them from the kernel (e.g., call [`Pkey::new`] until it
-/// fails).
-///
-/// Because MPK may not be available on all systems, [`Pkey`] wraps an `Option`
-/// that will always be `None` if MPK is not supported. The idea here is that
-/// the API can remain the same regardless of MPK support.
 #[derive(Clone, Copy, Debug)]
 pub struct ProtectionKey(u32);
 
 impl ProtectionKey {
-    /// Mark a page as protected by this [`Pkey`].
+    /// Mark a page as protected by this [`ProtectionKey`].
     ///
     /// This "colors" the pages of `region` via a kernel `pkey_mprotect` call to
-    /// only allow reads and writes when this [`Pkey`] is activated (see
-    /// [`Pkey::activate`]).
+    /// only allow reads and writes when this [`ProtectionKey`] is activated
+    /// (see [`allow`]).
     ///
     /// # Errors
     ///
@@ -99,7 +82,7 @@ impl ProtectionKey {
         })
     }
 
-    /// Convert the [`Pkey`] to its 0-based index; this is useful for
+    /// Convert the [`ProtectionKey`] to its 0-based index; this is useful for
     /// determining which allocation "stripe" a key belongs to.
     ///
     /// This function assumes that the kernel has allocated key 0 for itself.
@@ -109,29 +92,50 @@ impl ProtectionKey {
     }
 }
 
-/// A bit field indicating which protection keys should be *allowed*.
+/// A bit field indicating which protection keys should be allowed and disabled.
 ///
-/// When bit `n` is set, it means the protection key is allowed--conversely,
-/// protection is disabled for this key.
-pub struct ProtectionMask(u16);
+/// The internal representation makes it easy to use [`ProtectionMask`] directly
+/// with the PKRU register. When bits `n` and `n+1` are set, it means the
+/// protection key is *not* allowed (see the PKRU write and access disabled
+/// bits).
+pub struct ProtectionMask(u32);
 impl ProtectionMask {
     /// Allow access from all protection keys.
+    #[inline]
     pub fn all() -> Self {
-        Self(u16::MAX)
+        Self(pkru::ALLOW_ACCESS)
     }
 
     /// Only allow access to memory protected with protection key 0; note that
     /// this does not mean "none" but rather allows access from the default
     /// kernel protection key.
+    #[inline]
     pub fn zero() -> Self {
-        Self(1)
+        Self(pkru::DISABLE_ACCESS ^ 0b11)
     }
 
     /// Include `pkey` as another allowed protection key in the mask.
+    #[inline]
     pub fn or(self, pkey: ProtectionKey) -> Self {
-        Self(self.0 | 1 << pkey.0)
+        let mask = pkru::DISABLE_ACCESS ^ 0b11 << (pkey.0 * 2);
+        Self(self.0 & mask)
     }
 }
+
+/// Helper macro for skipping tests on systems that do not have MPK enabled
+/// (e.g., older architecture, disabled by kernel, etc.)
+#[cfg(test)]
+macro_rules! skip_if_mpk_unavailable {
+    () => {
+        if !crate::mpk::is_supported() {
+            println!("> mpk is not supported: ignoring test");
+            return;
+        }
+    };
+}
+/// Necessary for inter-module access.
+#[cfg(test)]
+pub(crate) use skip_if_mpk_unavailable;
 
 #[cfg(test)]
 mod tests {
@@ -151,6 +155,7 @@ mod tests {
 
     #[test]
     fn check_invalid_mark() {
+        skip_if_mpk_unavailable!();
         let pkey = keys()[0];
         let unaligned_region = unsafe {
             let addr = 1 as *mut u8; // this is not page-aligned!
@@ -163,5 +168,26 @@ mod tests {
             result.unwrap_err().to_string(),
             "failed to mark region with pkey (addr = 0x1, len = 1, prot = 0b11)"
         );
+    }
+
+    #[test]
+    fn check_masking() {
+        skip_if_mpk_unavailable!();
+        let original = pkru::read();
+
+        allow(ProtectionMask::all());
+        assert_eq!(0, pkru::read());
+
+        allow(ProtectionMask::all().or(ProtectionKey(5)));
+        assert_eq!(0, pkru::read());
+
+        allow(ProtectionMask::zero());
+        assert_eq!(0b11111111_11111111_11111111_11111100, pkru::read());
+
+        allow(ProtectionMask::zero().or(ProtectionKey(5)));
+        assert_eq!(0b11111111_11111111_11110011_11111100, pkru::read());
+
+        // Reset the PKRU state to what we originally observed.
+        pkru::write(original);
     }
 }

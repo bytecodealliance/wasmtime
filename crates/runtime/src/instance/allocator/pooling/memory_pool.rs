@@ -64,8 +64,8 @@ use super::{
 };
 use crate::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::{
-    AutoEnabled, CompiledModuleId, InstanceAllocationRequest, Memory, MemoryImageSlot, Mmap,
-    PoolingInstanceAllocatorConfig,
+    CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory, MemoryImageSlot, Mmap,
+    MpkEnabled, PoolingInstanceAllocatorConfig,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use libc::c_void;
@@ -97,21 +97,17 @@ struct Stripe {
 /// A diagram for this struct's fields is:
 ///
 /// ```text
-///                       memory_size
-///                           /
-///         max_accessible   /                    memory_and_guard_size
-///                 |       /                               |
-///              <--+--->  /                    <-----------+---------->
-///              <--------+->
-///
-/// +-----------+--------+---+-----------+     +--------+---+-----------+
-/// | PROT_NONE |            | PROT_NONE | ... |            | PROT_NONE |
-/// +-----------+--------+---+-----------+     +--------+---+-----------+
-/// |           |<------------------+---------------------------------->
-/// \           |                    \
-/// mapping     |            `max_total_memories` memories
+///          layout.max_memory_bytes                 layout.slot_bytes
+///                    |                                   |
+///              <-----+---->                  <-----------+----------->
+/// +-----------+------------+-----------+     +--------+---+-----------+-----------+
+/// | PROT_NONE |            | PROT_NONE | ... |            | PROT_NONE | PROT_NONE |
+/// +-----------+------------+-----------+     +--------+---+-----------+-----------+
+/// |           |<------------------+----------------------------------> <----+---->
+/// \           |                    \                                        |
+///  mapping    |            `layout.num_slots` memories         layout.post_slab_guard_size
 ///            /
-///    pre_slab_guard_size
+///   layout.pre_slab_guard_size
 /// ```
 #[derive(Debug)]
 pub struct MemoryPool {
@@ -124,22 +120,9 @@ pub struct MemoryPool {
     // dynamically transfer ownership of a slot to a Memory when in
     // use.
     image_slots: Vec<Mutex<Option<MemoryImageSlot>>>,
-    // The size, in bytes, of each linear memory's reservation, not including
-    // any guard region.
-    memory_size: usize,
-    // The size, in bytes, of each linear memory's reservation plus the trailing
-    // guard region allocated for it.
-    memory_and_guard_size: usize,
-    // The maximum size that can become accessible, in bytes, of each linear
-    // memory. Guaranteed to be a whole number of wasm pages.
-    max_accessible: usize,
-    // The size, in bytes, of the offset to the first linear memory in this
-    // pool. This is here to help account for the first region of guard pages,
-    // if desired, before the first linear memory.
-    pre_slab_guard_size: usize,
-    // The maximum number of memories that can be allocated concurrently, aka
-    // our pool's capacity.
-    max_total_memories: usize,
+    /// A description of the various memory sizes used in allocating the
+    /// `mapping` slab.
+    layout: SlabLayout,
     // The maximum number of memories that a single core module instance may
     // use.
     //
@@ -171,21 +154,21 @@ impl MemoryPool {
         }
 
         let pkeys = match config.memory_protection_keys {
-            AutoEnabled::Auto => {
+            MpkEnabled::Auto => {
                 if mpk::is_supported() {
                     mpk::keys()
                 } else {
                     &[]
                 }
             }
-            AutoEnabled::Enable => {
+            MpkEnabled::Enable => {
                 if mpk::is_supported() {
                     mpk::keys()
                 } else {
                     bail!("mpk is disabled on this system")
                 }
             }
-            AutoEnabled::Disable => &[],
+            MpkEnabled::Disable => &[],
         };
 
         // This is a tricky bit of global state: when creating a memory pool
@@ -202,27 +185,12 @@ impl MemoryPool {
             mpk::allow(ProtectionMask::all());
         }
 
-        // Interpret the larger of the maximal size of memory or the static
-        // memory bound as the size of the virtual address space reservation for
-        // memory itself. Typically `static_memory_bound` is 4G which helps
-        // elide most bounds checks in wasm. If `memory_pages` is larger,
-        // though, then this is a non-moving pooling allocator so we create
-        // larger reservations to account for that.
-        let max_memory_bytes = config.limits.memory_pages.max(tunables.static_memory_bound)
-            * u64::from(WASM_PAGE_SIZE);
-
-        // Create a slab layout and allocate it as completely inaccessible
+        // Create a slab layout and allocate it as a completely inaccessible
         // region to start--`PROT_NONE`.
-        let constraints = SlabConstraints {
-            max_memory_bytes: max_memory_bytes as usize,
-            num_memory_slots: config.limits.total_memories as usize,
-            num_pkeys_available: pkeys.len(),
-            guard_bytes: tunables.static_memory_offset_guard_size as usize,
-            guard_before_slots: tunables.guard_before_linear_memory,
-        };
+        let constraints = SlabConstraints::new(&config.limits, tunables, pkeys.len())?;
         let layout = calculate(&constraints)?;
         log::debug!("creating memory pool: {constraints:?} -> {layout:?}");
-        let mut mapping = Mmap::accessible_reserved(0, layout.total_slab_bytes)
+        let mut mapping = Mmap::accessible_reserved(0, layout.total_slab_bytes()?)
             .context("failed to create memory pool mapping")?;
 
         // Then, stripe the memory with the available protection keys. This is
@@ -230,7 +198,7 @@ impl MemoryPool {
         if layout.num_stripes >= 2 {
             let mut cursor = layout.pre_slab_guard_bytes;
             let pkeys = &pkeys[..layout.num_stripes];
-            for i in 0..constraints.num_memory_slots {
+            for i in 0..constraints.num_slots {
                 let pkey = &pkeys[i % pkeys.len()];
                 let region = unsafe { mapping.slice_mut(cursor..cursor + layout.slot_bytes) };
                 pkey.protect(region)?;
@@ -238,17 +206,17 @@ impl MemoryPool {
             }
             debug_assert_eq!(
                 cursor + layout.post_slab_guard_bytes,
-                layout.total_slab_bytes
+                layout.total_slab_bytes()?
             );
         }
 
         let image_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
-            .take(constraints.num_memory_slots)
+            .take(constraints.num_slots)
             .collect();
 
         let create_stripe = |i| {
-            let num_slots = constraints.num_memory_slots / layout.num_stripes
-                + usize::from(constraints.num_memory_slots % layout.num_stripes > i);
+            let num_slots = constraints.num_slots / layout.num_stripes
+                + usize::from(constraints.num_slots % layout.num_stripes > i);
             let allocator = ModuleAffinityIndexAllocator::new(
                 num_slots.try_into().unwrap(),
                 config.max_unused_warm_slots,
@@ -269,12 +237,8 @@ impl MemoryPool {
             stripes,
             mapping,
             image_slots,
-            memory_size: constraints.max_memory_bytes,
-            memory_and_guard_size: layout.slot_bytes,
-            pre_slab_guard_size: layout.pre_slab_guard_bytes,
-            max_total_memories: constraints.num_memory_slots,
+            layout,
             memories_per_instance: usize::try_from(config.limits.max_memories_per_module).unwrap(),
-            max_accessible: (config.limits.memory_pages as usize) * (WASM_PAGE_SIZE as usize),
             keep_resident: config.linear_memory_keep_resident,
             next_available_pkey: AtomicUsize::new(0),
         };
@@ -303,6 +267,7 @@ impl MemoryPool {
             );
         }
 
+        let max_memory_pages = self.layout.max_memory_bytes / WASM_PAGE_SIZE as usize;
         for (i, plan) in module
             .memory_plans
             .iter()
@@ -310,7 +275,7 @@ impl MemoryPool {
         {
             match plan.style {
                 MemoryStyle::Static { bound } => {
-                    if u64::try_from(self.memory_size).unwrap() < bound {
+                    if u64::try_from(self.layout.pages_to_next_stripe_slot()).unwrap() < bound {
                         bail!(
                             "memory size allocated per-memory is too small to \
                              satisfy static bound of {bound:#x} pages"
@@ -319,13 +284,12 @@ impl MemoryPool {
                 }
                 MemoryStyle::Dynamic { .. } => {}
             }
-            let max = self.max_accessible / (WASM_PAGE_SIZE as usize);
-            if plan.memory.minimum > u64::try_from(max).unwrap() {
+            if plan.memory.minimum > u64::try_from(max_memory_pages).unwrap() {
                 bail!(
                     "memory index {} has a minimum page size of {} which exceeds the limit of {}",
                     i.as_u32(),
                     plan.memory.minimum,
-                    max,
+                    max_memory_pages,
                 );
             }
         }
@@ -334,12 +298,7 @@ impl MemoryPool {
 
     /// Are zero slots in use right now?
     pub fn is_empty(&self) -> bool {
-        for stripe in &self.stripes {
-            if !stripe.allocator.is_empty() {
-                return false;
-            }
-        }
-        true
+        self.stripes.iter().all(|s| s.allocator.is_empty())
     }
 
     /// Allocate a single memory for the given instance allocation request.
@@ -383,13 +342,13 @@ impl MemoryPool {
             match memory_plan.style {
                 MemoryStyle::Static { bound } => {
                     let bound = bound * u64::from(WASM_PAGE_SIZE);
-                    assert!(bound <= u64::try_from(self.memory_size).unwrap());
+                    assert!(bound <= u64::try_from(self.layout.slot_bytes).unwrap());
                 }
                 MemoryStyle::Dynamic { .. } => {}
             }
 
             let base_ptr = self.get_base(allocation_index);
-            let base_capacity = self.max_accessible;
+            let base_capacity = self.layout.max_memory_bytes;
 
             let mut slot = self.take_memory_image_slot(allocation_index);
             let image = request.runtime_info.memory_image(memory_index)?;
@@ -415,7 +374,7 @@ impl MemoryPool {
                 base_ptr,
                 base_capacity,
                 slot,
-                self.memory_and_guard_size,
+                self.layout.slot_bytes,
                 unsafe { &mut *request.store.get().unwrap() },
             )
         })() {
@@ -447,11 +406,11 @@ impl MemoryPool {
             self.return_memory_image_slot(allocation_index, image);
         }
 
-        let stripe_index = allocation_index.index() % self.stripes.len();
-        let stripe_slot = allocation_index.0 / self.stripes.len() as u32;
+        let (stripe_index, striped_allocation_index) =
+            StripedAllocationIndex::from_unstriped_slot_index(allocation_index, self.stripes.len());
         self.stripes[stripe_index]
             .allocator
-            .free(SlotId(stripe_slot));
+            .free(SlotId(striped_allocation_index.0));
     }
 
     /// Purging everything related to `module`.
@@ -501,9 +460,9 @@ impl MemoryPool {
     }
 
     fn get_base(&self, allocation_index: MemoryAllocationIndex) -> *mut u8 {
-        assert!(allocation_index.index() < self.max_total_memories);
+        assert!(allocation_index.index() < self.layout.num_slots);
         let offset =
-            self.pre_slab_guard_size + allocation_index.index() * self.memory_and_guard_size;
+            self.layout.pre_slab_guard_bytes + allocation_index.index() * self.layout.slot_bytes;
         unsafe { self.mapping.as_ptr().offset(offset as isize).cast_mut() }
     }
 
@@ -519,7 +478,7 @@ impl MemoryPool {
             MemoryImageSlot::create(
                 self.get_base(allocation_index) as *mut c_void,
                 0,
-                self.max_accessible,
+                self.layout.max_memory_bytes,
             )
         })
     }
@@ -554,6 +513,16 @@ impl Drop for MemoryPool {
 pub struct StripedAllocationIndex(u32);
 
 impl StripedAllocationIndex {
+    fn from_unstriped_slot_index(
+        index: MemoryAllocationIndex,
+        num_stripes: usize,
+    ) -> (usize, Self) {
+        let stripe_index = index.index() % num_stripes;
+        let num_stripes: u32 = num_stripes.try_into().unwrap();
+        let index_within_stripe = Self(index.0 / num_stripes);
+        (stripe_index, index_within_stripe)
+    }
+
     fn as_unstriped_slot_index(self, stripe: usize, num_stripes: usize) -> MemoryAllocationIndex {
         let num_stripes: u32 = num_stripes.try_into().unwrap();
         let stripe: u32 = stripe.try_into().unwrap();
@@ -563,24 +532,64 @@ impl StripedAllocationIndex {
 
 #[derive(Clone, Debug)]
 struct SlabConstraints {
+    /// Essentially, the `static_memory_bound`: this is an assumption that the
+    /// runtime and JIT compiler make about how much space will be guarded
+    /// between slots.
+    expected_slot_bytes: usize,
+    /// The maximum size of any memory in the pool.
     max_memory_bytes: usize,
-    num_memory_slots: usize,
+    num_slots: usize,
     num_pkeys_available: usize,
     guard_bytes: usize,
     guard_before_slots: bool,
 }
 
+impl SlabConstraints {
+    fn new(
+        limits: &InstanceLimits,
+        tunables: &Tunables,
+        num_pkeys_available: usize,
+    ) -> Result<Self> {
+        // The maximum size a memory can grow to in this pool.
+        let max_memory_bytes = limits.memory_pages * u64::from(WASM_PAGE_SIZE);
+
+        // `static_memory_bound` is the configured number of Wasm pages for a
+        // static memory slot (see `Config::static_memory_maximum_size`); even
+        // if the memory never grows to this size (e.g., it has a lower memory
+        // maximum), codegen will assume that this unused memory is mapped
+        // `PROT_NONE`. Typically `static_memory_bound` is 4G which helps elide
+        // most bounds checks. `MemoryPool` must respect this bound, though not
+        // explicitly: if we can achieve the same effect via MPK-protected
+        // stripes, the slot size can be lower than the `static_memory_bound`.
+        let expected_slot_bytes = tunables.static_memory_bound * u64::from(WASM_PAGE_SIZE);
+
+        let constraints = SlabConstraints {
+            max_memory_bytes: max_memory_bytes
+                .try_into()
+                .context("max memory is too large")?,
+            num_slots: limits
+                .total_memories
+                .try_into()
+                .context("too many memories")?,
+            expected_slot_bytes: expected_slot_bytes
+                .try_into()
+                .context("static memory bound is too large")?,
+            num_pkeys_available,
+            guard_bytes: tunables
+                .static_memory_offset_guard_size
+                .try_into()
+                .context("guard region is too large")?,
+            guard_before_slots: tunables.guard_before_linear_memory,
+        };
+        Ok(constraints)
+    }
+}
+
 #[derive(Debug)]
 struct SlabLayout {
-    /// The total number of bytes to allocate for the memory pool slab.
-    total_slab_bytes: usize,
-    /// If necessary, the number of bytes to reserve as a guard region at the
-    /// beginning of the slab.
-    pre_slab_guard_bytes: usize,
-    /// If necessary, the number of bytes to reserve as a guard region at the
-    /// beginning of the slab.
-    post_slab_guard_bytes: usize,
-    /// The size of each slot in the memory pool; this comprehends the maximum
+    /// The total number of slots available in the memory pool slab.
+    num_slots: usize,
+    /// The size of each slot in the memory pool; this contains the maximum
     /// memory size (i.e., from WebAssembly or Wasmtime configuration) plus any
     /// guard region after the memory to catch OOB access. On these guard
     /// regions, note that:
@@ -588,16 +597,64 @@ struct SlabLayout {
     ///   via `Config::static_memory_guard_size`
     /// - memory protection keys can compress the size of the guard region by
     ///   placing slots from a different key (i.e., a stripe) in the guard
-    ///   region
+    ///   region; this means the slot itself can be smaller and we can allocate
+    ///   more of them.
     slot_bytes: usize,
+    // The maximum size that can become accessible, in bytes, for each linear
+    // memory. Guaranteed to be a whole number of wasm pages.
+    max_memory_bytes: usize,
+    /// The total number of bytes to allocate for the memory pool slab.
+    // total_slab_bytes: usize,
+    /// If necessary, the number of bytes to reserve as a guard region at the
+    /// beginning of the slab.
+    pre_slab_guard_bytes: usize,
+    /// Like `pre_slab_guard_bytes`, but at the end of the slab.
+    post_slab_guard_bytes: usize,
     /// The number of stripes needed in the slab layout.
     num_stripes: usize,
+}
+
+impl SlabLayout {
+    /// Return the total size of the slab, using the final layout (where `n =
+    /// num_slots`):
+    ///
+    /// ```text
+    /// ┌────────────────────┬──────┬──────┬───┬──────┬─────────────────────┐
+    /// │pre_slab_guard_bytes│slot 1│slot 2│...│slot n│post_slab_guard_bytes│
+    /// └────────────────────┴──────┴──────┴───┴──────┴─────────────────────┘
+    /// ```
+    fn total_slab_bytes(&self) -> Result<usize> {
+        self.slot_bytes
+            .checked_mul(self.num_slots)
+            .and_then(|c| c.checked_add(self.pre_slab_guard_bytes))
+            .and_then(|c| c.checked_add(self.post_slab_guard_bytes))
+            .ok_or_else(|| anyhow!("total size of memory reservation exceeds addressable memory"))
+    }
+
+    /// Returns the number of Wasm pages from the beginning of one slot to the
+    /// next slot in the same stripe--this is the striped equivalent of
+    /// `static_memory_bound`. Recall that between slots of the same stripe we
+    /// will see a slot from every other stripe.
+    ///
+    /// For example, in a 3-stripe pool, this function measures the distance
+    /// from the beginning of slot 1 to slot 4, which are of the same stripe:
+    ///
+    /// ```text
+    /// ┌────────┬──────┬──────┬────────┬───┐
+    /// │*slot 1*│slot 2│slot 3│*slot 4*│...|
+    /// └────────┴──────┴──────┴────────┴───┘
+    /// ```
+    fn pages_to_next_stripe_slot(&self) -> usize {
+        let slot_pages = self.slot_bytes / WASM_PAGE_SIZE as usize;
+        slot_pages * self.num_stripes
+    }
 }
 
 fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
     let SlabConstraints {
         max_memory_bytes,
-        num_memory_slots,
+        num_slots,
+        expected_slot_bytes,
         num_pkeys_available,
         guard_bytes,
         guard_before_slots,
@@ -610,78 +667,88 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
     // accesses greater than this.
     let pre_slab_guard_bytes = if guard_before_slots { guard_bytes } else { 0 };
 
-    let (num_stripes, needed_guard_bytes) = if guard_bytes == 0 || max_memory_bytes == 0 {
-        // In the uncommon case where the memory or guard regions are empty, we
+    // To calculate the slot size, we start with the default configured size and
+    // attempt to chip away at this via MPK protection. Note here how we begin
+    // to define a slot as "all of the memory and guard region."
+    let slot_bytes = expected_slot_bytes
+        .max(max_memory_bytes)
+        .checked_add(guard_bytes)
+        .unwrap_or(usize::MAX);
+
+    let (num_stripes, slot_bytes) = if guard_bytes == 0 || max_memory_bytes == 0 || num_slots == 0 {
+        // In the uncommon case where the memory/guard regions are empty or we don't need any slots , we
         // will not need any stripes: we just lay out the slots back-to-back
         // using a single stripe.
-        (1, guard_bytes)
+        (1, slot_bytes)
     } else if num_pkeys_available < 2 {
         // If we do not have enough protection keys to stripe the memory, we do
         // the same. We can't elide any of the guard bytes because we aren't
         // overlapping guard regions with other stripes...
-        (1, guard_bytes)
-    } else if num_memory_slots == 0 {
-        (1, guard_bytes)
+        (1, slot_bytes)
     } else {
         // ...but if we can create at least two stripes, we can use another
         // stripe (i.e., a different pkey) as this slot's guard region--this
-        // reduces the guard bytes each slot has to allocate. We must make sure,
-        // though, that if the size of that other stripe(s) does not fully cover
-        // `guard_bytes`, we keep those around to prevent OOB access.
-        //
-        // We first calculate the number of stripes we need: we want to minimize
-        // this so that there is less chance of a single store running out of
-        // slots with its stripe--we need at least two, though. But this is not
-        // just an optimization; we need to handle the case when there are fewer
-        // slots than stripes. E.g., if our pool is configured with only three
-        // slots (`num_memory_slots = 3`), we will run into failures if we
-        // attempt to set up more than three stripes.
+        // reduces the guard bytes each slot has to allocate. We must make
+        // sure, though, that if the size of that other stripe(s) does not
+        // fully cover `guard_bytes`, we keep those around to prevent OOB
+        // access.
+
+        // We first calculate the number of stripes we need: we want to
+        // minimize this so that there is less chance of a single store
+        // running out of slots with its stripe--we need at least two,
+        // though. But this is not just an optimization; we need to handle
+        // the case when there are fewer slots than stripes. E.g., if our
+        // pool is configured with only three slots (`num_memory_slots =
+        // 3`), we will run into failures if we attempt to set up more than
+        // three stripes.
         let needed_num_stripes =
-            guard_bytes / max_memory_bytes + usize::from(guard_bytes % max_memory_bytes != 0) + 1;
-        let num_stripes = num_pkeys_available
-            .min(needed_num_stripes)
-            .min(num_memory_slots);
+            slot_bytes / max_memory_bytes + usize::from(slot_bytes % max_memory_bytes != 0) + 1;
+        let num_stripes = num_pkeys_available.min(needed_num_stripes).min(num_slots);
+
+        // Next, we try to reduce the slot size by "overlapping" the
+        // stripes: we can make slot `n` smaller since we know that slot
+        // `n+1` and following are in different stripes and will look just
+        // like `PROT_NONE` memory.
         let next_slots_overlapping_bytes = max_memory_bytes
             .checked_mul(num_stripes - 1)
             .unwrap_or(usize::MAX);
-        let needed_guard_bytes = guard_bytes
+        let needed_slot_bytes = slot_bytes
             .checked_sub(next_slots_overlapping_bytes)
-            .unwrap_or(0);
-        (num_stripes, needed_guard_bytes)
+            .unwrap_or(0)
+            .max(max_memory_bytes);
+        (num_stripes, needed_slot_bytes)
     };
 
     // The page-aligned slot size; equivalent to `memory_and_guard_size`.
     let page_alignment = crate::page_size() - 1;
-    let slot_bytes = max_memory_bytes
-        .checked_add(needed_guard_bytes)
-        .and_then(|slot_bytes| slot_bytes.checked_add(page_alignment))
+    let slot_bytes = slot_bytes
+        .checked_add(page_alignment)
         .and_then(|slot_bytes| Some(slot_bytes & !page_alignment))
         .ok_or_else(|| anyhow!("slot size is too large"))?;
 
     // We may need another guard region (like `pre_slab_guard_bytes`) at the end
     // of our slab. We could be conservative and just create it as large as
-    // `guard_bytes`, but because we know that the last slot already has a
-    // region as large as `needed_guard_bytes`, we can reduce the final guard
-    // region by that much.
-    let post_slab_guard_bytes = guard_bytes - needed_guard_bytes;
+    // `guard_bytes`, but because we know that the last slot already has
+    // `guard_bytes` factored in to its guard region, we can reduce the final
+    // guard region by that much.
+    let post_slab_guard_bytes = guard_bytes
+        .checked_sub(slot_bytes - max_memory_bytes)
+        .unwrap_or(0);
 
-    // The final layout (where `n = num_memory_slots`):
-    // ┌────────────────────┬──────┬──────┬───┬──────┬─────────────────────┐
-    // │pre_slab_guard_bytes│slot 1│slot 2│...│slot n│post_slab_guard_bytes│
-    // └────────────────────┴──────┴──────┴───┴──────┴─────────────────────┘
-    let total_slab_bytes = slot_bytes
-        .checked_mul(num_memory_slots)
-        .and_then(|c| c.checked_add(pre_slab_guard_bytes))
-        .and_then(|c| c.checked_add(post_slab_guard_bytes))
-        .ok_or_else(|| anyhow!("total size of memory reservation exceeds addressable memory"))?;
-
-    Ok(SlabLayout {
-        total_slab_bytes,
+    // Check that we haven't exceeded the slab we can calculate given the limits
+    // of `usize`.
+    let layout = SlabLayout {
+        num_slots,
+        slot_bytes,
+        max_memory_bytes,
         pre_slab_guard_bytes,
         post_slab_guard_bytes,
-        slot_bytes,
         num_stripes,
-    })
+    };
+    match layout.total_slab_bytes() {
+        Ok(_) => Ok(layout),
+        Err(e) => Err(e),
+    }
 }
 
 #[cfg(test)]
@@ -713,16 +780,16 @@ mod tests {
             },
         )?;
 
-        assert_eq!(pool.memory_and_guard_size, WASM_PAGE_SIZE as usize);
-        assert_eq!(pool.max_total_memories, 5);
-        assert_eq!(pool.max_accessible, WASM_PAGE_SIZE as usize);
+        assert_eq!(pool.layout.slot_bytes, WASM_PAGE_SIZE as usize);
+        assert_eq!(pool.layout.num_slots, 5);
+        assert_eq!(pool.layout.max_memory_bytes, WASM_PAGE_SIZE as usize);
 
         let base = pool.mapping.as_ptr() as usize;
 
         for i in 0..5 {
             let index = MemoryAllocationIndex(i);
             let ptr = pool.get_base(index);
-            assert_eq!(ptr as usize - base, i as usize * pool.memory_and_guard_size);
+            assert_eq!(ptr as usize - base, i as usize * pool.layout.slot_bytes);
         }
 
         Ok(())
@@ -747,10 +814,11 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(pool.memories.memory_size, 2 * 65536);
+        assert_eq!(pool.memories.layout.max_memory_bytes, 2 * 65536);
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_pooling_allocator_striping() {
         if !mpk::is_supported() {
             println!("skipping `test_pooling_allocator_striping` test; mpk is not supported");
@@ -759,7 +827,7 @@ mod tests {
 
         // Force the use of MPK.
         let config = PoolingInstanceAllocatorConfig {
-            memory_protection_keys: AutoEnabled::Enable,
+            memory_protection_keys: MpkEnabled::Enable,
             ..PoolingInstanceAllocatorConfig::default()
         };
         let pool = MemoryPool::new(&config, &Tunables::default()).unwrap();
@@ -780,20 +848,23 @@ mod tests {
     fn check_known_layout_calculations() {
         for num_pkeys_available in 0..16 {
             for num_memory_slots in [0, 1, 10, 64] {
-                for max_memory_bytes in
-                    [0, 1 * WASM_PAGE_SIZE as usize, 10 * WASM_PAGE_SIZE as usize]
-                {
-                    for guard_bytes in [0, 2 << 30 /* 2GB */] {
-                        for guard_before_slots in [true, false] {
-                            let constraints = SlabConstraints {
-                                max_memory_bytes,
-                                num_memory_slots,
-                                num_pkeys_available,
-                                guard_bytes,
-                                guard_before_slots,
-                            };
-                            let layout = calculate(&constraints);
-                            assert_slab_layout_invariants(constraints, layout.unwrap());
+                for expected_slot_bytes in [0, 1 << 30 /* 1GB */, 4 << 30 /* 4GB */] {
+                    for max_memory_bytes in
+                        [0, 1 * WASM_PAGE_SIZE as usize, 10 * WASM_PAGE_SIZE as usize]
+                    {
+                        for guard_bytes in [0, 2 << 30 /* 2GB */] {
+                            for guard_before_slots in [true, false] {
+                                let constraints = SlabConstraints {
+                                    max_memory_bytes,
+                                    num_slots: num_memory_slots,
+                                    expected_slot_bytes,
+                                    num_pkeys_available,
+                                    guard_bytes,
+                                    guard_before_slots,
+                                };
+                                let layout = calculate(&constraints);
+                                assert_slab_layout_invariants(constraints, layout.unwrap());
+                            }
                         }
                     }
                 }
@@ -803,6 +874,7 @@ mod tests {
 
     proptest! {
         #[test]
+        #[cfg_attr(miri, ignore)]
         fn check_random_layout_calculations(c in constraints()) {
             if let Ok(l) = calculate(&c) {
                 assert_slab_layout_invariants(c, l);
@@ -816,19 +888,22 @@ mod tests {
             any::<usize>(),
             any::<usize>(),
             any::<usize>(),
+            any::<usize>(),
             any::<bool>(),
         )
             .prop_map(
                 |(
                     max_memory_bytes,
                     num_memory_slots,
+                    expected_slot_bytes,
                     num_pkeys_available,
                     guard_bytes,
                     guard_before_slots,
                 )| {
                     SlabConstraints {
                         max_memory_bytes,
-                        num_memory_slots,
+                        num_slots: num_memory_slots,
+                        expected_slot_bytes,
                         num_pkeys_available,
                         guard_bytes,
                         guard_before_slots,
@@ -840,20 +915,40 @@ mod tests {
     fn assert_slab_layout_invariants(c: SlabConstraints, s: SlabLayout) {
         // Check that all the sizes add up.
         assert_eq!(
-            s.total_slab_bytes,
-            s.pre_slab_guard_bytes + s.slot_bytes * c.num_memory_slots + s.post_slab_guard_bytes,
+            s.total_slab_bytes().unwrap(),
+            s.pre_slab_guard_bytes + s.slot_bytes * c.num_slots + s.post_slab_guard_bytes,
             "the slab size does not add up: {c:?} => {s:?}"
         );
-
-        // Check that the memory slot size is page-aligned.
         assert!(
-            s.slot_bytes % crate::page_size() == 0,
-            "slot size is not page-aligned: {c:?} => {s:?}",
+            s.slot_bytes >= s.max_memory_bytes,
+            "slot is not big enough: {c:?} => {s:?}"
+        );
+
+        // Check that the various memory values are page-aligned.
+        assert!(
+            is_aligned(s.slot_bytes),
+            "slot is not page-aligned: {c:?} => {s:?}",
+        );
+        assert!(
+            is_aligned(s.max_memory_bytes),
+            "slot guard region is not page-aligned: {c:?} => {s:?}",
+        );
+        assert!(
+            is_aligned(s.pre_slab_guard_bytes),
+            "pre-slab guard region is not page-aligned: {c:?} => {s:?}"
+        );
+        assert!(
+            is_aligned(s.post_slab_guard_bytes),
+            "post-slab guard region is not page-aligned: {c:?} => {s:?}"
+        );
+        assert!(
+            is_aligned(s.total_slab_bytes().unwrap()),
+            "slab is not page-aligned: {c:?} => {s:?}"
         );
 
         // Check that we use no more or less stripes than needed.
         assert!(s.num_stripes >= 1, "not enough stripes: {c:?} => {s:?}");
-        if c.num_pkeys_available == 0 || c.num_memory_slots == 0 {
+        if c.num_pkeys_available == 0 || c.num_slots == 0 {
             assert_eq!(
                 s.num_stripes, 1,
                 "expected at least one stripe: {c:?} => {s:?}"
@@ -864,13 +959,16 @@ mod tests {
                 "layout has more stripes than available pkeys: {c:?} => {s:?}"
             );
             assert!(
-                s.num_stripes <= c.num_memory_slots,
+                s.num_stripes <= c.num_slots,
                 "layout has more stripes than memory slots: {c:?} => {s:?}"
             );
         }
 
         // Check that we use the minimum number of stripes/protection keys.
-        // - if the next slot is bigger
+        // - if the next MPK-protected slot is bigger or the same as the
+        //   required guard region, we only need two stripes
+        // - if the next slot is smaller than the guard region, we only need
+        //   enough stripes to add up to at least that guard region size.
         if c.num_pkeys_available > 1 && c.max_memory_bytes > 0 {
             assert!(
                 s.num_stripes <= (c.guard_bytes / c.max_memory_bytes) + 2,
@@ -879,11 +977,22 @@ mod tests {
         }
 
         // Check that the memory-striping will not allow OOB access.
-        if s.num_stripes > 1 {
-            assert!(
-                s.slot_bytes * (s.num_stripes - 1) >= c.guard_bytes,
-                "layout may allow OOB access: {c:?} => {s:?}"
-            );
-        }
+        // - we may have reduced the slot size from `expected_slot_bytes` to
+        //   `slot_bytes` assuming MPK striping; we check that the expectation
+        //   still holds
+        // - the last slot won't have MPK striping after it; we check that the
+        //   `post_slab_guard_bytes` accounts for this
+        assert!(
+            s.slot_bytes * s.num_stripes >= c.expected_slot_bytes + c.guard_bytes,
+            "slot may allow OOB access: {c:?} => {s:?}"
+        );
+        assert!(
+            s.slot_bytes + s.post_slab_guard_bytes >= c.expected_slot_bytes,
+            "last slot may allow OOB access: {c:?} => {s:?}"
+        );
+    }
+
+    fn is_aligned(bytes: usize) -> bool {
+        bytes % crate::page_size() == 0
     }
 }

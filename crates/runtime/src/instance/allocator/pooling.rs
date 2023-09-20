@@ -80,7 +80,7 @@ use super::{
 };
 use crate::{
     instance::Instance,
-    mpk::{self, ProtectionKey, ProtectionMask},
+    mpk::{self, MpkEnabled, ProtectionKey, ProtectionMask},
     CompiledModuleId, Memory, Table,
 };
 use anyhow::{bail, Result};
@@ -218,7 +218,7 @@ pub struct PoolingInstanceAllocatorConfig {
     /// Same as `linear_memory_keep_resident` but for tables.
     pub table_keep_resident: usize,
     /// Whether to enable memory protection keys.
-    pub memory_protection_keys: AutoEnabled,
+    pub memory_protection_keys: MpkEnabled,
 }
 
 impl Default for PoolingInstanceAllocatorConfig {
@@ -231,21 +231,9 @@ impl Default for PoolingInstanceAllocatorConfig {
             async_stack_keep_resident: 0,
             linear_memory_keep_resident: 0,
             table_keep_resident: 0,
-            memory_protection_keys: AutoEnabled::Disable,
+            memory_protection_keys: MpkEnabled::Disable,
         }
     }
-}
-
-/// Describe the tri-state configuration of memory protection keys (MPK).
-#[derive(Clone, Copy, Debug)]
-pub enum AutoEnabled {
-    /// Use MPK if supported by the current system; fall back to guard regions
-    /// otherwise.
-    Auto,
-    /// Use MPK or fail if not supported.
-    Enable,
-    /// Do not use MPK.
-    Disable,
 }
 
 /// Implements the pooling instance allocator.

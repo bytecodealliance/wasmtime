@@ -23,8 +23,7 @@ use core::arch::asm;
 
 /// This `PKRU` register mask allows access to any pages marked with any
 /// key--in other words, reading and writing is permitted to all pages.
-#[cfg(test)]
-const ALLOW_ACCESS: u32 = 0;
+pub const ALLOW_ACCESS: u32 = 0;
 
 /// This `PKRU` register mask disables access to any page marked with any
 /// key--in other words, no reading or writing to all pages.
@@ -61,25 +60,15 @@ pub fn has_cpuid_bit_set() -> bool {
     (result.ecx & 0b100) != 0
 }
 
-/// Check that the `CR4.PKE` flag (bit 22) is set; see the Intel Software
-/// Development Manual, vol 3a, section 2.7. This register can only be
-/// accessed from privilege level 0.
-#[cfg(test)]
-fn has_cr4_bit_set() -> bool {
-    let cr4: u64;
-    unsafe {
-        asm!("mov {}, cr4", out(reg) cr4, options(nomem, nostack, preserves_flags));
-    }
-    (cr4 & (1 << 22)) != 0
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mpk::enabled::skip_if_mpk_unavailable;
 
     #[test]
     #[ignore = "cannot be run with other tests that munge the PKRU register"]
     fn check_read() {
+        skip_if_mpk_unavailable!();
         assert_eq!(read(), DISABLE_ACCESS ^ 1);
         // By default, the Linux kernel only allows a process to access key 0,
         // the default kernel key.
@@ -87,9 +76,10 @@ mod tests {
 
     #[test]
     fn check_roundtrip() {
+        skip_if_mpk_unavailable!();
         let pkru = read();
         // Allow access to pages marked with any key.
-        write(0);
+        write(ALLOW_ACCESS);
         assert_eq!(read(), ALLOW_ACCESS);
         // Restore the original value.
         write(pkru);

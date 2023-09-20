@@ -10,7 +10,8 @@
 //! [`pkeys`]: https://man7.org/linux/man-pages/man7/pkeys.7.html
 
 use crate::page_size;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
+use std::io::Error;
 
 /// Protection mask allowing reads of pkey-protected memory (see `prot` in
 /// [`pkey_mprotect`]).
@@ -28,13 +29,15 @@ pub const PROT_WRITE: u32 = libc::PROT_WRITE as u32; // == 0b0010;
 /// Each process has its own separate pkey index; e.g., if process `m`
 /// allocates key 1, process `n` can as well.
 pub fn pkey_alloc(flags: u32, access_rights: u32) -> Result<u32> {
-    debug_assert_eq!(flags, 0); // reserved for future use--must be 0.
+    assert_eq!(flags, 0); // reserved for future use--must be 0.
     let result = unsafe { libc::syscall(libc::SYS_pkey_alloc, flags, access_rights) };
     if result >= 0 {
-        Ok(result.try_into().expect("TODO"))
+        Ok(result
+            .try_into()
+            .expect("only pkey IDs between 0 and 15 are expected"))
     } else {
         debug_assert_eq!(result, -1); // only this error result is expected.
-        Err(anyhow!(unsafe { errno_as_string() }))
+        Err(Error::last_os_error().into())
     }
 }
 
@@ -48,7 +51,7 @@ pub fn pkey_free(key: u32) -> Result<()> {
         Ok(())
     } else {
         debug_assert_eq!(result, -1); // only this error result is expected.
-        Err(anyhow!(unsafe { errno_as_string() }))
+        Err(Error::last_os_error().into())
     }
 }
 
@@ -67,20 +70,8 @@ pub fn pkey_mprotect(addr: usize, len: usize, prot: u32, key: u32) -> Result<()>
         Ok(())
     } else {
         debug_assert_eq!(result, -1); // only this error result is expected.
-        Err(anyhow!(unsafe { errno_as_string() }))
+        Err(Error::last_os_error().into())
     }
-}
-
-/// Helper function for retrieving the libc error message for the current
-/// error (see GNU libc's ["Checking for Errors"] documentation).
-///
-/// ["Checking for Errors"]: https://www.gnu.org/software/libc/manual/html_node/Checking-for-Errors.html
-unsafe fn errno_as_string() -> String {
-    let errno = *libc::__errno_location();
-    let err_ptr = libc::strerror(errno);
-    std::ffi::CStr::from_ptr(err_ptr)
-        .to_string_lossy()
-        .into_owned()
 }
 
 #[cfg(test)]
@@ -106,13 +97,16 @@ mod tests {
     fn check_invalid_free() {
         let result = pkey_free(42);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "Invalid argument");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid argument (os error 22)"
+        );
     }
 
     #[test]
     #[should_panic]
     fn check_invalid_alloc_flags() {
-        pkey_alloc(42, 0).unwrap();
+        let _ = pkey_alloc(42, 0);
     }
 
     #[test]

@@ -161,10 +161,16 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
     }
 
     fn restrict_to_pkey(&self, _: ProtectionKey) {
-        // The on-demand allocator cannot use protection keys.
+        // The on-demand allocator cannot use protection keys; an on-demand
+        // allocator will never hand out protection keys to the stores its
+        // engine creates.
+        unreachable!()
     }
 
     fn allow_all_pkeys(&self) {
-        // The on-demand allocator cannot use protection keys.
+        // The on-demand allocator cannot use protection keys; an on-demand
+        // allocator will never hand out protection keys to the stores its
+        // engine creates.
+        unreachable!()
     }
 }

@@ -14,13 +14,13 @@ pub fn keys() -> &'static [ProtectionKey] {
 pub fn allow(_: ProtectionMask) {}
 
 #[derive(Clone, Copy, Debug)]
-pub struct ProtectionKey;
+pub enum ProtectionKey {}
 impl ProtectionKey {
     pub fn protect(&self, _: &mut [u8]) -> Result<()> {
-        Ok(())
+        match *self {}
     }
     pub fn as_stripe(&self) -> usize {
-        0
+        match *self {}
     }
 }
 

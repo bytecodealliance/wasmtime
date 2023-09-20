@@ -14,9 +14,10 @@ use wasmparser::WasmFeatures;
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::Tunables;
 use wasmtime_jit::profiling::{self, ProfilingAgent};
-use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
+use wasmtime_runtime::{mpk, InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
 pub use wasmtime_environ::CacheStore;
+pub use wasmtime_runtime::MpkEnabled;
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -1186,7 +1187,7 @@ impl Config {
     ///
     /// Note that the pooling allocator can reduce the amount of memory needed
     /// for pooling allocation by using memory protection; see
-    /// [`Config::memory_protection_keys`] for details.
+    /// `PoolingAllocatorConfig::memory_protection_keys` for details.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
         let max_pages = max_size / u64::from(wasmtime_environ::WASM_PAGE_SIZE);
         self.tunables.static_memory_bound = max_pages;
@@ -2313,16 +2314,15 @@ impl PoolingAllocationConfig {
     ///
     /// When using the pooling allocator (see [`Config::allocation_strategy`],
     /// [`InstanceAllocationStrategy::Pooling`]), memory protection keys can
-    /// reduce the total amount of allocated memory by eliminating guard regions
-    /// between WebAssembly memories in the pool. It does so by "coloring"
-    /// memory regions with different memory keys and setting which regions are
-    /// accessible each time executions switches from host to guest (or vice
-    /// versa).
+    /// reduce the total amount of allocated virtual memory by eliminating guard
+    /// regions between WebAssembly memories in the pool. It does so by
+    /// "coloring" memory regions with different memory keys and setting which
+    /// regions are accessible each time executions switches from host to guest
+    /// (or vice versa).
     ///
     /// MPK is only available on Linux (called `pku` there) and recent x86
-    /// systems. Checking for support at runtime is possible with
-    /// [`mpk::is_supported`][wasmtime_runtime::mpk::is_supported]. This
-    /// configuration setting can be in three states:
+    /// systems; we check for MPK support at runtime by examining the `CPUID`
+    /// register. This configuration setting can be in three states:
     ///
     /// - `auto`: if MPK support is available the guard regions are removed; if
     ///   not, the guard regions remain
@@ -2330,10 +2330,25 @@ impl PoolingAllocationConfig {
     ///   supported
     /// - `disable`: never use MPK
     ///
-    /// By default this value is `auto`.
-    pub fn memory_protection_keys(&mut self, enable: wasmtime_runtime::AutoEnabled) -> &mut Self {
+    /// By default this value is `disabled`, but may become `auto` in future releases.
+    ///
+    /// __WARNING__: this configuration options is still experimental--use at
+    /// your own risk! MPK uses kernel and CPU features to protect memory
+    /// regions; you may observe segmentation faults if anything is
+    /// misconfigured.
+    pub fn memory_protection_keys(&mut self, enable: MpkEnabled) -> &mut Self {
         self.config.memory_protection_keys = enable;
         self
+    }
+
+    /// Check if memory protection keys (MPK) are available on the current host.
+    ///
+    /// This is a convenience method for determining MPK availability using the
+    /// same method that [`MpkEnabled::Auto`] does. See
+    /// [`PoolingAllocationConfig::memory_protection_keys`] for more
+    /// information.
+    pub fn are_memory_protection_keys_available(&self) -> bool {
+        mpk::is_supported()
     }
 }
 

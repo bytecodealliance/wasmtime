@@ -31,6 +31,7 @@ mod vmcontext;
 
 pub mod debug_builtins;
 pub mod libcalls;
+pub mod mpk;
 
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
@@ -50,6 +51,7 @@ pub use crate::memory::{
 };
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
+pub use crate::mpk::MpkEnabled;
 pub use crate::store_box::*;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::*;
