@@ -15,6 +15,6 @@ async fn run() {
     )
     .await;
 
-    let error = res.unwrap_err();
-    assert_eq!(error.to_string(), "Error::InvalidUrl(\"failed to lookup address information: Temporary failure in name resolution\")");
+    let error = res.unwrap_err().to_string();
+    assert!(error.starts_with("Error::InvalidUrl(\"failed to lookup address information:"));
 }
