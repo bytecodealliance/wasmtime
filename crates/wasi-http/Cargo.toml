@@ -12,14 +12,14 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true, default-features = false }
-hyper = { version = "=1.0.0-rc.3", features = ["full"] }
+hyper = { version = "0.14.27", features = ["full"] }
 tokio = { version = "1", default-features = false, features = [
     "net",
     "rt-multi-thread",
     "time",
 ] }
 http = { version = "0.2.9" }
-http-body = "1.0.0-rc.2"
+http-body = "0.4.5"
 http-body-util = "0.1.0-rc.2"
 thiserror = { workspace = true }
 tracing = { workspace = true }

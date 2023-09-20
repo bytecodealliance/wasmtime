@@ -30,7 +30,7 @@ pub struct HostOutgoingRequest {
 pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: FieldMap,
-    pub body: Option<(hyper::body::Incoming, std::time::Duration)>,
+    pub body: Option<(hyper::body::Body, std::time::Duration)>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
 
@@ -90,7 +90,7 @@ pub enum HostFields {
 }
 
 pub struct IncomingResponseInternal {
-    pub resp: hyper::Response<hyper::body::Incoming>,
+    pub resp: hyper::Response<hyper::body::Body>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
     pub between_bytes_timeout: std::time::Duration,
 }

@@ -1,9 +1,7 @@
 use crate::{bindings::http::types, types::FieldMap};
 use anyhow::anyhow;
 use bytes::Bytes;
-use http_body_util::combinators::BoxBody;
 use std::{
-    convert::Infallible,
     pin::Pin,
     sync::{Arc, Mutex},
     time::Duration,
@@ -122,21 +120,18 @@ impl HostIncomingBody {
     /// streaming body to completion. Data segments will be communicated out over the
     /// [`DataReceiver`] channel, and a [`HostFutureTrailers`] gives a way to block on/retrieve the
     /// trailers.
-    pub fn new(mut body: hyper::body::Incoming, between_bytes_timeout: Duration) -> Self {
+    pub fn new(mut body: hyper::body::Body, between_bytes_timeout: Duration) -> Self {
+        use hyper::body::HttpBody;
+
         let (body_writer, body_receiver) = mpsc::channel(1);
         let (trailer_writer, trailers) = oneshot::channel();
 
         let worker = preview2::spawn(async move {
             loop {
-                let frame = match tokio::time::timeout(
-                    between_bytes_timeout,
-                    http_body_util::BodyExt::frame(&mut body),
-                )
-                .await
-                {
+                let data = match tokio::time::timeout(between_bytes_timeout, body.data()).await {
                     Ok(None) => break,
 
-                    Ok(Some(Ok(frame))) => frame,
+                    Ok(Some(Ok(data))) => data,
 
                     Ok(Some(Err(e))) => {
                         match body_writer.send(Err(anyhow::anyhow!(e))).await {
@@ -168,31 +163,35 @@ impl HostIncomingBody {
                     }
                 };
 
-                if frame.is_trailers() {
-                    // We know we're not going to write any more data frames at this point, so we
-                    // explicitly drop the body_writer so that anything waiting on the read end returns
-                    // immediately.
-                    drop(body_writer);
-
-                    let trailers = frame.into_trailers().unwrap();
-
-                    // TODO: this will fail in two cases:
-                    // 1. we've already used the channel once, which should be imposible,
-                    // 2. the read end is closed.
-                    // I'm not sure how to differentiate between these two cases, or really
-                    // if we need to do anything to handle either.
-                    let _ = trailer_writer.send(Ok(trailers));
-
-                    break;
-                }
-
-                assert!(frame.is_data(), "frame wasn't data");
-
-                let data = frame.into_data().unwrap();
-
                 // If the receiver no longer exists, thats ok - in that case we want to keep the
                 // loop running to relieve backpressure, so we get to the trailers.
                 let _ = body_writer.send(Ok(data)).await;
+            }
+
+            match tokio::time::timeout(between_bytes_timeout, body.trailers()).await {
+                Err(_) => {
+                    let _ = trailer_writer.send(Err(types::Error::TimeoutError(
+                        "data frame timed out".to_string(),
+                    )
+                    .into()));
+                }
+
+                Ok(res) => {
+                    // We know we're not going to write any more data frames at this point, so we
+                    // explicitly drop the body_writer so that anything waiting on the read end
+                    // returns immediately.
+                    drop(body_writer);
+
+                    // We always send a trailers map, treating no trailers from hyper as sending
+                    // the empty trailers. It might be good to revisit this, passing an optional
+                    // trailers out isntead to communicate when none were present in the response.
+                    let res = res.map(|e| e.unwrap_or_default()).map_err(|e| anyhow!(e));
+
+                    // This could fail in two ways: 1) we've already used the channel, or 2) the
+                    // read end is closed. We can't take any action based on either outcome, so we
+                    // ignore the error here.
+                    let _ = trailer_writer.send(res);
+                }
             }
         });
 
@@ -253,75 +252,16 @@ impl HostFutureTrailers {
     }
 }
 
-pub type HyperBody = BoxBody<Bytes, Infallible>;
+pub type HyperBody = hyper::Body;
 
 pub struct HostOutgoingBody {
-    pub body_output_stream: Option<Box<dyn HostOutputStream>>,
-    pub trailers_sender: Option<tokio::sync::oneshot::Sender<hyper::HeaderMap>>,
+    pub sender: hyper::body::Sender,
 }
 
 impl HostOutgoingBody {
     pub fn new() -> (Self, HyperBody) {
-        use http_body_util::BodyExt;
-        use hyper::{
-            body::{Body, Frame},
-            HeaderMap,
-        };
-        use std::future::Future;
-        use std::task::{Context, Poll};
-        use tokio::sync::oneshot::error::RecvError;
-        struct BodyImpl {
-            body_receiver: mpsc::Receiver<Bytes>,
-            trailers_receiver: Option<oneshot::Receiver<HeaderMap>>,
-        }
-        impl Body for BodyImpl {
-            type Data = Bytes;
-            type Error = Infallible;
-            fn poll_frame(
-                mut self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-            ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-                match self.as_mut().body_receiver.poll_recv(cx) {
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(Some(frame)) => Poll::Ready(Some(Ok(Frame::data(frame)))),
-
-                    // This means that the `body_sender` end of the channel has been dropped.
-                    Poll::Ready(None) => {
-                        if let Some(mut trailers_receiver) = self.as_mut().trailers_receiver.take()
-                        {
-                            match Pin::new(&mut trailers_receiver).poll(cx) {
-                                Poll::Pending => {
-                                    self.as_mut().trailers_receiver = Some(trailers_receiver);
-                                    Poll::Pending
-                                }
-                                Poll::Ready(Ok(trailers)) => {
-                                    Poll::Ready(Some(Ok(Frame::trailers(trailers))))
-                                }
-                                Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),
-                            }
-                        } else {
-                            Poll::Ready(None)
-                        }
-                    }
-                }
-            }
-        }
-
-        let (body_sender, body_receiver) = mpsc::channel(1);
-        let (trailers_sender, trailers_receiver) = oneshot::channel();
-        let body_impl = BodyImpl {
-            body_receiver,
-            trailers_receiver: Some(trailers_receiver),
-        }
-        .boxed();
-        (
-            Self {
-                // TODO: this capacity constant is arbitrary, and should be configurable
-                body_output_stream: Some(Box::new(BodyWriteStream::new(1024 * 1024, body_sender))),
-                trailers_sender: Some(trailers_sender),
-            },
-            body_impl,
-        )
+        let (sender, body) = hyper::Body::channel();
+        (Self { sender }, body)
     }
 }
 

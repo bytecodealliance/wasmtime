@@ -1431,6 +1431,17 @@ dependencies = [
 
 [[package]]
 name = "http-body"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5f38f16d184e36f2408a55281cd658ecbd3ca05cce6d6510a176eca393e26d1"
+dependencies = [
+ "bytes",
+ "http",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "http-body"
 version = "1.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "951dfc2e32ac02d67c90c0d65bd27009a635dc9b381a2cc7d284ab01e3a0150d"
@@ -1448,7 +1459,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "http",
- "http-body",
+ "http-body 1.0.0-rc.2",
  "pin-project-lite",
 ]
 
@@ -1481,6 +1492,30 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
+version = "0.14.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffb1cfd654a8219eaef89881fdb3bb3b1cdc5fa75ded05d6933b2b382e395468"
+dependencies = [
+ "bytes",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
+ "h2",
+ "http",
+ "http-body 0.4.5",
+ "httparse",
+ "httpdate",
+ "itoa",
+ "pin-project-lite",
+ "socket2",
+ "tokio",
+ "tower-service",
+ "tracing",
+ "want",
+]
+
+[[package]]
+name = "hyper"
 version = "1.0.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b75264b2003a3913f118d35c586e535293b3e22e41f074930762929d071e092"
@@ -1491,7 +1526,7 @@ dependencies = [
  "futures-util",
  "h2",
  "http",
- "http-body",
+ "http-body 1.0.0-rc.2",
  "httparse",
  "httpdate",
  "itoa",
@@ -2665,9 +2700,9 @@ dependencies = [
  "cfg-if",
  "heck",
  "http",
- "http-body",
+ "http-body 1.0.0-rc.2",
  "http-body-util",
- "hyper",
+ "hyper 1.0.0-rc.3",
  "is-terminal",
  "lazy_static",
  "tempfile",
@@ -2798,6 +2833,12 @@ checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "tower-service"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 
 [[package]]
 name = "tracing"
@@ -3758,9 +3799,9 @@ dependencies = [
  "bytes",
  "futures",
  "http",
- "http-body",
+ "http-body 0.4.5",
  "http-body-util",
- "hyper",
+ "hyper 0.14.27",
  "rustls",
  "thiserror",
  "tokio",

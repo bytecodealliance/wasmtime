@@ -5,8 +5,6 @@ use crate::bindings::http::{
 use crate::types::{HostFutureIncomingResponse, IncomingResponseInternal, TableHttpExt};
 use crate::WasiHttpView;
 use anyhow::Context;
-use bytes::Bytes;
-use http_body_util::{BodyExt, Empty};
 use hyper::Method;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -84,7 +82,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             }
         }
 
-        let body = req.body.unwrap_or_else(|| Empty::<Bytes>::new().boxed());
+        let body = req.body.unwrap_or_default();
 
         let request = builder.body(body).map_err(http_protocol_error)?;
 
@@ -105,7 +103,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 timeout(
                     connect_timeout,
                     // TODO: we should plumb the builder through the http context, and use it here
-                    hyper::client::conn::http1::handshake(tcp_stream),
+                    hyper::client::conn::handshake(tcp_stream),
                 )
                 .await
                 .map_err(|_| timeout_error("connection"))??
