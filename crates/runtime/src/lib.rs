@@ -31,19 +31,20 @@ mod vmcontext;
 
 pub mod debug_builtins;
 pub mod libcalls;
+pub mod mpk;
 
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
 pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
+#[cfg(feature = "pooling-allocator")]
+pub use crate::instance::{
+    AutoEnabled, InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
+};
 pub use crate::instance::{
     Instance, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl, InstanceHandle,
     MemoryAllocationIndex, OnDemandInstanceAllocator, StorePtr, TableAllocationIndex,
-};
-#[cfg(feature = "pooling-allocator")]
-pub use crate::instance::{
-    InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
 };
 pub use crate::memory::{
     DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
@@ -182,8 +183,8 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// not callable from outside the Wasm module itself.
     fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction>;
 
-    /// Return the addres, in memory, of the trampoline that allows Wasm to call
-    /// a native function of the given signature.
+    /// Return the address, in memory, of the trampoline that allows Wasm to
+    /// call a native function of the given signature.
     fn wasm_to_native_trampoline(
         &self,
         signature: VMSharedSignatureIndex,
