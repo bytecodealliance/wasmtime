@@ -1908,7 +1908,7 @@ impl PoolingAllocationConfig {
     /// allocator additionally track an "affinity" flag to a particular core
     /// wasm module. When a module is instantiated into a slot then the slot is
     /// considered affine to that module, even after the instance has been
-    /// dealloocated.
+    /// deallocated.
     ///
     /// When a new instance is created then a slot must be chosen, and the
     /// current algorithm for selecting a slot is:
@@ -1931,7 +1931,7 @@ impl PoolingAllocationConfig {
     /// impact of "unused slots" for a long-running wasm server.
     ///
     /// If this setting is set to 0, for example, then affine slots are
-    /// aggressively resused on a least-recently-used basis. A "cold" slot is
+    /// aggressively reused on a least-recently-used basis. A "cold" slot is
     /// only used if there are no affine slots available to allocate from. This
     /// means that the set of slots used over the lifetime of a program is the
     /// same as the maximum concurrent number of wasm instances.

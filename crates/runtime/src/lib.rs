@@ -182,8 +182,8 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// not callable from outside the Wasm module itself.
     fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction>;
 
-    /// Return the addres, in memory, of the trampoline that allows Wasm to call
-    /// a native function of the given signature.
+    /// Return the address, in memory, of the trampoline that allows Wasm to
+    /// call a native function of the given signature.
     fn wasm_to_native_trampoline(
         &self,
         signature: VMSharedSignatureIndex,
