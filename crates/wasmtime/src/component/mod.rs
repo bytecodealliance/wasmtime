@@ -326,16 +326,20 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // Restrict the code generated to what's needed for the interface
 ///     // imports in the inlined WIT document fragment.
 ///     interfaces: "
-///         import package.foo
+///         import wasi:cli/command
 ///     ",
 ///
-///     // Remap interface names to module names, imported from elsewhere.
-///     // Using this option will prevent any code from being generated
-///     // for the names mentioned in the mapping, assuming instead that the
-///     // names mentioned come from a previous use of the `bindgen!` macro
-///     // with `only_interfaces: true`.
+///     // Remap imported interfaces or resources to types defined in Rust
+///     // elsewhere. Using this option will prevent any code from being
+///     // generated for interfaces mentioned here. Resources named here will
+///     // not have a type generated to represent the resource.
+///     //
+///     // Interfaces mapped with this option should be previously generated
+///     // with an invocation of this macro. Resources need to be mapped to a
+///     // Rust type name.
 ///     with: {
-///         "a": somewhere::else::a,
+///         "wasi:random/random": some::other::wasi::random::random,
+///         "wasi:filesystem/types/descriptor": MyDescriptorType,
 ///     },
 /// });
 /// ```
