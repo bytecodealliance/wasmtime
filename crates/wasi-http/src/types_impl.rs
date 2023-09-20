@@ -444,10 +444,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         id: OutgoingBody,
     ) -> wasmtime::Result<Result<OutputStream, ()>> {
         let body = self.table().get_outgoing_body(id)?;
-        // This is the point where the pre-1.0.0 api is hard to fit onto wasi-http: we can't
-        // duplicate teh sender, but we need to keep it around to be able to send trailers. Perhaps
-        // we could manage this with an `Arc<Mutex>`, but the send method is a future, so that
-        // would likely force some other issues as well.
         if let Some(stream) = body.body_output_stream.take() {
             let id = self.table().push_output_stream_child(stream, id)?;
             Ok(Ok(id))
@@ -464,7 +460,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let mut body = self.table().delete_outgoing_body(id)?;
         let trailers = self.table().get_fields(ts)?.clone();
 
-        match body.sender.send_trailers(trailers.into()).await {
+        match body
+            .trailers_sender
+            .take()
+            // Should be unreachable - this is the only place we take the trailers sender,
+            // at the end of the HostOutgoingBody's lifetime
+            .ok_or_else(|| anyhow!("trailers_sender missing"))?
+            .send(trailers.into())
+        {
             Ok(()) => {}
             Err(_) => {} // Ignoring failure: receiver died sending body, but we can't report that
                          // here.
