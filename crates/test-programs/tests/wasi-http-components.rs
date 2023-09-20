@@ -120,8 +120,8 @@ async fn outbound_request_post() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn outbound_request_post_large() {
-    setup_http1(run("outbound_request_post_large"))
+async fn outbound_request_large_post() {
+    setup_http1(run("outbound_request_large_post"))
         .await
         .unwrap();
 }
