@@ -25,7 +25,6 @@ pub fn add_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Resul
 where
     T: WasiHttpView + bindings::http::types::Host,
 {
-    bindings::http::incoming_handler::add_to_linker(l, |t| t)?;
     bindings::http::outgoing_handler::add_to_linker(l, |t| t)?;
     bindings::http::types::add_to_linker(l, |t| t)?;
     Ok(())
