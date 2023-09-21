@@ -14,7 +14,6 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;
@@ -22,8 +21,6 @@ mod lower;
 mod settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
-
-use inst::create_reg_environment;
 
 use self::inst::EmitInfo;
 
