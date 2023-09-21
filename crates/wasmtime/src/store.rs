@@ -1304,15 +1304,13 @@ impl StoreOpaque {
 
     /// Get all memories (host- or Wasm-defined) within this store.
     pub fn all_memories<'a>(&'a mut self) -> impl Iterator<Item = Memory> + 'a {
-        unsafe {
-            let mems = self
-                .instances
-                .iter_mut()
-                .flat_map(|instance| instance.handle.defined_memories())
-                .collect::<Vec<_>>();
-            mems.into_iter()
-                .map(|memory| Memory::from_wasmtime_memory(memory, self))
-        }
+        let mems = self
+            .instances
+            .iter_mut()
+            .flat_map(|instance| instance.handle.defined_memories())
+            .collect::<Vec<_>>();
+        mems.into_iter()
+            .map(|memory| unsafe { Memory::from_wasmtime_memory(memory, self) })
     }
 
     /// Iterate over all globals (host- or Wasm-defined) within this store.
