@@ -1,4 +1,5 @@
 use crate::bindings::http::{
+    incoming_handler::{self, IncomingRequest, ResponseOutparam},
     outgoing_handler,
     types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme},
 };
@@ -173,6 +174,16 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .push_future_incoming_response(HostFutureIncomingResponse::new(handle))?;
 
         Ok(Ok(fut))
+    }
+}
+
+impl<T: WasiHttpView> incoming_handler::Host for T {
+    fn handle(
+        &mut self,
+        _request: IncomingRequest,
+        _response_out: ResponseOutparam,
+    ) -> wasmtime::Result<()> {
+        todo!()
     }
 }
 
