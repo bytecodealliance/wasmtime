@@ -1,9 +1,12 @@
+use rustix::io::Errno;
+
 use crate::preview2::bindings::sockets::network::{
     self, ErrorCode, IpAddressFamily, IpSocketAddress, Ipv4Address, Ipv4SocketAddress, Ipv6Address,
     Ipv6SocketAddress,
 };
 use crate::preview2::network::TableNetworkExt;
 use crate::preview2::{TableError, WasiView};
+use anyhow::anyhow;
 use std::io;
 
 impl<T: WasiView> network::Host for T {
@@ -16,64 +19,109 @@ impl<T: WasiView> network::Host for T {
     }
 }
 
+
+/// Unfortunately, Rust's io::ErrorKind is missing more than half of the relevant error codes.
+/// This trait provides access to a unified error code.
+pub(crate) trait SystemError: std::error::Error {
+    fn errno(&self) -> Option<Errno>;
+}
+
+impl SystemError for Errno {
+    fn errno(&self) -> Option<Errno> {
+        Some(*self)
+    }
+}
+
+impl SystemError for std::io::Error {
+    fn errno(&self) -> Option<Errno> {
+        if let Some(errno) = Errno::from_io_error(self) {
+            return Some(errno);
+        }
+
+        // Error is probably synthesized in Rust code. Luckily, the errors kinds map pretty straightforward back to native error codes.
+        match self.kind() {
+            std::io::ErrorKind::AddrInUse => Some(Errno::ADDRINUSE),
+            std::io::ErrorKind::AddrNotAvailable => Some(Errno::ADDRNOTAVAIL),
+            std::io::ErrorKind::AlreadyExists => Some(Errno::EXIST),
+            std::io::ErrorKind::BrokenPipe => Some(Errno::PIPE),
+            std::io::ErrorKind::ConnectionAborted => Some(Errno::CONNABORTED),
+            std::io::ErrorKind::ConnectionRefused => Some(Errno::CONNREFUSED),
+            std::io::ErrorKind::ConnectionReset => Some(Errno::CONNRESET),
+            std::io::ErrorKind::Interrupted => Some(Errno::INTR),
+            std::io::ErrorKind::InvalidInput => Some(Errno::INVAL),
+            std::io::ErrorKind::NotConnected => Some(Errno::NOTCONN),
+            std::io::ErrorKind::NotFound => Some(Errno::NOENT),
+            std::io::ErrorKind::OutOfMemory => Some(Errno::NOMEM),
+            std::io::ErrorKind::PermissionDenied => Some(Errno::ACCESS), // Alternative: EPERM
+            std::io::ErrorKind::TimedOut => Some(Errno::TIMEDOUT),
+            std::io::ErrorKind::Unsupported => Some(Errno::NOTSUP),
+            std::io::ErrorKind::WouldBlock => Some(Errno::WOULDBLOCK), // Alternative: EAGAIN
+
+            _ => None,
+        }
+    }
+}
+
+
 impl From<TableError> for network::Error {
     fn from(error: TableError) -> Self {
         Self::trap(error.into())
     }
 }
 
-impl From<io::Error> for network::Error {
-    fn from(error: io::Error) -> Self {
-        match error.kind() {
-            // Errors that we can directly map.
-            io::ErrorKind::PermissionDenied => ErrorCode::AccessDenied,
-            io::ErrorKind::ConnectionRefused => ErrorCode::ConnectionRefused,
-            io::ErrorKind::ConnectionReset => ErrorCode::ConnectionReset,
-            io::ErrorKind::NotConnected => ErrorCode::NotConnected,
-            io::ErrorKind::AddrInUse => ErrorCode::AddressInUse,
-            io::ErrorKind::AddrNotAvailable => ErrorCode::AddressNotBindable,
-            io::ErrorKind::WouldBlock => ErrorCode::WouldBlock,
-            io::ErrorKind::TimedOut => ErrorCode::Timeout,
-            io::ErrorKind::Unsupported => ErrorCode::NotSupported,
-            io::ErrorKind::OutOfMemory => ErrorCode::OutOfMemory,
+impl<T: SystemError> From<T> for network::Error {
+    fn from(error: T) -> Self {
+        let errno = match error.errno() {
+            Some(errno) => errno,
+            None => return Self::trap(anyhow!("Unknown network error: {:?}", error)),
+        };
 
-            // Errors we don't expect to see here.
-            io::ErrorKind::Interrupted | io::ErrorKind::ConnectionAborted => {
-                // Transient errors should be skipped.
-                return Self::trap(error.into());
-            }
+        match errno {
+            Errno::WOULDBLOCK => ErrorCode::WouldBlock,
+            #[allow(unreachable_patterns)] // EWOULDBLOCK and EAGAIN can have the same value.
+            Errno::AGAIN => ErrorCode::WouldBlock,
+            Errno::INTR => ErrorCode::WouldBlock,
+            #[cfg(not(windows))]
+            Errno::PERM => ErrorCode::AccessDenied,
+            Errno::ACCESS => ErrorCode::AccessDenied,
+            Errno::ADDRINUSE => ErrorCode::AddressInUse,
+            Errno::ADDRNOTAVAIL => ErrorCode::AddressNotBindable,
+            Errno::ALREADY => ErrorCode::ConcurrencyConflict,
+            Errno::TIMEDOUT => ErrorCode::Timeout,
+            Errno::CONNREFUSED => ErrorCode::ConnectionRefused,
+            Errno::CONNRESET => ErrorCode::ConnectionReset,
+            // Errno::CONNABORTED => ErrorCode::Todo, // FIXME
+            // Errno::INVAL => ErrorCode::Todo, // FIXME
+            Errno::HOSTUNREACH => ErrorCode::RemoteUnreachable,
+            Errno::HOSTDOWN => ErrorCode::RemoteUnreachable,
+            Errno::NETDOWN => ErrorCode::RemoteUnreachable,
+            Errno::NETUNREACH => ErrorCode::RemoteUnreachable,
+            #[cfg(target_os = "linux")]
+            Errno::NONET => ErrorCode::RemoteUnreachable,
+            Errno::ISCONN => ErrorCode::AlreadyConnected,
+            Errno::NOTCONN => ErrorCode::NotConnected,
+            Errno::DESTADDRREQ => ErrorCode::NotConnected,
+            #[cfg(not(windows))]
+            Errno::NFILE => ErrorCode::NewSocketLimit,
+            Errno::MFILE => ErrorCode::NewSocketLimit,
+            Errno::MSGSIZE => ErrorCode::DatagramTooLarge,
+            #[cfg(not(windows))]
+            Errno::NOMEM => ErrorCode::OutOfMemory,
+            Errno::NOBUFS => ErrorCode::OutOfMemory,
+            Errno::OPNOTSUPP => ErrorCode::NotSupported,
+            Errno::NOPROTOOPT => ErrorCode::NotSupported,
+            Errno::PFNOSUPPORT => ErrorCode::NotSupported,
+            Errno::PROTONOSUPPORT => ErrorCode::NotSupported,
+            Errno::PROTOTYPE => ErrorCode::NotSupported,
+            Errno::SOCKTNOSUPPORT => ErrorCode::NotSupported,
+            Errno::AFNOSUPPORT => ErrorCode::NotSupported,
 
-            // Errors not expected from network APIs.
-            io::ErrorKind::WriteZero
-            | io::ErrorKind::InvalidInput
-            | io::ErrorKind::InvalidData
-            | io::ErrorKind::BrokenPipe
-            | io::ErrorKind::NotFound
-            | io::ErrorKind::UnexpectedEof
-            | io::ErrorKind::AlreadyExists => return Self::trap(error.into()),
-
-            // Errors that don't correspond to a Rust `io::ErrorKind`.
-            io::ErrorKind::Other => match error.raw_os_error() {
-                None => return Self::trap(error.into()),
-                Some(libc::ENOBUFS) | Some(libc::ENOMEM) => ErrorCode::OutOfMemory,
-                Some(libc::EOPNOTSUPP) => ErrorCode::NotSupported,
-                Some(libc::ENETUNREACH) | Some(libc::EHOSTUNREACH) | Some(libc::ENETDOWN) => {
-                    ErrorCode::RemoteUnreachable
-                }
-                Some(libc::ECONNRESET) => ErrorCode::ConnectionReset,
-                Some(libc::ECONNREFUSED) => ErrorCode::ConnectionRefused,
-                Some(libc::EADDRINUSE) => ErrorCode::AddressInUse,
-                Some(_) => return Self::trap(error.into()),
-            },
-            _ => return Self::trap(error.into()),
+            // Trap on unexpected errors. These include:
+            // - EINPROGRESS: Should have been handled by connect.
+            // - ENOTSOCK, EFAULT, EBADF, EBADFD, ENOSYS: Implementation error on our side.
+            _ => return network::Error::trap(anyhow!("Unexpected error: {:?}", error)),
         }
         .into()
-    }
-}
-
-impl From<rustix::io::Errno> for network::Error {
-    fn from(error: rustix::io::Errno) -> Self {
-        std::io::Error::from(error).into()
     }
 }
 
