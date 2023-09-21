@@ -924,3 +924,64 @@ fn no_actual_wasm_code() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn use_types_across_component_boundaries() -> Result<()> {
+    // Create a component that exports a function that returns a record
+    let engine = super::engine();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (type (;0;) (record (field "a" u8) (field "b" string)))
+            (import "my-record" (type $my-record (eq 0)))
+            (core module $m
+                (memory $memory 17)
+                (export "memory" (memory $memory))
+                (func (export "my-func") (result i32)
+                    i32.const 4
+                    return))
+            (core instance $instance (instantiate $m))
+            (type $func-type (func (result $my-record)))
+            (alias core export $instance "my-func" (core func $my-func))
+            (alias core export $instance "memory" (core memory $memory))
+            (func $my-func (type $func-type) (canon lift (core func $my-func) (memory $memory) string-encoding=utf8))
+            (export $export "my-func" (func $my-func))
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, 0);
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let my_func = instance.get_func(&mut store, "my-func").unwrap();
+    let mut results = vec![Val::Bool(false)];
+    my_func.call(&mut store, &[], &mut results)?;
+
+    // Create another component that exports a function that takes that record as an argument
+    let component = Component::new(
+        &engine,
+        format!(
+            r#"(component
+            (type (;0;) (record (field "a" u8) (field "b" string)))
+            (import "my-record" (type $my-record (eq 0)))
+            (core module $m
+                (memory $memory 17)
+                (export "memory" (memory $memory))
+                {REALLOC_AND_FREE}
+                (func (export "my-func") (param i32 i32 i32)))
+            (core instance $instance (instantiate $m))
+            (type $func-type (func (param "my-record" $my-record)))
+            (alias core export $instance "my-func" (core func $my-func))
+            (alias core export $instance "memory" (core memory $memory))
+            (func $my-func (type $func-type) (canon lift (core func $my-func) (memory $memory) string-encoding=utf8 (realloc (func $instance "realloc"))))
+            (export $export "my-func" (func $my-func))
+        )"#
+        ),
+    )?;
+    let mut store = Store::new(&engine, 0);
+    let linker = Linker::new(&engine);
+    let instance = linker.instantiate(&mut store, &component)?;
+    let my_func = instance.get_func(&mut store, "my-func").unwrap();
+    // Call the exported function with the return values of the call to the previous component's exported function
+    my_func.call(&mut store, &results, &mut [])?;
+
+    Ok(())
+}
