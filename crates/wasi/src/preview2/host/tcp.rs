@@ -226,6 +226,13 @@ impl<T: WasiView> tcp::Host for T {
     fn local_address(&mut self, this: tcp::TcpSocket) -> Result<IpSocketAddress, network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
+
+        match socket.tcp_state {
+            HostTcpState::Default => return Err(ErrorCode::NotBound.into()),
+            HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+            _ => {}
+        }
+
         let addr = socket
             .tcp_socket()
             .as_socketlike_view::<std::net::TcpStream>()

@@ -143,6 +143,12 @@ interface udp {
 
 	/// Get the current bound address.
 	/// 
+	/// POSIX mentions:
+	/// > If the socket has not been bound to a local name, the value
+	/// > stored in the object pointed to by `address` is unspecified.
+	///
+	/// WASI is stricter and requires `local-address` to return `not-bound` when the socket hasn't been bound yet.
+	/// 
 	/// # Typical errors
 	/// - `not-bound`: The socket is not bound to any local address.
 	/// 
