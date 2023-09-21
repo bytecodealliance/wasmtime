@@ -120,8 +120,8 @@ impl HostInputStream for HostIncomingBodyStream {
 impl HostIncomingBody {
     /// Consume the state held in the [`HostIncomingBody`] to spawn a task that will drive the
     /// streaming body to completion. Data segments will be communicated out over the
-    /// [`DataReceiver`] channel, and a [`HostFutureTrailers`] gives a way to block on/retrieve the
-    /// trailers.
+    /// [`HostIncomingBodyStream`], and a [`HostFutureTrailers`] gives a way to block on/retrieve
+    /// the trailers.
     pub fn new(mut body: hyper::body::Incoming, between_bytes_timeout: Duration) -> Self {
         let (body_writer, body_receiver) = mpsc::channel(1);
         let (trailer_writer, trailers) = oneshot::channel();
@@ -450,15 +450,14 @@ impl Worker {
     }
 }
 
-/// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
+/// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
 pub struct BodyWriteStream {
     worker: Arc<Worker>,
     _join_handle: preview2::AbortOnDropJoinHandle<()>,
 }
 
 impl BodyWriteStream {
-    /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
-    /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
+    /// Create a [`BodyWriteStream`].
     pub fn new(write_budget: usize, writer: mpsc::Sender<Bytes>) -> Self {
         let worker = Arc::new(Worker::new(write_budget));
 
