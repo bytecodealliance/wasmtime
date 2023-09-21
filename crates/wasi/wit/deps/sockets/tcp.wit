@@ -57,6 +57,15 @@ interface tcp {
 	/// - the socket is transitioned into the Connection state
 	/// - a pair of streams is returned that can be used to read & write to the connection
 	/// 
+	/// POSIX mentions:
+	/// > If connect() fails, the state of the socket is unspecified. Conforming applications should
+	/// > close the file descriptor and create a new socket before attempting to reconnect.
+	/// 
+	/// WASI prescribes the following behavior:
+	/// - If `connect` fails because an input/state validation error, the socket should remain usable.
+	/// - If a connection was actually attempted but failed, the socket should become unusable for further network communication.
+	///   Besides `drop`, any method after such a failure may return an error.
+	/// 
 	/// # Typical `start` errors
 	/// - `address-family-mismatch`:   The `remote-address` has the wrong address family. (EAFNOSUPPORT)
 	/// - `invalid-remote-address`:    The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EADDRNOTAVAIL on Windows)

@@ -133,7 +133,10 @@ impl<T: WasiView> tcp::Host for T {
                 // Check whether the connect succeeded.
                 match sockopt::get_socket_error(socket.tcp_socket()) {
                     Ok(Ok(())) => {}
-                    Err(err) | Ok(Err(err)) => return Err(err.into()),
+                    Err(err) | Ok(Err(err)) => {
+                        socket.tcp_state = HostTcpState::ConnectFailed;
+                        return Err(err.into());
+                    },
                 }
             }
             _ => return Err(ErrorCode::NotInProgress.into()),
