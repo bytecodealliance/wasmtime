@@ -34,7 +34,6 @@ interface tcp {
 	/// # Typical `start` errors
 	/// - `address-family-mismatch`:   The `local-address` has the wrong address family. (EINVAL)
 	/// - `already-bound`:             The socket is already bound. (EINVAL)
-	/// - `concurrency-conflict`:      Another `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	/// 
 	/// # Typical `finish` errors
 	/// - `address-in-use`:            No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
@@ -73,7 +72,6 @@ interface tcp {
 	/// - `already-attached`:          The socket is already attached to a different network. The `network` passed to `connect` must be identical to the one passed to `bind`.
 	/// - `already-connected`:         The socket is already in the Connection state. (EISCONN)
 	/// - `already-listening`:         The socket is already in the Listener state. (EOPNOTSUPP, EINVAL on Windows)
-	/// - `concurrency-conflict`:      Another `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	/// 
 	/// # Typical `finish` errors
 	/// - `timeout`:                   Connection timed out. (ETIMEDOUT)
@@ -107,7 +105,6 @@ interface tcp {
 	/// - `not-bound`:                 The socket is not bound to any local address. (EDESTADDRREQ)
 	/// - `already-connected`:         The socket is already in the Connection state. (EISCONN, EINVAL on BSD)
 	/// - `already-listening`:         The socket is already in the Listener state.
-	/// - `concurrency-conflict`:      Another `bind`, `connect` or `listen` operation is already in progress. (EINVAL on BSD)
 	///
 	/// # Typical `finish` errors
 	/// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE)
@@ -189,7 +186,6 @@ interface tcp {
 	/// - `ipv6-only-operation`:  (get/set) `this` socket is an IPv4 socket.
 	/// - `already-bound`:        (set) The socket is already bound.
 	/// - `not-supported`:        (set) Host does not support dual-stack sockets. (Implementations are not required to.)
-	/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	ipv6-only: func(this: tcp-socket) -> result<bool, error-code>
 	set-ipv6-only: func(this: tcp-socket, value: bool) -> result<_, error-code>
 
@@ -197,20 +193,13 @@ interface tcp {
 	/// 
 	/// # Typical errors
 	/// - `already-connected`:    (set) The socket is already in the Connection state.
-	/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	set-listen-backlog-size: func(this: tcp-socket, value: u64) -> result<_, error-code>
 
 	/// Equivalent to the SO_KEEPALIVE socket option.
-	/// 
-	/// # Typical errors
-	/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	keep-alive: func(this: tcp-socket) -> result<bool, error-code>
 	set-keep-alive: func(this: tcp-socket, value: bool) -> result<_, error-code>
 
 	/// Equivalent to the TCP_NODELAY socket option.
-	/// 
-	/// # Typical errors
-	/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	no-delay: func(this: tcp-socket) -> result<bool, error-code>
 	set-no-delay: func(this: tcp-socket, value: bool) -> result<_, error-code>
 	
@@ -219,7 +208,6 @@ interface tcp {
 	/// # Typical errors
 	/// - `already-connected`:    (set) The socket is already in the Connection state.
 	/// - `already-listening`:    (set) The socket is already in the Listener state.
-	/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	unicast-hop-limit: func(this: tcp-socket) -> result<u8, error-code>
 	set-unicast-hop-limit: func(this: tcp-socket, value: u8) -> result<_, error-code>
 
@@ -237,7 +225,6 @@ interface tcp {
 	/// # Typical errors
 	/// - `already-connected`:    (set) The socket is already in the Connection state.
 	/// - `already-listening`:    (set) The socket is already in the Listener state.
-	/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	receive-buffer-size: func(this: tcp-socket) -> result<u64, error-code>
 	set-receive-buffer-size: func(this: tcp-socket, value: u64) -> result<_, error-code>
 	send-buffer-size: func(this: tcp-socket) -> result<u64, error-code>

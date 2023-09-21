@@ -23,6 +23,7 @@ interface network {
 	/// - `access-denied`
 	/// - `not-supported`
 	/// - `out-of-memory`
+	/// - `concurrency-conflict`
 	/// 
 	/// See each individual API for what the POSIX equivalents are. They sometimes differ per API.
 	enum error-code {
@@ -50,6 +51,8 @@ interface network {
 		timeout,
 
 		/// This operation is incompatible with another asynchronous operation that is already in progress.
+		///
+		/// POSIX equivalent: EALREADY
 		concurrency-conflict,
 
 		/// Trying to finish an asynchronous operation that:
