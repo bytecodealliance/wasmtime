@@ -7,9 +7,9 @@ use crate::{
         HostFutureTrailers, HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody, HyperBody,
     },
 };
+use std::any::Any;
 use std::pin::Pin;
 use std::task;
-use std::{any::Any, collections::HashMap};
 use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Table, TableError};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
@@ -36,45 +36,7 @@ pub struct HostIncomingResponse {
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
 
-#[derive(Clone)]
-pub struct FieldMap(pub HashMap<String, Vec<Vec<u8>>>);
-
-impl From<hyper::HeaderMap> for FieldMap {
-    fn from(headers: hyper::HeaderMap) -> Self {
-        use std::collections::hash_map::Entry;
-
-        let mut res: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
-
-        for (k, v) in headers.iter() {
-            let v = v.as_bytes().to_vec();
-            match res.entry(k.as_str().to_string()) {
-                Entry::Occupied(mut vs) => vs.get_mut().push(v),
-                Entry::Vacant(e) => {
-                    e.insert(vec![v]);
-                }
-            }
-        }
-
-        Self(res)
-    }
-}
-
-impl From<FieldMap> for hyper::HeaderMap {
-    fn from(fm: FieldMap) -> Self {
-        let mut res = hyper::HeaderMap::new();
-        for (k, vs) in fm.0 {
-            let name = hyper::header::HeaderName::from_bytes(k.as_str().as_bytes()).expect("FIXME");
-            for v in vs {
-                res.append(
-                    name.clone(),
-                    hyper::header::HeaderValue::from_bytes(&v)
-                        .expect("FIXME: need to make this a TryFrom"),
-                );
-            }
-        }
-        res
-    }
-}
+pub type FieldMap = hyper::HeaderMap;
 
 pub enum HostFields {
     Ref {

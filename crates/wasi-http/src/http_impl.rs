@@ -77,10 +77,8 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .uri(format!("{scheme}{authority}{}", req.path_with_query))
             .header(hyper::header::HOST, &authority);
 
-        for (k, v) in req.headers.0 {
-            for item in v {
-                builder = builder.header(&k, item);
-            }
+        for (k, v) in req.headers.iter() {
+            builder = builder.header(k, v);
         }
 
         let body = req.body.unwrap_or_else(|| Empty::<Bytes>::new().boxed());
