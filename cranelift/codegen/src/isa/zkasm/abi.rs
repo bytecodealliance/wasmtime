@@ -461,7 +461,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 frame_layout.stack_args_size.try_into().unwrap(),
             ));
         }
-        // insts.push(Inst::Ret {});
+        insts.push(Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 0,
+        });
 
         insts
     }
