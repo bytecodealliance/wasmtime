@@ -130,6 +130,9 @@ interface network {
 
 		/// The connection was reset.
 		connection-reset,
+
+		/// A connection was aborted.
+		connection-aborted,
 		
 
 		// ### UDP SOCKET ERRORS ###

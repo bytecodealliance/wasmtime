@@ -136,8 +136,8 @@ interface tcp {
 	/// # Typical errors
 	/// - `not-listening`: Socket is not in the Listener state. (EINVAL)
 	/// - `would-block`:   No pending connections at the moment. (EWOULDBLOCK, EAGAIN)
-	/// 
-	/// Host implementations must skip over transient errors returned by the native accept syscall.
+	/// - `connection-aborted`: An incoming connection was pending, but was terminated by the client before this listener could accept it. (ECONNABORTED)
+	/// - `new-socket-limit`:   The new socket resource could not be created because of a system limit. (EMFILE, ENFILE)
 	/// 
 	/// # References
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/accept.html>
