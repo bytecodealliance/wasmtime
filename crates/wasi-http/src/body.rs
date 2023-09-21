@@ -118,9 +118,8 @@ pub struct HostIncomingBody {
 impl HostIncomingBody {
     pub fn into_future_trailers(self) -> HostFutureTrailers {
         HostFutureTrailers {
-            worker: self.worker,
-            receiver: self.trailers,
-            received: None,
+            _worker: self.worker,
+            state: HostFutureTrailersState::Waiting(self.trailers),
         }
     }
 }
@@ -214,47 +213,28 @@ impl HostInputStream for HostIncomingBodyStream {
 }
 
 pub struct HostFutureTrailers {
-    pub worker: AbortOnDropJoinHandle<()>,
-    pub received: Option<Result<FieldMap, types::Error>>,
-    pub receiver: oneshot::Receiver<Result<hyper::HeaderMap, anyhow::Error>>,
+    _worker: AbortOnDropJoinHandle<()>,
+    pub state: HostFutureTrailersState,
+}
+
+pub enum HostFutureTrailersState {
+    Waiting(oneshot::Receiver<Result<hyper::HeaderMap, anyhow::Error>>),
+    Done(Result<FieldMap, types::Error>),
 }
 
 impl HostFutureTrailers {
-    pub fn ready(&mut self) -> impl Future<Output = anyhow::Result<()>> + '_ {
-        use std::task::{Context, Poll};
-
-        // We wrote this as an impl Future instead of an async fn because the `receiver`
-        // gets moved by an .await on it. We avoid ever awaiting on the resolved Future
-        // by returning early when received.is_some().
-        struct TrailersReady<'a>(&'a mut HostFutureTrailers);
-
-        impl<'a> Future for TrailersReady<'a> {
-            type Output = anyhow::Result<()>;
-
-            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-                if self.0.received.is_some() {
-                    return Poll::Ready(Ok(()));
-                }
-                match Pin::new(&mut self.0.receiver).poll(cx) {
-                    Poll::Ready(Ok(Ok(headers))) => {
-                        self.0.received = Some(Ok(FieldMap::from(headers)))
-                    }
-                    Poll::Ready(Ok(Err(e))) => {
-                        self.0.received = Some(Err(types::Error::ProtocolError(format!(
-                            "hyper error: {e:?}"
-                        ))))
-                    }
-                    Poll::Ready(Err(_)) => {
-                        self.0.received = Some(Err(types::Error::ProtocolError(
-                            "stream hung up before trailers were received".to_string(),
-                        )))
-                    }
-                    Poll::Pending => return Poll::Pending,
-                }
-                Poll::Ready(Ok(()))
-            }
+    pub async fn ready(&mut self) -> anyhow::Result<()> {
+        if let HostFutureTrailersState::Waiting(rx) = &mut self.state {
+            let result = match rx.await {
+                Ok(Ok(headers)) => Ok(FieldMap::from(headers)),
+                Ok(Err(e)) => Err(types::Error::ProtocolError(format!("hyper error: {e:?}"))),
+                Err(_) => Err(types::Error::ProtocolError(
+                    "stream hung up before trailers were received".to_string(),
+                )),
+            };
+            self.state = HostFutureTrailersState::Done(result);
         }
-        TrailersReady(self)
+        Ok(())
     }
 }
 
