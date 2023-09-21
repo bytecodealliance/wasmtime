@@ -237,7 +237,7 @@ impl HostFutureTrailers {
                 }
                 match Pin::new(&mut self.0.receiver).poll(cx) {
                     Poll::Ready(Ok(Ok(headers))) => {
-                        self.0.received = Some(Ok(FieldMap::from(headers)))
+                        self.0.received = Some(Ok(headers))
                     }
                     Poll::Ready(Ok(Err(e))) => {
                         self.0.received = Some(Err(types::Error::ProtocolError(format!(

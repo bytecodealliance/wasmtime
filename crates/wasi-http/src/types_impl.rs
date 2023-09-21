@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::bindings::http::types::{
     Error, Fields, FutureIncomingResponse, FutureTrailers, Headers, IncomingBody, IncomingRequest,
     IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse, ResponseOutparam,
@@ -16,6 +14,7 @@ use crate::{
     },
 };
 use anyhow::{anyhow, Context};
+use std::any::Any;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
     bindings::poll::poll::Pollable,
@@ -30,24 +29,17 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(())
     }
     fn new_fields(&mut self, entries: Vec<(String, Vec<u8>)>) -> wasmtime::Result<Fields> {
-        use std::collections::{hash_map::Entry, HashMap};
+        let mut map = hyper::HeaderMap::new();
 
-        let mut map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
-
-        for (key, value) in entries {
-            match map.entry(key) {
-                Entry::Occupied(mut entry) => entry.get_mut().push(value),
-                Entry::Vacant(entry) => {
-                    entry.insert(vec![value]);
-                }
-            }
+        for (header, value) in entries {
+            let header = hyper::header::HeaderName::from_bytes(header.as_bytes())?;
+            let value = hyper::header::HeaderValue::from_bytes(&value)?;
+            map.append(header, value);
         }
 
         let id = self
             .table()
-            .push_fields(HostFields::Owned {
-                fields: FieldMap(map),
-            })
+            .push_fields(HostFields::Owned { fields: map })
             .context("[new_fields] pushing fields")?;
         Ok(id)
     }
@@ -56,25 +48,34 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .table()
             .get_fields(fields)
             .context("[fields_get] getting fields")?
-            .0
-            .get(&name)
-            .ok_or_else(|| anyhow!("key not found: {name}"))?
-            .clone();
+            .get_all(hyper::header::HeaderName::from_bytes(name.as_bytes())?)
+            .into_iter()
+            .map(|val| val.as_bytes().to_owned())
+            .collect();
         Ok(res)
     }
     fn fields_set(
         &mut self,
         fields: Fields,
         name: String,
-        value: Vec<Vec<u8>>,
+        values: Vec<Vec<u8>>,
     ) -> wasmtime::Result<()> {
         let m = self.table().get_fields(fields)?;
-        m.0.insert(name, value.clone());
+
+        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
+
+        m.remove(&header);
+        for value in values {
+            let value = hyper::header::HeaderValue::from_bytes(&value)?;
+            m.append(&header, value);
+        }
+
         Ok(())
     }
     fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
         let m = self.table().get_fields(fields)?;
-        m.0.remove(&name);
+        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
+        m.remove(header);
         Ok(())
     }
     fn fields_append(
@@ -87,22 +88,16 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .table()
             .get_fields(fields)
             .context("[fields_append] getting mutable fields")?;
-        match m.0.get_mut(&name) {
-            Some(v) => v.push(value),
-            None => {
-                let mut vec = std::vec::Vec::new();
-                vec.push(value);
-                m.0.insert(name, vec);
-            }
-        };
+        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
+        let value = hyper::header::HeaderValue::from_bytes(&value)?;
+        m.append(header, value);
         Ok(())
     }
     fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
         let fields = self.table().get_fields(fields)?;
         let result = fields
-            .0
             .iter()
-            .map(|(name, value)| (name.clone(), value[0].clone()))
+            .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_owned()))
             .collect();
         Ok(result)
     }
