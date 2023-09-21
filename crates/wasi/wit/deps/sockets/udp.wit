@@ -38,7 +38,7 @@ interface udp {
 	/// - `concurrency-conflict`:      Another `bind` or `connect` operation is already in progress. (EALREADY)
 	/// 
 	/// # Typical `finish` errors
-	/// - `ephemeral-ports-exhausted`: No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
+	/// - `address-in-use`:            No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
 	/// - `address-in-use`:            Address is already in use. (EADDRINUSE)
 	/// - `address-not-bindable`:      `local-address` is not an address that the `network` can bind to. (EADDRNOTAVAIL)
 	/// - `not-in-progress`:           A `bind` operation is not in progress.
@@ -72,7 +72,7 @@ interface udp {
 	/// - `concurrency-conflict`:      Another `bind` or `connect` operation is already in progress. (EALREADY)
 	/// 
 	/// # Typical `finish` errors
-	/// - `ephemeral-ports-exhausted`: Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
+	/// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
 	/// - `not-in-progress`:           A `connect` operation is not in progress.
 	/// - `would-block`:               Can't finish the operation, it is still in progress. (EWOULDBLOCK, EAGAIN)
 	/// 

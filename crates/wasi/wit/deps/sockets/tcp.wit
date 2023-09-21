@@ -37,7 +37,7 @@ interface tcp {
 	/// - `concurrency-conflict`:      Another `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 	/// 
 	/// # Typical `finish` errors
-	/// - `ephemeral-ports-exhausted`: No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
+	/// - `address-in-use`:            No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
 	/// - `address-in-use`:            Address is already in use. (EADDRINUSE)
 	/// - `address-not-bindable`:      `local-address` is not an address that the `network` can bind to. (EADDRNOTAVAIL)
 	/// - `not-in-progress`:           A `bind` operation is not in progress.
@@ -80,7 +80,7 @@ interface tcp {
 	/// - `connection-refused`:        The connection was forcefully rejected. (ECONNREFUSED)
 	/// - `connection-reset`:          The connection was reset. (ECONNRESET)
 	/// - `remote-unreachable`:        The remote address is not reachable. (EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
-	/// - `ephemeral-ports-exhausted`: Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
+	/// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
 	/// - `not-in-progress`:           A `connect` operation is not in progress.
 	/// - `would-block`:               Can't finish the operation, it is still in progress. (EWOULDBLOCK, EAGAIN)
 	/// 
@@ -110,7 +110,7 @@ interface tcp {
 	/// - `concurrency-conflict`:      Another `bind`, `connect` or `listen` operation is already in progress. (EINVAL on BSD)
 	///
 	/// # Typical `finish` errors
-	/// - `ephemeral-ports-exhausted`: Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE)
+	/// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE)
 	/// - `not-in-progress`:           A `listen` operation is not in progress.
 	/// - `would-block`:               Can't finish the operation, it is still in progress. (EWOULDBLOCK, EAGAIN)
 	///

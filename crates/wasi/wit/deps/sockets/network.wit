@@ -107,11 +107,8 @@ interface network {
 		/// A bind operation failed because the provided address is not an address that the `network` can bind to.
 		address-not-bindable,
 
-		/// A bind operation failed because the provided address is already in use.
+		/// A bind operation failed because the provided address is already in use or because there are no ephemeral ports available.
 		address-in-use,
-
-		/// A bind operation failed because there are no ephemeral ports available.
-		ephemeral-ports-exhausted,
 
 		/// The remote address is not reachable
 		remote-unreachable,
