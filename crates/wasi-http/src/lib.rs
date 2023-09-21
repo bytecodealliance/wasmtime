@@ -1,6 +1,4 @@
 pub use crate::types::{WasiHttpCtx, WasiHttpView};
-use core::fmt::Formatter;
-use std::fmt::{self, Display};
 
 pub mod body;
 pub mod http_impl;
@@ -26,27 +24,6 @@ pub mod bindings {
     });
 
     pub use wasi::http;
-}
-
-impl std::error::Error for crate::bindings::http::types::Error {}
-
-impl Display for crate::bindings::http::types::Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            crate::bindings::http::types::Error::InvalidUrl(m) => {
-                write!(f, "[InvalidUrl] {}", m)
-            }
-            crate::bindings::http::types::Error::ProtocolError(m) => {
-                write!(f, "[ProtocolError] {}", m)
-            }
-            crate::bindings::http::types::Error::TimeoutError(m) => {
-                write!(f, "[TimeoutError] {}", m)
-            }
-            crate::bindings::http::types::Error::UnexpectedError(m) => {
-                write!(f, "[UnexpectedError] {}", m)
-            }
-        }
-    }
 }
 
 impl From<wasmtime_wasi::preview2::TableError> for crate::bindings::http::types::Error {

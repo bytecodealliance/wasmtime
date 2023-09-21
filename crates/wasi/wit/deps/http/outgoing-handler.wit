@@ -6,14 +6,7 @@
 //   that takes a `request` parameter and returns a `response` result.
 //
 interface outgoing-handler {
-  use types.{outgoing-request, request-options, future-incoming-response}
-
-  // FIXME: we would want to use the types.error here but there is a
-  // wasmtime-wit-bindgen bug that prevents us from using the same error in
-  // the two different interfaces, right now...
-  variant error {
-    invalid(string)
-  }
+  use types.{outgoing-request, request-options, future-incoming-response, error}
 
   // The parameter and result types of the `handle` function allow the caller
   // to concurrently stream the bodies of the outgoing request and the incoming

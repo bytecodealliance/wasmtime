@@ -50,7 +50,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             crate::bindings::http::types::Method::Trace => Method::TRACE,
             crate::bindings::http::types::Method::Patch => Method::PATCH,
             crate::bindings::http::types::Method::Other(method) => {
-                return Ok(Err(outgoing_handler::Error::Invalid(format!(
+                return Ok(Err(outgoing_handler::Error::InvalidUrl(format!(
                     "unknown method {method}"
                 ))));
             }
@@ -60,7 +60,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             Scheme::Http => (false, "http://", 80),
             Scheme::Https => (true, "https://", 443),
             Scheme::Other(scheme) => {
-                return Ok(Err(outgoing_handler::Error::Invalid(format!(
+                return Ok(Err(outgoing_handler::Error::InvalidUrl(format!(
                     "unsupported scheme {scheme}"
                 ))))
             }
