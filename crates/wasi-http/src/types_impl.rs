@@ -3,7 +3,7 @@ use crate::bindings::http::types::{
     IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
-use crate::body::HostFutureTrailers;
+use crate::body::{HostFutureTrailers, HostFutureTrailersState};
 use crate::types::FieldMap;
 use crate::WasiHttpView;
 use crate::{
@@ -291,19 +291,18 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         id: FutureTrailers,
     ) -> wasmtime::Result<Option<Result<Trailers, Error>>> {
         let trailers = self.table().get_future_trailers(id)?;
-
-        if trailers.received.is_none() {
-            return Ok(None);
-        }
-
-        let res = trailers.received.as_mut().unwrap();
-        if let Err(e) = res {
-            return Ok(Some(Err(e.clone())));
+        match &trailers.state {
+            HostFutureTrailersState::Waiting(_) => return Ok(None),
+            HostFutureTrailersState::Done(Err(e)) => return Ok(Some(Err(e.clone()))),
+            HostFutureTrailersState::Done(Ok(_)) => {}
         }
 
         fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
             let trailers = elem.downcast_mut::<HostFutureTrailers>().unwrap();
-            trailers.received.as_mut().unwrap().as_mut().unwrap()
+            match &mut trailers.state {
+                HostFutureTrailersState::Done(Ok(e)) => e,
+                _ => unreachable!(),
+            }
         }
 
         let hdrs = self.table().push_fields(HostFields::Ref {
