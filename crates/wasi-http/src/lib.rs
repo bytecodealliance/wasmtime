@@ -1,9 +1,8 @@
-pub use crate::http_impl::WasiHttpViewExt;
 pub use crate::types::{WasiHttpCtx, WasiHttpView};
 use core::fmt::Formatter;
 use std::fmt::{self, Display};
 
-pub mod component_impl;
+pub mod body;
 pub mod http_impl;
 pub mod incoming_handler;
 pub mod proxy;
@@ -11,56 +10,22 @@ pub mod types;
 pub mod types_impl;
 
 pub mod bindings {
-    #[cfg(feature = "sync")]
-    pub mod sync {
-        pub(crate) mod _internal {
-            wasmtime::component::bindgen!({
-                path: "wit",
-                interfaces: "
-                    import wasi:http/incoming-handler
-                    import wasi:http/outgoing-handler
-                    import wasi:http/types
-                ",
-                tracing: true,
-                with: {
-                    "wasi:io/streams": wasmtime_wasi::preview2::bindings::sync_io::io::streams,
-                    "wasi:poll/poll": wasmtime_wasi::preview2::bindings::sync_io::poll::poll,
-                }
-            });
-        }
-        pub use self::_internal::wasi::http;
-    }
-
-    pub(crate) mod _internal_rest {
-        wasmtime::component::bindgen!({
-            path: "wit",
-            interfaces: "
+    wasmtime::component::bindgen!({
+        path: "wit",
+        interfaces: "
                 import wasi:http/incoming-handler
                 import wasi:http/outgoing-handler
                 import wasi:http/types
             ",
-            tracing: true,
-            async: true,
-            with: {
-                "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
-                "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
-            }
-        });
-    }
+        tracing: true,
+        async: false,
+        with: {
+            "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
+            "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
+        }
+    });
 
-    pub use self::_internal_rest::wasi::http;
-}
-
-pub fn add_to_linker<T: WasiHttpView>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()> {
-    crate::component_impl::add_component_to_linker::<T>(linker, |t| t)
-}
-
-pub mod sync {
-    use crate::types::WasiHttpView;
-
-    pub fn add_to_linker<T: WasiHttpView>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()> {
-        crate::component_impl::sync::add_component_to_linker::<T>(linker, |t| t)
-    }
+    pub use wasi::http;
 }
 
 impl std::error::Error for crate::bindings::http::types::Error {}

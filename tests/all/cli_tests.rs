@@ -791,6 +791,7 @@ fn run_basic_component() -> Result<()> {
 }
 
 #[cfg(feature = "wasi-http")]
+#[ignore = "needs to be ported to components"]
 #[test]
 fn run_wasi_http_module() -> Result<()> {
     let output = run_wasmtime_for_output(

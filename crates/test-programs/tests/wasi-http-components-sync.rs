@@ -46,11 +46,12 @@ impl WasiView for Ctx {
 }
 
 impl WasiHttpView for Ctx {
-    fn http_ctx(&self) -> &WasiHttpCtx {
-        &self.http
-    }
-    fn http_ctx_mut(&mut self) -> &mut WasiHttpCtx {
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
+    }
+
+    fn table(&mut self) -> &mut Table {
+        &mut self.table
     }
 }
 
@@ -60,7 +61,7 @@ fn instantiate_component(
 ) -> Result<(Store<Ctx>, Command), anyhow::Error> {
     let mut linker = Linker::new(&ENGINE);
     add_to_linker(&mut linker)?;
-    wasmtime_wasi_http::proxy::sync::add_to_linker(&mut linker)?;
+    wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
 
     let mut store = Store::new(&ENGINE, ctx);
 
@@ -84,7 +85,7 @@ fn run(name: &str) -> anyhow::Result<()> {
             builder.env(var, val);
         }
         let wasi = builder.build(&mut table)?;
-        let http = WasiHttpCtx::new();
+        let http = WasiHttpCtx {};
 
         let (mut store, command) = instantiate_component(component, Ctx { table, wasi, http })?;
         command

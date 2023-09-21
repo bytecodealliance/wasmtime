@@ -31,6 +31,7 @@ mod stdio;
 mod stream;
 mod table;
 mod tcp;
+mod write_stream;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
@@ -151,7 +152,7 @@ pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
             .unwrap()
     });
 
-pub(crate) struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
+pub struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
 impl<T> Drop for AbortOnDropJoinHandle<T> {
     fn drop(&mut self) {
         self.0.abort()
@@ -188,7 +189,7 @@ impl<T> std::future::Future for AbortOnDropJoinHandle<T> {
     }
 }
 
-pub(crate) fn spawn<F, G>(f: F) -> AbortOnDropJoinHandle<G>
+pub fn spawn<F, G>(f: F) -> AbortOnDropJoinHandle<G>
 where
     F: std::future::Future<Output = G> + Send + 'static,
     G: Send + 'static,

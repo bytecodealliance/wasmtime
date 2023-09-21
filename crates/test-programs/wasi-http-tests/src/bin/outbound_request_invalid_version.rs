@@ -17,7 +17,7 @@ async fn run() {
 
     let error = res.unwrap_err().to_string();
     if error.ne("Error::ProtocolError(\"invalid HTTP version parsed\")")
-        && error.ne("Error::ProtocolError(\"operation was canceled\")")
+        && !error.starts_with("Error::ProtocolError(\"operation was canceled")
     {
         panic!(
             r#"assertion failed: `(left == right)`

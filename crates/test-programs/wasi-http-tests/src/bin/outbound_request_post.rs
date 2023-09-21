@@ -22,5 +22,5 @@ async fn run() {
     assert_eq!(res.status, 200);
     let method = res.header("x-wasmtime-test-method").unwrap();
     assert_eq!(std::str::from_utf8(method).unwrap(), "POST");
-    assert_eq!(res.body, b"{\"foo\": \"bar\"}");
+    assert_eq!(res.body, b"{\"foo\": \"bar\"}", "invalid body returned");
 }

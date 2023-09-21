@@ -18,6 +18,6 @@ async fn run() {
     let error = res.unwrap_err();
     assert_eq!(
         error.to_string(),
-        "Error::InvalidUrl(\"unknown method OTHER\")"
+        "Error::Invalid(\"unknown method OTHER\")"
     );
 }

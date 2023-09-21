@@ -47,10 +47,10 @@ impl WasiView for Ctx {
 }
 
 impl WasiHttpView for Ctx {
-    fn http_ctx(&self) -> &WasiHttpCtx {
-        &self.http
+    fn table(&mut self) -> &mut Table {
+        &mut self.table
     }
-    fn http_ctx_mut(&mut self) -> &mut WasiHttpCtx {
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
     }
 }
@@ -85,16 +85,11 @@ async fn run(name: &str) -> anyhow::Result<()> {
             builder.env(var, val);
         }
         let wasi = builder.build(&mut table)?;
-        let http = WasiHttpCtx::new();
+        let http = WasiHttpCtx;
 
         let (mut store, command) =
             instantiate_component(component, Ctx { table, wasi, http }).await?;
-        command
-            .wasi_cli_run()
-            .call_run(&mut store)
-            .await?
-            .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
-        Ok(())
+        command.wasi_cli_run().call_run(&mut store).await
     };
     r.map_err(move |trap: anyhow::Error| {
         let stdout = stdout.try_into_inner().expect("single ref to stdout");
@@ -109,7 +104,8 @@ async fn run(name: &str) -> anyhow::Result<()> {
             "error while testing wasi-tests {} with http-components",
             name
         ))
-    })?;
+    })?
+    .map_err(|()| anyhow::anyhow!("run returned an error"))?;
     Ok(())
 }
 
