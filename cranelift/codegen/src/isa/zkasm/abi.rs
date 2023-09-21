@@ -1,5 +1,7 @@
 //! Implementation of a standard Riscv64 ABI.
 
+use std::sync::OnceLock;
+
 use crate::ir;
 use crate::ir::types::*;
 
@@ -21,7 +23,7 @@ use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::PRegSet;
-use regs::x_reg;
+use regs::{create_reg_environment, x_reg};
 
 use smallvec::{smallvec, SmallVec};
 
@@ -253,32 +255,15 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    fn get_ext_mode(
-        _call_conv: isa::CallConv,
-        specified: ir::ArgumentExtension,
-    ) -> ir::ArgumentExtension {
-        specified
-    }
-
-    fn gen_args(_isa_flags: &crate::isa::zkasm::settings::Flags, args: Vec<ArgPair>) -> Inst {
+    fn gen_args(args: Vec<ArgPair>) -> Self::I {
         Inst::Args { args }
     }
 
-    fn gen_ret(
-        _setup_frame: bool,
-        _isa_flags: &Self::F,
-        _call_conv: isa::CallConv,
-        rets: Vec<RetPair>,
-        stack_bytes_to_pop: u32,
-    ) -> Inst {
+    fn gen_rets(rets: Vec<RetPair>) -> Self::I {
         Inst::Ret {
             rets,
-            stack_bytes_to_pop,
+            stack_bytes_to_pop: 0,
         }
-    }
-
-    fn get_stacklimit_reg(_call_conv: isa::CallConv) -> Reg {
-        spilltmp_reg()
     }
 
     fn gen_add_imm(
@@ -329,6 +314,10 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
+    fn get_stacklimit_reg(_call_conv: isa::CallConv) -> Reg {
+        spilltmp_reg()
+    }
+
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Inst {
         let mem = AMode::RegOffset(base, offset as i64, ty);
         Inst::gen_load(into_reg, mem, ty, MemFlags::trusted())
@@ -356,44 +345,124 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    fn gen_prologue_frame_setup(_flags: &settings::Flags) -> SmallInstVec<Inst> {
-        // add  sp,sp,-16    ;; alloc stack space for fp.
-        // sd   ra,8(sp)     ;; save ra.
-        // sd   fp,0(sp)     ;; store old fp.
-        // mv   fp,sp        ;; set fp to sp.
+    fn compute_frame_layout(
+        call_conv: isa::CallConv,
+        flags: &settings::Flags,
+        _sig: &Signature,
+        regs: &[Writable<RealReg>],
+        is_leaf: bool,
+        stack_args_size: u32,
+        fixed_frame_storage_size: u32,
+        outgoing_args_size: u32,
+    ) -> FrameLayout {
+        let mut regs: Vec<Writable<RealReg>> = regs
+            .iter()
+            .cloned()
+            .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
+            .collect();
+
+        regs.sort();
+
+        // Compute clobber size.
+        let clobber_size = compute_clobber_size(&regs);
+
+        // Compute linkage frame size.
+        let setup_area_size = if flags.preserve_frame_pointers()
+            || !is_leaf
+            // The function arguments that are passed on the stack are addressed
+            // relative to the Frame Pointer.
+            || stack_args_size > 0
+            || clobber_size > 0
+            || fixed_frame_storage_size > 0
+        {
+            16 // FP, LR
+        } else {
+            0
+        };
+
+        // Return FrameLayout structure.
+        debug_assert!(outgoing_args_size == 0);
+        FrameLayout {
+            stack_args_size,
+            setup_area_size,
+            clobber_size,
+            fixed_frame_storage_size,
+            outgoing_args_size,
+            clobbered_callee_saves: regs,
+        }
+    }
+
+    fn gen_prologue_frame_setup(
+        _call_conv: isa::CallConv,
+        _flags: &settings::Flags,
+        _isa_flags: &Self::F,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
-        insts.push(Inst::AdjustSp { amount: -1 });
-        insts.push(Self::gen_store_stack(
-            StackAMode::SPOffset(0, I64),
-            link_reg(),
-            I64,
-        ));
-        // insts.push(Self::gen_store_stack(
-        //     StackAMode::SPOffset(0, I64),
-        //     fp_reg(),
-        //     I64,
-        // ));
-        // insts.push(Inst::Mov {
-        //     rd: writable_fp_reg(),
-        //     rm: stack_reg(),
-        //     ty: I64,
-        // });
+
+        if frame_layout.setup_area_size > 0 {
+            // add  sp,sp,-16    ;; alloc stack space for fp.
+            // sd   ra,8(sp)     ;; save ra.
+            // sd   fp,0(sp)     ;; store old fp.
+            // mv   fp,sp        ;; set fp to sp.
+            insts.push(Inst::AdjustSp { amount: -1 });
+            insts.push(Self::gen_store_stack(
+                StackAMode::SPOffset(0, I64),
+                link_reg(),
+                I64,
+            ));
+            // insts.push(Self::gen_store_stack(
+            //     StackAMode::SPOffset(0, I64),
+            //     fp_reg(),
+            //     I64,
+            // ));
+
+            // if flags.unwind_info() {
+            //     insts.push(Inst::Unwind {
+            //         inst: UnwindInst::PushFrameRegs {
+            //             offset_upward_to_caller_sp: frame_layout.setup_area_size,
+            //         },
+            //     });
+            // }
+            // insts.push(Inst::Mov {
+            //     rd: writable_fp_reg(),
+            //     rm: stack_reg(),
+            //     ty: I64,
+            // });
+        }
+
         insts
     }
-    /// reverse of gen_prologue_frame_setup.
-    fn gen_epilogue_frame_restore(_: &settings::Flags) -> SmallInstVec<Inst> {
+
+    fn gen_epilogue_frame_restore(
+        call_conv: isa::CallConv,
+        _flags: &settings::Flags,
+        _isa_flags: &Self::F,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
-        insts.push(Self::gen_load_stack(
-            StackAMode::SPOffset(0, I64),
-            writable_link_reg(),
-            I64,
-        ));
-        // insts.push(Self::gen_load_stack(
-        //     StackAMode::SPOffset(0, I64),
-        //     writable_fp_reg(),
-        //     I64,
-        // ));
-        insts.push(Inst::AdjustSp { amount: 1 });
+
+        if frame_layout.setup_area_size > 0 {
+            insts.push(Self::gen_load_stack(
+                StackAMode::SPOffset(0, I64),
+                writable_link_reg(),
+                I64,
+            ));
+            // insts.push(Self::gen_load_stack(
+            //     StackAMode::SPOffset(0, I64),
+            //     writable_fp_reg(),
+            //     I64,
+            // ));
+            insts.push(Inst::AdjustSp { amount: 1 });
+        }
+
+        if call_conv == isa::CallConv::Tail && frame_layout.stack_args_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(
+                frame_layout.stack_args_size.try_into().unwrap(),
+            ));
+        }
+        // insts.push(Inst::Ret {});
+
         insts
     }
 
@@ -419,34 +488,66 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             }),
         });
     }
-    // Returns stack bytes used as well as instructions. Does not adjust
-    // nominal SP offset; abi_impl generic code will do that.
+
+    fn gen_inline_probestack(
+        insts: &mut SmallInstVec<Self::I>,
+        call_conv: isa::CallConv,
+        frame_size: u32,
+        guard_size: u32,
+    ) {
+        // Unroll at most n consecutive probes, before falling back to using a loop
+        const PROBE_MAX_UNROLL: u32 = 3;
+        // Number of probes that we need to perform
+        let probe_count = align_to(frame_size, guard_size) / guard_size;
+
+        if probe_count <= PROBE_MAX_UNROLL {
+            Self::gen_probestack_unroll(insts, guard_size, probe_count)
+        } else {
+            Self::gen_probestack_loop(insts, call_conv, guard_size, probe_count)
+        }
+    }
+
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
-        _setup_frame: bool,
-        _flags: &settings::Flags,
-        clobbered_callee_saves: &[Writable<RealReg>],
-        fixed_frame_storage_size: u32,
-        _outgoing_args_size: u32,
-    ) -> (u64, SmallVec<[Inst; 16]>) {
+        flags: &settings::Flags,
+        frame_layout: &FrameLayout,
+    ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
-        let clobbered_size = compute_clobber_size(&clobbered_callee_saves);
         // Adjust the stack pointer downward for clobbers and the function fixed
         // frame (spillslots and storage slots).
-        let stack_size = fixed_frame_storage_size + clobbered_size;
-        // Each stack slot is 256 bit and can fit 8 u32 values.
+        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
+        // Each stack slot is 64 bit and can fit a u8 value.
         let stack_size = stack_size / 8;
+        if flags.unwind_info() && frame_layout.setup_area_size > 0 {
+            // The *unwind* frame (but not the actual frame) starts at the
+            // clobbers, just below the saved FP/LR pair.
+            // insts.push(Inst::Unwind {
+            //     inst: UnwindInst::DefineNewFrame {
+            //         offset_downward_to_clobbers: frame_layout.clobber_size,
+            //         offset_upward_to_caller_sp: frame_layout.setup_area_size,
+            //     },
+            // });
+        }
         // Store each clobbered register in order at offsets from SP,
         // placing them above the fixed frame slots.
         if stack_size > 0 {
+            // since we use fp, we didn't need use UnwindInst::StackAlloc.
             let mut cur_offset = 1;
-            for reg in clobbered_callee_saves {
+            for reg in &frame_layout.clobbered_callee_saves {
                 let r_reg = reg.to_reg();
                 let ty = match r_reg.class() {
                     RegClass::Int => I64,
                     RegClass::Float => F64,
                     RegClass::Vector => unimplemented!("Vector Clobber Saves"),
                 };
+                if flags.unwind_info() {
+                    // insts.push(Inst::Unwind {
+                    //     inst: UnwindInst::SaveReg {
+                    //         clobber_offset: frame_layout.clobber_size - cur_offset,
+                    //         reg: r_reg,
+                    //     },
+                    // });
+                }
                 insts.push(Self::gen_store_stack(
                     StackAMode::SPOffset(-(cur_offset as i64), ty),
                     real_reg_to_reg(reg.to_reg()),
@@ -458,22 +559,17 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 amount: -(stack_size as i64),
             });
         }
-        (clobbered_size as u64, insts)
+        insts
     }
 
     fn gen_clobber_restore(
-        call_conv: isa::CallConv,
-        sig: &Signature,
+        _call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        clobbers: &[Writable<RealReg>],
-        fixed_frame_storage_size: u32,
-        _outgoing_args_size: u32,
-    ) -> SmallVec<[Inst; 16]> {
+        frame_layout: &FrameLayout,
+    ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
-        let clobbered_callee_saves =
-            Self::get_clobbered_callee_saves(call_conv, _flags, sig, clobbers);
-        let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
-        // Each stack slot is 256 bit and can fit 8 u32 values.
+        let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
+        // Each stack slot is 64 bit and can fit a u8 value.
         let stack_size = stack_size / 8;
         if stack_size > 0 {
             insts.push(Inst::AdjustSp {
@@ -481,7 +577,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             });
         }
         let mut cur_offset = 1;
-        for reg in &clobbered_callee_saves {
+        for reg in &frame_layout.clobbered_callee_saves {
             let rreg = reg.to_reg();
             let ty = match rreg.class() {
                 RegClass::Int => I64,
@@ -603,6 +699,14 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         s.nominal_sp_to_fp
     }
 
+    fn get_machine_env(
+        _flags: &settings::Flags,
+        _call_conv: isa::CallConv,
+    ) -> &regalloc2::MachineEnv {
+        static MACHINE_ENV: OnceLock<regalloc2::MachineEnv> = OnceLock::new();
+        MACHINE_ENV.get_or_init(create_reg_environment)
+    }
+
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
         if call_conv_of_callee == isa::CallConv::Tail {
             TAIL_CLOBBERS
@@ -611,52 +715,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    fn get_clobbered_callee_saves(
-        call_conv: isa::CallConv,
-        _flags: &settings::Flags,
-        _sig: &Signature,
-        regs: &[Writable<RealReg>],
-    ) -> Vec<Writable<RealReg>> {
-        let mut regs: Vec<Writable<RealReg>> = regs
-            .iter()
-            .cloned()
-            .filter(|r| is_reg_saved_in_prologue(call_conv, r.to_reg()))
-            .collect();
-
-        regs.sort();
-        regs
-    }
-
-    fn is_frame_setup_needed(
-        is_leaf: bool,
-        stack_args_size: u32,
-        num_clobbered_callee_saves: usize,
-        fixed_frame_storage_size: u32,
-    ) -> bool {
-        !is_leaf
-            // The function arguments that are passed on the stack are addressed
-            // relative to the Frame Pointer.
-            || stack_args_size > 0
-            || num_clobbered_callee_saves > 0
-        || fixed_frame_storage_size > 0
-    }
-
-    fn gen_inline_probestack(
-        insts: &mut SmallInstVec<Self::I>,
-        call_conv: isa::CallConv,
-        frame_size: u32,
-        guard_size: u32,
-    ) {
-        // Unroll at most n consecutive probes, before falling back to using a loop
-        const PROBE_MAX_UNROLL: u32 = 3;
-        // Number of probes that we need to perform
-        let probe_count = align_to(frame_size, guard_size) / guard_size;
-
-        if probe_count <= PROBE_MAX_UNROLL {
-            Self::gen_probestack_unroll(insts, guard_size, probe_count)
-        } else {
-            Self::gen_probestack_loop(insts, call_conv, guard_size, probe_count)
-        }
+    fn get_ext_mode(
+        _call_conv: isa::CallConv,
+        specified: ir::ArgumentExtension,
+    ) -> ir::ArgumentExtension {
+        specified
     }
 }
 

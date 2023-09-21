@@ -23,7 +23,7 @@ mod settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 
-use inst::crate_reg_eviroment;
+use inst::create_reg_environment;
 
 use self::inst::EmitInfo;
 
@@ -32,7 +32,6 @@ pub struct Riscv64Backend {
     triple: Triple,
     flags: shared_settings::Flags,
     isa_flags: riscv_settings::Flags,
-    mach_env: MachineEnv,
 }
 
 impl Riscv64Backend {
@@ -42,12 +41,10 @@ impl Riscv64Backend {
         flags: shared_settings::Flags,
         isa_flags: riscv_settings::Flags,
     ) -> Riscv64Backend {
-        let mach_env = crate_reg_eviroment(&flags);
         Riscv64Backend {
             triple,
             flags,
             isa_flags,
-            mach_env,
         }
     }
 
@@ -115,10 +112,6 @@ impl TargetIsa for Riscv64Backend {
         &self.flags
     }
 
-    fn machine_env(&self) -> &MachineEnv {
-        &self.mach_env
-    }
-
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
     }
@@ -127,10 +120,10 @@ impl TargetIsa for Riscv64Backend {
     fn emit_unwind_info(
         &self,
         result: &CompiledCode,
-        kind: crate::machinst::UnwindInfoKind,
+        kind: crate::isa::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         use crate::isa::unwind::UnwindInfo;
-        use crate::machinst::UnwindInfoKind;
+        use crate::isa::UnwindInfoKind;
         Ok(match kind {
             UnwindInfoKind::SystemV => {
                 let mapper = self::inst::unwind::systemv::RegisterMapper;

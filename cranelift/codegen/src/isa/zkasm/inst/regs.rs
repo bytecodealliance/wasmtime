@@ -145,7 +145,7 @@ pub fn writable_spilltmp_reg2() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg2())
 }
 
-pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
+pub fn create_reg_environment() -> MachineEnv {
     let preferred_regs_by_class: [Vec<PReg>; 3] = {
         // Registers are A, B, C, D, E.
         let x_registers: Vec<PReg> = (5..=7)

@@ -9,8 +9,8 @@ use clap::Parser;
 use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
-use cranelift_codegen::timing;
 use cranelift_codegen::Context;
+use cranelift_codegen::{timing, FinalizedRelocTarget};
 use cranelift_entity::EntityRef;
 use cranelift_reader::parse_sets_and_triple;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
@@ -272,7 +272,9 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                     delta -= 1;
                 }
 
-                let code = if let ExternalName::User(name) = reloc.name {
+                let code = if let FinalizedRelocTarget::ExternalName(ExternalName::User(name)) =
+                    reloc.target
+                {
                     let name = &func.params.user_named_funcs()[name];
                     if name.index == 0 {
                         b"  B :ASSERT".to_vec()

@@ -2091,6 +2091,10 @@ impl MachInstLabelUse for LabelUse {
             _ => None,
         }
     }
+
+    fn worst_case_veneer_size() -> CodeOffset {
+        todo!()
+    }
 }
 
 impl LabelUse {
