@@ -2,6 +2,7 @@ use crate::{bindings::http::types, types::FieldMap};
 use anyhow::anyhow;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
+use std::future::Future;
 use std::{
     convert::Infallible,
     pin::Pin,
@@ -219,10 +220,12 @@ pub struct HostFutureTrailers {
 }
 
 impl HostFutureTrailers {
-    pub fn ready(&mut self) -> impl std::future::Future<Output = anyhow::Result<()>> + '_ {
-        use std::future::Future;
+    pub fn ready(&mut self) -> impl Future<Output = anyhow::Result<()>> + '_ {
         use std::task::{Context, Poll};
 
+        // We wrote this as an impl Future instead of an async fn because the `receiver`
+        // gets moved by an .await on it. We avoid ever awaiting on the resolved Future
+        // by returning early when received.is_some().
         struct TrailersReady<'a>(&'a mut HostFutureTrailers);
 
         impl<'a> Future for TrailersReady<'a> {
@@ -232,31 +235,25 @@ impl HostFutureTrailers {
                 if self.0.received.is_some() {
                     return Poll::Ready(Ok(()));
                 }
-
                 match Pin::new(&mut self.0.receiver).poll(cx) {
                     Poll::Ready(Ok(Ok(headers))) => {
                         self.0.received = Some(Ok(FieldMap::from(headers)))
                     }
-
                     Poll::Ready(Ok(Err(e))) => {
                         self.0.received = Some(Err(types::Error::ProtocolError(format!(
                             "hyper error: {e:?}"
                         ))))
                     }
-
                     Poll::Ready(Err(_)) => {
                         self.0.received = Some(Err(types::Error::ProtocolError(
                             "stream hung up before trailers were received".to_string(),
                         )))
                     }
-
                     Poll::Pending => return Poll::Pending,
                 }
-
                 Poll::Ready(Ok(()))
             }
         }
-
         TrailersReady(self)
     }
 }
@@ -275,7 +272,6 @@ impl HostOutgoingBody {
             body::{Body, Frame},
             HeaderMap,
         };
-        use std::future::Future;
         use std::task::{Context, Poll};
         use tokio::sync::oneshot::error::RecvError;
         struct BodyImpl {
