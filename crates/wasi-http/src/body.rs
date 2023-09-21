@@ -11,7 +11,8 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::preview2::{
-    self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, OutputStreamError, StreamState,
+    self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, OutputStreamError,
+    StreamRuntimeError, StreamState,
 };
 
 /// Holds onto the things needed to construct a [`HostIncomingBody`] until we are ready to build
@@ -153,8 +154,9 @@ impl HostInputStream for HostIncomingBodyStream {
             return Ok((chunk, StreamState::Open));
         }
 
-        // TODO: we need to check self.error and report it, once we have the means to do so through
-        // the streams interface.
+        if let Some(e) = self.error.take() {
+            return Err(StreamRuntimeError::from(e).into());
+        }
 
         if !self.open {
             return Ok((Bytes::new(), StreamState::Closed));
@@ -173,8 +175,7 @@ impl HostInputStream for HostIncomingBodyStream {
 
             Ok(Err(e)) => {
                 self.open = false;
-                self.error = Some(e);
-                return Ok((Bytes::new(), StreamState::Closed));
+                return Err(StreamRuntimeError::from(e).into());
             }
 
             Err(TryRecvError::Empty) => {
