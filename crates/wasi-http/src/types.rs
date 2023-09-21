@@ -3,7 +3,9 @@
 
 use crate::{
     bindings::http::types::{FutureTrailers, IncomingBody, Method, OutgoingBody, Scheme},
-    body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, HyperBody},
+    body::{
+        HostFutureTrailers, HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody, HyperBody,
+    },
 };
 use std::pin::Pin;
 use std::task;
@@ -30,7 +32,7 @@ pub struct HostOutgoingRequest {
 pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: FieldMap,
-    pub body: Option<(hyper::body::Incoming, std::time::Duration)>,
+    pub body: Option<HostIncomingBodyBuilder>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
 

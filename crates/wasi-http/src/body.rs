@@ -13,6 +13,101 @@ use wasmtime_wasi::preview2::{
     self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, OutputStreamError, StreamState,
 };
 
+/// Holds onto the things needed to construct a [`HostIncomingBody`] until we are ready to build
+/// one. The HostIncomingBody spawns a task that starts consuming the incoming body, and we don't
+/// want to do that unless the user asks to consume the body.
+pub struct HostIncomingBodyBuilder {
+    pub body: hyper::body::Incoming,
+    pub between_bytes_timeout: Duration,
+}
+
+impl HostIncomingBodyBuilder {
+    /// Consume the state held in the [`HostIncomingBodyBuilder`] to spawn a task that will drive the
+    /// streaming body to completion. Data segments will be communicated out over the
+    /// [`HostIncomingBodyStream`], and a [`HostFutureTrailers`] gives a way to block on/retrieve
+    /// the trailers.
+    pub fn build(mut self) -> HostIncomingBody {
+        let (body_writer, body_receiver) = mpsc::channel(1);
+        let (trailer_writer, trailers) = oneshot::channel();
+
+        let worker = preview2::spawn(async move {
+            loop {
+                let frame = match tokio::time::timeout(
+                    self.between_bytes_timeout,
+                    http_body_util::BodyExt::frame(&mut self.body),
+                )
+                .await
+                {
+                    Ok(None) => break,
+
+                    Ok(Some(Ok(frame))) => frame,
+
+                    Ok(Some(Err(e))) => {
+                        match body_writer.send(Err(anyhow::anyhow!(e))).await {
+                            Ok(_) => {}
+                            // If the body read end has dropped, then we report this error with the
+                            // trailers. unwrap and rewrap Err because the Ok side of these two Results
+                            // are different.
+                            Err(e) => {
+                                let _ = trailer_writer.send(Err(e.0.unwrap_err()));
+                            }
+                        }
+                        break;
+                    }
+
+                    Err(_) => {
+                        match body_writer
+                            .send(Err(types::Error::TimeoutError(
+                                "data frame timed out".to_string(),
+                            )
+                            .into()))
+                            .await
+                        {
+                            Ok(_) => {}
+                            Err(e) => {
+                                let _ = trailer_writer.send(Err(e.0.unwrap_err()));
+                            }
+                        }
+                        break;
+                    }
+                };
+
+                if frame.is_trailers() {
+                    // We know we're not going to write any more data frames at this point, so we
+                    // explicitly drop the body_writer so that anything waiting on the read end returns
+                    // immediately.
+                    drop(body_writer);
+
+                    let trailers = frame.into_trailers().unwrap();
+
+                    // TODO: this will fail in two cases:
+                    // 1. we've already used the channel once, which should be imposible,
+                    // 2. the read end is closed.
+                    // I'm not sure how to differentiate between these two cases, or really
+                    // if we need to do anything to handle either.
+                    let _ = trailer_writer.send(Ok(trailers));
+
+                    break;
+                }
+
+                assert!(frame.is_data(), "frame wasn't data");
+
+                let data = frame.into_data().unwrap();
+
+                // If the receiver no longer exists, thats ok - in that case we want to keep the
+                // loop running to relieve backpressure, so we get to the trailers.
+                let _ = body_writer.send(Ok(data)).await;
+            }
+        });
+
+        HostIncomingBody {
+            worker,
+            stream: Some(HostIncomingBodyStream::new(body_receiver)),
+            trailers,
+        }
+    }
+}
+
 pub struct HostIncomingBody {
     pub worker: AbortOnDropJoinHandle<()>,
     pub stream: Option<HostIncomingBodyStream>,
@@ -114,93 +209,6 @@ impl HostInputStream for HostIncomingBodyStream {
         }
 
         Ok(())
-    }
-}
-
-impl HostIncomingBody {
-    /// Consume the state held in the [`HostIncomingBody`] to spawn a task that will drive the
-    /// streaming body to completion. Data segments will be communicated out over the
-    /// [`HostIncomingBodyStream`], and a [`HostFutureTrailers`] gives a way to block on/retrieve
-    /// the trailers.
-    pub fn new(mut body: hyper::body::Incoming, between_bytes_timeout: Duration) -> Self {
-        let (body_writer, body_receiver) = mpsc::channel(1);
-        let (trailer_writer, trailers) = oneshot::channel();
-
-        let worker = preview2::spawn(async move {
-            loop {
-                let frame = match tokio::time::timeout(
-                    between_bytes_timeout,
-                    http_body_util::BodyExt::frame(&mut body),
-                )
-                .await
-                {
-                    Ok(None) => break,
-
-                    Ok(Some(Ok(frame))) => frame,
-
-                    Ok(Some(Err(e))) => {
-                        match body_writer.send(Err(anyhow::anyhow!(e))).await {
-                            Ok(_) => {}
-                            // If the body read end has dropped, then we report this error with the
-                            // trailers. unwrap and rewrap Err because the Ok side of these two Results
-                            // are different.
-                            Err(e) => {
-                                let _ = trailer_writer.send(Err(e.0.unwrap_err()));
-                            }
-                        }
-                        break;
-                    }
-
-                    Err(_) => {
-                        match body_writer
-                            .send(Err(types::Error::TimeoutError(
-                                "data frame timed out".to_string(),
-                            )
-                            .into()))
-                            .await
-                        {
-                            Ok(_) => {}
-                            Err(e) => {
-                                let _ = trailer_writer.send(Err(e.0.unwrap_err()));
-                            }
-                        }
-                        break;
-                    }
-                };
-
-                if frame.is_trailers() {
-                    // We know we're not going to write any more data frames at this point, so we
-                    // explicitly drop the body_writer so that anything waiting on the read end returns
-                    // immediately.
-                    drop(body_writer);
-
-                    let trailers = frame.into_trailers().unwrap();
-
-                    // TODO: this will fail in two cases:
-                    // 1. we've already used the channel once, which should be imposible,
-                    // 2. the read end is closed.
-                    // I'm not sure how to differentiate between these two cases, or really
-                    // if we need to do anything to handle either.
-                    let _ = trailer_writer.send(Ok(trailers));
-
-                    break;
-                }
-
-                assert!(frame.is_data(), "frame wasn't data");
-
-                let data = frame.into_data().unwrap();
-
-                // If the receiver no longer exists, thats ok - in that case we want to keep the
-                // loop running to relieve backpressure, so we get to the trailers.
-                let _ = body_writer.send(Ok(data)).await;
-            }
-        });
-
-        Self {
-            worker,
-            stream: Some(HostIncomingBodyStream::new(body_receiver)),
-            trailers,
-        }
     }
 }
 

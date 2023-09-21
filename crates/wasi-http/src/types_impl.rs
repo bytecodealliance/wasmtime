@@ -9,7 +9,7 @@ use crate::body::HostFutureTrailers;
 use crate::types::FieldMap;
 use crate::WasiHttpView;
 use crate::{
-    body::{HostIncomingBody, HostOutgoingBody},
+    body::{HostIncomingBodyBuilder, HostOutgoingBody},
     types::{
         HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest,
         TableHttpExt,
@@ -261,10 +261,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[incoming_response_consume] getting response")?;
 
         match r.body.take() {
-            Some((body, duration)) => {
-                let id = self
-                    .table()
-                    .push_incoming_body(HostIncomingBody::new(body, duration))?;
+            Some(builder) => {
+                let id = self.table().push_incoming_body(builder.build())?;
                 Ok(Ok(id))
             }
 
@@ -369,7 +367,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let resp = self.table().push_incoming_response(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers: FieldMap::from(parts.headers),
-            body: Some((body, resp.between_bytes_timeout)),
+            body: Some(HostIncomingBodyBuilder {
+                body,
+                between_bytes_timeout: resp.between_bytes_timeout,
+            }),
             worker: resp.worker,
         })?;
 
