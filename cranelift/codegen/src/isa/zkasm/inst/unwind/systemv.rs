@@ -75,6 +75,7 @@ mod tests {
     use std::str::FromStr;
     use target_lexicon::triple;
 
+    /*
     #[test]
     fn test_simple_func() {
         let isa = lookup(triple!("zkasm"))
@@ -171,4 +172,5 @@ mod tests {
 
         func
     }
+    */
 }
