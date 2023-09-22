@@ -833,18 +833,15 @@ impl MachInstEmit for Inst {
             &Inst::Ret {
                 stack_bytes_to_pop, ..
             } => {
-                // put_string(&format!("RETURN\n"), sink);
-                put_string(&format!(":JMP(RR)\n"), sink);
-
-                /* if stack_bytes_to_pop != 0 {
+                if stack_bytes_to_pop != 0 {
                     Inst::AdjustSp {
                         amount: i64::from(stack_bytes_to_pop),
                     }
                     .emit(&[], sink, emit_info, state);
                 }
-                //jalr x0, x1, 0
-                let x: u32 = (0b1100111) | (1 << 15);
-                sink.put4(x); */
+                // TODO: use the `RETURN` instruction instead!
+                // put_string(&format!("RETURN\n"), sink);
+                put_string(":JMP(RR)\n", sink);
             }
 
             &Inst::Extend {
@@ -891,33 +888,11 @@ impl MachInstEmit for Inst {
             }
             &Inst::AdjustSp { amount } => {
                 let amount = if amount > 0 {
-                    format!("- {}", amount)
+                    format!("+ {}", amount)
                 } else {
-                    format!("+ {}", -amount)
+                    format!("- {}", -amount)
                 };
                 put_string(&format!("SP {amount} => SP\n"), sink);
-
-                /* if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Addi,
-                        rd: writable_stack_reg(),
-                        rs: stack_reg(),
-                        imm12: imm,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                } else {
-                    let tmp = writable_spilltmp_reg();
-                    let mut insts = Inst::load_constant_u64(tmp, amount as u64, &mut |_| tmp);
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::Add,
-                        rd: writable_stack_reg(),
-                        rs1: tmp.to_reg(),
-                        rs2: stack_reg(),
-                    });
-                    insts
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
-                } */
             }
             &Inst::Call { ref info } => {
                 // call

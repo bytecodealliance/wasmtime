@@ -10,54 +10,32 @@ fn test_zkasm_binemit() {
     struct TestUnit {
         inst: Inst,
         assembly: &'static str,
-        code: TestEncoding,
-    }
-
-    struct TestEncoding(Cow<'static, str>);
-
-    impl From<&'static str> for TestEncoding {
-        fn from(value: &'static str) -> Self {
-            Self(value.into())
-        }
-    }
-
-    impl From<u32> for TestEncoding {
-        fn from(value: u32) -> Self {
-            let value = value.swap_bytes();
-            let value = format!("{value:08X}");
-            Self(value.into())
-        }
     }
 
     impl TestUnit {
-        fn new(inst: Inst, assembly: &'static str, code: impl Into<TestEncoding>) -> Self {
-            let code = code.into();
-            Self {
-                inst,
-                assembly,
-                code,
-            }
+        fn new(inst: Inst, assembly: &'static str) -> Self {
+            Self { inst, assembly }
         }
     }
 
     let mut insns = Vec::<TestUnit>::with_capacity(500);
 
-    // insns.push(TestUnit::new(
-    //     Inst::Ret {
-    //         rets: vec![],
-    //         stack_bytes_to_pop: 0,
-    //     },
-    //     "ret",
-    //     0x00008067,
-    // ));
-    // insns.push(TestUnit::new(
-    //     Inst::Ret {
-    //         rets: vec![],
-    //         stack_bytes_to_pop: 16,
-    //     },
-    //     "add sp, sp, #16 ; ret",
-    //     "1301010167800000",
-    // ));
+    insns.push(TestUnit::new(
+        Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 0,
+        },
+        ":JMP(RR)",
+    ));
+    insns.push(TestUnit::new(
+        Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 16,
+        },
+        "SP + 16 => SP\n  :JMP(RR)",
+    ));
+    // TODO: a test with `rets`.
+
     //
     // insns.push(TestUnit::new(
     //     Inst::Mov {
@@ -2113,8 +2091,10 @@ fn test_zkasm_binemit() {
         unit.inst
             .emit(&[], &mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
-        let actual_encoding = buffer.stringify_code_bytes();
-        assert_eq!(actual_encoding, unit.code.0);
+        let actual_encoding = std::str::from_utf8(buffer.data())
+            .expect("mach buffer is expected to contain assembly as valid utf-8");
+
+        assert_eq!(actual_encoding.trim(), unit.assembly);
     }
 }
 

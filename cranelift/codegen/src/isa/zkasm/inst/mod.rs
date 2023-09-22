@@ -1607,9 +1607,9 @@ impl Inst {
                 stack_bytes_to_pop,
             } => {
                 let mut s = if stack_bytes_to_pop == 0 {
-                    "ret".to_string()
+                    ":JMP(RR)".to_string()
                 } else {
-                    format!("add sp, sp, #{stack_bytes_to_pop} ; ret")
+                    format!("SP + {stack_bytes_to_pop} => SP\n  :JMP(RR)")
                 };
 
                 let mut empty_allocs = AllocationConsumer::default();
