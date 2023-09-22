@@ -101,6 +101,7 @@ members = [
   "crates/jit-icache-coherence",
   "crates/test-programs/wasi-tests",
   "crates/test-programs/wasi-http-tests",
+  "crates/test-programs/wasi-http-proxy-tests",
   "crates/test-programs/wasi-sockets-tests",
   "crates/test-programs/command-tests",
   "crates/test-programs/reactor-tests",
