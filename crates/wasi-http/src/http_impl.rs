@@ -2,7 +2,7 @@ use crate::bindings::http::{
     outgoing_handler,
     types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme},
 };
-use crate::types::{HostFutureIncomingResponse, IncomingResponseInternal, TableHttpExt};
+use crate::types::{self, HostFutureIncomingResponse, IncomingResponseInternal, TableHttpExt};
 use crate::WasiHttpView;
 use anyhow::Context;
 use bytes::Bytes;
@@ -37,7 +37,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 .unwrap_or(600 * 1000) as u64,
         );
 
-        let req = self.table().delete_outgoing_request(request_id)?;
+        let req = types::OutgoingRequestLens::from(request_id).delete(self.table())?;
 
         let method = match req.method {
             crate::bindings::http::types::Method::Get => Method::GET,

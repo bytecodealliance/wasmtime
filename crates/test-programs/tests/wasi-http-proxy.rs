@@ -4,11 +4,10 @@ use wasmtime::{
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
-    command::{add_to_linker, Command},
-    pipe::MemoryOutputPipe,
-    IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    self,
+    pipe::MemoryOutputPipe, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::{proxy::Proxy, types, WasiHttpCtx, WasiHttpView};
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -56,52 +55,56 @@ impl WasiHttpView for Ctx {
     }
 }
 
-async fn instantiate(
-    component: Component,
-    ctx: Ctx,
-) -> Result<(Store<Ctx>, Command), anyhow::Error> {
+async fn instantiate(component: Component, ctx: Ctx) -> Result<(Store<Ctx>, Proxy), anyhow::Error> {
     let mut linker = Linker::new(&ENGINE);
-    add_to_linker(&mut linker)?;
     wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
+
+    // due to the preview1 adapter
+    preview2::bindings::filesystem::types::add_to_linker(&mut linker, |l| l)?;
+    preview2::bindings::filesystem::preopens::add_to_linker(&mut linker, |l| l)?;
+    preview2::bindings::cli::environment::add_to_linker(&mut linker, |l| l)?;
+    preview2::bindings::cli::exit::add_to_linker(&mut linker, |l| l)?;
+    preview2::bindings::cli::terminal_input::add_to_linker(&mut linker, |l| l)?;
+    preview2::bindings::cli::terminal_output::add_to_linker(&mut linker, |l| l)?;
+    preview2::bindings::cli::terminal_stdin::add_to_linker(&mut linker, |l| l)?;
+    preview2::bindings::cli::terminal_stdout::add_to_linker(&mut linker, |l| l)?;
+    preview2::bindings::cli::terminal_stderr::add_to_linker(&mut linker, |l| l)?;
 
     let mut store = Store::new(&ENGINE, ctx);
 
-    let (command, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
-    Ok((store, command))
+    let (proxy, _instance) = Proxy::instantiate_async(&mut store, &component, &linker).await?;
+    Ok((store, proxy))
 }
 
 #[test_log::test(tokio::test)]
-async fn proxy_tests() -> anyhow::Result<()> {
+async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
-    let r = {
-        let mut table = Table::new();
-        let component = get_component("wasi_http_proxy_tests");
 
-        // Create our wasi context.
-        let mut builder = WasiCtxBuilder::new();
-        builder.stdout(stdout.clone(), IsATTY::No);
-        builder.stderr(stderr.clone(), IsATTY::No);
-        for (var, val) in test_programs::wasi_tests_environment() {
-            builder.env(var, val);
-        }
-        let wasi = builder.build(&mut table)?;
-        let http = WasiHttpCtx;
+    let mut table = Table::new();
+    let component = get_component("wasi_http_proxy_tests");
 
-        let (mut store, command) = instantiate(component, Ctx { table, wasi, http }).await?;
-        command.wasi_cli_run().call_run(&mut store).await
-    };
-    r.map_err(move |trap: anyhow::Error| {
-        let stdout = stdout.try_into_inner().expect("single ref to stdout");
-        if !stdout.is_empty() {
-            println!("[guest] stdout:\n{}\n===", String::from_utf8_lossy(&stdout));
-        }
-        let stderr = stderr.try_into_inner().expect("single ref to stderr");
-        if !stderr.is_empty() {
-            println!("[guest] stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
-        }
-        trap.context("error while testing wasi-http-proxy-tests with http-components".to_owned())
-    })?
-    .map_err(|()| anyhow::anyhow!("run returned an error"))?;
+    // Create our wasi context.
+    let mut builder = WasiCtxBuilder::new();
+    builder.stdout(stdout.clone(), IsATTY::No);
+    builder.stderr(stderr.clone(), IsATTY::No);
+    for (var, val) in test_programs::wasi_tests_environment() {
+        builder.env(var, val);
+    }
+    let wasi = builder.build(&mut table)?;
+    let http = WasiHttpCtx;
+
+    let mut ctx = Ctx { table, wasi, http };
+
+    let req = ctx.new_incoming_request(types::HostIncomingRequest {})?;
+    let out = ctx.new_response_outparam()?;
+
+    let (mut store, proxy) = instantiate(component, ctx).await?;
+
+    proxy
+        .wasi_http_incoming_handler()
+        .call_handle(&mut store, req, out)
+        .await?;
+
     Ok(())
 }

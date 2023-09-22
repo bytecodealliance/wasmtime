@@ -2,7 +2,10 @@
 //! implementation of the wasi-http API.
 
 use crate::{
-    bindings::http::types::{FutureTrailers, IncomingBody, Method, OutgoingBody, Scheme},
+    bindings::http::types::{
+        self, FutureTrailers, IncomingBody, IncomingRequest, Method, OutgoingBody,
+        OutgoingResponse, ResponseOutparam, Scheme,
+    },
     body::{
         HostFutureTrailers, HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody, HyperBody,
     },
@@ -18,7 +21,30 @@ pub struct WasiHttpCtx;
 pub trait WasiHttpView: Send {
     fn ctx(&mut self) -> &mut WasiHttpCtx;
     fn table(&mut self) -> &mut Table;
+
+    fn new_incoming_request(
+        &mut self,
+        req: HostIncomingRequest,
+    ) -> wasmtime::Result<IncomingRequest> {
+        Ok(IncomingRequestLens::push(self.table(), req)?.id)
+    }
+
+    fn new_response_outparam(&mut self) -> wasmtime::Result<ResponseOutparam> {
+        Ok(ResponseOutparamLens::push(self.table(), HostResponseOutparam { result: None })?.id)
+    }
 }
+
+pub type IncomingRequestLens = TableLens<HostIncomingRequest>;
+
+pub struct HostIncomingRequest {}
+
+pub type ResponseOutparamLens = TableLens<HostResponseOutparam>;
+
+pub struct HostResponseOutparam {
+    pub result: Option<Result<HostOutgoingResponse, types::Error>>,
+}
+
+pub type OutgoingRequestLens = TableLens<HostOutgoingRequest>;
 
 pub struct HostOutgoingRequest {
     pub method: Method,
@@ -35,6 +61,10 @@ pub struct HostIncomingResponse {
     pub body: Option<HostIncomingBodyBuilder>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
+
+pub type OutgoingResponseLens = TableLens<HostOutgoingResponse>;
+
+pub struct HostOutgoingResponse {}
 
 pub type FieldMap = hyper::HeaderMap;
 
@@ -105,13 +135,65 @@ impl std::future::Future for HostFutureIncomingResponse {
     }
 }
 
-#[async_trait::async_trait]
+pub struct TableLens<T> {
+    id: u32,
+    _unused: std::marker::PhantomData<T>,
+}
+
+impl<T: Send + Sync + 'static> TableLens<T> {
+    pub fn from(id: u32) -> Self {
+        Self {
+            id,
+            _unused: std::marker::PhantomData {},
+        }
+    }
+
+    pub fn into(self) -> u32 {
+        self.id
+    }
+
+    #[inline(always)]
+    pub fn push(table: &mut Table, val: T) -> Result<Self, TableError> {
+        let id = table.push(Box::new(val))?;
+        Ok(Self::from(id))
+    }
+
+    #[inline(always)]
+    pub fn get<'t>(&self, table: &'t Table) -> Result<&'t T, TableError> {
+        table.get(self.id)
+    }
+
+    #[inline(always)]
+    pub fn get_mut<'t>(&self, table: &'t mut Table) -> Result<&'t mut T, TableError> {
+        table.get_mut(self.id)
+    }
+
+    #[inline(always)]
+    pub fn delete(&self, table: &mut Table) -> Result<T, TableError> {
+        table.delete(self.id)
+    }
+}
+
 pub trait TableHttpExt {
-    fn push_outgoing_response(&mut self, request: HostOutgoingRequest) -> Result<u32, TableError>;
-    fn get_outgoing_request(&self, id: u32) -> Result<&HostOutgoingRequest, TableError>;
-    fn get_outgoing_request_mut(&mut self, id: u32)
-        -> Result<&mut HostOutgoingRequest, TableError>;
-    fn delete_outgoing_request(&mut self, id: u32) -> Result<HostOutgoingRequest, TableError>;
+    fn push_incoming_request(
+        &mut self,
+        request: HostIncomingRequest,
+    ) -> Result<IncomingRequest, TableError>;
+    fn get_incoming_request(
+        &mut self,
+        id: IncomingRequest,
+    ) -> Result<&mut HostIncomingRequest, TableError>;
+    fn delete_incoming_request(
+        &mut self,
+        id: IncomingRequest,
+    ) -> Result<HostIncomingRequest, TableError>;
+
+    fn push_outgoing_response(
+        &mut self,
+        resp: HostOutgoingResponse,
+    ) -> Result<OutgoingResponse, TableError>;
+    fn get_outgoing_response(&mut self, id: u32) -> Result<&mut HostOutgoingResponse, TableError>;
+    fn delete_outgoing_response(&mut self, id: u32) -> Result<HostOutgoingResponse, TableError>;
 
     fn push_incoming_response(&mut self, response: HostIncomingResponse)
         -> Result<u32, TableError>;
@@ -165,23 +247,47 @@ pub trait TableHttpExt {
     ) -> Result<HostFutureTrailers, TableError>;
 }
 
-#[async_trait::async_trait]
 impl TableHttpExt for Table {
-    fn push_outgoing_response(&mut self, request: HostOutgoingRequest) -> Result<u32, TableError> {
+    fn push_incoming_request(
+        &mut self,
+        request: HostIncomingRequest,
+    ) -> Result<IncomingRequest, TableError> {
         self.push(Box::new(request))
     }
-    fn get_outgoing_request(&self, id: u32) -> Result<&HostOutgoingRequest, TableError> {
-        self.get::<HostOutgoingRequest>(id)
-    }
-    fn get_outgoing_request_mut(
+
+    fn get_incoming_request(
         &mut self,
-        id: u32,
-    ) -> Result<&mut HostOutgoingRequest, TableError> {
-        self.get_mut::<HostOutgoingRequest>(id)
+        id: IncomingRequest,
+    ) -> Result<&mut HostIncomingRequest, TableError> {
+        self.get_mut(id)
     }
-    fn delete_outgoing_request(&mut self, id: u32) -> Result<HostOutgoingRequest, TableError> {
-        let req = self.delete::<HostOutgoingRequest>(id)?;
-        Ok(req)
+
+    fn delete_incoming_request(
+        &mut self,
+        id: IncomingRequest,
+    ) -> Result<HostIncomingRequest, TableError> {
+        self.delete(id)
+    }
+
+    fn push_outgoing_response(
+        &mut self,
+        response: HostOutgoingResponse,
+    ) -> Result<OutgoingResponse, TableError> {
+        self.push(Box::new(response))
+    }
+
+    fn get_outgoing_response(
+        &mut self,
+        id: OutgoingResponse,
+    ) -> Result<&mut HostOutgoingResponse, TableError> {
+        self.get_mut(id)
+    }
+
+    fn delete_outgoing_response(
+        &mut self,
+        id: OutgoingResponse,
+    ) -> Result<HostOutgoingResponse, TableError> {
+        self.delete(id)
     }
 
     fn push_incoming_response(

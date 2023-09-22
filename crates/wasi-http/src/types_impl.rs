@@ -4,13 +4,12 @@ use crate::bindings::http::types::{
     Scheme, StatusCode, Trailers,
 };
 use crate::body::{HostFutureTrailers, HostFutureTrailersState};
-use crate::types::FieldMap;
 use crate::WasiHttpView;
 use crate::{
     body::{HostIncomingBodyBuilder, HostOutgoingBody},
     types::{
-        HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest,
-        TableHttpExt,
+        self, FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingResponse,
+        HostOutgoingRequest, TableHttpExt,
     },
 };
 use anyhow::{anyhow, Context};
@@ -113,11 +112,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[fields_clone] pushing fields")?;
         Ok(id)
     }
-    fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn drop_incoming_request(&mut self, id: IncomingRequest) -> wasmtime::Result<()> {
+        let _ = types::IncomingRequestLens::from(id).delete(self.table())?;
+        Ok(())
     }
     fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
-        self.table().delete_outgoing_request(request)?;
+        types::OutgoingRequestLens::from(request).delete(self.table())?;
         Ok(())
     }
     fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
@@ -168,19 +168,17 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             scheme,
             body: None,
         };
-        let id = self
-            .table()
-            .push_outgoing_response(req)
-            .context("[new_outgoing_request] pushing request")?;
+        let id = types::OutgoingRequestLens::push(self.table(), req)
+            .context("[new_outgoing_request] pushing request")?
+            .into();
         Ok(id)
     }
     fn outgoing_request_write(
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingBody, ()>> {
-        let req = self
-            .table()
-            .get_outgoing_request_mut(request)
+        let req = types::OutgoingRequestLens::from(request)
+            .get_mut(self.table())
             .context("[outgoing_request_write] getting request")?;
 
         if req.body.is_some() {
@@ -197,15 +195,28 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         Ok(Ok(outgoing_body))
     }
-    fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn drop_response_outparam(&mut self, id: ResponseOutparam) -> wasmtime::Result<()> {
+        let _ = types::ResponseOutparamLens::from(id).delete(self.table())?;
+        Ok(())
     }
     fn set_response_outparam(
         &mut self,
-        _outparam: ResponseOutparam,
-        _response: Result<OutgoingResponse, Error>,
+        id: ResponseOutparam,
+        resp: Result<OutgoingResponse, Error>,
     ) -> wasmtime::Result<()> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        let val = match resp {
+            Ok(resp) => Ok(self.table().delete_outgoing_response(resp)?),
+            Err(e) => Err(e),
+        };
+
+        let param = types::ResponseOutparamLens::from(id).get_mut(self.table())?;
+
+        // TODO: better error
+        assert!(param.result.is_none());
+
+        param.result.replace(val);
+
+        Ok(())
     }
     fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
         self.table()
@@ -213,8 +224,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[drop_incoming_response] deleting response")?;
         Ok(())
     }
-    fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn drop_outgoing_response(&mut self, id: OutgoingResponse) -> wasmtime::Result<()> {
+        types::OutgoingResponseLens::from(id).delete(self.table())?;
+        Ok(())
     }
     fn incoming_response_status(
         &mut self,
