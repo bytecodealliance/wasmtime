@@ -196,6 +196,7 @@ fn coredump_has_defined_globals_and_memory() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn multiple_globals_memories_and_instances() -> Result<()> {
     let mut config = Config::default();
     config.wasm_multi_memory(true);
