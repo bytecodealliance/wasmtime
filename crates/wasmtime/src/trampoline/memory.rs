@@ -71,7 +71,7 @@ pub fn create_memory(
             ondemand: OnDemandInstanceAllocator::default(),
         }
         .allocate_module(request)?;
-        let instance_id = store.add_instance(handle.clone(), true);
+        let instance_id = store.add_dummy_instance(handle.clone());
         Ok(instance_id)
     }
 }

@@ -50,7 +50,7 @@ fn create_handle(
                 wmemcheck: false,
             })?;
 
-        Ok(store.add_instance(handle, true))
+        Ok(store.add_dummy_instance(handle))
     }
 }
 

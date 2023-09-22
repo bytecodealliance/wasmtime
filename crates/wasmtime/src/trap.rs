@@ -77,7 +77,7 @@ pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
 
 #[cold] // traps are exceptional, this helps move handling off the main path
 pub(crate) fn from_runtime_box(
-    store: &StoreOpaque,
+    store: &mut StoreOpaque,
     runtime_trap: Box<wasmtime_runtime::Trap>,
 ) -> Error {
     let wasmtime_runtime::Trap {
