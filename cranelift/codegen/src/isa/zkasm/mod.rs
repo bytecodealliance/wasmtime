@@ -157,16 +157,7 @@ impl TargetIsa for Riscv64Backend {
 
     #[cfg(feature = "disas")]
     fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
-        use capstone::prelude::*;
-        let mut cs = Capstone::new()
-            .riscv()
-            .mode(arch::riscv::ArchMode::RiscV64)
-            .build()?;
-        // Similar to AArch64, RISC-V uses inline constants rather than a separate
-        // constant pool. We want to skip dissasembly over inline constants instead
-        // of stopping on invalid bytes.
-        cs.set_skipdata(true)?;
-        Ok(cs)
+        Err(capstone::Error::UnsupportedArch)
     }
 
     fn has_native_fma(&self) -> bool {
