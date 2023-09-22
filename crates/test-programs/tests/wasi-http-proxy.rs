@@ -4,10 +4,9 @@ use wasmtime::{
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
-    self,
-    pipe::MemoryOutputPipe, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    self, pipe::MemoryOutputPipe, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
-use wasmtime_wasi_http::{proxy::Proxy, types, WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::{bindings, proxy::Proxy, types, WasiHttpCtx, WasiHttpView};
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -96,7 +95,9 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
 
     let mut ctx = Ctx { table, wasi, http };
 
-    let req = ctx.new_incoming_request(types::HostIncomingRequest {})?;
+    let req = ctx.new_incoming_request(types::HostIncomingRequest {
+        method: bindings::http::types::Method::Get,
+    })?;
     let out = ctx.new_response_outparam()?;
 
     let (mut store, proxy) = instantiate(component, ctx).await?;
@@ -105,6 +106,15 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
         .wasi_http_incoming_handler()
         .call_handle(&mut store, req, out)
         .await?;
+
+    let stdout = stdout.contents();
+    if !stdout.is_empty() {
+        println!("[guest] stdout:\n{}\n===", String::from_utf8_lossy(&stdout));
+    }
+    let stderr = stderr.contents();
+    if !stderr.is_empty() {
+        println!("[guest] stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
+    }
 
     Ok(())
 }

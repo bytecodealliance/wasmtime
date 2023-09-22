@@ -120,8 +120,13 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         types::OutgoingRequestLens::from(request).delete(self.table())?;
         Ok(())
     }
-    fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn incoming_request_method(&mut self, request: IncomingRequest) -> wasmtime::Result<Method> {
+        let method = types::IncomingRequestLens::from(request)
+            .get(self.table())?
+            .method
+            .clone();
+
+        Ok(method)
     }
     fn incoming_request_path_with_query(
         &mut self,

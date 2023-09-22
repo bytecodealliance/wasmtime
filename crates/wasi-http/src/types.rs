@@ -36,7 +36,9 @@ pub trait WasiHttpView: Send {
 
 pub type IncomingRequestLens = TableLens<HostIncomingRequest>;
 
-pub struct HostIncomingRequest {}
+pub struct HostIncomingRequest {
+    pub method: Method,
+}
 
 pub type ResponseOutparamLens = TableLens<HostResponseOutparam>;
 
