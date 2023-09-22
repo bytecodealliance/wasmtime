@@ -3,7 +3,7 @@
 use crate::dominator_tree::DominatorTree;
 use crate::ir;
 use crate::ir::{Function, Type};
-use crate::isa::zkasm::settings as riscv_settings;
+use crate::isa::zkasm::settings as zkasm_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
     compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
@@ -28,7 +28,7 @@ use self::inst::EmitInfo;
 pub struct Riscv64Backend {
     triple: Triple,
     flags: shared_settings::Flags,
-    isa_flags: riscv_settings::Flags,
+    isa_flags: zkasm_settings::Flags,
 }
 
 impl Riscv64Backend {
@@ -36,7 +36,7 @@ impl Riscv64Backend {
     pub fn new_with_flags(
         triple: Triple,
         flags: shared_settings::Flags,
-        isa_flags: riscv_settings::Flags,
+        isa_flags: zkasm_settings::Flags,
     ) -> Riscv64Backend {
         Riscv64Backend {
             triple,
@@ -208,9 +208,9 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
     }
     IsaBuilder {
         triple,
-        setup: riscv_settings::builder(),
+        setup: zkasm_settings::builder(),
         constructor: |triple, shared_flags, builder| {
-            let isa_flags = riscv_settings::Flags::new(&shared_flags, builder);
+            let isa_flags = zkasm_settings::Flags::new(&shared_flags, builder);
             let backend = Riscv64Backend::new_with_flags(triple, shared_flags, isa_flags);
             Ok(backend.wrapped())
         },

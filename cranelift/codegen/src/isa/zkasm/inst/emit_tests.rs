@@ -2103,7 +2103,7 @@ fn test_zkasm_binemit() {
     let emit_info = EmitInfo::new(flags, isa_flags);
 
     for unit in insns.iter() {
-        println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
+        println!("zkASM: {:?}, {}", unit.inst, unit.assembly);
         // Check the printed text is as expected.
         let actual_printing = unit
             .inst
@@ -2114,225 +2114,119 @@ fn test_zkasm_binemit() {
             .emit(&[], &mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let actual_encoding = buffer.stringify_code_bytes();
-
         assert_eq!(actual_encoding, unit.code.0);
     }
 }
 
-fn make_test_flags() -> (settings::Flags, super::super::riscv_settings::Flags) {
+fn make_test_flags() -> (settings::Flags, super::super::zkasm_settings::Flags) {
     let b = settings::builder();
     let flags = settings::Flags::new(b.clone());
-    let b2 = super::super::riscv_settings::builder();
-    let isa_flags = super::super::riscv_settings::Flags::new(&flags, &b2);
+    let b2 = super::super::zkasm_settings::builder();
+    let isa_flags = super::super::zkasm_settings::Flags::new(&flags, &b2);
     (flags, isa_flags)
 }
 
-#[derive(Debug)]
-pub(crate) struct DebugRTypeInst {
-    op_code: u32,
-    rd: u32,
-    funct3: u32,
-    rs1: u32,
-    rs2: u32,
-    funct7: u32,
-}
-
-impl DebugRTypeInst {
-    pub(crate) fn from_bs(x: &[u8]) -> Option<Self> {
-        if x.len() != 4 {
-            return None;
-        }
-        let a = [x[0], x[1], x[2], x[3]];
-        Some(Self::from_u32(u32::from_le_bytes(a)))
-    }
-
-    pub(crate) fn from_u32(x: u32) -> Self {
-        let op_code = x & 0b111_1111;
-        let x = x >> 7;
-        let rd = x & 0b1_1111;
-        let x = x >> 5;
-        let funct3 = x & 0b111;
-        let x = x >> 3;
-        let rs1 = x & 0b1_1111;
-        let x = x >> 5;
-        let rs2 = x & 0b1_1111;
-        let x = x >> 5;
-        let funct7 = x & 0b111_1111;
-        Self {
-            op_code,
-            rd,
-            funct3,
-            rs1,
-            rs2,
-            funct7,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct DebugITypeInst {
-    op_code: u32,
-    rd: u32,
-    funct3: u32,
-    rs: u32,
-    imm12: u32,
-    shamt5: u32,
-    shamt6: u32,
-    funct7: u32,
-    funct6: u32,
-}
-
-impl DebugITypeInst {
-    pub(crate) fn from_bs(x: &[u8]) -> Self {
-        let a = [x[0], x[1], x[2], x[3]];
-        Self::from_u32(u32::from_le_bytes(a))
-    }
-    pub(crate) fn from_u32(x: u32) -> Self {
-        let op_code = x & 0b111_1111;
-        let x = x >> 7;
-        let rd = x & 0b1_1111;
-        let x = x >> 5;
-        let funct3 = x & 0b111;
-        let x = x >> 3;
-        let rs = x & 0b1_1111;
-        let x = x >> 5;
-        let imm12 = x & 0b1111_1111_1111;
-        let shamt5 = imm12 & 0b1_1111;
-        let shamt6 = imm12 & 0b11_1111;
-        let funct7 = imm12 >> 5;
-        let funct6 = funct7 >> 1;
-        Self {
-            op_code,
-            rd,
-            funct3,
-            rs,
-            imm12,
-            shamt5,
-            shamt6,
-            funct7,
-            funct6,
-        }
-    }
-    fn print_b(self) {
-        println!("opcode:{:b}", self.op_code);
-        println!("rd:{}", self.rd);
-        println!("funct3:{:b}", self.funct3);
-        println!("rs:{}", self.rs);
-        println!("shamt5:{:b}", self.shamt5);
-        println!("shamt6:{:b}", self.shamt6);
-        println!("funct6:{:b}", self.funct6);
-        println!("funct7:{:b}", self.funct7);
-    }
-}
-
-#[test]
-fn xxx() {
-    let x = 1240847763;
-    let x = DebugITypeInst::from_u32(x);
-    x.print_b();
-}
-
-#[test]
-fn zkasm_worst_case_instruction_size() {
-    let (flags, isa_flags) = make_test_flags();
-    let emit_info = EmitInfo::new(flags, isa_flags);
-
-    //there are all candidates potential generate a lot of bytes.
-    let mut candidates: Vec<MInst> = vec![];
-
-    // candidates.push(Inst::IntSelect {
-    //     dst: vec![writable_a0(), writable_a0()],
-    //     ty: I128,
-    //     op: IntSelectOP::Smax,
-    //     x: ValueRegs::two(x_reg(1), x_reg(2)),
-    //     y: ValueRegs::two(x_reg(3), x_reg(4)),
-    // });
-    //
-    // candidates.push(Inst::FcvtToInt {
-    //     rd: writable_a0(),
-    //     rs: fa0(),
-    //     is_signed: true,
-    //     in_type: F64,
-    //     out_type: I8,
-    //     is_sat: false,
-    //     tmp: writable_a1(),
-    // });
-    // candidates.push(Inst::FcvtToInt {
-    //     rd: writable_a0(),
-    //     rs: fa0(),
-    //     is_signed: true,
-    //     in_type: F64,
-    //     out_type: I16,
-    //     is_sat: false,
-    //     tmp: writable_a1(),
-    // });
-    // candidates.push(Inst::FcvtToInt {
-    //     rd: writable_a0(),
-    //     rs: fa0(),
-    //     is_signed: true,
-    //     in_type: F32,
-    //     out_type: I8,
-    //     is_sat: false,
-    //     tmp: writable_a1(),
-    // });
-    // candidates.push(Inst::FcvtToInt {
-    //     rd: writable_a0(),
-    //     rs: fa0(),
-    //     is_signed: true,
-    //     in_type: F32,
-    //     out_type: I16,
-    //     is_sat: false,
-    //     tmp: writable_a1(),
-    // });
-    // candidates.push(Inst::FcvtToInt {
-    //     rd: writable_a0(),
-    //     rs: fa0(),
-    //     is_signed: true,
-    //     in_type: F64,
-    //     out_type: I8,
-    //     is_sat: false,
-    //     tmp: writable_a1(),
-    // });
-    // candidates.push(Inst::FcvtToInt {
-    //     rd: writable_a0(),
-    //     rs: fa0(),
-    //     is_signed: true,
-    //     in_type: F64,
-    //     out_type: I16,
-    //     is_sat: false,
-    //     tmp: writable_a1(),
-    // });
-    //
-    // candidates.push(Inst::FloatRound {
-    //     op: FloatRoundOP::Trunc,
-    //     int_tmp: writable_a0(),
-    //     f_tmp: writable_a0(),
-    //     rd: writable_fa0(),
-    //     rs: fa0(),
-    //     ty: F64,
-    // });
-    //
-    // candidates.push(Inst::FloatSelect {
-    //     op: FloatSelectOP::Max,
-    //     rd: writable_fa0(),
-    //     tmp: writable_a0(),
-    //     rs1: fa0(),
-    //     rs2: fa0(),
-    //     ty: F64,
-    // });
-
-    let mut max: (u32, MInst) = (0, Inst::Nop0);
-    for i in candidates {
-        let mut buffer = MachBuffer::new();
-        i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish(&Default::default(), &mut Default::default());
-        let length = buffer.data().len() as u32;
-        if length > max.0 {
-            let length = buffer.data().len() as u32;
-            max = (length, i.clone());
-        }
-        println!("insn:{:?}  length: {}", i, length);
-    }
-    println!("calculate max size is {} , inst is {:?}", max.0, max.1);
-    assert!(max.0 <= Inst::worst_case_size());
-}
+// #[test]
+// fn zkasm_worst_case_instruction_size() {
+//     let (flags, isa_flags) = make_test_flags();
+//     let emit_info = EmitInfo::new(flags, isa_flags);
+//
+//     //there are all candidates potential generate a lot of bytes.
+//     let mut candidates: Vec<MInst> = vec![];
+//
+//     // candidates.push(Inst::IntSelect {
+//     //     dst: vec![writable_a0(), writable_a0()],
+//     //     ty: I128,
+//     //     op: IntSelectOP::Smax,
+//     //     x: ValueRegs::two(x_reg(1), x_reg(2)),
+//     //     y: ValueRegs::two(x_reg(3), x_reg(4)),
+//     // });
+//     //
+//     // candidates.push(Inst::FcvtToInt {
+//     //     rd: writable_a0(),
+//     //     rs: fa0(),
+//     //     is_signed: true,
+//     //     in_type: F64,
+//     //     out_type: I8,
+//     //     is_sat: false,
+//     //     tmp: writable_a1(),
+//     // });
+//     // candidates.push(Inst::FcvtToInt {
+//     //     rd: writable_a0(),
+//     //     rs: fa0(),
+//     //     is_signed: true,
+//     //     in_type: F64,
+//     //     out_type: I16,
+//     //     is_sat: false,
+//     //     tmp: writable_a1(),
+//     // });
+//     // candidates.push(Inst::FcvtToInt {
+//     //     rd: writable_a0(),
+//     //     rs: fa0(),
+//     //     is_signed: true,
+//     //     in_type: F32,
+//     //     out_type: I8,
+//     //     is_sat: false,
+//     //     tmp: writable_a1(),
+//     // });
+//     // candidates.push(Inst::FcvtToInt {
+//     //     rd: writable_a0(),
+//     //     rs: fa0(),
+//     //     is_signed: true,
+//     //     in_type: F32,
+//     //     out_type: I16,
+//     //     is_sat: false,
+//     //     tmp: writable_a1(),
+//     // });
+//     // candidates.push(Inst::FcvtToInt {
+//     //     rd: writable_a0(),
+//     //     rs: fa0(),
+//     //     is_signed: true,
+//     //     in_type: F64,
+//     //     out_type: I8,
+//     //     is_sat: false,
+//     //     tmp: writable_a1(),
+//     // });
+//     // candidates.push(Inst::FcvtToInt {
+//     //     rd: writable_a0(),
+//     //     rs: fa0(),
+//     //     is_signed: true,
+//     //     in_type: F64,
+//     //     out_type: I16,
+//     //     is_sat: false,
+//     //     tmp: writable_a1(),
+//     // });
+//     //
+//     // candidates.push(Inst::FloatRound {
+//     //     op: FloatRoundOP::Trunc,
+//     //     int_tmp: writable_a0(),
+//     //     f_tmp: writable_a0(),
+//     //     rd: writable_fa0(),
+//     //     rs: fa0(),
+//     //     ty: F64,
+//     // });
+//     //
+//     // candidates.push(Inst::FloatSelect {
+//     //     op: FloatSelectOP::Max,
+//     //     rd: writable_fa0(),
+//     //     tmp: writable_a0(),
+//     //     rs1: fa0(),
+//     //     rs2: fa0(),
+//     //     ty: F64,
+//     // });
+//
+//     let mut max: (u32, MInst) = (0, Inst::Nop0);
+//     for i in candidates {
+//         let mut buffer = MachBuffer::new();
+//         i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
+//         let buffer = buffer.finish(&Default::default(), &mut Default::default());
+//         let length = buffer.data().len() as u32;
+//         if length > max.0 {
+//             let length = buffer.data().len() as u32;
+//             max = (length, i.clone());
+//         }
+//         println!("insn:{:?}  length: {}", i, length);
+//     }
+//     println!("calculate max size is {} , inst is {:?}", max.0, max.1);
+//     assert!(max.0 <= Inst::worst_case_size());
+// }

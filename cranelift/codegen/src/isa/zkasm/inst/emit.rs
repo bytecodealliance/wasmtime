@@ -11,13 +11,13 @@ use regalloc2::Allocation;
 
 pub struct EmitInfo {
     shared_flag: settings::Flags,
-    isa_flags: super::super::riscv_settings::Flags,
+    isa_flags: super::super::zkasm_settings::Flags,
 }
 
 impl EmitInfo {
     pub(crate) fn new(
         shared_flag: settings::Flags,
-        isa_flags: super::super::riscv_settings::Flags,
+        isa_flags: super::super::zkasm_settings::Flags,
     ) -> Self {
         Self {
             shared_flag,
