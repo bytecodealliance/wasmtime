@@ -95,17 +95,28 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
 
     let mut ctx = Ctx { table, wasi, http };
 
-    let req = ctx.new_incoming_request(types::HostIncomingRequest {
-        method: bindings::http::types::Method::Get,
-    })?;
-    let out = ctx.new_response_outparam()?;
-
     let (mut store, proxy) = instantiate(component, ctx).await?;
+
+    let req = store
+        .data_mut()
+        .new_incoming_request(types::HostIncomingRequest {
+            method: bindings::http::types::Method::Get,
+        })?;
+
+    let out = store.data_mut().new_response_outparam()?;
 
     proxy
         .wasi_http_incoming_handler()
         .call_handle(&mut store, req, out)
         .await?;
+
+    let resp = store.data_mut().take_response_outparam(out)?;
+
+    let resp = match resp {
+        Some(Ok(resp)) => resp,
+        Some(Err(e)) => panic!("Error given in response: {e:?}"),
+        None => panic!("No response given for request!"),
+    };
 
     let stdout = stdout.contents();
     if !stdout.is_empty() {

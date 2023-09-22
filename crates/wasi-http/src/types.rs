@@ -32,6 +32,15 @@ pub trait WasiHttpView: Send {
     fn new_response_outparam(&mut self) -> wasmtime::Result<ResponseOutparam> {
         Ok(ResponseOutparamLens::push(self.table(), HostResponseOutparam { result: None })?.id)
     }
+
+    fn take_response_outparam(
+        &mut self,
+        outparam: ResponseOutparam,
+    ) -> wasmtime::Result<Option<Result<HostOutgoingResponse, types::Error>>> {
+        Ok(ResponseOutparamLens::from(outparam)
+            .delete(self.table())?
+            .result)
+    }
 }
 
 pub type IncomingRequestLens = TableLens<HostIncomingRequest>;
