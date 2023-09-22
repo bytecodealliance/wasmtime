@@ -6,7 +6,14 @@ Unreleased.
 
 ### Added
 
+* Added the `wasmtime::FrameInfo::module` method, which returns the
+  `wasmtime::Module` associated with the stack frame.
+
 ### Changed
+
+* The `wasmtime::FrameInfo::module_name` has been removed, however you can now
+  get identical results by chaining `wasmtime::FrameInfo::module` and
+  `wasmtime::Module::name`: `my_frame.module().name()`.
 
 --------------------------------------------------------------------------------
 

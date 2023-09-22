@@ -350,6 +350,9 @@ impl CommonOptions {
         if let Some(enable) = self.debug.debug_info {
             config.debug_info(enable);
         }
+        if self.debug.coredump.is_some() {
+            config.coredump_on_trap(true);
+        }
         if let Some(level) = self.opts.opt_level {
             config.cranelift_opt_level(level);
         }

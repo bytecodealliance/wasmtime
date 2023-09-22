@@ -577,6 +577,15 @@ impl Memory {
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         store.store_data().contains(self.0)
     }
+
+    /// Get a stable hash key for this memory.
+    ///
+    /// Even if the same underlying memory definition is added to the
+    /// `StoreData` multiple times and becomes multiple `wasmtime::Memory`s,
+    /// this hash key will be consistent across all of these memories.
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl std::hash::Hash + Eq {
+        store[self.0].definition as usize
+    }
 }
 
 /// A linear memory. This trait provides an interface for raw memory buffers
@@ -946,5 +955,42 @@ mod tests {
             wasmtime_environ::MemoryStyle::Dynamic { .. } => {}
             other => panic!("unexpected style {:?}", other),
         }
+    }
+
+    #[test]
+    fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
+        let mut store = Store::<()>::default();
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (memory (export "m") 1 1)
+                )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        // Each time we `get_memory`, we call `Memory::from_wasmtime` which adds
+        // a new entry to `StoreData`, so `g1` and `g2` will have different
+        // indices into `StoreData`.
+        let m1 = instance.get_memory(&mut store, "m").unwrap();
+        let m2 = instance.get_memory(&mut store, "m").unwrap();
+
+        // That said, they really point to the same memory.
+        assert_eq!(m1.data(&store)[0], 0);
+        assert_eq!(m2.data(&store)[0], 0);
+        m1.data_mut(&mut store)[0] = 42;
+        assert_eq!(m1.data(&mut store)[0], 42);
+        assert_eq!(m2.data(&mut store)[0], 42);
+
+        // And therefore their hash keys are the same.
+        assert!(m1.hash_key(&store.as_context().0) == m2.hash_key(&store.as_context().0));
+
+        // But the hash keys are different from different memories.
+        let instance2 = Instance::new(&mut store, &module, &[])?;
+        let m3 = instance2.get_memory(&mut store, "m").unwrap();
+        assert!(m1.hash_key(&store.as_context().0) != m3.hash_key(&store.as_context().0));
+
+        Ok(())
     }
 }

@@ -373,23 +373,23 @@ fn attempt_to_leave_during_malloc() -> Result<()> {
     assert_eq!(trace.len(), 4);
 
     // This was our entry point...
-    assert_eq!(trace[3].module_name(), Some("m"));
+    assert_eq!(trace[3].module().name(), Some("m"));
     assert_eq!(trace[3].func_name(), Some("run"));
 
     // ... which called an imported function which ends up being originally
     // defined by the shim instance. The shim instance then does an indirect
     // call through a table which goes to the `canon.lower`'d host function
-    assert_eq!(trace[2].module_name(), Some("host_shim"));
+    assert_eq!(trace[2].module().name(), Some("host_shim"));
     assert_eq!(trace[2].func_name(), Some("shim_ret_string"));
 
     // ... and the lowered host function will call realloc to allocate space for
     // the result
-    assert_eq!(trace[1].module_name(), Some("m"));
+    assert_eq!(trace[1].module().name(), Some("m"));
     assert_eq!(trace[1].func_name(), Some("realloc"));
 
     // ... but realloc calls the shim instance and tries to exit the
     // component, triggering a dynamic trap
-    assert_eq!(trace[0].module_name(), Some("host_shim"));
+    assert_eq!(trace[0].module().name(), Some("host_shim"));
     assert_eq!(trace[0].func_name(), Some("shim_thunk"));
 
     // In addition to the above trap also ensure that when we enter a wasm

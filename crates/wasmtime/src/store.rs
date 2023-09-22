@@ -78,7 +78,7 @@
 
 use crate::instance::InstanceData;
 use crate::linker::Definition;
-use crate::module::BareModuleInfo;
+use crate::module::{BareModuleInfo, RegisteredModuleId};
 use crate::trampoline::VMHostGlobalContext;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use crate::{Global, Instance, Memory};
@@ -433,14 +433,24 @@ where
 /// instance allocator.
 struct StoreInstance {
     handle: InstanceHandle,
+    kind: StoreInstanceKind,
+}
 
-    /// Whether or not this is a dummy instance that is just an implementation
-    /// detail for something else. For example, host-created memories internally
-    /// create a dummy instance.
+enum StoreInstanceKind {
+    /// An actual, non-dummy instance.
+    Real {
+        /// The id of this instance's module inside our owning store's
+        /// `ModuleRegistry`.
+        module_id: RegisteredModuleId,
+    },
+
+    /// This is a dummy instance that is just an implementation detail for
+    /// something else. For example, host-created memories internally create a
+    /// dummy instance.
     ///
-    /// Regardless of the configured instance allocator for this engine, dummy
+    /// Regardless of the configured instance allocator for the engine, dummy
     /// instances always use the on-demand allocator to deallocate the instance.
-    dummy: bool,
+    Dummy,
 }
 
 #[derive(Copy, Clone)]
@@ -1253,10 +1263,27 @@ impl StoreOpaque {
         &mut self.host_globals
     }
 
-    pub unsafe fn add_instance(&mut self, handle: InstanceHandle) -> InstanceId {
+    pub fn module_for_instance(&self, instance: InstanceId) -> Option<&'_ Module> {
+        match self.instances[instance.0].kind {
+            StoreInstanceKind::Dummy => None,
+            StoreInstanceKind::Real { module_id } => {
+                let module = self
+                    .modules()
+                    .lookup_module_by_id(module_id)
+                    .expect("should always have a registered module for real instances");
+                Some(module)
+            }
+        }
+    }
+
+    pub unsafe fn add_instance(
+        &mut self,
+        handle: InstanceHandle,
+        module_id: RegisteredModuleId,
+    ) -> InstanceId {
         self.instances.push(StoreInstance {
             handle: handle.clone(),
-            dummy: false,
+            kind: StoreInstanceKind::Real { module_id },
         });
         InstanceId(self.instances.len() - 1)
     }
@@ -1269,7 +1296,7 @@ impl StoreOpaque {
     pub unsafe fn add_dummy_instance(&mut self, handle: InstanceHandle) -> InstanceId {
         self.instances.push(StoreInstance {
             handle: handle.clone(),
-            dummy: true,
+            kind: StoreInstanceKind::Dummy,
         });
         InstanceId(self.instances.len() - 1)
     }
@@ -1290,7 +1317,7 @@ impl StoreOpaque {
             .enumerate()
             .filter_map(|(idx, inst)| {
                 let id = InstanceId::from_index(idx);
-                if inst.dummy {
+                if let StoreInstanceKind::Dummy = inst.kind {
                     None
                 } else {
                     Some(InstanceData::from_id(id))
@@ -1304,6 +1331,9 @@ impl StoreOpaque {
 
     /// Get all memories (host- or Wasm-defined) within this store.
     pub fn all_memories<'a>(&'a mut self) -> impl Iterator<Item = Memory> + 'a {
+        // NB: Host-created memories have dummy instances. Therefore, we can get
+        // all memories in the store by iterating over all instances (including
+        // dummy instances) and getting each of their defined memories.
         let mems = self
             .instances
             .iter_mut()
@@ -2266,7 +2296,7 @@ impl Drop for StoreOpaque {
             let allocator = self.engine.allocator();
             let ondemand = OnDemandInstanceAllocator::default();
             for instance in self.instances.iter_mut() {
-                if instance.dummy {
+                if let StoreInstanceKind::Dummy = instance.kind {
                     ondemand.deallocate_module(&mut instance.handle);
                 } else {
                     allocator.deallocate_module(&mut instance.handle);
@@ -2291,7 +2321,7 @@ impl Drop for StoreOpaque {
 
 impl wasmtime_runtime::ModuleInfoLookup for ModuleRegistry {
     fn lookup(&self, pc: usize) -> Option<&dyn ModuleInfo> {
-        self.lookup_module(pc)
+        self.lookup_module_info(pc)
     }
 }
 

@@ -66,6 +66,7 @@ fn coredump_has_stack() -> Result<()> {
     assert_eq!(cd.frames()[0].func_name().unwrap(), "c");
     assert_eq!(cd.frames()[1].func_name().unwrap(), "b");
     assert_eq!(cd.frames()[2].func_name().unwrap(), "a");
+    let _ = cd.serialize(&mut store, "stack");
     Ok(())
 }
 
@@ -105,6 +106,7 @@ fn coredump_has_modules_and_instances() -> Result<()> {
     let cd = e.downcast_ref::<WasmCoreDump>().unwrap();
     assert_eq!(cd.modules().len(), 2);
     assert_eq!(cd.instances().len(), 2);
+    let _ = cd.serialize(&mut store, "modules-and-instances");
     Ok(())
 }
 
@@ -158,6 +160,7 @@ fn coredump_has_host_globals_and_memory() -> Result<()> {
     assert_eq!(core_dump.globals().len(), 1);
     assert_eq!(core_dump.memories().len(), 1);
     assert_eq!(core_dump.instances().len(), 1);
+    let _ = core_dump.serialize(&mut store, "host-globals-and-memory");
 
     Ok(())
 }
@@ -191,6 +194,7 @@ fn coredump_has_defined_globals_and_memory() -> Result<()> {
     assert_eq!(core_dump.globals().len(), 1);
     assert_eq!(core_dump.memories().len(), 1);
     assert_eq!(core_dump.instances().len(), 1);
+    let _ = core_dump.serialize(&mut store, "defined-globals-and-memory");
 
     Ok(())
 }
@@ -250,6 +254,7 @@ fn multiple_globals_memories_and_instances() -> Result<()> {
     assert_eq!(core_dump.globals().len(), 2);
     assert_eq!(core_dump.memories().len(), 2);
     assert_eq!(core_dump.instances().len(), 2);
+    let _ = core_dump.serialize(&mut store, "multi");
 
     Ok(())
 }
