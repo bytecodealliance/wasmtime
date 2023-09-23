@@ -1481,36 +1481,36 @@
 
 ;;;;;  Rules for `uload8`;;;;;;;;;
 (rule (lower (uload8 flags p offset))
-  (gen_load (amode p offset $I8) (LoadOP.Lbu) flags $I8))
+  (gen_load (amode p offset $I8) (LoadOP.Lbu) flags))
 
 ;;;;;  Rules for `sload8`;;;;;;;;;
 (rule (lower (sload8 flags p offset))
-  (gen_load (amode p offset $I8) (LoadOP.Lb) flags $I8))
+  (gen_load (amode p offset $I8) (LoadOP.Lb) flags))
 
 ;;;;;  Rules for `uload16`;;;;;;;;;
 (rule (lower (uload16 flags p offset))
-  (gen_load (amode p offset $I16) (LoadOP.Lhu) flags $I16))
+  (gen_load (amode p offset $I16) (LoadOP.Lhu) flags))
 
 ;;;;;  Rules for `iload16`;;;;;;;;;
 (rule (lower (sload16 flags p offset))
-  (gen_load (amode p offset $I16) (LoadOP.Lh) flags $I16))
+  (gen_load (amode p offset $I16) (LoadOP.Lh) flags))
 
 ;;;;;  Rules for `uload32`;;;;;;;;;
 (rule (lower (uload32 flags p offset))
-  (gen_load (amode p offset $I32) (LoadOP.Lwu) flags $I32))
+  (gen_load (amode p offset $I32) (LoadOP.Lwu) flags))
 
 ;;;;;  Rules for `sload32`;;;;;;;;;
 (rule (lower (sload32 flags p offset))
-  (gen_load (amode p offset $I32) (LoadOP.Lw) flags $I32))
+  (gen_load (amode p offset $I32) (LoadOP.Lw) flags))
 
 ;;;;;  Rules for `load`;;;;;;;;;
 (rule (lower (has_type ty (load flags p offset)))
-  (gen_load (amode p offset ty) (load_op ty) flags ty))
+  (gen_load (amode p offset ty) (load_op ty) flags))
 
 (rule 1 (lower (has_type $I128 (load flags p offset)))
   (if-let offset_plus_8 (s32_add_fallible offset 8))
-  (let ((lo XReg (gen_load (amode p offset $I64) (LoadOP.Ld) flags $I64))
-        (hi XReg (gen_load (amode p offset_plus_8 $I64) (LoadOP.Ld) flags $I64)))
+  (let ((lo XReg (gen_load (amode p offset $I64) (LoadOP.Ld) flags))
+        (hi XReg (gen_load (amode p offset_plus_8 $I64) (LoadOP.Ld) flags)))
     (value_regs lo hi)))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (load flags p offset)))

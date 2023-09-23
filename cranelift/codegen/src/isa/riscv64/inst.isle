@@ -1664,10 +1664,10 @@
 
 ;; Otherwise we fall back to loading the immediate from the constant pool.
 (rule 0 (imm (ty_int ty) c)
-  (emit_load
+  (gen_load
+    (gen_const_amode (emit_u64_le_const c))
     (LoadOP.Ld)
-    (mem_flags_trusted)
-    (gen_const_amode (emit_u64_le_const c))))
+    (mem_flags_trusted)))
 
 ;; Imm12 Rules
 
@@ -2453,16 +2453,12 @@
 (rule 1 (load_op_reg_type (LoadOP.Flw)) $F64)
 (rule 0 (load_op_reg_type _) $I64)
 
-(decl emit_load (LoadOP MemFlags AMode) Reg)
-(rule (emit_load op flags from)
-      (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
-            (_ Unit (emit (MInst.Load dst op flags from))))
-        dst))
-
 ;; helper function to load from memory.
-(decl gen_load (AMode LoadOP MemFlags Type) Reg)
-(rule (gen_load amode op flags ty)
-  (emit_load op flags amode))
+(decl gen_load (AMode LoadOP MemFlags) Reg)
+(rule (gen_load amode op flags)
+  (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
+      (_ Unit (emit (MInst.Load dst op flags amode))))
+    dst))
 
 ;; helper function to store to memory.
 (decl gen_store (AMode StoreOP MemFlags Reg) InstOutput)
