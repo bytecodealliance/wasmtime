@@ -2402,8 +2402,9 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high)
     )))
 
-(decl gen_amode (Reg Offset32 Type) AMode)
-(extern constructor gen_amode gen_amode)
+;; Generates a AMode that points to a register plus an offset.
+(decl gen_reg_offset_amode (Reg Offset32 Type) AMode)
+(extern constructor gen_reg_offset_amode gen_reg_offset_amode)
 
 ;; Generates a AMode that points to a constant in the constant pool.
 (decl gen_const_amode (VCodeConstant) AMode)
@@ -2425,7 +2426,7 @@
 ;; helper function to load from memory.
 (decl gen_load (Reg Offset32 LoadOP MemFlags Type) Reg)
 (rule (gen_load p offset op flags ty)
-  (emit_load op flags (gen_amode p offset $I64)))
+  (emit_load op flags (gen_reg_offset_amode p offset $I64)))
 
 (decl gen_load_128 (Reg Offset32 MemFlags) ValueRegs)
 (rule (gen_load_128 p offset flags)
@@ -2440,7 +2441,7 @@
 (decl gen_store (Reg Offset32 StoreOP MemFlags Reg) InstOutput)
 (rule
   (gen_store base offset op flags src)
-  (side_effect (SideEffectNoResult.Inst (MInst.Store (gen_amode base offset $I64) op flags src)))
+  (side_effect (SideEffectNoResult.Inst (MInst.Store (gen_reg_offset_amode base offset $I64) op flags src)))
 )
 
 (decl gen_store_128 (Reg Offset32 MemFlags ValueRegs) InstOutput)
@@ -2448,8 +2449,8 @@
   (gen_store_128 p offset flags src)
   (side_effect
     (SideEffectNoResult.Inst2
-      (MInst.Store (gen_amode p offset $I64) (StoreOP.Sd) flags (value_regs_get src 0))
-      (MInst.Store (gen_amode p (offset32_add offset 8) $I64) (StoreOP.Sd) flags (value_regs_get src 1)))))
+      (MInst.Store (gen_reg_offset_amode p offset $I64) (StoreOP.Sd) flags (value_regs_get src 0))
+      (MInst.Store (gen_reg_offset_amode p (offset32_add offset 8) $I64) (StoreOP.Sd) flags (value_regs_get src 1)))))
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
