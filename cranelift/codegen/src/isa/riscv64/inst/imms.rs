@@ -187,6 +187,10 @@ impl Imm6 {
         value.try_into().ok().and_then(Imm6::maybe_from_i16)
     }
 
+    pub fn maybe_from_i64(value: i64) -> Option<Self> {
+        value.try_into().ok().and_then(Imm6::maybe_from_i16)
+    }
+
     pub fn maybe_from_imm12(value: Imm12) -> Option<Self> {
         Imm6::maybe_from_i16(value.as_i16())
     }
@@ -194,6 +198,28 @@ impl Imm6 {
     /// Bits for encoding.
     pub fn bits(&self) -> u8 {
         self.value as u8 & 0x3f
+    }
+}
+
+/// A unsigned 6-bit immediate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Uimm6 {
+    value: u8,
+}
+
+impl Uimm6 {
+    /// Create an unsigned 6-bit immediate from an u8
+    pub fn maybe_from_u8(value: u8) -> Option<Self> {
+        if value <= 63 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u8 {
+        self.value & 0x3f
     }
 }
 

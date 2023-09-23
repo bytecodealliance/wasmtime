@@ -247,8 +247,8 @@ block0(v0: i64, v1: i64):
 ;   c.mv s0, sp
 ; block1: ; offset 0xc
 ;   c.jalr a1
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
 ;   c.addi16sp sp, 0x10
 ;   c.jr ra
 
@@ -379,8 +379,8 @@ block0:
 ; block1: ; offset 0xe
 ;   c.mv a0, sp
 ;   c.addi16sp sp, 0x10
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
 ;   c.addi16sp sp, 0x10
 ;   c.jr ra
 
@@ -464,11 +464,10 @@ block0:
 ; block1: ; offset 0xe
 ;   c.addi4spn a0, sp, 0x18
 ;   c.addi16sp sp, 0x40
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
 ;   c.addi16sp sp, 0x10
 ;   c.jr ra
-
 
 function %c_li() -> i64 {
 block0:
@@ -560,3 +559,78 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   c.andi a0, 0
 ;   c.jr ra
+
+function %c_lwsp() -> i32 {
+  ss0 = explicit_slot 16
+
+block0:
+  v0 = stack_load.i32 ss0+12
+  return v0
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   add sp,-16
+; block0:
+;   lw a0,12(nominal_sp)
+;   add sp,+16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x10
+; block1: ; offset 0xe
+;   c.lwsp a0, 0xc(sp)
+;   c.addi16sp sp, 0x10
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+function %c_ldsp() -> i64 {
+  ss0 = explicit_slot 128
+
+block0:
+  v0 = stack_load.i64 ss0+64
+  return v0
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   add sp,-128
+; block0:
+;   ld a0,64(nominal_sp)
+;   add sp,+128
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x80
+; block1: ; offset 0xe
+;   c.ldsp a0, 0x40(sp)
+;   c.addi16sp sp, 0x80
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+

@@ -464,6 +464,7 @@ impl Inst {
         start_off: &mut u32,
     ) -> bool {
         let has_zca = emit_info.isa_flags.has_zca();
+        let has_zcd = emit_info.isa_flags.has_zcd();
 
         // Currently all compressed extensions (Zcb, Zcd, Zcmp, Zcmt, etc..) require Zca
         // to be enabled, so check it early.
@@ -724,6 +725,48 @@ impl Inst {
                     None => return false,
                 };
                 sink.put2(encode_cb_type(CbOp::CAndi, rd, imm6));
+            }
+
+            // Stack Based Loads
+            Inst::Load {
+                rd,
+                op: op @ (LoadOP::Lw | LoadOP::Ld | LoadOP::Fld),
+                from,
+                flags,
+            } if from.get_base_register() == Some(stack_reg())
+                && (from.get_offset_with_state(state) % op.size()) == 0 =>
+            {
+                // We encode the offset in multiples of the load size.
+                let offset = from.get_offset_with_state(state);
+                let imm6 = match u8::try_from(offset / op.size())
+                    .ok()
+                    .and_then(Uimm6::maybe_from_u8)
+                {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
+
+                // Some additional constraints on these instructions.
+                //
+                // Integer loads are not allowed to target x0, but floating point loads
+                // are, since f0 is not a special register.
+                //
+                // Floating point loads are not included in the base Zca extension
+                // but in a separate Zcd extension. Both of these are part of the C Extension.
+                let rd_is_zero = rd.to_reg() == zero_reg();
+                let op = match op {
+                    LoadOP::Lw if !rd_is_zero => CiOp::CLwsp,
+                    LoadOP::Ld if !rd_is_zero => CiOp::CLdsp,
+                    LoadOP::Fld if has_zcd => CiOp::CFldsp,
+                    _ => return false,
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put2(encode_ci_sp_load(op, rd, imm6));
             }
 
             _ => return false,

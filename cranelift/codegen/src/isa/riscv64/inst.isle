@@ -743,6 +743,9 @@
   (CSlli)
   (CLi)
   (CLui)
+  (CLwsp)
+  (CLdsp)
+  (CFldsp)
 ))
 
 ;; Opcodes for the CIW compressed instruction format

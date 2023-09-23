@@ -407,6 +407,41 @@ pub fn encode_ci_type(op: CiOp, rd: WritableReg, imm: Imm6) -> u16 {
     bits.try_into().unwrap()
 }
 
+// Stack-Pointer relative loads are regular CI instructions, but, the immediate
+// is zero extended, and with a slightly different immediate field encoding.
+pub fn encode_ci_sp_load(op: CiOp, rd: WritableReg, imm: Uimm6) -> u16 {
+    let imm = imm.bits();
+
+    // These are the spec encoded offsets.
+    // LWSP:  [5|4:2|7:6]
+    // LDSP:  [5|4:3|8:6]
+    // FLDSP: [5|4:3|8:6]
+    //
+    // We don't recieve the entire offset in `imm`, just a multiple of the load-size.
+
+    // Number of bits in the lowest position of imm. 3 for lwsp, 2 for {f,}ldsp.
+    let low_bits = match op {
+        CiOp::CLwsp => 3,                // [4:2]
+        CiOp::CLdsp | CiOp::CFldsp => 2, // [4:3]
+        _ => unreachable!(),
+    };
+    let high_bits = 6 - 1 - low_bits;
+    let mut enc_imm = 0;
+
+    // Encode [7:6] at the bottom of imm
+    enc_imm |= imm >> (6 - high_bits);
+
+    // Next place [4:2] in the middle
+    enc_imm |= (imm & ((1 << low_bits) - 1)) << high_bits;
+
+    // Finally place [5] at the top
+    enc_imm |= ((imm >> low_bits) & 1) << 5;
+
+    let enc_imm = Imm6::maybe_from_i16((enc_imm as i16) << 10 >> 10).unwrap();
+
+    encode_ci_type(op, rd, enc_imm)
+}
+
 /// c.addi16sp is a regular CI op, but the immediate field is encoded in a weird way
 pub fn encode_c_addi16sp(imm: Imm6) -> u16 {
     let imm = imm.bits();

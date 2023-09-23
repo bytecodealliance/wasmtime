@@ -1317,6 +1317,15 @@ impl LoadOP {
         }
     }
 
+    pub(crate) fn size(&self) -> i64 {
+        match self {
+            Self::Lb | Self::Lbu => 1,
+            Self::Lh | Self::Lhu => 2,
+            Self::Lw | Self::Lwu | Self::Flw => 4,
+            Self::Ld | Self::Fld => 8,
+        }
+    }
+
     pub(crate) fn op_code(self) -> u32 {
         match self {
             Self::Lb | Self::Lh | Self::Lw | Self::Lbu | Self::Lhu | Self::Lwu | Self::Ld => {
@@ -1983,9 +1992,9 @@ impl CiOp {
         // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
         match self {
             CiOp::CAddi | CiOp::CSlli => 0b000,
-            CiOp::CLi => 0b010,
-            CiOp::CAddiw => 0b001,
-            CiOp::CAddi16sp | CiOp::CLui => 0b011,
+            CiOp::CAddiw | CiOp::CFldsp => 0b001,
+            CiOp::CLi | CiOp::CLwsp => 0b010,
+            CiOp::CAddi16sp | CiOp::CLui | CiOp::CLdsp => 0b011,
         }
     }
 
@@ -1995,7 +2004,7 @@ impl CiOp {
             CiOp::CAddi | CiOp::CAddiw | CiOp::CAddi16sp | CiOp::CLi | CiOp::CLui => {
                 COpcodeSpace::C1
             }
-            CiOp::CSlli => COpcodeSpace::C2,
+            CiOp::CSlli | CiOp::CLwsp | CiOp::CLdsp | CiOp::CFldsp => COpcodeSpace::C2,
         }
     }
 }

@@ -1,0 +1,41 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zca has_zcd
+
+function %c_fldsp() -> f64 {
+  ss0 = explicit_slot 16
+
+block0:
+  v0 = stack_load.f64 ss0+8
+  return v0
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   add sp,-16
+; block0:
+;   fld fa0,8(nominal_sp)
+;   add sp,+16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x10
+; block1: ; offset 0xe
+;   c.fldsp fa0, 8(sp)
+;   c.addi16sp sp, 0x10
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
