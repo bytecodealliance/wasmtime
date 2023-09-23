@@ -98,9 +98,9 @@ impl<T: SystemError> From<T> for network::Error {
             Errno::NETUNREACH => ErrorCode::RemoteUnreachable,
             #[cfg(target_os = "linux")]
             Errno::NONET => ErrorCode::RemoteUnreachable,
-            Errno::ISCONN => ErrorCode::AlreadyConnected,
-            Errno::NOTCONN => ErrorCode::NotConnected,
-            Errno::DESTADDRREQ => ErrorCode::NotConnected,
+            Errno::ISCONN => ErrorCode::InvalidState,
+            Errno::NOTCONN => ErrorCode::InvalidState,
+            Errno::DESTADDRREQ => ErrorCode::InvalidState,
             #[cfg(not(windows))]
             Errno::NFILE => ErrorCode::NewSocketLimit,
             Errno::MFILE => ErrorCode::NewSocketLimit,

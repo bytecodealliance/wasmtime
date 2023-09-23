@@ -34,7 +34,7 @@ interface udp {
 	/// 
 	/// # Typical `start` errors
 	/// - `address-family-mismatch`:   The `local-address` has the wrong address family. (EINVAL)
-	/// - `already-bound`:             The socket is already bound. (EINVAL)
+	/// - `invalid-state`:             The socket is already bound. (EINVAL)
 	/// 
 	/// # Typical `finish` errors
 	/// - `address-in-use`:            No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
@@ -89,7 +89,7 @@ interface udp {
 	/// If `max-results` is 0, this function returns successfully with an empty list.
 	/// 
 	/// # Typical errors
-	/// - `not-bound`:          The socket is not bound to any local address. (EINVAL)
+	/// - `invalid-state`:      The socket is not bound to any local address. (EINVAL)
 	/// - `remote-unreachable`: The remote address is not reachable. (ECONNREFUSED, ECONNRESET, ENETRESET on Windows, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
 	/// - `would-block`:        There is no pending data available to be read at the moment. (EWOULDBLOCK, EAGAIN)
 	/// 
@@ -123,7 +123,7 @@ interface udp {
 	/// - `invalid-remote-address`:  The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EDESTADDRREQ, EADDRNOTAVAIL)
 	/// - `invalid-remote-address`:  The port in `remote-address` is set to 0. (EDESTADDRREQ, EADDRNOTAVAIL)
 	/// - `already-connected`:       The socket is in "connected" mode and the `datagram.remote-address` does not match the address passed to `connect`. (EISCONN)
-	/// - `not-bound`:               The socket is not bound to any local address. Unlike POSIX, this function does not perform an implicit bind.
+	/// - `invalid-state`:           The socket is not bound to any local address. Unlike POSIX, this function does not perform an implicit bind.
 	/// - `remote-unreachable`:      The remote address is not reachable. (ECONNREFUSED, ECONNRESET, ENETRESET on Windows, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
 	/// - `datagram-too-large`:      The datagram is too large. (EMSGSIZE)
 	/// - `would-block`:             The send buffer is currently full. (EWOULDBLOCK, EAGAIN)
@@ -145,10 +145,10 @@ interface udp {
 	/// > If the socket has not been bound to a local name, the value
 	/// > stored in the object pointed to by `address` is unspecified.
 	///
-	/// WASI is stricter and requires `local-address` to return `not-bound` when the socket hasn't been bound yet.
+	/// WASI is stricter and requires `local-address` to return `invalid-state` when the socket hasn't been bound yet.
 	/// 
 	/// # Typical errors
-	/// - `not-bound`: The socket is not bound to any local address.
+	/// - `invalid-state`: The socket is not bound to any local address.
 	/// 
 	/// # References
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/getsockname.html>
@@ -160,7 +160,7 @@ interface udp {
 	/// Get the address set with `connect`.
 	/// 
 	/// # Typical errors
-	/// - `not-connected`: The socket is not connected to a remote address. (ENOTCONN)
+	/// - `invalid-state`: The socket is not connected to a remote address. (ENOTCONN)
 	/// 
 	/// # References
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/getpeername.html>
@@ -180,7 +180,7 @@ interface udp {
 	/// 
 	/// # Typical errors
 	/// - `ipv6-only-operation`:  (get/set) `this` socket is an IPv4 socket.
-	/// - `already-bound`:        (set) The socket is already bound.
+	/// - `invalid-state`:        (set) The socket is already bound.
 	/// - `not-supported`:        (set) Host does not support dual-stack sockets. (Implementations are not required to.)
 	ipv6-only: func(this: udp-socket) -> result<bool, error-code>
 	set-ipv6-only: func(this: udp-socket, value: bool) -> result<_, error-code>

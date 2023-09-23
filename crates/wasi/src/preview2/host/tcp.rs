@@ -29,7 +29,8 @@ impl<T: WasiView> tcp::Host for T {
 
         match socket.tcp_state {
             HostTcpState::Default => {}
-            _ => return Err(ErrorCode::NotInProgress.into()),
+            HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+            _ => return Err(ErrorCode::InvalidState.into()),
         }
 
         let network = table.get_network(network)?;
@@ -72,8 +73,14 @@ impl<T: WasiView> tcp::Host for T {
 
             match socket.tcp_state {
                 HostTcpState::Default => {}
-                HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
-                _ => return Err(ErrorCode::NotInProgress.into()),
+                HostTcpState::Bound
+                | HostTcpState::Connected
+                | HostTcpState::ConnectFailed
+                | HostTcpState::Listening => return Err(ErrorCode::InvalidState.into()),
+                HostTcpState::Connecting
+                | HostTcpState::ConnectReady
+                | HostTcpState::ListenStarted
+                | HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
             }
 
             let network = table.get_network(network)?;
@@ -136,7 +143,7 @@ impl<T: WasiView> tcp::Host for T {
                     Err(err) | Ok(Err(err)) => {
                         socket.tcp_state = HostTcpState::ConnectFailed;
                         return Err(err.into());
-                    },
+                    }
                 }
             }
             _ => return Err(ErrorCode::NotInProgress.into()),
@@ -156,9 +163,14 @@ impl<T: WasiView> tcp::Host for T {
 
         match socket.tcp_state {
             HostTcpState::Bound => {}
-            HostTcpState::ListenStarted => return Err(ErrorCode::AlreadyListening.into()),
-            HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
-            _ => return Err(ErrorCode::NotInProgress.into()),
+            HostTcpState::Default
+            | HostTcpState::Connected
+            | HostTcpState::ConnectFailed
+            | HostTcpState::Listening => return Err(ErrorCode::InvalidState.into()),
+            HostTcpState::ListenStarted
+            | HostTcpState::Connecting
+            | HostTcpState::ConnectReady
+            | HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
         }
 
         socket
@@ -194,8 +206,7 @@ impl<T: WasiView> tcp::Host for T {
 
         match socket.tcp_state {
             HostTcpState::Listening => {}
-            HostTcpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
-            _ => return Err(ErrorCode::NotInProgress.into()),
+            _ => return Err(ErrorCode::InvalidState.into()),
         }
 
         // Do the OS accept call.
@@ -228,7 +239,7 @@ impl<T: WasiView> tcp::Host for T {
         let socket = table.get_tcp_socket(this)?;
 
         match socket.tcp_state {
-            HostTcpState::Default => return Err(ErrorCode::NotBound.into()),
+            HostTcpState::Default => return Err(ErrorCode::InvalidState.into()),
             HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
             _ => {}
         }
@@ -243,6 +254,12 @@ impl<T: WasiView> tcp::Host for T {
     fn remote_address(&mut self, this: tcp::TcpSocket) -> Result<IpSocketAddress, network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
+
+        match socket.tcp_state {
+            HostTcpState::Connected => {}
+            _ => return Err(ErrorCode::InvalidState.into()),
+        }
+
         let addr = socket
             .tcp_socket()
             .as_socketlike_view::<std::net::TcpStream>()
@@ -304,6 +321,13 @@ impl<T: WasiView> tcp::Host for T {
     fn set_ipv6_only(&mut self, this: tcp::TcpSocket, value: bool) -> Result<(), network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
+
+        match socket.tcp_state {
+            HostTcpState::Default => {}
+            HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+            _ => return Err(ErrorCode::InvalidState.into()),
+        }
+
         Ok(sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?)
     }
 
@@ -317,7 +341,7 @@ impl<T: WasiView> tcp::Host for T {
 
         match socket.tcp_state {
             HostTcpState::Listening => {}
-            _ => return Err(ErrorCode::NotInProgress.into()),
+            _ => return Err(ErrorCode::InvalidState.into()),
         }
 
         let value = value.try_into().map_err(|_| ErrorCode::OutOfMemory)?;
@@ -464,6 +488,14 @@ impl<T: WasiView> tcp::Host for T {
     ) -> Result<(), network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
+
+        match socket.tcp_state {
+            HostTcpState::Connected => {}
+            HostTcpState::Connecting | HostTcpState::ConnectReady => {
+                return Err(ErrorCode::ConcurrencyConflict.into())
+            }
+            _ => return Err(ErrorCode::InvalidState.into()),
+        }
 
         let how = match shutdown_type {
             ShutdownType::Receive => std::net::Shutdown::Read,

@@ -89,23 +89,14 @@ interface network {
 
 		// ### TCP & UDP SOCKET ERRORS ###
 
+		/// The operation is not valid in the socket's current state.
+		invalid-state,
+
 		/// A new socket resource could not be created because of a system limit.
 		new-socket-limit,
 		
 		/// The socket is already attached to another network.
 		already-attached,
-
-		/// The socket is already bound.
-		already-bound,
-
-		/// The socket is already in the Connection state.
-		already-connected,
-
-		/// The socket is not bound to any local address.
-		not-bound,
-
-		/// The socket is not in the Connection state.
-		not-connected,
 
 		/// A bind operation failed because the provided address is not an address that the `network` can bind to.
 		address-not-bindable,
@@ -118,12 +109,6 @@ interface network {
 		
 
 		// ### TCP SOCKET ERRORS ###
-		
-		/// The socket is already in the Listener state.
-		already-listening,
-
-		/// The socket is already in the Listener state.
-		not-listening,
 
 		/// The connection was forcefully rejected
 		connection-refused,

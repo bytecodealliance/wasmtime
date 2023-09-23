@@ -33,7 +33,7 @@ interface tcp {
 	/// 
 	/// # Typical `start` errors
 	/// - `address-family-mismatch`:   The `local-address` has the wrong address family. (EINVAL)
-	/// - `already-bound`:             The socket is already bound. (EINVAL)
+	/// - `invalid-state`:             The socket is already bound. (EINVAL)
 	/// 
 	/// # Typical `finish` errors
 	/// - `address-in-use`:            No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
@@ -70,8 +70,8 @@ interface tcp {
 	/// - `invalid-remote-address`:    The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EADDRNOTAVAIL on Windows)
 	/// - `invalid-remote-address`:    The port in `remote-address` is set to 0. (EADDRNOTAVAIL on Windows)
 	/// - `already-attached`:          The socket is already attached to a different network. The `network` passed to `connect` must be identical to the one passed to `bind`.
-	/// - `already-connected`:         The socket is already in the Connection state. (EISCONN)
-	/// - `already-listening`:         The socket is already in the Listener state. (EOPNOTSUPP, EINVAL on Windows)
+	/// - `invalid-state`:             The socket is already in the Connection state. (EISCONN)
+	/// - `invalid-state`:             The socket is already in the Listener state. (EOPNOTSUPP, EINVAL on Windows)
 	/// 
 	/// # Typical `finish` errors
 	/// - `timeout`:                   Connection timed out. (ETIMEDOUT)
@@ -102,9 +102,9 @@ interface tcp {
 	/// - the socket must already be explicitly bound.
 	/// 
 	/// # Typical `start` errors
-	/// - `not-bound`:                 The socket is not bound to any local address. (EDESTADDRREQ)
-	/// - `already-connected`:         The socket is already in the Connection state. (EISCONN, EINVAL on BSD)
-	/// - `already-listening`:         The socket is already in the Listener state.
+	/// - `invalid-state`:             The socket is not bound to any local address. (EDESTADDRREQ)
+	/// - `invalid-state`:             The socket is already in the Connection state. (EISCONN, EINVAL on BSD)
+	/// - `invalid-state`:             The socket is already in the Listener state.
 	///
 	/// # Typical `finish` errors
 	/// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE)
@@ -131,7 +131,7 @@ interface tcp {
 	/// `tcp-socket` is dropped before its child streams are dropped.
 	/// 
 	/// # Typical errors
-	/// - `not-listening`: Socket is not in the Listener state. (EINVAL)
+	/// - `invalid-state`:      Socket is not in the Listener state. (EINVAL)
 	/// - `would-block`:   No pending connections at the moment. (EWOULDBLOCK, EAGAIN)
 	/// - `connection-aborted`: An incoming connection was pending, but was terminated by the client before this listener could accept it. (ECONNABORTED)
 	/// - `new-socket-limit`:   The new socket resource could not be created because of a system limit. (EMFILE, ENFILE)
@@ -149,10 +149,10 @@ interface tcp {
 	/// > If the socket has not been bound to a local name, the value
 	/// > stored in the object pointed to by `address` is unspecified.
 	///
-	/// WASI is stricter and requires `local-address` to return `not-bound` when the socket hasn't been bound yet.
+	/// WASI is stricter and requires `local-address` to return `invalid-state` when the socket hasn't been bound yet.
 	/// 
 	/// # Typical errors
-	/// - `not-bound`: The socket is not bound to any local address.
+	/// - `invalid-state`: The socket is not bound to any local address.
 	/// 
 	/// # References
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/getsockname.html>
@@ -161,10 +161,10 @@ interface tcp {
 	/// - <https://man.freebsd.org/cgi/man.cgi?getsockname>
 	local-address: func(this: tcp-socket) -> result<ip-socket-address, error-code>
 
-	/// Get the bound remote address.
+	/// Get the remote address.
 	/// 
 	/// # Typical errors
-	/// - `not-connected`: The socket is not connected to a remote address. (ENOTCONN)
+	/// - `invalid-state`: The socket is not connected to a remote address. (ENOTCONN)
 	/// 
 	/// # References
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/getpeername.html>
@@ -184,7 +184,7 @@ interface tcp {
 	/// 
 	/// # Typical errors
 	/// - `ipv6-only-operation`:  (get/set) `this` socket is an IPv4 socket.
-	/// - `already-bound`:        (set) The socket is already bound.
+	/// - `invalid-state`:        (set) The socket is already bound.
 	/// - `not-supported`:        (set) Host does not support dual-stack sockets. (Implementations are not required to.)
 	ipv6-only: func(this: tcp-socket) -> result<bool, error-code>
 	set-ipv6-only: func(this: tcp-socket, value: bool) -> result<_, error-code>
@@ -192,7 +192,7 @@ interface tcp {
 	/// Hints the desired listen queue size. Implementations are free to ignore this.
 	/// 
 	/// # Typical errors
-	/// - `already-connected`:    (set) The socket is already in the Connection state.
+	/// - `invalid-state`:        (set) The socket is already in the Connection state.
 	set-listen-backlog-size: func(this: tcp-socket, value: u64) -> result<_, error-code>
 
 	/// Equivalent to the SO_KEEPALIVE socket option.
@@ -206,8 +206,8 @@ interface tcp {
 	/// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
 	/// 
 	/// # Typical errors
-	/// - `already-connected`:    (set) The socket is already in the Connection state.
-	/// - `already-listening`:    (set) The socket is already in the Listener state.
+	/// - `invalid-state`:        (set) The socket is already in the Connection state.
+	/// - `invalid-state`:        (set) The socket is already in the Listener state.
 	unicast-hop-limit: func(this: tcp-socket) -> result<u8, error-code>
 	set-unicast-hop-limit: func(this: tcp-socket, value: u8) -> result<_, error-code>
 
@@ -223,8 +223,8 @@ interface tcp {
 	/// Equivalent to the SO_RCVBUF and SO_SNDBUF socket options.
 	/// 
 	/// # Typical errors
-	/// - `already-connected`:    (set) The socket is already in the Connection state.
-	/// - `already-listening`:    (set) The socket is already in the Listener state.
+	/// - `invalid-state`:        (set) The socket is already in the Connection state.
+	/// - `invalid-state`:        (set) The socket is already in the Listener state.
 	receive-buffer-size: func(this: tcp-socket) -> result<u64, error-code>
 	set-receive-buffer-size: func(this: tcp-socket, value: u64) -> result<_, error-code>
 	send-buffer-size: func(this: tcp-socket) -> result<u64, error-code>
@@ -252,7 +252,7 @@ interface tcp {
 	/// The shutdown function does not close (drop) the socket.
 	/// 
 	/// # Typical errors
-	/// - `not-connected`: The socket is not in the Connection state. (ENOTCONN)
+	/// - `invalid-state`: The socket is not in the Connection state. (ENOTCONN)
 	/// 
 	/// # References
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/shutdown.html>
