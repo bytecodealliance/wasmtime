@@ -2433,9 +2433,6 @@
         (high Reg (gen_load p (offset32_add offset 8) (LoadOP.Ld) flags $I64)))
     (value_regs low high)))
 
-(decl default_memflags () MemFlags)
-(extern constructor default_memflags default_memflags)
-
 (decl offset32_add (Offset32 i64) Offset32)
 (extern constructor offset32_add offset32_add)
 
