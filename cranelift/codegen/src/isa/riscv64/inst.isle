@@ -2611,32 +2611,6 @@
 (decl store_op (Type) StoreOP)
 (extern constructor store_op store_op)
 
-;; bool is "is_signed"
-(decl int_load_op (bool u8) LoadOP)
-(rule
-  (int_load_op $false 8)
-  (LoadOP.Lbu))
-
-(rule
-  (int_load_op $true 8)
-  (LoadOP.Lb))
-
-(rule
-  (int_load_op $false 16)
-  (LoadOP.Lhu))
-(rule
-  (int_load_op $true 16)
-  (LoadOP.Lh))
-(rule
-  (int_load_op $false 32)
-  (LoadOP.Lwu))
-(rule
-  (int_load_op $true 32)
-  (LoadOP.Lw))
-
-(rule
-  (int_load_op _ 64)
-  (LoadOP.Ld))
 
 ;;;; load extern name
 (decl load_ext_name (ExternalName i64) Reg)
