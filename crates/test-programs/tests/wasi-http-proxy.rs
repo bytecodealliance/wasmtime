@@ -1,4 +1,5 @@
 #![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
+use anyhow::Context;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -97,26 +98,42 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
 
     let (mut store, proxy) = instantiate(component, ctx).await?;
 
-    let req = store
-        .data_mut()
-        .new_incoming_request(types::HostIncomingRequest {
-            method: bindings::http::types::Method::Get,
-        })?;
-
-    let out = store.data_mut().new_response_outparam()?;
-
-    proxy
-        .wasi_http_incoming_handler()
-        .call_handle(&mut store, req, out)
-        .await?;
-
-    let resp = store.data_mut().take_response_outparam(out)?;
-
-    let resp = match resp {
-        Some(Ok(resp)) => resp,
-        Some(Err(e)) => panic!("Error given in response: {e:?}"),
-        None => panic!("No response given for request!"),
+    let req = {
+        let req = hyper::Request::builder()
+            .method(http::Method::GET)
+            .body(bytes::Bytes::new())?;
+        store.data_mut().new_incoming_request(req)?
     };
+
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let out = store.data_mut().new_response_outparam(sender)?;
+
+    let handle = preview2::spawn(async move {
+        proxy
+            .wasi_http_incoming_handler()
+            .call_handle(&mut store, req, out)
+            .await?;
+
+        Ok::<_, anyhow::Error>(())
+    });
+
+    let resp = match receiver.await {
+        Ok(Ok(resp)) => {
+            use http_body_util::BodyExt;
+            let (parts, body) = resp.into_parts();
+            let collected = BodyExt::collect(body).await?;
+            Ok(hyper::Response::from_parts(parts, collected))
+        }
+
+        Ok(Err(e)) => Err(e),
+
+        // This happens if the wasm never calls `set-response-outparam`
+        Err(e) => panic!("Failed to receive a response: {e:?}"),
+    };
+
+    // Now that the response has been processed, we can wait on the wasm to finish without
+    // deadlocking.
+    handle.await.context("Component execution")?;
 
     let stdout = stdout.contents();
     if !stdout.is_empty() {
@@ -126,6 +143,11 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
     if !stderr.is_empty() {
         println!("[guest] stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
     }
+
+    match resp {
+        Ok(resp) => println!("response: {resp:?}"),
+        Err(e) => panic!("Error given in response: {e:?}"),
+    };
 
     Ok(())
 }

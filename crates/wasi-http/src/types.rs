@@ -24,35 +24,25 @@ pub trait WasiHttpView: Send {
 
     fn new_incoming_request(
         &mut self,
-        req: HostIncomingRequest,
+        req: hyper::Request<bytes::Bytes>,
     ) -> wasmtime::Result<IncomingRequest> {
         Ok(IncomingRequestLens::push(self.table(), req)?.id)
     }
 
-    fn new_response_outparam(&mut self) -> wasmtime::Result<ResponseOutparam> {
-        Ok(ResponseOutparamLens::push(self.table(), HostResponseOutparam { result: None })?.id)
-    }
-
-    fn take_response_outparam(
+    fn new_response_outparam(
         &mut self,
-        outparam: ResponseOutparam,
-    ) -> wasmtime::Result<Option<Result<HostOutgoingResponse, types::Error>>> {
-        Ok(ResponseOutparamLens::from(outparam)
-            .delete(self.table())?
-            .result)
+        result: tokio::sync::oneshot::Sender<Result<hyper::Response<HyperBody>, types::Error>>,
+    ) -> wasmtime::Result<ResponseOutparam> {
+        Ok(ResponseOutparamLens::push(self.table(), HostResponseOutparam { result })?.id)
     }
 }
 
-pub type IncomingRequestLens = TableLens<HostIncomingRequest>;
-
-pub struct HostIncomingRequest {
-    pub method: Method,
-}
+pub type IncomingRequestLens = TableLens<hyper::Request<bytes::Bytes>>;
 
 pub type ResponseOutparamLens = TableLens<HostResponseOutparam>;
 
 pub struct HostResponseOutparam {
-    pub result: Option<Result<HostOutgoingResponse, types::Error>>,
+    pub result: tokio::sync::oneshot::Sender<Result<hyper::Response<HyperBody>, types::Error>>,
 }
 
 pub type OutgoingRequestLens = TableLens<HostOutgoingRequest>;
@@ -75,7 +65,28 @@ pub struct HostIncomingResponse {
 
 pub type OutgoingResponseLens = TableLens<HostOutgoingResponse>;
 
-pub struct HostOutgoingResponse {}
+pub struct HostOutgoingResponse {
+    pub status: u16,
+    pub headers: FieldMap,
+    pub body: Option<HyperBody>,
+}
+
+impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperBody> {
+    type Error = http::Error;
+
+    fn try_from(resp: HostOutgoingResponse) -> Result<hyper::Response<HyperBody>, Self::Error> {
+        use http_body_util::{BodyExt, Empty};
+
+        let mut builder = hyper::Response::builder().status(resp.status);
+
+        *builder.headers_mut().unwrap() = resp.headers;
+
+        match resp.body {
+            Some(body) => builder.body(body),
+            None => builder.body(Empty::<bytes::Bytes>::new().boxed()),
+        }
+    }
+}
 
 pub type FieldMap = hyper::HeaderMap;
 
@@ -186,19 +197,6 @@ impl<T: Send + Sync + 'static> TableLens<T> {
 }
 
 pub trait TableHttpExt {
-    fn push_incoming_request(
-        &mut self,
-        request: HostIncomingRequest,
-    ) -> Result<IncomingRequest, TableError>;
-    fn get_incoming_request(
-        &mut self,
-        id: IncomingRequest,
-    ) -> Result<&mut HostIncomingRequest, TableError>;
-    fn delete_incoming_request(
-        &mut self,
-        id: IncomingRequest,
-    ) -> Result<HostIncomingRequest, TableError>;
-
     fn push_outgoing_response(
         &mut self,
         resp: HostOutgoingResponse,
@@ -259,27 +257,6 @@ pub trait TableHttpExt {
 }
 
 impl TableHttpExt for Table {
-    fn push_incoming_request(
-        &mut self,
-        request: HostIncomingRequest,
-    ) -> Result<IncomingRequest, TableError> {
-        self.push(Box::new(request))
-    }
-
-    fn get_incoming_request(
-        &mut self,
-        id: IncomingRequest,
-    ) -> Result<&mut HostIncomingRequest, TableError> {
-        self.get_mut(id)
-    }
-
-    fn delete_incoming_request(
-        &mut self,
-        id: IncomingRequest,
-    ) -> Result<HostIncomingRequest, TableError> {
-        self.delete(id)
-    }
-
     fn push_outgoing_response(
         &mut self,
         response: HostOutgoingResponse,

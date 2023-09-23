@@ -2659,6 +2659,7 @@ name = "test-programs"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "cap-rand",
  "cap-std",
  "cargo_metadata",
