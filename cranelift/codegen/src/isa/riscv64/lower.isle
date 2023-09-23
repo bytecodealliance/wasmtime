@@ -1480,41 +1480,43 @@
   (udf code))
 
 ;;;;;  Rules for `uload8`;;;;;;;;;
-(rule (lower (uload8 flags p @ (value_type (ty_addr64 _)) offset))
-  (gen_load p offset (LoadOP.Lbu) flags $I64))
+(rule (lower (uload8 flags p offset))
+  (gen_load (amode p offset $I8) (LoadOP.Lbu) flags $I8))
 
 ;;;;;  Rules for `sload8`;;;;;;;;;
-(rule
-  (lower (sload8 flags p @ (value_type (ty_addr64 _)) offset))
-  (gen_load p offset (LoadOP.Lb) flags $I64))
+(rule (lower (sload8 flags p offset))
+  (gen_load (amode p offset $I8) (LoadOP.Lb) flags $I8))
 
 ;;;;;  Rules for `uload16`;;;;;;;;;
-(rule (lower (uload16 flags p @ (value_type (ty_addr64 _)) offset))
-  (gen_load p offset (LoadOP.Lhu) flags $I64))
+(rule (lower (uload16 flags p offset))
+  (gen_load (amode p offset $I16) (LoadOP.Lhu) flags $I16))
 
 ;;;;;  Rules for `iload16`;;;;;;;;;
-(rule (lower (sload16 flags p @ (value_type (ty_addr64 _)) offset))
-  (gen_load p offset (LoadOP.Lh) flags $I64))
+(rule (lower (sload16 flags p offset))
+  (gen_load (amode p offset $I16) (LoadOP.Lh) flags $I16))
 
 ;;;;;  Rules for `uload32`;;;;;;;;;
-(rule (lower (uload32 flags p @ (value_type (ty_addr64 _)) offset))
-  (gen_load p offset (LoadOP.Lwu) flags $I64))
+(rule (lower (uload32 flags p offset))
+  (gen_load (amode p offset $I32) (LoadOP.Lwu) flags $I32))
 
-;;;;;  Rules for `iload16`;;;;;;;;;
-(rule (lower (sload32 flags p @ (value_type (ty_addr64 _)) offset))
-  (gen_load p offset (LoadOP.Lw) flags $I64))
+;;;;;  Rules for `sload32`;;;;;;;;;
+(rule (lower (sload32 flags p offset))
+  (gen_load (amode p offset $I32) (LoadOP.Lw) flags $I32))
 
 ;;;;;  Rules for `load`;;;;;;;;;
-(rule (lower (has_type ty (load flags p @ (value_type (ty_addr64 _)) offset)))
-  (gen_load p offset (load_op ty) flags ty))
+(rule (lower (has_type ty (load flags p offset)))
+  (gen_load (amode p offset ty) (load_op ty) flags ty))
 
-;;;; for I128
-(rule 1 (lower (has_type $I128 (load flags p @ (value_type (ty_addr64 _)) offset)))
-  (gen_load_128 p offset flags))
+(rule 1 (lower (has_type $I128 (load flags p offset)))
+  (if-let offset_plus_8 (s32_add_fallible offset 8))
+  (let ((lo XReg (gen_load (amode p offset $I64) (LoadOP.Ld) flags $I64))
+        (hi XReg (gen_load (amode p offset_plus_8 $I64) (LoadOP.Ld) flags $I64)))
+    (value_regs lo hi)))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
-  (let ((eew VecElementWidth (element_width_from_type ty)))
-    (vec_load eew (VecAMode.UnitStride (gen_amode p offset $I64)) flags (unmasked) ty)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (load flags p offset)))
+  (let ((eew VecElementWidth (element_width_from_type ty))
+        (amode AMode (amode p offset ty)))
+    (vec_load eew (VecAMode.UnitStride amode) flags (unmasked) ty)))
 
 ;;;;;  Rules for Load + Extend Combos ;;;;;;;;;
 
@@ -1523,72 +1525,72 @@
 ;; do a SEW/2 extension. This only reads half width elements from the source vector register
 ;; extends it, and writes the back the full register.
 
-(decl gen_load64_extend (Type ExtendOp MemFlags XReg Offset32) VReg)
+(decl gen_load64_extend (Type ExtendOp MemFlags AMode) VReg)
 
-(rule (gen_load64_extend ty (ExtendOp.Signed) flags addr offset)
+(rule (gen_load64_extend ty (ExtendOp.Signed) flags amode)
   (let ((eew VecElementWidth (element_width_from_type $I64))
         (load_state VState (vstate_from_type $I64))
-        (loaded VReg (vec_load eew (VecAMode.UnitStride (gen_amode addr offset $I64)) flags (unmasked) load_state)))
+        (loaded VReg (vec_load eew (VecAMode.UnitStride amode) flags (unmasked) load_state)))
     (rv_vsext_vf2 loaded (unmasked) ty)))
 
-(rule (gen_load64_extend ty (ExtendOp.Zero) flags addr offset)
+(rule (gen_load64_extend ty (ExtendOp.Zero) flags amode)
   (let ((eew VecElementWidth (element_width_from_type $I64))
         (load_state VState (vstate_from_type $I64))
-        (loaded VReg (vec_load eew (VecAMode.UnitStride (gen_amode addr offset $I64)) flags (unmasked) load_state)))
+        (loaded VReg (vec_load eew (VecAMode.UnitStride amode) flags (unmasked) load_state)))
     (rv_vzext_vf2 loaded (unmasked) ty)))
 
 ;;;;;  Rules for `uload8x8`;;;;;;;;;;
-(rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (uload8x8 flags addr @ (value_type (ty_addr64 _)) offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags addr offset))
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (uload8x8 flags addr offset)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
 
 ;;;;;  Rules for `uload16x4`;;;;;;;;;
-(rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (uload16x4 flags addr @ (value_type (ty_addr64 _)) offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags addr offset))
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (uload16x4 flags addr offset)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
 
 ;;;;;  Rules for `uload32x2`;;;;;;;;;
-(rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (uload32x2 flags addr @ (value_type (ty_addr64 _)) offset)))
-  (gen_load64_extend ty (ExtendOp.Zero) flags addr offset))
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (uload32x2 flags addr offset)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags (amode addr offset ty)))
 
 ;;;;;  Rules for `sload8x8`;;;;;;;;;;
-(rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (sload8x8 flags addr @ (value_type (ty_addr64 _)) offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags addr offset))
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (sload8x8 flags addr offset)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
 
 ;;;;;  Rules for `sload16x4`;;;;;;;;;
-(rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (sload16x4 flags addr @ (value_type (ty_addr64 _)) offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags addr offset))
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (sload16x4 flags addr offset)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
 
 ;;;;;  Rules for `sload32x2`;;;;;;;;;
-(rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (sload32x2 flags addr @ (value_type (ty_addr64 _)) offset)))
-  (gen_load64_extend ty (ExtendOp.Signed) flags addr offset))
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (sload32x2 flags addr offset)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags (amode addr offset ty)))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
-(rule
-  (lower (istore8 flags x p @ (value_type (ty_addr64 _)) offset))
-  (gen_store p offset (StoreOP.Sb) flags x))
+(rule (lower (istore8 flags x p offset))
+  (gen_store (amode p offset $I8) (StoreOP.Sb) flags x))
+
 ;;;;;  Rules for `istore16`;;;;;;;;;
-(rule
-  (lower (istore16 flags x p @ (value_type (ty_addr64 _)) offset))
-  (gen_store p offset (StoreOP.Sh) flags x))
+(rule (lower (istore16 flags x p offset))
+  (gen_store (amode p offset $I16) (StoreOP.Sh) flags x))
 
 ;;;;;  Rules for `istore32`;;;;;;;;;
-(rule
-  (lower (istore32 flags x p @ (value_type (ty_addr64 _)) offset))
-  (gen_store p offset (StoreOP.Sw) flags x))
+(rule (lower (istore32 flags x p offset))
+  (gen_store (amode p offset $I32) (StoreOP.Sw) flags x))
 
 ;;;;;  Rules for `store`;;;;;;;;;
-(rule
-  (lower (store flags x @ (value_type ty) p @ (value_type (ty_addr64 _)) offset))
-  (gen_store p offset (store_op ty) flags x))
+(rule (lower (store flags x @ (value_type ty) p offset))
+  (gen_store (amode p offset ty) (store_op ty) flags x))
 
-;;; special for I128
-(rule 1
-  (lower (store flags x @ (value_type $I128 ) p @ (value_type (ty_addr64 _)) offset))
-  (gen_store_128 p offset flags x))
+(rule 1 (lower (store flags x @ (value_type $I128) p offset))
+  (if-let offset_plus_8 (s32_add_fallible offset 8))
+  (let ((_ InstOutput (gen_store (amode p offset $I64) (StoreOP.Sd) flags (value_regs_get x 0))))
+    (gen_store (amode p offset_plus_8 $I64) (StoreOP.Sd) flags (value_regs_get x 1))))
 
-(rule 2
-  (lower (store flags x @ (value_type (ty_vec_fits_in_register ty)) p @ (value_type (ty_addr64 _)) offset))
-  (let ((eew VecElementWidth (element_width_from_type ty)))
-    (vec_store eew (VecAMode.UnitStride (gen_amode p offset $I64)) x flags (unmasked) ty)))
+(rule 2 (lower (store flags x @ (value_type (ty_vec_fits_in_register ty)) p offset))
+  (let ((eew VecElementWidth (element_width_from_type ty))
+        (amode AMode (amode p offset ty)))
+    (vec_store eew (VecAMode.UnitStride amode) x flags (unmasked) ty)))
+
+
+;;;;;  Rules for `icmp`;;;;;;;;;
 
 (decl gen_icmp (IntCC ValueRegs ValueRegs Type) XReg)
 (rule
@@ -1598,7 +1600,6 @@
       (_ Unit (emit (MInst.Icmp cc result x y ty))))
     result))
 
-;;;;;  Rules for `icmp`;;;;;;;;;
 (rule 0 (lower (icmp cc x @ (value_type (ty_int ty)) y))
   (lower_icmp cc x y ty))
 

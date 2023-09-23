@@ -581,3 +581,21 @@ block0(v0: i64, v1: i32):
 ;   sd a1, 8(a2)
 ;   ret
 
+
+function %load_from_get_stack_pointer() -> i64 {
+block0:
+  v0 = get_stack_pointer.i64
+  v1 = load.i64 v0+8
+  return v1
+}
+
+; VCode:
+; block0:
+;   ld a0,8(sp)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld a0, 8(sp)
+;   ret
+
