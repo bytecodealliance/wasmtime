@@ -432,8 +432,8 @@ impl MachInstEmit for Inst {
         let mut start_off = sink.cur_offset();
 
         // First try to emit this as a compressed instruction
-        let success = inst.try_emit_compressed(sink, emit_info, state, &mut start_off);
-        if !success {
+        let res = inst.try_emit_compressed(sink, emit_info, state, &mut start_off);
+        if res.is_none() {
             // If we can't lets emit it as a normal instruction
             inst.emit_uncompressed(sink, emit_info, state, &mut start_off);
         }
@@ -462,14 +462,14 @@ impl Inst {
         emit_info: &EmitInfo,
         state: &mut EmitState,
         start_off: &mut u32,
-    ) -> bool {
+    ) -> Option<()> {
         let has_zca = emit_info.isa_flags.has_zca();
         let has_zcd = emit_info.isa_flags.has_zcd();
 
         // Currently all compressed extensions (Zcb, Zcd, Zcmp, Zcmt, etc..) require Zca
         // to be enabled, so check it early.
         if !has_zca {
-            return false;
+            return None;
         }
 
         fn reg_is_compressible(r: Reg) -> bool {
@@ -621,11 +621,7 @@ impl Inst {
                 rs,
                 imm12,
             } if rd.to_reg() != zero_reg() && rs == zero_reg() && imm12.as_i16() != 0 => {
-                let imm6 = match Imm6::maybe_from_imm12(imm12) {
-                    Some(imm6) => imm6,
-                    None => return false,
-                };
-
+                let imm6 = Imm6::maybe_from_imm12(imm12)?;
                 sink.put2(encode_ci_type(CiOp::CLi, rd, imm6));
             }
 
@@ -636,11 +632,7 @@ impl Inst {
                 rs,
                 imm12,
             } if rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
-                let imm6 = match Imm6::maybe_from_imm12(imm12) {
-                    Some(imm6) => imm6,
-                    None => return false,
-                };
-
+                let imm6 = Imm6::maybe_from_imm12(imm12)?;
                 sink.put2(encode_ci_type(CiOp::CAddi, rd, imm6));
             }
 
@@ -651,10 +643,7 @@ impl Inst {
                 rs,
                 imm12,
             } if rd.to_reg() == rs && rs != zero_reg() => {
-                let imm6 = match Imm6::maybe_from_imm12(imm12) {
-                    Some(imm6) => imm6,
-                    None => return false,
-                };
+                let imm6 = Imm6::maybe_from_imm12(imm12)?;
                 sink.put2(encode_ci_type(CiOp::CAddiw, rd, imm6));
             }
 
@@ -671,13 +660,9 @@ impl Inst {
                 // Check that the top bits are sign extended
                 let imm = imm20.as_i32() << 14 >> 14;
                 if imm != imm20.as_i32() {
-                    return false;
+                    return None;
                 }
-                let imm6 = match Imm6::maybe_from_i32(imm) {
-                    Some(imm6) => imm6,
-                    None => return false,
-                };
-
+                let imm6 = Imm6::maybe_from_i32(imm)?;
                 sink.put2(encode_ci_type(CiOp::CLui, rd, imm6));
             }
 
@@ -720,10 +705,7 @@ impl Inst {
                 rs,
                 imm12,
             } if rd.to_reg() == rs && reg_is_compressible(rs) => {
-                let imm6 = match Imm6::maybe_from_imm12(imm12) {
-                    Some(imm6) => imm6,
-                    None => return false,
-                };
+                let imm6 = Imm6::maybe_from_imm12(imm12)?;
                 sink.put2(encode_cb_type(CbOp::CAndi, rd, imm6));
             }
 
@@ -738,13 +720,9 @@ impl Inst {
             {
                 // We encode the offset in multiples of the load size.
                 let offset = from.get_offset_with_state(state);
-                let imm6 = match u8::try_from(offset / op.size())
+                let imm6 = u8::try_from(offset / op.size())
                     .ok()
-                    .and_then(Uimm6::maybe_from_u8)
-                {
-                    Some(imm6) => imm6,
-                    None => return false,
-                };
+                    .and_then(Uimm6::maybe_from_u8)?;
 
                 // Some additional constraints on these instructions.
                 //
@@ -758,7 +736,7 @@ impl Inst {
                     LoadOP::Lw if !rd_is_zero => CiOp::CLwsp,
                     LoadOP::Ld if !rd_is_zero => CiOp::CLdsp,
                     LoadOP::Fld if has_zcd => CiOp::CFldsp,
-                    _ => return false,
+                    _ => return None,
                 };
 
                 let srcloc = state.cur_srcloc();
@@ -769,10 +747,10 @@ impl Inst {
                 sink.put2(encode_ci_sp_load(op, rd, imm6));
             }
 
-            _ => return false,
+            _ => return None,
         }
 
-        return true;
+        return Some(());
     }
 
     fn emit_uncompressed(
