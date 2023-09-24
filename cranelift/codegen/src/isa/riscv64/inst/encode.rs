@@ -9,8 +9,8 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, CjOp, CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR,
-    VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
+    CaOp, CbOp, CiOp, CiwOp, CjOp, CrOp, CssOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5,
+    VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -493,6 +493,41 @@ pub fn encode_cb_type(op: CbOp, rd: WritableReg, imm: Imm6) -> u16 {
     bits |= reg_to_compressed_gpr_num(rd.to_reg()) << 7;
     bits |= unsigned_field_width(op.funct2(), 2) << 10;
     bits |= unsigned_field_width(((imm >> 5) & 1) as u32, 1) << 12;
+    bits |= unsigned_field_width(op.funct3(), 3) << 13;
+    bits.try_into().unwrap()
+}
+
+// Encode a CSS type instruction.
+//
+// The imm field is a 6 bit unsigned immediate.
+//
+// 0--1-2-------6-7--------12-13-------15
+// |op |   src   |    imm    |  funct3  |
+pub fn encode_css_type(op: CssOp, src: Reg, imm: Uimm6) -> u16 {
+    let imm = imm.bits();
+
+    // These are the spec encoded offsets.
+    // c.swsp:  [5:2|7:6]
+    // c.sdsp:  [5:3|8:6]
+    // c.fsdsp: [5:3|8:6]
+    //
+    // We don't recieve the entire offset in `imm`, just a multiple of the load-size.
+
+    // Number of bits in the lowest position of imm. 4 for c.swsp, 3 for c.{f,}sdsp.
+    let low_bits = match op {
+        CssOp::CSwsp => 4,                 // [5:2]
+        CssOp::CSdsp | CssOp::CFsdsp => 3, // [5:3]
+    };
+    let high_bits = 6 - low_bits;
+
+    let mut enc_imm = 0;
+    enc_imm |= (imm & ((1 << low_bits) - 1)) << high_bits;
+    enc_imm |= imm >> low_bits;
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= reg_to_gpr_num(src) << 2;
+    bits |= unsigned_field_width(enc_imm as u32, 6) << 7;
     bits |= unsigned_field_width(op.funct3(), 3) << 13;
     bits.try_into().unwrap()
 }

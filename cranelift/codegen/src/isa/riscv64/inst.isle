@@ -760,6 +760,13 @@
   (CAndi)
 ))
 
+;; Opcodes for the CSS compressed instruction format
+(type CssOp (enum
+  (CSwsp)
+  (CSdsp)
+  (CFsdsp)
+))
+
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR

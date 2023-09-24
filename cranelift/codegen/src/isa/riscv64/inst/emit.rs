@@ -3,7 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CbOp, CiOp, CiwOp, CrOp};
+use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CbOp, CiOp, CiwOp, CrOp, CssOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -745,6 +745,38 @@ impl Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 sink.put2(encode_ci_sp_load(op, rd, imm6));
+            }
+
+            // Stack Based Stores
+            Inst::Store {
+                src,
+                op: op @ (StoreOP::Sw | StoreOP::Sd | StoreOP::Fsd),
+                to,
+                flags,
+            } if to.get_base_register() == Some(stack_reg())
+                && (to.get_offset_with_state(state) % op.size()) == 0 =>
+            {
+                // We encode the offset in multiples of the store size.
+                let offset = to.get_offset_with_state(state);
+                let imm6 = u8::try_from(offset / op.size())
+                    .ok()
+                    .and_then(Uimm6::maybe_from_u8)?;
+
+                // Floating point stores are not included in the base Zca extension
+                // but in a separate Zcd extension. Both of these are part of the C Extension.
+                let op = match op {
+                    StoreOP::Sw => CssOp::CSwsp,
+                    StoreOP::Sd => CssOp::CSdsp,
+                    StoreOP::Fsd if has_zcd => CssOp::CFsdsp,
+                    _ => return None,
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put2(encode_css_type(op, src, imm6));
             }
 
             _ => return None,
