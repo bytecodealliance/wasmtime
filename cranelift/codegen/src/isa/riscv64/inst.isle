@@ -1664,10 +1664,10 @@
 
 ;; Otherwise we fall back to loading the immediate from the constant pool.
 (rule 0 (imm (ty_int ty) c)
-  (emit_load
+  (gen_load
+    (gen_const_amode (emit_u64_le_const c))
     (LoadOP.Ld)
-    (mem_flags_trusted)
-    (gen_const_amode (emit_u64_le_const c))))
+    (mem_flags_trusted)))
 
 ;; Imm12 Rules
 
@@ -2402,12 +2402,66 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high)
     )))
 
-(decl gen_amode (Reg Offset32 Type) AMode)
-(extern constructor gen_amode gen_amode)
+;; Generates a AMode that points to a register plus an offset.
+(decl gen_reg_offset_amode (Reg i64 Type) AMode)
+(extern constructor gen_reg_offset_amode gen_reg_offset_amode)
+
+;; Generates a AMode that an offset from the stack pointer.
+(decl gen_sp_offset_amode (i64 Type) AMode)
+(extern constructor gen_sp_offset_amode gen_sp_offset_amode)
+
+;; Generates a AMode that an offset from the frame pointer.
+(decl gen_fp_offset_amode (i64 Type) AMode)
+(extern constructor gen_fp_offset_amode gen_fp_offset_amode)
+
+;; Generates an AMode that points to a stack slot + offset.
+(decl gen_stack_slot_amode (StackSlot i64 Type) AMode)
+(extern constructor gen_stack_slot_amode gen_stack_slot_amode)
 
 ;; Generates a AMode that points to a constant in the constant pool.
 (decl gen_const_amode (VCodeConstant) AMode)
 (extern constructor gen_const_amode gen_const_amode)
+
+
+
+;; Tries to match a Value + Offset into an AMode
+(decl amode (Value i32 Type) AMode)
+(rule 0 (amode addr offset ty) (amode_inner addr offset ty))
+
+;; If we are adding a constant offset with an iadd we can instead make that
+;; offset part of the amode offset.
+;;
+;; We can't recurse into `amode` again since that could cause stack overflows.
+;; See: https://github.com/bytecodealliance/wasmtime/pull/6968
+(rule 1 (amode (iadd addr (iconst (simm32 y))) offset ty)
+  (if-let new_offset (s32_add_fallible y offset))
+  (amode_inner addr new_offset ty))
+(rule 2 (amode (iadd (iconst (simm32 x)) addr) offset ty)
+  (if-let new_offset (s32_add_fallible x offset))
+  (amode_inner addr new_offset ty))
+
+
+;; These are the normal rules for generating an AMode.
+(decl amode_inner (Value i32 Type) AMode)
+
+;; In the simplest case we just lower into a Reg+Offset
+(rule 0 (amode_inner r @ (value_type (ty_addr64 _)) offset ty)
+  (gen_reg_offset_amode r offset ty))
+
+;; If the value is a `get_frame_pointer`, we can just use the offset from that.
+(rule 1 (amode_inner (get_frame_pointer) offset ty)
+  (gen_fp_offset_amode offset ty))
+
+;; If the value is a `get_stack_pointer`, we can just use the offset from that.
+(rule 1 (amode_inner (get_stack_pointer) offset ty)
+  (gen_sp_offset_amode offset ty))
+
+;; Similarly if the value is a `stack_addr` we can also turn that into an sp offset.
+(rule 1 (amode_inner (stack_addr ss ss_offset) amode_offset ty)
+  (if-let combined_offset (s32_add_fallible ss_offset amode_offset))
+  (gen_stack_slot_amode ss combined_offset ty))
+
+
 
 
 ;; Returns a canonical type for a LoadOP. We only return I64 or F64.
@@ -2416,43 +2470,20 @@
 (rule 1 (load_op_reg_type (LoadOP.Flw)) $F64)
 (rule 0 (load_op_reg_type _) $I64)
 
-(decl emit_load (LoadOP MemFlags AMode) Reg)
-(rule (emit_load op flags from)
-      (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
-            (_ Unit (emit (MInst.Load dst op flags from))))
-        dst))
-
 ;; helper function to load from memory.
-(decl gen_load (Reg Offset32 LoadOP MemFlags Type) Reg)
-(rule (gen_load p offset op flags ty)
-  (emit_load op flags (gen_amode p offset $I64)))
-
-(decl gen_load_128 (Reg Offset32 MemFlags) ValueRegs)
-(rule (gen_load_128 p offset flags)
-  (let ((low Reg (gen_load p offset (LoadOP.Ld) flags $I64))
-        (high Reg (gen_load p (offset32_add offset 8) (LoadOP.Ld) flags $I64)))
-    (value_regs low high)))
-
-(decl default_memflags () MemFlags)
-(extern constructor default_memflags default_memflags)
-
-(decl offset32_add (Offset32 i64) Offset32)
-(extern constructor offset32_add offset32_add)
+(decl gen_load (AMode LoadOP MemFlags) Reg)
+(rule (gen_load amode op flags)
+  (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
+      (_ Unit (emit (MInst.Load dst op flags amode))))
+    dst))
 
 ;; helper function to store to memory.
-(decl gen_store (Reg Offset32 StoreOP MemFlags Reg) InstOutput)
-(rule
-  (gen_store base offset op flags src)
-  (side_effect (SideEffectNoResult.Inst (MInst.Store (gen_amode base offset $I64) op flags src)))
-)
+(decl gen_store (AMode StoreOP MemFlags Reg) InstOutput)
+(rule (gen_store amode op flags src)
+  (side_effect (SideEffectNoResult.Inst (MInst.Store amode op flags src))))
 
-(decl gen_store_128 (Reg Offset32 MemFlags ValueRegs) InstOutput)
-(rule
-  (gen_store_128 p offset flags src)
-  (side_effect
-    (SideEffectNoResult.Inst2
-      (MInst.Store (gen_amode p offset $I64) (StoreOP.Sd) flags (value_regs_get src 0))
-      (MInst.Store (gen_amode p (offset32_add offset 8) $I64) (StoreOP.Sd) flags (value_regs_get src 1)))))
+
+
 
 (decl valid_atomic_transaction (Type) Type)
 (extern extractor valid_atomic_transaction valid_atomic_transaction)
@@ -2611,32 +2642,6 @@
 (decl store_op (Type) StoreOP)
 (extern constructor store_op store_op)
 
-;; bool is "is_signed"
-(decl int_load_op (bool u8) LoadOP)
-(rule
-  (int_load_op $false 8)
-  (LoadOP.Lbu))
-
-(rule
-  (int_load_op $true 8)
-  (LoadOP.Lb))
-
-(rule
-  (int_load_op $false 16)
-  (LoadOP.Lhu))
-(rule
-  (int_load_op $true 16)
-  (LoadOP.Lh))
-(rule
-  (int_load_op $false 32)
-  (LoadOP.Lwu))
-(rule
-  (int_load_op $true 32)
-  (LoadOP.Lw))
-
-(rule
-  (int_load_op _ 64)
-  (LoadOP.Ld))
 
 ;;;; load extern name
 (decl load_ext_name (ExternalName i64) Reg)
