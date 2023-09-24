@@ -9,7 +9,7 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, CjOp, CrOp, CssOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5,
+    CaOp, CbOp, CiOp, CiwOp, CjOp, CrOp, CsOp, CssOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5,
     VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
@@ -528,6 +528,36 @@ pub fn encode_css_type(op: CssOp, src: Reg, imm: Uimm6) -> u16 {
     bits |= unsigned_field_width(op.op().bits(), 2);
     bits |= reg_to_gpr_num(src) << 2;
     bits |= unsigned_field_width(enc_imm as u32, 6) << 7;
+    bits |= unsigned_field_width(op.funct3(), 3) << 13;
+    bits.try_into().unwrap()
+}
+
+// Encode a CS type instruction.
+//
+// The imm field is a 5 bit unsigned immediate.
+//
+// 0--1-2-----4-5----------6-7---------9-10----------12-13-----15
+// |op |  src  | imm(2-bit) |   base    |  imm(3-bit)  | funct3  |
+pub fn encode_cs_type(op: CsOp, src: Reg, base: Reg, imm: Uimm5) -> u16 {
+    let imm = imm.bits();
+
+    // c.sw:  [2|6]
+    // c.sd:  [7:6]
+    // c.fsd: [7:6]
+    let imm2 = match op {
+        CsOp::CSw => ((imm >> 5) & 1) | ((imm & 1) << 1),
+        CsOp::CSd | CsOp::CFsd => (imm >> 6) & 0b11,
+    };
+
+    // [5:3] on all opcodes
+    let imm3 = (imm >> 1) & 0b111;
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= reg_to_compressed_gpr_num(src) << 2;
+    bits |= unsigned_field_width(imm2 as u32, 2) << 5;
+    bits |= reg_to_compressed_gpr_num(base) << 7;
+    bits |= unsigned_field_width(imm3 as u32, 2) << 10;
     bits |= unsigned_field_width(op.funct3(), 3) << 13;
     bits.try_into().unwrap()
 }

@@ -201,6 +201,12 @@ impl Imm6 {
     }
 }
 
+impl Display for Imm6 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 /// A unsigned 6-bit immediate.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Uimm6 {
@@ -223,7 +229,35 @@ impl Uimm6 {
     }
 }
 
-impl Display for Imm6 {
+impl Display for Uimm6 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+/// A unsigned 5-bit immediate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Uimm5 {
+    value: u8,
+}
+
+impl Uimm5 {
+    /// Create an unsigned 5-bit immediate from an u8
+    pub fn maybe_from_u8(value: u8) -> Option<Self> {
+        if value <= 31 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u8 {
+        self.value & 0x1f
+    }
+}
+
+impl Display for Uimm5 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{}", self.value)
     }

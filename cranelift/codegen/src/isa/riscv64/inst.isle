@@ -767,6 +767,12 @@
   (CFsdsp)
 ))
 
+;; Opcodes for the CS compressed instruction format
+(type CsOp (enum
+  (CSw)
+  (CSd)
+  (CFsd)
+))
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR
