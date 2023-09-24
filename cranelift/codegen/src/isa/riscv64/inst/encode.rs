@@ -9,8 +9,9 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, CjOp, CrOp, CsOp, CssOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5,
-    VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
+    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, VecAluOpRImm5,
+    VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth,
+    VecOpCategory, VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -539,25 +540,67 @@ pub fn encode_css_type(op: CssOp, src: Reg, imm: Uimm6) -> u16 {
 // 0--1-2-----4-5----------6-7---------9-10----------12-13-----15
 // |op |  src  | imm(2-bit) |   base    |  imm(3-bit)  | funct3  |
 pub fn encode_cs_type(op: CsOp, src: Reg, base: Reg, imm: Uimm5) -> u16 {
+    let size = match op {
+        CsOp::CFsd | CsOp::CSd => 8,
+        CsOp::CSw => 4,
+    };
+
+    encode_cs_cl_type_bits(op.op(), op.funct3(), size, src, base, imm)
+}
+
+// Encode a CL type instruction.
+//
+// The imm field is a 5 bit unsigned immediate.
+//
+// 0--1-2------4-5----------6-7---------9-10----------12-13-----15
+// |op |  dest  | imm(2-bit) |   base    |  imm(3-bit)  | funct3  |
+pub fn encode_cl_type(op: ClOp, dest: WritableReg, base: Reg, imm: Uimm5) -> u16 {
+    let size = match op {
+        ClOp::CFld | ClOp::CLd => 8,
+        ClOp::CLw => 4,
+    };
+
+    encode_cs_cl_type_bits(op.op(), op.funct3(), size, dest.to_reg(), base, imm)
+}
+
+// CL and CS type instructions have the same physical layout.
+//
+// 0--1-2----------4-5----------6-7---------9-10----------12-13-----15
+// |op |  dest/src  | imm(2-bit) |   base    |  imm(3-bit)  | funct3  |
+fn encode_cs_cl_type_bits(
+    op: COpcodeSpace,
+    funct3: u32,
+    size: u32,
+    dest_src: Reg,
+    base: Reg,
+    imm: Uimm5,
+) -> u16 {
     let imm = imm.bits();
 
-    // c.sw:  [2|6]
-    // c.sd:  [7:6]
-    // c.fsd: [7:6]
-    let imm2 = match op {
-        CsOp::CSw => ((imm >> 5) & 1) | ((imm & 1) << 1),
-        CsOp::CSd | CsOp::CFsd => (imm >> 6) & 0b11,
+    // c.sw  / c.lw:  [2|6]
+    // c.sd  / c.ld:  [7:6]
+    // c.fsd / c.fld: [7:6]
+    //
+    // We differentiate these based on the operation size
+    let imm2 = match size {
+        4 => ((imm >> 4) & 1) | ((imm & 1) << 1),
+        8 => (imm >> 3) & 0b11,
+        _ => unreachable!(),
     };
 
     // [5:3] on all opcodes
-    let imm3 = (imm >> 1) & 0b111;
+    let imm3 = match size {
+        4 => (imm >> 1) & 0b111,
+        8 => (imm >> 0) & 0b111,
+        _ => unreachable!(),
+    };
 
     let mut bits = 0;
-    bits |= unsigned_field_width(op.op().bits(), 2);
-    bits |= reg_to_compressed_gpr_num(src) << 2;
+    bits |= unsigned_field_width(op.bits(), 2);
+    bits |= reg_to_compressed_gpr_num(dest_src) << 2;
     bits |= unsigned_field_width(imm2 as u32, 2) << 5;
     bits |= reg_to_compressed_gpr_num(base) << 7;
-    bits |= unsigned_field_width(imm3 as u32, 2) << 10;
-    bits |= unsigned_field_width(op.funct3(), 3) << 13;
+    bits |= unsigned_field_width(imm3 as u32, 3) << 10;
+    bits |= unsigned_field_width(funct3, 3) << 13;
     bits.try_into().unwrap()
 }

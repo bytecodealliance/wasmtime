@@ -4,7 +4,7 @@ use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, CrOp, CsOp, CssOp,
+    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp,
 };
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
@@ -747,6 +747,44 @@ impl Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 sink.put2(encode_ci_sp_load(op, rd, imm6));
+            }
+
+            // Regular Loads
+            Inst::Load {
+                rd,
+                op: op @ (LoadOP::Lw | LoadOP::Ld | LoadOP::Fld),
+                from,
+                flags,
+            } if reg_is_compressible(rd.to_reg())
+                && from
+                    .get_base_register()
+                    .map(reg_is_compressible)
+                    .unwrap_or(false)
+                && (from.get_offset_with_state(state) % op.size()) == 0 =>
+            {
+                let base = from.get_base_register().unwrap();
+
+                // We encode the offset in multiples of the store size.
+                let offset = from.get_offset_with_state(state);
+                let imm5 = u8::try_from(offset / op.size())
+                    .ok()
+                    .and_then(Uimm5::maybe_from_u8)?;
+
+                // Floating point loads are not included in the base Zca extension
+                // but in a separate Zcd extension. Both of these are part of the C Extension.
+                let op = match op {
+                    LoadOP::Lw => ClOp::CLw,
+                    LoadOP::Ld => ClOp::CLd,
+                    LoadOP::Fld if has_zcd => ClOp::CFld,
+                    _ => return None,
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put2(encode_cl_type(op, rd, base, imm5));
             }
 
             // Stack Based Stores

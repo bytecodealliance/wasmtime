@@ -774,6 +774,13 @@
   (CFsd)
 ))
 
+;; Opcodes for the CL compressed instruction format
+(type ClOp (enum
+  (CLw)
+  (CLd)
+  (CFld)
+))
+
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR
   (CsrRW)

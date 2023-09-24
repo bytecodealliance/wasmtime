@@ -743,7 +743,39 @@ block0(v0: i64, v1: i64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c.sd a1, 8(a0)
+;   c.sd a1, 0x10(a0)
 ;   sd a1, -0x10(a0)
+;   c.jr ra
+
+function %c_lw(i64) -> i32 {
+block0(v0: i64):
+  v1 = load.i32 v0+64
+  return v1
+}
+
+; VCode:
+; block0:
+;   lw a0,64(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.lw a0, 0x40(a0)
+;   c.jr ra
+
+function %c_ld(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i64 v0+64
+  return v1
+}
+
+; VCode:
+; block0:
+;   ld a0,64(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.ld a0, 0x40(a0)
 ;   c.jr ra
 

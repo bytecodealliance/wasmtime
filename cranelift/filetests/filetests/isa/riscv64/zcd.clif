@@ -92,7 +92,23 @@ block0(v0: i64, v1: f64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c.fsd fa0, 8(a0)
+;   c.fsd fa0, 0x10(a0)
 ;   fsd fa0, -0x10(a0)
+;   c.jr ra
+
+function %c_fld(i64) -> f64 {
+block0(v0: i64):
+  v1 = load.f64 v0+64
+  return v1
+}
+
+; VCode:
+; block0:
+;   fld fa0,64(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.fld fa0, 0x40(a0)
 ;   c.jr ra
 
