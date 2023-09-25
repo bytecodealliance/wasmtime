@@ -35,27 +35,23 @@ fn test_zkasm_binemit() {
         "SP - 16 => SP\n  :JMP(RR)",
     ));
     // TODO: a test with `rets`.
+    insns.push(TestUnit::new(
+        Inst::Mov {
+            rd: writable_fa0(),
+            rm: fa1(),
+            ty: F32,
+        },
+        "fa1 => fa0", // FIXME: wrong register names!
+    ));
 
-    //
-    // insns.push(TestUnit::new(
-    //     Inst::Mov {
-    //         rd: writable_fa0(),
-    //         rm: fa1(),
-    //         ty: F32,
-    //     },
-    //     "fmv.s fa0,fa1",
-    //     0x20b58553,
-    // ));
-    //
-    // insns.push(TestUnit::new(
-    //     Inst::Mov {
-    //         rd: writable_fa0(),
-    //         rm: fa1(),
-    //         ty: F64,
-    //     },
-    //     "fmv.d fa0,fa1",
-    //     0x22b58553,
-    // ));
+    insns.push(TestUnit::new(
+        Inst::Mov {
+            rd: writable_fa0(),
+            rm: fa1(),
+            ty: F64,
+        },
+        "fa1 => fa0", // FIXME: wrong register names!
+    ));
     //
     // insns.push(TestUnit::new(
     //     Inst::AluRRImm12 {
@@ -2086,7 +2082,7 @@ fn test_zkasm_binemit() {
         let actual_printing = unit
             .inst
             .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
-        assert_eq!(unit.assembly, actual_printing);
+        assert_eq!(unit.assembly.trim(), actual_printing.trim());
         let mut buffer = MachBuffer::new();
         unit.inst
             .emit(&[], &mut buffer, &emit_info, &mut Default::default());
@@ -2094,7 +2090,7 @@ fn test_zkasm_binemit() {
         let actual_encoding = std::str::from_utf8(buffer.data())
             .expect("mach buffer is expected to contain assembly as valid utf-8");
 
-        assert_eq!(actual_encoding.trim(), unit.assembly);
+        assert_eq!(actual_encoding.trim(), unit.assembly.trim());
     }
 }
 

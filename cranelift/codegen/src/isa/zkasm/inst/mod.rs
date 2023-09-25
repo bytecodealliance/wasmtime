@@ -1607,9 +1607,9 @@ impl Inst {
                 stack_bytes_to_pop,
             } => {
                 let mut s = if stack_bytes_to_pop == 0 {
-                    ":JMP(RR)".to_string()
+                    "  :JMP(RR)".to_string()
                 } else {
-                    format!("SP - {stack_bytes_to_pop} => SP\n  :JMP(RR)")
+                    format!("  SP - {stack_bytes_to_pop} => SP\n  :JMP(RR)")
                 };
 
                 let mut empty_allocs = AllocationConsumer::default();
@@ -1749,15 +1749,7 @@ impl Inst {
             &MInst::Mov { rd, rm, ty } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let rm = format_reg(rm, allocs);
-
-                let op = match ty {
-                    F32 => "fmv.s",
-                    F64 => "fmv.d",
-                    ty if ty.is_vector() => "vmv1r.v",
-                    _ => "mv",
-                };
-
-                format!("{op} {rd},{rm}")
+                format!("{rm} => {rd}")
             }
             &MInst::MovFromPReg { rd, rm } => {
                 let rd = format_reg(rd.to_reg(), allocs);
