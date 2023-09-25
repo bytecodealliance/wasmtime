@@ -1438,31 +1438,35 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
 #[inline]
 fn stack_pointer() -> usize {
     let stack_pointer: usize;
-    unsafe {
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "x86_64")] {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "x86_64")] {
+            unsafe {
                 std::arch::asm!(
                     "mov {}, rsp",
                     out(reg) stack_pointer,
                     options(nostack,nomem),
                 );
-            } else if #[cfg(target_arch = "aarch64")] {
+            }
+        } else if #[cfg(target_arch = "aarch64")] {
+            unsafe {
                 std::arch::asm!(
                     "mov {}, sp",
                     out(reg) stack_pointer,
                     options(nostack,nomem),
                 );
-            } else if #[cfg(target_arch = "riscv64")] {
+            }
+        } else if #[cfg(target_arch = "riscv64")] {
+            unsafe {
                 std::arch::asm!(
                     "mv {}, sp",
                     out(reg) stack_pointer,
                     options(nostack,nomem),
                 );
-            } else if #[cfg(target_arch = "s390x")] {
-                stack_pointer = psm::stack_pointer() as usize;
-            } else {
-                compile_error!("unsupported platform");
             }
+        } else if #[cfg(target_arch = "s390x")] {
+            stack_pointer = psm::stack_pointer() as usize;
+        } else {
+            compile_error!("unsupported platform");
         }
     }
     stack_pointer
