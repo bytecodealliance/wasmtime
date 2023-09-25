@@ -741,6 +741,11 @@
   (CAddiw)
   (CAddi16sp)
   (CSlli)
+  (CLi)
+  (CLui)
+  (CLwsp)
+  (CLdsp)
+  (CFldsp)
 ))
 
 ;; Opcodes for the CIW compressed instruction format
@@ -748,6 +753,33 @@
   (CAddi4spn)
 ))
 
+;; Opcodes for the CB compressed instruction format
+(type CbOp (enum
+  (CSrli)
+  (CSrai)
+  (CAndi)
+))
+
+;; Opcodes for the CSS compressed instruction format
+(type CssOp (enum
+  (CSwsp)
+  (CSdsp)
+  (CFsdsp)
+))
+
+;; Opcodes for the CS compressed instruction format
+(type CsOp (enum
+  (CSw)
+  (CSd)
+  (CFsd)
+))
+
+;; Opcodes for the CL compressed instruction format
+(type ClOp (enum
+  (CLw)
+  (CLd)
+  (CFld)
+))
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR
