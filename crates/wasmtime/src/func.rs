@@ -946,9 +946,7 @@ impl Func {
     /// this function is properly rooted within it. Additionally this function
     /// should not be liberally used since it's a very low-level knob.
     pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
-        self.vm_func_ref(store.as_context_mut().0)
-            .as_ptr()
-            .cast()
+        self.vm_func_ref(store.as_context_mut().0).as_ptr().cast()
     }
 
     /// Invokes this function with the `params` given, returning the results
