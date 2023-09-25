@@ -225,8 +225,8 @@ impl RunCommand {
         let main = self.load_module(&engine, &self.module_and_args[0])?;
 
         // Validate coredump-on-trap argument
-        if let Some(coredump_path) = &self.common.debug.coredump {
-            if coredump_path.contains("%") {
+        if let Some(path) = &self.common.debug.coredump {
+            if path.contains("%") {
                 bail!("the coredump-on-trap path does not support patterns yet.")
             }
         }
@@ -529,7 +529,7 @@ impl RunCommand {
                     .wasi_cli_run()
                     .call_run(&mut *store)
                     .context("failed to invoke `run` function")
-                    .map_err(|e| self.handle_coredump(e));
+                    .map_err(|e| self.handle_core_dump(&mut *store, e));
 
                 // Translate the `Result<(),()>` produced by wasm into a feigned
                 // explicit exit here with status 1 if `Err(())` is returned.
@@ -583,16 +583,18 @@ impl RunCommand {
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
         let mut results = vec![Val::null(); ty.results().len()];
-        let invoke_res = func.call(store, &values, &mut results).with_context(|| {
-            if let Some(name) = &self.invoke {
-                format!("failed to invoke `{}`", name)
-            } else {
-                format!("failed to invoke command default")
-            }
-        });
+        let invoke_res = func
+            .call(&mut *store, &values, &mut results)
+            .with_context(|| {
+                if let Some(name) = &self.invoke {
+                    format!("failed to invoke `{}`", name)
+                } else {
+                    format!("failed to invoke command default")
+                }
+            });
 
         if let Err(err) = invoke_res {
-            return Err(self.handle_coredump(err));
+            return Err(self.handle_core_dump(&mut *store, err));
         }
 
         if !results.is_empty() {
@@ -617,7 +619,7 @@ impl RunCommand {
         Ok(())
     }
 
-    fn handle_coredump(&self, err: Error) -> Error {
+    fn handle_core_dump(&self, store: &mut Store<Host>, err: Error) -> Error {
         let coredump_path = match &self.common.debug.coredump {
             Some(path) => path,
             None => return err,
@@ -629,7 +631,7 @@ impl RunCommand {
             .to_str()
             .unwrap_or_else(|| "unknown");
 
-        if let Err(coredump_err) = generate_coredump(&err, &source_name, coredump_path) {
+        if let Err(coredump_err) = write_core_dump(store, &err, &source_name, coredump_path) {
             eprintln!("warning: coredump failed to generate: {}", coredump_err);
             err
         } else {
@@ -1037,36 +1039,22 @@ fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<u
     Ok(num_fd)
 }
 
-fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str) -> Result<()> {
-    let bt = err
-        .downcast_ref::<wasmtime::WasmBacktrace>()
-        .ok_or_else(|| anyhow!("no wasm backtrace found to generate coredump with"))?;
+fn write_core_dump(
+    store: &mut Store<Host>,
+    err: &anyhow::Error,
+    name: &str,
+    path: &str,
+) -> Result<()> {
+    let core_dump = err
+        .downcast_ref::<wasmtime::WasmCoreDump>()
+        .expect("should have been configured to capture core dumps");
 
-    let coredump = wasm_encoder::CoreDumpSection::new(source_name);
-    let mut stacksection = wasm_encoder::CoreDumpStackSection::new("main");
-    for f in bt.frames() {
-        // We don't have the information at this point to map frames to
-        // individual instances of a module, so we won't be able to create the
-        // "frame ∈ instance ∈ module" hierarchy described in the core dump spec
-        // until we move core dump generation into the runtime. So for now
-        // instanceidx will be 0 for all frames
-        let instanceidx = 0;
-        stacksection.frame(
-            instanceidx,
-            f.func_index(),
-            u32::try_from(f.func_offset().unwrap_or(0)).unwrap(),
-            // We don't currently have access to locals/stack values
-            [],
-            [],
-        );
-    }
-    let mut module = wasm_encoder::Module::new();
-    module.section(&coredump);
-    module.section(&stacksection);
+    let core_dump = core_dump.serialize(store, name);
 
-    let mut f = File::create(coredump_path)
-        .context(format!("failed to create file at `{}`", coredump_path))?;
-    f.write_all(module.as_slice())
-        .with_context(|| format!("failed to write coredump file at `{}`", coredump_path))?;
+    let mut core_dump_file =
+        File::create(path).context(format!("failed to create file at `{}`", path))?;
+    core_dump_file
+        .write_all(&core_dump)
+        .with_context(|| format!("failed to write core dump file at `{}`", path))?;
     Ok(())
 }

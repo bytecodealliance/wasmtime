@@ -130,12 +130,12 @@ fn test_trap_trace() -> Result<()> {
 
     let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 2);
-    assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
+    assert_eq!(trace[0].module().name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 1);
     assert_eq!(trace[0].func_name(), Some("hello"));
     assert_eq!(trace[0].func_offset(), Some(1));
     assert_eq!(trace[0].module_offset(), Some(0x26));
-    assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
+    assert_eq!(trace[1].module().name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 0);
     assert_eq!(trace[1].func_name(), None);
     assert_eq!(trace[1].func_offset(), Some(1));
@@ -254,9 +254,9 @@ fn test_trap_trace_cb() -> Result<()> {
 
     let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert_eq!(trace.len(), 2);
-    assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
+    assert_eq!(trace[0].module().name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 2);
-    assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
+    assert_eq!(trace[1].module().name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 1);
     assert!(format!("{e:?}").contains("cb throw"));
 
@@ -281,7 +281,7 @@ fn test_trap_stack_overflow() -> Result<()> {
     let trace = e.downcast_ref::<WasmBacktrace>().unwrap().frames();
     assert!(trace.len() >= 32);
     for i in 0..trace.len() {
-        assert_eq!(trace[i].module_name().unwrap(), "rec_mod");
+        assert_eq!(trace[i].module().name().unwrap(), "rec_mod");
         assert_eq!(trace[i].func_index(), 0);
         assert_eq!(trace[i].func_name(), Some("run"));
     }

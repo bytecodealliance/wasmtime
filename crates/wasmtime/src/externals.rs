@@ -349,6 +349,58 @@ impl Global {
             from: store[self.0].definition,
         }
     }
+
+    /// Get a stable hash key for this global.
+    ///
+    /// Even if the same underlying global definition is added to the
+    /// `StoreData` multiple times and becomes multiple `wasmtime::Global`s,
+    /// this hash key will be consistent across all of these globals.
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl std::hash::Hash + Eq {
+        store[self.0].definition as usize
+    }
+}
+
+#[cfg(test)]
+mod global_tests {
+    use super::*;
+    use crate::{Instance, Module, Store};
+
+    #[test]
+    fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
+        let mut store = Store::<()>::default();
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (global (export "g") (mut i32) (i32.const 0))
+                )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        // Each time we `get_global`, we call `Global::from_wasmtime` which adds
+        // a new entry to `StoreData`, so `g1` and `g2` will have different
+        // indices into `StoreData`.
+        let g1 = instance.get_global(&mut store, "g").unwrap();
+        let g2 = instance.get_global(&mut store, "g").unwrap();
+
+        // That said, they really point to the same global.
+        assert_eq!(g1.get(&mut store).unwrap_i32(), 0);
+        assert_eq!(g2.get(&mut store).unwrap_i32(), 0);
+        g1.set(&mut store, Val::I32(42))?;
+        assert_eq!(g1.get(&mut store).unwrap_i32(), 42);
+        assert_eq!(g2.get(&mut store).unwrap_i32(), 42);
+
+        // And therefore their hash keys are the same.
+        assert!(g1.hash_key(&store.as_context().0) == g2.hash_key(&store.as_context().0));
+
+        // But the hash keys are different from different globals.
+        let instance2 = Instance::new(&mut store, &module, &[])?;
+        let g3 = instance2.get_global(&mut store, "g").unwrap();
+        assert!(g1.hash_key(&store.as_context().0) != g3.hash_key(&store.as_context().0));
+
+        Ok(())
+    }
 }
 
 /// A WebAssembly `table`, or an array of values.

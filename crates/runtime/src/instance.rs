@@ -384,6 +384,28 @@ impl Instance {
         }
     }
 
+    /// Get all globals within this instance.
+    ///
+    /// Returns both import and defined globals.
+    ///
+    /// Returns both exported and non-exported globals.
+    ///
+    /// Gives access to the full globals space.
+    pub fn all_globals<'a>(
+        &'a mut self,
+    ) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + 'a {
+        let module = self.module().clone();
+        module.globals.keys().map(move |idx| {
+            (
+                idx,
+                ExportGlobal {
+                    definition: self.defined_or_imported_global_ptr(idx),
+                    global: self.module().globals[idx],
+                },
+            )
+        })
+    }
+
     /// Get the globals defined in this instance (not imported).
     pub fn defined_globals<'a>(
         &'a mut self,
@@ -1350,14 +1372,43 @@ impl InstanceHandle {
         self.instance_mut().get_table_with_lazy_init(index, range)
     }
 
-    /// Return the memories defined in this instance (not imported).
-    pub fn defined_memories<'a>(&'a mut self) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
-        let idxs = (0..self.module().memory_plans.len())
-            .skip(self.module().num_imported_memories)
+    /// Get all memories within this instance.
+    ///
+    /// Returns both import and defined memories.
+    ///
+    /// Returns both exported and non-exported memories.
+    ///
+    /// Gives access to the full memories space.
+    pub fn all_memories<'a>(
+        &'a mut self,
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + 'a {
+        let indices = (0..self.module().memory_plans.len())
             .map(|i| MemoryIndex::new(i))
             .collect::<Vec<_>>();
-        idxs.into_iter()
-            .map(|memidx| self.get_exported_memory(memidx))
+        indices
+            .into_iter()
+            .map(|i| (i, self.get_exported_memory(i)))
+    }
+
+    /// Return the memories defined in this instance (not imported).
+    pub fn defined_memories<'a>(&'a mut self) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
+        let num_imported = self.module().num_imported_memories;
+        self.all_memories()
+            .skip(num_imported)
+            .map(|(_i, memory)| memory)
+    }
+
+    /// Get all globals within this instance.
+    ///
+    /// Returns both import and defined globals.
+    ///
+    /// Returns both exported and non-exported globals.
+    ///
+    /// Gives access to the full globals space.
+    pub fn all_globals<'a>(
+        &'a mut self,
+    ) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + 'a {
+        self.instance_mut().all_globals()
     }
 
     /// Get the globals defined in this instance (not imported).
