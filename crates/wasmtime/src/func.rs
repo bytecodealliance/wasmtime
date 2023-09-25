@@ -1447,11 +1447,15 @@ fn stack_pointer() -> usize {
                     out(reg) stack_pointer,
                     options(nostack,nomem),
                 );
-            } else if #[cfg(any(target_arch = "aarch64", target_arch = "riscv64"))] {
-                // aarch64 and riscv64 happen to have the same assembler syntax
-                // for `mov` and `sp`, so they both use this.
+            } else if #[cfg(target_arch = "aarch64")] {
                 std::arch::asm!(
                     "mov {}, sp",
+                    out(reg) stack_pointer,
+                    options(nostack,nomem),
+                );
+            } else if #[cfg(target_arch = "riscv64")] {
+                std::arch::asm!(
+                    "mv {}, sp",
                     out(reg) stack_pointer,
                     options(nostack,nomem),
                 );
