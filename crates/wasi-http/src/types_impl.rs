@@ -4,7 +4,7 @@ use crate::bindings::http::types::{
     Scheme, StatusCode, Trailers,
 };
 use crate::body::{HostFutureTrailers, HostFutureTrailersState};
-use crate::types::HostOutgoingResponse;
+use crate::types::{HostOutgoingResponse, HostIncomingRequest};
 use crate::WasiHttpView;
 use crate::{
     body::{HostIncomingBodyBuilder, HostOutgoingBody},
@@ -151,24 +151,50 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     }
     fn incoming_request_path_with_query(
         &mut self,
-        _request: IncomingRequest,
+        id: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        let req = types::IncomingRequestLens::from(id).get(self.table())?;
+        Ok(req
+            .uri()
+            .path_and_query()
+            .map(|path_and_query| path_and_query.as_str().to_owned()))
     }
-    fn incoming_request_scheme(
-        &mut self,
-        _request: IncomingRequest,
-    ) -> wasmtime::Result<Option<Scheme>> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn incoming_request_scheme(&mut self, id: IncomingRequest) -> wasmtime::Result<Option<Scheme>> {
+        let req = types::IncomingRequestLens::from(id).get(self.table())?;
+        Ok(req.uri().scheme().map(|scheme| {
+            if scheme == &http::uri::Scheme::HTTP {
+                return Scheme::Http;
+            }
+
+            if scheme == &http::uri::Scheme::HTTPS {
+                return Scheme::Https;
+            }
+
+            Scheme::Other(req.uri().scheme_str().unwrap().to_owned())
+        }))
     }
     fn incoming_request_authority(
         &mut self,
-        _request: IncomingRequest,
+        id: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        let req = types::IncomingRequestLens::from(id).get(self.table())?;
+        Ok(req.uri().authority().map(|auth| auth.as_str().to_owned()))
     }
-    fn incoming_request_headers(&mut self, _request: IncomingRequest) -> wasmtime::Result<Headers> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn incoming_request_headers(&mut self, id: IncomingRequest) -> wasmtime::Result<Headers> {
+        let _ = types::IncomingRequestLens::from(id).get(self.table())?;
+
+        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
+            elem.downcast_mut::<HostIncomingRequest>()
+                .unwrap()
+                .headers_mut()
+        }
+
+        let headers = self.table().push_fields(HostFields::Ref {
+            parent: id,
+            get_fields,
+        })?;
+
+        Ok(headers)
     }
     fn incoming_request_consume(
         &mut self,
@@ -363,7 +389,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
                 headers: fields,
                 body: None,
             },
-        )?.into();
+        )?
+        .into();
 
         Ok(id)
     }

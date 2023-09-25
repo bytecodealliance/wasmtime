@@ -37,7 +37,9 @@ pub trait WasiHttpView: Send {
     }
 }
 
-pub type IncomingRequestLens = TableLens<hyper::Request<bytes::Bytes>>;
+pub type HostIncomingRequest = hyper::Request<bytes::Bytes>;
+
+pub type IncomingRequestLens = TableLens<HostIncomingRequest>;
 
 pub type ResponseOutparamLens = TableLens<HostResponseOutparam>;
 
