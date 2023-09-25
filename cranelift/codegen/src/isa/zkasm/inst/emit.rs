@@ -887,6 +887,9 @@ impl MachInstEmit for Inst {
                             .for_each(|i| i.emit(&[], sink, emit_info, state)); */
             }
             &Inst::AdjustSp { amount } => {
+                // Stack is growing "up" in zkASM contrary to traditional architectures, so
+                // we flip it here.
+                let amount = -amount;
                 let amount = if amount > 0 {
                     format!("+ {}", amount)
                 } else {
