@@ -159,7 +159,8 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             let resp = timeout(first_byte_timeout, sender.send_request(request))
                 .await
                 .map_err(|_| timeout_error("first byte"))?
-                .map_err(hyper_protocol_error)?;
+                .map_err(hyper_protocol_error)?
+                .map(|body| body.map_err(|e| anyhow::anyhow!(e)).boxed());
 
             Ok(IncomingResponseInternal {
                 resp,

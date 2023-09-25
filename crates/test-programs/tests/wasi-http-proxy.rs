@@ -99,9 +99,13 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
     let (mut store, proxy) = instantiate(component, ctx).await?;
 
     let req = {
-        let req = hyper::Request::builder()
-            .method(http::Method::GET)
-            .body(bytes::Bytes::new())?;
+        use http_body_util::{BodyExt, Empty};
+
+        let req = hyper::Request::builder().method(http::Method::GET).body(
+            Empty::<bytes::Bytes>::new()
+                .map_err(|e| anyhow::anyhow!(e))
+                .boxed(),
+        )?;
         store.data_mut().new_incoming_request(req)?
     };
 

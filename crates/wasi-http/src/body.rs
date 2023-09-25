@@ -15,11 +15,13 @@ use wasmtime_wasi::preview2::{
     StreamRuntimeError, StreamState,
 };
 
+pub type HyperIncomingBody = BoxBody<Bytes, anyhow::Error>;
+
 /// Holds onto the things needed to construct a [`HostIncomingBody`] until we are ready to build
 /// one. The HostIncomingBody spawns a task that starts consuming the incoming body, and we don't
 /// want to do that unless the user asks to consume the body.
 pub struct HostIncomingBodyBuilder {
-    pub body: hyper::body::Incoming,
+    pub body: HyperIncomingBody,
     pub between_bytes_timeout: Duration,
 }
 
@@ -45,7 +47,7 @@ impl HostIncomingBodyBuilder {
                     Ok(Some(Ok(frame))) => frame,
 
                     Ok(Some(Err(e))) => {
-                        match body_writer.send(Err(anyhow::anyhow!(e))).await {
+                        match body_writer.send(Err(e)).await {
                             Ok(_) => {}
                             // If the body read end has dropped, then we report this error with the
                             // trailers. unwrap and rewrap Err because the Ok side of these two Results
@@ -239,7 +241,7 @@ impl HostFutureTrailers {
     }
 }
 
-pub type HyperBody = BoxBody<Bytes, Infallible>;
+pub type HyperOutgoingBody = BoxBody<Bytes, Infallible>;
 
 pub struct HostOutgoingBody {
     pub body_output_stream: Option<Box<dyn HostOutputStream>>,
@@ -247,7 +249,7 @@ pub struct HostOutgoingBody {
 }
 
 impl HostOutgoingBody {
-    pub fn new() -> (Self, HyperBody) {
+    pub fn new() -> (Self, HyperOutgoingBody) {
         use http_body_util::BodyExt;
         use hyper::{
             body::{Body, Frame},

@@ -7,7 +7,8 @@ use crate::{
         OutgoingResponse, ResponseOutparam, Scheme,
     },
     body::{
-        HostFutureTrailers, HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody, HyperBody,
+        HostFutureTrailers, HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody,
+        HyperIncomingBody, HyperOutgoingBody,
     },
 };
 use std::any::Any;
@@ -24,27 +25,46 @@ pub trait WasiHttpView: Send {
 
     fn new_incoming_request(
         &mut self,
-        req: hyper::Request<bytes::Bytes>,
+        req: hyper::Request<HyperIncomingBody>,
     ) -> wasmtime::Result<IncomingRequest> {
-        Ok(IncomingRequestLens::push(self.table(), req)?.id)
+        let (parts, body) = req.into_parts();
+        let body = HostIncomingBodyBuilder {
+            body,
+            // TODO: this needs to be plumbed through
+            between_bytes_timeout: std::time::Duration::from_millis(600 * 1000),
+        };
+        Ok(IncomingRequestLens::push(
+            self.table(),
+            HostIncomingRequest {
+                parts,
+                body: Some(body),
+            },
+        )?
+        .id)
     }
 
     fn new_response_outparam(
         &mut self,
-        result: tokio::sync::oneshot::Sender<Result<hyper::Response<HyperBody>, types::Error>>,
+        result: tokio::sync::oneshot::Sender<
+            Result<hyper::Response<HyperOutgoingBody>, types::Error>,
+        >,
     ) -> wasmtime::Result<ResponseOutparam> {
         Ok(ResponseOutparamLens::push(self.table(), HostResponseOutparam { result })?.id)
     }
 }
 
-pub type HostIncomingRequest = hyper::Request<bytes::Bytes>;
-
 pub type IncomingRequestLens = TableLens<HostIncomingRequest>;
+
+pub struct HostIncomingRequest {
+    pub parts: http::request::Parts,
+    pub body: Option<HostIncomingBodyBuilder>,
+}
 
 pub type ResponseOutparamLens = TableLens<HostResponseOutparam>;
 
 pub struct HostResponseOutparam {
-    pub result: tokio::sync::oneshot::Sender<Result<hyper::Response<HyperBody>, types::Error>>,
+    pub result:
+        tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::Error>>,
 }
 
 pub type OutgoingRequestLens = TableLens<HostOutgoingRequest>;
@@ -55,7 +75,7 @@ pub struct HostOutgoingRequest {
     pub path_with_query: String,
     pub authority: String,
     pub headers: FieldMap,
-    pub body: Option<HyperBody>,
+    pub body: Option<HyperOutgoingBody>,
 }
 
 pub struct HostIncomingResponse {
@@ -70,13 +90,15 @@ pub type OutgoingResponseLens = TableLens<HostOutgoingResponse>;
 pub struct HostOutgoingResponse {
     pub status: u16,
     pub headers: FieldMap,
-    pub body: Option<HyperBody>,
+    pub body: Option<HyperOutgoingBody>,
 }
 
-impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperBody> {
+impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
     type Error = http::Error;
 
-    fn try_from(resp: HostOutgoingResponse) -> Result<hyper::Response<HyperBody>, Self::Error> {
+    fn try_from(
+        resp: HostOutgoingResponse,
+    ) -> Result<hyper::Response<HyperOutgoingBody>, Self::Error> {
         use http_body_util::{BodyExt, Empty};
 
         let mut builder = hyper::Response::builder().status(resp.status);
@@ -108,7 +130,7 @@ pub enum HostFields {
 }
 
 pub struct IncomingResponseInternal {
-    pub resp: hyper::Response<hyper::body::Incoming>,
+    pub resp: hyper::Response<HyperIncomingBody>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
     pub between_bytes_timeout: std::time::Duration,
 }
