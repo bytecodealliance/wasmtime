@@ -6,15 +6,13 @@
 use crate::disasm::print_all;
 use anyhow::{Context as _, Result};
 use clap::Parser;
-use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
+use cranelift_codegen::timing;
 use cranelift_codegen::Context;
-use cranelift_codegen::{timing, FinalizedRelocTarget};
 use cranelift_entity::EntityRef;
 use cranelift_reader::parse_sets_and_triple;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex};
-use std::collections::HashMap;
 use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
@@ -233,15 +231,6 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         vprintln!(options.verbose, "");
     }
 
-    println!("start:");
-    let start_func = dummy_environ
-        .info
-        .start_func
-        .expect("Must have a start function");
-    println!("  zkPC + 2 => RR");
-    println!("  :JMP(function_{})", start_func.index());
-    println!("  :JMP(finalizeExecution)");
-
     let num_func_imports = dummy_environ.get_num_func_imports();
     let mut total_module_code_size = 0;
     let mut context = Context::new();
@@ -250,7 +239,6 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
 
         let mut saved_size = None;
         let func_index = num_func_imports + def_index.index();
-        println!("\nfunction_{}:", func_index);
         let mut mem = vec![];
         let (relocs, traps, stack_maps) = if options.check_translation {
             if let Err(errors) = context.verify(fisa) {
@@ -262,84 +250,6 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 .compile_and_emit(isa, &mut mem, &mut Default::default())
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
             let code_info = compiled_code.code_info();
-            let mut code_buffer = compiled_code.code_buffer().to_vec();
-            let mut delta = 0i32;
-            for reloc in compiled_code.buffer.relocs() {
-                let start = (reloc.offset as i32 + delta) as usize;
-                let mut pos = start;
-                while code_buffer[pos] != b'\n' {
-                    pos += 1;
-                    delta -= 1;
-                }
-
-                let code = if let FinalizedRelocTarget::ExternalName(ExternalName::User(name)) =
-                    reloc.target
-                {
-                    let name = &func.params.user_named_funcs()[name];
-                    if name.index == 0 {
-                        b"  B :ASSERT".to_vec()
-                    } else {
-                        format!("  zkPC + 2 => RR\n  :JMP(function_{})", name.index)
-                            .as_bytes()
-                            .to_vec()
-                    }
-                } else {
-                    b"  UNKNOWN".to_vec()
-                };
-                delta += code.len() as i32;
-
-                code_buffer.splice(start..pos, code);
-            }
-
-            if let Ok(code) = std::str::from_utf8(&code_buffer) {
-                let mut label_definition: HashMap<usize, usize> = HashMap::new();
-                let mut label_uses: HashMap<usize, Vec<usize>> = HashMap::new();
-                let mut lines = Vec::new();
-                for (index, line) in code.lines().enumerate() {
-                    let mut line = line.to_string();
-                    if line.starts_with(&"label_") {
-                        let label_index: usize = line[6..line.len() - 1]
-                            .parse()
-                            .expect("Failed to parse label index");
-                        line = format!("L{func_index}_{label_index}:");
-                        label_definition.insert(label_index, index);
-                    } else if line.contains(&"label_") {
-                        let pos = line.find(&"label_").unwrap();
-                        let pos_end = pos + line[pos..].find(&")").unwrap();
-                        let label_index: usize = line[pos + 6..pos_end]
-                            .parse()
-                            .expect("Failed to parse label index");
-                        line.replace_range(pos..pos_end, &format!("L{func_index}_{label_index}"));
-                        label_uses.entry(label_index).or_default().push(index);
-                    }
-                    lines.push(line);
-                }
-
-                let mut lines_to_delete = Vec::new();
-                for (label, label_line) in label_definition {
-                    match label_uses.entry(label) {
-                        std::collections::hash_map::Entry::Occupied(uses) => {
-                            if uses.get().len() == 1 {
-                                let use_line = uses.get()[0];
-                                if use_line + 1 == label_line {
-                                    lines_to_delete.push(use_line);
-                                    lines_to_delete.push(label_line);
-                                }
-                            }
-                        }
-                        std::collections::hash_map::Entry::Vacant(_) => {
-                            lines_to_delete.push(label_line);
-                        }
-                    }
-                }
-                lines_to_delete.sort();
-                lines_to_delete.reverse();
-                for index in lines_to_delete {
-                    lines.remove(index);
-                }
-
-                println!("{}", lines.join("\n"));
-            }
 
             if options.print_size {
                 println!(
@@ -395,13 +305,6 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
 
         context.clear();
     }
-
-    let postamble = "
-finalizeExecution:
-  ${beforeLast()}  :JMPN(finalizeExecution)
-                   :JMP(start)
-";
-    println!("{postamble}");
 
     if !options.check_translation && options.print_size {
         println!("Total module code size: {} bytes", total_module_code_size);

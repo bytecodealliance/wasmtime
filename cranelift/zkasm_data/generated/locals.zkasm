@@ -2,18 +2,15 @@ start:
   zkPC + 2 => RR
   :JMP(function_1)
   :JMP(finalizeExecution)
-
 function_1:
   SP + 1 => SP
   RR :MSTORE(SP)
-  0 + 2 => A
-  0 + 2 => B
+  2 + 3 => A
+  0 + 5 => B
   B :ASSERT
   $ => RR :MLOAD(SP)
   SP - 1 => SP
   :JMP(RR)
-
 finalizeExecution:
-  ${beforeLast()}  :JMPN(finalizeExecution)
+  ${beforeLast()}  :JMPN(finalizeExecution):
                    :JMP(start)
-

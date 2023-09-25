@@ -37,6 +37,7 @@ mod test_safepoint;
 mod test_unwind;
 mod test_verifier;
 mod test_wasm;
+mod test_zkasm;
 
 /// Main entry point for `clif-util test`.
 ///
