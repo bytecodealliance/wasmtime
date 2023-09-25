@@ -1437,7 +1437,6 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
 
 #[inline]
 fn stack_pointer() -> usize {
-    // psm::stack_pointer() as usize
     let stack_pointer: usize;
     unsafe {
         cfg_if::cfg_if! {
