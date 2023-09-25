@@ -25,7 +25,7 @@ mod tests {
         // expected number of steps.
         // In the future we might need to put zero in all registers here.
         program.push("finalizeExecution:".to_string());
-        program.push("  ${beforeLast()}  :JMPN(finalizeExecution):".to_string());
+        program.push("  ${beforeLast()}  :JMPN(finalizeExecution)".to_string());
         program.push("                   :JMP(start)".to_string());
         program
     }
