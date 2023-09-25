@@ -346,4 +346,57 @@ impl Table {
             vmctx: export.vmctx,
         }
     }
+
+    /// Get a stable hash key for this table.
+    ///
+    /// Even if the same underlying table definition is added to the
+    /// `StoreData` multiple times and becomes multiple `wasmtime::Table`s,
+    /// this hash key will be consistent across all of these tables.
+    #[allow(dead_code)] // Not used yet, but added for consistency.
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl std::hash::Hash + Eq {
+        store[self.0].definition as usize
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Instance, Module, Store};
+
+    #[test]
+    fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
+        let mut store = Store::<()>::default();
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (table (export "t") 1 1 externref)
+                )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        // Each time we `get_table`, we call `Table::from_wasmtime` which adds
+        // a new entry to `StoreData`, so `t1` and `t2` will have different
+        // indices into `StoreData`.
+        let t1 = instance.get_table(&mut store, "t").unwrap();
+        let t2 = instance.get_table(&mut store, "t").unwrap();
+
+        // That said, they really point to the same table.
+        assert!(t1.get(&mut store, 0).unwrap().unwrap_externref().is_none());
+        assert!(t2.get(&mut store, 0).unwrap().unwrap_externref().is_none());
+        t1.set(&mut store, 0, Val::ExternRef(Some(ExternRef::new(42))))?;
+        assert!(t1.get(&mut store, 0).unwrap().unwrap_externref().is_some());
+        assert!(t2.get(&mut store, 0).unwrap().unwrap_externref().is_some());
+
+        // And therefore their hash keys are the same.
+        assert!(t1.hash_key(&store.as_context().0) == t2.hash_key(&store.as_context().0));
+
+        // But the hash keys are different from different tables.
+        let instance2 = Instance::new(&mut store, &module, &[])?;
+        let t3 = instance2.get_table(&mut store, "t").unwrap();
+        assert!(t1.hash_key(&store.as_context().0) != t3.hash_key(&store.as_context().0));
+
+        Ok(())
+    }
 }

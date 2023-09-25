@@ -1339,6 +1339,16 @@ impl Func {
         // (unsafely), which should be safe since we just did the type check above.
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
     }
+
+    /// Get a stable hash key for this function.
+    ///
+    /// Even if the same underlying function is added to the `StoreData`
+    /// multiple times and becomes multiple `wasmtime::Func`s, this hash key
+    /// will be consistent across all of these functions.
+    #[allow(dead_code)] // Not used yet, but added for consistency.
+    pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl std::hash::Hash + Eq {
+        self.caller_checked_func_ref(store).as_ptr() as usize
+    }
 }
 
 /// Prepares for entrance into WebAssembly.
@@ -2389,5 +2399,49 @@ mod rooted {
                 self.func().func_ref()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Instance, Module, Store};
+
+    #[test]
+    fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
+        let mut store = Store::<()>::default();
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (func (export "f")
+                        nop
+                    )
+                )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        // Each time we `get_func`, we call `Func::from_wasmtime` which adds a
+        // new entry to `StoreData`, so `f1` and `f2` will have different
+        // indices into `StoreData`.
+        let f1 = instance.get_func(&mut store, "f").unwrap();
+        let f2 = instance.get_func(&mut store, "f").unwrap();
+
+        // But their hash keys are the same.
+        assert!(
+            f1.hash_key(&mut store.as_context_mut().0)
+                == f2.hash_key(&mut store.as_context_mut().0)
+        );
+
+        // But the hash keys are different from different funcs.
+        let instance2 = Instance::new(&mut store, &module, &[])?;
+        let f3 = instance2.get_func(&mut store, "f").unwrap();
+        assert!(
+            f1.hash_key(&mut store.as_context_mut().0)
+                != f3.hash_key(&mut store.as_context_mut().0)
+        );
+
+        Ok(())
     }
 }
