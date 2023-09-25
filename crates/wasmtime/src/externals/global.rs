@@ -155,7 +155,7 @@ impl Global {
                 Val::F64(f) => *definition.as_u64_mut() = f,
                 Val::FuncRef(f) => {
                     *definition.as_func_ref_mut() = f.map_or(ptr::null_mut(), |f| {
-                        f.caller_checked_func_ref(store).as_ptr().cast()
+                        f.vm_func_ref(store).as_ptr().cast()
                     });
                 }
                 Val::ExternRef(x) => {

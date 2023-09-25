@@ -946,7 +946,7 @@ impl Func {
     /// this function is properly rooted within it. Additionally this function
     /// should not be liberally used since it's a very low-level knob.
     pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
-        self.caller_checked_func_ref(store.as_context_mut().0)
+        self.vm_func_ref(store.as_context_mut().0)
             .as_ptr()
             .cast()
     }
@@ -1080,7 +1080,7 @@ impl Func {
     }
 
     #[inline]
-    pub(crate) fn caller_checked_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
+    pub(crate) fn vm_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
         let func_data = &mut store.store_data_mut()[self.0];
         if let Some(in_store) = func_data.in_store_func_ref {
             in_store.as_non_null()
@@ -1347,7 +1347,7 @@ impl Func {
     /// will be consistent across all of these functions.
     #[allow(dead_code)] // Not used yet, but added for consistency.
     pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl std::hash::Hash + Eq {
-        self.caller_checked_func_ref(store).as_ptr() as usize
+        self.vm_func_ref(store).as_ptr() as usize
     }
 }
 
