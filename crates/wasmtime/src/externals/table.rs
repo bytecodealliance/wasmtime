@@ -6,10 +6,11 @@ use wasmtime_runtime::{self as runtime};
 
 /// A WebAssembly `table`, or an array of values.
 ///
-/// Like [`Memory`] a table is an indexed array of values, but unlike [`Memory`]
-/// it's an array of WebAssembly reference type values rather than bytes. One of
-/// the most common usages of a table is a function table for wasm modules (a
-/// `funcref` table), where each element has the `ValType::FuncRef` type.
+/// Like [`Memory`][crate::Memory] a table is an indexed array of values, but
+/// unlike [`Memory`][crate::Memory] it's an array of WebAssembly reference type
+/// values rather than bytes. One of the most common usages of a table is a
+/// function table for wasm modules (a `funcref` table), where each element has
+/// the `ValType::FuncRef` type.
 ///
 /// A [`Table`] "belongs" to the store that it was originally created within
 /// (either via [`Table::new`] or via instantiating a
