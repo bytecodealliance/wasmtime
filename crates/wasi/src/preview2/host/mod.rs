@@ -4,7 +4,6 @@ mod exit;
 pub(crate) mod filesystem;
 mod instance_network;
 mod io;
-mod logging;
 mod network;
 mod random;
 mod tcp;

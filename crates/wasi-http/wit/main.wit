@@ -30,5 +30,4 @@ world preview1-adapter-reactor {
   import wasi:cli/terminal-stdin
   import wasi:cli/terminal-stdout
   import wasi:cli/terminal-stderr
-  import wasi:logging/logging
 }

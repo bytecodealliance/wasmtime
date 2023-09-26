@@ -1,9 +1,7 @@
-use crate::bindings::{
-    http::types::{
-        Error, Fields, FutureIncomingResponse, FutureTrailers, Headers, IncomingBody, IncomingRequest,
-        IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse, ResponseOutparam,
-        Scheme, StatusCode, Trailers,
-    },
+use crate::bindings::http::types::{
+    Error, Fields, FutureIncomingResponse, FutureTrailers, Headers, IncomingBody, IncomingRequest,
+    IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse, ResponseOutparam,
+    Scheme, StatusCode, Trailers,
 };
 use crate::body::{HostFutureTrailers, HostFutureTrailersState};
 use crate::types::FieldMap;
@@ -17,12 +15,12 @@ use crate::{
 };
 use anyhow::{anyhow, Context};
 use std::any::Any;
+use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
-    bindings::io::streams::{InputStream, OutputStream},
     bindings::io::poll::Pollable,
+    bindings::io::streams::{InputStream, OutputStream},
     HostPollable, PollableFuture, TablePollableExt, TableStreamExt,
 };
-use wasmtime::component::Resource;
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
@@ -274,7 +272,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(())
     }
 
-    fn future_trailers_subscribe(&mut self, index: FutureTrailers) -> wasmtime::Result<Resource<Pollable>> {
+    fn future_trailers_subscribe(
+        &mut self,
+        index: FutureTrailers,
+    ) -> wasmtime::Result<Resource<Pollable>> {
         // Eagerly force errors about the validity of the index.
         let _ = self.table().get_future_trailers(index)?;
 
@@ -438,11 +439,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         }
     }
 
-    fn write_trailers(
-        &mut self,
-        id: Resource<OutgoingBody>,
-        ts: Trailers,
-    ) -> wasmtime::Result<()> {
+    fn write_trailers(&mut self, id: Resource<OutgoingBody>, ts: Trailers) -> wasmtime::Result<()> {
         let mut body = self.table().delete_outgoing_body(id)?;
         let trailers = self.table().get_fields(ts)?.clone();
 
@@ -462,11 +459,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         Ok(())
     }
 
-    fn drop(
-        &mut self,
-        id: Resource<OutgoingBody>
-        ) -> wasmtime::Result<()> {
-            let _ = self.table().delete_outgoing_body(id)?;
-            Ok(())
+    fn drop(&mut self, id: Resource<OutgoingBody>) -> wasmtime::Result<()> {
+        let _ = self.table().delete_outgoing_body(id)?;
+        Ok(())
     }
 }

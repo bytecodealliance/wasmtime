@@ -10,8 +10,8 @@ use crate::{
 use std::any::Any;
 use std::pin::Pin;
 use std::task;
-use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Table, TableError};
 use wasmtime::component::Resource;
+use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Table, TableError};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx;
@@ -144,13 +144,31 @@ pub trait TableHttpExt {
         id: u32,
     ) -> Result<HostFutureIncomingResponse, TableError>;
 
-    fn push_incoming_body(&mut self, body: HostIncomingBody) -> Result<Resource<IncomingBody>, TableError>;
-    fn get_incoming_body(&mut self, id: &Resource<IncomingBody>) -> Result<&mut HostIncomingBody, TableError>;
-    fn delete_incoming_body(&mut self, id: Resource<IncomingBody>) -> Result<HostIncomingBody, TableError>;
+    fn push_incoming_body(
+        &mut self,
+        body: HostIncomingBody,
+    ) -> Result<Resource<IncomingBody>, TableError>;
+    fn get_incoming_body(
+        &mut self,
+        id: &Resource<IncomingBody>,
+    ) -> Result<&mut HostIncomingBody, TableError>;
+    fn delete_incoming_body(
+        &mut self,
+        id: Resource<IncomingBody>,
+    ) -> Result<HostIncomingBody, TableError>;
 
-    fn push_outgoing_body(&mut self, body: HostOutgoingBody) -> Result<Resource<OutgoingBody>, TableError>;
-    fn get_outgoing_body(&mut self, id: &Resource<OutgoingBody>) -> Result<&mut HostOutgoingBody, TableError>;
-    fn delete_outgoing_body(&mut self, id: Resource<OutgoingBody>) -> Result<HostOutgoingBody, TableError>;
+    fn push_outgoing_body(
+        &mut self,
+        body: HostOutgoingBody,
+    ) -> Result<Resource<OutgoingBody>, TableError>;
+    fn get_outgoing_body(
+        &mut self,
+        id: &Resource<OutgoingBody>,
+    ) -> Result<&mut HostOutgoingBody, TableError>;
+    fn delete_outgoing_body(
+        &mut self,
+        id: Resource<OutgoingBody>,
+    ) -> Result<HostOutgoingBody, TableError>;
 
     fn push_future_trailers(
         &mut self,
@@ -256,27 +274,45 @@ impl TableHttpExt for Table {
         self.delete(id)
     }
 
-    fn push_incoming_body(&mut self, body: HostIncomingBody) -> Result<Resource<IncomingBody>, TableError> {
+    fn push_incoming_body(
+        &mut self,
+        body: HostIncomingBody,
+    ) -> Result<Resource<IncomingBody>, TableError> {
         Ok(Resource::new_own(self.push(Box::new(body))?))
     }
 
-    fn get_incoming_body(&mut self, id: &Resource<IncomingBody>) -> Result<&mut HostIncomingBody, TableError> {
+    fn get_incoming_body(
+        &mut self,
+        id: &Resource<IncomingBody>,
+    ) -> Result<&mut HostIncomingBody, TableError> {
         self.get_mut(id.rep())
     }
 
-    fn delete_incoming_body(&mut self, id: Resource<IncomingBody>) -> Result<HostIncomingBody, TableError> {
+    fn delete_incoming_body(
+        &mut self,
+        id: Resource<IncomingBody>,
+    ) -> Result<HostIncomingBody, TableError> {
         self.delete(id.rep())
     }
 
-    fn push_outgoing_body(&mut self, body: HostOutgoingBody) -> Result<Resource<OutgoingBody>, TableError> {
+    fn push_outgoing_body(
+        &mut self,
+        body: HostOutgoingBody,
+    ) -> Result<Resource<OutgoingBody>, TableError> {
         Ok(Resource::new_own(self.push(Box::new(body))?))
     }
 
-    fn get_outgoing_body(&mut self, id: &Resource<OutgoingBody>) -> Result<&mut HostOutgoingBody, TableError> {
+    fn get_outgoing_body(
+        &mut self,
+        id: &Resource<OutgoingBody>,
+    ) -> Result<&mut HostOutgoingBody, TableError> {
         self.get_mut(id.rep())
     }
 
-    fn delete_outgoing_body(&mut self, id: Resource<OutgoingBody>) -> Result<HostOutgoingBody, TableError> {
+    fn delete_outgoing_body(
+        &mut self,
+        id: Resource<OutgoingBody>,
+    ) -> Result<HostOutgoingBody, TableError> {
         self.delete(id.rep())
     }
 
