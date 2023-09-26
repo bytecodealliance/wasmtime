@@ -1038,7 +1038,7 @@ fn pass_guest_back_as_borrow() -> Result<()> {
                     )
 
                     (func (export "take") (param i32)
-                        (if (i32.ne (local.get 0) (i32.const 100)) (unreachable))
+                        (if (i32.ne (local.get 0) (i32.const 100)) (then (unreachable)))
                     )
                 )
                 (core instance $i (instantiate $m
@@ -1228,8 +1228,8 @@ fn guest_different_host_same() -> Result<()> {
 
                     (func (export "f") (param i32 i32)
                         ;; separate tables both have initial index of 0
-                        (if (i32.ne (local.get 0) (i32.const 0)) (unreachable))
-                        (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
+                        (if (i32.ne (local.get 0) (i32.const 0)) (then (unreachable)))
+                        (if (i32.ne (local.get 1) (i32.const 0)) (then (unreachable)))
 
                         ;; host should end up getting the same resource
                         (call $f (local.get 0) (local.get 1))
