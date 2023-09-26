@@ -2285,6 +2285,20 @@ pub(crate) fn emit(
             let src1 = allocs.next(src1.to_reg());
             let src2 = src2.clone().to_reg_mem_imm().with_allocs(allocs);
 
+            // When the opcode is commutative, src1 is xmm{0..7}, and src2 is
+            // xmm{8..15}, then we can swap the operands to save one byte on the
+            // instruction's encoding.
+            let (src1, src2) = match (src1, src2) {
+                (src1, RegMemImm::Reg { reg: src2 })
+                    if op.is_commutative()
+                        && src1.to_real_reg().unwrap().hw_enc() < 8
+                        && src2.to_real_reg().unwrap().hw_enc() >= 8 =>
+                {
+                    (src2, RegMemImm::Reg { reg: src1 })
+                }
+                (src1, src2) => (src1, src2),
+            };
+
             let src2 = match src2 {
                 // For opcodes where one of the operands is an immediate the
                 // encoding is a bit different, notably the usage of
@@ -2319,6 +2333,7 @@ pub(crate) fn emit(
                 }
                 RegMemImm::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
             };
+
             let (prefix, map, opcode) = match op {
                 AvxOpcode::Vminps => (LP::None, OM::_0F, 0x5D),
                 AvxOpcode::Vminpd => (LP::_66, OM::_0F, 0x5D),
