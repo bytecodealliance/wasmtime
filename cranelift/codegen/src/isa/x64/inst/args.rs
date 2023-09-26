@@ -669,6 +669,12 @@ impl From<RegMem> for RegMemImm {
     }
 }
 
+impl From<Reg> for RegMemImm {
+    fn from(reg: Reg) -> Self {
+        RegMemImm::Reg { reg }
+    }
+}
+
 impl PrettyPrint for RegMemImm {
     fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
@@ -1759,6 +1765,47 @@ impl AvxOpcode {
             AvxOpcode::Vpbroadcastb | AvxOpcode::Vpbroadcastw | AvxOpcode::Vpbroadcastd => {
                 smallvec![InstructionSet::AVX2]
             }
+        }
+    }
+
+    /// Is the opcode known to be commutative?
+    ///
+    /// Note that this method is not exhaustive, and there may be commutative
+    /// opcodes that we don't recognize as commutative.
+    pub(crate) fn is_commutative(&self) -> bool {
+        match *self {
+            AvxOpcode::Vpaddb
+            | AvxOpcode::Vpaddw
+            | AvxOpcode::Vpaddd
+            | AvxOpcode::Vpaddq
+            | AvxOpcode::Vpaddsb
+            | AvxOpcode::Vpaddsw
+            | AvxOpcode::Vpaddusb
+            | AvxOpcode::Vpaddusw
+            | AvxOpcode::Vpand
+            | AvxOpcode::Vandps
+            | AvxOpcode::Vandpd
+            | AvxOpcode::Vpor
+            | AvxOpcode::Vorps
+            | AvxOpcode::Vorpd
+            | AvxOpcode::Vpxor
+            | AvxOpcode::Vxorps
+            | AvxOpcode::Vxorpd
+            | AvxOpcode::Vpmuldq
+            | AvxOpcode::Vpmuludq
+            | AvxOpcode::Vaddps
+            | AvxOpcode::Vaddpd
+            | AvxOpcode::Vmulps
+            | AvxOpcode::Vmulpd
+            | AvxOpcode::Vpcmpeqb
+            | AvxOpcode::Vpcmpeqw
+            | AvxOpcode::Vpcmpeqd
+            | AvxOpcode::Vpcmpeqq
+            | AvxOpcode::Vaddss
+            | AvxOpcode::Vaddsd
+            | AvxOpcode::Vmulss
+            | AvxOpcode::Vmulsd => true,
+            _ => false,
         }
     }
 }
