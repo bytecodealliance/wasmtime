@@ -84,7 +84,7 @@ where
             !store.0.async_support(),
             "must use `call_async` with async stores"
         );
-        let func = self.func.caller_checked_func_ref(store.0);
+        let func = self.func.vm_func_ref(store.0);
         unsafe { Self::call_raw(&mut store, func, params) }
     }
 
@@ -122,7 +122,7 @@ where
         );
         store
             .on_fiber(|store| {
-                let func = self.func.caller_checked_func_ref(store.0);
+                let func = self.func.vm_func_ref(store.0);
                 unsafe { Self::call_raw(store, func, params) }
             })
             .await?
@@ -439,7 +439,7 @@ unsafe impl WasmTy for Option<Func> {
     #[inline]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
         if let Some(f) = self {
-            f.caller_checked_func_ref(store).as_ptr()
+            f.vm_func_ref(store).as_ptr()
         } else {
             ptr::null_mut()
         }
