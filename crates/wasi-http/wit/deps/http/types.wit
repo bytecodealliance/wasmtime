@@ -142,19 +142,18 @@ interface types {
   // incoming-body.
   incoming-response-consume: func(response: /* borrow */ incoming-response) -> result</* child */ incoming-body>
 
-  type incoming-body = u32
-  drop-incoming-body: func(this: /* own */ incoming-body)
-
-  // returned input-stream is a child - the implementation may trap if
-  // incoming-body is dropped (or consumed by call to
-  // incoming-body-finish) before the input-stream is dropped.
-  // May be called at most once. returns error if called additional times.
-  incoming-body-stream: func(this: /* borrow */ incoming-body) ->
-    result</* child */ input-stream>
-  // takes ownership of incoming-body. this will trap if the
-  // incoming-body-stream child is still alive!
-  incoming-body-finish: func(this: /* own */ incoming-body) ->
-    /* transitive child of the incoming-response of incoming-body */ future-trailers
+  resource incoming-body {
+    // returned input-stream is a child - the implementation may trap if
+    // incoming-body is dropped (or consumed by call to
+    // incoming-body-finish) before the input-stream is dropped.
+    // May be called at most once. returns error if called additional times.
+    %stream: func() ->
+      result</* child */ input-stream>
+    // takes ownership of incoming-body. this will trap if the
+    // incoming-body-stream child is still alive!
+    finish: func() ->
+      /* transitive child of the incoming-response of incoming-body */ future-trailers
+  }
 
   type future-trailers = u32
   drop-future-trailers: func(this: /* own */ future-trailers)
@@ -176,14 +175,14 @@ interface types {
   /// return an error.
   outgoing-response-write: func(this: /* borrow */ outgoing-response) -> result</* child */ outgoing-body>
 
-  type outgoing-body = u32
-  drop-outgoing-body: func(this: /* own */ outgoing-body)
-  /// Will give the child output-stream at most once. subsequent calls will
-  /// return an error.
-  outgoing-body-write: func(this: /* borrow */ outgoing-body) -> result</* child */ output-stream>
-  /// Write trailers as the way to finish an outgoing-body. To finish an
-  /// outgoing-body without writing trailers, use drop-outgoing-body.
-  outgoing-body-write-trailers: func(this: /* own */ outgoing-body, trailers: /* own */ trailers)
+  resource outgoing-body {
+    /// Will give the child output-stream at most once. subsequent calls will
+    /// return an error.
+    write: func() -> result</* child */ output-stream>
+    /// Write trailers as the way to finish an outgoing-body. To finish an
+    /// outgoing-body without writing trailers, use drop-outgoing-body.
+    write-trailers: func(trailers: /* own */ trailers)
+  }
 
   /// The following block defines a special resource type used by the
   /// `wasi:http/outgoing-handler` interface to emulate

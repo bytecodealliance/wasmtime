@@ -19,7 +19,7 @@ pub mod bindings {
         async: false,
         with: {
             "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
-            "wasi:poll/poll": wasmtime_wasi::preview2::bindings::poll::poll,
+            "wasi:io/poll": wasmtime_wasi::preview2::bindings::io::poll,
         }
     });
 
