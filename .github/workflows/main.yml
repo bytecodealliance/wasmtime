@@ -37,7 +37,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Check Code style quickly by running `rustfmt` over all code
+  test_zkasm:
+    name: Test generated zkAsm
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: ./ci/test-zk.sh --install-zkwasm --all
+
   rustfmt:
     name: Rustfmt
     runs-on: ubuntu-latest

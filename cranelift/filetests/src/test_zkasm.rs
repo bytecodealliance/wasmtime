@@ -191,6 +191,5 @@ mod tests {
         counter,
         fibonacci,
         add_func,
-        add_memory,
     }
 }
