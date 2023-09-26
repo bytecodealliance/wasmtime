@@ -1,10 +1,11 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::CodeGenContext;
+use crate::codegen::{CodeGenContext, TableData};
 use crate::isa::reg::Reg;
-use crate::regalloc::RegAlloc;
 use cranelift_codegen::{Final, MachBufferFinalized, MachLabel};
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
+
+pub(crate) use cranelift_codegen::ir::TrapCode;
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum DivKind {
@@ -112,6 +113,17 @@ impl OperandSize {
             OperandSize::S128 => 7,
         }
     }
+
+    /// Create an [`OperandSize`]  from the given number of bytes.
+    pub fn from_bytes(bytes: u8) -> Self {
+        use OperandSize::*;
+        match bytes {
+            4 => S32,
+            8 => S64,
+            16 => S128,
+            _ => panic!("Invalid bytes {} for OperandSize", bytes),
+        }
+    }
 }
 
 /// An abstraction over a register or immediate.
@@ -177,6 +189,18 @@ pub(crate) enum CalleeKind {
     Indirect(Reg),
     /// A function call to a local function.
     Direct(u32),
+}
+
+impl CalleeKind {
+    /// Creates a callee kind from a register.
+    pub fn indirect(reg: Reg) -> Self {
+        Self::Indirect(reg)
+    }
+
+    /// Creates a direct callee kind from a function index.
+    pub fn direct(index: u32) -> Self {
+        Self::Direct(index)
+    }
 }
 
 impl RegImm {
@@ -281,6 +305,16 @@ pub(crate) trait MacroAssembler {
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
 
+    /// Loads the address of the table element at a given index.
+    /// Returns a register that contains address of the table element.
+    fn table_elem_address(
+        &mut self,
+        index: Reg,
+        size: OperandSize,
+        table_data: &TableData,
+        context: &mut CodeGenContext,
+    ) -> Reg;
+
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
     /// offset)].
@@ -289,6 +323,11 @@ pub(crate) trait MacroAssembler {
     /// Constructs an address with an offset that is absolute to the
     /// current position of the stack pointer (e.g. [sp + offset].
     fn address_at_sp(&self, offset: u32) -> Self::Address;
+
+    /// Alias for [`Self::address_at_reg`] using the VMContext register as
+    /// a base. The VMContext register is derived from the ABI type that is
+    /// associated to the MacroAssembler.
+    fn address_at_vmctx(&self, offset: u32) -> Self::Address;
 
     /// Construct an address that is absolute to the current position
     /// of the given register.
@@ -305,6 +344,10 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a stack load.
     fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
+
+    /// Alias for `MacroAssembler::load` with the operand size corresponding
+    /// to the pointer size of the target.
+    fn load_ptr(&mut self, src: Self::Address, dst: Reg);
 
     /// Pop a value from the machine stack into the given register.
     fn pop(&mut self, dst: Reg, size: OperandSize);
@@ -406,7 +449,7 @@ pub(crate) trait MacroAssembler {
     /// The default implementation divides the given memory range
     /// into word-sized slots. Then it unrolls a series of store
     /// instructions, effectively assigning zero to each slot.
-    fn zero_mem_range(&mut self, mem: &Range<u32>, regalloc: &mut RegAlloc) {
+    fn zero_mem_range(&mut self, mem: &Range<u32>) {
         let word_size = <Self::ABI as abi::ABI>::word_bytes();
         if mem.is_empty() {
             return;
@@ -437,7 +480,7 @@ pub(crate) trait MacroAssembler {
             // Add an upper bound to this generation;
             // given a considerably large amount of slots
             // this will be inefficient.
-            let zero = regalloc.scratch;
+            let zero = <Self::ABI as abi::ABI>::scratch_reg();
             self.zero(zero);
             let zero = RegImm::reg(zero);
 
@@ -460,14 +503,7 @@ pub(crate) trait MacroAssembler {
     /// Performs a comparison between the two operands,
     /// and immediately after emits a jump to the given
     /// label destination if the condition is met.
-    fn branch(
-        &mut self,
-        kind: CmpKind,
-        lhs: RegImm,
-        rhs: RegImm,
-        taken: MachLabel,
-        size: OperandSize,
-    );
+    fn branch(&mut self, kind: CmpKind, lhs: RegImm, rhs: Reg, taken: MachLabel, size: OperandSize);
 
     /// Emits and unconditional jump to the given label.
     fn jmp(&mut self, target: MachLabel);
@@ -478,4 +514,7 @@ pub(crate) trait MacroAssembler {
 
     /// Emit an unreachable code trap.
     fn unreachable(&mut self);
+
+    /// Traps if the condition code is met.
+    fn trapif(&mut self, cc: CmpKind, code: TrapCode);
 }

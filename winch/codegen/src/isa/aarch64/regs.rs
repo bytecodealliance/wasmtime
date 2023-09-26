@@ -131,7 +131,8 @@ pub(crate) const fn shadow_sp() -> Reg {
     xreg(28)
 }
 
-const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
+/// Bitmask for non-allocatble GPR.
+pub(crate) const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
     | (1 << ip1().hw_enc())
     | (1 << platform().hw_enc())
     | (1 << fp().hw_enc())

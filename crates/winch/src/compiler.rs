@@ -68,7 +68,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut validator = validator.into_validator(self.take_allocations());
         let buffer = self
             .isa
-            .compile_function(ty, &body, &translation, &mut validator)
+            .compile_function(ty, types, &body, &translation, &mut validator)
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;

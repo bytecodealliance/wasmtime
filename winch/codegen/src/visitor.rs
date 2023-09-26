@@ -5,8 +5,7 @@
 //! machine code emitter.
 
 use crate::abi::ABI;
-use crate::codegen::ControlStackFrame;
-use crate::codegen::{control_index, CodeGen};
+use crate::codegen::{control_index, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
     CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, RoundingMode, ShiftKind,
 };
@@ -14,7 +13,9 @@ use crate::stack::{TypedReg, Val};
 use smallvec::SmallVec;
 use wasmparser::BrTable;
 use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
-use wasmtime_environ::{FuncIndex, GlobalIndex, WasmType};
+use wasmtime_environ::{
+    FuncIndex, GlobalIndex, TableIndex, TableStyle, TypeIndex, WasmType, FUNCREF_MASK,
+};
 
 /// A macro to define unsupported WebAssembly operators.
 ///
@@ -130,6 +131,8 @@ macro_rules! def_unsupported {
     (emit Select $($rest:tt)*) => {};
     (emit Drop $($rest:tt)*) => {};
     (emit BrTable $($rest:tt)*) => {};
+    (emit CallIndirect $($rest:tt)*) => {};
+
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -609,14 +612,97 @@ where
         }
     }
 
-    // TODO verify the case where the target local is on the stack.
+    // TODO: verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
         let src = self.context.set_local(self.masm, index);
         self.context.free_reg(src);
     }
 
     fn visit_call(&mut self, index: u32) {
-        self.emit_call(FuncIndex::from_u32(index));
+        let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
+        self.emit_call(callee);
+    }
+
+    fn visit_call_indirect(&mut self, type_index: u32, table_index: u32, _: u8) {
+        let type_index = TypeIndex::from_u32(type_index);
+        let table_index = TableIndex::from_u32(table_index);
+        let table_data = self.env.resolve_table_data(table_index);
+        let ptr_type = self.env.ptr_type();
+
+        let builtin = self
+            .env
+            .builtins
+            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
+
+        FnCall::new_unchecked(&builtin.sig).with_lib(
+            self.masm,
+            &mut self.context,
+            &builtin,
+            |cx, masm, call, callee| {
+                // Calcualte the table element address.
+                let index = cx.pop_to_reg(masm, None);
+                let elem_addr =
+                    masm.table_elem_address(index.into(), index.ty.into(), &table_data, cx);
+
+                let defined = masm.get_label();
+                let cont = masm.get_label();
+
+                // Preemptively move the table element address to the
+                // result register, to avoid conflicts at the control flow merge.
+                let result = call.abi_sig.result.result_reg().unwrap();
+                masm.mov(elem_addr.into(), result, ptr_type.into());
+                cx.free_reg(result);
+
+                // Push the builtin function arguments to the stack.
+                cx.stack
+                    .push(TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into());
+                cx.stack.push(table_index.as_u32().try_into().unwrap());
+                cx.stack.push(index.into());
+
+                masm.branch(
+                    CmpKind::Ne,
+                    elem_addr.into(),
+                    elem_addr,
+                    defined,
+                    ptr_type.into(),
+                );
+
+                call.reg(masm, cx, callee);
+                // We know the signature of the libcall in this case, so we assert that there's
+                // one element in the stack and that it's  the ABI signature's result register.
+                let top = cx.stack.peek().unwrap();
+                let top = top.get_reg();
+                debug_assert!(top.reg == result);
+                masm.jmp(cont);
+
+                // In the defined case, mask the funcref address in place, by peeking into the
+                // last element of the value stack, which was pushed by the `indirect` function
+                // call above.
+                masm.bind(defined);
+                let imm = RegImm::i64(FUNCREF_MASK as i64);
+                let dst = top.into();
+                masm.and(dst, dst, imm, top.ty.into());
+
+                masm.bind(cont);
+                // The indirect call above, will take care of freeing the registers used as
+                // params.
+                // So we only free the params used to lazily initialize the func ref.
+                cx.free_reg(elem_addr);
+            },
+        );
+
+        // Perform the indirect call.
+        match self.env.translation.module.table_plans[table_index].style {
+            TableStyle::CallerChecksSignature => {
+                let funcref_ptr = self.context.stack.peek().map(|v| v.get_reg()).unwrap();
+                self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
+            }
+        }
+
+        // Perform call indirect.
+        // `emit_call` expects the callee to be on the stack. Delaying the
+        // computation of the callee address reduces register pressure.
+        self.emit_call(self.env.funcref(type_index));
     }
 
     fn visit_nop(&mut self) {}
@@ -671,11 +757,12 @@ where
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
         let result = frame.as_target_result();
-        let top =
-            self.context
-                .without::<TypedReg, M, _>(result.result_reg(), self.masm, |ctx, masm| {
-                    ctx.pop_to_reg(masm, None)
-                });
+        let top = self.context.without::<TypedReg, M, _>(
+            result.regs(),
+            result.regs(),
+            self.masm,
+            |ctx, masm| ctx.pop_to_reg(masm, None),
+        );
         self.context.pop_abi_results(&result, self.masm);
         self.context.push_abi_results(&result, self.masm);
         self.masm.branch(
@@ -699,7 +786,8 @@ where
         let default_index = control_index(targets.default(), self.control_frames.len());
         let default_result = self.control_frames[default_index].as_target_result();
         let (index, tmp) = self.context.without::<(TypedReg, _), M, _>(
-            default_result.result_reg(),
+            default_result.regs(),
+            default_result.regs(),
             self.masm,
             |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
         );

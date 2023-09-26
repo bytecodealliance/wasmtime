@@ -72,6 +72,10 @@ pub(crate) trait ABI {
     /// function type.
     fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
 
+    /// Construct an ABI siganture from WasmType params and returns.
+    fn sig_from(params: &[WasmType], returns: &[WasmType], call_conv: &CallingConvention)
+        -> ABISig;
+
     /// Construct the ABI-specific result from a slice of
     /// [`wasmtime_environ::WasmtType`].
     fn result(returns: &[WasmType], call_conv: &CallingConvention) -> ABIResult;
@@ -107,7 +111,7 @@ pub(crate) trait ABI {
 
 /// ABI-specific representation of a function argument.
 #[derive(Debug)]
-pub(crate) enum ABIArg {
+pub enum ABIArg {
     /// A register argument.
     Reg {
         /// Type of the argument.
@@ -212,11 +216,20 @@ impl ABIResult {
             1
         }
     }
+
+    /// Returns an iterator over the result registers.
+    ///
+    /// NOTE: Currently only one or zero registers
+    /// will be returned until suport for multi-value is introduced.
+    pub fn regs(&self) -> impl Iterator<Item = Reg> + '_ {
+        std::iter::once(self.result_reg()).filter_map(|v| v)
+    }
 }
 
 pub(crate) type ABIParams = SmallVec<[ABIArg; 6]>;
 
 /// An ABI-specific representation of a function signature.
+#[derive(Debug)]
 pub(crate) struct ABISig {
     /// Function parameters.
     pub params: ABIParams,
@@ -234,6 +247,18 @@ impl ABISig {
             result,
             stack_bytes,
         }
+    }
+
+    /// Returns an iterator over all the registers used as params.
+    pub fn param_regs(&self) -> impl Iterator<Item = Reg> + '_ {
+        self.params.iter().filter_map(|r| r.get_reg())
+    }
+
+    /// Returns an iterator over all the registers used in the signature.
+    pub fn regs(&self) -> impl Iterator<Item = Reg> + '_ {
+        let params_iter = self.param_regs();
+        let result_iter = self.result.regs();
+        params_iter.chain(result_iter)
     }
 }
 

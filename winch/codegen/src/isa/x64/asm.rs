@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::{Reg, RegClass},
-    masm::{CalleeKind, CmpKind, DivKind, OperandSize, RemKind, RoundingMode, ShiftKind},
+    masm::{CmpKind, DivKind, OperandSize, RemKind, RoundingMode, ShiftKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
@@ -845,41 +845,35 @@ impl Assembler {
         })
     }
 
-    /// Emit a function call to a known or unknown location.
-    ///
-    /// A known location is a locally defined function index.
-    /// An unknown location is an address whose value is located
-    /// ina register.
-    pub fn call(&mut self, callee: CalleeKind) {
-        match callee {
-            CalleeKind::Indirect(reg) => {
-                self.emit(Inst::CallUnknown {
-                    dest: RegMem::reg(reg.into()),
-                    info: Box::new(CallInfo {
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        clobbers: Default::default(),
-                        opcode: Opcode::Call,
-                        callee_pop_size: 0,
-                        callee_conv: CallConv::SystemV,
-                    }),
-                });
-            }
-            CalleeKind::Direct(index) => {
-                let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
-                self.emit(Inst::CallKnown {
-                    dest,
-                    info: Box::new(CallInfo {
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        clobbers: Default::default(),
-                        opcode: Opcode::Call,
-                        callee_pop_size: 0,
-                        callee_conv: CallConv::SystemV,
-                    }),
-                });
-            }
-        }
+    /// Emit a call to an unknown location through a register.
+    pub fn call_with_reg(&mut self, callee: Reg) {
+        self.emit(Inst::CallUnknown {
+            dest: RegMem::reg(callee.into()),
+            info: Box::new(CallInfo {
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: Default::default(),
+                opcode: Opcode::Call,
+                callee_pop_size: 0,
+                callee_conv: CallConv::SystemV,
+            }),
+        });
+    }
+
+    /// Emit a call to a locally defined function through an index.
+    pub fn call_with_index(&mut self, index: u32) {
+        let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
+        self.emit(Inst::CallKnown {
+            dest,
+            info: Box::new(CallInfo {
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: Default::default(),
+                opcode: Opcode::Call,
+                callee_pop_size: 0,
+                callee_conv: CallConv::SystemV,
+            }),
+        });
     }
 
     /// Emits a conditional jump to the given label.
@@ -916,5 +910,13 @@ impl Assembler {
     /// Emit a trap instruction.
     pub fn trap(&mut self, code: TrapCode) {
         self.emit(Inst::Ud2 { trap_code: code })
+    }
+
+    /// Conditional trap.
+    pub fn trapif(&mut self, cc: CmpKind, trap_code: TrapCode) {
+        self.emit(Inst::TrapIf {
+            cc: cc.into(),
+            trap_code,
+        });
     }
 }

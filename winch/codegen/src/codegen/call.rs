@@ -2,7 +2,7 @@
 //! calling convention, see [ABI].
 use crate::{
     abi::{ABIArg, ABISig, ABI},
-    codegen::CodeGenContext,
+    codegen::{BuiltinFunction, CodeGenContext},
     masm::{CalleeKind, MacroAssembler, OperandSize},
     reg::Reg,
 };
@@ -57,13 +57,13 @@ pub(crate) struct FnCall<'a> {
     /// │                                                  │
     /// └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
     ///
-    call_stack_space: u32,
+    call_stack_space: Option<u32>,
     /// The total stack space needed for the callee arguments on the
     /// stack, including any adjustments to the function's frame and
     /// aligned to to the required ABI alignment.
     arg_stack_space: u32,
     /// The ABI-specific signature of the callee.
-    abi_sig: &'a ABISig,
+    pub abi_sig: &'a ABISig,
 }
 
 impl<'a> FnCall<'a> {
@@ -84,10 +84,38 @@ impl<'a> FnCall<'a> {
         context: &mut CodeGenContext,
         masm: &mut M,
     ) -> Self {
-        let stack = &context.stack;
         let arg_stack_space = callee_sig.stack_bytes;
-        let callee_params = &callee_sig.params;
+        let mut call = Self {
+            abi_sig: &callee_sig,
+            arg_stack_space,
+            call_stack_space: None,
+        };
+        // When all the information is known upfront, we can optimize and
+        // calcualte the stack space needed by the call right away.
+        call.save_live_registers(context, masm);
+        call
+    }
 
+    /// Creates a new [`FnCall`] from an [`ABISIg`] without checking if the
+    /// stack has the correct amount of values for the call.
+    /// This happens in situations in which not all the information is known
+    /// upfront in order to fulfill the call, like for example with dealing
+    /// with libcalls.
+    pub fn new_unchecked(sig: &'a ABISig) -> Self {
+        Self {
+            abi_sig: sig,
+            call_stack_space: None,
+            arg_stack_space: sig.stack_bytes,
+        }
+    }
+
+    fn save_live_registers<M: MacroAssembler>(
+        &mut self,
+        context: &mut CodeGenContext,
+        masm: &mut M,
+    ) {
+        let callee_params = &self.abi_sig.params;
+        let stack = &context.stack;
         let call_stack_space = match callee_params.len() {
             0 => {
                 let _ = context.save_live_registers_and_calculate_sizeof(masm, ..);
@@ -126,45 +154,124 @@ impl<'a> FnCall<'a> {
             }
         };
 
-        Self {
-            abi_sig: &callee_sig,
-            arg_stack_space,
-            call_stack_space,
-        }
+        self.call_stack_space = Some(call_stack_space);
+    }
+
+    /// Used to calculate the stack space just before emitting the function
+    /// call, which is when all the information to emit the call is expected to
+    /// be available.
+    fn calculate_call_stack_space(&mut self, context: &mut CodeGenContext) {
+        let params_len = self.abi_sig.params.len();
+        assert!(context.stack.len() >= params_len);
+
+        let stack_len = context.stack.len();
+        let call_stack_space = if params_len == 0 {
+            0
+        } else {
+            context.stack.sizeof((stack_len - params_len)..)
+        };
+        self.call_stack_space = Some(call_stack_space);
     }
 
     /// Emit a direct function call, to a locally defined function.
     pub fn direct<M: MacroAssembler>(
-        &self,
+        &mut self,
         masm: &mut M,
         context: &mut CodeGenContext,
         callee: FuncIndex,
     ) {
+        if self.call_stack_space.is_none() {
+            self.calculate_call_stack_space(context);
+        }
         let reserved_stack = masm.call(self.arg_stack_space, |masm| {
             self.assign_args(context, masm, <M::ABI as ABI>::scratch_reg());
-            CalleeKind::Direct(callee.as_u32())
+            CalleeKind::direct(callee.as_u32())
         });
         self.post_call::<M>(masm, context, reserved_stack);
     }
 
-    /// Emit an indirect function call, using a raw address.
-    pub fn indirect<M: MacroAssembler>(
-        &self,
-        masm: &mut M,
-        context: &mut CodeGenContext,
-        addr: M::Address,
-    ) {
+    /// Emit an indirect function call, using a register.
+    pub fn reg<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext, reg: Reg) {
+        if self.call_stack_space.is_none() {
+            self.calculate_call_stack_space(context);
+        }
+
         let reserved_stack = masm.call(self.arg_stack_space, |masm| {
             let scratch = <M::ABI as ABI>::scratch_reg();
             self.assign_args(context, masm, scratch);
-            masm.load(addr, scratch, OperandSize::S64);
-            CalleeKind::Indirect(scratch)
+            CalleeKind::indirect(reg)
         });
+        context.free_reg(reg);
         self.post_call::<M>(masm, context, reserved_stack);
     }
 
+    /// Emit an indirect function call, using a an address.
+    /// This function will load the provided address into a unallocatable
+    /// scratch register.
+    pub fn addr<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        context: &mut CodeGenContext,
+        callee: M::Address,
+    ) {
+        if self.call_stack_space.is_none() {
+            self.calculate_call_stack_space(context);
+        }
+
+        let reserved_stack = masm.call(self.arg_stack_space, |masm| {
+            let scratch = <M::ABI as ABI>::scratch_reg();
+            self.assign_args(context, masm, scratch);
+            masm.load(callee, scratch, OperandSize::S64);
+            CalleeKind::indirect(scratch)
+        });
+
+        self.post_call::<M>(masm, context, reserved_stack);
+    }
+
+    /// Prepares the compiler to call a built-in function (libcall).
+    /// This fuction, saves all the live registers and loads the callee
+    /// address into a non-argument register which is then passed to the
+    /// caller through the provided callback.
+    ///
+    /// It is the caller's responsibility to finalize the function call
+    /// by calling `FnCall::reg` once all the information is known.
+    pub fn with_lib<M: MacroAssembler, F>(
+        &mut self,
+        masm: &mut M,
+        context: &mut CodeGenContext,
+        func: &BuiltinFunction,
+        mut f: F,
+    ) where
+        F: FnMut(&mut CodeGenContext, &mut M, &mut Self, Reg),
+    {
+        // When dealing with libcalls, we don't have all the information
+        // upfront (all necessary arguments in the stack) in order to optimize
+        // saving the live registers, so we save all the values available in
+        // the value stack.
+        context.spill(masm);
+        let vmctx = <M::ABI as ABI>::vmctx_reg();
+        let scratch = <M::ABI as ABI>::scratch_reg();
+
+        let builtins_base = masm.address_at_reg(vmctx, func.base);
+        masm.load(builtins_base, scratch, OperandSize::S64);
+        let builtin_func_addr = masm.address_at_reg(scratch, func.offset);
+        context.without::<(), M, _>(
+            // Do not free the result registers if any as the function call will
+            // push them onto the stack as a result of the call.
+            self.abi_sig.regs(),
+            self.abi_sig.param_regs(),
+            masm,
+            |cx, masm| {
+                let callee = cx.any_gpr(masm);
+                masm.load_ptr(builtin_func_addr, callee);
+                f(cx, masm, self, callee);
+                cx.free_reg(callee);
+            },
+        );
+    }
+
     fn post_call<M: MacroAssembler>(&self, masm: &mut M, context: &mut CodeGenContext, size: u32) {
-        masm.free_stack(self.call_stack_space + size);
+        masm.free_stack(self.call_stack_space.unwrap() + size);
         // Only account for registers given that any memory entries
         // consumed by the call (assigned to a register or to a stack
         // slot) were freed by the previous call to
