@@ -5,6 +5,8 @@
 
 use anyhow::Result;
 use clap::Parser;
+#[cfg(all(feature = "component-model", feature = "wasi-http"))]
+use wasmtime_cli::commands::ServeCommand;
 use wasmtime_cli::commands::{
     CompileCommand, ConfigCommand, ExploreCommand, RunCommand, SettingsCommand, WastCommand,
 };
@@ -55,7 +57,7 @@ enum Subcommand {
     Run(RunCommand),
     /// Serves requests from a wasi-http proxy component.
     #[cfg(all(feature = "component-model", feature = "wasi-http"))]
-    Serve(RunCommand),
+    Serve(ServeCommand),
     /// Displays available Cranelift settings for a target.
     Settings(SettingsCommand),
     /// Runs a WebAssembly test script file

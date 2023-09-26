@@ -65,12 +65,13 @@ pub struct ServeCommand {
     common: CommonOptions,
 
     /// The WebAssembly component to run.
-    #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
+    #[clap(value_name = "WASM", required = true)]
     component: PathBuf,
 }
 
 impl ServeCommand {
-    fn execute(mut self) -> Result<()> {
+    /// Start a server to run the given wasi-http proxy component
+    pub fn execute(mut self) -> Result<()> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_time()
             .enable_io()
@@ -91,7 +92,16 @@ impl ServeCommand {
         Ok(())
     }
 
-    fn set_preview2_ctx(&self, linker: &mut Linker<Host>) -> Result<()> {
+    fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
+        wasmtime_wasi::preview2::bindings::filesystem::types::add_to_linker(linker, |a| a)?;
+        wasmtime_wasi::preview2::bindings::filesystem::preopens::add_to_linker(linker, |a| a)?;
+        wasmtime_wasi::preview2::bindings::cli::environment::add_to_linker(linker, |a| a)?;
+        wasmtime_wasi::preview2::bindings::cli::exit::add_to_linker(linker, |a| a)?;
+        wasmtime_wasi::preview2::bindings::cli::terminal_input::add_to_linker(linker, |a| a)?;
+        wasmtime_wasi::preview2::bindings::cli::terminal_output::add_to_linker(linker, |a| a)?;
+        wasmtime_wasi::preview2::bindings::cli::terminal_stdin::add_to_linker(linker, |a| a)?;
+        wasmtime_wasi::preview2::bindings::cli::terminal_stdout::add_to_linker(linker, |a| a)?;
+        wasmtime_wasi::preview2::bindings::cli::terminal_stderr::add_to_linker(linker, |a| a)?;
         wasmtime_wasi_http::proxy::add_to_linker(linker)?;
         Ok(())
     }
@@ -100,12 +110,13 @@ impl ServeCommand {
         use hyper::server::conn::http1;
 
         let mut config = self.common.config(None)?;
+        config.wasm_component_model(true);
         config.async_support(true);
 
         let engine = Arc::new(Engine::new(&config)?);
         let mut linker = Linker::new(&engine);
 
-        self.set_preview2_ctx(&mut linker)?;
+        self.add_to_linker(&mut linker)?;
 
         let component = Component::from_file(&engine, &self.component)?;
 
@@ -171,9 +182,11 @@ impl hyper::service::Service<Request> for ProxyHandler {
             let (sender, receiver) = tokio::sync::oneshot::channel();
             let out = store.data_mut().new_response_outparam(sender)?;
 
-            let (proxy, inst) =
-                wasmtime_wasi_http::proxy::Proxy::instantiate_pre(&mut store, &handler.instance_pre)
-                    .await?;
+            let (proxy, _inst) = wasmtime_wasi_http::proxy::Proxy::instantiate_pre(
+                &mut store,
+                &handler.instance_pre,
+            )
+            .await?;
 
             // TODO: need to track the join handle, but don't want to block the response on it
             tokio::task::spawn(async move {

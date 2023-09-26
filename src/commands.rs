@@ -11,3 +11,6 @@ mod wast;
 mod serve;
 
 pub use self::{compile::*, config::*, explore::*, run::*, settings::*, wast::*};
+
+#[cfg(all(feature = "component-model", feature = "wasi-http"))]
+pub use self::serve::*;
