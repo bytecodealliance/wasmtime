@@ -1,105 +1,69 @@
-use wasi_sockets_tests::*;
-use wasi::poll::poll;
 use wasi::io::streams;
 use wasi::sockets::network::{
     self, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
 };
-use wasi::sockets::{instance_network, tcp, tcp_create_socket};
-
+use wasi::sockets::tcp;
+use wasi_sockets_tests::*;
 
 fn test_sample_application(family: network::IpAddressFamily, bind_address: IpSocketAddress) {
     let first_message = b"Hello, world!";
     let second_message = b"Greetings, planet!";
 
-	let net = instance_network::instance_network();
-    let sock = tcp_create_socket::create_tcp_socket(family).unwrap();
+    let net = NetworkResource::default();
+    let listener = TcpSocketResource::new(family).unwrap();
 
-    let sub = tcp::subscribe(sock);
+    listener.bind(&net, bind_address).unwrap();
+    listener.listen().unwrap();
 
-    tcp::start_bind(sock, net, bind_address).unwrap();
+    let addr = tcp::local_address(listener.handle).unwrap();
 
-    wait(sub);
-    wasi::poll::poll::drop_pollable(sub);
+    {
+        let client = TcpSocketResource::new(family).unwrap();
+        let (_client_input, client_output) = client.connect(&net, addr).unwrap();
 
-    tcp::finish_bind(sock).unwrap();
+        let (n, status) = client_output.write(&[]);
+        assert_eq!(n, 0);
+        assert_eq!(status, streams::StreamStatus::Open);
 
-    let sub = tcp::subscribe(sock);
+        let (n, status) = client_output.write(first_message);
+        assert_eq!(n, first_message.len());
+        assert_eq!(status, streams::StreamStatus::Open);
+    }
 
-    tcp::start_listen(sock).unwrap();
-    wait(sub);
-    tcp::finish_listen(sock).unwrap();
+    {
+        let (_accepted, input, _output) = listener.accept().unwrap();
 
-    let addr = tcp::local_address(sock).unwrap();
+        let (empty_data, status) = streams::read(input.handle, 0).unwrap();
+        assert!(empty_data.is_empty());
+        assert_eq!(status, streams::StreamStatus::Open);
 
-    let client = tcp_create_socket::create_tcp_socket(family).unwrap();
-    let client_sub = tcp::subscribe(client);
+        let (data, status) =
+            streams::blocking_read(input.handle, first_message.len() as u64).unwrap();
+        assert_eq!(status, streams::StreamStatus::Open);
 
-    tcp::start_connect(client, net, addr).unwrap();
-    wait(client_sub);
-    let (client_input, client_output) = tcp::finish_connect(client).unwrap();
-
-    let (n, status) = write(client_output, &[]);
-    assert_eq!(n, 0);
-    assert_eq!(status, streams::StreamStatus::Open);
-
-    let (n, status) = write(client_output, first_message);
-    assert_eq!(n, first_message.len());
-    assert_eq!(status, streams::StreamStatus::Open);
-
-    streams::drop_input_stream(client_input);
-    streams::drop_output_stream(client_output);
-    poll::drop_pollable(client_sub);
-    tcp::drop_tcp_socket(client);
-
-    wait(sub);
-    let (accepted, input, output) = tcp::accept(sock).unwrap();
-
-    let (empty_data, status) = streams::read(input, 0).unwrap();
-    assert!(empty_data.is_empty());
-    assert_eq!(status, streams::StreamStatus::Open);
-
-    let (data, status) = streams::blocking_read(input, first_message.len() as u64).unwrap();
-    assert_eq!(status, streams::StreamStatus::Open);
-
-    streams::drop_input_stream(input);
-    streams::drop_output_stream(output);
-    tcp::drop_tcp_socket(accepted);
-
-    // Check that we sent and recieved our message!
-    assert_eq!(data, first_message); // Not guaranteed to work but should work in practice.
+        // Check that we sent and recieved our message!
+        assert_eq!(data, first_message); // Not guaranteed to work but should work in practice.
+    }
 
     // Another client
-    let client = tcp_create_socket::create_tcp_socket(family).unwrap();
-    let client_sub = tcp::subscribe(client);
+    {
+        let client = TcpSocketResource::new(family).unwrap();
+        let (_client_input, client_output) = client.connect(&net, addr).unwrap();
 
-    tcp::start_connect(client, net, addr).unwrap();
-    wait(client_sub);
-    let (client_input, client_output) = tcp::finish_connect(client).unwrap();
+        let (n, status) = client_output.write(second_message);
+        assert_eq!(n, second_message.len());
+        assert_eq!(status, streams::StreamStatus::Open);
+    }
 
-    let (n, status) = write(client_output, second_message);
-    assert_eq!(n, second_message.len());
-    assert_eq!(status, streams::StreamStatus::Open);
+    {
+        let (_accepted, input, _output) = listener.accept().unwrap();
+        let (data, status) =
+            streams::blocking_read(input.handle, second_message.len() as u64).unwrap();
+        assert_eq!(status, streams::StreamStatus::Open);
 
-    streams::drop_input_stream(client_input);
-    streams::drop_output_stream(client_output);
-    poll::drop_pollable(client_sub);
-    tcp::drop_tcp_socket(client);
-
-    wait(sub);
-    let (accepted, input, output) = tcp::accept(sock).unwrap();
-    let (data, status) = streams::blocking_read(input, second_message.len() as u64).unwrap();
-    assert_eq!(status, streams::StreamStatus::Open);
-
-    streams::drop_input_stream(input);
-    streams::drop_output_stream(output);
-    tcp::drop_tcp_socket(accepted);
-
-    // Check that we sent and recieved our message!
-    assert_eq!(data, second_message); // Not guaranteed to work but should work in practice.
-
-    poll::drop_pollable(sub);
-    tcp::drop_tcp_socket(sock);
-    network::drop_network(net);
+        // Check that we sent and recieved our message!
+        assert_eq!(data, second_message); // Not guaranteed to work but should work in practice.
+    }
 }
 
 fn main() {
