@@ -7,7 +7,7 @@ use wasmtime::{
 use wasmtime_wasi::preview2::{
     self, pipe::MemoryOutputPipe, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
-use wasmtime_wasi_http::{bindings, proxy::Proxy, types, WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::{proxy::Proxy, WasiHttpCtx, WasiHttpView};
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -94,7 +94,7 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
     let wasi = builder.build(&mut table)?;
     let http = WasiHttpCtx;
 
-    let mut ctx = Ctx { table, wasi, http };
+    let ctx = Ctx { table, wasi, http };
 
     let (mut store, proxy) = instantiate(component, ctx).await?;
 
