@@ -14,7 +14,6 @@ interface tcp-create-socket {
 	/// All sockets are non-blocking. Use the wasi-poll interface to block on asynchronous operations.
 	/// 
 	/// # Typical errors
-	/// - `not-supported`:                The host does not support TCP sockets. (EOPNOTSUPP)
 	/// - `address-family-not-supported`: The specified `address-family` is not supported. (EAFNOSUPPORT)
 	/// - `new-socket-limit`:             The new socket resource could not be created because of a system limit. (EMFILE, ENFILE)
 	/// 
