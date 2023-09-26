@@ -17,6 +17,8 @@ use rustix::net::sockopt;
 use std::any::Any;
 use tokio::io::Interest;
 
+use super::network::SystemError;
+
 impl<T: WasiView> tcp::Host for T {
     fn start_bind(
         &mut self,
@@ -37,9 +39,12 @@ impl<T: WasiView> tcp::Host for T {
         let binder = network.0.tcp_binder(local_address)?;
 
         // Perform the OS bind call.
-        binder.bind_existing_tcp_listener(
-            &*socket.tcp_socket().as_socketlike_view::<TcpListener>(),
-        )?;
+        binder
+            .bind_existing_tcp_listener(&*socket.tcp_socket().as_socketlike_view::<TcpListener>())
+            .map_err(|error| match error.errno() {
+                Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(),
+                _ => Into::<network::Error>::into(error),
+            })?;
 
         let socket = table.get_tcp_socket_mut(this)?;
         socket.tcp_state = HostTcpState::BindStarted;
@@ -102,9 +107,14 @@ impl<T: WasiView> tcp::Host for T {
                 return Ok(());
             }
             // continue in progress,
-            Err(err) if err.raw_os_error() == Some(INPROGRESS.raw_os_error()) => {}
+            Err(err) if err.errno() == Some(INPROGRESS) => {}
             // or fail immediately.
-            Err(err) => return Err(err.into()),
+            Err(err) => {
+                return Err(match err.errno() {
+                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(),
+                    _ => Into::<network::Error>::into(err),
+                })
+            }
         }
 
         let socket = table.get_tcp_socket_mut(this)?;

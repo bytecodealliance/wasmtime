@@ -32,7 +32,9 @@ interface tcp {
 	/// Unlike in POSIX, this function is async. This enables interactive WASI hosts to inject permission prompts.
 	/// 
 	/// # Typical `start` errors
-	/// - `address-family-mismatch`:   The `local-address` has the wrong address family. (EINVAL)
+	/// - `invalid-argument`:          The `local-address` has the wrong address family. (EAFNOSUPPORT, EFAULT on Windows)
+	/// - `invalid-argument`:          `local-address` is not a unicast address. (EINVAL)
+	/// - `invalid-argument`:          `local-address` is an IPv4-mapped IPv6 address, but the socket has `ipv6-only` enabled. (EINVAL)
 	/// - `invalid-state`:             The socket is already bound. (EINVAL)
 	/// 
 	/// # Typical `finish` errors
@@ -66,10 +68,14 @@ interface tcp {
 	///   Besides `drop`, any method after such a failure may return an error.
 	/// 
 	/// # Typical `start` errors
-	/// - `address-family-mismatch`:   The `remote-address` has the wrong address family. (EAFNOSUPPORT)
-	/// - `invalid-remote-address`:    The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EADDRNOTAVAIL on Windows)
-	/// - `invalid-remote-address`:    The port in `remote-address` is set to 0. (EADDRNOTAVAIL on Windows)
-	/// - `already-attached`:          The socket is already attached to a different network. The `network` passed to `connect` must be identical to the one passed to `bind`.
+	/// - `invalid-argument`:          The `remote-address` has the wrong address family. (EAFNOSUPPORT)
+	/// - `invalid-argument`:          `remote-address` is not a unicast address. (EINVAL, ENETUNREACH on Linux, EAFNOSUPPORT on MacOS)
+	/// - `invalid-argument`:          `remote-address` is an IPv4-mapped IPv6 address, but the socket has `ipv6-only` enabled. (EINVAL, EADDRNOTAVAIL on Illumos)
+	/// - `invalid-argument`:          `remote-address` is a non-IPv4-mapped IPv6 address, but the socket was bound to a specific IPv4-mapped IPv6 address. (or vice versa)
+	/// - `invalid-argument`:          The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EADDRNOTAVAIL on Windows)
+	/// - `invalid-argument`:          The port in `remote-address` is set to 0. (EADDRNOTAVAIL on Windows)
+	/// - `invalid-argument`:          The socket was explicitly bound and the `connect` call is trying to connect to this socket's own local binding.
+	/// - `invalid-argument`:          The socket is already attached to a different network. The `network` passed to `connect` must be identical to the one passed to `bind`.
 	/// - `invalid-state`:             The socket is already in the Connection state. (EISCONN)
 	/// - `invalid-state`:             The socket is already in the Listener state. (EOPNOTSUPP, EINVAL on Windows)
 	/// 
@@ -133,7 +139,7 @@ interface tcp {
 	/// 
 	/// # Typical errors
 	/// - `invalid-state`:      Socket is not in the Listener state. (EINVAL)
-	/// - `would-block`:   No pending connections at the moment. (EWOULDBLOCK, EAGAIN)
+	/// - `would-block`:        No pending connections at the moment. (EWOULDBLOCK, EAGAIN)
 	/// - `connection-aborted`: An incoming connection was pending, but was terminated by the client before this listener could accept it. (ECONNABORTED)
 	/// - `new-socket-limit`:   The new socket resource could not be created because of a system limit. (EMFILE, ENFILE)
 	/// 
@@ -184,8 +190,8 @@ interface tcp {
 	/// Equivalent to the IPV6_V6ONLY socket option.
 	/// 
 	/// # Typical errors
-	/// - `ipv6-only-operation`:  (get/set) `this` socket is an IPv4 socket.
 	/// - `invalid-state`:        (set) The socket is already bound.
+	/// - `not-supported`:        (get/set) `this` socket is an IPv4 socket.
 	/// - `not-supported`:        (set) Host does not support dual-stack sockets. (Implementations are not required to.)
 	ipv6-only: func(this: tcp-socket) -> result<bool, error-code>
 	set-ipv6-only: func(this: tcp-socket, value: bool) -> result<_, error-code>

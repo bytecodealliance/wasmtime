@@ -42,6 +42,11 @@ interface network {
 		/// POSIX equivalent: EOPNOTSUPP
 		not-supported,
 
+		/// One of the arguments is invalid.
+		/// 
+		/// POSIX equivalent: EINVAL
+		invalid-argument,
+
 		/// Not enough memory to complete the operation.
 		/// 
 		/// POSIX equivalent: ENOMEM, ENOBUFS, EAI_MEMORY
@@ -68,24 +73,6 @@ interface network {
 		would-block,
 
 
-		// ### IP ERRORS ###
-
-		/// The specified address-family is not supported.
-		address-family-not-supported,
-
-		/// An IPv4 address was passed to an IPv6 resource, or vice versa.
-		address-family-mismatch,
-
-		/// The socket address is not a valid remote address. E.g. the IP address is set to INADDR_ANY, or the port is set to 0.
-		invalid-remote-address,
-
-		/// The operation is only supported on IPv4 resources.
-		ipv4-only-operation,
-
-		/// The operation is only supported on IPv6 resources.
-		ipv6-only-operation,
-
-
 
 		// ### TCP & UDP SOCKET ERRORS ###
 
@@ -94,9 +81,6 @@ interface network {
 
 		/// A new socket resource could not be created because of a system limit.
 		new-socket-limit,
-		
-		/// The socket is already attached to another network.
-		already-attached,
 
 		/// A bind operation failed because the provided address is not an address that the `network` can bind to.
 		address-not-bindable,
@@ -125,9 +109,6 @@ interface network {
 
 
 		// ### NAME LOOKUP ERRORS ###
-		
-		/// The provided name is a syntactically invalid domain name.
-		invalid-name,
 
 		/// Name does not exist or has no suitable associated IP addresses.
 		name-unresolvable,

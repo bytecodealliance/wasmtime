@@ -91,7 +91,7 @@ impl<T: SystemError> From<T> for network::Error {
             Errno::CONNREFUSED => ErrorCode::ConnectionRefused,
             Errno::CONNRESET => ErrorCode::ConnectionReset,
             Errno::CONNABORTED => ErrorCode::ConnectionAborted,
-            // Errno::INVAL => ErrorCode::Todo, // FIXME
+            Errno::INVAL => ErrorCode::InvalidArgument,
             Errno::HOSTUNREACH => ErrorCode::RemoteUnreachable,
             Errno::HOSTDOWN => ErrorCode::RemoteUnreachable,
             Errno::NETDOWN => ErrorCode::RemoteUnreachable,
