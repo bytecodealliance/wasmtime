@@ -12,7 +12,7 @@ Embedding](./examples-rust-core-dumps.md).
 First, we need to compile some code to Wasm that can trap. Consider the
 following Rust code:
 
-```rust
+```rust,no_run
 // trap.rs
 
 fn main() {
