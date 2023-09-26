@@ -76,14 +76,15 @@ pub async fn request(
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
     if let Some(mut buf) = body {
-        let request_body = http_types::outgoing_body_write(outgoing_body)
+        let request_body = outgoing_body
+            .write()
             .map_err(|_| anyhow!("outgoing request write failed"))?;
 
-        let pollable = streams::subscribe_to_output_stream(request_body);
+        let pollable = request_body.subscribe();
         while !buf.is_empty() {
-            test_programs::poll_list(&[pollable]);
+            poll::poll_list(&[&pollable]);
 
-            let permit = match streams::check_write(request_body) {
+            let permit = match request_body.check_write() {
                 Ok(n) => n,
                 Err(_) => anyhow::bail!("output stream error"),
             };
@@ -92,25 +93,23 @@ pub async fn request(
             let (chunk, rest) = buf.split_at(len);
             buf = rest;
 
-            match streams::write(request_body, chunk) {
+            match request_body.write(chunk) {
                 Err(_) => anyhow::bail!("output stream error"),
                 _ => {}
             }
         }
 
-        match streams::flush(request_body) {
+        match request_body.flush() {
             Err(_) => anyhow::bail!("output stream error"),
             _ => {}
         }
 
-        test_programs::poll_oneoff(&[pollable]);
+        poll::poll_list(&[&pollable]);
 
-        match streams::check_write(request_body) {
+        match request_body.check_write() {
             Ok(_) => {}
             Err(_) => anyhow::bail!("output stream error"),
         };
-
-        streams::drop_output_stream(request_body);
     }
 
     let future_response = outgoing_handler::handle(request, None)?;
@@ -118,13 +117,13 @@ pub async fn request(
     // TODO: The current implementation requires this drop after the request is sent.
     // The ownership semantics are unclear in wasi-http we should clarify exactly what is
     // supposed to happen here.
-    http_types::drop_outgoing_body(outgoing_body);
+    drop(outgoing_body);
 
     let incoming_response = match http_types::future_incoming_response_get(future_response) {
         Some(result) => result.map_err(|_| anyhow!("incoming response errored"))?,
         None => {
             let pollable = http_types::listen_to_future_incoming_response(future_response);
-            let _ = test_programs::poll_oneoff(&[pollable]);
+            let _ = poll::poll_list(&[&pollable]);
             http_types::future_incoming_response_get(future_response)
                 .expect("incoming response available")
                 .map_err(|_| anyhow!("incoming response errored"))?
@@ -147,15 +146,16 @@ pub async fn request(
 
     http_types::drop_incoming_response(incoming_response);
 
-    let input_stream = http_types::incoming_body_stream(incoming_body).unwrap();
-    let input_stream_pollable = streams::subscribe_to_input_stream(input_stream);
+    let input_stream = incoming_body.stream().unwrap();
+    let input_stream_pollable = input_stream.subscribe();
 
     let mut body = Vec::new();
     let mut eof = streams::StreamStatus::Open;
     while eof != streams::StreamStatus::Ended {
-        poll::poll_oneoff(&[input_stream_pollable]);
+        poll::poll_list(&[&input_stream_pollable]);
 
-        let (mut body_chunk, stream_status) = streams::read(input_stream, 1024 * 1024)
+        let (mut body_chunk, stream_status) = input_stream
+            .read(1024 * 1024)
             .map_err(|_| anyhow!("input_stream read failed"))?;
 
         eof = stream_status;
@@ -164,10 +164,6 @@ pub async fn request(
             body.append(&mut body_chunk);
         }
     }
-
-    poll::drop_pollable(input_stream_pollable);
-    streams::drop_input_stream(input_stream);
-    http_types::drop_incoming_body(incoming_body);
 
     Ok(Response {
         status,
