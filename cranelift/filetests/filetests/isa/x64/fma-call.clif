@@ -77,17 +77,17 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqu  %xmm0, rsp(48 + virtual offset)
 ;   movdqu  rsp(0 + virtual offset), %xmm4
 ;   pshufd  $1, %xmm4, %xmm0
-;   movdqu  rsp(16 + virtual offset), %xmm8
-;   pshufd  $1, %xmm8, %xmm1
-;   movdqu  rsp(32 + virtual offset), %xmm12
-;   pshufd  $1, %xmm12, %xmm2
+;   movdqu  rsp(16 + virtual offset), %xmm2
+;   pshufd  $1, %xmm2, %xmm1
+;   movdqu  rsp(32 + virtual offset), %xmm4
+;   pshufd  $1, %xmm4, %xmm2
 ;   load_ext_name %FmaF32+0, %r9
 ;   call    *%r9
 ;   movdqu  %xmm0, rsp(64 + virtual offset)
 ;   movdqu  rsp(0 + virtual offset), %xmm4
 ;   pshufd  $2, %xmm4, %xmm0
-;   movdqu  rsp(16 + virtual offset), %xmm14
-;   pshufd  $2, %xmm14, %xmm1
+;   movdqu  rsp(16 + virtual offset), %xmm6
+;   pshufd  $2, %xmm6, %xmm1
 ;   movdqu  rsp(32 + virtual offset), %xmm3
 ;   pshufd  $2, %xmm3, %xmm2
 ;   load_ext_name %FmaF32+0, %r10
@@ -131,17 +131,17 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqu %xmm0, 0x30(%rsp)
 ;   movdqu (%rsp), %xmm4
 ;   pshufd $1, %xmm4, %xmm0
-;   movdqu 0x10(%rsp), %xmm8
-;   pshufd $1, %xmm8, %xmm1
-;   movdqu 0x20(%rsp), %xmm12
-;   pshufd $1, %xmm12, %xmm2
+;   movdqu 0x10(%rsp), %xmm2
+;   pshufd $1, %xmm2, %xmm1
+;   movdqu 0x20(%rsp), %xmm4
+;   pshufd $1, %xmm4, %xmm2
 ;   movabsq $0, %r9 ; reloc_external Abs8 %FmaF32 0
 ;   callq *%r9
 ;   movdqu %xmm0, 0x40(%rsp)
 ;   movdqu (%rsp), %xmm4
 ;   pshufd $2, %xmm4, %xmm0
-;   movdqu 0x10(%rsp), %xmm14
-;   pshufd $2, %xmm14, %xmm1
+;   movdqu 0x10(%rsp), %xmm6
+;   pshufd $2, %xmm6, %xmm1
 ;   movdqu 0x20(%rsp), %xmm3
 ;   pshufd $2, %xmm3, %xmm2
 ;   movabsq $0, %r10 ; reloc_external Abs8 %FmaF32 0
@@ -196,9 +196,9 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   pshufd  $238, %xmm2, %xmm2
 ;   load_ext_name %FmaF64+0, %r9
 ;   call    *%r9
-;   movdqa  %xmm0, %xmm14
+;   movdqa  %xmm0, %xmm6
 ;   movdqu  rsp(48 + virtual offset), %xmm0
-;   movlhps %xmm0, %xmm14, %xmm0
+;   movlhps %xmm0, %xmm6, %xmm0
 ;   addq    %rsp, $64, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -227,9 +227,9 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   pshufd $0xee, %xmm2, %xmm2
 ;   movabsq $0, %r9 ; reloc_external Abs8 %FmaF64 0
 ;   callq *%r9
-;   movdqa %xmm0, %xmm14
+;   movdqa %xmm0, %xmm6
 ;   movdqu 0x30(%rsp), %xmm0
-;   movlhps %xmm14, %xmm0
+;   movlhps %xmm6, %xmm0
 ;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
