@@ -11,9 +11,9 @@ the same time:
     clang foo.c -g -o foo.wasm
     ```
 
-2. Run Wasmtime with the debug info enabled; this is `-g` from the CLI and
-   `Config::debug_info(true)` in an embedding (e.g. see [debugging in a Rust
-   embedding](./examples-rust-debugging.md))
+2. Run Wasmtime with the debug info enabled; this is `-D debug-info` from the
+   CLI and `Config::debug_info(true)` in an embedding (e.g. see [debugging in a
+   Rust embedding](./examples-rust-debugging.md))
 
 3. Use a supported debugger:
 
