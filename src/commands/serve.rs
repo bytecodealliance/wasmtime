@@ -1,15 +1,11 @@
 use anyhow::Result;
 use clap::Parser;
 use std::{path::PathBuf, pin::Pin, sync::Arc};
-use wasmtime::component::{Component, Instance, InstancePre, Linker};
+use wasmtime::component::{Component, InstancePre, Linker};
 use wasmtime::{Engine, Store};
 use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_http::proxy::Proxy;
-use wasmtime_wasi_http::{
-    body::{HyperIncomingBody, HyperOutgoingBody},
-    WasiHttpCtx, WasiHttpView,
-};
+use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
 struct Host {
     table: Table,
