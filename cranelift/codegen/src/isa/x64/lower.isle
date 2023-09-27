@@ -3336,23 +3336,36 @@
 
 ;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Note that the `cvtsi2s{s,d}` instruction is not just an int-to-float
+;; conversion instruction in isolation, it also takes the upper 64-bits of an
+;; xmm register and places it into the destination. We don't actually want that
+;; to happen as it could accidentally create a false dependency with a
+;; previous instruction defining the register's upper 64-bits. See #7085 for
+;; an instance of this.
+;;
+;; This means that the first operand to all of the int-to-float conversions here
+;; are `(xmm_zero)` operands which is a guaranteed zero register that has no
+;; dependencies on other instructions. Ideally this would be lifted out to a
+;; higher level to get deduplicated between consecutive int-to-float operations
+;; for example but that's not easy to do at this time.
+
 (rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I8))))
-      (x64_cvtsi2ss $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2ss $I32 (xmm_zero $F32X4) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I16))))
-      (x64_cvtsi2ss $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2ss $I32 (xmm_zero $F32X4) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
-      (x64_cvtsi2ss ty a))
+      (x64_cvtsi2ss ty (xmm_zero $F32X4) a))
 
 (rule 2 (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I8))))
-      (x64_cvtsi2sd $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2sd $I32 (xmm_zero $F64X2) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 2 (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I16))))
-      (x64_cvtsi2sd $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2sd $I32 (xmm_zero $F64X2) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
-      (x64_cvtsi2sd ty a))
+      (x64_cvtsi2sd ty (xmm_zero $F64X2) a))
 
 (rule 0 (lower (fcvt_from_sint a @ (value_type $I32X4)))
       (x64_cvtdq2ps a))
@@ -3363,10 +3376,10 @@
 ;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
-      (x64_cvtsi2ss $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
+      (x64_cvtsi2ss $I64 (xmm_zero $F32X4) (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
-      (x64_cvtsi2sd $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
+      (x64_cvtsi2sd $I64 (xmm_zero $F64X2) (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
 (rule (lower (has_type ty (fcvt_from_uint val @ (value_type $I64))))
       (cvt_u64_to_float_seq ty val))
