@@ -2279,6 +2279,12 @@ struct State {
     /// lazy initialization happens.
     descriptors: UnsafeCell<Option<Descriptors>>,
 
+    /// Borrow state of `descriptors`.
+    ///
+    /// If it looks like we're kind re-implementing `RefCell`, it's because we
+    /// basically are; `RefCell` itself pulls in static initializers.
+    descriptors_borrowed: UnsafeCell<bool>,
+
     /// Auxiliary storage to handle the `path_readlink` function.
     path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
 
@@ -2454,6 +2460,7 @@ impl State {
                 magic2: MAGIC,
                 import_alloc: ImportAlloc::new(),
                 descriptors: UnsafeCell::new(None),
+                descriptors_borrowed: UnsafeCell::new(false),
                 path_buf: UnsafeCell::new(MaybeUninit::uninit()),
                 long_lived_arena: BumpArena::new(),
                 args: Cell::new(None),
@@ -2478,6 +2485,12 @@ impl State {
 
     /// Accessor for the descriptors member that ensures it is properly initialized
     fn with_descriptors<T, F: FnOnce(&Descriptors) -> T>(&self, fn_: F) -> T {
+        unsafe {
+            if core::mem::replace(&mut *self.descriptors_borrowed.get(), true) {
+                unreachable!(); // Don't borrow descriptors while they're already borrowed.
+            }
+        }
+
         let descriptors: &mut Option<Descriptors> = unsafe { &mut *self.descriptors.get() };
         match descriptors {
             None => {
@@ -2485,13 +2498,25 @@ impl State {
             }
             Some(_descriptors) => {}
         }
-        match descriptors {
+        let result = match descriptors {
             Some(descriptors) => fn_(descriptors),
             None => unreachable!(),
+        };
+
+        unsafe {
+            *self.descriptors_borrowed.get() = false;
         }
+
+        result
     }
 
     fn with_descriptors_mut<T, F: FnOnce(&mut Descriptors) -> T>(&self, fn_: F) -> T {
+        unsafe {
+            if core::mem::replace(&mut *self.descriptors_borrowed.get(), true) {
+                unreachable!(); // Don't borrow descriptors while they're already borrowed.
+            }
+        }
+
         let descriptors: &mut Option<Descriptors> = unsafe { &mut *self.descriptors.get() };
         match descriptors {
             None => {
@@ -2499,10 +2524,16 @@ impl State {
             }
             Some(_descriptors) => {}
         }
-        match descriptors {
+        let result = match descriptors {
             Some(descriptors) => fn_(descriptors),
             None => unreachable!(),
+        };
+
+        unsafe {
+            *self.descriptors_borrowed.get() = false;
         }
+
+        result
     }
 
     fn get_environment(&self) -> &[StrTuple] {
