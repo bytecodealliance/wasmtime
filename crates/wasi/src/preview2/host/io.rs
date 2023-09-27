@@ -489,14 +489,11 @@ pub mod sync {
 
     impl<T: WasiView + Sync> HostOutputStream for T {
         fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
-            AsyncHostOutputStream::drop(self, Resource::new_borrow(stream.rep()))
+            AsyncHostOutputStream::drop(self, stream)
         }
 
         fn check_write(&mut self, stream: Resource<OutputStream>) -> Result<u64, streams::Error> {
-            Ok(AsyncHostOutputStream::check_write(
-                self,
-                Resource::new_borrow(stream.rep()),
-            )?)
+            Ok(AsyncHostOutputStream::check_write(self, stream)?)
         }
 
         fn write(
@@ -504,11 +501,7 @@ pub mod sync {
             stream: Resource<OutputStream>,
             bytes: Vec<u8>,
         ) -> Result<(), streams::Error> {
-            Ok(AsyncHostOutputStream::write(
-                self,
-                Resource::new_borrow(stream.rep()),
-                bytes,
-            )?)
+            Ok(AsyncHostOutputStream::write(self, stream, bytes)?)
         }
 
         fn blocking_write_and_flush(
@@ -517,12 +510,7 @@ pub mod sync {
             bytes: Vec<u8>,
         ) -> Result<(), streams::Error> {
             Ok(in_tokio(async {
-                AsyncHostOutputStream::blocking_write_and_flush(
-                    self,
-                    Resource::new_borrow(stream.rep()),
-                    bytes,
-                )
-                .await
+                AsyncHostOutputStream::blocking_write_and_flush(self, stream, bytes).await
             })?)
         }
 
@@ -532,12 +520,7 @@ pub mod sync {
             len: u64,
         ) -> Result<(), streams::Error> {
             Ok(in_tokio(async {
-                AsyncHostOutputStream::blocking_write_zeroes_and_flush(
-                    self,
-                    Resource::new_borrow(stream.rep()),
-                    len,
-                )
-                .await
+                AsyncHostOutputStream::blocking_write_zeroes_and_flush(self, stream, len).await
             })?)
         }
 
@@ -545,9 +528,7 @@ pub mod sync {
             &mut self,
             stream: Resource<OutputStream>,
         ) -> anyhow::Result<Resource<Pollable>> {
-            Ok(Resource::new_own(
-                AsyncHostOutputStream::subscribe(self, Resource::new_borrow(stream.rep()))?.rep(),
-            ))
+            Ok(AsyncHostOutputStream::subscribe(self, stream)?)
         }
 
         fn write_zeroes(
@@ -555,11 +536,7 @@ pub mod sync {
             stream: Resource<OutputStream>,
             len: u64,
         ) -> Result<(), streams::Error> {
-            Ok(AsyncHostOutputStream::write_zeroes(
-                self,
-                Resource::new_borrow(stream.rep()),
-                len,
-            )?)
+            Ok(AsyncHostOutputStream::write_zeroes(self, stream, len)?)
         }
 
         fn flush(&mut self, stream: Resource<OutputStream>) -> Result<(), streams::Error> {
@@ -582,16 +559,7 @@ pub mod sync {
             src: Resource<InputStream>,
             len: u64,
         ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async {
-                AsyncHostOutputStream::splice(
-                    self,
-                    Resource::new_borrow(dst.rep()),
-                    Resource::new_borrow(src.rep()),
-                    len,
-                )
-                .await
-            })
-            .map(xform)
+            in_tokio(async { AsyncHostOutputStream::splice(self, dst, src, len).await }).map(xform)
         }
 
         fn blocking_splice(
@@ -600,16 +568,8 @@ pub mod sync {
             src: Resource<InputStream>,
             len: u64,
         ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async {
-                AsyncHostOutputStream::blocking_splice(
-                    self,
-                    Resource::new_borrow(dst.rep()),
-                    Resource::new_borrow(src.rep()),
-                    len,
-                )
-                .await
-            })
-            .map(xform)
+            in_tokio(async { AsyncHostOutputStream::blocking_splice(self, dst, src, len).await })
+                .map(xform)
         }
 
         fn forward(
@@ -617,21 +577,13 @@ pub mod sync {
             dst: Resource<OutputStream>,
             src: Resource<InputStream>,
         ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async {
-                AsyncHostOutputStream::forward(
-                    self,
-                    Resource::new_borrow(dst.rep()),
-                    Resource::new_borrow(src.rep()),
-                )
-                .await
-            })
-            .map(xform)
+            in_tokio(async { AsyncHostOutputStream::forward(self, dst, src).await }).map(xform)
         }
     }
 
     impl<T: WasiView + Sync> HostInputStream for T {
         fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
-            AsyncHostInputStream::drop(self, Resource::new_borrow(stream.rep()))
+            AsyncHostInputStream::drop(self, stream)
         }
 
         fn read(
@@ -639,10 +591,7 @@ pub mod sync {
             stream: Resource<InputStream>,
             len: u64,
         ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
-            in_tokio(async {
-                AsyncHostInputStream::read(self, Resource::new_borrow(stream.rep()), len).await
-            })
-            .map(xform)
+            in_tokio(async { AsyncHostInputStream::read(self, stream, len).await }).map(xform)
         }
 
         fn blocking_read(
@@ -650,11 +599,8 @@ pub mod sync {
             stream: Resource<InputStream>,
             len: u64,
         ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
-            in_tokio(async {
-                AsyncHostInputStream::blocking_read(self, Resource::new_borrow(stream.rep()), len)
-                    .await
-            })
-            .map(xform)
+            in_tokio(async { AsyncHostInputStream::blocking_read(self, stream, len).await })
+                .map(xform)
         }
 
         fn skip(
@@ -662,10 +608,7 @@ pub mod sync {
             stream: Resource<InputStream>,
             len: u64,
         ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async {
-                AsyncHostInputStream::skip(self, Resource::new_borrow(stream.rep()), len).await
-            })
-            .map(xform)
+            in_tokio(async { AsyncHostInputStream::skip(self, stream, len).await }).map(xform)
         }
 
         fn blocking_skip(
@@ -673,20 +616,15 @@ pub mod sync {
             stream: Resource<InputStream>,
             len: u64,
         ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async {
-                AsyncHostInputStream::blocking_skip(self, Resource::new_borrow(stream.rep()), len)
-                    .await
-            })
-            .map(xform)
+            in_tokio(async { AsyncHostInputStream::blocking_skip(self, stream, len).await })
+                .map(xform)
         }
 
         fn subscribe(
             &mut self,
             stream: Resource<InputStream>,
         ) -> anyhow::Result<Resource<Pollable>> {
-            Ok(Resource::new_own(
-                AsyncHostInputStream::subscribe(self, Resource::new_borrow(stream.rep()))?.rep(),
-            ))
+            AsyncHostInputStream::subscribe(self, stream)
         }
     }
 }

@@ -165,23 +165,17 @@ pub mod sync {
 
     impl<T: WasiView> poll::Host for T {
         fn poll_list(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
-            let pollables = pollables
-                .iter()
-                .map(|pollable| Resource::new_borrow(pollable.rep()))
-                .collect();
             in_tokio(async { AsyncHost::poll_list(self, pollables).await })
         }
 
         fn poll_one(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-            in_tokio(async {
-                AsyncHost::poll_one(self, Resource::new_borrow(pollable.rep())).await
-            })
+            in_tokio(async { AsyncHost::poll_one(self, pollable).await })
         }
     }
 
     impl<T: WasiView> crate::preview2::bindings::sync_io::io::poll::HostPollable for T {
         fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-            AsyncHostPollable::drop(self, Resource::new_borrow(pollable.rep()))
+            AsyncHostPollable::drop(self, pollable)
         }
     }
 }

@@ -69,6 +69,11 @@ pub mod bindings {
                 },
                 with: {
                     "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
+                    "wasi:filesystem/types/descriptor": super::super::filesystem::types::Descriptor,
+                    "wasi:filesystem/types/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
+                    "wasi:io/poll/pollable": super::super::io::poll::Pollable,
+                    "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
+                    "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
                 }
             });
         }
