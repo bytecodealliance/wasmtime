@@ -60,12 +60,20 @@ pub struct ServeCommand {
     #[clap(flatten)]
     common: CommonOptions,
 
+    /// Socket address for the web server to bind to. Defaults to 0.0.0.0:8080.
+    #[clap(long = "addr", value_name = "SOCKADDR")]
+    addr: Option<std::net::SocketAddr>,
+
     /// The WebAssembly component to run.
     #[clap(value_name = "WASM", required = true)]
     component: PathBuf,
 }
 
 impl ServeCommand {
+    fn addr(&self) -> std::net::SocketAddr {
+        self.addr.unwrap_or("0.0.0.0:8080".parse().unwrap())
+    }
+
     /// Start a server to run the given wasi-http proxy component
     pub fn execute(mut self) -> Result<()> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -118,7 +126,7 @@ impl ServeCommand {
 
         let instance = Arc::new(linker.instantiate_pre(&component)?);
 
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:80").await?;
+        let listener = tokio::net::TcpListener::bind(self.addr()).await?;
 
         loop {
             let (stream, _) = listener.accept().await?;
