@@ -1,5 +1,4 @@
 #![cfg(feature = "test_programs")]
-#![cfg(feature = "fixme-resources-vs-sync-bindings")] // FIXME: These tests depend on the sync bindings resources matching the async bindings resources
 use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{component::Linker, Config, Engine, Store};
