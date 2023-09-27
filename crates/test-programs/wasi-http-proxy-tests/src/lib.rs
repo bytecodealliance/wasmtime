@@ -25,8 +25,7 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
 
         bindings::wasi::http::types::set_response_outparam(outparam, Ok(resp));
 
-        let out =
-            bindings::wasi::http::types::outgoing_body_write(body).expect("outgoing stream");
+        let out = bindings::wasi::http::types::outgoing_body_write(body).expect("outgoing stream");
         bindings::wasi::io::streams::blocking_write_and_flush(out, b"hello, world!")
             .expect("writing response");
 
