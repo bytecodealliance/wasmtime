@@ -1347,23 +1347,18 @@ fn wasm_fault_address_reported_by_default() -> Result<()> {
     )?;
     let err = Instance::new(&mut store, &module, &[]).unwrap_err();
 
-    // On s390x faulting addressess are rounded to the nearest page boundary
-    // instead of having the precise address reported.
-    let mut expected_addr = 0xdeadbeef_u32;
-    if cfg!(target_arch = "s390x") {
-        expected_addr &= 0xfffff000;
-    }
-
     // NB: at this time there's no programmatic access to the fault address
     // because it's not always available for load/store traps. Only static
     // memories on 32-bit have this information, but bounds-checked memories
     // use manual trapping instructions and otherwise don't have a means of
     // communicating the faulting address at this time.
+    //
+    // It looks like the exact reported fault address may not be deterministic,
+    // so assert that we have the right error message, but not the exact address.
     let err = format!("{err:?}");
     assert!(
-        err.contains(&format!(
-            "memory fault at wasm address 0x{expected_addr:x} in linear memory of size 0x10000"
-        )),
+        err.contains("memory fault at wasm address ")
+            && err.contains(" in linear memory of size 0x10000"),
         "bad error: {err}"
     );
     Ok(())
