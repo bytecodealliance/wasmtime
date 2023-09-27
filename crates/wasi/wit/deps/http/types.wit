@@ -81,7 +81,7 @@ interface types {
   incoming-request-headers: func(request: /* borrow */ incoming-request) -> /* child */ headers
   // Will return the input-stream child at most once. If called more than
   // once, subsequent calls will return error.
-  incoming-request-consume: func(request: /* borrow */ incoming-request) -> result< /* child */ input-stream>
+  incoming-request-consume: func(request: /* borrow */ incoming-request) -> result< /* child */ incoming-body>
 
   type outgoing-request = u32
   drop-outgoing-request: func(request: /* own */ outgoing-request)
