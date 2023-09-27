@@ -97,15 +97,6 @@ impl ServeCommand {
     }
 
     fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
-        wasmtime_wasi::preview2::bindings::filesystem::types::add_to_linker(linker, |a| a)?;
-        wasmtime_wasi::preview2::bindings::filesystem::preopens::add_to_linker(linker, |a| a)?;
-        wasmtime_wasi::preview2::bindings::cli::environment::add_to_linker(linker, |a| a)?;
-        wasmtime_wasi::preview2::bindings::cli::exit::add_to_linker(linker, |a| a)?;
-        wasmtime_wasi::preview2::bindings::cli::terminal_input::add_to_linker(linker, |a| a)?;
-        wasmtime_wasi::preview2::bindings::cli::terminal_output::add_to_linker(linker, |a| a)?;
-        wasmtime_wasi::preview2::bindings::cli::terminal_stdin::add_to_linker(linker, |a| a)?;
-        wasmtime_wasi::preview2::bindings::cli::terminal_stdout::add_to_linker(linker, |a| a)?;
-        wasmtime_wasi::preview2::bindings::cli::terminal_stderr::add_to_linker(linker, |a| a)?;
         wasmtime_wasi_http::proxy::add_to_linker(linker)?;
         Ok(())
     }

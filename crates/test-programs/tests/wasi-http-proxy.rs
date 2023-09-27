@@ -59,17 +59,6 @@ async fn instantiate(component: Component, ctx: Ctx) -> Result<(Store<Ctx>, Prox
     let mut linker = Linker::new(&ENGINE);
     wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
 
-    // due to the preview1 adapter
-    preview2::bindings::filesystem::types::add_to_linker(&mut linker, |l| l)?;
-    preview2::bindings::filesystem::preopens::add_to_linker(&mut linker, |l| l)?;
-    preview2::bindings::cli::environment::add_to_linker(&mut linker, |l| l)?;
-    preview2::bindings::cli::exit::add_to_linker(&mut linker, |l| l)?;
-    preview2::bindings::cli::terminal_input::add_to_linker(&mut linker, |l| l)?;
-    preview2::bindings::cli::terminal_output::add_to_linker(&mut linker, |l| l)?;
-    preview2::bindings::cli::terminal_stdin::add_to_linker(&mut linker, |l| l)?;
-    preview2::bindings::cli::terminal_stdout::add_to_linker(&mut linker, |l| l)?;
-    preview2::bindings::cli::terminal_stderr::add_to_linker(&mut linker, |l| l)?;
-
     let mut store = Store::new(&ENGINE, ctx);
 
     let (proxy, _instance) = Proxy::instantiate_async(&mut store, &component, &linker).await?;

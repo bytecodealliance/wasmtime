@@ -25,15 +25,9 @@ pub fn add_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Resul
 where
     T: WasiHttpView + preview2::WasiView + bindings::http::types::Host,
 {
-    preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
-    preview2::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
-    preview2::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
-    preview2::bindings::poll::poll::add_to_linker(l, |t| t)?;
-    preview2::bindings::io::streams::add_to_linker(l, |t| t)?;
-    preview2::bindings::random::random::add_to_linker(l, |t| t)?;
-    preview2::bindings::cli::stdout::add_to_linker(l, |t| t)?;
-    preview2::bindings::cli::stderr::add_to_linker(l, |t| t)?;
-    preview2::bindings::cli::stdin::add_to_linker(l, |t| t)?;
+    // TODO: this shouldn't be required, but the adapter unconditionally pulls in all of these
+    // dependencies.
+    preview2::command::add_to_linker(l)?;
 
     bindings::http::outgoing_handler::add_to_linker(l, |t| t)?;
     bindings::http::types::add_to_linker(l, |t| t)?;
@@ -69,15 +63,9 @@ pub mod sync {
     where
         T: WasiHttpView + preview2::WasiView + bindings::http::types::Host,
     {
-        preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
-        preview2::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
-        preview2::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
-        preview2::bindings::io::streams::add_to_linker(l, |t| t)?;
-        preview2::bindings::random::random::add_to_linker(l, |t| t)?;
-        preview2::bindings::random::random::add_to_linker(l, |t| t)?;
-        preview2::bindings::cli::stdout::add_to_linker(l, |t| t)?;
-        preview2::bindings::cli::stderr::add_to_linker(l, |t| t)?;
-        preview2::bindings::cli::stdin::add_to_linker(l, |t| t)?;
+        // TODO: this shouldn't be required, but the adapter unconditionally pulls in all of these
+        // dependencies.
+        preview2::command::sync::add_to_linker(l)?;
 
         bindings::http::outgoing_handler::add_to_linker(l, |t| t)?;
         bindings::http::types::add_to_linker(l, |t| t)?;
