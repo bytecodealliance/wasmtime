@@ -3,13 +3,11 @@
 //! We're avoiding static initializers, so we can't have things like string
 //! literals. Replace the standard assert macros with simpler implementations.
 
-use crate::bindings::wasi::logging::logging;
-
 #[allow(dead_code)]
 #[doc(hidden)]
 pub fn println(message: &[u8]) {
-    let context = byte_array_literals::str!("context");
-    logging::log(logging::Level::Info, &context, message);
+    // FIXME: We need some way to print a message.
+    let _ = message;
 }
 
 /// A minimal `eprintln` for debugging.
