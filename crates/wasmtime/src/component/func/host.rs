@@ -2,7 +2,7 @@ use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Type, Val};
-use crate::{AsContextMut, StoreContextMut, ValRaw};
+use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
 use std::any::Any;
 use std::mem::{self, MaybeUninit};
@@ -224,7 +224,10 @@ where
     lift.enter_call();
     let params = storage.lift_params(&mut lift, param_tys)?;
 
+    cx.0.call_hook(CallHook::CallingHost)?;
     let ret = closure(cx.as_context_mut(), params)?;
+    cx.0.call_hook(CallHook::ReturningFromHost)?;
+
     flags.set_may_leave(false);
     let mut lower = LowerContext::new(cx, &options, types, instance);
     storage.lower_results(&mut lower, result_tys, ret)?;
@@ -379,7 +382,12 @@ where
     for _ in result_tys.types.iter() {
         result_vals.push(Val::Bool(false));
     }
+    store.as_context_mut().0.call_hook(CallHook::CallingHost)?;
     closure(store.as_context_mut(), &args, &mut result_vals)?;
+    store
+        .as_context_mut()
+        .0
+        .call_hook(CallHook::ReturningFromHost)?;
     flags.set_may_leave(false);
 
     let mut cx = LowerContext::new(store, &options, types, instance);

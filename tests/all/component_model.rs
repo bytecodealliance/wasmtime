@@ -8,6 +8,7 @@ use wasmtime_component_util::REALLOC_AND_FREE;
 mod aot;
 mod r#async;
 mod bindgen;
+mod call_hook;
 mod dynamic;
 mod func;
 mod import;
