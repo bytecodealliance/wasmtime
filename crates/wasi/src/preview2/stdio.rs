@@ -333,14 +333,7 @@ mod test {
 
     // This test doesn't work under qemu because of the use of fork in the test helper.
     #[test]
-    #[cfg_attr(not(target = "x86_64"), ignore)]
-    fn test_async_fd_stdin() {
-        test_stdin_by_forking(super::stdin);
-    }
-
-    // This test doesn't work under qemu because of the use of fork in the test helper.
-    #[test]
-    #[cfg_attr(not(target = "x86_64"), ignore)]
+    #[cfg_attr(not(target_arch = "x86_64"), ignore)]
     fn test_worker_thread_stdin() {
         test_stdin_by_forking(super::worker_thread_stdin::stdin);
     }

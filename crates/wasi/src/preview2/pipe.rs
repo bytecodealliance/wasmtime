@@ -105,17 +105,6 @@ impl HostOutputStream for MemoryOutputPipe {
     }
 }
 
-/// FIXME: this needs docs
-pub fn pipe(size: usize) -> (AsyncReadStream, AsyncWriteStream) {
-    let (a, b) = tokio::io::duplex(size);
-    let (_read_half, write_half) = tokio::io::split(a);
-    let (read_half, _write_half) = tokio::io::split(b);
-    (
-        AsyncReadStream::new(read_half),
-        AsyncWriteStream::new(size, write_half),
-    )
-}
-
 /// Provides a [`HostInputStream`] impl from a [`tokio::io::AsyncRead`] impl
 pub struct AsyncReadStream {
     state: StreamState,
