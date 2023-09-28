@@ -3752,6 +3752,7 @@ dependencies = [
  "io-extras",
  "io-lifetimes 2.0.2",
  "libc",
+ "log",
  "once_cell",
  "rustix 0.38.8",
  "system-interface",

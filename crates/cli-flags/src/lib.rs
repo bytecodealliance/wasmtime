@@ -242,6 +242,8 @@ wasmtime_option_group! {
         /// Flag for WASI preview2 to inherit the host's network within the
         /// guest so it has full access to all addresses/ports/etc.
         pub inherit_network: Option<bool>,
+        /// Indicates whether `wasi:sockets/ip-name-lookup` is enabled or not.
+        pub allow_ip_name_lookup: Option<bool>,
 
     }
 
