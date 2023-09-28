@@ -48,6 +48,7 @@ fn create_handle(
                 store: StorePtr::new(store.traitobj()),
                 runtime_info,
                 wmemcheck: false,
+                pkey: None,
             })?;
 
         Ok(store.add_dummy_instance(handle))

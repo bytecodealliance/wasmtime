@@ -96,9 +96,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
-    ExportGlobal, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
-    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
+    mpk::ProtectionKey, ExportGlobal, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    ModuleInfo, OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext,
+    VMExternRef, VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
 };
 
 mod context;
@@ -343,6 +343,11 @@ pub struct StoreOpaque {
     /// `store_data` above, where the function pointers are stored.
     rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
 
+    /// Keep track of what protection key is being used during allocation so
+    /// that the right memory pages can be enabled when entering WebAssembly
+    /// guest code.
+    pkey: Option<ProtectionKey>,
+
     /// Runtime state for components used in the handling of resources, borrow,
     /// and calls. These also interact with the `ResourceAny` type and its
     /// internal representation.
@@ -473,6 +478,7 @@ impl<T> Store<T> {
     /// tables created to 10,000. This can be overridden with the
     /// [`Store::limiter`] configuration method.
     pub fn new(engine: &Engine, data: T) -> Self {
+        let pkey = engine.allocator().next_available_pkey();
         let mut inner = Box::new(StoreInner {
             inner: StoreOpaque {
                 _marker: marker::PhantomPinned,
@@ -504,6 +510,7 @@ impl<T> Store<T> {
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
                 rooted_host_funcs: ManuallyDrop::new(Vec::new()),
+                pkey,
                 #[cfg(feature = "component-model")]
                 component_host_table: Default::default(),
                 #[cfg(feature = "component-model")]
@@ -537,6 +544,7 @@ impl<T> Store<T> {
                         store: StorePtr::empty(),
                         runtime_info: &shim,
                         wmemcheck: engine.config().wmemcheck,
+                        pkey: None,
                     })
                     .expect("failed to allocate default callee")
             };
@@ -1164,6 +1172,16 @@ impl<T> StoreInner<T> {
     }
 
     pub fn call_hook(&mut self, s: CallHook) -> Result<()> {
+        if let Some(pkey) = &self.inner.pkey {
+            let allocator = self.engine().allocator();
+            match s {
+                CallHook::CallingWasm | CallHook::ReturningFromHost => {
+                    allocator.restrict_to_pkey(*pkey)
+                }
+                CallHook::ReturningFromWasm | CallHook::CallingHost => allocator.allow_all_pkeys(),
+            }
+        }
+
         match &mut self.call_hook {
             Some(CallHookInner::Sync(hook)) => hook(&mut self.data, s),
 
@@ -1667,6 +1685,12 @@ at https://bytecodealliance.org/security.
 "
         );
         std::process::abort();
+    }
+
+    /// Retrieve the store's protection key.
+    #[inline]
+    pub(crate) fn get_pkey(&self) -> Option<ProtectionKey> {
+        self.pkey.clone()
     }
 
     #[inline]

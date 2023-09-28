@@ -167,6 +167,12 @@ impl ModuleAffinityIndexAllocator {
         }))
     }
 
+    /// How many slots can this allocator allocate?
+    pub fn len(&self) -> usize {
+        let inner = self.0.lock().unwrap();
+        inner.slot_state.len()
+    }
+
     /// Are zero slots in use right now?
     pub fn is_empty(&self) -> bool {
         let inner = self.0.lock().unwrap();
@@ -299,8 +305,16 @@ impl ModuleAffinityIndexAllocator {
         });
     }
 
-    /// For testing only, we want to be able to assert what is on the
-    /// single freelist, for the policies that keep just one.
+    /// Return the number of empty slots available in this allocator.
+    #[cfg(test)]
+    pub fn num_empty_slots(&self) -> usize {
+        let inner = self.0.lock().unwrap();
+        let total_slots = inner.slot_state.len();
+        (total_slots - inner.last_cold as usize) + inner.unused_warm_slots as usize
+    }
+
+    /// For testing only, we want to be able to assert what is on the single
+    /// freelist, for the policies that keep just one.
     #[cfg(test)]
     #[allow(unused)]
     pub(crate) fn testing_freelist(&self) -> Vec<SlotId> {
@@ -311,8 +325,8 @@ impl ModuleAffinityIndexAllocator {
             .collect()
     }
 
-    /// For testing only, get the list of all modules with at least
-    /// one slot with affinity for that module.
+    /// For testing only, get the list of all modules with at least one slot
+    /// with affinity for that module.
     #[cfg(test)]
     pub(crate) fn testing_module_affinity_list(&self) -> Vec<MemoryInModule> {
         let inner = self.0.lock().unwrap();
@@ -475,7 +489,9 @@ mod test {
     fn test_next_available_allocation_strategy() {
         for size in 0..20 {
             let state = ModuleAffinityIndexAllocator::new(size, 0);
+            assert_eq!(state.num_empty_slots() as u32, size);
             for i in 0..size {
+                assert_eq!(state.num_empty_slots() as u32, size - i);
                 assert_eq!(state.alloc(None).unwrap().index(), i as usize);
             }
             assert!(state.alloc(None).is_none());
@@ -496,6 +512,9 @@ mod test {
         assert_ne!(index1, index2);
 
         state.free(index1);
+        assert_eq!(state.num_empty_slots(), 99);
+
+        // Allocate to the same `index1` slot again.
         let index3 = state.alloc(Some(id1)).unwrap();
         assert_eq!(index3, index1);
         state.free(index3);
@@ -512,13 +531,14 @@ mod test {
         // for id1, and 98 empty. Allocate 100 for id2. The first
         // should be equal to the one we know was previously used for
         // id2. The next 99 are arbitrary.
-
+        assert_eq!(state.num_empty_slots(), 100);
         let mut indices = vec![];
         for _ in 0..100 {
             indices.push(state.alloc(Some(id2)).unwrap());
         }
         assert!(state.alloc(None).is_none());
         assert_eq!(indices[0], index2);
+        assert_eq!(state.num_empty_slots(), 0);
 
         for i in indices {
             state.free(i);

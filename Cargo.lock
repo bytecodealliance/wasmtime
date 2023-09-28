@@ -3681,6 +3681,7 @@ dependencies = [
  "memoffset",
  "once_cell",
  "paste",
+ "proptest",
  "rand",
  "rustix 0.38.8",
  "sptr",
