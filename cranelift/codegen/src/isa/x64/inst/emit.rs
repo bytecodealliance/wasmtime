@@ -32,8 +32,14 @@ fn emit_signed_cvt(
     } else {
         SseOpcode::Cvtsi2ss
     };
-    let inst = Inst::gpr_to_xmm(op, RegMem::reg(src), OperandSize::Size64, dst);
-    inst.emit(&[], sink, info, state);
+    Inst::CvtIntToFloat {
+        op,
+        dst: Writable::from_reg(Xmm::new(dst.to_reg()).unwrap()),
+        src1: Xmm::new(dst.to_reg()).unwrap(),
+        src2: GprMem::new(RegMem::reg(src)).unwrap(),
+        src2_size: OperandSize::Size64,
+    }
+    .emit(&[], sink, info, state);
 }
 
 /// Emits a one way conditional jump if CC is set (true).
