@@ -261,8 +261,8 @@ file-per-thread-logger = "0.2.0"
 tokio = { version = "1.26.0", features = [ "rt", "time" ] }
 hyper = "=1.0.0-rc.3"
 http = "0.2.9"
-http-body = "1.0.0-rc.2"
-http-body-util = "0.1.0-rc.2"
+http-body = "=1.0.0-rc.2"
+http-body-util = "=0.1.0-rc.2"
 bytes = "1.4"
 futures = { version = "0.3.27", default-features = false }
 indexmap = "2.0.0"
