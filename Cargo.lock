@@ -3342,6 +3342,7 @@ dependencies = [
  "anyhow",
  "cap-std",
  "env_logger 0.10.0",
+ "futures",
  "once_cell",
  "wasi-cap-std-sync",
  "wasi-common",
