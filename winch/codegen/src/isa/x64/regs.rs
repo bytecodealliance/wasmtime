@@ -174,6 +174,10 @@ pub(crate) fn scratch_xmm() -> Reg {
 const GPR: u32 = 16;
 /// FPR count.
 const FPR: u32 = 16;
+/// GPR index bound.
+pub(crate) const MAX_GPR: u32 = GPR;
+/// GPR index bound.
+pub(crate) const MAX_FPR: u32 = FPR;
 const ALLOCATABLE_GPR: u32 = (1 << GPR) - 1;
 const ALLOCATABLE_FPR: u32 = (1 << FPR) - 1;
 /// Bitmask of non-alloctable GPRs.

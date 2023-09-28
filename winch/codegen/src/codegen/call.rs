@@ -91,16 +91,25 @@ impl<'a> FnCall<'a> {
             call_stack_space: None,
         };
         // When all the information is known upfront, we can optimize and
-        // calcualte the stack space needed by the call right away.
+        // calculate the stack space needed by the call right away.
         call.save_live_registers(context, masm);
         call
     }
 
-    /// Creates a new [`FnCall`] from an [`ABISIg`] without checking if the
-    /// stack has the correct amount of values for the call.
-    /// This happens in situations in which not all the information is known
-    /// upfront in order to fulfill the call, like for example with dealing
-    /// with libcalls.
+    /// Creates a new [`FnCall`] from an [`ABISIg`] without checking if the stack has the correct
+    /// amount of values for the call. This happens in situations in which not all the information
+    /// is known upfront in order to fulfill the call, like for example with dealing with libcalls.
+    /// Libcalls don't necessarily match 1-to-1 to WebAssembly instructions, so it's possible that
+    /// before emittiing the libcall we need to adjust the value stack with the right values to be
+    /// used as parameters. We can't preemptively adjust the stack since in some cases we might
+    /// need to ensure that the stack is balanced right until we emit the function call because
+    /// there's a dependency on certain values on the stack. A good example of this is when lazily
+    /// initializing funcrefs: in order to correctly get the value of a function reference we need
+    /// to determine if a libcall is needed, in order to do so we preemptively prepare the compiler
+    /// to emit one since we can't know ahead-of-time of time if one will be required or not. That
+    /// is the main reason why this function is unchecked, it's the caller's responsibility to
+    /// ensure -- depending on the libcall -- that the value stack is correctly balanaced before
+    /// the call.
     pub fn new_unchecked(sig: &'a ABISig) -> Self {
         Self {
             abi_sig: sig,

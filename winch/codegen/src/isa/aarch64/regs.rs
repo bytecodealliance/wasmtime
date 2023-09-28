@@ -4,15 +4,20 @@ use crate::{isa::reg::Reg, masm::OperandSize};
 use regalloc2::{PReg, RegClass};
 use smallvec::{smallvec, SmallVec};
 
+/// FPR index bound.
+pub(crate) const MAX_FPR: u32 = 32;
+/// FPR index bound.
+pub(crate) const MAX_GPR: u32 = 32;
+
 /// Construct a X-register from an index.
 pub(crate) const fn xreg(num: u8) -> Reg {
-    assert!(num < 32);
+    assert!((num as u32) < MAX_GPR);
     Reg::new(PReg::new(num as usize, RegClass::Int))
 }
 
 /// Construct a V-register from an index.
 pub(crate) const fn vreg(num: u8) -> Reg {
-    assert!(num < 32);
+    assert!((num as u32) < MAX_FPR);
     Reg::new(PReg::new(num as usize, RegClass::Float))
 }
 

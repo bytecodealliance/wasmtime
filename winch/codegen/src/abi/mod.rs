@@ -72,7 +72,7 @@ pub(crate) trait ABI {
     /// function type.
     fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
 
-    /// Construct an ABI siganture from WasmType params and returns.
+    /// Construct an ABI signature from WasmType params and returns.
     fn sig_from(params: &[WasmType], returns: &[WasmType], call_conv: &CallingConvention)
         -> ABISig;
 

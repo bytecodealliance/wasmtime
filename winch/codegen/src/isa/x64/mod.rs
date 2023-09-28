@@ -21,7 +21,7 @@ use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_environ::{ModuleTranslation, ModuleTypes, WasmFuncType};
 
-use self::regs::{ALL_FPR, ALL_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
+use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
 
 mod abi;
 mod address;
@@ -106,8 +106,16 @@ impl TargetIsa for X64 {
 
         let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
-        let gpr = RegBitSet::int(ALL_GPR, NON_ALLOCATABLE_GPR);
-        let fpr = RegBitSet::float(ALL_FPR, NON_ALLOCATABLE_FPR);
+        let gpr = RegBitSet::int(
+            ALL_GPR.into(),
+            NON_ALLOCATABLE_GPR.into(),
+            usize::try_from(MAX_GPR).unwrap(),
+        );
+        let fpr = RegBitSet::float(
+            ALL_FPR.into(),
+            NON_ALLOCATABLE_FPR.into(),
+            usize::try_from(MAX_FPR).unwrap(),
+        );
 
         let regalloc = RegAlloc::from(gpr, fpr);
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);

@@ -37,31 +37,38 @@ pub struct RegBitSet {
     /// The register class.
     class: RegClass,
     /// The set of allocatable
-    allocatable: u32,
+    allocatable: u64,
     /// The set of non-alloctable registers.
-    non_allocatable: u32,
+    non_allocatable: u64,
+    /// The max number of registers.
+    /// Invariant:
+    /// When allocating or freeing a register the encoding (index) of the
+    /// register must be less than the max property.
+    max: usize,
 }
 
 impl RegBitSet {
     /// Creates an integer register class bitset.
-    pub fn int(allocatable: u32, non_allocatable: u32) -> Self {
+    pub fn int(allocatable: u64, non_allocatable: u64, max: usize) -> Self {
         // Assert that one set is the complement of the other.
         debug_assert!(allocatable & non_allocatable == 0);
         Self {
             class: RegClass::Int,
             allocatable,
             non_allocatable,
+            max,
         }
     }
 
     /// Creates a float register class bitset.
-    pub fn float(allocatable: u32, non_allocatable: u32) -> Self {
+    pub fn float(allocatable: u64, non_allocatable: u64, max: usize) -> Self {
         // Assert that one set is the complement of the other.
         debug_assert!(allocatable & non_allocatable == 0);
         Self {
             class: RegClass::Float,
             allocatable,
             non_allocatable,
+            max,
         }
     }
 }
@@ -81,7 +88,7 @@ impl RegSet {
         self.available(class).then(|| {
             let bitset = &self[class];
             let index = bitset.allocatable.trailing_zeros();
-            self.allocate(class, index);
+            self.allocate(class, index.into());
             Reg::from(class, index as usize)
         })
     }
@@ -90,7 +97,7 @@ impl RegSet {
     pub fn reg(&mut self, reg: Reg) -> Option<Reg> {
         let index = reg.hw_enc();
         self.named_reg_available(reg).then(|| {
-            self.allocate(reg.class(), index.into());
+            self.allocate(reg.class(), index.try_into().unwrap());
             reg
         })
     }
@@ -98,7 +105,10 @@ impl RegSet {
     /// Marks the specified register as available, utilizing the
     /// register class to determine the bitset that requires updating.
     pub fn free(&mut self, reg: Reg) {
-        let index = reg.hw_enc() as u32;
+        let bitset = &self[reg.class()];
+        let index = reg.hw_enc();
+        assert!(index < bitset.max);
+        let index = u64::try_from(index).unwrap();
         if !self.is_non_allocatable(reg.class(), index) {
             self[reg.class()].allocatable |= 1 << index;
         }
@@ -107,9 +117,11 @@ impl RegSet {
     /// Returns true if the specified register is allocatable.
     pub fn named_reg_available(&self, reg: Reg) -> bool {
         let bitset = &self[reg.class()];
+        assert!(reg.hw_enc() < bitset.max);
         let index = 1 << reg.hw_enc();
+
         (!bitset.allocatable & index) == 0
-            || self.is_non_allocatable(reg.class(), reg.hw_enc().into())
+            || self.is_non_allocatable(reg.class(), reg.hw_enc().try_into().unwrap())
     }
 
     fn available(&self, class: RegClass) -> bool {
@@ -117,13 +129,13 @@ impl RegSet {
         bitset.allocatable != 0
     }
 
-    fn allocate(&mut self, class: RegClass, index: u32) {
+    fn allocate(&mut self, class: RegClass, index: u64) {
         if !self.is_non_allocatable(class, index) {
             self[class].allocatable &= !(1 << index);
         }
     }
 
-    fn is_non_allocatable(&self, class: RegClass, index: u32) -> bool {
+    fn is_non_allocatable(&self, class: RegClass, index: u64) -> bool {
         let bitset = &self[class];
         let non_allocatable = bitset.non_allocatable;
         non_allocatable != 0 && !non_allocatable & (1 << index) == 0

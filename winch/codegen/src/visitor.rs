@@ -639,7 +639,7 @@ where
             &mut self.context,
             &builtin,
             |cx, masm, call, callee| {
-                // Calcualte the table element address.
+                // Calculate the table element address.
                 let index = cx.pop_to_reg(masm, None);
                 let elem_addr =
                     masm.table_elem_address(index.into(), index.ty.into(), &table_data, cx);
