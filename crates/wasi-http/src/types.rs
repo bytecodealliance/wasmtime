@@ -107,7 +107,11 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
 
         match resp.body {
             Some(body) => builder.body(body),
-            None => builder.body(Empty::<bytes::Bytes>::new().boxed()),
+            None => builder.body(
+                Empty::<bytes::Bytes>::new()
+                    .map_err(|_| anyhow::anyhow!("empty error"))
+                    .boxed(),
+            ),
         }
     }
 }

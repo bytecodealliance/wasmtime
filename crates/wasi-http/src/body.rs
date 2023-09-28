@@ -4,7 +4,6 @@ use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use std::future::Future;
 use std::{
-    convert::Infallible,
     pin::Pin,
     sync::{Arc, Mutex},
     time::Duration,
@@ -241,29 +240,32 @@ impl HostFutureTrailers {
     }
 }
 
-pub type HyperOutgoingBody = BoxBody<Bytes, Infallible>;
+pub type HyperOutgoingBody = BoxBody<Bytes, anyhow::Error>;
+
+pub enum FinishMessage {
+    Finished,
+    Trailers(hyper::HeaderMap),
+    Abort,
+}
 
 pub struct HostOutgoingBody {
     pub body_output_stream: Option<Box<dyn HostOutputStream>>,
-    pub trailers_sender: Option<tokio::sync::oneshot::Sender<hyper::HeaderMap>>,
+    pub finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
 }
 
 impl HostOutgoingBody {
     pub fn new() -> (Self, HyperOutgoingBody) {
         use http_body_util::BodyExt;
-        use hyper::{
-            body::{Body, Frame},
-            HeaderMap,
-        };
+        use hyper::body::{Body, Frame};
         use std::task::{Context, Poll};
         use tokio::sync::oneshot::error::RecvError;
         struct BodyImpl {
             body_receiver: mpsc::Receiver<Bytes>,
-            trailers_receiver: Option<oneshot::Receiver<HeaderMap>>,
+            finish_receiver: Option<oneshot::Receiver<FinishMessage>>,
         }
         impl Body for BodyImpl {
             type Data = Bytes;
-            type Error = Infallible;
+            type Error = anyhow::Error;
             fn poll_frame(
                 mut self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
@@ -274,16 +276,21 @@ impl HostOutgoingBody {
 
                     // This means that the `body_sender` end of the channel has been dropped.
                     Poll::Ready(None) => {
-                        if let Some(mut trailers_receiver) = self.as_mut().trailers_receiver.take()
-                        {
-                            match Pin::new(&mut trailers_receiver).poll(cx) {
+                        if let Some(mut finish_receiver) = self.as_mut().finish_receiver.take() {
+                            match Pin::new(&mut finish_receiver).poll(cx) {
                                 Poll::Pending => {
-                                    self.as_mut().trailers_receiver = Some(trailers_receiver);
+                                    self.as_mut().finish_receiver = Some(finish_receiver);
                                     Poll::Pending
                                 }
-                                Poll::Ready(Ok(trailers)) => {
-                                    Poll::Ready(Some(Ok(Frame::trailers(trailers))))
-                                }
+                                Poll::Ready(Ok(message)) => match message {
+                                    FinishMessage::Finished => Poll::Ready(None),
+                                    FinishMessage::Trailers(trailers) => {
+                                        Poll::Ready(Some(Ok(Frame::trailers(trailers))))
+                                    }
+                                    FinishMessage::Abort => Poll::Ready(Some(Err(
+                                        anyhow::anyhow!("response corrupted"),
+                                    ))),
+                                },
                                 Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),
                             }
                         } else {
@@ -295,17 +302,17 @@ impl HostOutgoingBody {
         }
 
         let (body_sender, body_receiver) = mpsc::channel(1);
-        let (trailers_sender, trailers_receiver) = oneshot::channel();
+        let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
             body_receiver,
-            trailers_receiver: Some(trailers_receiver),
+            finish_receiver: Some(finish_receiver),
         }
         .boxed();
         (
             Self {
                 // TODO: this capacity constant is arbitrary, and should be configurable
                 body_output_stream: Some(Box::new(BodyWriteStream::new(1024 * 1024, body_sender))),
-                trailers_sender: Some(trailers_sender),
+                finish_sender: Some(finish_sender),
             },
             body_impl,
         )

@@ -167,24 +167,25 @@ impl hyper::service::Service<Request> for ProxyHandler {
         let handler = self.clone();
 
         Box::pin(async move {
-            let host = Host::new()?;
-            let mut store = Store::new(&handler.engine, host);
-
-            let req = store.data_mut().new_incoming_request(
-                req.map(|body| body.map_err(|e| anyhow::anyhow!(e)).boxed()),
-            )?;
-
             let (sender, receiver) = tokio::sync::oneshot::channel();
-            let out = store.data_mut().new_response_outparam(sender)?;
-
-            let (proxy, _inst) = wasmtime_wasi_http::proxy::Proxy::instantiate_pre(
-                &mut store,
-                &handler.instance_pre,
-            )
-            .await?;
 
             // TODO: need to track the join handle, but don't want to block the response on it
             tokio::task::spawn(async move {
+                let host = Host::new()?;
+                let mut store = Store::new(&handler.engine, host);
+
+                let req = store.data_mut().new_incoming_request(
+                    req.map(|body| body.map_err(|e| anyhow::anyhow!(e)).boxed()),
+                )?;
+
+                let out = store.data_mut().new_response_outparam(sender)?;
+
+                let (proxy, _inst) = wasmtime_wasi_http::proxy::Proxy::instantiate_pre(
+                    &mut store,
+                    &handler.instance_pre,
+                )
+                .await?;
+
                 proxy
                     .wasi_http_incoming_handler()
                     .call_handle(store, req, out)

@@ -81,7 +81,11 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             builder = builder.header(k, v);
         }
 
-        let body = req.body.unwrap_or_else(|| Empty::<Bytes>::new().boxed());
+        let body = req.body.unwrap_or_else(|| {
+            Empty::<Bytes>::new()
+                .map_err(|_| anyhow::anyhow!("empty error"))
+                .boxed()
+        });
 
         let request = builder.body(body).map_err(http_protocol_error)?;
 

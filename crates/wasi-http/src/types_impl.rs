@@ -3,7 +3,7 @@ use crate::bindings::http::types::{
     IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
-use crate::body::{HostFutureTrailers, HostFutureTrailersState};
+use crate::body::{FinishMessage, HostFutureTrailers, HostFutureTrailersState};
 use crate::types::{HostIncomingRequest, HostOutgoingResponse};
 use crate::WasiHttpView;
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
         HostOutgoingRequest, TableHttpExt,
     },
 };
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use std::any::Any;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
@@ -533,32 +533,41 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         }
     }
 
-    fn outgoing_body_write_trailers(
+    fn outgoing_body_finish(
         &mut self,
         id: OutgoingBody,
-        ts: Trailers,
+        ts: Option<Trailers>,
     ) -> wasmtime::Result<()> {
         let mut body = self.table().delete_outgoing_body(id)?;
-        let trailers = self.table().get_fields(ts)?.clone();
 
-        match body
-            .trailers_sender
+        let sender = body
+            .finish_sender
             .take()
-            // Should be unreachable - this is the only place we take the trailers sender,
-            // at the end of the HostOutgoingBody's lifetime
-            .ok_or_else(|| anyhow!("trailers_sender missing"))?
-            .send(trailers.into())
-        {
-            Ok(()) => {}
-            Err(_) => {} // Ignoring failure: receiver died sending body, but we can't report that
-                         // here.
-        }
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        let message = if let Some(ts) = ts {
+            FinishMessage::Trailers(self.table().get_fields(ts)?.clone().into())
+        } else {
+            FinishMessage::Finished
+        };
+
+        // Ignoring failure: receiver died sending body, but we can't report that here.
+        let _ = sender.send(message.into());
 
         Ok(())
     }
 
     fn drop_outgoing_body(&mut self, id: OutgoingBody) -> wasmtime::Result<()> {
-        let _ = self.table().delete_outgoing_body(id)?;
+        let mut body = self.table().delete_outgoing_body(id)?;
+
+        let sender = body
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        // Ignoring failure: receiver died sending body, but we can't report that here.
+        let _ = sender.send(FinishMessage::Abort);
+
         Ok(())
     }
 }
