@@ -4179,9 +4179,9 @@ dependencies = [
 
 [[package]]
 name = "wit-component"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0477d36188eeba8e8f2579220ec385086f188de99453c6689814d4dad6a4c22c"
+checksum = "ee23614740bf871dac9856e3062c7a308506eb3f0a2759939ab8d0aa8436a1c0"
 dependencies = [
  "anyhow",
  "bitflags 2.3.3",
@@ -4197,9 +4197,9 @@ dependencies = [
 
 [[package]]
 name = "wit-parser"
-version = "0.11.2"
+version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4419bc240aa8c421e44a0c180e33891d5556b8b2327f432265a2c382cca9d294"
+checksum = "a39edca9abb16309def3843af73b58d47d243fe33a9ceee572446bcc57556b9a"
 dependencies = [
  "anyhow",
  "id-arena",
