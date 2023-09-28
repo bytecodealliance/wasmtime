@@ -390,7 +390,7 @@ impl<T: WasiView> tcp::Host for T {
         // fall back to the other.
         match sockopt::get_ipv6_unicast_hops(socket.tcp_socket()) {
             Ok(value) => Ok(value),
-            Err(Errno::NOPROTOOPT) => {
+            Err(Errno::NOPROTOOPT | Errno::OPNOTSUPP) => {
                 let value = sockopt::get_ip_ttl(socket.tcp_socket())?;
                 let value = value.try_into().unwrap();
                 Ok(value)
@@ -411,7 +411,7 @@ impl<T: WasiView> tcp::Host for T {
         // fall back to the other.
         match sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value)) {
             Ok(()) => Ok(()),
-            Err(Errno::NOPROTOOPT) => Ok(sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?),
+            Err(Errno::NOPROTOOPT | Errno::OPNOTSUPP) => Ok(sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?),
             Err(err) => Err(err.into()),
         }
     }
