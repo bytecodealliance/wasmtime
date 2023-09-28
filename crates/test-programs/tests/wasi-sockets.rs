@@ -69,3 +69,9 @@ async fn run(name: &str) -> anyhow::Result<()> {
 async fn tcp_sample_application() {
     run("tcp_sample_application").await.unwrap();
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn tcp_states() {
+    run("tcp_states").await.unwrap();
+}
+
