@@ -216,8 +216,8 @@ wasmprinter = "0.2.67"
 wasm-encoder = "0.33.2"
 wasm-smith = "0.12.18"
 wasm-mutate = "0.2.35"
-wit-parser = "0.11.2"
-wit-component = "0.14.3"
+wit-parser = "0.11.3"
+wit-component = "0.14.4"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
