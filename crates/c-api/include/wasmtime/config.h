@@ -367,6 +367,36 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_enable(wasm_config_t*, const
  */
 WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const char *key, const char *value);
 
+/**
+ * \brief Whether or not to enable support for asynchronous functions in Wasmtime.
+ *
+ * When enabled, the config can optionally define host functions with async. 
+ * Instances created and functions called with this Config must be called through their asynchronous APIs, however.
+ * For example using wasmtime_func_call will panic when used with this config.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support
+ */
+WASMTIME_CONFIG_PROP(void, async_support, bool)
+
+/**
+ * \brief Configures the size of the stacks used for asynchronous execution.
+ *
+ * This setting configures the size of the stacks that are allocated for asynchronous execution. 
+ *
+ * The value cannot be less than max_wasm_stack.
+ *
+ * The amount of stack space guaranteed for host functions is async_stack_size - max_wasm_stack, so take care
+ * not to set these two values close to one another; doing so may cause host functions to overflow the stack 
+ * and abort the process.
+ *
+ * By default this option is 2 MiB.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_stack_size
+ */
+WASMTIME_CONFIG_PROP(void, async_stack_size, uint64_t)
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
