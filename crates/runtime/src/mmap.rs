@@ -122,6 +122,7 @@ impl Mmap {
     /// # Panics
     ///
     /// Panics of the `range` provided is outside of the limits of this mmap.
+    #[inline]
     pub unsafe fn slice(&self, range: Range<usize>) -> &[u8] {
         assert!(range.start <= range.end);
         assert!(range.end <= self.len());
