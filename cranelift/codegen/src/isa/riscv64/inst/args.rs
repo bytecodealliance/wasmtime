@@ -1960,6 +1960,7 @@ impl CaOp {
             CaOp::CSub => 0b00,
             CaOp::CAddw => 0b01,
             CaOp::CSubw => 0b00,
+            CaOp::CMul => 0b10,
         }
     }
 
@@ -1967,16 +1968,20 @@ impl CaOp {
         // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
         match self {
             CaOp::CAnd | CaOp::COr | CaOp::CXor | CaOp::CSub => 0b100_011,
-            CaOp::CSubw | CaOp::CAddw => 0b100_111,
+            CaOp::CSubw | CaOp::CAddw | CaOp::CMul => 0b100_111,
         }
     }
 
     pub fn op(&self) -> COpcodeSpace {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CaOp::CAnd | CaOp::COr | CaOp::CXor | CaOp::CSub | CaOp::CAddw | CaOp::CSubw => {
-                COpcodeSpace::C1
-            }
+            CaOp::CAnd
+            | CaOp::COr
+            | CaOp::CXor
+            | CaOp::CSub
+            | CaOp::CAddw
+            | CaOp::CSubw
+            | CaOp::CMul => COpcodeSpace::C1,
         }
     }
 }

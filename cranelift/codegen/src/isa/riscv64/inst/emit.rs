@@ -465,7 +465,9 @@ impl Inst {
         state: &mut EmitState,
         start_off: &mut u32,
     ) -> Option<()> {
+        let has_m = emit_info.isa_flags.has_m();
         let has_zca = emit_info.isa_flags.has_zca();
+        let has_zcb = emit_info.isa_flags.has_zcb();
         let has_zcd = emit_info.isa_flags.has_zcd();
 
         // Currently all compressed extensions (Zcb, Zcd, Zcmp, Zcmt, etc..) require Zca
@@ -513,7 +515,8 @@ impl Inst {
                     | AluOPRRR::Xor
                     | AluOPRRR::Sub
                     | AluOPRRR::Addw
-                    | AluOPRRR::Subw),
+                    | AluOPRRR::Subw
+                    | AluOPRRR::Mul),
                 rd,
                 rs1,
                 rs2,
@@ -525,7 +528,8 @@ impl Inst {
                     AluOPRRR::Sub => CaOp::CSub,
                     AluOPRRR::Addw => CaOp::CAddw,
                     AluOPRRR::Subw => CaOp::CSubw,
-                    _ => unreachable!(),
+                    AluOPRRR::Mul if has_zcb && has_m => CaOp::CMul,
+                    _ => return None,
                 };
 
                 sink.put2(encode_ca_type(op, rd, rs2));

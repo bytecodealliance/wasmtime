@@ -728,6 +728,7 @@
   (CSub)
   (CAddw)
   (CSubw)
+  (CMul)
 ))
 
 ;; Opcodes for the CJ compressed instruction format
