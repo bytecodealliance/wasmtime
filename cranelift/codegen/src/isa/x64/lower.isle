@@ -3345,9 +3345,13 @@
 ;;
 ;; This means that the first operand to all of the int-to-float conversions here
 ;; are `(xmm_zero)` operands which is a guaranteed zero register that has no
-;; dependencies on other instructions. Ideally this would be lifted out to a
-;; higher level to get deduplicated between consecutive int-to-float operations
-;; for example but that's not easy to do at this time.
+;; dependencies on other instructions.
+;;
+;; Ideally this would be lifted out to a higher level to get deduplicated
+;; between consecutive int-to-float operations but that's not easy
+;; to do at this time. One possibility would be a mid-end rule which rewrites
+;; `fcvt_from_sint` to an x86-specific opcode using a zero constant which would
+;; be subject to normal LICM, but that's not feasible today.
 
 (rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I8))))
       (x64_cvtsi2ss $I32 (xmm_zero $F32X4) (extend_to_gpr a $I32 (ExtendKind.Sign))))

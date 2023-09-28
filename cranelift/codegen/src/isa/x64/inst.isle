@@ -439,6 +439,10 @@
 
        ;; Conversion from signed integers to floats, the `{v,}`cvtsi2s{s,d}`
        ;; instructions.
+       ;;
+       ;; Note that this is special in that `src1` is an xmm/float register
+       ;; while `src2` is a general purpose register as this is converting an
+       ;; integer in a gpr to an equivalent float in an xmm reg.
        (CvtIntToFloat (op SseOpcode)
                       (src1 Xmm)
                       (src2 GprMem)

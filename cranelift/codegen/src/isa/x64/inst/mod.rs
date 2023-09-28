@@ -1305,8 +1305,8 @@ impl PrettyPrint for Inst {
                 dst,
                 src2_size,
             } => {
-                let dst = pretty_print_reg(*dst.to_reg(), 8, allocs);
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(*dst.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(src2_size.to_bytes(), allocs);
                 let op = ljustify(op.to_string());
                 format!("{op} {src1}, {src2}, {dst}")

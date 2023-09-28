@@ -3235,8 +3235,8 @@ pub(crate) fn emit(
             dst,
             src2_size,
         } => {
-            let dst = allocs.next(dst.to_reg().to_reg());
             let src1 = allocs.next(src1.to_reg());
+            let dst = allocs.next(dst.to_reg().to_reg());
             assert_eq!(src1, dst);
             let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
 
