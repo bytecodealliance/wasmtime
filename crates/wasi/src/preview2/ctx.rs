@@ -54,7 +54,10 @@ impl WasiCtxBuilder {
     pub fn new() -> Self {
         // For the insecure random API, use `SmallRng`, which is fast. It's
         // also insecure, but that's the deal here.
-        let insecure_random = Box::new(cap_rand::rngs::SmallRng::from_entropy());
+        let insecure_random = Box::new(
+            cap_rand::rngs::SmallRng::from_rng(cap_rand::thread_rng(cap_rand::ambient_authority()))
+                .unwrap(),
+        );
 
         // For the insecure random seed, use a `u128` generated from
         // `thread_rng()`, so that it's not guessable from the insecure_random
