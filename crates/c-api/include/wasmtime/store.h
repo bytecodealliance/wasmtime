@@ -243,6 +243,32 @@ WASM_API_EXTERN void wasmtime_context_set_epoch_deadline(wasmtime_context_t *con
  */
 WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(wasmtime_store_t *store, wasmtime_error_t* (*func)(wasmtime_context_t*, void*, uint64_t*), void *data);
 
+/**
+ * \brief Configures a Store to yield execution of async WebAssembly code periodically.
+ *
+ * When a Store is configured to consume fuel with #wasmtime_config_consume_fuel 
+ * this method will configure what happens when fuel runs out. Specifically executing
+ * WebAssembly will be suspended and control will be yielded back to the caller.
+ *
+ * This is only suitable with use of a store associated with an async config because
+ * only then are futures used and yields are possible.
+ */
+WASM_API_EXTERN void wasmtime_context_out_of_fuel_async_yield(
+    wasmtime_context_t *context,
+    uint64_t injection_count,
+    uint64_t fuel_to_inject);
+
+/**
+ * \brief Configures epoch-deadline expiration to yield to the async caller and the update the deadline.
+ *
+ * This is only suitable with use of a store associated with an async config because
+ * only then are futures used and yields are possible.
+ *
+ * See the Rust documentation for more:
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Store.html#method.epoch_deadline_async_yield_and_update
+ */
+WASM_API_EXTERN void wasmtime_context_epoch_deadline_async_yield_and_update(wasmtime_context_t *context, uint64_t delta);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

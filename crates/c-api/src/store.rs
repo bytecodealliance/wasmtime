@@ -259,3 +259,22 @@ pub extern "C" fn wasmtime_context_set_epoch_deadline(
 ) {
     store.set_epoch_deadline(ticks_beyond_current);
 }
+
+#[no_mangle]
+#[cfg(feature = "async")]
+pub extern "C" fn wasmtime_context_epoch_deadline_async_yield_and_update(
+    mut store: CStoreContextMut<'_>,
+    delta: u64,
+) {
+    store.epoch_deadline_async_yield_and_update(delta);
+}
+
+#[no_mangle]
+#[cfg(feature = "async")]
+pub extern "C" fn wasmtime_context_out_of_fuel_async_yield(
+    mut store: CStoreContextMut<'_>,
+    injection_count: u64,
+    fuel_to_inject: u64,
+) {
+    store.out_of_fuel_async_yield(injection_count, fuel_to_inject);
+}
