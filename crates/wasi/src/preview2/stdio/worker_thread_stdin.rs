@@ -23,10 +23,11 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
+use crate::preview2::stdio::StdinStream;
 use crate::preview2::{HostInputStream, StreamState};
 use anyhow::Error;
 use bytes::{Bytes, BytesMut};
-use std::io::Read;
+use std::io::{IsTerminal, Read};
 use std::mem;
 use std::sync::{Condvar, Mutex, OnceLock};
 use tokio::sync::Notify;
@@ -103,8 +104,12 @@ pub fn stdin() -> Stdin {
     Stdin
 }
 
-impl is_terminal::IsTerminal for Stdin {
-    fn is_terminal(&self) -> bool {
+impl StdinStream for Stdin {
+    fn stream(&self) -> Box<dyn HostInputStream> {
+        Box::new(Stdin)
+    }
+
+    fn isatty(&self) -> bool {
         std::io::stdin().is_terminal()
     }
 }

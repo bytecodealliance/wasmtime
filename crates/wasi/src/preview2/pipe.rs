@@ -10,45 +10,46 @@
 use crate::preview2::{HostInputStream, HostOutputStream, OutputStreamError, StreamState};
 use anyhow::{anyhow, Error};
 use bytes::Bytes;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 pub use crate::preview2::write_stream::AsyncWriteStream;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemoryInputPipe {
-    buffer: std::io::Cursor<Bytes>,
+    buffer: Arc<Mutex<Bytes>>,
 }
 
 impl MemoryInputPipe {
     pub fn new(bytes: Bytes) -> Self {
         Self {
-            buffer: std::io::Cursor::new(bytes),
+            buffer: Arc::new(Mutex::new(bytes)),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.buffer.get_ref().len() as u64 == self.buffer.position()
+        self.buffer.lock().unwrap().is_empty()
     }
 }
 
 #[async_trait::async_trait]
 impl HostInputStream for MemoryInputPipe {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        if self.is_empty() {
+        let mut buffer = self.buffer.lock().unwrap();
+        if buffer.is_empty() {
             return Ok((Bytes::new(), StreamState::Closed));
         }
 
-        let mut dest = bytes::BytesMut::zeroed(size);
-        let nbytes = std::io::Read::read(&mut self.buffer, dest.as_mut())?;
-        dest.truncate(nbytes);
-
-        let state = if self.is_empty() {
+        let size = size.min(buffer.len());
+        let read = buffer.split_to(size);
+        let state = if buffer.is_empty() {
             StreamState::Closed
         } else {
             StreamState::Open
         };
-        Ok((dest.freeze(), state))
+        Ok((read, state))
     }
+
     async fn ready(&mut self) -> Result<(), Error> {
         Ok(())
     }
@@ -57,7 +58,7 @@ impl HostInputStream for MemoryInputPipe {
 #[derive(Debug, Clone)]
 pub struct MemoryOutputPipe {
     capacity: usize,
-    buffer: std::sync::Arc<std::sync::Mutex<bytes::BytesMut>>,
+    buffer: Arc<Mutex<bytes::BytesMut>>,
 }
 
 impl MemoryOutputPipe {
@@ -212,6 +213,7 @@ impl HostInputStream for AsyncReadStream {
 }
 
 /// An output stream that consumes all input written to it, and is always ready.
+#[derive(Copy, Clone)]
 pub struct SinkOutputStream;
 
 #[async_trait::async_trait]
@@ -231,6 +233,7 @@ impl HostOutputStream for SinkOutputStream {
 }
 
 /// A stream that is ready immediately, but will always report that it's closed.
+#[derive(Copy, Clone)]
 pub struct ClosedInputStream;
 
 #[async_trait::async_trait]
@@ -245,6 +248,7 @@ impl HostInputStream for ClosedInputStream {
 }
 
 /// An output stream that is always closed.
+#[derive(Copy, Clone)]
 pub struct ClosedOutputStream;
 
 #[async_trait::async_trait]

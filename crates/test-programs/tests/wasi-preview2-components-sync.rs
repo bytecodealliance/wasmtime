@@ -5,7 +5,7 @@ use wasmtime::{component::Linker, Config, Engine, Store};
 use wasmtime_wasi::preview2::{
     command::sync::{add_to_linker, Command},
     pipe::MemoryOutputPipe,
-    DirPerms, FilePerms, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 lazy_static::lazy_static! {
@@ -43,9 +43,7 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         if inherit_stdio {
             builder.inherit_stdio();
         } else {
-            builder
-                .stdout(stdout.clone(), IsATTY::No)
-                .stderr(stderr.clone(), IsATTY::No);
+            builder.stdout(stdout.clone()).stderr(stderr.clone());
         }
         builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);
@@ -56,8 +54,8 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
             builder.env(var, val);
         }
 
-        let mut table = Table::new();
-        let wasi = builder.build(&mut table)?;
+        let table = Table::new();
+        let wasi = builder.build();
         struct Ctx {
             wasi: WasiCtx,
             table: Table,

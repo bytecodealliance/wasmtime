@@ -1,13 +1,10 @@
 use super::clocks::host::{monotonic_clock, wall_clock};
 use crate::preview2::{
-    bindings::cli::{terminal_input, terminal_output},
-    bindings::io::streams,
     clocks::{self, HostMonotonicClock, HostWallClock},
     filesystem::Dir,
     pipe, random, stdio,
-    stdio::{HostTerminalInputState, HostTerminalOutputState},
-    stream::{HostInputStream, HostOutputStream, TableStreamExt},
-    DirPerms, FilePerms, IsATTY, Table,
+    stdio::{StdinStream, StdoutStream},
+    DirPerms, FilePerms, Table,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
 use cap_std::ipnet::{self, IpNet};
@@ -15,12 +12,11 @@ use cap_std::net::Pool;
 use cap_std::{ambient_authority, AmbientAuthority};
 use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use wasmtime::component::Resource;
 
 pub struct WasiCtxBuilder {
-    stdin: (Box<dyn HostInputStream>, IsATTY),
-    stdout: (Box<dyn HostOutputStream>, IsATTY),
-    stderr: (Box<dyn HostOutputStream>, IsATTY),
+    stdin: Box<dyn StdinStream>,
+    stdout: Box<dyn StdoutStream>,
+    stderr: Box<dyn StdoutStream>,
     env: Vec<(String, String)>,
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
@@ -68,9 +64,9 @@ impl WasiCtxBuilder {
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
         Self {
-            stdin: (Box::new(pipe::ClosedInputStream), IsATTY::No),
-            stdout: (Box::new(pipe::SinkOutputStream), IsATTY::No),
-            stderr: (Box::new(pipe::SinkOutputStream), IsATTY::No),
+            stdin: Box::new(pipe::ClosedInputStream),
+            stdout: Box::new(pipe::SinkOutputStream),
+            stderr: Box::new(pipe::SinkOutputStream),
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
@@ -84,52 +80,31 @@ impl WasiCtxBuilder {
         }
     }
 
-    pub fn stdin(&mut self, stdin: impl HostInputStream + 'static, isatty: IsATTY) -> &mut Self {
-        self.stdin = (Box::new(stdin), isatty);
+    pub fn stdin(&mut self, stdin: impl StdinStream + 'static) -> &mut Self {
+        self.stdin = Box::new(stdin);
         self
     }
 
-    pub fn stdout(&mut self, stdout: impl HostOutputStream + 'static, isatty: IsATTY) -> &mut Self {
-        self.stdout = (Box::new(stdout), isatty);
+    pub fn stdout(&mut self, stdout: impl StdoutStream + 'static) -> &mut Self {
+        self.stdout = Box::new(stdout);
         self
     }
 
-    pub fn stderr(&mut self, stderr: impl HostOutputStream + 'static, isatty: IsATTY) -> &mut Self {
-        self.stderr = (Box::new(stderr), isatty);
+    pub fn stderr(&mut self, stderr: impl StdoutStream + 'static) -> &mut Self {
+        self.stderr = Box::new(stderr);
         self
     }
 
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        use is_terminal::IsTerminal;
-        let inherited = stdio::stdin();
-        let isatty = if inherited.is_terminal() {
-            IsATTY::Yes
-        } else {
-            IsATTY::No
-        };
-        self.stdin(inherited, isatty)
+        self.stdin(stdio::stdin())
     }
 
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        use is_terminal::IsTerminal;
-        let inherited = stdio::stdout();
-        let isatty = if inherited.is_terminal() {
-            IsATTY::Yes
-        } else {
-            IsATTY::No
-        };
-        self.stdout(inherited, isatty)
+        self.stdout(stdio::stdout())
     }
 
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        use is_terminal::IsTerminal;
-        let inherited = stdio::stderr();
-        let isatty = if inherited.is_terminal() {
-            IsATTY::Yes
-        } else {
-            IsATTY::No
-        };
-        self.stderr(inherited, isatty)
+        self.stderr(stdio::stderr())
     }
 
     pub fn inherit_stdio(&mut self) -> &mut Self {
@@ -273,10 +248,9 @@ impl WasiCtxBuilder {
     /// # Panics
     ///
     /// Panics if this method is called twice.
-    pub fn build(&mut self, table: &mut Table) -> Result<WasiCtx, anyhow::Error> {
+    pub fn build(&mut self) -> WasiCtx {
         assert!(!self.built);
 
-        use anyhow::Context;
         let Self {
             stdin,
             stdout,
@@ -294,38 +268,10 @@ impl WasiCtxBuilder {
         } = mem::replace(self, Self::new());
         self.built = true;
 
-        let stdin_terminal = Some(if let IsATTY::Yes = stdin.1 {
-            Some(Resource::new_own(
-                table.push(Box::new(HostTerminalInputState))?,
-            ))
-        } else {
-            None
-        });
-        let stdout_terminal = Some(if let IsATTY::Yes = stdout.1 {
-            Some(Resource::new_own(
-                table.push(Box::new(HostTerminalOutputState))?,
-            ))
-        } else {
-            None
-        });
-        let stderr_terminal = Some(if let IsATTY::Yes = stderr.1 {
-            Some(Resource::new_own(
-                table.push(Box::new(HostTerminalOutputState))?,
-            ))
-        } else {
-            None
-        });
-        let stdin = Some(table.push_input_stream(stdin.0).context("stdin")?);
-        let stdout = Some(table.push_output_stream(stdout.0).context("stdout")?);
-        let stderr = Some(table.push_output_stream(stderr.0).context("stderr")?);
-
-        Ok(WasiCtx {
+        WasiCtx {
             stdin,
-            stdin_terminal,
             stdout,
-            stdout_terminal,
             stderr,
-            stderr_terminal,
             env,
             args,
             preopens,
@@ -335,7 +281,7 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
-        })
+        }
     }
 }
 
@@ -355,11 +301,8 @@ pub struct WasiCtx {
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
     pub(crate) preopens: Vec<(Dir, String)>,
-    pub(crate) stdin: Option<Resource<streams::InputStream>>,
-    pub(crate) stdout: Option<Resource<streams::OutputStream>>,
-    pub(crate) stderr: Option<Resource<streams::OutputStream>>,
-    pub(crate) stdin_terminal: Option<Option<Resource<terminal_input::TerminalInput>>>,
-    pub(crate) stdout_terminal: Option<Option<Resource<terminal_output::TerminalOutput>>>,
-    pub(crate) stderr_terminal: Option<Option<Resource<terminal_output::TerminalOutput>>>,
+    pub(crate) stdin: Box<dyn StdinStream>,
+    pub(crate) stdout: Box<dyn StdoutStream>,
+    pub(crate) stderr: Box<dyn StdoutStream>,
     pub(crate) pool: Pool,
 }

@@ -8,7 +8,7 @@ use wasmtime::{
 use wasmtime_wasi::preview2::{
     command::{add_to_linker, Command},
     pipe::MemoryInputPipe,
-    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, IsATTY, Table, WasiCtx, WasiCtxBuilder,
+    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, Table, WasiCtx, WasiCtxBuilder,
     WasiView,
 };
 
@@ -61,10 +61,10 @@ async fn instantiate(
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn hello_stdout() -> Result<()> {
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .args(&["gussie", "sparky", "willa"])
-        .build(&mut table)?;
+        .build();
     let (mut store, command) =
         instantiate(get_component("hello_stdout"), CommandCtx { table, wasi }).await?;
     command
@@ -76,7 +76,7 @@ async fn hello_stdout() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn panic() -> Result<()> {
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .args(&[
             "diesel",
@@ -88,7 +88,7 @@ async fn panic() -> Result<()> {
             "good",
             "yesterday",
         ])
-        .build(&mut table)?;
+        .build();
     let (mut store, command) =
         instantiate(get_component("panic"), CommandCtx { table, wasi }).await?;
     let r = command.wasi_cli_run().call_run(&mut store).await;
@@ -99,10 +99,10 @@ async fn panic() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn args() -> Result<()> {
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .args(&["hello", "this", "", "is an argument", "with 🚩 emoji"])
-        .build(&mut table)?;
+        .build();
     let (mut store, command) =
         instantiate(get_component("args"), CommandCtx { table, wasi }).await?;
     command
@@ -114,8 +114,8 @@ async fn args() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn random() -> Result<()> {
-    let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let table = Table::new();
+    let wasi = WasiCtxBuilder::new().build();
     let (mut store, command) =
         instantiate(get_component("random"), CommandCtx { table, wasi }).await?;
 
@@ -157,11 +157,11 @@ async fn time() -> Result<()> {
         }
     }
 
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .monotonic_clock(FakeMonotonicClock { now: Mutex::new(0) })
         .wall_clock(FakeWallClock)
-        .build(&mut table)?;
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("time"), CommandCtx { table, wasi }).await?;
@@ -175,13 +175,12 @@ async fn time() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdin() -> Result<()> {
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .stdin(
-            MemoryInputPipe::new("So rested he by the Tumtum tree".into()),
-            IsATTY::No,
-        )
-        .build(&mut table)?;
+        .stdin(MemoryInputPipe::new(
+            "So rested he by the Tumtum tree".into(),
+        ))
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("stdin"), CommandCtx { table, wasi }).await?;
@@ -195,13 +194,12 @@ async fn stdin() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn poll_stdin() -> Result<()> {
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .stdin(
-            MemoryInputPipe::new("So rested he by the Tumtum tree".into()),
-            IsATTY::No,
-        )
-        .build(&mut table)?;
+        .stdin(MemoryInputPipe::new(
+            "So rested he by the Tumtum tree".into(),
+        ))
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("poll_stdin"), CommandCtx { table, wasi }).await?;
@@ -215,11 +213,11 @@ async fn poll_stdin() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn env() -> Result<()> {
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .env("frabjous", "day")
         .env("callooh", "callay")
-        .build(&mut table)?;
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("env"), CommandCtx { table, wasi }).await?;
@@ -239,10 +237,10 @@ async fn file_read() -> Result<()> {
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
-        .build(&mut table)?;
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("file_read"), CommandCtx { table, wasi }).await?;
@@ -263,10 +261,10 @@ async fn file_append() -> Result<()> {
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
-        .build(&mut table)?;
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("file_append"), CommandCtx { table, wasi }).await?;
@@ -296,10 +294,10 @@ async fn file_dir_sync() -> Result<()> {
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
-        .build(&mut table)?;
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("file_dir_sync"), CommandCtx { table, wasi }).await?;
@@ -313,8 +311,8 @@ async fn file_dir_sync() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn exit_success() -> Result<()> {
-    let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let table = Table::new();
+    let wasi = WasiCtxBuilder::new().build();
 
     let (mut store, command) =
         instantiate(get_component("exit_success"), CommandCtx { table, wasi }).await?;
@@ -330,8 +328,8 @@ async fn exit_success() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn exit_default() -> Result<()> {
-    let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let table = Table::new();
+    let wasi = WasiCtxBuilder::new().build();
 
     let (mut store, command) =
         instantiate(get_component("exit_default"), CommandCtx { table, wasi }).await?;
@@ -343,8 +341,8 @@ async fn exit_default() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn exit_failure() -> Result<()> {
-    let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let table = Table::new();
+    let wasi = WasiCtxBuilder::new().build();
 
     let (mut store, command) =
         instantiate(get_component("exit_failure"), CommandCtx { table, wasi }).await?;
@@ -360,8 +358,8 @@ async fn exit_failure() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn exit_panic() -> Result<()> {
-    let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let table = Table::new();
+    let wasi = WasiCtxBuilder::new().build();
 
     let (mut store, command) =
         instantiate(get_component("exit_panic"), CommandCtx { table, wasi }).await?;
@@ -388,12 +386,12 @@ async fn directory_list() -> Result<()> {
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .inherit_stdout()
         .inherit_stderr()
         .preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
-        .build(&mut table)?;
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("directory_list"), CommandCtx { table, wasi }).await?;
@@ -407,8 +405,8 @@ async fn directory_list() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn default_clocks() -> Result<()> {
-    let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let table = Table::new();
+    let wasi = WasiCtxBuilder::new().build();
 
     let (mut store, command) =
         instantiate(get_component("default_clocks"), CommandCtx { table, wasi }).await?;
@@ -422,8 +420,8 @@ async fn default_clocks() -> Result<()> {
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn export_cabi_realloc() -> Result<()> {
-    let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let table = Table::new();
+    let wasi = WasiCtxBuilder::new().build();
     let (mut store, command) = instantiate(
         get_component("export_cabi_realloc"),
         CommandCtx { table, wasi },
@@ -444,11 +442,11 @@ async fn read_only() -> Result<()> {
     std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
     std::fs::create_dir(dir.path().join("sub"))?;
 
-    let mut table = Table::new();
+    let table = Table::new();
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     let wasi = WasiCtxBuilder::new()
         .preopened_dir(open_dir, DirPerms::READ, FilePerms::READ, "/")
-        .build(&mut table)?;
+        .build();
 
     let (mut store, command) =
         instantiate(get_component("read_only"), CommandCtx { table, wasi }).await?;
@@ -461,16 +459,15 @@ async fn read_only() -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[ignore] // FIXME: this calls get_stdin but it's already consumed
 async fn stream_pollable_lifetimes() -> Result<()> {
     // Test program has two modes, dispatching based on argument.
     {
         // Correct execution: should succeed
-        let mut table = Table::new();
+        let table = Table::new();
         let wasi = WasiCtxBuilder::new()
             .args(&["correct"])
-            .stdin(MemoryInputPipe::new(" ".into()), IsATTY::No)
-            .build(&mut table)?;
+            .stdin(MemoryInputPipe::new(" ".into()))
+            .build();
 
         let (mut store, command) = instantiate(
             get_component("stream_pollable_lifetimes"),
@@ -486,11 +483,11 @@ async fn stream_pollable_lifetimes() -> Result<()> {
     }
     {
         // Incorrect execution: should trap with a TableError::HasChildren
-        let mut table = Table::new();
+        let table = Table::new();
         let wasi = WasiCtxBuilder::new()
             .args(&["trap"])
-            .stdin(MemoryInputPipe::new(" ".into()), IsATTY::No)
-            .build(&mut table)?;
+            .stdin(MemoryInputPipe::new(" ".into()))
+            .build();
 
         let (mut store, command) = instantiate(
             get_component("stream_pollable_lifetimes"),

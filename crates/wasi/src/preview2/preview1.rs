@@ -1366,7 +1366,7 @@ impl<
                     return Ok(0);
                 };
                 let (read, state) = stream_res(
-                    streams::HostInputStream::read(
+                    streams::HostInputStream::blocking_read(
                         self,
                         Resource::new_borrow(input_stream),
                         buf.len().try_into().unwrap_or(u64::MAX),
