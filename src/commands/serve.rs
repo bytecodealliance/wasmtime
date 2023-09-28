@@ -132,8 +132,6 @@ impl ServeCommand {
                 {
                     eprintln!("error: {e:?}");
                 }
-
-                Ok::<_, anyhow::Error>(())
             });
         }
     }
