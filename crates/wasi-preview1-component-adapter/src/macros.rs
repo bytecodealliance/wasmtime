@@ -3,11 +3,24 @@
 //! We're avoiding static initializers, so we can't have things like string
 //! literals. Replace the standard assert macros with simpler implementations.
 
+use crate::bindings::wasi::io::streams;
+use crate::bindings::wasi::cli::stderr::get_stderr;
+
 #[allow(dead_code)]
 #[doc(hidden)]
-pub fn println(message: &[u8]) {
-    // FIXME: We need some way to print a message.
-    let _ = message;
+pub fn print(message: &[u8]) {
+    let _ = unsafe { get_stderr().blocking_write_and_flush(message) };
+}
+
+/// A minimal `eprint` for debugging.
+#[allow(unused_macros)]
+macro_rules! eprint {
+    ($arg:tt) => {{
+        // We have to expand string literals into byte arrays to prevent them
+        // from getting statically initialized.
+        let message = byte_array_literals::str!($arg);
+        $crate::macros::print(&message);
+    }};
 }
 
 /// A minimal `eprintln` for debugging.
@@ -16,16 +29,14 @@ macro_rules! eprintln {
     ($arg:tt) => {{
         // We have to expand string literals into byte arrays to prevent them
         // from getting statically initialized.
-        // We use `str` instead of `str_nl` because we're calling the logging
-        // API which expects lines.
-        let message = byte_array_literals::str!($arg);
-        $crate::macros::println(&message);
+        let message = byte_array_literals::str_nl!($arg);
+        $crate::macros::print(&message);
     }};
 }
 
 pub(crate) fn eprint_u32(x: u32) {
     if x == 0 {
-        eprintln!("0");
+        eprint!("0");
     } else {
         eprint_u32_impl(x)
     }
@@ -35,7 +46,7 @@ pub(crate) fn eprint_u32(x: u32) {
             eprint_u32_impl(x / 10);
 
             let digit = [b'0' + ((x % 10) as u8)];
-            crate::macros::println(&digit);
+            crate::macros::print(&digit);
         }
     }
 }
@@ -43,8 +54,9 @@ pub(crate) fn eprint_u32(x: u32) {
 /// A minimal `unreachable`.
 macro_rules! unreachable {
     () => {{
-        eprintln!("unreachable executed at adapter line:");
+        eprint!("unreachable executed at adapter line ");
         crate::macros::eprint_u32(line!());
+        eprint!("\n");
         #[cfg(target_arch = "wasm32")]
         core::arch::wasm32::unreachable();
         // This is here to keep rust-analyzer happy when building for native:
@@ -53,9 +65,11 @@ macro_rules! unreachable {
     }};
 
     ($arg:tt) => {{
-        eprintln!("unreachable executed at adapter line:");
+        eprint!("unreachable executed at adapter line ");
         crate::macros::eprint_u32(line!());
+        eprint!(": ");
         eprintln!($arg);
+        eprint!("\n");
         #[cfg(target_arch = "wasm32")]
         core::arch::wasm32::unreachable();
         // This is here to keep rust-analyzer happy when building for native:
