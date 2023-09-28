@@ -63,6 +63,66 @@ typedef wasm_trap_t* (*wasmtime_func_callback_t)(
     size_t nresults);
 
 /**
+ * The callback to determine a continuation's current state.
+ *
+ * Return true if the host call has completed, otherwise false will 
+ * continue to yield WebAssembly execution.
+ *
+ * \param if error is assigned a non `NULL` value then the called function will 
+ *        trap with the returned error. Note that ownership of error is transferred 
+ *        to wasmtime.
+ */
+typedef bool (*wasmtime_func_async_continuation_callback_t)(
+    void *env,
+    wasmtime_caller_t *caller,
+    wasm_trap_t **error);
+
+/**
+ * A continuation for the current state of the host function's execution.
+ * 
+ * This continutation can be polled via the callback and returns the current state.
+ */
+typedef struct wasmtime_async_continuation_t {
+  wasmtime_func_async_continuation_callback_t callback;
+  void *env;
+  void (*finalizer)(void *);
+} wasmtime_async_continuation_t;
+
+/**
+ * \brief Create a new continuation for the callback.
+ *
+ * \param callback the function to call each time the continuation is polled.
+ * \param env the parameter will be passed to the callback on each invocation.
+ * \param finalizer the function to delete env when the continuation is destroyed. 
+ *        May be `NULL` to omit any cleanup.
+ */
+WASM_API_EXTERN wasmtime_async_continuation_t *wasmtime_async_continuation_new(
+    wasmtime_func_async_continuation_callback_t callback,
+    void *env,
+    void (*finalizer)(void *));
+
+/**
+ * \brief Callback signature for #wasmtime_linker_define_async_func.
+ *
+ * This is a host function that returns a continuation to be called later. 
+ * The continuation returned is owned by wasmtime and will be deleted when it completes.
+ *
+ * All the arguments to this function will be kept alive until the continuation
+ * returns that it has errored or has completed.
+ *
+ * Only supported for async stores.
+ *
+ * See #wasmtime_func_callback_t for more information.
+ */
+typedef wasmtime_async_continuation_t *(*wasmtime_func_async_callback_t)(
+    void *env,
+    wasmtime_caller_t *caller, 
+    const wasmtime_val_t *args,
+    size_t nargs, 
+    wasmtime_val_t *results,
+    size_t nresults);
+
+/**
  * \brief Creates a new host-defined function.
  *
  * Inserts a host-defined function into the `store` provided which can be used

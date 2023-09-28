@@ -11,6 +11,8 @@
 #include <wasmtime/error.h>
 #include <wasmtime/store.h>
 #include <wasmtime/extern.h>
+#include <wasmtime/instance.h>
+#include <wasmtime/module.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,6 +120,23 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func(
     void *data,
     void (*finalizer)(void*)
 );
+
+/**
+ * \brief Defines a new async function in this linker.
+ *
+ * This function behaves similar to #wasmtime_linker_define_func, except it supports async
+ * callbacks
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_linker_define_async_func(
+    wasmtime_linker_t *linker,
+    const char *module,
+    size_t module_len,
+    const char *name,
+    size_t name_len,
+    const wasm_functype_t *ty,
+    wasmtime_func_async_callback_t cb,
+    void *data,
+    void (*finalizer)(void *));
 
 /**
  * \brief Defines a new function in this linker.
