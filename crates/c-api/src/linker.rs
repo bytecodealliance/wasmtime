@@ -136,6 +136,35 @@ pub extern "C" fn wasmtime_linker_instantiate(
     super::instance::handle_instantiate(result, instance_ptr, trap_ptr)
 }
 
+#[cfg(feature = "async")]
+async fn do_linker_instantiate_async(
+    linker: &wasmtime_linker_t,
+    store: CStoreContextMut<'_>,
+    module: &wasmtime_module_t,
+    instance_ptr: &mut Instance,
+) -> wasmtime::Result<()> {
+    let instance = linker
+        .linker
+        .instantiate_async(store, &module.module)
+        .await?;
+    *instance_ptr = instance;
+    Ok(())
+}
+
+#[no_mangle]
+#[cfg(feature = "async")]
+pub extern "C" fn wasmtime_linker_instantiate_async<'a>(
+    linker: &'a wasmtime_linker_t,
+    store: CStoreContextMut<'a>,
+    module: &'a wasmtime_module_t,
+    instance_ptr: &'a mut Instance,
+) -> Box<crate::wasmtime_call_future_t<'a>> {
+    let fut = Box::pin(do_linker_instantiate_async(linker, store, module, instance_ptr));
+    Box::new(crate::wasmtime_call_future_t {
+        state: crate::CallFutureState::Called(fut),
+    })
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_module(
     linker: &mut wasmtime_linker_t,

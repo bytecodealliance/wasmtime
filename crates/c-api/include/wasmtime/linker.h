@@ -219,6 +219,23 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_instantiate(
 );
 
 /**
+ * \brief Instantiates a #wasm_module_t with the items defined in this linker for an async store.
+ *
+ * This is the same as #wasmtime_linker_instantiate but used for async stores 
+ * (which requires functions are called asynchronously). The returning #wasmtime_call_future_t 
+ * must be polled using #wasmtime_call_future_poll, and is owned and must be deleted using #wasmtime_call_future_delete.
+ * The future's results are retrieved using `wasmtime_call_future_get_results after polling has returned true marking 
+ * the future as completed.
+ *
+ * All arguments to this function must outlive the returned future.
+ */
+WASM_API_EXTERN wasmtime_call_future_t *wasmtime_linker_instantiate_async(
+    const wasmtime_linker_t *linker,
+    wasmtime_context_t *store,
+    const wasmtime_module_t *module,
+    wasmtime_instance_t *instance);
+
+/**
  * \brief Defines automatic instantiations of a #wasm_module_t in this linker.
  *
  * \param linker the linker the module is being added to
