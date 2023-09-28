@@ -93,6 +93,7 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct Dir {
     pub dir: Arc<cap_std::fs::Dir>,
     pub perms: DirPerms,

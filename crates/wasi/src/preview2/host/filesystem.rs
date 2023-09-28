@@ -6,6 +6,7 @@ use crate::preview2::bindings::filesystem::{preopens, types};
 use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::{Dir, File, TableFsExt};
 use crate::preview2::{DirPerms, FilePerms, Table, TableError, WasiView};
+use anyhow::Context;
 use wasmtime::component::Resource;
 
 use types::ErrorCode;
@@ -22,12 +23,15 @@ impl<T: WasiView> preopens::Host for T {
     fn get_directories(
         &mut self,
     ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
-        Ok(self
-            .ctx_mut()
-            .preopens
-            .drain(..)
-            .map(|(fd, name)| (Resource::new_own(fd.rep()), name.clone()))
-            .collect())
+        let mut results = Vec::new();
+        for (dir, name) in self.ctx().preopens.clone() {
+            let fd = self
+                .table_mut()
+                .push_dir(dir)
+                .with_context(|| format!("failed to push preopen {name}"))?;
+            results.push((fd, name));
+        }
+        Ok(results)
     }
 }
 

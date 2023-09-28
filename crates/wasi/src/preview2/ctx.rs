@@ -1,10 +1,9 @@
 use super::clocks::host::{monotonic_clock, wall_clock};
 use crate::preview2::{
     bindings::cli::{terminal_input, terminal_output},
-    bindings::filesystem::types::Descriptor,
     bindings::io::streams,
     clocks::{self, HostMonotonicClock, HostWallClock},
-    filesystem::{Dir, TableFsExt},
+    filesystem::Dir,
     pipe, random, stdio,
     stdio::{HostTerminalInputState, HostTerminalOutputState},
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
@@ -320,16 +319,6 @@ impl WasiCtxBuilder {
         let stdout = Some(table.push_output_stream(stdout.0).context("stdout")?);
         let stderr = Some(table.push_output_stream(stderr.0).context("stderr")?);
 
-        let preopens = preopens
-            .into_iter()
-            .map(|(dir, path)| {
-                let dirfd = table
-                    .push_dir(dir)
-                    .with_context(|| format!("preopen {path:?}"))?;
-                Ok((dirfd, path))
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
         Ok(WasiCtx {
             stdin,
             stdin_terminal,
@@ -365,7 +354,7 @@ pub struct WasiCtx {
     pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
-    pub(crate) preopens: Vec<(Resource<Descriptor>, String)>,
+    pub(crate) preopens: Vec<(Dir, String)>,
     pub(crate) stdin: Option<Resource<streams::InputStream>>,
     pub(crate) stdout: Option<Resource<streams::OutputStream>>,
     pub(crate) stderr: Option<Resource<streams::OutputStream>>,
