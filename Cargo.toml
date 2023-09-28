@@ -297,6 +297,9 @@ component-model = [
 winch = ["wasmtime/winch"]
 wmemcheck = ["wasmtime/wmemcheck"]
 
+# Enable the `wasmtime serve` command
+serve = ["wasi-http", "component-model"]
+
 [[test]]
 name = "host_segfault"
 harness = false

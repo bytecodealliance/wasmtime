@@ -7,10 +7,10 @@ mod run;
 mod settings;
 mod wast;
 
-#[cfg(all(feature = "component-model", feature = "wasi-http"))]
+#[cfg(feature = "serve")]
 mod serve;
 
 pub use self::{compile::*, config::*, explore::*, run::*, settings::*, wast::*};
 
-#[cfg(all(feature = "component-model", feature = "wasi-http"))]
+#[cfg(feature = "serve")]
 pub use self::serve::*;
