@@ -103,6 +103,7 @@ impl ServeCommand {
 
     async fn serve(&mut self) -> Result<()> {
         use hyper::server::conn::http1;
+        use hyper_util::rt::TokioIo;
 
         let mut config = self.common.config(None)?;
         config.wasm_component_model(true);
@@ -127,7 +128,7 @@ impl ServeCommand {
                 let handler = ProxyHandler::new(engine, instance);
                 if let Err(e) = http1::Builder::new()
                     .keep_alive(true)
-                    .serve_connection(stream, handler)
+                    .serve_connection(TokioIo::new(stream), handler)
                     .await
                 {
                     eprintln!("error: {e:?}");
@@ -159,7 +160,7 @@ impl hyper::service::Service<Request> for ProxyHandler {
     type Error = anyhow::Error;
     type Future = Pin<Box<dyn std::future::Future<Output = Result<Self::Response>> + Send>>;
 
-    fn call(&mut self, req: Request) -> Self::Future {
+    fn call(&self, req: Request) -> Self::Future {
         use http_body_util::BodyExt;
 
         let handler = self.clone();

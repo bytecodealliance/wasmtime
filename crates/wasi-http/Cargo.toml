@@ -13,6 +13,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true, default-features = false }
 hyper = { workspace = true, features = ["full"] }
+hyper-util = { workspace = true }
 tokio = { workspace = true, features = [
     "net",
     "rt-multi-thread",

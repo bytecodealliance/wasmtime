@@ -8,6 +8,7 @@ use anyhow::Context;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::Method;
+use hyper_util::rt::TokioIo;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
@@ -131,7 +132,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
 
                     let (sender, conn) = timeout(
                         connect_timeout,
-                        hyper::client::conn::http1::handshake(stream),
+                        hyper::client::conn::http1::handshake(TokioIo::new(stream)),
                     )
                     .await
                     .map_err(|_| timeout_error("connection"))??;
@@ -147,7 +148,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 let (sender, conn) = timeout(
                     connect_timeout,
                     // TODO: we should plumb the builder through the http context, and use it here
-                    hyper::client::conn::http1::handshake(tcp_stream),
+                    hyper::client::conn::http1::handshake(TokioIo::new(tcp_stream)),
                 )
                 .await
                 .map_err(|_| timeout_error("connection"))??;
