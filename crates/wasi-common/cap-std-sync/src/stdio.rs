@@ -76,9 +76,9 @@ impl WasiFile for Stdin {
     }
     fn isatty(&self) -> bool {
         #[cfg(unix)]
-        self.0.as_fd().is_terminal()
+        return self.0.as_fd().is_terminal();
         #[cfg(windows)]
-        self.0.as_handle().is_terminal()
+        return self.0.as_handle().is_terminal();
     }
 }
 #[cfg(windows)]
