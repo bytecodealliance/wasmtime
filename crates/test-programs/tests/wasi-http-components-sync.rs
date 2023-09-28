@@ -4,9 +4,8 @@ use wasmtime::{
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
-    command::sync::{add_to_linker, Command},
-    pipe::MemoryOutputPipe,
-    IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    command::sync::Command, pipe::MemoryOutputPipe, IsATTY, Table, WasiCtx, WasiCtxBuilder,
+    WasiView,
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
@@ -60,8 +59,7 @@ fn instantiate_component(
     ctx: Ctx,
 ) -> Result<(Store<Ctx>, Command), anyhow::Error> {
     let mut linker = Linker::new(&ENGINE);
-    add_to_linker(&mut linker)?;
-    wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
+    wasmtime_wasi_http::proxy::sync::add_to_linker(&mut linker)?;
 
     let mut store = Store::new(&ENGINE, ctx);
 

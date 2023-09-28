@@ -2,9 +2,13 @@
 //! implementation of the wasi-http API.
 
 use crate::{
-    bindings::http::types::{FutureTrailers, IncomingBody, Method, OutgoingBody, Scheme},
+    bindings::http::types::{
+        self, FutureTrailers, IncomingBody, IncomingRequest, Method, OutgoingBody,
+        OutgoingResponse, ResponseOutparam, Scheme,
+    },
     body::{
-        HostFutureTrailers, HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody, HyperBody,
+        HostFutureTrailers, HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody,
+        HyperIncomingBody, HyperOutgoingBody,
     },
 };
 use std::any::Any;
@@ -18,7 +22,52 @@ pub struct WasiHttpCtx;
 pub trait WasiHttpView: Send {
     fn ctx(&mut self) -> &mut WasiHttpCtx;
     fn table(&mut self) -> &mut Table;
+
+    fn new_incoming_request(
+        &mut self,
+        req: hyper::Request<HyperIncomingBody>,
+    ) -> wasmtime::Result<IncomingRequest> {
+        let (parts, body) = req.into_parts();
+        let body = HostIncomingBodyBuilder {
+            body,
+            // TODO: this needs to be plumbed through
+            between_bytes_timeout: std::time::Duration::from_millis(600 * 1000),
+        };
+        Ok(IncomingRequestLens::push(
+            self.table(),
+            HostIncomingRequest {
+                parts,
+                body: Some(body),
+            },
+        )?
+        .id)
+    }
+
+    fn new_response_outparam(
+        &mut self,
+        result: tokio::sync::oneshot::Sender<
+            Result<hyper::Response<HyperOutgoingBody>, types::Error>,
+        >,
+    ) -> wasmtime::Result<ResponseOutparam> {
+        Ok(ResponseOutparamLens::push(self.table(), HostResponseOutparam { result })?.id)
+    }
 }
+
+pub type IncomingRequestLens = TableLens<HostIncomingRequest>;
+
+pub struct HostIncomingRequest {
+    pub parts: http::request::Parts,
+    pub body: Option<HostIncomingBodyBuilder>,
+}
+
+pub type ResponseOutparamLens = TableLens<HostResponseOutparam>;
+
+pub struct HostResponseOutparam {
+    pub result:
+        tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::Error>>,
+}
+
+pub type OutgoingRequestLens = TableLens<HostOutgoingRequest>;
 
 pub struct HostOutgoingRequest {
     pub method: Method,
@@ -26,7 +75,7 @@ pub struct HostOutgoingRequest {
     pub path_with_query: String,
     pub authority: String,
     pub headers: FieldMap,
-    pub body: Option<HyperBody>,
+    pub body: Option<HyperOutgoingBody>,
 }
 
 pub struct HostIncomingResponse {
@@ -34,6 +83,37 @@ pub struct HostIncomingResponse {
     pub headers: FieldMap,
     pub body: Option<HostIncomingBodyBuilder>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
+}
+
+pub type OutgoingResponseLens = TableLens<HostOutgoingResponse>;
+
+pub struct HostOutgoingResponse {
+    pub status: u16,
+    pub headers: FieldMap,
+    pub body: Option<HyperOutgoingBody>,
+}
+
+impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
+    type Error = http::Error;
+
+    fn try_from(
+        resp: HostOutgoingResponse,
+    ) -> Result<hyper::Response<HyperOutgoingBody>, Self::Error> {
+        use http_body_util::{BodyExt, Empty};
+
+        let mut builder = hyper::Response::builder().status(resp.status);
+
+        *builder.headers_mut().unwrap() = resp.headers;
+
+        match resp.body {
+            Some(body) => builder.body(body),
+            None => builder.body(
+                Empty::<bytes::Bytes>::new()
+                    .map_err(|_| anyhow::anyhow!("empty error"))
+                    .boxed(),
+            ),
+        }
+    }
 }
 
 pub type FieldMap = hyper::HeaderMap;
@@ -54,7 +134,7 @@ pub enum HostFields {
 }
 
 pub struct IncomingResponseInternal {
-    pub resp: hyper::Response<hyper::body::Incoming>,
+    pub resp: hyper::Response<HyperIncomingBody>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
     pub between_bytes_timeout: std::time::Duration,
 }
@@ -105,13 +185,52 @@ impl std::future::Future for HostFutureIncomingResponse {
     }
 }
 
-#[async_trait::async_trait]
+pub struct TableLens<T> {
+    id: u32,
+    _unused: std::marker::PhantomData<T>,
+}
+
+impl<T: Send + Sync + 'static> TableLens<T> {
+    pub fn from(id: u32) -> Self {
+        Self {
+            id,
+            _unused: std::marker::PhantomData {},
+        }
+    }
+
+    pub fn into(self) -> u32 {
+        self.id
+    }
+
+    #[inline(always)]
+    pub fn push(table: &mut Table, val: T) -> Result<Self, TableError> {
+        let id = table.push(Box::new(val))?;
+        Ok(Self::from(id))
+    }
+
+    #[inline(always)]
+    pub fn get<'t>(&self, table: &'t Table) -> Result<&'t T, TableError> {
+        table.get(self.id)
+    }
+
+    #[inline(always)]
+    pub fn get_mut<'t>(&self, table: &'t mut Table) -> Result<&'t mut T, TableError> {
+        table.get_mut(self.id)
+    }
+
+    #[inline(always)]
+    pub fn delete(&self, table: &mut Table) -> Result<T, TableError> {
+        table.delete(self.id)
+    }
+}
+
 pub trait TableHttpExt {
-    fn push_outgoing_response(&mut self, request: HostOutgoingRequest) -> Result<u32, TableError>;
-    fn get_outgoing_request(&self, id: u32) -> Result<&HostOutgoingRequest, TableError>;
-    fn get_outgoing_request_mut(&mut self, id: u32)
-        -> Result<&mut HostOutgoingRequest, TableError>;
-    fn delete_outgoing_request(&mut self, id: u32) -> Result<HostOutgoingRequest, TableError>;
+    fn push_outgoing_response(
+        &mut self,
+        resp: HostOutgoingResponse,
+    ) -> Result<OutgoingResponse, TableError>;
+    fn get_outgoing_response(&mut self, id: u32) -> Result<&mut HostOutgoingResponse, TableError>;
+    fn delete_outgoing_response(&mut self, id: u32) -> Result<HostOutgoingResponse, TableError>;
 
     fn push_incoming_response(&mut self, response: HostIncomingResponse)
         -> Result<u32, TableError>;
@@ -165,23 +284,26 @@ pub trait TableHttpExt {
     ) -> Result<HostFutureTrailers, TableError>;
 }
 
-#[async_trait::async_trait]
 impl TableHttpExt for Table {
-    fn push_outgoing_response(&mut self, request: HostOutgoingRequest) -> Result<u32, TableError> {
-        self.push(Box::new(request))
-    }
-    fn get_outgoing_request(&self, id: u32) -> Result<&HostOutgoingRequest, TableError> {
-        self.get::<HostOutgoingRequest>(id)
-    }
-    fn get_outgoing_request_mut(
+    fn push_outgoing_response(
         &mut self,
-        id: u32,
-    ) -> Result<&mut HostOutgoingRequest, TableError> {
-        self.get_mut::<HostOutgoingRequest>(id)
+        response: HostOutgoingResponse,
+    ) -> Result<OutgoingResponse, TableError> {
+        self.push(Box::new(response))
     }
-    fn delete_outgoing_request(&mut self, id: u32) -> Result<HostOutgoingRequest, TableError> {
-        let req = self.delete::<HostOutgoingRequest>(id)?;
-        Ok(req)
+
+    fn get_outgoing_response(
+        &mut self,
+        id: OutgoingResponse,
+    ) -> Result<&mut HostOutgoingResponse, TableError> {
+        self.get_mut(id)
+    }
+
+    fn delete_outgoing_response(
+        &mut self,
+        id: OutgoingResponse,
+    ) -> Result<HostOutgoingResponse, TableError> {
+        self.delete(id)
     }
 
     fn push_incoming_response(

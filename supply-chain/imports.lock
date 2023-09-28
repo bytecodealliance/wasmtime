@@ -353,6 +353,10 @@ audited_as = "11.0.1"
 version = "14.0.0"
 audited_as = "12.0.1"
 
+[[unpublished.wasmtime-wmemcheck]]
+version = "14.0.0"
+audited_as = "13.0.0"
+
 [[unpublished.wiggle]]
 version = "13.0.0"
 audited_as = "11.0.1"
@@ -1683,6 +1687,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wit-bindgen]]
 version = "12.0.1"
 when = "2023-08-24"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wmemcheck]]
+version = "13.0.0"
+when = "2023-09-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
