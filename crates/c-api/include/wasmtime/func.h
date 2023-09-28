@@ -307,6 +307,80 @@ WASM_API_EXTERN void *wasmtime_func_to_raw(
     wasmtime_context_t* context,
     const wasmtime_func_t *func);
 
+/**
+ * \brief The structure representing a asynchronously running function.
+ *
+ * This structure is always owned by the caller and must be deleted using wasmtime_call_future_delete.
+ *
+ *
+ *
+ */
+typedef struct wasmtime_call_future wasmtime_call_future_t;
+
+/**
+ * \brief Executes WebAssembly in the function.
+ *
+ * Returns true if the function call has completed, which then wasmtime_call_future_get_results should be called.
+ * After this function returns true, it should *not* be called again for a given future.
+ *
+ * This function returns false if execution has yielded either due to being out of fuel 
+ * (see wasmtime_store_out_of_fuel_async_yield), or the epoch has been incremented enough 
+ * (see wasmtime_store_epoch_deadline_async_yield_and_update).
+ *
+ * The function may also return false if asynchronous host functions have been called, which then calling this 
+ * function will call the continuation from the async host function.
+ *
+ * For more see the information at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#asynchronous-wasm
+ *
+ */
+WASM_API_EXTERN bool wasmtime_call_future_poll(wasmtime_call_future_t *future);
+
+/**
+ * /brief Frees the underlying memory for a future.
+ *
+ * All wasmtime_call_future_t are owned by the caller and should be deleted using this function no 
+ * matter the result.
+ */
+WASM_API_EXTERN void wasmtime_call_future_delete(wasmtime_call_future_t *future);
+
+/**
+ * \brief Obtains the results for a wasm call execution.
+ *
+ * This method should only be called on a wasmtime_call_future_t after wasmtime_call_future_poll has returned true.
+ *
+ * The `trap` pointer cannot be `NULL`.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_call_future_get_results(
+    wasmtime_call_future_t *fut,
+    wasm_trap_t **trap);
+
+/**
+ * \brief Invokes this function with the params given, returning the results asynchronously.
+ *
+ * This function is the same as wasmtime_func_call except that it is asynchronous.
+ * This is only compatible with stores associated with an asynchronous config.
+ *
+ * The result is a future that is owned by the caller and must be deleted via #wasmtime_call_future_delete. 
+ *
+ * The `args` and `results` pointers may be `NULL` if the corresponding length is zero.
+ *
+ * Does not take ownership of #wasmtime_val_t arguments or #wasmtime_val_t results,
+ * the arguments and results must be kept alive until the returned #wasmtime_call_future_t is deleted.
+ *
+ * See #wasmtime_call_future_t for for more information.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Func.html#method.call_async
+ */
+WASM_API_EXTERN wasmtime_call_future_t* wasmtime_func_call_async(
+    wasmtime_context_t *context,
+    const wasmtime_func_t *func,
+    const wasmtime_val_t *args,
+    size_t nargs,
+    wasmtime_val_t *results,
+    size_t nresults);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
