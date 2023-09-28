@@ -1645,9 +1645,10 @@ impl Pollables {
 // after the call.
 impl Drop for Pollables {
     fn drop(&mut self) {
-        for i in 0..self.length {
+        while self.index != 0 {
+            self.index -= 1;
             unsafe {
-                core::ptr::drop_in_place(self.pointer.add(i));
+                core::ptr::drop_in_place(self.pointer.add(self.index));
             }
         }
     }

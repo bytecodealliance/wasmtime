@@ -3,8 +3,8 @@
 //! We're avoiding static initializers, so we can't have things like string
 //! literals. Replace the standard assert macros with simpler implementations.
 
-use crate::bindings::wasi::io::streams;
 use crate::bindings::wasi::cli::stderr::get_stderr;
+use crate::bindings::wasi::io::streams;
 
 #[allow(dead_code)]
 #[doc(hidden)]
