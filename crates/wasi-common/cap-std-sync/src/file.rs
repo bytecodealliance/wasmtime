@@ -127,7 +127,10 @@ impl WasiFile for File {
         Ok(self.0.num_ready_bytes()?)
     }
     fn isatty(&self) -> bool {
-        self.0.as_fd().is_terminal()
+        #[cfg(unix)]
+        return self.0.as_fd().is_terminal();
+        #[cfg(windows)]
+        return self.0.as_handle().is_terminal();
     }
 }
 
