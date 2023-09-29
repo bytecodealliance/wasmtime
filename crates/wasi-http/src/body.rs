@@ -159,7 +159,7 @@ impl HostInputStream for HostIncomingBodyStream {
         }
 
         if !self.open {
-            return Ok(Bytes::new());
+            return Err(StreamError::Closed);
         }
 
         match self.receiver.try_recv() {
