@@ -1,8 +1,5 @@
 use crate::preview2::bindings::filesystem::types::Descriptor;
-use crate::preview2::{
-    AbortOnDropJoinHandle, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
-    Table, TableError,
-};
+use crate::preview2::{AbortOnDropJoinHandle, HostOutputStream, StreamError, Table, TableError};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use futures::future::{maybe_done, MaybeDone};
@@ -130,7 +127,7 @@ impl FileInputStream {
         Self { file, position }
     }
 
-    pub async fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+    pub async fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         use system_interface::fs::FileIoExt;
         let f = Arc::clone(&self.file);
         let p = self.position;
@@ -141,33 +138,24 @@ impl FileInputStream {
         })
         .await
         .unwrap();
-        let (n, state) = read_result(r)?;
+        let n = read_result(r)?;
         buf.truncate(n);
         self.position += n as u64;
-        Ok((buf.freeze(), state))
+        Ok(buf.freeze())
     }
 
-    pub async fn skip(&mut self, nelem: usize) -> anyhow::Result<(usize, StreamState)> {
-        let mut nread = 0;
-        let mut state = StreamState::Open;
-
-        let (bs, read_state) = self.read(nelem).await?;
-        // TODO: handle the case where `bs.len()` is less than `nelem`
-        nread += bs.len();
-        if read_state.is_closed() {
-            state = read_state;
-        }
-
-        Ok((nread, state))
+    pub async fn skip(&mut self, nelem: usize) -> Result<usize, StreamError> {
+        let bs = self.read(nelem).await?;
+        Ok(bs.len())
     }
 }
 
-fn read_result(r: Result<usize, std::io::Error>) -> Result<(usize, StreamState), anyhow::Error> {
+fn read_result(r: Result<usize, std::io::Error>) -> Result<usize, StreamError> {
     match r {
-        Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n, StreamState::Open)),
-        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
-        Err(e) => Err(StreamRuntimeError::from(anyhow!(e)).into()),
+        Ok(0) => Err(StreamError::Closed),
+        Ok(n) => Ok(n),
+        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok(0),
+        Err(e) => Err(StreamError::Trap(e.into())),
     }
 }
 
@@ -209,15 +197,15 @@ const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 
 #[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
-    fn write(&mut self, buf: Bytes) -> Result<(), OutputStreamError> {
+    fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         use system_interface::fs::FileIoExt;
 
         if self.closed {
-            return Err(OutputStreamError::Closed);
+            return Err(StreamError::Closed);
         }
         if !matches!(self.task, MaybeDone::Gone) {
             // a write is pending - this call was not permitted
-            return Err(OutputStreamError::Trap(anyhow!(
+            return Err(StreamError::Trap(anyhow!(
                 "write not permitted: FileOutputStream write pending"
             )));
         }
@@ -247,16 +235,16 @@ impl HostOutputStream for FileOutputStream {
         )));
         Ok(())
     }
-    fn flush(&mut self) -> Result<(), OutputStreamError> {
+    fn flush(&mut self) -> Result<(), StreamError> {
         if self.closed {
-            return Err(OutputStreamError::Closed);
+            return Err(StreamError::Closed);
         }
         // Only userland buffering of file writes is in the blocking task.
         Ok(())
     }
-    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+    async fn write_ready(&mut self) -> Result<usize, StreamError> {
         if self.closed {
-            return Err(OutputStreamError::Closed);
+            return Err(StreamError::Closed);
         }
         // If there is no outstanding task, accept more input:
         if matches!(self.task, MaybeDone::Gone) {
@@ -273,7 +261,7 @@ impl HostOutputStream for FileOutputStream {
             Ok(()) => Ok(FILE_WRITE_CAPACITY),
             Err(e) => {
                 self.closed = true;
-                Err(OutputStreamError::LastOperationFailed(e.into()))
+                Err(StreamError::LastOperationFailed(e.into()))
             }
         }
     }

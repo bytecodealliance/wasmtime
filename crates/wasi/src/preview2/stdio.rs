@@ -234,7 +234,7 @@ impl<T: WasiView> terminal_stderr::Host for T {
 
 #[cfg(all(unix, test))]
 mod test {
-    use crate::preview2::{HostInputStream, StreamState};
+    use crate::preview2::HostInputStream;
     use libc;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Write};

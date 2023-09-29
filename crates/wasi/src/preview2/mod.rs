@@ -40,10 +40,7 @@ pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, TablePollableExt};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
-pub use self::stream::{
-    HostInputStream, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
-    TableStreamExt,
-};
+pub use self::stream::{HostInputStream, HostOutputStream, StreamError, TableStreamExt};
 pub use self::table::{OccupiedEntry, Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
@@ -64,7 +61,7 @@ pub mod bindings {
                 ",
                 tracing: true,
                 trappable_error_type: {
-                    "wasi:io/streams"::"write-error": Error,
+                    "wasi:io/streams"::"stream-error": Error,
                     "wasi:filesystem/types"::"error-code": Error,
                 },
                 with: {
@@ -142,7 +139,7 @@ pub mod bindings {
             ],
         },
         trappable_error_type: {
-            "wasi:io/streams"::"write-error": Error,
+            "wasi:io/streams"::"stream-error": Error,
             "wasi:filesystem/types"::"error-code": Error,
             "wasi:sockets/network"::"error-code": Error,
         },
