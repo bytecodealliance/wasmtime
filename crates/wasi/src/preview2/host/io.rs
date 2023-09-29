@@ -1,13 +1,8 @@
 use crate::preview2::{
-    bindings::io::poll::Pollable,
     bindings::io::streams::{self, InputStream, OutputStream},
-    filesystem::FileInputStream,
     poll::PollableFuture,
-    stream::{
-        HostInputStream, HostOutputStream, InternalInputStream, InternalTableStreamExt,
-        OutputStreamError, StreamRuntimeError, StreamState, TableStreamExt,
-    },
-    HostPollable, TableError, TablePollableExt, WasiView,
+    stream::{OutputStreamError, StreamRuntimeError, StreamState},
+    Pollable, TableError, WasiView,
 };
 use std::any::Any;
 use std::future::Future;
@@ -48,12 +43,12 @@ impl<T: WasiView> streams::Host for T {}
 #[async_trait::async_trait]
 impl<T: WasiView> streams::HostOutputStream for T {
     fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
-        self.table_mut().delete_output_stream(stream)?;
+        self.table_mut().delete_resource(stream)?;
         Ok(())
     }
 
     fn check_write(&mut self, stream: Resource<OutputStream>) -> Result<u64, streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(&stream)?;
+        let s = self.table_mut().get_resource_mut(&stream)?;
         let mut ready = s.write_ready();
         let mut task = Context::from_waker(futures::task::noop_waker_ref());
         match Pin::new(&mut ready).poll(&mut task) {
@@ -68,31 +63,30 @@ impl<T: WasiView> streams::HostOutputStream for T {
         stream: Resource<OutputStream>,
         bytes: Vec<u8>,
     ) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(&stream)?;
-        HostOutputStream::write(s, bytes.into())?;
+        self.table_mut()
+            .get_resource_mut(&stream)?
+            .write(bytes.into())?;
         Ok(())
     }
 
     fn subscribe(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<Resource<Pollable>> {
-        // Ensure that table element is an output-stream:
-        let _ = self.table_mut().get_output_stream_mut(&stream)?;
-
         fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
             let stream = stream
-                .downcast_mut::<Box<dyn HostOutputStream>>()
-                .expect("downcast to HostOutputStream failed");
+                .downcast_mut::<OutputStream>()
+                .expect("downcast to OutputStream failed");
             Box::pin(async move {
                 let _ = stream.write_ready().await?;
                 Ok(())
             })
         }
 
-        Ok(self
-            .table_mut()
-            .push_host_pollable(HostPollable::TableEntry {
+        Ok(self.table_mut().push_child_resource(
+            Pollable::TableEntry {
                 index: stream.rep(),
                 make_future: output_stream_ready,
-            })?)
+            },
+            &stream,
+        )?)
     }
 
     async fn blocking_write_and_flush(
@@ -100,7 +94,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
         stream: Resource<OutputStream>,
         bytes: Vec<u8>,
     ) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(&stream)?;
+        let s = self.table_mut().get_resource_mut(&stream)?;
 
         if bytes.len() > 4096 {
             return Err(streams::Error::trap(anyhow::anyhow!(
@@ -113,11 +107,11 @@ impl<T: WasiView> streams::HostOutputStream for T {
             let permit = s.write_ready().await?;
             let len = bytes.len().min(permit);
             let chunk = bytes.split_to(len);
-            HostOutputStream::write(s, chunk)?;
+            s.write(chunk)?;
         }
 
-        HostOutputStream::flush(s)?;
-        let _ = s.write_ready().await?;
+        s.flush()?;
+        s.write_ready().await?;
 
         Ok(())
     }
@@ -127,7 +121,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
         stream: Resource<OutputStream>,
         len: u64,
     ) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(&stream)?;
+        let s = self.table_mut().get_resource_mut(&stream)?;
 
         if len > 4096 {
             return Err(streams::Error::trap(anyhow::anyhow!(
@@ -139,12 +133,12 @@ impl<T: WasiView> streams::HostOutputStream for T {
         while len > 0 {
             let permit = s.write_ready().await?;
             let this_len = len.min(permit as u64);
-            HostOutputStream::write_zeroes(s, this_len as usize)?;
+            s.write_zeroes(this_len as usize)?;
             len -= this_len;
         }
 
-        HostOutputStream::flush(s)?;
-        let _ = s.write_ready().await?;
+        s.flush()?;
+        s.write_ready().await?;
 
         Ok(())
     }
@@ -154,14 +148,14 @@ impl<T: WasiView> streams::HostOutputStream for T {
         stream: Resource<OutputStream>,
         len: u64,
     ) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(&stream)?;
-        HostOutputStream::write_zeroes(s, len as usize)?;
+        self.table_mut()
+            .get_resource_mut(&stream)?
+            .write_zeroes(len as usize)?;
         Ok(())
     }
 
     fn flush(&mut self, stream: Resource<OutputStream>) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(&stream)?;
-        HostOutputStream::flush(s)?;
+        self.table_mut().get_resource_mut(&stream)?.flush()?;
         Ok(())
     }
 
@@ -169,9 +163,9 @@ impl<T: WasiView> streams::HostOutputStream for T {
         &mut self,
         stream: Resource<OutputStream>,
     ) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(&stream)?;
-        HostOutputStream::flush(s)?;
-        let _ = s.write_ready().await?;
+        let s = self.table_mut().get_resource_mut(&stream)?;
+        s.flush()?;
+        s.write_ready().await?;
         Ok(())
     }
 
@@ -194,7 +188,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
             ?;
         let d: &mut Box<dyn crate::OutputStream> = ctx
             .table_mut()
-            .get_output_stream_mut(dst)
+            .get_resource_mut(dst)
             ?;
 
         let bytes_spliced: u64 = s.splice(&mut **d, len).await?;
@@ -233,7 +227,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
             ?;
         let d: &mut Box<dyn crate::OutputStream> = ctx
             .table_mut()
-            .get_output_stream_mut(dst)
+            .get_resource_mut(dst)
             ?;
 
         let bytes_spliced: u64 = s.splice(&mut **d, len).await?;
@@ -248,7 +242,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
 #[async_trait::async_trait]
 impl<T: WasiView> streams::HostInputStream for T {
     fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
-        self.table_mut().delete_internal_input_stream(stream)?;
+        self.table_mut().delete_resource(stream)?;
         Ok(())
     }
 
@@ -257,9 +251,9 @@ impl<T: WasiView> streams::HostInputStream for T {
         stream: Resource<InputStream>,
         len: u64,
     ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_input_stream_mut(&stream)? {
-            InternalInputStream::Host(s) => {
-                let (bytes, state) = match HostInputStream::read(s.as_mut(), len as usize) {
+        match self.table_mut().get_resource_mut(&stream)? {
+            InputStream::Host(s) => {
+                let (bytes, state) = match s.read(len as usize) {
                     Ok(a) => a,
                     Err(e) => {
                         if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
@@ -274,8 +268,8 @@ impl<T: WasiView> streams::HostInputStream for T {
 
                 Ok(Ok((bytes.into(), state.into())))
             }
-            InternalInputStream::File(s) => {
-                let (bytes, state) = match FileInputStream::read(s, len as usize).await {
+            InputStream::File(s) => {
+                let (bytes, state) = match s.read(len as usize).await {
                     Ok(a) => a,
                     Err(e) => {
                         if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
@@ -296,38 +290,10 @@ impl<T: WasiView> streams::HostInputStream for T {
         stream: Resource<InputStream>,
         len: u64,
     ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_input_stream_mut(&stream)? {
-            InternalInputStream::Host(s) => {
-                s.ready().await?;
-                let (bytes, state) = match HostInputStream::read(s.as_mut(), len as usize) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                debug_assert!(bytes.len() <= len as usize);
-                Ok(Ok((bytes.into(), state.into())))
-            }
-            InternalInputStream::File(s) => {
-                let (bytes, state) = match FileInputStream::read(s, len as usize).await {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                Ok(Ok((bytes.into(), state.into())))
-            }
+        if let InputStream::Host(s) = self.table_mut().get_resource_mut(&stream)? {
+            s.ready().await?;
         }
+        self.read(stream, len).await
     }
 
     async fn skip(
@@ -335,10 +301,10 @@ impl<T: WasiView> streams::HostInputStream for T {
         stream: Resource<InputStream>,
         len: u64,
     ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_input_stream_mut(&stream)? {
-            InternalInputStream::Host(s) => {
+        match self.table_mut().get_resource_mut(&stream)? {
+            InputStream::Host(s) => {
                 // TODO: the cast to usize should be fallible, use `.try_into()?`
-                let (bytes_skipped, state) = match HostInputStream::skip(s.as_mut(), len as usize) {
+                let (bytes_skipped, state) = match s.skip(len as usize) {
                     Ok(a) => a,
                     Err(e) => {
                         if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
@@ -352,8 +318,8 @@ impl<T: WasiView> streams::HostInputStream for T {
 
                 Ok(Ok((bytes_skipped as u64, state.into())))
             }
-            InternalInputStream::File(s) => {
-                let (bytes_skipped, state) = match FileInputStream::skip(s, len as usize).await {
+            InputStream::File(s) => {
+                let (bytes_skipped, state) = match s.skip(len as usize).await {
                     Ok(a) => a,
                     Err(e) => {
                         if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
@@ -374,67 +340,38 @@ impl<T: WasiView> streams::HostInputStream for T {
         stream: Resource<InputStream>,
         len: u64,
     ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_input_stream_mut(&stream)? {
-            InternalInputStream::Host(s) => {
-                s.ready().await?;
-                // TODO: the cast to usize should be fallible, use `.try_into()?`
-                let (bytes_skipped, state) = match HostInputStream::skip(s.as_mut(), len as usize) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-
-                Ok(Ok((bytes_skipped as u64, state.into())))
-            }
-            InternalInputStream::File(s) => {
-                let (bytes_skipped, state) = match FileInputStream::skip(s, len as usize).await {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                Ok(Ok((bytes_skipped as u64, state.into())))
-            }
+        if let InputStream::Host(s) = self.table_mut().get_resource_mut(&stream)? {
+            s.ready().await?;
         }
+        self.skip(stream, len).await
     }
 
     fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
         // Ensure that table element is an input-stream:
-        let pollable = match self.table_mut().get_internal_input_stream_mut(&stream)? {
-            InternalInputStream::Host(_) => {
+        let pollable = match self.table_mut().get_resource(&stream)? {
+            InputStream::Host(_) => {
                 fn input_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
                     let stream = stream
-                        .downcast_mut::<InternalInputStream>()
-                        .expect("downcast to InternalInputStream failed");
+                        .downcast_mut::<InputStream>()
+                        .expect("downcast to InputStream failed");
                     match *stream {
-                        InternalInputStream::Host(ref mut hs) => hs.ready(),
+                        InputStream::Host(ref mut hs) => hs.ready(),
                         _ => unreachable!(),
                     }
                 }
 
-                HostPollable::TableEntry {
+                Pollable::TableEntry {
                     index: stream.rep(),
                     make_future: input_stream_ready,
                 }
             }
             // Files are always "ready" immediately (because we have no way to actually wait on
             // readiness in epoll)
-            InternalInputStream::File(_) => {
-                HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
+            InputStream::File(_) => {
+                Pollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
             }
         };
-        Ok(self.table_mut().push_host_pollable(pollable)?)
+        Ok(self.table_mut().push_child_resource(pollable, &stream)?)
     }
 }
 

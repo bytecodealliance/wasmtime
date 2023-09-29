@@ -4,9 +4,8 @@ use crate::preview2::bindings::{
     clocks::monotonic_clock::{self, Instant},
     clocks::timezone::{self, TimezoneDisplay},
     clocks::wall_clock::{self, Datetime},
-    io::poll::Pollable,
 };
-use crate::preview2::{HostPollable, TablePollableExt, WasiView};
+use crate::preview2::{Pollable, WasiView};
 use cap_std::time::SystemTime;
 use wasmtime::component::Resource;
 
@@ -60,9 +59,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
             // Deadline is in the past, so pollable is always ready:
             Ok(self
                 .table_mut()
-                .push_host_pollable(HostPollable::Closure(Box::new(|| {
-                    Box::pin(async { Ok(()) })
-                })))?)
+                .push_resource(Pollable::Closure(Box::new(|| Box::pin(async { Ok(()) }))))?)
         } else {
             let duration = if absolute {
                 Duration::from_nanos(when - clock_now)
@@ -79,7 +76,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
             );
             Ok(self
                 .table_mut()
-                .push_host_pollable(HostPollable::Closure(Box::new(move || {
+                .push_resource(Pollable::Closure(Box::new(move || {
                     Box::pin(async move {
                         tracing::trace!(
                             "mkf: deadline = {:?}, now = {:?}",

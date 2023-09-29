@@ -102,10 +102,8 @@ async fn reactor_tests() -> Result<()> {
     // Note, this works because of the add_to_linker invocations using the
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let writepipe = preview2::pipe::MemoryOutputPipe::new(4096);
-    let table_ix = preview2::TableStreamExt::push_output_stream(
-        store.data_mut().table_mut(),
-        Box::new(writepipe.clone()),
-    )?;
+    let stream: preview2::OutputStream = Box::new(writepipe.clone());
+    let table_ix = store.data_mut().table_mut().push_resource(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 

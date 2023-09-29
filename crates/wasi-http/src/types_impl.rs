@@ -17,9 +17,8 @@ use anyhow::Context;
 use std::any::Any;
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
-    bindings::io::poll::Pollable,
     bindings::io::streams::{InputStream, OutputStream},
-    HostPollable, PollableFuture, TablePollableExt, TableStreamExt,
+    Pollable, PollableFuture,
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
@@ -360,9 +359,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             Box::pin(elem.downcast_mut::<HostFutureTrailers>().unwrap().ready())
         }
 
+        // FIXME: this should use `push_child_resource`
         let id = self
             .table()
-            .push_host_pollable(HostPollable::TableEntry { index, make_future })?;
+            .push_resource(Pollable::TableEntry { index, make_future })?;
 
         Ok(id)
     }
@@ -489,7 +489,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             )
         }
 
-        let pollable = self.table().push_host_pollable(HostPollable::TableEntry {
+        // FIXME: this should use `push_child_resource`
+        let pollable = self.table().push_resource(Pollable::TableEntry {
             index: id,
             make_future,
         })?;
@@ -504,7 +505,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let body = self.table().get_outgoing_body(id)?;
         if let Some(stream) = body.body_output_stream.take() {
             let dummy = Resource::<u32>::new_own(id);
-            let id = self.table().push_output_stream_child(stream, dummy)?;
+            let id = self.table().push_child_resource(stream, &dummy)?;
             Ok(Ok(id))
         } else {
             Ok(Err(()))
@@ -558,7 +559,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingBody for T {
         let body = self.table().get_incoming_body(&id)?;
 
         if let Some(stream) = body.stream.take() {
-            let stream = self.table().push_input_stream_child(Box::new(stream), id)?;
+            let stream = InputStream::Host(Box::new(stream));
+            let stream = self.table().push_child_resource(stream, &id)?;
             return Ok(Ok(stream));
         }
 
