@@ -4,38 +4,24 @@ use wasi::io::poll;
 use wasi::io::streams;
 use wasi::sockets::{network, tcp, tcp_create_socket};
 
-pub fn write(output: &streams::OutputStream, mut bytes: &[u8]) -> (usize, streams::StreamStatus) {
-    let total = bytes.len();
-    let mut written = 0;
-
+pub fn write(output: &streams::OutputStream, mut bytes: &[u8]) -> Result<(), streams::StreamError> {
     let pollable = output.subscribe();
 
     while !bytes.is_empty() {
         poll::poll_list(&[&pollable]);
 
-        let permit = match output.check_write() {
-            Ok(n) => n,
-            Err(_) => return (written, streams::StreamStatus::Ended),
-        };
+        let permit = output.check_write()?;
 
         let len = bytes.len().min(permit as usize);
         let (chunk, rest) = bytes.split_at(len);
 
-        match output.write(chunk) {
-            Ok(()) => {}
-            Err(_) => return (written, streams::StreamStatus::Ended),
-        }
+        output.write(chunk)?;
 
-        match output.blocking_flush() {
-            Ok(()) => {}
-            Err(_) => return (written, streams::StreamStatus::Ended),
-        }
+        output.blocking_flush()?;
 
         bytes = rest;
-        written += len;
     }
-
-    (total, streams::StreamStatus::Open)
+    Ok(())
 }
 
 pub fn example_body(net: tcp::Network, sock: tcp::TcpSocket, family: network::IpAddressFamily) {
@@ -57,13 +43,9 @@ pub fn example_body(net: tcp::Network, sock: tcp::TcpSocket, family: network::Ip
     poll::poll_one(&client_sub);
     let (client_input, client_output) = client.finish_connect().unwrap();
 
-    let (n, status) = write(&client_output, &[]);
-    assert_eq!(n, 0);
-    assert_eq!(status, streams::StreamStatus::Open);
+    write(&client_output, &[]).unwrap();
 
-    let (n, status) = write(&client_output, first_message);
-    assert_eq!(n, first_message.len());
-    assert_eq!(status, streams::StreamStatus::Open);
+    write(&client_output, first_message).unwrap();
 
     drop(client_input);
     drop(client_output);
@@ -73,12 +55,10 @@ pub fn example_body(net: tcp::Network, sock: tcp::TcpSocket, family: network::Ip
     poll::poll_one(&sub);
     let (accepted, input, output) = sock.accept().unwrap();
 
-    let (empty_data, status) = input.read(0).unwrap();
+    let empty_data = input.read(0).unwrap();
     assert!(empty_data.is_empty());
-    assert_eq!(status, streams::StreamStatus::Open);
 
-    let (data, status) = input.blocking_read(first_message.len() as u64).unwrap();
-    assert_eq!(status, streams::StreamStatus::Open);
+    let data = input.blocking_read(first_message.len() as u64).unwrap();
 
     drop(input);
     drop(output);
@@ -95,9 +75,7 @@ pub fn example_body(net: tcp::Network, sock: tcp::TcpSocket, family: network::Ip
     poll::poll_one(&client_sub);
     let (client_input, client_output) = client.finish_connect().unwrap();
 
-    let (n, status) = write(&client_output, second_message);
-    assert_eq!(n, second_message.len());
-    assert_eq!(status, streams::StreamStatus::Open);
+    write(&client_output, second_message).unwrap();
 
     drop(client_input);
     drop(client_output);
@@ -106,8 +84,7 @@ pub fn example_body(net: tcp::Network, sock: tcp::TcpSocket, family: network::Ip
 
     poll::poll_one(&sub);
     let (accepted, input, output) = sock.accept().unwrap();
-    let (data, status) = input.blocking_read(second_message.len() as u64).unwrap();
-    assert_eq!(status, streams::StreamStatus::Open);
+    let data = input.blocking_read(second_message.len() as u64).unwrap();
 
     drop(input);
     drop(output);

@@ -149,15 +149,14 @@ pub async fn request(
     let input_stream_pollable = input_stream.subscribe();
 
     let mut body = Vec::new();
-    let mut eof = streams::StreamStatus::Open;
-    while eof != streams::StreamStatus::Ended {
+    loop {
         poll::poll_list(&[&input_stream_pollable]);
 
-        let (mut body_chunk, stream_status) = input_stream
-            .read(1024 * 1024)
-            .map_err(|_| anyhow!("input_stream read failed"))?;
-
-        eof = stream_status;
+        let mut body_chunk = match input_stream.read(1024 * 1024) {
+            Ok(c) => c,
+            Err(streams::StreamError::Closed) => break,
+            Err(e) => Err(anyhow!("input_stream read failed: {e:?}"))?,
+        };
 
         if !body_chunk.is_empty() {
             body.append(&mut body_chunk);
