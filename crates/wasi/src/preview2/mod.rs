@@ -146,6 +146,9 @@ pub mod bindings {
             "wasi:filesystem/types"::"error-code": Error,
             "wasi:sockets/network"::"error-code": Error,
         },
+        with: {
+            "wasi:sockets/network/network": super::network::Network,
+        },
     });
 
     pub use wasi::*;

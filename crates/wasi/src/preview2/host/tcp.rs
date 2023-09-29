@@ -4,7 +4,6 @@ use crate::preview2::bindings::{
     sockets::network::{self, ErrorCode, IpAddressFamily, IpSocketAddress, Network},
     sockets::tcp::{self, ShutdownType},
 };
-use crate::preview2::network::TableNetworkExt;
 use crate::preview2::poll::TablePollableExt;
 use crate::preview2::stream::TableStreamExt;
 use crate::preview2::tcp::{HostTcpSocketState, HostTcpState, TableTcpSocketExt};
@@ -35,7 +34,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
 
-        let network = table.get_network(&network)?;
+        let network = table.get_resource(&network)?;
         let binder = network.0.tcp_binder(local_address)?;
 
         // Perform the OS bind call.
@@ -79,7 +78,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                 _ => return Err(ErrorCode::NotInProgress.into()),
             }
 
-            let network = table.get_network(&network)?;
+            let network = table.get_resource(&network)?;
             let connecter = network.0.tcp_connecter(remote_address)?;
 
             // Do an OS `connect`. Our socket is non-blocking, so it'll either...
