@@ -22,7 +22,6 @@ You can also build using cmake:
 mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-async
 */
 
-#include "wasmtime/async.h"
 #include <assert.h>
 #include <chrono>
 #include <condition_variable>
@@ -137,7 +136,7 @@ struct printer_thread_state {
 
 printer_thread_state printer_state;
 
-bool poll_print_finished_state(void *env, wasm_trap_t **trap) {
+bool poll_print_finished_state(void *, wasm_trap_t **trap) {
   std::cout << "polling async host function result" << std::endl;
   // Don't block, just poll the future state.
   if (printer_state.result_is_pending()) {
@@ -195,8 +194,8 @@ int main() {
   error.reset(wasmtime_linker_define_async_func(
       linker.get(), host_module_name.data(), host_module_name.size(),
       host_func_name.data(), host_func_name.size(), functype.get(),
-      [](void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
-         size_t nargs, wasmtime_val_t *results, size_t nresults) {
+      [](void *, wasmtime_caller_t *, const wasmtime_val_t *args, size_t,
+         wasmtime_val_t *, size_t) {
         std::cout << "invoking async host function" << std::endl;
         printer_state.print_finished_future =
             printer_state.print_finished.get_future();
