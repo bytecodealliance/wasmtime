@@ -2123,7 +2123,12 @@ impl CsznOp {
     pub fn funct6(&self) -> u32 {
         // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
         match self {
-            CsznOp::CNot => 0b100_111,
+            CsznOp::CNot
+            | CsznOp::CZextw
+            | CsznOp::CZextb
+            | CsznOp::CZexth
+            | CsznOp::CSextb
+            | CsznOp::CSexth => 0b100_111,
         }
     }
 
@@ -2131,13 +2136,23 @@ impl CsznOp {
         // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
         match self {
             CsznOp::CNot => 0b11_101,
+            CsznOp::CZextb => 0b11_000,
+            CsznOp::CZexth => 0b11_010,
+            CsznOp::CZextw => 0b11_100,
+            CsznOp::CSextb => 0b11_001,
+            CsznOp::CSexth => 0b11_011,
         }
     }
 
     pub fn op(&self) -> COpcodeSpace {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
-            CsznOp::CNot => COpcodeSpace::C1,
+            CsznOp::CNot
+            | CsznOp::CZextb
+            | CsznOp::CZexth
+            | CsznOp::CZextw
+            | CsznOp::CSextb
+            | CsznOp::CSexth => COpcodeSpace::C1,
         }
     }
 }

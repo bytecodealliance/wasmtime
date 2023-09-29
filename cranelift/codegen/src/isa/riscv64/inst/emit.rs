@@ -466,6 +466,8 @@ impl Inst {
         start_off: &mut u32,
     ) -> Option<()> {
         let has_m = emit_info.isa_flags.has_m();
+        let has_zba = emit_info.isa_flags.has_zba();
+        let has_zbb = emit_info.isa_flags.has_zbb();
         let has_zca = emit_info.isa_flags.has_zca();
         let has_zcb = emit_info.isa_flags.has_zcb();
         let has_zcd = emit_info.isa_flags.has_zcd();
@@ -704,6 +706,22 @@ impl Inst {
                 sink.put2(encode_cb_type(op, rd, imm6));
             }
 
+            // c.zextb
+            //
+            // This is an alias for `andi rd, rd, 0xff`
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Andi,
+                rd,
+                rs,
+                imm12,
+            } if has_zcb
+                && rd.to_reg() == rs
+                && reg_is_compressible(rs)
+                && imm12.as_i16() == 0xff =>
+            {
+                sink.put2(encode_cszn_type(CsznOp::CZextb, rd));
+            }
+
             // c.andi
             Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Andi,
@@ -875,6 +893,47 @@ impl Inst {
                 && imm12.as_i16() == -1 =>
             {
                 sink.put2(encode_cszn_type(CsznOp::CNot, rd));
+            }
+
+            // c.sext.b / c.sext.h / c.zext.h
+            //
+            // These are all the extend instructions present in `Zcb`, they
+            // also require `Zbb` since they aren't available in the base ISA.
+            Inst::AluRRImm12 {
+                alu_op: alu_op @ (AluOPRRI::Sextb | AluOPRRI::Sexth | AluOPRRI::Zexth),
+                rd,
+                rs,
+                imm12,
+            } if has_zcb
+                && has_zbb
+                && rd.to_reg() == rs
+                && reg_is_compressible(rs)
+                && imm12.as_i16() == 0 =>
+            {
+                let op = match alu_op {
+                    AluOPRRI::Sextb => CsznOp::CSextb,
+                    AluOPRRI::Sexth => CsznOp::CSexth,
+                    AluOPRRI::Zexth => CsznOp::CZexth,
+                    _ => unreachable!(),
+                };
+                sink.put2(encode_cszn_type(op, rd));
+            }
+
+            // c.zext.w
+            //
+            // This is an alias for `add.uw rd, rd, zero`
+            Inst::AluRRR {
+                alu_op: AluOPRRR::Adduw,
+                rd,
+                rs1,
+                rs2,
+            } if has_zcb
+                && has_zba
+                && rd.to_reg() == rs1
+                && reg_is_compressible(rs1)
+                && rs2 == zero_reg() =>
+            {
+                sink.put2(encode_cszn_type(CsznOp::CZextw, rd));
             }
 
             _ => return None,

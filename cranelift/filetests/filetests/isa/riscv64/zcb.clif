@@ -1,6 +1,6 @@
 test compile precise-output
 set unwind_info=false
-target riscv64 has_zca has_zcb
+target riscv64 has_zca has_zcb has_zbb has_zba
 
 function %c_mul(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -34,5 +34,85 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x75, 0x9d
+;   c.jr ra
+
+function %c_zextb(i8) -> i64 {
+block0(v0: i8):
+    v1 = uextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   andi a0,a0,255
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x61, 0x9d
+;   c.jr ra
+
+function %c_zexth(i16) -> i64 {
+block0(v0: i16):
+    v1 = uextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   zext.h a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x69, 0x9d
+;   c.jr ra
+
+function %c_zextw(i32) -> i64 {
+block0(v0: i32):
+    v1 = uextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   zext.w a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x71, 0x9d
+;   c.jr ra
+
+function %c_sextb(i8) -> i64 {
+block0(v0: i8):
+    v1 = sextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.b a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x65, 0x9d
+;   c.jr ra
+
+function %c_sexth(i16) -> i64 {
+block0(v0: i16):
+    v1 = sextend.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   sext.h a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x6d, 0x9d
 ;   c.jr ra
 

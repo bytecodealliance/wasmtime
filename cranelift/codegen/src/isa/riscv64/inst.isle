@@ -785,6 +785,11 @@
 ;; Opcodes for the CSZN compressed instruction format
 (type CsznOp (enum
   (CNot)
+  (CZextb)
+  (CZexth)
+  (CZextw)
+  (CSextb)
+  (CSexth)
 ))
 
 
