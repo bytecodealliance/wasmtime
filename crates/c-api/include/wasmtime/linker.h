@@ -122,23 +122,6 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func(
 );
 
 /**
- * \brief Defines a new async function in this linker.
- *
- * This function behaves similar to #wasmtime_linker_define_func, except it supports async
- * callbacks
- */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_linker_define_async_func(
-    wasmtime_linker_t *linker,
-    const char *module,
-    size_t module_len,
-    const char *name,
-    size_t name_len,
-    const wasm_functype_t *ty,
-    wasmtime_func_async_callback_t cb,
-    void *data,
-    void (*finalizer)(void *));
-
-/**
  * \brief Defines a new function in this linker.
  *
  * This is the same as #wasmtime_linker_define_func except that it's the analog
@@ -236,23 +219,6 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_instantiate(
     wasmtime_instance_t *instance,
     wasm_trap_t **trap
 );
-
-/**
- * \brief Instantiates a #wasm_module_t with the items defined in this linker for an async store.
- *
- * This is the same as #wasmtime_linker_instantiate but used for async stores 
- * (which requires functions are called asynchronously). The returning #wasmtime_call_future_t 
- * must be polled using #wasmtime_call_future_poll, and is owned and must be deleted using #wasmtime_call_future_delete.
- * The future's results are retrieved using `wasmtime_call_future_get_results after polling has returned true marking 
- * the future as completed.
- *
- * All arguments to this function must outlive the returned future.
- */
-WASM_API_EXTERN wasmtime_call_future_t *wasmtime_linker_instantiate_async(
-    const wasmtime_linker_t *linker,
-    wasmtime_context_t *store,
-    const wasmtime_module_t *module,
-    wasmtime_instance_t *instance);
 
 /**
  * \brief Defines automatic instantiations of a #wasm_module_t in this linker.

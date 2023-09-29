@@ -47,6 +47,11 @@ pub use crate::types::*;
 pub use crate::val::*;
 pub use crate::vec::*;
 
+#[cfg(feature = "async")]
+mod r#async;
+#[cfg(feature = "async")]
+pub use crate::r#async::*;
+
 #[cfg(feature = "wasi")]
 mod wasi;
 #[cfg(feature = "wasi")]

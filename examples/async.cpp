@@ -22,14 +22,7 @@ You can also build using cmake:
 mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-async
 */
 
-#include "wasmtime/config.h"
-#include "wasmtime/error.h"
-#include "wasmtime/extern.h"
-#include "wasmtime/func.h"
-#include "wasmtime/instance.h"
-#include "wasmtime/linker.h"
-#include "wasmtime/store.h"
-#include "wasmtime/trap.h"
+#include "wasmtime/async.h"
 #include <assert.h>
 #include <chrono>
 #include <condition_variable>
@@ -209,9 +202,10 @@ int main() {
         printer_state.print_finished_future =
             printer_state.print_finished.get_future();
         printer_state.value_to_print.set_value(args[0].of.i32);
-        return wasmtime_async_continuation_new(&poll_print_finished_state,
-                                               /*env=*/nullptr,
-                                               /*finalizer=*/nullptr);
+        return new wasmtime_async_continuation_t{.callback =
+                                                     &poll_print_finished_state,
+                                                 .env = nullptr,
+                                                 .finalizer = nullptr};
       },
       /*env=*/nullptr, /*finalizer=*/nullptr));
   if (error) {

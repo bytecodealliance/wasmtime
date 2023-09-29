@@ -9,7 +9,7 @@ use wasmtime::{Func, Instance, Linker};
 
 #[repr(C)]
 pub struct wasmtime_linker_t {
-    linker: Linker<crate::StoreData>,
+    pub(crate) linker: Linker<crate::StoreData>,
 }
 
 wasmtime_c_api_macros::declare_own!(wasmtime_linker_t);
@@ -37,6 +37,8 @@ macro_rules! to_str {
         }
     };
 }
+
+pub(crate) use to_str;
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_define(
@@ -72,30 +74,6 @@ pub unsafe extern "C" fn wasmtime_linker_define_func(
     let name = to_str!(name, name_len);
     let cb = crate::func::c_callback_to_rust_fn(callback, data, finalizer);
     handle_result(linker.linker.func_new(module, name, ty, cb), |_linker| ())
-}
-
-#[no_mangle]
-#[cfg(feature = "async")]
-pub unsafe extern "C" fn wasmtime_linker_define_async_func(
-    linker: &mut wasmtime_linker_t,
-    module: *const u8,
-    module_len: usize,
-    name: *const u8,
-    name_len: usize,
-    ty: &wasm_functype_t,
-    callback: crate::wasmtime_func_async_callback_t,
-    data: *mut c_void,
-    finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
-) -> Option<Box<wasmtime_error_t>> {
-    let ty = ty.ty().ty.clone();
-    let module = to_str!(module, module_len);
-    let name = to_str!(name, name_len);
-    let cb = crate::func::c_async_callback_to_rust_fn(callback, data, finalizer);
-
-    handle_result(
-        linker.linker.func_new_async(module, name, ty, cb),
-        |_linker| (),
-    )
 }
 
 #[no_mangle]
@@ -158,40 +136,6 @@ pub extern "C" fn wasmtime_linker_instantiate(
 ) -> Option<Box<wasmtime_error_t>> {
     let result = linker.linker.instantiate(store, &module.module);
     super::instance::handle_instantiate(result, instance_ptr, trap_ptr)
-}
-
-#[cfg(feature = "async")]
-async fn do_linker_instantiate_async(
-    linker: &wasmtime_linker_t,
-    store: CStoreContextMut<'_>,
-    module: &wasmtime_module_t,
-    instance_ptr: &mut Instance,
-) -> wasmtime::Result<()> {
-    let instance = linker
-        .linker
-        .instantiate_async(store, &module.module)
-        .await?;
-    *instance_ptr = instance;
-    Ok(())
-}
-
-#[no_mangle]
-#[cfg(feature = "async")]
-pub extern "C" fn wasmtime_linker_instantiate_async<'a>(
-    linker: &'a wasmtime_linker_t,
-    store: CStoreContextMut<'a>,
-    module: &'a wasmtime_module_t,
-    instance_ptr: &'a mut Instance,
-) -> Box<crate::wasmtime_call_future_t<'a>> {
-    let fut = Box::pin(do_linker_instantiate_async(
-        linker,
-        store,
-        module,
-        instance_ptr,
-    ));
-    Box::new(crate::wasmtime_call_future_t {
-        state: crate::CallFutureState::Called(fut),
-    })
 }
 
 #[no_mangle]
