@@ -11,7 +11,6 @@ use std::{
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::preview2::{
     self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError,
-    StreamRuntimeError, StreamState,
 };
 
 pub type HyperIncomingBody = BoxBody<Bytes, anyhow::Error>;
@@ -146,21 +145,21 @@ impl HostIncomingBodyStream {
 
 #[async_trait::async_trait]
 impl HostInputStream for HostIncomingBodyStream {
-    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+    fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         use mpsc::error::TryRecvError;
 
         if !self.buffer.is_empty() {
             let len = size.min(self.buffer.len());
             let chunk = self.buffer.split_to(len);
-            return Ok((chunk, StreamState::Open));
+            return Ok(chunk);
         }
 
         if let Some(e) = self.error.take() {
-            return Err(StreamRuntimeError::from(e).into());
+            return Err(StreamError::LastOperationFailed(e));
         }
 
         if !self.open {
-            return Ok((Bytes::new(), StreamState::Closed));
+            return Ok(Bytes::new());
         }
 
         match self.receiver.try_recv() {
@@ -171,21 +170,21 @@ impl HostInputStream for HostIncomingBodyStream {
                     self.buffer = bytes;
                 }
 
-                return Ok((chunk, StreamState::Open));
+                return Ok(chunk);
             }
 
             Ok(Err(e)) => {
                 self.open = false;
-                return Err(StreamRuntimeError::from(e).into());
+                return Err(StreamError::LastOperationFailed(e));
             }
 
             Err(TryRecvError::Empty) => {
-                return Ok((Bytes::new(), StreamState::Open));
+                return Ok(Bytes::new());
             }
 
             Err(TryRecvError::Disconnected) => {
                 self.open = false;
-                return Ok((Bytes::new(), StreamState::Closed));
+                return Err(StreamError::Closed);
             }
         }
     }
