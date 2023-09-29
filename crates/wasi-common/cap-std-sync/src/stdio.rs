@@ -1,10 +1,8 @@
 use crate::file::convert_systimespec;
 use fs_set_times::SetTimes;
-use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
-use std::io;
-use std::io::{Read, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use system_interface::io::ReadReady;
 
 #[cfg(windows)]
@@ -77,7 +75,10 @@ impl WasiFile for Stdin {
         Ok(self.0.num_ready_bytes()?)
     }
     fn isatty(&self) -> bool {
-        self.0.is_terminal()
+        #[cfg(unix)]
+        return self.0.as_fd().is_terminal();
+        #[cfg(windows)]
+        return self.0.as_handle().is_terminal();
     }
 }
 #[cfg(windows)]

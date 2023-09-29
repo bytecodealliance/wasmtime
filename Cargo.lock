@@ -2678,7 +2678,6 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper",
- "is-terminal",
  "lazy_static",
  "tempfile",
  "test-log",
@@ -3025,7 +3024,6 @@ dependencies = [
  "fs-set-times",
  "io-extras",
  "io-lifetimes 2.0.2",
- "is-terminal",
  "once_cell",
  "rustix 0.38.8",
  "system-interface",
@@ -3526,7 +3524,6 @@ name = "wasmtime-environ"
 version = "14.0.0"
 dependencies = [
  "anyhow",
- "atty",
  "clap",
  "cranelift-entity",
  "env_logger 0.10.0",
