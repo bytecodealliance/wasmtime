@@ -1718,9 +1718,6 @@
 (decl imm_from_bits (u64) Imm12)
 (extern constructor imm_from_bits imm_from_bits)
 
-(decl imm_from_neg_bits (i64) Imm12)
-(extern constructor imm_from_neg_bits imm_from_neg_bits)
-
 (decl imm12_const_add (i32 i32) Imm12)
 (extern constructor imm12_const_add imm12_const_add)
 

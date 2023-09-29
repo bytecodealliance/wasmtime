@@ -350,10 +350,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn imm_from_bits(&mut self, val: u64) -> Imm12 {
         Imm12::maybe_from_u64(val).unwrap()
     }
-    #[inline]
-    fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {
-        Imm12::maybe_from_i64(val).unwrap()
-    }
 
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
