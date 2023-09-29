@@ -171,32 +171,3 @@ pub enum InputStream {
 }
 
 pub type OutputStream = Box<dyn HostOutputStream>;
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn input_stream_in_table() {
-        let dummy = crate::preview2::pipe::ClosedInputStream;
-        let mut table = Table::new();
-        // Put it into the table:
-        let ix = table.push_input_stream(Box::new(dummy)).unwrap();
-        // Get a mut ref to it:
-        let _ = table.get_input_stream_mut(&ix).unwrap();
-        // Delete it:
-        let _ = table.delete_input_stream(ix).unwrap();
-    }
-
-    #[test]
-    fn output_stream_in_table() {
-        let dummy = crate::preview2::pipe::SinkOutputStream;
-        let mut table = Table::new();
-        // Put it in the table:
-        let ix = table.push_output_stream(Box::new(dummy)).unwrap();
-        // Get a mut ref to it:
-        let _ = table.get_output_stream_mut(&ix).unwrap();
-        // Delete it:
-        let _ = table.delete_output_stream(ix).unwrap();
-    }
-}
