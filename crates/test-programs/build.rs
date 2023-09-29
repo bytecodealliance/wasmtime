@@ -48,6 +48,7 @@ fn build_and_generate_tests() {
         .arg("--package=wasi-sockets-tests")
         .env("CARGO_TARGET_DIR", &out_dir)
         .env("CARGO_PROFILE_DEV_DEBUG", "1")
+        .env("RUSTFLAGS", rustflags())
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
     if BUILD_WASI_HTTP_TESTS {
         cmd.arg("--package=wasi-http-tests");
@@ -153,6 +154,7 @@ fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
         .arg("--package=wasi-preview1-component-adapter")
         .arg("--target=wasm32-unknown-unknown")
         .env("CARGO_TARGET_DIR", out_dir)
+        .env("RUSTFLAGS", rustflags())
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
     for f in features {
         cmd.arg(f);
@@ -171,6 +173,15 @@ fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
     .unwrap();
     println!("wasi {name} adapter: {:?}", &adapter);
     fs::read(&adapter).unwrap()
+}
+
+fn rustflags() -> &'static str {
+    match option_env!("RUSTFLAGS") {
+        // If we're in CI which is denying warnings then deny warnings to code
+        // built here too to keep the tree warning-free.
+        Some(s) if s.contains("-D warnings") => "-D warnings",
+        _ => "",
+    }
 }
 
 // Builds components out of modules, and creates an `${out_dir}/${package}_component.rs` file that
