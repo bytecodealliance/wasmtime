@@ -1480,7 +1480,7 @@ impl<I: VCodeInst> VRegAllocator<I> {
     /// Allocate a fresh ValueRegs.
     pub fn alloc(&mut self, ty: Type) -> CodegenResult<ValueRegs<Reg>> {
         if self.deferred_error.is_some() {
-            return Err(self.deferred_error.unwrap());
+            return Err(CodegenError::CodeTooLarge);
         }
         let v = self.next_vreg;
         let (regclasses, tys) = I::rc_for_type(ty)?;
