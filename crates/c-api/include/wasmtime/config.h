@@ -367,6 +367,73 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_enable(wasm_config_t*, const
  */
 WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const char *key, const char *value);
 
+/**
+ * A callback to create a new LinearMemory from the specified parameters.
+ *
+ * The result should be written to `memory_ret` and optionally a finalizer for the returned memory 
+ * can be returned in the finalizer pointer.
+ *
+ * For more information about the parameters see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html#tymethod.new_memory
+ */
+typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
+    wasm_memorytype_t *ty,
+    size_t minimum,
+    size_t maximum,
+    size_t reserved_size_in_bytes,
+    size_t guard_size_in_bytes,
+    void **memory_ret,
+    void (**finalizer)(void*));
+
+/**
+ * Return the data from a LinearMemory instance created from a #wasmtime_new_memory_t callback.
+ *
+ * The size in bytes as well as the maximum number of bytes that can be allocated should be 
+ * returned as well.
+ *
+ * For more information about the parameters see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
+ */
+typedef void *(*wasmtime_memory_get_callback_t)(
+    void *memory_ptr,
+    size_t *byte_size,
+    size_t *maximum_byte_size);
+
+/**
+ * Grow the memory to the `new_size` in bytes.
+ *
+ * For more information about the parameters see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html#tymethod.grow_to
+ */
+typedef wasmtime_error_t *(*wasmtime_memory_grow_callback_t)(
+    void *memory_ptr,
+    size_t new_size);
+
+/**
+ * A representation of custom memory creator and methods for an instance of LinearMemory.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html
+ */
+typedef struct {
+  wasmtime_new_memory_callback_t new_memory;
+  wasmtime_memory_get_callback_t get_memory;
+  wasmtime_memory_grow_callback_t grow_memory;
+} wasmtime_memory_creator_t;
+
+/**
+ * Sets a custom memory creator.
+ *
+ * Custom memory creators are used when creating host Memory objects or when creating instance
+ * linear memories for the on-demand instance allocation strategy.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.with_host_memory
+ */
+WASM_API_EXTERN void wasmtime_config_host_memory_creator_set(
+    wasm_config_t*,
+    wasmtime_memory_creator_t*);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
