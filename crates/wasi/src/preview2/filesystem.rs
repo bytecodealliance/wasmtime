@@ -1,7 +1,6 @@
 use crate::preview2::bindings::filesystem::types;
 use crate::preview2::{
     AbortOnDropJoinHandle, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
-    TableError,
 };
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
@@ -14,10 +13,10 @@ pub enum Descriptor {
 }
 
 impl Descriptor {
-    pub fn file(&self) -> Result<&File, TableError> {
+    pub fn file(&self) -> Result<&File, types::ErrorCode> {
         match self {
             Descriptor::File(f) => Ok(f),
-            Descriptor::Dir(_) => Err(TableError::WrongType.into()),
+            Descriptor::Dir(_) => Err(types::ErrorCode::BadDescriptor),
         }
     }
 

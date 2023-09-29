@@ -2141,7 +2141,6 @@ trait ResourceExt<T> {
 
 impl<T: 'static> ResourceExt<T> for Resource<T> {
     fn borrowed(&self) -> Resource<T> {
-        assert!(self.owned());
         Resource::new_borrow(self.rep())
     }
 }
