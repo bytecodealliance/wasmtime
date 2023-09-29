@@ -97,10 +97,14 @@ impl ABI for X64ABI {
         64
     }
 
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+    fn sig_from(
+        params: &[WasmType],
+        returns: &[WasmType],
+        call_conv: &CallingConvention,
+    ) -> ABISig {
         assert!(call_conv.is_fastcall() || call_conv.is_systemv() || call_conv.is_default());
 
-        if wasm_sig.returns().len() > 1 {
+        if returns.len() > 1 {
             panic!("multi-value not supported");
         }
 
@@ -115,14 +119,17 @@ impl ABI for X64ABI {
             (0, RegIndexEnv::default())
         };
 
-        let params: SmallVec<[ABIArg; 6]> = wasm_sig
-            .params()
+        let params: SmallVec<[ABIArg; 6]> = params
             .iter()
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env, is_fastcall))
             .collect();
 
-        let result = Self::result(wasm_sig.returns(), call_conv);
+        let result = Self::result(returns, call_conv);
         ABISig::new(params, result, stack_offset)
+    }
+
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
     }
 
     fn result(returns: &[WasmType], _call_conv: &CallingConvention) -> ABIResult {

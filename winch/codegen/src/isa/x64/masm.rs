@@ -7,12 +7,12 @@ use super::{
 
 use crate::masm::{
     CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode,
-    ShiftKind,
+    ShiftKind, TrapCode,
 };
 use crate::{abi::ABI, masm::StackSlot};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
-    codegen::CodeGenContext,
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData},
     stack::Val,
 };
 use crate::{
@@ -20,9 +20,10 @@ use crate::{
     masm::CalleeKind,
 };
 use cranelift_codegen::{
-    ir::TrapCode, isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized,
-    MachLabel,
+    isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized, MachLabel,
 };
+
+use wasmtime_environ::PtrSize;
 
 /// x64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -32,6 +33,10 @@ pub(crate) struct MacroAssembler {
     asm: Assembler,
     /// ISA flags.
     flags: x64_settings::Flags,
+    /// Shared flags.
+    shared_flags: settings::Flags,
+    /// The target pointer size.
+    ptr_size: OperandSize,
 }
 
 impl Masm for MacroAssembler {
@@ -104,12 +109,77 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset)
     }
 
+    fn table_elem_address(
+        &mut self,
+        index: Reg,
+        size: OperandSize,
+        table_data: &TableData,
+        context: &mut CodeGenContext,
+    ) -> Reg {
+        let vmctx = <Self::ABI as ABI>::vmctx_reg();
+        let scratch = regs::scratch();
+        let bound = context.any_gpr(self);
+        let ptr_base = context.any_gpr(self);
+        let tmp = context.any_gpr(self);
+
+        if let Some(offset) = table_data.base {
+            // If the table data declares a particular offset base,
+            // load the address into a register to further use it as
+            // the table address.
+            self.asm
+                .mov_mr(&Address::offset(vmctx, offset), ptr_base, OperandSize::S64);
+        } else {
+            // Else, simply move the vmctx register into the addr register as
+            // the base to calculate the table address.
+            self.asm.mov_rr(vmctx, ptr_base, OperandSize::S64);
+        };
+
+        // OOB check.
+        let bound_addr = Address::offset(ptr_base, table_data.current_elems_offset);
+        self.asm.mov_mr(&bound_addr, bound, OperandSize::S64);
+        self.asm.cmp_rr(bound, index, size);
+        self.asm.trapif(CmpKind::GeU, TrapCode::TableOutOfBounds);
+
+        // Move the index into the scratch register to calcualte the table
+        // element address.
+        // Moving the value of the index register to the scratch register
+        // also avoids overwriting the context of the index register.
+        self.asm.mov_rr(index, scratch, OperandSize::S32);
+        self.asm
+            .mul_ir(table_data.element_size as i32, scratch, OperandSize::S64);
+        self.asm.mov_mr(
+            &Address::offset(ptr_base, table_data.offset),
+            ptr_base,
+            OperandSize::S64,
+        );
+        // Copy the value of the table base into a temporary register
+        // so that we can use it later in case of a misspeculation.
+        self.asm.mov_rr(ptr_base, tmp, OperandSize::S64);
+        // Calculate the address of the table element.
+        self.asm.add_rr(scratch, ptr_base, OperandSize::S64);
+        if self.shared_flags.enable_table_access_spectre_mitigation() {
+            // Perform a bounds check and override the value of the
+            // table element address in case the index is out of bounds.
+            self.asm.cmp_rr(bound, index, OperandSize::S32);
+            self.asm.cmov(tmp, ptr_base, CmpKind::GeU, OperandSize::S64);
+        }
+        self.asm
+            .mov_mr(&Address::offset(ptr_base, 0), ptr_base, OperandSize::S64);
+        context.free_reg(bound);
+        context.free_reg(tmp);
+        ptr_base
+    }
+
     fn address_from_sp(&self, offset: u32) -> Self::Address {
         Address::offset(regs::rsp(), self.sp_offset - offset)
     }
 
     fn address_at_sp(&self, offset: u32) -> Self::Address {
         Address::offset(regs::rsp(), offset)
+    }
+
+    fn address_at_vmctx(&self, offset: u32) -> Self::Address {
+        Address::offset(<Self::ABI as ABI>::vmctx_reg(), offset)
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
@@ -142,7 +212,7 @@ impl Masm for MacroAssembler {
             self.asm.pop_r(dst);
             self.decrement_sp(<Self::ABI as abi::ABI>::word_bytes());
         } else {
-            let addr = self.address_at_sp(self.sp_offset);
+            let addr = self.address_from_sp(self.sp_offset);
             self.asm.xmm_mov_mr(&addr, dst, size);
             self.free_stack(size.bytes());
         }
@@ -160,8 +230,15 @@ impl Masm for MacroAssembler {
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack);
         let callee = load_callee(self);
-        self.asm.call(callee);
+        match callee {
+            CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg),
+            CalleeKind::Direct(idx) => self.asm.call_with_index(idx),
+        };
         total_stack
+    }
+
+    fn load_ptr(&mut self, src: Self::Address, dst: Reg) {
+        self.load(src, dst, self.ptr_size);
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
@@ -531,24 +608,24 @@ impl Masm for MacroAssembler {
         &mut self,
         kind: CmpKind,
         lhs: RegImm,
-        rhs: RegImm,
+        rhs: Reg,
         taken: MachLabel,
         size: OperandSize,
     ) {
         use CmpKind::*;
 
         match &(lhs, rhs) {
-            (RegImm::Reg(rlhs), RegImm::Reg(rrhs)) => {
+            (RegImm::Reg(rlhs), rrhs) => {
                 // If the comparision kind is zero or not zero and both operands
                 // are the same register, emit a test instruction. Else we emit
                 // a normal comparison.
                 if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
                     self.asm.test_rr(*rrhs, *rlhs, size);
                 } else {
-                    self.cmp(lhs, rhs.get_reg().unwrap(), size);
+                    self.cmp(lhs, rhs, size);
                 }
             }
-            _ => self.cmp(lhs, rhs.get_reg().unwrap(), size),
+            _ => self.cmp(lhs, rhs, size),
         }
         self.asm.jmp_if(kind, taken);
     }
@@ -627,6 +704,10 @@ impl Masm for MacroAssembler {
         self.asm.trap(TrapCode::UnreachableCodeReached)
     }
 
+    fn trapif(&mut self, cc: CmpKind, code: TrapCode) {
+        self.asm.trapif(cc, code);
+    }
+
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {
         // At least one default target.
         assert!(targets.len() >= 1);
@@ -649,11 +730,17 @@ impl Masm for MacroAssembler {
 
 impl MacroAssembler {
     /// Create an x64 MacroAssembler.
-    pub fn new(shared_flags: settings::Flags, isa_flags: x64_settings::Flags) -> Self {
+    pub fn new(
+        ptr_size: impl PtrSize,
+        shared_flags: settings::Flags,
+        isa_flags: x64_settings::Flags,
+    ) -> Self {
         Self {
             sp_offset: 0,
-            asm: Assembler::new(shared_flags, isa_flags.clone()),
+            asm: Assembler::new(shared_flags.clone(), isa_flags.clone()),
             flags: isa_flags,
+            shared_flags,
+            ptr_size: ptr_type_from_ptr_size(ptr_size.size()).into(),
         }
     }
 

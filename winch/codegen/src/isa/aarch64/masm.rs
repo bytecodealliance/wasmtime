@@ -1,11 +1,11 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::CodeGenContext,
+    codegen::{CodeGenContext, TableData},
     isa::reg::Reg,
     masm::{
         CalleeKind, CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm,
-        RemKind, RoundingMode, ShiftKind, StackSlot,
+        RemKind, RoundingMode, ShiftKind, StackSlot, TrapCode,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -97,11 +97,25 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
+    fn table_elem_address(
+        &mut self,
+        _index: Reg,
+        _size: OperandSize,
+        _table_data: &TableData,
+        _context: &mut CodeGenContext,
+    ) -> Reg {
+        todo!()
+    }
+
     fn address_from_sp(&self, _offset: u32) -> Self::Address {
         todo!()
     }
 
     fn address_at_sp(&self, _offset: u32) -> Self::Address {
+        todo!()
+    }
+
+    fn address_at_vmctx(&self, _offset: u32) -> Self::Address {
         todo!()
     }
 
@@ -133,6 +147,10 @@ impl Masm for MacroAssembler {
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
         self.asm.ldr(src, dst, size);
+    }
+
+    fn load_ptr(&mut self, _src: Self::Address, _dst: Reg) {
+        todo!()
     }
 
     fn pop(&mut self, _dst: Reg, _size: OperandSize) {
@@ -313,7 +331,7 @@ impl Masm for MacroAssembler {
         &mut self,
         _kind: CmpKind,
         _lhs: RegImm,
-        _rhs: RegImm,
+        _rhs: Reg,
         _taken: MachLabel,
         _size: OperandSize,
     ) {
@@ -329,6 +347,10 @@ impl Masm for MacroAssembler {
     }
 
     fn jmp_table(&mut self, _targets: &[MachLabel], _index: Reg, _tmp: Reg) {
+        todo!()
+    }
+
+    fn trapif(&mut self, _cc: CmpKind, _code: TrapCode) {
         todo!()
     }
 }

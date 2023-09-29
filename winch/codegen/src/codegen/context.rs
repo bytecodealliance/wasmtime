@@ -2,7 +2,7 @@ use wasmtime_environ::WasmType;
 
 use super::ControlStackFrame;
 use crate::{
-    abi::ABIResult,
+    abi::{ABIResult, ABI},
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm},
@@ -81,22 +81,32 @@ impl<'a> CodeGenContext<'a> {
         self.reg_for_class(RegClass::Int, masm)
     }
 
-    /// Executes the provided function, guaranteeing that the
-    /// specified register, if any, remains unallocatable throughout
-    /// the function's execution.
-    pub fn without<T, M, F>(&mut self, reg: Option<Reg>, masm: &mut M, mut f: F) -> T
+    /// Executes the provided function, guaranteeing that the specified set of
+    /// registers, if any, remain unallocatable throughout the function's
+    /// execution. Only the registers in the `free` iterator will be freed. The
+    /// caller must guarantee that in case the iterators are different, the free
+    /// iterator must be a subset of the alloc iterator.
+    pub fn without<T, M, F>(
+        &mut self,
+        alloc: impl Iterator<Item = Reg>,
+        free: impl Iterator<Item = Reg>,
+        masm: &mut M,
+        mut f: F,
+    ) -> T
     where
         M: MacroAssembler,
         F: FnMut(&mut Self, &mut M) -> T,
     {
-        if let Some(reg) = reg {
-            self.reg(reg, masm);
+        debug_assert!(free.size_hint().0 <= alloc.size_hint().0);
+
+        for r in alloc {
+            self.reg(r, masm);
         }
 
         let result = f(self, masm);
 
-        if let Some(reg) = reg {
-            self.free_reg(reg);
+        for r in free {
+            self.free_reg(r);
         }
 
         result
@@ -403,8 +413,9 @@ impl<'a> CodeGenContext<'a> {
             Val::Local(local) => {
                 let slot = frame.get_local(local.index).expect("valid local at slot");
                 let addr = masm.local_address(&slot);
-                masm.load(addr, regalloc.scratch, slot.ty.into());
-                let stack_slot = masm.push(regalloc.scratch, slot.ty.into());
+                let scratch = <M::ABI as ABI>::scratch_reg();
+                masm.load(addr, scratch, slot.ty.into());
+                let stack_slot = masm.push(scratch, slot.ty.into());
                 *v = Val::mem(slot.ty, stack_slot);
             }
             _ => {}

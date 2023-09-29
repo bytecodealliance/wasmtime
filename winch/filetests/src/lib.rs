@@ -12,7 +12,7 @@ mod test {
     use wasmtime_environ::ModuleTranslation;
     use wasmtime_environ::{
         wasmparser::{Parser as WasmParser, Validator},
-        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables, TypeConvert,
+        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTypes, Tunables, TypeConvert,
     };
     use winch_codegen::{lookup, TargetIsa};
     use winch_test_macros::generate_file_tests;
@@ -108,13 +108,13 @@ mod test {
             .translate(parser, &wasm)
             .context("Failed to translate WebAssembly module")
             .unwrap();
-        let _ = types.finish();
+        let types = types.finish();
 
         let body_inputs = std::mem::take(&mut translation.function_body_inputs);
 
         let binding = body_inputs
             .into_iter()
-            .map(|func| compile(&isa, &translation, func).join("\n"))
+            .map(|func| compile(&isa, &types, &translation, func).join("\n"))
             .collect::<Vec<String>>()
             .join("\n\n");
         let actual = binding.as_str();
@@ -147,6 +147,7 @@ mod test {
 
     fn compile(
         isa: &Box<dyn TargetIsa>,
+        module_types: &ModuleTypes,
         translation: &ModuleTranslation,
         f: (DefinedFuncIndex, FunctionBodyData<'_>),
     ) -> Vec<String> {
@@ -160,7 +161,7 @@ mod test {
         let FunctionBodyData { body, validator } = f.1;
         let mut validator = validator.into_validator(Default::default());
         let buffer = isa
-            .compile_function(&sig, &body, &translation, &mut validator)
+            .compile_function(&sig, module_types, &body, &translation, &mut validator)
             .expect("Couldn't compile function");
 
         disasm(buffer.data(), isa).unwrap()
