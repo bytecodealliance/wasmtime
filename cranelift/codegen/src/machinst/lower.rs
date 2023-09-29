@@ -18,7 +18,6 @@ use crate::machinst::{
     SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
     ValueRegs, Writable,
 };
-use crate::CodegenError;
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
@@ -163,13 +162,6 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// VReg allocation context, given to the vcode field at build time to finalize the vcode.
     vregs: VRegAllocator<I>,
-
-    /// A deferred error from vreg allocation, to be bubbled up to the
-    /// top level of the lowering algorithm. We take this approach
-    /// because we cannot currently propagate a `Result` upward
-    /// through ISLE code (the lowering rules), and temp allocations
-    /// typically happen as a result of particular lowering rules.
-    vreg_alloc_error: Option<CodegenError>,
 
     /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, ValueRegs<Reg>>,
@@ -445,7 +437,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             allocatable: PRegSet::from(machine_env),
             vcode,
             vregs,
-            vreg_alloc_error: None,
             value_regs,
             sret_reg,
             block_end_colors,
@@ -1084,12 +1075,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
 
             self.finish_bb();
-        }
 
-        // Check for any deferred vreg-temp allocation errors, and
-        // bubble one up at this time if it exists.
-        if let Some(e) = self.vreg_alloc_error {
-            return Err(e);
+            // Check for any deferred vreg-temp allocation errors, and
+            // bubble one up at this time if it exists.
+            if let Some(e) = self.vregs.take_deferred_error() {
+                return Err(e);
+            }
         }
 
         // Now that we've emitted all instructions into the
@@ -1340,14 +1331,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get a new temp.
     pub fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>> {
-        let allocated = match self.vregs.alloc(ty) {
-            Ok(x) => x,
-            Err(e) => {
-                self.vreg_alloc_error = Some(e);
-                self.vregs.invalid(ty)
-            }
-        };
-        writable_value_regs(allocated)
+        writable_value_regs(self.vregs.alloc_with_deferred_error(ty))
     }
 
     /// Emit a machine instruction.
