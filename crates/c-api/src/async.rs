@@ -138,21 +138,9 @@ unsafe fn c_async_callback_to_rust_fn(
     }
 }
 
-pub enum CallFutureState<'a> {
-    Undefined,
-    Called(Pin<Box<dyn Future<Output = Result<()>> + 'a>>),
-    Finished(Result<()>),
-}
-
-impl Default for CallFutureState<'_> {
-    fn default() -> Self {
-        CallFutureState::Undefined
-    }
-}
-
 #[repr(transparent)]
 pub struct wasmtime_call_future_t<'a> {
-    pub state: CallFutureState<'a>,
+    underlying: Pin<Box<dyn Future<Output = ()> + 'a>>,
 }
 
 #[no_mangle]
@@ -160,42 +148,22 @@ pub extern "C" fn wasmtime_call_future_delete(_future: Box<wasmtime_call_future_
 
 #[no_mangle]
 pub extern "C" fn wasmtime_call_future_poll(future: &mut wasmtime_call_future_t) -> bool {
-    let mut fut = match mem::take(&mut future.state) {
-        CallFutureState::Called(fut) => fut,
-        _ => panic!("wasmtime_call_future_poll on a completed function"),
-    };
     let w = futures::task::noop_waker_ref();
-    match fut.as_mut().poll(&mut Context::from_waker(w)) {
-        Poll::Ready(result) => {
-            future.state = CallFutureState::Finished(result);
-            true
-        }
-        Poll::Pending => {
-            future.state = CallFutureState::Called(fut);
-            false
-        }
+    match future.underlying.as_mut().poll(&mut Context::from_waker(w)) {
+        Poll::Ready(()) => true,
+        Poll::Pending => false,
     }
 }
 
-#[no_mangle]
-pub extern "C" fn wasmtime_call_future_get_results(
-    future: &mut wasmtime_call_future_t,
+fn handle_call_error(
+    err: wasmtime::Error,
     trap_ret: &mut *mut wasm_trap_t,
-) -> Option<Box<wasmtime_error_t>> {
-    let r = match mem::take(&mut future.state) {
-        CallFutureState::Finished(r) => r,
-        _ => panic!("wasmtime_call_future_get_results on a completed function"),
-    };
-    match r {
-        Ok(()) => None,
-        Err(err) => {
-            if err.is::<Trap>() {
-                *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
-                None
-            } else {
-                Some(Box::new(wasmtime_error_t::from(err)))
-            }
-        }
+    err_ret: &mut *mut wasmtime_error_t,
+) {
+    if err.is::<Trap>() {
+        *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
+    } else {
+        *err_ret = Box::into_raw(Box::new(wasmtime_error_t::from(err)));
     }
 }
 
@@ -204,21 +172,24 @@ async fn do_func_call_async(
     func: &Func,
     args: impl ExactSizeIterator<Item = Val>,
     results: &mut [MaybeUninit<wasmtime_val_t>],
-) -> Result<()> {
+    trap_ret: &mut *mut wasm_trap_t,
+    err_ret: &mut *mut wasmtime_error_t,
+) {
     let mut store = store.as_context_mut();
     let mut params = mem::take(&mut store.data_mut().wasm_val_storage);
-    let (wt_params, wt_results) = translate_args(
-        &mut params,
-        args,
-        results.len(),
-    );
-    func.call_async(&mut store, wt_params, wt_results).await?;
-    for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
-        crate::initialize(slot, wasmtime_val_t::from_val(val.clone()));
+    let (wt_params, wt_results) = translate_args(&mut params, args, results.len());
+    let result = func.call_async(&mut store, wt_params, wt_results).await;
+
+    match result {
+        Ok(()) => {
+            for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
+                crate::initialize(slot, wasmtime_val_t::from_val(val.clone()));
+            }
+            params.truncate(0);
+            store.data_mut().wasm_val_storage = params;
+        }
+        Err(err) => handle_call_error(err, trap_ret, err_ret),
     }
-    params.truncate(0);
-    store.data_mut().wasm_val_storage = params;
-    Ok(())
 }
 
 #[no_mangle]
@@ -229,15 +200,17 @@ pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
     nargs: usize,
     results: *mut MaybeUninit<wasmtime_val_t>,
     nresults: usize,
+    trap_ret: &'a mut *mut wasm_trap_t,
+    err_ret: &'a mut *mut wasmtime_error_t,
 ) -> Box<wasmtime_call_future_t<'a>> {
-    let args = crate::slice_from_raw_parts(args, nargs).iter().map(|i| i.to_val());
+    let args = crate::slice_from_raw_parts(args, nargs)
+        .iter()
+        .map(|i| i.to_val());
     let results = crate::slice_from_raw_parts_mut(results, nresults);
     let fut = Box::pin(do_func_call_async(
-        store, func, args, results,
+        store, func, args, results, trap_ret, err_ret,
     ));
-    Box::new(wasmtime_call_future_t {
-        state: CallFutureState::Called(fut),
-    })
+    Box::new(wasmtime_call_future_t { underlying: fut })
 }
 
 #[no_mangle]
@@ -268,13 +241,14 @@ async fn do_linker_instantiate_async(
     store: CStoreContextMut<'_>,
     module: &wasmtime_module_t,
     instance_ptr: &mut Instance,
-) -> Result<()> {
-    let instance = linker
-        .linker
-        .instantiate_async(store, &module.module)
-        .await?;
-    *instance_ptr = instance;
-    Ok(())
+    trap_ret: &mut *mut wasm_trap_t,
+    err_ret: &mut *mut wasmtime_error_t,
+) {
+    let result = linker.linker.instantiate_async(store, &module.module).await;
+    match result {
+        Ok(instance) => *instance_ptr = instance,
+        Err(err) => handle_call_error(err, trap_ret, err_ret),
+    }
 }
 
 #[no_mangle]
@@ -283,14 +257,16 @@ pub extern "C" fn wasmtime_linker_instantiate_async<'a>(
     store: CStoreContextMut<'a>,
     module: &'a wasmtime_module_t,
     instance_ptr: &'a mut Instance,
+    trap_ret: &'a mut *mut wasm_trap_t,
+    err_ret: &'a mut *mut wasmtime_error_t,
 ) -> Box<crate::wasmtime_call_future_t<'a>> {
     let fut = Box::pin(do_linker_instantiate_async(
         linker,
         store,
         module,
         instance_ptr,
+        trap_ret,
+        err_ret,
     ));
-    Box::new(crate::wasmtime_call_future_t {
-        state: crate::CallFutureState::Called(fut),
-    })
+    Box::new(crate::wasmtime_call_future_t { underlying: fut })
 }

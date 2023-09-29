@@ -159,17 +159,6 @@ WASM_API_EXTERN bool wasmtime_call_future_poll(wasmtime_call_future_t *future);
 WASM_API_EXTERN void wasmtime_call_future_delete(wasmtime_call_future_t *future);
 
 /**
- * \brief Obtains the results for a wasm call execution.
- *
- * This method should only be called on a wasmtime_call_future_t after wasmtime_call_future_poll has returned true.
- *
- * The `trap` pointer cannot be `NULL`.
- */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_call_future_get_results(
-    wasmtime_call_future_t *fut,
-    wasm_trap_t **trap);
-
-/**
  * \brief Invokes this function with the params given, returning the results asynchronously.
  *
  * This function is the same as wasmtime_func_call except that it is asynchronous.
@@ -193,7 +182,9 @@ WASM_API_EXTERN wasmtime_call_future_t* wasmtime_func_call_async(
     const wasmtime_val_t *args,
     size_t nargs,
     wasmtime_val_t *results,
-    size_t nresults);
+    size_t nresults,
+    wasm_trap_t** trap_ret,
+    wasmtime_error_t** wasmtime_error_t);
 
 /**
  * \brief Defines a new async function in this linker.
@@ -227,7 +218,9 @@ WASM_API_EXTERN wasmtime_call_future_t *wasmtime_linker_instantiate_async(
     const wasmtime_linker_t *linker,
     wasmtime_context_t *store,
     const wasmtime_module_t *module,
-    wasmtime_instance_t *instance);
+    wasmtime_instance_t *instance,
+    wasm_trap_t** trap_ret,
+    wasmtime_error_t** wasmtime_error_t);
 
 #ifdef __cplusplus
 }  // extern "C"

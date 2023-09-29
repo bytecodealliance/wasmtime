@@ -214,14 +214,16 @@ int main() {
 
   // Now instantiate our module using the linker.
   handle<wasmtime_call_future_t, wasmtime_call_future_delete> call_future;
+  wasm_trap_t *trap_ptr = nullptr;
+  wasmtime_error_t *error_ptr = nullptr;
   wasmtime_instance_t instance;
   call_future.reset(wasmtime_linker_instantiate_async(
-      linker.get(), context, compiled_module.get(), &instance));
+      linker.get(), context, compiled_module.get(), &instance, &trap_ptr,
+      &error_ptr));
   while (!wasmtime_call_future_poll(call_future.get())) {
     std::cout << "yielding instantiation!" << std::endl;
   }
-  wasm_trap_t *trap_ptr = nullptr;
-  error.reset(wasmtime_call_future_get_results(call_future.get(), &trap_ptr));
+  error.reset(error_ptr);
   handle<wasm_trap_t, wasm_trap_delete> trap{trap_ptr};
   if (error || trap) {
     exit_with_error("failed to instantiate module", error.get(), trap.get());
@@ -243,9 +245,9 @@ int main() {
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = 15;
   std::array<wasmtime_val_t, 0> results;
-  call_future.reset(
-      wasmtime_func_call_async(context, &guest_func_extern.of.func, args.data(),
-                               args.size(), results.data(), results.size()));
+  call_future.reset(wasmtime_func_call_async(
+      context, &guest_func_extern.of.func, args.data(), args.size(),
+      results.data(), results.size(), &trap_ptr, &error_ptr));
   // Poll the execution of the call. This can yield control back if there is an
   // async host call or if we ran out of fuel.
   while (!wasmtime_call_future_poll(call_future.get())) {
@@ -262,7 +264,7 @@ int main() {
   }
   // Extract if there were failures or traps after poll returns that execution
   // completed.
-  error.reset(wasmtime_call_future_get_results(call_future.get(), &trap_ptr));
+  error.reset(error_ptr);
   trap.reset(trap_ptr);
   if (error || trap) {
     exit_with_error("running guest function failed", error.get(), trap.get());
