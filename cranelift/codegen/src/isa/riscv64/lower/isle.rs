@@ -244,9 +244,9 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int(), "{:?}", ty);
         if ty.bits() == 128 {
-            ValueRegs::two(self.zero_reg(), self.zero_reg())
+            ValueRegs::two(self.zero_reg().to_reg(), self.zero_reg().to_reg())
         } else {
-            ValueRegs::one(self.zero_reg())
+            ValueRegs::one(self.zero_reg().to_reg())
         }
     }
 
@@ -343,8 +343,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         writable_zero_reg()
     }
     #[inline]
-    fn zero_reg(&mut self) -> Reg {
-        zero_reg()
+    fn zero_reg(&mut self) -> XReg {
+        XReg::new(zero_reg()).unwrap()
     }
     #[inline]
     fn imm_from_bits(&mut self, val: u64) -> Imm12 {

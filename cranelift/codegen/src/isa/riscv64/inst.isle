@@ -3035,7 +3035,7 @@
 (extern constructor sp_reg sp_reg)
 
 ;; Helper for creating the zero register.
-(decl zero_reg () Reg)
+(decl zero_reg () XReg)
 (extern constructor zero_reg zero_reg)
 
 (decl value_regs_zero () ValueRegs)
