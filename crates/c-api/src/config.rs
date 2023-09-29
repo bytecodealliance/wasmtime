@@ -255,15 +255,3 @@ pub unsafe extern "C" fn wasmtime_config_cranelift_flag_set(
     let value = CStr::from_ptr(value).to_str().expect("not valid utf-8");
     c.config.cranelift_flag_set(flag, value);
 }
-
-#[no_mangle]
-#[cfg(feature = "async")]
-pub extern "C" fn wasmtime_config_async_support_set(c: &mut wasm_config_t, enable: bool) {
-    c.config.async_support(enable);
-}
-
-#[no_mangle]
-#[cfg(feature = "async")]
-pub extern "C" fn wasmtime_config_async_stack_size_set(c: &mut wasm_config_t, size: usize) {
-    c.config.async_stack_size(size);
-}

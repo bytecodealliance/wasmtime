@@ -268,6 +268,7 @@ int main() {
   if (error || trap) {
     exit_with_error("running guest function failed", error.get(), trap.get());
   }
+  call_future = nullptr;
   // At this point, if our host function returned results they would be
   // available in the `results` array.
 

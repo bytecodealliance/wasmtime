@@ -8,10 +8,37 @@ use std::task::{Context, Poll};
 use wasmtime::{AsContextMut, Caller, Func, Instance, Result, Trap, Val};
 
 use crate::{
-    bad_utf8, handle_result, to_str, translate_args, wasm_functype_t, wasm_trap_t,
+    bad_utf8, handle_result, to_str, translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t,
     wasmtime_caller_t, wasmtime_error_t, wasmtime_linker_t, wasmtime_module_t, wasmtime_val_t,
     wasmtime_val_union, CStoreContextMut, WASMTIME_I32,
 };
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_async_support_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.async_support(enable);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_async_stack_size_set(c: &mut wasm_config_t, size: usize) {
+    c.config.async_stack_size(size);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_context_epoch_deadline_async_yield_and_update(
+    mut store: CStoreContextMut<'_>,
+    delta: u64,
+) {
+    store.epoch_deadline_async_yield_and_update(delta);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_context_out_of_fuel_async_yield(
+    mut store: CStoreContextMut<'_>,
+    injection_count: u64,
+    fuel_to_inject: u64,
+) {
+    store.out_of_fuel_async_yield(injection_count, fuel_to_inject);
+}
 
 pub type wasmtime_func_async_callback_t = extern "C" fn(
     *mut c_void,

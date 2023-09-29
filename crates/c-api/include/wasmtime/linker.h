@@ -11,8 +11,6 @@
 #include <wasmtime/error.h>
 #include <wasmtime/store.h>
 #include <wasmtime/extern.h>
-#include <wasmtime/instance.h>
-#include <wasmtime/module.h>
 
 #ifdef __cplusplus
 extern "C" {
