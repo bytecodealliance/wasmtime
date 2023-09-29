@@ -5,7 +5,6 @@ use crate::preview2::bindings::{
     sockets::tcp::{self, ShutdownType},
 };
 use crate::preview2::poll::TablePollableExt;
-use crate::preview2::stream::TableStreamExt;
 use crate::preview2::tcp::{TcpSocket, TcpState};
 use crate::preview2::{HostPollable, PollableFuture, WasiView};
 use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
@@ -143,12 +142,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         socket.tcp_state = TcpState::Connected;
         let (input, output) = socket.as_split();
-        let input_stream = self
-            .table_mut()
-            .push_input_stream_child(input, Resource::<tcp::TcpSocket>::new_borrow(this.rep()))?;
-        let output_stream = self
-            .table_mut()
-            .push_output_stream_child(output, Resource::<tcp::TcpSocket>::new_borrow(this.rep()))?;
+        let input_stream = self.table_mut().push_child_resource(input, &this)?;
+        let output_stream = self.table_mut().push_child_resource(output, &this)?;
 
         Ok((input_stream, output_stream))
     }
@@ -221,16 +216,11 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         tcp_socket.tcp_state = TcpState::Connected;
 
         let (input, output) = tcp_socket.as_split();
+        let output: OutputStream = output;
 
         let tcp_socket = self.table_mut().push_resource(tcp_socket)?;
-        let input_stream = self.table_mut().push_input_stream_child(
-            input,
-            Resource::<tcp::TcpSocket>::new_borrow(tcp_socket.rep()),
-        )?;
-        let output_stream = self.table_mut().push_output_stream_child(
-            output,
-            Resource::<tcp::TcpSocket>::new_borrow(tcp_socket.rep()),
-        )?;
+        let input_stream = self.table_mut().push_child_resource(input, &tcp_socket)?;
+        let output_stream = self.table_mut().push_child_resource(output, &tcp_socket)?;
 
         Ok((tcp_socket, input_stream, output_stream))
     }

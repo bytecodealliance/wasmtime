@@ -1,8 +1,9 @@
 use crate::preview2::bindings::clocks::wall_clock;
 use crate::preview2::bindings::filesystem::types::{HostDescriptor, HostDirectoryEntryStream};
 use crate::preview2::bindings::filesystem::{preopens, types};
-use crate::preview2::bindings::io::streams;
+use crate::preview2::bindings::io::streams::{InputStream, OutputStream};
 use crate::preview2::filesystem::{Descriptor, Dir, File, ReaddirIterator};
+use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
 use crate::preview2::{DirPerms, FilePerms, Table, TableError, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
@@ -750,12 +751,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
-    ) -> Result<Resource<streams::InputStream>, types::Error> {
-        use crate::preview2::{
-            filesystem::FileInputStream,
-            stream::{InternalInputStream, InternalTableStreamExt},
-        };
-
+    ) -> Result<Resource<InputStream>, types::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_resource(&fd)?.file()?;
 
@@ -769,9 +765,7 @@ impl<T: WasiView> HostDescriptor for T {
         let reader = FileInputStream::new(clone, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self
-            .table_mut()
-            .push_internal_input_stream(InternalInputStream::File(reader))?;
+        let index = self.table_mut().push_resource(InputStream::File(reader))?;
 
         Ok(index)
     }
@@ -780,9 +774,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
-    ) -> Result<Resource<streams::OutputStream>, types::Error> {
-        use crate::preview2::{filesystem::FileOutputStream, TableStreamExt};
-
+    ) -> Result<Resource<OutputStream>, types::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_resource(&fd)?.file()?;
 
@@ -795,9 +787,10 @@ impl<T: WasiView> HostDescriptor for T {
 
         // Create a stream view for it.
         let writer = FileOutputStream::write_at(clone, offset);
+        let writer: OutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push_output_stream(Box::new(writer))?;
+        let index = self.table_mut().push_resource(writer)?;
 
         Ok(index)
     }
@@ -805,9 +798,7 @@ impl<T: WasiView> HostDescriptor for T {
     fn append_via_stream(
         &mut self,
         fd: Resource<types::Descriptor>,
-    ) -> Result<Resource<streams::OutputStream>, types::Error> {
-        use crate::preview2::{filesystem::FileOutputStream, TableStreamExt};
-
+    ) -> Result<Resource<OutputStream>, types::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_resource(&fd)?.file()?;
 
@@ -819,9 +810,10 @@ impl<T: WasiView> HostDescriptor for T {
 
         // Create a stream view for it.
         let appender = FileOutputStream::append(clone);
+        let appender: OutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push_output_stream(Box::new(appender))?;
+        let index = self.table_mut().push_resource(appender)?;
 
         Ok(index)
     }

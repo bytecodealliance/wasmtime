@@ -42,7 +42,6 @@ pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
 pub use self::stream::{
     HostInputStream, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
-    TableStreamExt,
 };
 pub use self::table::{OccupiedEntry, Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
@@ -151,6 +150,8 @@ pub mod bindings {
             "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
             "wasi:filesystem/types/directory-entry-stream": super::filesystem::ReaddirIterator,
             "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,
+            "wasi:io/streams/input-stream": super::stream::InputStream,
+            "wasi:io/streams/output-stream": super::stream::OutputStream,
         },
     });
 

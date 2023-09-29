@@ -19,7 +19,7 @@ use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
     bindings::io::poll::Pollable,
     bindings::io::streams::{InputStream, OutputStream},
-    HostPollable, PollableFuture, TablePollableExt, TableStreamExt,
+    HostPollable, PollableFuture, TablePollableExt,
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
@@ -504,7 +504,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         let body = self.table().get_outgoing_body(id)?;
         if let Some(stream) = body.body_output_stream.take() {
             let dummy = Resource::<u32>::new_own(id);
-            let id = self.table().push_output_stream_child(stream, dummy)?;
+            let id = self.table().push_child_resource(stream, &dummy)?;
             Ok(Ok(id))
         } else {
             Ok(Err(()))
@@ -558,7 +558,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingBody for T {
         let body = self.table().get_incoming_body(&id)?;
 
         if let Some(stream) = body.stream.take() {
-            let stream = self.table().push_input_stream_child(Box::new(stream), id)?;
+            let stream = InputStream::Host(Box::new(stream));
+            let stream = self.table().push_child_resource(stream, &id)?;
             return Ok(Ok(stream));
         }
 

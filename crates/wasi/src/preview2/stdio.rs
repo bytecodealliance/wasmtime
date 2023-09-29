@@ -4,7 +4,6 @@ use crate::preview2::bindings::cli::{
 };
 use crate::preview2::bindings::io::streams;
 use crate::preview2::pipe::{self, AsyncWriteStream};
-use crate::preview2::stream::TableStreamExt;
 use crate::preview2::{HostInputStream, HostOutputStream, WasiView};
 use std::io::IsTerminal;
 use wasmtime::component::Resource;
@@ -160,21 +159,23 @@ pub enum IsATTY {
 impl<T: WasiView> stdin::Host for T {
     fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stdin.stream();
-        Ok(self.table_mut().push_input_stream(stream)?)
+        Ok(self
+            .table_mut()
+            .push_resource(streams::InputStream::Host(stream))?)
     }
 }
 
 impl<T: WasiView> stdout::Host for T {
     fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stdout.stream();
-        Ok(self.table_mut().push_output_stream(stream)?)
+        Ok(self.table_mut().push_resource(stream)?)
     }
 }
 
 impl<T: WasiView> stderr::Host for T {
     fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stderr.stream();
-        Ok(self.table_mut().push_output_stream(stream)?)
+        Ok(self.table_mut().push_resource(stream)?)
     }
 }
 

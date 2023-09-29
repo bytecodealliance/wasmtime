@@ -152,6 +152,20 @@ impl Table {
         Ok(child)
     }
 
+    /// Same as `push_child`, but typed.
+    pub fn push_child_resource<T, U>(
+        &mut self,
+        entry: T,
+        parent: &Resource<U>,
+    ) -> Result<Resource<T>, TableError>
+    where
+        T: Send + Sync + 'static,
+        U: 'static,
+    {
+        let idx = self.push_child(Box::new(entry), parent.rep())?;
+        Ok(Resource::new_own(idx))
+    }
+
     fn push_(&mut self, e: TableEntry) -> Result<u32, TableError> {
         // NOTE: The performance of this new key calculation could be very bad once keys wrap
         // around.

@@ -1,4 +1,5 @@
 use super::{HostInputStream, HostOutputStream, OutputStreamError};
+use crate::preview2::stream::{InputStream, OutputStream};
 use crate::preview2::{with_ambient_tokio_runtime, AbortOnDropJoinHandle, StreamState};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
 use cap_std::net::TcpListener;
@@ -244,9 +245,9 @@ impl TcpSocket {
     }
 
     /// Create the input/output stream pair for a tcp socket.
-    pub fn as_split(&self) -> (Box<impl HostInputStream>, Box<impl HostOutputStream>) {
+    pub fn as_split(&self) -> (InputStream, OutputStream) {
         let input = Box::new(TcpReadStream::new(self.inner.clone()));
         let output = Box::new(TcpWriteStream::new(self.inner.clone()));
-        (input, output)
+        (InputStream::Host(input), output)
     }
 }

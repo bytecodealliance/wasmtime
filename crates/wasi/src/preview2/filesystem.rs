@@ -116,7 +116,7 @@ impl Dir {
     }
 }
 
-pub(crate) struct FileInputStream {
+pub struct FileInputStream {
     file: Arc<cap_std::fs::File>,
     position: u64,
 }
