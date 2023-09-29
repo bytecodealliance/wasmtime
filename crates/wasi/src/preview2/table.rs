@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::collections::{BTreeSet, HashMap};
+use wasmtime::component::Resource;
 
 #[derive(thiserror::Error, Debug)]
 pub enum TableError {
@@ -105,6 +106,15 @@ impl Table {
     /// Insert a resource at the next available index.
     pub fn push(&mut self, entry: Box<dyn Any + Send + Sync>) -> Result<u32, TableError> {
         self.push_(TableEntry::new(entry, None))
+    }
+
+    /// Same as `push`, but typed.
+    pub fn push_resource<T>(&mut self, entry: T) -> Result<Resource<T>, TableError>
+    where
+        T: Send + Sync + 'static,
+    {
+        let idx = self.push(Box::new(entry))?;
+        Ok(Resource::new_own(idx))
     }
 
     /// Insert a resource at the next available index, and track that it has a
@@ -216,6 +226,19 @@ impl Table {
         }
     }
 
+    /// Same as `get`, but typed
+    pub fn get_resource<T: Any + Sized>(&self, key: &Resource<T>) -> Result<&T, TableError> {
+        self.get(key.rep())
+    }
+
+    /// Same as `get_mut`, but typed
+    pub fn get_resource_mut<T: Any + Sized>(
+        &mut self,
+        key: &Resource<T>,
+    ) -> Result<&mut T, TableError> {
+        self.get_mut(key.rep())
+    }
+
     /// Get an [`OccupiedEntry`] corresponding to a table entry, if it exists. This allows you to
     /// remove or replace the entry based on its contents. The methods available are a subset of
     /// [`std::collections::hash_map::OccupiedEntry`] - it does not give access to the key, it
@@ -281,6 +304,15 @@ impl Table {
                 Err(TableError::WrongType)
             }
         }
+    }
+
+    /// Same as `delete`, but typed
+    pub fn delete_resource<T>(&mut self, resource: Resource<T>) -> Result<T, TableError>
+    where
+        T: Any,
+    {
+        debug_assert!(resource.owned());
+        self.delete(resource.rep())
     }
 
     /// Zip the values of the map with mutable references to table entries corresponding to each
