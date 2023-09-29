@@ -1,14 +1,16 @@
-use crate::preview2::bindings::cli::{
-    stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
-    terminal_stdout,
+use crate::preview2::bindings::{
+    self,
+    cli::{
+        stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
+        terminal_stdout,
+    },
+    clocks::{monotonic_clock, wall_clock},
+    filesystem::{preopens, types as filesystem},
+    io::{poll, streams},
 };
-use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
-use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
-use crate::preview2::bindings::io::poll;
-use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::host::filesystem::TableReaddirExt;
-use crate::preview2::{bindings, IsATTY, TableError, WasiView};
+use crate::preview2::{IsATTY, StreamError, TableError, WasiView};
 use anyhow::{anyhow, bail, Context};
 use std::borrow::Borrow;
 use std::cell::Cell;
@@ -57,14 +59,15 @@ impl BlockingMode {
         host: &mut impl streams::Host,
         input_stream: Resource<streams::InputStream>,
         max_size: usize,
-    ) -> Result<(Vec<u8>, streams::StreamStatus), types::Error> {
+    ) -> Result<Vec<u8>, streams::Error> {
         let max_size = max_size.try_into().unwrap_or(u64::MAX);
         match self {
-            BlockingMode::Blocking => stream_res(
-                streams::HostInputStream::blocking_read(host, input_stream, max_size).await,
-            ),
+            BlockingMode::Blocking => {
+                streams::HostInputStream::blocking_read(host, input_stream, max_size).await
+            }
+
             BlockingMode::NonBlocking => {
-                stream_res(streams::HostInputStream::read(host, input_stream, max_size).await)
+                streams::HostInputStream::read(host, input_stream, max_size).await
             }
         }
     }
@@ -73,7 +76,7 @@ impl BlockingMode {
         host: &mut (impl streams::Host + poll::Host),
         output_stream: Resource<streams::OutputStream>,
         mut bytes: &[u8],
-    ) -> Result<usize, types::Error> {
+    ) -> Result<usize, streams::Error> {
         use streams::HostOutputStream as Streams;
 
         match self {
@@ -95,7 +98,7 @@ impl BlockingMode {
                 let borrow = Resource::new_borrow(output_stream.rep());
                 let n = match Streams::check_write(host, borrow) {
                     Ok(n) => n,
-                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => 0,
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => 0,
                     Err(e) => Err(e)?,
                 };
 
@@ -107,7 +110,7 @@ impl BlockingMode {
                 let borrow = Resource::new_borrow(output_stream.rep());
                 match Streams::write(host, borrow, bytes[..len].to_vec()) {
                     Ok(()) => {}
-                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => {
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => {
                         return Ok(0)
                     }
                     Err(e) => Err(e)?,
@@ -116,7 +119,7 @@ impl BlockingMode {
                 let borrow = Resource::new_borrow(output_stream.rep());
                 match Streams::blocking_flush(host, borrow).await {
                     Ok(()) => {}
-                    Err(e) if matches!(e.downcast_ref(), Some(streams::WriteError::Closed)) => {
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => {
                         return Ok(0)
                     }
                     Err(e) => Err(e)?,
@@ -555,23 +558,28 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
+impl From<StreamError> for types::Error {
+    fn from(err: StreamError) -> Self {
+        types::Error::from(streams::Error::from(err))
+    }
+}
+
 impl From<streams::Error> for types::Error {
     fn from(err: streams::Error) -> Self {
         match err.downcast() {
-            Ok(streams::WriteError::Closed | streams::WriteError::LastOperationFailed) => {
-                types::Errno::Io.into()
-            }
-
+            Ok(se) => se.into(),
             Err(t) => types::Error::trap(t),
         }
     }
 }
 
-fn stream_res<A>(r: anyhow::Result<Result<A, ()>>) -> Result<A, types::Error> {
-    match r {
-        Ok(Ok(a)) => Ok(a),
-        Ok(Err(_)) => Err(types::Errno::Io.into()),
-        Err(trap) => Err(types::Error::trap(trap)),
+impl From<streams::StreamError> for types::Error {
+    fn from(err: streams::StreamError) -> Self {
+        match err {
+            streams::StreamError::Closed | streams::StreamError::LastOperationFailed => {
+                types::Errno::Io.into()
+            }
+        }
     }
 }
 
@@ -1335,7 +1343,7 @@ impl<
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
-        let (mut buf, read, state) = match desc {
+        let (mut buf, read) = match desc {
             Descriptor::File(File {
                 fd,
                 blocking_mode,
@@ -1354,33 +1362,31 @@ impl<
                             .context("failed to call `read-via-stream`")
                             .unwrap_or_else(types::Error::trap)
                     })?;
-                let (read, state) = blocking_mode.read(self, stream, buf.len()).await?;
+                let read = blocking_mode.read(self, stream, buf.len()).await?;
                 let n = read.len().try_into()?;
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
                 position.store(pos, Ordering::Relaxed);
 
-                (buf, read, state)
+                (buf, read)
             }
             Descriptor::Stdin { input_stream, .. } => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0);
                 };
-                let (read, state) = stream_res(
-                    streams::HostInputStream::blocking_read(
-                        self,
-                        Resource::new_borrow(input_stream),
-                        buf.len().try_into().unwrap_or(u64::MAX),
-                    )
-                    .await,
-                )?;
-                (buf, read, state)
+                let read = streams::HostInputStream::blocking_read(
+                    self,
+                    Resource::new_borrow(input_stream),
+                    buf.len().try_into().unwrap_or(u64::MAX),
+                )
+                .await?;
+                (buf, read)
             }
             _ => return Err(types::Errno::Badf.into()),
         };
         if read.len() > buf.len() {
             return Err(types::Errno::Range.into());
         }
-        if state == streams::StreamStatus::Open && read.len() == 0 {
+        if read.len() == 0 {
             return Err(types::Errno::Intr.into());
         }
         let (buf, _) = buf.split_at_mut(read.len());
@@ -1399,7 +1405,7 @@ impl<
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
-        let (mut buf, read, state) = match desc {
+        let (mut buf, read) = match desc {
             Descriptor::File(File {
                 fd, blocking_mode, ..
             }) if self.table().is_file(&Resource::new_borrow(fd)) => {
@@ -1414,8 +1420,8 @@ impl<
                             .context("failed to call `read-via-stream`")
                             .unwrap_or_else(types::Error::trap)
                     })?;
-                let (read, state) = blocking_mode.read(self, stream, buf.len()).await?;
-                (buf, read, state)
+                let read = blocking_mode.read(self, stream, buf.len()).await?;
+                (buf, read)
             }
             Descriptor::Stdin { .. } => {
                 // NOTE: legacy implementation returns SPIPE here
@@ -1426,7 +1432,7 @@ impl<
         if read.len() > buf.len() {
             return Err(types::Errno::Range.into());
         }
-        if state == streams::StreamStatus::Open && read.len() == 0 {
+        if read.len() == 0 {
             return Err(types::Errno::Intr.into());
         }
         let (buf, _) = buf.split_at_mut(read.len());
