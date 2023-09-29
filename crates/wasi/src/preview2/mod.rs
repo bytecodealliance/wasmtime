@@ -154,6 +154,8 @@ pub mod bindings {
             "wasi:io/streams/input-stream": super::stream::InputStream,
             "wasi:io/streams/output-stream": super::stream::OutputStream,
             "wasi:io/poll/pollable": super::poll::Pollable,
+            "wasi:cli/terminal-input/terminal-input": super::stdio::TerminalInput,
+            "wasi:cli/terminal-output/terminal-output": super::stdio::TerminalOutput,
         },
     });
 
