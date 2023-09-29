@@ -148,15 +148,15 @@ impl Descriptors {
         };
 
         let stdin_isatty = match terminal_stdin::get_terminal_stdin() {
-            Some(t) => IsATTY::Yes,
+            Some(_) => IsATTY::Yes,
             None => IsATTY::No,
         };
         let stdout_isatty = match terminal_stdout::get_terminal_stdout() {
-            Some(t) => IsATTY::Yes,
+            Some(_) => IsATTY::Yes,
             None => IsATTY::No,
         };
         let stderr_isatty = match terminal_stderr::get_terminal_stderr() {
-            Some(t) => IsATTY::Yes,
+            Some(_) => IsATTY::Yes,
             None => IsATTY::No,
         };
 
@@ -180,6 +180,7 @@ impl Descriptors {
         .trapping_unwrap();
 
         #[link(wasm_import_module = "wasi:filesystem/preopens")]
+        #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
         extern "C" {
             #[link_name = "get-directories"]
             fn get_preopens_import(rval: *mut PreopenList);
@@ -340,7 +341,7 @@ impl Descriptors {
     pub fn get_stream_with_error(&self, fd: Fd, error: Errno) -> Result<&Streams, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => Ok(streams),
-            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
+            Descriptor::Closed(_) => Err(error),
         }
     }
 
@@ -392,12 +393,7 @@ impl Descriptors {
                 ..
             }) => Ok(file),
             Descriptor::Streams(Streams {
-                type_:
-                    StreamType::File(
-                        file @ File {
-                            descriptor_type: _, ..
-                        },
-                    ),
+                type_: StreamType::File(File { .. }),
                 ..
             }) => Err(wasi::ERRNO_NOTDIR),
             _ => Err(wasi::ERRNO_BADF),

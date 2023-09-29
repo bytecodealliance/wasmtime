@@ -346,23 +346,24 @@ pub unsafe extern "C" fn environ_sizes_get(
 /// Note: This is similar to `clock_getres` in POSIX.
 #[no_mangle]
 pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errno {
-    State::with(|state| {
-        match id {
-            CLOCKID_MONOTONIC => {
-                let res = monotonic_clock::resolution();
-                *resolution = res;
-            }
-            CLOCKID_REALTIME => {
-                let res = wall_clock::resolution();
-                *resolution = Timestamp::from(res.seconds)
-                    .checked_mul(1_000_000_000)
-                    .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
-                    .ok_or(ERRNO_OVERFLOW)?;
-            }
-            _ => unreachable!(),
+    match id {
+        CLOCKID_MONOTONIC => {
+            *resolution = monotonic_clock::resolution();
+            ERRNO_SUCCESS
         }
-        Ok(())
-    })
+        CLOCKID_REALTIME => {
+            let res = wall_clock::resolution();
+            *resolution = match Timestamp::from(res.seconds)
+                .checked_mul(1_000_000_000)
+                .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
+            {
+                Some(ns) => ns,
+                None => return ERRNO_OVERFLOW,
+            };
+            ERRNO_SUCCESS
+        }
+        _ => ERRNO_BADF,
+    }
 }
 
 /// Return the time value of a clock.
@@ -373,28 +374,23 @@ pub unsafe extern "C" fn clock_time_get(
     _precision: Timestamp,
     time: &mut Timestamp,
 ) -> Errno {
-    if matches!(
-        get_allocation_state(),
-        AllocationState::StackAllocated | AllocationState::StateAllocated
-    ) {
-        State::with(|state| match id {
-            CLOCKID_MONOTONIC => {
-                *time = monotonic_clock::now();
-                Ok(())
-            }
-            CLOCKID_REALTIME => {
-                let res = wall_clock::now();
-                *time = Timestamp::from(res.seconds)
-                    .checked_mul(1_000_000_000)
-                    .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
-                    .ok_or(ERRNO_OVERFLOW)?;
-                Ok(())
-            }
-            _ => Err(ERRNO_BADF),
-        })
-    } else {
-        *time = Timestamp::from(0u64);
-        ERRNO_SUCCESS
+    match id {
+        CLOCKID_MONOTONIC => {
+            *time = monotonic_clock::now();
+            ERRNO_SUCCESS
+        }
+        CLOCKID_REALTIME => {
+            let res = wall_clock::now();
+            *time = match Timestamp::from(res.seconds)
+                .checked_mul(1_000_000_000)
+                .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
+            {
+                Some(ns) => ns,
+                None => return ERRNO_OVERFLOW,
+            };
+            ERRNO_SUCCESS
+        }
+        _ => ERRNO_BADF,
     }
 }
 
@@ -428,11 +424,11 @@ pub unsafe extern "C" fn fd_advise(
 /// Force the allocation of space in a file.
 /// Note: This is similar to `posix_fallocate` in POSIX.
 #[no_mangle]
-pub unsafe extern "C" fn fd_allocate(fd: Fd, offset: Filesize, len: Filesize) -> Errno {
+pub unsafe extern "C" fn fd_allocate(fd: Fd, _offset: Filesize, _len: Filesize) -> Errno {
     State::with(|state| {
         state.with_descriptors(|ds| {
             // For not-files, fail with BADF
-            let file = ds.get_file(fd)?;
+            ds.get_file(fd)?;
             // For all files, fail with NOTSUP, because this call does not exist in preview 2.
             Err(wasi::ERRNO_NOTSUP)
         })
@@ -629,8 +625,8 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_set_rights(
     fd: Fd,
-    fs_rights_base: Rights,
-    fs_rights_inheriting: Rights,
+    _fs_rights_base: Rights,
+    _fs_rights_inheriting: Rights,
 ) -> Errno {
     State::with(|state| {
         state.with_descriptors(|ds| match ds.get(fd)? {
@@ -1791,6 +1787,7 @@ pub unsafe extern "C" fn poll_oneoff(
         }
 
         #[link(wasm_import_module = "wasi:io/poll")]
+        #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
         extern "C" {
             #[link_name = "poll-list"]
             fn poll_list_import(pollables: *const Pollable, len: usize, rval: *mut ReadyList);
@@ -1857,7 +1854,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                     }
                                     Err(e) => (e.into(), 1, 0),
                                 },
-                                StreamType::Socket(connection) => {
+                                StreamType::Socket(_connection) => {
                                     unreachable!() // TODO
                                                    /*
                                                    match tcp::bytes_readable(*connection) {
@@ -1891,7 +1888,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         match desc {
                             Descriptor::Streams(streams) => match &streams.type_ {
                                 StreamType::File(_) | StreamType::Stdio(_) => (ERRNO_SUCCESS, 1, 0),
-                                StreamType::Socket(connection) => {
+                                StreamType::Socket(_connection) => {
                                     unreachable!() // TODO
                                                    /*
                                                    match tcp::bytes_writable(connection) {
@@ -1948,7 +1945,7 @@ pub unsafe extern "C" fn proc_exit(rval: Exitcode) -> ! {
 /// Send a signal to the process of the calling thread.
 /// Note: This is similar to `raise` in POSIX.
 #[no_mangle]
-pub unsafe extern "C" fn proc_raise(sig: Signal) -> Errno {
+pub unsafe extern "C" fn proc_raise(_sig: Signal) -> Errno {
     unreachable!()
 }
 
@@ -1994,7 +1991,7 @@ pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
 /// Accept a new incoming connection.
 /// Note: This is similar to `accept` in POSIX.
 #[no_mangle]
-pub unsafe extern "C" fn sock_accept(fd: Fd, flags: Fdflags, connection: *mut Fd) -> Errno {
+pub unsafe extern "C" fn sock_accept(_fd: Fd, _flags: Fdflags, _connection: *mut Fd) -> Errno {
     unreachable!()
 }
 
@@ -2003,12 +2000,12 @@ pub unsafe extern "C" fn sock_accept(fd: Fd, flags: Fdflags, connection: *mut Fd
 /// the data into multiple buffers in the manner of `readv`.
 #[no_mangle]
 pub unsafe extern "C" fn sock_recv(
-    fd: Fd,
-    ri_data_ptr: *const Iovec,
-    ri_data_len: usize,
-    ri_flags: Riflags,
-    ro_datalen: *mut Size,
-    ro_flags: *mut Roflags,
+    _fd: Fd,
+    _ri_data_ptr: *const Iovec,
+    _ri_data_len: usize,
+    _ri_flags: Riflags,
+    _ro_datalen: *mut Size,
+    _ro_flags: *mut Roflags,
 ) -> Errno {
     unreachable!()
 }
@@ -2018,11 +2015,11 @@ pub unsafe extern "C" fn sock_recv(
 /// the data from multiple buffers in the manner of `writev`.
 #[no_mangle]
 pub unsafe extern "C" fn sock_send(
-    fd: Fd,
-    si_data_ptr: *const Ciovec,
-    si_data_len: usize,
-    si_flags: Siflags,
-    so_datalen: *mut Size,
+    _fd: Fd,
+    _si_data_ptr: *const Ciovec,
+    _si_data_len: usize,
+    _si_flags: Siflags,
+    _so_datalen: *mut Size,
 ) -> Errno {
     unreachable!()
 }
@@ -2030,7 +2027,7 @@ pub unsafe extern "C" fn sock_send(
 /// Shut down socket send and receive channels.
 /// Note: This is similar to `shutdown` in POSIX.
 #[no_mangle]
-pub unsafe extern "C" fn sock_shutdown(fd: Fd, how: Sdflags) -> Errno {
+pub unsafe extern "C" fn sock_shutdown(_fd: Fd, _how: Sdflags) -> Errno {
     unreachable!()
 }
 
