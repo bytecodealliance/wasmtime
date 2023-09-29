@@ -1,4 +1,4 @@
-use crate::preview2::bindings::filesystem::types::Descriptor;
+use crate::preview2::bindings::filesystem::types::{self, Descriptor};
 use crate::preview2::{
     AbortOnDropJoinHandle, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
     Table, TableError,
@@ -276,5 +276,31 @@ impl HostOutputStream for FileOutputStream {
                 Err(OutputStreamError::LastOperationFailed(e.into()))
             }
         }
+    }
+}
+
+pub struct ReaddirIterator(
+    std::sync::Mutex<
+        Box<dyn Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static>,
+    >,
+);
+
+impl ReaddirIterator {
+    pub(crate) fn new(
+        i: impl Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static,
+    ) -> Self {
+        ReaddirIterator(std::sync::Mutex::new(Box::new(i)))
+    }
+    pub(crate) fn next(&self) -> Result<Option<types::DirectoryEntry>, types::Error> {
+        self.0.lock().unwrap().next().transpose()
+    }
+}
+
+impl IntoIterator for ReaddirIterator {
+    type Item = Result<types::DirectoryEntry, types::Error>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + Send>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_inner().unwrap()
     }
 }

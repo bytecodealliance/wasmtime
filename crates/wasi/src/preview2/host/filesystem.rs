@@ -1,10 +1,8 @@
 use crate::preview2::bindings::clocks::wall_clock;
-use crate::preview2::bindings::filesystem::types::{
-    DirectoryEntryStream, HostDescriptor, HostDirectoryEntryStream,
-};
+use crate::preview2::bindings::filesystem::types::{HostDescriptor, HostDirectoryEntryStream};
 use crate::preview2::bindings::filesystem::{preopens, types};
 use crate::preview2::bindings::io::streams;
-use crate::preview2::filesystem::{Dir, File, TableFsExt};
+use crate::preview2::filesystem::{Dir, File, ReaddirIterator, TableFsExt};
 use crate::preview2::{DirPerms, FilePerms, Table, TableError, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
@@ -325,7 +323,7 @@ impl<T: WasiView> HostDescriptor for T {
             Err(ReaddirError::Io(e)) => Err(types::Error::from(e)),
             Err(ReaddirError::IllegalSequence) => Err(ErrorCode::IllegalByteSequence.into()),
         });
-        Ok(table.push_readdir(ReaddirIterator::new(entries))?)
+        Ok(table.push_resource(ReaddirIterator::new(entries))?)
     }
 
     async fn sync(&mut self, fd: Resource<types::Descriptor>) -> Result<(), types::Error> {
@@ -898,12 +896,12 @@ impl<T: WasiView> HostDirectoryEntryStream for T {
         stream: Resource<types::DirectoryEntryStream>,
     ) -> Result<Option<types::DirectoryEntry>, types::Error> {
         let table = self.table();
-        let readdir = table.get_readdir(&stream)?;
+        let readdir = table.get_resource(&stream)?;
         readdir.next()
     }
 
     fn drop(&mut self, stream: Resource<types::DirectoryEntryStream>) -> anyhow::Result<()> {
-        self.table_mut().delete_readdir(stream)?;
+        self.table_mut().delete_resource(stream)?;
         Ok(())
     }
 }
@@ -1105,69 +1103,6 @@ fn symlink_follow(path_flags: types::PathFlags) -> bool {
     path_flags.contains(types::PathFlags::SYMLINK_FOLLOW)
 }
 
-pub(crate) struct ReaddirIterator(
-    std::sync::Mutex<
-        Box<dyn Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static>,
-    >,
-);
-
-impl ReaddirIterator {
-    fn new(
-        i: impl Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static,
-    ) -> Self {
-        ReaddirIterator(std::sync::Mutex::new(Box::new(i)))
-    }
-    fn next(&self) -> Result<Option<types::DirectoryEntry>, types::Error> {
-        self.0.lock().unwrap().next().transpose()
-    }
-}
-
-impl IntoIterator for ReaddirIterator {
-    type Item = Result<types::DirectoryEntry, types::Error>;
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + Send>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_inner().unwrap()
-    }
-}
-
-pub(crate) trait TableReaddirExt {
-    fn push_readdir(
-        &mut self,
-        readdir: ReaddirIterator,
-    ) -> Result<Resource<DirectoryEntryStream>, TableError>;
-    fn delete_readdir(
-        &mut self,
-        fd: Resource<DirectoryEntryStream>,
-    ) -> Result<ReaddirIterator, TableError>;
-    fn get_readdir(
-        &self,
-        fd: &Resource<DirectoryEntryStream>,
-    ) -> Result<&ReaddirIterator, TableError>;
-}
-
-impl TableReaddirExt for Table {
-    fn push_readdir(
-        &mut self,
-        readdir: ReaddirIterator,
-    ) -> Result<Resource<DirectoryEntryStream>, TableError> {
-        Ok(Resource::new_own(self.push(Box::new(readdir))?))
-    }
-    fn delete_readdir(
-        &mut self,
-        fd: Resource<DirectoryEntryStream>,
-    ) -> Result<ReaddirIterator, TableError> {
-        self.delete(fd.rep())
-    }
-
-    fn get_readdir(
-        &self,
-        fd: &Resource<DirectoryEntryStream>,
-    ) -> Result<&ReaddirIterator, TableError> {
-        self.get(fd.rep())
-    }
-}
-
 fn mask_file_perms(p: FilePerms, flags: types::DescriptorFlags) -> FilePerms {
     use types::DescriptorFlags;
     let mut out = FilePerms::empty();
@@ -1187,9 +1122,9 @@ mod test {
     fn table_readdir_works() {
         let mut table = Table::new();
         let ix = table
-            .push_readdir(ReaddirIterator::new(std::iter::empty()))
+            .push_resource(ReaddirIterator::new(std::iter::empty()))
             .unwrap();
-        let _ = table.get_readdir(&ix).unwrap();
-        table.delete_readdir(ix).unwrap();
+        let _ = table.get_resource(&ix).unwrap();
+        table.delete_resource(ix).unwrap();
     }
 }

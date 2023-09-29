@@ -7,7 +7,6 @@ use crate::preview2::bindings::filesystem::{preopens, types as filesystem};
 use crate::preview2::bindings::io::poll;
 use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::TableFsExt;
-use crate::preview2::host::filesystem::TableReaddirExt;
 use crate::preview2::{bindings, IsATTY, TableError, WasiView};
 use anyhow::{anyhow, bail, Context};
 use std::borrow::Borrow;
@@ -1678,7 +1677,7 @@ impl<
         for (entry, d_next) in self
             .table_mut()
             // remove iterator from table and use it directly:
-            .delete_readdir(stream)?
+            .delete_resource(stream)?
             .into_iter()
             .zip(3u64..)
         {

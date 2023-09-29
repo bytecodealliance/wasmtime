@@ -149,6 +149,7 @@ pub mod bindings {
         with: {
             "wasi:sockets/network/network": super::network::Network,
             "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
+            "wasi:filesystem/types/directory-entry-stream": super::filesystem::ReaddirIterator,
         },
     });
 
