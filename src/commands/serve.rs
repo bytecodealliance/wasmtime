@@ -1,26 +1,24 @@
-use anyhow::Result;
+use crate::common::{Profile, RunCommon};
+use anyhow::{bail, Result};
 use clap::Parser;
 use std::{path::PathBuf, pin::Pin, sync::Arc};
 use wasmtime::component::{Component, InstancePre, Linker};
-use wasmtime::{Engine, Store};
-use wasmtime_cli_flags::CommonOptions;
-use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime::{Engine, Store, StoreLimits};
+use wasmtime_wasi::preview2::{self, Table, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
+
+#[cfg(feature = "wasi-nn")]
+use wasmtime_wasi_nn::WasiNnCtx;
 
 struct Host {
     table: Table,
     ctx: WasiCtx,
     http: WasiHttpCtx,
-}
 
-impl Host {
-    fn new() -> Self {
-        Host {
-            table: Table::new(),
-            ctx: WasiCtxBuilder::new().build(),
-            http: WasiHttpCtx,
-        }
-    }
+    limits: StoreLimits,
+
+    #[cfg(feature = "wasi-nn")]
+    nn: Option<WasiNnCtx>,
 }
 
 impl WasiView for Host {
@@ -51,16 +49,21 @@ impl WasiHttpView for Host {
     }
 }
 
+const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
+    std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
+    8080,
+);
+
 /// Runs a WebAssembly module
 #[derive(Parser)]
 #[structopt(name = "run")]
 pub struct ServeCommand {
     #[clap(flatten)]
-    common: CommonOptions,
+    run: RunCommon,
 
-    /// Socket address for the web server to bind to. Defaults to 0.0.0.0:8080.
-    #[clap(long = "addr", value_name = "SOCKADDR")]
-    addr: Option<std::net::SocketAddr>,
+    /// Socket address for the web server to bind to.
+    #[clap(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
+    addr: std::net::SocketAddr,
 
     /// The WebAssembly component to run.
     #[clap(value_name = "WASM", required = true)]
@@ -68,12 +71,32 @@ pub struct ServeCommand {
 }
 
 impl ServeCommand {
-    fn addr(&self) -> std::net::SocketAddr {
-        self.addr.unwrap_or("0.0.0.0:8080".parse().unwrap())
-    }
-
     /// Start a server to run the given wasi-http proxy component
-    pub fn execute(mut self) -> Result<()> {
+    pub fn execute(self) -> Result<()> {
+        // We force cli errors before starting to listen for connections so tha we don't
+        // accidentally delay them to the first request.
+        if self.run.common.wasi.nn == Some(true) {
+            #[cfg(not(feature = "wasi-nn"))]
+            {
+                bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
+            }
+        }
+
+        if let Some(Profile::Guest { .. }) = &self.run.profile {
+            bail!("Cannot use the guest profiler with components");
+        }
+
+        if self.run.common.wasi.nn == Some(true) {
+            #[cfg(not(feature = "wasi-nn"))]
+            {
+                bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
+            }
+        }
+
+        if self.run.common.wasi.threads == Some(true) {
+            bail!("wasi-threads does not support components yet")
+        }
+
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_time()
             .enable_io()
@@ -94,38 +117,127 @@ impl ServeCommand {
         Ok(())
     }
 
+    fn new_store(&self, engine: &Engine) -> Result<Store<Host>> {
+        let mut builder = WasiCtxBuilder::new();
+
+        // TODO: connect stdio to logging infrastructure
+
+        let mut host = Host {
+            table: Table::new(),
+            ctx: builder.build(),
+            http: WasiHttpCtx,
+
+            limits: StoreLimits::default(),
+
+            #[cfg(feature = "wasi-nn")]
+            nn: None,
+        };
+
+        if self.run.common.wasi.nn == Some(true) {
+            #[cfg(feature = "wasi-nn")]
+            {
+                let graphs = self
+                    .run
+                    .common
+                    .wasi
+                    .nn_graph
+                    .iter()
+                    .map(|g| (g.format.clone(), g.dir.clone()))
+                    .collect::<Vec<_>>();
+                let (backends, registry) = wasmtime_wasi_nn::preload(&graphs)?;
+                host.nn.replace(WasiNnCtx::new(backends, registry));
+            }
+        }
+
+        let mut store = Store::new(engine, host);
+
+        if self.run.common.wasm.timeout.is_some() {
+            store.set_epoch_deadline(1);
+        }
+
+        store.data_mut().limits = self.run.store_limits();
+        store.limiter(|t| &mut t.limits);
+
+        // If fuel has been configured, we want to add the configured
+        // fuel amount to this store.
+        if let Some(fuel) = self.run.common.wasm.fuel {
+            store.add_fuel(fuel)?;
+        }
+
+        Ok(store)
+    }
+
     fn add_to_linker(&self, linker: &mut Linker<Host>) -> Result<()> {
+        // wasi-http and the component model are implicitly enabled for `wasmtime serve`, so we
+        // don't test for `self.run.common.wasi.common` or `self.run.common.wasi.http` in this
+        // function.
+
         wasmtime_wasi_http::proxy::add_to_linker(linker)?;
+
+        if self.run.common.wasi.nn == Some(true) {
+            #[cfg(feature = "wasi-nn")]
+            {
+                wasmtime_wasi_nn::wit::ML::add_to_linker(linker, |host| host.nn.as_mut().unwrap())?;
+            }
+        }
+
         Ok(())
     }
 
-    async fn serve(&mut self) -> Result<()> {
+    async fn serve(mut self) -> Result<()> {
         use hyper::server::conn::http1;
 
-        let mut config = self.common.config(None)?;
+        self.run.common.init_logging();
+
+        let mut config = self.run.common.config(None)?;
         config.wasm_component_model(true);
         config.async_support(true);
 
-        let engine = Arc::new(Engine::new(&config)?);
+        if self.run.common.wasm.timeout.is_some() {
+            config.epoch_interruption(true);
+        }
+
+        match self.run.profile {
+            Some(Profile::Native(s)) => {
+                config.profiler(s);
+            }
+
+            // We bail early in `execute` if the guest profiler is configured.
+            Some(Profile::Guest { .. }) => unreachable!(),
+
+            None => {}
+        }
+
+        let engine = Engine::new(&config)?;
         let mut linker = Linker::new(&engine);
 
         self.add_to_linker(&mut linker)?;
 
         let component = Component::from_file(&engine, &self.component)?;
 
-        let instance = Arc::new(linker.instantiate_pre(&component)?);
+        let instance = linker.instantiate_pre(&component)?;
 
-        let listener = tokio::net::TcpListener::bind(self.addr()).await?;
+        let listener = tokio::net::TcpListener::bind(self.addr).await?;
+
+        let _epoch_thread = if let Some(timeout) = self.run.common.wasm.timeout {
+            let engine = engine.clone();
+            Some(preview2::spawn(async move {
+                tokio::time::sleep(timeout).await;
+                engine.increment_epoch();
+            }))
+        } else {
+            None
+        };
+
+        let handler = ProxyHandler::new(self, engine, instance);
 
         loop {
             let (stream, _) = listener.accept().await?;
-            let engine = Arc::clone(&engine);
-            let instance = Arc::clone(&instance);
+            let h = handler.clone();
             tokio::task::spawn(async move {
-                let handler = ProxyHandler::new(engine, instance);
                 if let Err(e) = http1::Builder::new()
                     .keep_alive(true)
-                    .serve_connection(stream, handler)
+                    .serve_connection(stream, h)
                     .await
                 {
                     eprintln!("error: {e:?}");
@@ -135,18 +247,22 @@ impl ServeCommand {
     }
 }
 
-#[derive(Clone)]
-struct ProxyHandler {
-    engine: Arc<Engine>,
-    instance_pre: Arc<InstancePre<Host>>,
+struct ProxyHandlerInner {
+    cmd: ServeCommand,
+    engine: Engine,
+    instance_pre: InstancePre<Host>,
 }
 
+#[derive(Clone)]
+struct ProxyHandler(Arc<ProxyHandlerInner>);
+
 impl ProxyHandler {
-    fn new(engine: Arc<Engine>, instance_pre: Arc<InstancePre<Host>>) -> Self {
-        Self {
+    fn new(cmd: ServeCommand, engine: Engine, instance_pre: InstancePre<Host>) -> Self {
+        Self(Arc::new(ProxyHandlerInner {
+            cmd,
             engine,
             instance_pre,
-        }
+        }))
     }
 }
 
@@ -166,7 +282,7 @@ impl hyper::service::Service<Request> for ProxyHandler {
 
         // TODO: need to track the join handle, but don't want to block the response on it
         tokio::task::spawn(async move {
-            let mut store = Store::new(&handler.engine, Host::new());
+            let mut store = handler.0.cmd.new_store(&handler.0.engine)?;
 
             let req = store.data_mut().new_incoming_request(
                 req.map(|body| body.map_err(|e| anyhow::anyhow!(e)).boxed()),
@@ -176,7 +292,7 @@ impl hyper::service::Service<Request> for ProxyHandler {
 
             let (proxy, _inst) = wasmtime_wasi_http::proxy::Proxy::instantiate_pre(
                 &mut store,
-                &handler.instance_pre,
+                &handler.0.instance_pre,
             )
             .await?;
 
