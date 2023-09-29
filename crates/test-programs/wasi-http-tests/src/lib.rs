@@ -76,8 +76,7 @@ pub async fn request(
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
     if let Some(mut buf) = body {
-        let request_body = outgoing_body
-            .write()
+        let request_body = http_types::outgoing_body_write(outgoing_body)
             .map_err(|_| anyhow!("outgoing request write failed"))?;
 
         let pollable = request_body.subscribe();
@@ -117,7 +116,7 @@ pub async fn request(
     // TODO: The current implementation requires this drop after the request is sent.
     // The ownership semantics are unclear in wasi-http we should clarify exactly what is
     // supposed to happen here.
-    drop(outgoing_body);
+    http_types::outgoing_body_finish(outgoing_body, None);
 
     let incoming_response = match http_types::future_incoming_response_get(future_response) {
         Some(result) => result.map_err(|_| anyhow!("incoming response errored"))?,

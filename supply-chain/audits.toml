@@ -498,10 +498,10 @@ end = "2024-06-26"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-wmemcheck]]
-who = "Dan Gohman <dev@sunfishcode.online>"
+who = "Pat Hickey <pat@moreproductive.org>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
-start = "2023-09-27"
+start = "2022-11-27"
 end = "2024-06-26"
 notes = "The Bytecode Alliance is the author of this crate."
 
@@ -1903,6 +1903,11 @@ who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
 delta = "0.9.9 -> 0.10.2"
 notes = "This upgrade is mostly a code refactor, as far as I can tell. No new uses of unsafe nor any new ambient capabilities usage."
+
+[[audits.signal-hook-registry]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "1.4.1"
 
 [[audits.slab]]
 who = "Pat Hickey <phickey@fastly.com>"

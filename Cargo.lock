@@ -2467,6 +2467,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "similar"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2659,6 +2668,7 @@ name = "test-programs"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "cap-rand",
  "cap-std",
  "cargo_metadata",
@@ -2668,7 +2678,6 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper",
- "is-terminal",
  "lazy_static",
  "tempfile",
  "test-log",
@@ -2750,6 +2759,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys",
@@ -3014,7 +3024,6 @@ dependencies = [
  "fs-set-times",
  "io-extras",
  "io-lifetimes 2.0.2",
- "is-terminal",
  "once_cell",
  "rustix 0.38.8",
  "system-interface",
@@ -3040,6 +3049,13 @@ dependencies = [
  "wasmtime",
  "wiggle",
  "windows-sys",
+]
+
+[[package]]
+name = "wasi-http-proxy-tests"
+version = "0.0.0"
+dependencies = [
+ "wit-bindgen",
 ]
 
 [[package]]
@@ -3394,6 +3410,9 @@ dependencies = [
  "criterion",
  "env_logger 0.10.0",
  "filecheck",
+ "http-body",
+ "http-body-util",
+ "hyper",
  "libc",
  "listenfd",
  "log",
@@ -3505,7 +3524,6 @@ name = "wasmtime-environ"
 version = "14.0.0"
 dependencies = [
  "anyhow",
- "atty",
  "clap",
  "cranelift-entity",
  "env_logger 0.10.0",
@@ -3762,7 +3780,6 @@ dependencies = [
  "http-body-util",
  "hyper",
  "rustls",
- "thiserror",
  "tokio",
  "tokio-rustls",
  "tracing",

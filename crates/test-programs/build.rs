@@ -33,6 +33,7 @@ fn build_and_generate_tests() {
     println!("cargo:rerun-if-changed=./wasi-sockets-tests");
     if BUILD_WASI_HTTP_TESTS {
         println!("cargo:rerun-if-changed=./wasi-http-tests");
+        println!("cargo:rerun-if-changed=./wasi-http-proxy-tests");
     } else {
         println!("cargo:rustc-cfg=skip_wasi_http_tests");
     }
@@ -50,6 +51,7 @@ fn build_and_generate_tests() {
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
     if BUILD_WASI_HTTP_TESTS {
         cmd.arg("--package=wasi-http-tests");
+        cmd.arg("--package=wasi-http-proxy-tests");
     }
     let status = cmd.status().unwrap();
     assert!(status.success());
@@ -60,8 +62,14 @@ fn build_and_generate_tests() {
     components_rs(&meta, "wasi-tests", "bin", &command_adapter, &out_dir);
 
     if BUILD_WASI_HTTP_TESTS {
-        modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
         components_rs(&meta, "wasi-http-tests", "bin", &command_adapter, &out_dir);
+        components_rs(
+            &meta,
+            "wasi-http-proxy-tests",
+            "cdylib",
+            &reactor_adapter,
+            &out_dir,
+        );
     }
 
     components_rs(&meta, "command-tests", "bin", &command_adapter, &out_dir);

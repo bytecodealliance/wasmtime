@@ -81,7 +81,7 @@ interface types {
   incoming-request-headers: func(request: /* borrow */ incoming-request) -> /* child */ headers
   // Will return the input-stream child at most once. If called more than
   // once, subsequent calls will return error.
-  incoming-request-consume: func(request: /* borrow */ incoming-request) -> result< /* child */ input-stream>
+  incoming-request-consume: func(request: /* borrow */ incoming-request) -> result< /* own */ incoming-body>
 
   type outgoing-request = u32
   drop-outgoing-request: func(request: /* own */ outgoing-request)
@@ -140,7 +140,7 @@ interface types {
   // May be called at most once. returns error if called additional times.
   // TODO: make incoming-request-consume work the same way, giving a child
   // incoming-body.
-  incoming-response-consume: func(response: /* borrow */ incoming-response) -> result</* child */ incoming-body>
+  incoming-response-consume: func(response: /* borrow */ incoming-response) -> result</* own */ incoming-body>
 
   resource incoming-body {
     // returned input-stream is a child - the implementation may trap if
@@ -173,16 +173,18 @@ interface types {
 
   /// Will give the child outgoing-response at most once. subsequent calls will
   /// return an error.
-  outgoing-response-write: func(this: /* borrow */ outgoing-response) -> result</* child */ outgoing-body>
+  outgoing-response-write: func(this: /* borrow */ outgoing-response) -> result</* own */ outgoing-body>
 
-  resource outgoing-body {
-    /// Will give the child output-stream at most once. subsequent calls will
-    /// return an error.
-    write: func() -> result</* child */ output-stream>
-    /// Write trailers as the way to finish an outgoing-body. To finish an
-    /// outgoing-body without writing trailers, use drop-outgoing-body.
-    write-trailers: func(trailers: /* own */ trailers)
-  }
+  type outgoing-body = u32
+  drop-outgoing-body: func(this: /* own */ outgoing-body)
+  /// Will give the child output-stream at most once. subsequent calls will
+  /// return an error.
+  outgoing-body-write: func(this: /* borrow */ outgoing-body) -> result</* child */ output-stream>
+  /// Finalize an outgoing body, optionally providing trailers. This must be
+  /// called to signal that the response is complete. If the `outgoing-body` is
+  /// dropped without calling `outgoing-body-finalize`, the implementation
+  /// should treat the body as corrupted.
+  outgoing-body-finish: func(this: /* own */ outgoing-body, trailers: /* own */ option<trailers>)
 
   /// The following block defines a special resource type used by the
   /// `wasi:http/outgoing-handler` interface to emulate

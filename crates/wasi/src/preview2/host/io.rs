@@ -43,10 +43,10 @@ impl From<OutputStreamError> for streams::Error {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView + Sync> streams::Host for T {}
+impl<T: WasiView> streams::Host for T {}
 
 #[async_trait::async_trait]
-impl<T: WasiView + Sync> streams::HostOutputStream for T {
+impl<T: WasiView> streams::HostOutputStream for T {
     fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
         self.table_mut().delete_output_stream(stream)?;
         Ok(())
@@ -246,7 +246,7 @@ impl<T: WasiView + Sync> streams::HostOutputStream for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView + Sync> streams::HostInputStream for T {
+impl<T: WasiView> streams::HostInputStream for T {
     fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
         self.table_mut().delete_internal_input_stream(stream)?;
         Ok(())
@@ -446,7 +446,6 @@ pub mod sync {
         },
         bindings::sync_io::io::poll::Pollable,
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
-        host::io::sync::streams::{HostInputStream, HostOutputStream},
         in_tokio, WasiView,
     };
     use wasmtime::component::Resource;
@@ -485,9 +484,9 @@ pub mod sync {
         }
     }
 
-    impl<T: WasiView + Sync> streams::Host for T {}
+    impl<T: WasiView> streams::Host for T {}
 
-    impl<T: WasiView + Sync> HostOutputStream for T {
+    impl<T: WasiView> streams::HostOutputStream for T {
         fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
             AsyncHostOutputStream::drop(self, stream)
         }
@@ -581,7 +580,7 @@ pub mod sync {
         }
     }
 
-    impl<T: WasiView + Sync> HostInputStream for T {
+    impl<T: WasiView> streams::HostInputStream for T {
         fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
             AsyncHostInputStream::drop(self, stream)
         }

@@ -2,7 +2,7 @@ use crate::bindings::http::{
     outgoing_handler,
     types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme},
 };
-use crate::types::{HostFutureIncomingResponse, IncomingResponseInternal, TableHttpExt};
+use crate::types::{self, HostFutureIncomingResponse, IncomingResponseInternal, TableHttpExt};
 use crate::WasiHttpView;
 use anyhow::Context;
 use bytes::Bytes;
@@ -37,7 +37,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 .unwrap_or(600 * 1000) as u64,
         );
 
-        let req = self.table().delete_outgoing_request(request_id)?;
+        let req = types::OutgoingRequestLens::from(request_id).delete(self.table())?;
 
         let method = match req.method {
             crate::bindings::http::types::Method::Get => Method::GET,
@@ -81,7 +81,11 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             builder = builder.header(k, v);
         }
 
-        let body = req.body.unwrap_or_else(|| Empty::<Bytes>::new().boxed());
+        let body = req.body.unwrap_or_else(|| {
+            Empty::<Bytes>::new()
+                .map_err(|_| anyhow::anyhow!("empty error"))
+                .boxed()
+        });
 
         let request = builder.body(body).map_err(http_protocol_error)?;
 
@@ -159,7 +163,8 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             let resp = timeout(first_byte_timeout, sender.send_request(request))
                 .await
                 .map_err(|_| timeout_error("first byte"))?
-                .map_err(hyper_protocol_error)?;
+                .map_err(hyper_protocol_error)?
+                .map(|body| body.map_err(|e| anyhow::anyhow!(e)).boxed());
 
             Ok(IncomingResponseInternal {
                 resp,
