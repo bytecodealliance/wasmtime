@@ -1210,6 +1210,12 @@
 (rule (rv_andi rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Andi) rs1 imm))
 
+;; Helper for emitting the `slt` ("Set Less Than") instruction.
+;; rd ← rs1 < rs2
+(decl rv_slt (XReg XReg) XReg)
+(rule (rv_slt rs1 rs2)
+  (alu_rrr (AluOPRRR.Slt) rs1 rs2))
+
 ;; Helper for emitting the `sltu` ("Set Less Than Unsigned") instruction.
 ;; rd ← rs1 < rs2
 (decl rv_sltu (XReg XReg) XReg)
@@ -1222,11 +1228,27 @@
 (rule (rv_snez rs1)
   (rv_sltu (zero_reg) rs1))
 
+;; Helper for emiting the `slti` ("Set Less Than Immediate") instruction.
+;; rd ← rs1 < imm
+(decl rv_slti (XReg Imm12) XReg)
+(rule (rv_slti rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Slti) rs1 imm))
+
 ;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
 ;; rd ← rs1 < imm
 (decl rv_sltiu (XReg Imm12) XReg)
 (rule (rv_sltiu rs1 imm)
   (alu_rr_imm12 (AluOPRRI.SltiU) rs1 imm))
+
+;; Helper for emitting the `sltz` instruction.
+;; This instruction is a mnemonic for `slt rd, rs, zero`.
+(decl rv_sltz (XReg) XReg)
+(rule (rv_sltz rs) (rv_slt rs (zero_reg)))
+
+;; Helper for emitting the `sgtz` instruction.
+;; This instruction is a mnemonic for `slt rd, zero, rs`.
+(decl rv_sgtz (XReg) XReg)
+(rule (rv_sgtz rs) (rv_slt (zero_reg) rs))
 
 ;; Helper for emitting the `seqz` instruction.
 ;; This instruction is a mnemonic for `sltiu rd, rs, 1`.

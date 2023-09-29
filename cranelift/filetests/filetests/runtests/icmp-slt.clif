@@ -53,3 +53,31 @@ block0(v0: i64, v1: i64):
 ; run: %icmp_slt_i64(0, 1) == 1
 ; run: %icmp_slt_i64(-5, -1) == 1
 ; run: %icmp_slt_i64(1, -1) == 0
+
+function %icmp32_slt_imm0(i32) -> i8 {
+block0(v0: i32):
+    v2 = icmp_imm slt v0, 0
+    return v2
+}
+; run: %icmp32_slt_imm0(0) == 0
+; run: %icmp32_slt_imm0(1) == 0
+; run: %icmp32_slt_imm0(-1) == 1
+
+function %icmp32_slt_imm1(i32) -> i8 {
+block0(v0: i32):
+    v2 = icmp_imm slt v0, 1
+    return v2
+}
+; run: %icmp32_slt_imm1(0) == 1
+; run: %icmp32_slt_imm1(1) == 0
+; run: %icmp32_slt_imm1(-1) == 1
+
+function %icmp32_slt_imm2(i32) -> i8 {
+block0(v0: i32):
+    v2 = icmp_imm slt v0, -1
+    return v2
+}
+; run: %icmp32_slt_imm2(0) == 0
+; run: %icmp32_slt_imm2(1) == 0
+; run: %icmp32_slt_imm2(-1) == 0
+; run: %icmp32_slt_imm2(-2) == 1

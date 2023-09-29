@@ -119,35 +119,49 @@ block0(v0: i8, v1: i128, v2: i128):
 }
 
 ; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s8,-8(sp)
+;   add sp,-16
 ; block0:
-;   mv a5,a0
-;   mv t2,a1
-;   li a0,42
+;   mv s8,a1
+;   addi a5,a0,-42
+;   seqz a5,a5
 ;   andi a5,a5,255
-;   andi a0,a0,255
-;   eq a5,a5,a0##ty=i8
-;   andi a5,a5,255
-;   select_i128 [a0,a1],[t2,a2],[a3,a4]##condition=a5
+;   select_i128 [a0,a1],[s8,a2],[a3,a4]##condition=a5
+;   add sp,+16
+;   ld s8,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a0
-;   mv t2, a1
-;   addi a0, zero, 0x2a
-;   andi a5, a5, 0xff
-;   andi a0, a0, 0xff
-;   bne a5, a0, 0xc
-;   addi a5, zero, 1
-;   j 8
-;   mv a5, zero
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s8, -8(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x18
+;   mv s8, a1
+;   addi a5, a0, -0x2a
+;   seqz a5, a5
 ;   andi a5, a5, 0xff
 ;   beqz a5, 0x10
-;   mv a0, t2
+;   mv a0, s8
 ;   mv a1, a2
 ;   j 0xc
 ;   mv a0, a3
 ;   mv a1, a4
+;   addi sp, sp, 0x10
+;   ld s8, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
 
 function %select_icmp_i16_i8(i16, i8, i8) -> i8 {
@@ -283,37 +297,49 @@ block0(v0: i16, v1: i128, v2: i128):
 }
 
 ; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s8,-8(sp)
+;   add sp,-16
 ; block0:
-;   mv a7,a1
-;   li a5,42
-;   slli a0,a0,48
-;   srli a0,a0,48
-;   slli a5,a5,48
-;   srli a5,a5,48
-;   eq a0,a0,a5##ty=i16
-;   andi a5,a0,255
-;   select_i128 [a0,a1],[a7,a2],[a3,a4]##condition=a5
+;   mv s8,a1
+;   addi a5,a0,-42
+;   seqz a5,a5
+;   andi a5,a5,255
+;   select_i128 [a0,a1],[s8,a2],[a3,a4]##condition=a5
+;   add sp,+16
+;   ld s8,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a7, a1
-;   addi a5, zero, 0x2a
-;   slli a0, a0, 0x30
-;   srli a0, a0, 0x30
-;   slli a5, a5, 0x30
-;   srli a5, a5, 0x30
-;   bne a0, a5, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
-;   andi a5, a0, 0xff
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s8, -8(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x18
+;   mv s8, a1
+;   addi a5, a0, -0x2a
+;   seqz a5, a5
+;   andi a5, a5, 0xff
 ;   beqz a5, 0x10
-;   mv a0, a7
+;   mv a0, s8
 ;   mv a1, a2
 ;   j 0xc
 ;   mv a0, a3
 ;   mv a1, a4
+;   addi sp, sp, 0x10
+;   ld s8, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
 
 function %select_icmp_i32_i8(i32, i8, i8) -> i8 {
@@ -449,37 +475,49 @@ block0(v0: i32, v1: i128, v2: i128):
 }
 
 ; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s8,-8(sp)
+;   add sp,-16
 ; block0:
-;   mv a7,a1
-;   li a5,42
-;   slli a0,a0,32
-;   srli a0,a0,32
-;   slli a5,a5,32
-;   srli a5,a5,32
-;   eq a0,a0,a5##ty=i32
-;   andi a5,a0,255
-;   select_i128 [a0,a1],[a7,a2],[a3,a4]##condition=a5
+;   mv s8,a1
+;   addi a5,a0,-42
+;   seqz a5,a5
+;   andi a5,a5,255
+;   select_i128 [a0,a1],[s8,a2],[a3,a4]##condition=a5
+;   add sp,+16
+;   ld s8,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a7, a1
-;   addi a5, zero, 0x2a
-;   slli a0, a0, 0x20
-;   srli a0, a0, 0x20
-;   slli a5, a5, 0x20
-;   srli a5, a5, 0x20
-;   bne a0, a5, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
-;   andi a5, a0, 0xff
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s8, -8(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x18
+;   mv s8, a1
+;   addi a5, a0, -0x2a
+;   seqz a5, a5
+;   andi a5, a5, 0xff
 ;   beqz a5, 0x10
-;   mv a0, a7
+;   mv a0, s8
 ;   mv a1, a2
 ;   j 0xc
 ;   mv a0, a3
 ;   mv a1, a4
+;   addi sp, sp, 0x10
+;   ld s8, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
 
 function %select_icmp_i64_i8(i64, i8, i8) -> i8 {
@@ -591,8 +629,8 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   add sp,-16
 ; block0:
 ;   mv s8,a1
-;   li a5,42
-;   eq a5,a0,a5##ty=i64
+;   addi a5,a0,-42
+;   seqz a5,a5
 ;   andi a5,a5,255
 ;   select_i128 [a0,a1],[s8,a2],[a3,a4]##condition=a5
 ;   add sp,+16
@@ -612,11 +650,8 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x18
 ;   mv s8, a1
-;   addi a5, zero, 0x2a
-;   bne a0, a5, 0xc
-;   addi a5, zero, 1
-;   j 8
-;   mv a5, zero
+;   addi a5, a0, -0x2a
+;   seqz a5, a5
 ;   andi a5, a5, 0xff
 ;   beqz a5, 0x10
 ;   mv a0, s8

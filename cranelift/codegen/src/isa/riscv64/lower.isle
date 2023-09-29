@@ -1603,8 +1603,91 @@
 (rule 0 (lower (icmp cc x @ (value_type (ty_int ty)) y))
   (lower_icmp cc x y ty))
 
-(rule 1 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
+(rule 1 (lower (icmp cc x @ (value_type (ty_int_ref_scalar_64 _)) y))
+  (scalar_icmp cc x y))
+
+;; try to put constants on the right hand side of `scalar_icmp` to avoid
+;; duplication of those rules
+(rule 2 (lower (icmp cc x @ (iconst _) y @ (value_type (ty_int_ref_scalar_64 _))))
+  (scalar_icmp (intcc_swap_args cc) y x))
+
+(rule 3 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
   (gen_expand_mask ty (gen_icmp_mask ty cc x y)))
+
+
+;; Helper to compare just two scalars. Callers should try to put constants on
+;; the right-hand side.
+(decl scalar_icmp (IntCC Value Value) XReg)
+(rule 0 (scalar_icmp (IntCC.Equal) x y)
+  (rv_seqz (rv_xor x y)))
+
+;; x == y <=> x - y == 0
+(rule 1 (scalar_icmp (IntCC.Equal) x (i64_from_iconst y))
+  (if-let (imm12_from_i64 imm) (i64_neg y))
+  (rv_seqz (rv_addi x imm)))
+
+(rule 2 (scalar_icmp (IntCC.Equal) x (u64_from_iconst 0))
+  (rv_seqz x))
+
+(rule 0 (scalar_icmp (IntCC.NotEqual) x y)
+  (rv_snez (rv_xor x y)))
+
+;; x != y <=> x - y != 0
+(rule 1 (scalar_icmp (IntCC.NotEqual) x (i64_from_iconst y))
+  (if-let (imm12_from_i64 imm) (i64_neg y))
+  (rv_snez (rv_addi x imm)))
+
+(rule 2 (scalar_icmp (IntCC.NotEqual) x (u64_from_iconst 0))
+  (rv_snez x))
+
+;; x != -1 <=> (unsigned) x < UINT_MAX
+(rule 3 (scalar_icmp (IntCC.NotEqual) x (i64_from_iconst -1))
+  (rv_sltiu x (imm12_const -1)))
+
+(rule 0 (scalar_icmp (IntCC.SignedLessThan) x y)
+  (rv_slt x y))
+
+(rule 1 (scalar_icmp (IntCC.SignedLessThan) x (imm12_from_value y))
+  (rv_slti x y))
+
+(rule 2 (scalar_icmp (IntCC.SignedLessThan) x (u64_from_iconst 0))
+  (rv_sltz x))
+
+(rule 0 (scalar_icmp (IntCC.UnsignedLessThan) x y)
+  (rv_sltu x y))
+
+(rule 1 (scalar_icmp (IntCC.UnsignedLessThan) x (imm12_from_value y))
+  (rv_sltiu x y))
+
+;; x < 1 <=> x == 0
+(rule 2 (scalar_icmp (IntCC.UnsignedLessThan) x (u64_from_iconst 1))
+  (rv_seqz x))
+
+;; x > y <=> y < x
+(rule 0 (scalar_icmp (IntCC.SignedGreaterThan) x y)
+  (rv_slt y x))
+
+(rule 1 (scalar_icmp (IntCC.SignedGreaterThan) x (u64_from_iconst 0))
+  (rv_sgtz x))
+
+;; x > y <=> y < x
+(rule 0 (scalar_icmp (IntCC.UnsignedGreaterThan) x y)
+  (rv_sltu y x))
+
+;; x > 0 <=> x != 0
+(rule 1 (scalar_icmp (IntCC.UnsignedGreaterThan) x (u64_from_iconst 0))
+  (rv_snez x))
+
+;; for remaining variants with have a "OrEqual" condition code invert the
+;; condition and invert the result.
+(rule 0 (scalar_icmp cc @ (IntCC.SignedGreaterThanOrEqual) x y)
+  (rv_xori (scalar_icmp (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (scalar_icmp cc @ (IntCC.UnsignedGreaterThanOrEqual) x y)
+  (rv_xori (scalar_icmp (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (scalar_icmp cc @ (IntCC.SignedLessThanOrEqual) x y)
+  (rv_xori (scalar_icmp (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (scalar_icmp cc @ (IntCC.UnsignedLessThanOrEqual) x y)
+  (rv_xori (scalar_icmp (intcc_complement cc) x y) (imm12_const 1)))
 
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;

@@ -10,15 +10,14 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   eq a0,a0,a1##ty=i64
+;   xor a3,a0,a1
+;   seqz a0,a3
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bne a0, a1, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
+;   xor a3, a0, a1
+;   seqz a0, a3
 ;   ret
 
 function %icmp_eq_i128(i128, i128) -> i8 {

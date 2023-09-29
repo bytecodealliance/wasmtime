@@ -157,21 +157,12 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   li a5,0
-;   andi a3,s1,255
-;   andi a5,a5,255
-;   eq s1,a3,a5##ty=i8
+;   seqz s1,s1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, zero
-;   andi a3, s1, 0xff
-;   andi a5, a5, 0xff
-;   bne a3, a5, 0xc
-;   addi s1, zero, 1
-;   j 8
-;   mv s1, zero
+;   seqz s1, s1
 ;   ret
 
 function %call_i8(i8) -> i8 tail {

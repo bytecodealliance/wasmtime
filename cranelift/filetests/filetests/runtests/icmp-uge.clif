@@ -53,3 +53,29 @@ block0(v0: i64, v1: i64):
 ; run: %icmp_uge_i64(0, 1) == 0
 ; run: %icmp_uge_i64(-5, -1) == 0
 ; run: %icmp_uge_i64(1, -1) == 0
+
+function %icmp32_uge_imm0(i32) -> i8 {
+block0(v0: i32):
+    v2 = icmp_imm uge v0, 0
+    return v2
+}
+; run: %icmp32_uge_imm0(0) == 1
+; run: %icmp32_uge_imm0(1) == 1
+
+function %icmp32_uge_imm1(i32) -> i8 {
+block0(v0: i32):
+    v2 = icmp_imm uge v0, 1
+    return v2
+}
+; run: %icmp32_uge_imm1(0) == 0
+; run: %icmp32_uge_imm1(1) == 1
+
+function %icmp32_uge_imm2(i32) -> i8 {
+block0(v0: i32):
+    v2 = icmp_imm uge v0, -1
+    return v2
+}
+; run: %icmp32_uge_imm2(0) == 0
+; run: %icmp32_uge_imm2(1) == 0
+; run: %icmp32_uge_imm2(-2) == 0
+; run: %icmp32_uge_imm2(-1) == 1

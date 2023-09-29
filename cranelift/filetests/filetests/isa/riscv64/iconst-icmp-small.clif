@@ -12,26 +12,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui a5,-2
-;   addi a1,a5,-564
-;   slli a2,a1,48
-;   srli a4,a2,48
-;   slli a0,a1,48
-;   srli a2,a0,48
-;   ne a0,a4,a2##ty=i16
+;   lui a2,-2
+;   addi a4,a2,-564
+;   xor a2,a4,a4
+;   sltu a0,zero,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a5, 0xffffe
-;   addi a1, a5, -0x234
-;   slli a2, a1, 0x30
-;   srli a4, a2, 0x30
-;   slli a0, a1, 0x30
-;   srli a2, a0, 0x30
-;   beq a4, a2, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
+;   lui a2, 0xffffe
+;   addi a4, a2, -0x234
+;   xor a2, a4, a4
+;   snez a0, a2
 ;   ret
 

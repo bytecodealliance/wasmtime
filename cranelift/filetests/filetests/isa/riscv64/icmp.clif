@@ -1,0 +1,952 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %eq(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   xor a3,a0,a1
+;   seqz a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   xor a3, a0, a1
+;   seqz a0, a3
+;   ret
+
+function %eqz1(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   seqz a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   seqz a0, a0
+;   ret
+
+function %eqz2(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp eq v1, v0
+    return v2
+}
+
+; VCode:
+; block0:
+;   seqz a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   seqz a0, a0
+;   ret
+
+function %eq_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = icmp eq v1, v0
+    return v2
+}
+
+; VCode:
+; block0:
+;   addi a2,a0,-1
+;   seqz a0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a2, a0, -1
+;   seqz a0, a2
+;   ret
+
+function %eq_const2(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   addi a2,a0,-2
+;   seqz a0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a2, a0, -2
+;   seqz a0, a2
+;   ret
+
+function %eq_const3(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 0xfff
+    v2 = icmp eq v1, v0
+    return v2
+}
+
+; VCode:
+; block0:
+;   lui a4,1
+;   addi a1,a4,-1
+;   xor a4,a0,a1
+;   seqz a0,a4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a4, 1
+;   addi a1, a4, -1
+;   xor a4, a0, a1
+;   seqz a0, a4
+;   ret
+
+function %eq_const4(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   addi a2,a0,1
+;   seqz a0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a2, a0, 1
+;   seqz a0, a2
+;   ret
+
+
+function %ne(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp ne v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   xor a3,a0,a1
+;   sltu a0,zero,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   xor a3, a0, a1
+;   snez a0, a3
+;   ret
+
+function %nez1(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp ne v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltu a0,zero,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   snez a0, a0
+;   ret
+
+function %nez2(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp ne v1, v0
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltu a0,zero,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   snez a0, a0
+;   ret
+
+function %ne_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = icmp ne v1, v0
+    return v2
+}
+
+; VCode:
+; block0:
+;   addi a2,a0,-1
+;   sltu a0,zero,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a2, a0, -1
+;   snez a0, a2
+;   ret
+
+function %ne_const2(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = icmp ne v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   addi a2,a0,-2
+;   sltu a0,zero,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a2, a0, -2
+;   snez a0, a2
+;   ret
+
+function %ne_const3(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 0xfff
+    v2 = icmp ne v1, v0
+    return v2
+}
+
+; VCode:
+; block0:
+;   lui a4,1
+;   addi a1,a4,-1
+;   xor a4,a0,a1
+;   sltu a0,zero,a4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a4, 1
+;   addi a1, a4, -1
+;   xor a4, a0, a1
+;   snez a0, a4
+;   ret
+
+function %ne_const4(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = icmp ne v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltiu a0,a0,-1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltiu a0, a0, -1
+;   ret
+
+function %ne_const5(i32) -> i8 system_v {
+block0(v0: i32):
+    v1 = iconst.i32 -2
+    v2 = icmp ne v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   addi a2,a0,2
+;   sltu a0,zero,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a2, a0, 2
+;   snez a0, a2
+;   ret
+
+function %slt(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slt a0, a0, a1
+;   ret
+
+function %slt_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm slt v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,a0,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltz a0, a0
+;   ret
+
+function %slt_const2(i64) -> i8 system_v {
+block0(v0: i64):
+    v2 = icmp_imm slt v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,a0,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltz a0, a0
+;   ret
+
+function %slt_const3(i16) -> i8 system_v {
+block0(v0: i16):
+    v2 = icmp_imm slt v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,a0,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltz a0, a0
+;   ret
+
+function %slt_const4(i8) -> i8 system_v {
+block0(v0: i8):
+    v2 = icmp_imm slt v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,a0,zero
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltz a0, a0
+;   ret
+
+function %slt_const5(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm slt v0, 1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slti a0,a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slti a0, a0, 1
+;   ret
+
+function %slt_const6(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm slt v0, 2
+    return v2
+}
+
+; VCode:
+; block0:
+;   slti a0,a0,2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slti a0, a0, 2
+;   ret
+
+function %slt_const7(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm slt v0, -7
+    return v2
+}
+
+; VCode:
+; block0:
+;   slti a0,a0,-7
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slti a0, a0, -7
+;   ret
+
+function %slt_const8(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm slt v0, 0xfff
+    return v2
+}
+
+; VCode:
+; block0:
+;   lui a3,1
+;   addi a5,a3,-1
+;   slt a0,a0,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a3, 1
+;   addi a5, a3, -1
+;   slt a0, a0, a5
+;   ret
+
+function %sgt(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp sgt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slt a0, a1, a0
+;   ret
+
+function %sgt_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm sgt v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,zero,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sgtz a0, a0
+;   ret
+
+function %sgt_const2(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm sgt v0, 1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,1
+;   slt a0,a3,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 1
+;   slt a0, a3, a0
+;   ret
+
+function %sgt_const2(i16) -> i8 system_v {
+block0(v0: i16):
+    v2 = icmp_imm sgt v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a0,zero,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sgtz a0, a0
+;   ret
+
+function %sle(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp sle v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a3,a1,a0
+;   xori a0,a3,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slt a3, a1, a0
+;   xori a0, a3, 1
+;   ret
+
+function %sge(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp sge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a3,a0,a1
+;   xori a0,a3,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slt a3, a0, a1
+;   xori a0, a3, 1
+;   ret
+
+function %sge_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm sge v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   slt a2,a0,zero
+;   xori a0,a2,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltz a2, a0
+;   xori a0, a2, 1
+;   ret
+
+function %sge_const2(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm sge v0, 1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slti a2,a0,1
+;   xori a0,a2,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slti a2, a0, 1
+;   xori a0, a2, 1
+;   ret
+
+function %sge_const3(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm sge v0, -1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slti a2,a0,-1
+;   xori a0,a2,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slti a2, a0, -1
+;   xori a0, a2, 1
+;   ret
+
+function %ult(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp ult v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltu a0,a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltu a0, a0, a1
+;   ret
+
+function %ult_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ult v0, 1
+    return v2
+}
+
+; VCode:
+; block0:
+;   seqz a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   seqz a0, a0
+;   ret
+
+function %ult_const2(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ult v0, 2
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltiu a0,a0,2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltiu a0, a0, 2
+;   ret
+
+function %ult_const3(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ult v0, -5
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltiu a0,a0,-5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltiu a0, a0, -5
+;   ret
+
+function %ult_const4(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ult v0, 0xfff
+    return v2
+}
+
+; VCode:
+; block0:
+;   lui a3,1
+;   addi a5,a3,-1
+;   sltu a0,a0,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a3, 1
+;   addi a5, a3, -1
+;   sltu a0, a0, a5
+;   ret
+
+function %ugt(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp ugt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltu a0,a1,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltu a0, a1, a0
+;   ret
+
+function %ugt_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ugt v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltu a0,zero,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   snez a0, a0
+;   ret
+
+function %ugt_const2(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ugt v0, 1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,1
+;   sltu a0,a3,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 1
+;   sltu a0, a3, a0
+;   ret
+
+function %ugt_const3(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ugt v0, 2
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,2
+;   sltu a0,a3,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 2
+;   sltu a0, a3, a0
+;   ret
+
+function %ugt_const3(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ugt v0, -1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a3,-1
+;   sltu a0,a3,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, -1
+;   sltu a0, a3, a0
+;   ret
+
+function %ule(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp ule v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltu a3,a1,a0
+;   xori a0,a3,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltu a3, a1, a0
+;   xori a0, a3, 1
+;   ret
+
+function %ule_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ule v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltu a2,zero,a0
+;   xori a0,a2,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   snez a2, a0
+;   xori a0, a2, 1
+;   ret
+
+function %ule_const2(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ule v0, 1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a4,1
+;   sltu a3,a4,a0
+;   xori a0,a3,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 1
+;   sltu a3, a4, a0
+;   xori a0, a3, 1
+;   ret
+
+function %ule_const3(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ule v0, -1
+    return v2
+}
+
+; VCode:
+; block0:
+;   li a4,-1
+;   sltu a3,a4,a0
+;   xori a0,a3,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, -1
+;   sltu a3, a4, a0
+;   xori a0, a3, 1
+;   ret
+
+function %ule_const4(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm ule v0, 0xfff
+    return v2
+}
+
+; VCode:
+; block0:
+;   lui a4,1
+;   addi a1,a4,-1
+;   sltu a4,a1,a0
+;   xori a0,a4,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a4, 1
+;   addi a1, a4, -1
+;   sltu a4, a1, a0
+;   xori a0, a4, 1
+;   ret
+
+function %uge(i32, i32) -> i8 system_v {
+block0(v0: i32, v1: i32):
+    v2 = icmp uge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltu a3,a0,a1
+;   xori a0,a3,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltu a3, a0, a1
+;   xori a0, a3, 1
+;   ret
+
+function %uge_const1(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm uge v0, 0
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltiu a2,a0,0
+;   xori a0,a2,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltiu a2, a0, 0
+;   xori a0, a2, 1
+;   ret
+
+function %uge_const2(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm uge v0, 1
+    return v2
+}
+
+; VCode:
+; block0:
+;   seqz a2,a0
+;   xori a0,a2,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   seqz a2, a0
+;   xori a0, a2, 1
+;   ret
+
+function %uge_const3(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm uge v0, -1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltiu a2,a0,-1
+;   xori a0,a2,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sltiu a2, a0, -1
+;   xori a0, a2, 1
+;   ret
+
+function %uge_const4(i32) -> i8 system_v {
+block0(v0: i32):
+    v2 = icmp_imm uge v0, 0xfff
+    return v2
+}
+
+; VCode:
+; block0:
+;   lui a4,1
+;   addi a1,a4,-1
+;   sltu a4,a0,a1
+;   xori a0,a4,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a4, 1
+;   addi a1, a4, -1
+;   sltu a4, a0, a1
+;   xori a0, a4, 1
+;   ret
+
