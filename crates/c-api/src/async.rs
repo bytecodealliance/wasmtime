@@ -30,29 +30,22 @@ pub struct wasmtime_async_continuation_t {
 }
 
 unsafe impl Send for wasmtime_async_continuation_t {}
-
-pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(
-    *mut c_void,
-    *mut wasmtime_caller_t,
-    trap_ret: *mut Option<Box<wasm_trap_t>>,
-) -> bool;
-
-struct CHostCallFuture<'a> {
-    pub callback: wasmtime_func_async_continuation_callback_t,
-    pub env: crate::ForeignData,
-    pub caller: &'a wasmtime_caller_t<'a>,
+unsafe impl Sync for wasmtime_async_continuation_t {}
+impl Drop for wasmtime_async_continuation_t {
+    fn drop(&mut self) {
+        if let Some(f) = self.finalizer {
+            f(self.env);
+        }
+    }
 }
-
-unsafe impl Send for CHostCallFuture<'_> {}
-
-impl Future for CHostCallFuture<'_> {
+impl Future for wasmtime_async_continuation_t {
     type Output = Result<()>;
     fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
         let this = self.get_mut();
         let mut trap = None;
         let done = {
             let cb = this.callback;
-            cb(this.env.data, &mut this.caller, &mut trap)
+            cb(this.env, &mut trap)
         };
         if let Some(trap) = trap {
             Poll::Ready(Err(trap.error))
@@ -63,6 +56,9 @@ impl Future for CHostCallFuture<'_> {
         }
     }
 }
+
+pub type wasmtime_func_async_continuation_callback_t =
+    extern "C" fn(*mut c_void, trap_ret: *mut Option<Box<wasm_trap_t>>) -> bool;
 
 struct CallbackData {
     env: *mut c_void,
@@ -100,16 +96,8 @@ async fn invoke_c_async_callback<'a>(
         out_results.as_mut_ptr(),
         out_results.len(),
     );
+    continuation.await?;
 
-    let fut = CHostCallFuture {
-        callback: continuation.callback,
-        env: crate::ForeignData {
-            data: continuation.env,
-            finalizer: continuation.finalizer,
-        },
-        caller: &caller,
-    };
-    fut.await?;
     // Translate the `wasmtime_val_t` results into the `results` space
     for (i, result) in out_results.iter().enumerate() {
         unsafe {

@@ -86,7 +86,6 @@ WASM_API_EXTERN void wasmtime_context_epoch_deadline_async_yield_and_update(wasm
  */
 typedef bool (*wasmtime_func_async_continuation_callback_t)(
     void *env,
-    wasmtime_caller_t *caller,
     wasm_trap_t **error);
 
 /**

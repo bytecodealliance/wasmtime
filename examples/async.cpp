@@ -137,8 +137,7 @@ struct printer_thread_state {
 
 printer_thread_state printer_state;
 
-bool poll_print_finished_state(void *env, wasmtime_caller_t *,
-                               wasm_trap_t **trap) {
+bool poll_print_finished_state(void *env, wasm_trap_t **trap) {
   std::cout << "polling async host function result" << std::endl;
   // Don't block, just poll the future state.
   if (printer_state.result_is_pending()) {
