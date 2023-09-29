@@ -3,7 +3,7 @@
 // imported and exported interfaces.
 interface types {
   use wasi:io/streams.{input-stream, output-stream}
-  use wasi:poll/poll.{pollable}
+  use wasi:io/poll.{pollable}
 
   // This type corresponds to HTTP standard Methods.
   variant method {
@@ -100,7 +100,7 @@ interface types {
   // Additional optional parameters that can be set when making a request.
   record request-options {
     // The following timeouts are specific to the HTTP protocol and work
-    // independently of the overall timeouts passed to `io.poll.poll-oneoff`.
+    // independently of the overall timeouts passed to `io.poll.poll-list`.
 
     // The timeout for the initial connect.
     connect-timeout-ms: option<u32>,
@@ -142,19 +142,18 @@ interface types {
   // incoming-body.
   incoming-response-consume: func(response: /* borrow */ incoming-response) -> result</* own */ incoming-body>
 
-  type incoming-body = u32
-  drop-incoming-body: func(this: /* own */ incoming-body)
-
-  // returned input-stream is a child - the implementation may trap if
-  // incoming-body is dropped (or consumed by call to
-  // incoming-body-finish) before the input-stream is dropped.
-  // May be called at most once. returns error if called additional times.
-  incoming-body-stream: func(this: /* borrow */ incoming-body) ->
-    result</* child */ input-stream>
-  // takes ownership of incoming-body. this will trap if the
-  // incoming-body-stream child is still alive!
-  incoming-body-finish: func(this: /* own */ incoming-body) ->
-    /* transitive child of the incoming-response of incoming-body */ future-trailers
+  resource incoming-body {
+    // returned input-stream is a child - the implementation may trap if
+    // incoming-body is dropped (or consumed by call to
+    // incoming-body-finish) before the input-stream is dropped.
+    // May be called at most once. returns error if called additional times.
+    %stream: func() ->
+      result</* child */ input-stream>
+    // takes ownership of incoming-body. this will trap if the
+    // incoming-body-stream child is still alive!
+    finish: func() ->
+      /* transitive child of the incoming-response of incoming-body */ future-trailers
+  }
 
   type future-trailers = u32
   drop-future-trailers: func(this: /* own */ future-trailers)
@@ -193,7 +192,7 @@ interface types {
   /// `future-incoming-response`, the client can call the non-blocking `get`
   /// method to get the result if it is available. If the result is not available,
   /// the client can call `listen` to get a `pollable` that can be passed to
-  /// `io.poll.poll-oneoff`.
+  /// `wasi:io/poll.poll-list`.
   type future-incoming-response = u32
   drop-future-incoming-response: func(f: /* own */ future-incoming-response)
   /// option indicates readiness.

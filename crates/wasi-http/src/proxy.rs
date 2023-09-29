@@ -16,7 +16,7 @@ wasmtime::component::bindgen!({
         "wasi:http/outgoing-handler": bindings::http::outgoing_handler,
         "wasi:http/types": bindings::http::types,
         "wasi:io/streams": preview2::bindings::io::streams,
-        "wasi:poll/poll": preview2::bindings::poll::poll,
+        "wasi:io/poll": preview2::bindings::io::poll,
         "wasi:random/random": preview2::bindings::random::random,
     },
 });

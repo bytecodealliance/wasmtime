@@ -15,9 +15,10 @@ use crate::{
 };
 use anyhow::Context;
 use std::any::Any;
+use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
+    bindings::io::poll::Pollable,
     bindings::io::streams::{InputStream, OutputStream},
-    bindings::poll::poll::Pollable,
     HostPollable, PollableFuture, TablePollableExt, TableStreamExt,
 };
 
@@ -207,7 +208,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     fn incoming_request_consume(
         &mut self,
         id: IncomingRequest,
-    ) -> wasmtime::Result<Result<IncomingBody, ()>> {
+    ) -> wasmtime::Result<Result<Resource<IncomingBody>, ()>> {
         let req = types::IncomingRequestLens::from(id).get_mut(self.table())?;
         match req.body.take() {
             Some(builder) => {
@@ -326,7 +327,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     fn incoming_response_consume(
         &mut self,
         response: IncomingResponse,
-    ) -> wasmtime::Result<Result<IncomingBody, ()>> {
+    ) -> wasmtime::Result<Result<Resource<IncomingBody>, ()>> {
         let table = self.table();
         let r = table
             .get_incoming_response_mut(response)
@@ -348,7 +349,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(())
     }
 
-    fn future_trailers_subscribe(&mut self, index: FutureTrailers) -> wasmtime::Result<Pollable> {
+    fn future_trailers_subscribe(
+        &mut self,
+        index: FutureTrailers,
+    ) -> wasmtime::Result<Resource<Pollable>> {
         // Eagerly force errors about the validity of the index.
         let _ = self.table().get_future_trailers(index)?;
 
@@ -475,7 +479,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     fn listen_to_future_incoming_response(
         &mut self,
         id: FutureIncomingResponse,
-    ) -> wasmtime::Result<Pollable> {
+    ) -> wasmtime::Result<Resource<Pollable>> {
         let _ = self.table().get_future_incoming_response(id)?;
 
         fn make_future<'a>(elem: &'a mut dyn Any) -> PollableFuture<'a> {
@@ -493,40 +497,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         Ok(pollable)
     }
 
-    fn incoming_body_stream(
-        &mut self,
-        id: IncomingBody,
-    ) -> wasmtime::Result<Result<InputStream, ()>> {
-        let body = self.table().get_incoming_body(id)?;
-
-        if let Some(stream) = body.stream.take() {
-            let stream = self.table().push_input_stream_child(Box::new(stream), id)?;
-            return Ok(Ok(stream));
-        }
-
-        Ok(Err(()))
-    }
-
-    fn incoming_body_finish(&mut self, id: IncomingBody) -> wasmtime::Result<FutureTrailers> {
-        let body = self.table().delete_incoming_body(id)?;
-        let trailers = self
-            .table()
-            .push_future_trailers(body.into_future_trailers())?;
-        Ok(trailers)
-    }
-
-    fn drop_incoming_body(&mut self, id: IncomingBody) -> wasmtime::Result<()> {
-        let _ = self.table().delete_incoming_body(id)?;
-        Ok(())
-    }
-
     fn outgoing_body_write(
         &mut self,
         id: OutgoingBody,
-    ) -> wasmtime::Result<Result<OutputStream, ()>> {
+    ) -> wasmtime::Result<Result<Resource<OutputStream>, ()>> {
         let body = self.table().get_outgoing_body(id)?;
         if let Some(stream) = body.body_output_stream.take() {
-            let id = self.table().push_output_stream_child(stream, id)?;
+            let dummy = Resource::<u32>::new_own(id);
+            let id = self.table().push_output_stream_child(stream, dummy)?;
             Ok(Ok(id))
         } else {
             Ok(Err(()))
@@ -568,6 +546,35 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         // Ignoring failure: receiver died sending body, but we can't report that here.
         let _ = sender.send(FinishMessage::Abort);
 
+        Ok(())
+    }
+}
+
+impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingBody for T {
+    fn stream(
+        &mut self,
+        id: Resource<IncomingBody>,
+    ) -> wasmtime::Result<Result<Resource<InputStream>, ()>> {
+        let body = self.table().get_incoming_body(&id)?;
+
+        if let Some(stream) = body.stream.take() {
+            let stream = self.table().push_input_stream_child(Box::new(stream), id)?;
+            return Ok(Ok(stream));
+        }
+
+        Ok(Err(()))
+    }
+
+    fn finish(&mut self, id: Resource<IncomingBody>) -> wasmtime::Result<FutureTrailers> {
+        let body = self.table().delete_incoming_body(id)?;
+        let trailers = self
+            .table()
+            .push_future_trailers(body.into_future_trailers())?;
+        Ok(trailers)
+    }
+
+    fn drop(&mut self, id: Resource<IncomingBody>) -> wasmtime::Result<()> {
+        let _ = self.table().delete_incoming_body(id)?;
         Ok(())
     }
 }

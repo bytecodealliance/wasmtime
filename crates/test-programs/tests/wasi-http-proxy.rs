@@ -5,7 +5,7 @@ use wasmtime::{
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
-    self, pipe::MemoryOutputPipe, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    self, pipe::MemoryOutputPipe, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{proxy::Proxy, WasiHttpCtx, WasiHttpView};
 
@@ -70,17 +70,17 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
 
-    let mut table = Table::new();
+    let table = Table::new();
     let component = get_component("wasi_http_proxy_tests");
 
     // Create our wasi context.
     let mut builder = WasiCtxBuilder::new();
-    builder.stdout(stdout.clone(), IsATTY::No);
-    builder.stderr(stderr.clone(), IsATTY::No);
+    builder.stdout(stdout.clone());
+    builder.stderr(stderr.clone());
     for (var, val) in test_programs::wasi_tests_environment() {
         builder.env(var, val);
     }
-    let wasi = builder.build(&mut table)?;
+    let wasi = builder.build();
     let http = WasiHttpCtx;
 
     let ctx = Ctx { table, wasi, http };
