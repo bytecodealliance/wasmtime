@@ -146,12 +146,13 @@ impl RegSet {
 mod tests {
     use super::{Reg, RegBitSet, RegClass, RegSet};
 
-    const UNIVERSE: u32 = (1 << 16) - 1;
+    const UNIVERSE: u64 = (1 << 16) - 1;
+    const MAX: usize = 16;
 
     #[test]
     fn test_any_gpr() {
-        let bitset = RegBitSet::int(UNIVERSE, !UNIVERSE);
-        let zero = RegBitSet::float(0, 0);
+        let bitset = RegBitSet::int(UNIVERSE, !UNIVERSE, MAX);
+        let zero = RegBitSet::float(0, 0, MAX);
         let mut set = RegSet::new(bitset, zero);
         for _ in 0..16 {
             let gpr = set.reg_for_class(RegClass::Int);
@@ -164,12 +165,12 @@ mod tests {
 
     #[test]
     fn test_gpr() {
-        let non_allocatable: u32 = 1 << 5;
+        let non_allocatable: u64 = 1 << 5;
         let all = UNIVERSE & !non_allocatable;
         let non_alloc = Reg::int(5);
         let alloc = Reg::int(2);
-        let bitset = RegBitSet::int(all, non_allocatable);
-        let zero = RegBitSet::float(0, 0);
+        let bitset = RegBitSet::int(all, non_allocatable, MAX);
+        let zero = RegBitSet::float(0, 0, MAX);
         let mut set = RegSet::new(bitset, zero);
         // Requesting a non alloctable register returns the register
         // and doesn't allocate it.
@@ -183,8 +184,8 @@ mod tests {
 
     #[test]
     fn test_free_reg() {
-        let set = RegBitSet::int(UNIVERSE, !UNIVERSE);
-        let zero = RegBitSet::float(0, 0);
+        let set = RegBitSet::int(UNIVERSE, !UNIVERSE, MAX);
+        let zero = RegBitSet::float(0, 0, MAX);
         let mut set = RegSet::new(set, zero);
         let gpr = set.reg_for_class(RegClass::Int).unwrap();
         set.free(gpr);
