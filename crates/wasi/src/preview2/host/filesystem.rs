@@ -2,7 +2,7 @@ use crate::preview2::bindings::clocks::wall_clock;
 use crate::preview2::bindings::filesystem::types::{HostDescriptor, HostDirectoryEntryStream};
 use crate::preview2::bindings::filesystem::{preopens, types};
 use crate::preview2::bindings::io::streams;
-use crate::preview2::filesystem::{Dir, File, ReaddirIterator, TableFsExt};
+use crate::preview2::filesystem::{Descriptor, Dir, File, ReaddirIterator};
 use crate::preview2::{DirPerms, FilePerms, Table, TableError, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
@@ -25,7 +25,7 @@ impl<T: WasiView> preopens::Host for T {
         for (dir, name) in self.ctx().preopens.clone() {
             let fd = self
                 .table_mut()
-                .push_dir(dir)
+                .push_resource(Descriptor::Dir(dir))
                 .with_context(|| format!("failed to push preopen {name}"))?;
             results.push((fd, name));
         }
@@ -57,7 +57,7 @@ impl<T: WasiView> HostDescriptor for T {
             Advice::NoReuse => A::NoReuse,
         };
 
-        let f = self.table().get_file(&fd)?;
+        let f = self.table().get_resource(&fd)?.file()?;
         f.spawn_blocking(move |f| f.advise(offset, len, advice))
             .await?;
         Ok(())
@@ -65,28 +65,28 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn sync_data(&mut self, fd: Resource<types::Descriptor>) -> Result<(), types::Error> {
         let table = self.table();
-        if table.is_file(&fd) {
-            let f = table.get_file(&fd)?;
-            match f.spawn_blocking(|f| f.sync_data()).await {
-                Ok(()) => Ok(()),
-                // On windows, `sync_data` uses `FileFlushBuffers` which fails with
-                // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
-                // this error, for POSIX compatibility.
-                #[cfg(windows)]
-                Err(e)
-                    if e.raw_os_error()
-                        == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
-                {
-                    Ok(())
+
+        match table.get_resource(&fd)? {
+            Descriptor::File(f) => {
+                match f.spawn_blocking(|f| f.sync_data()).await {
+                    Ok(()) => Ok(()),
+                    // On windows, `sync_data` uses `FileFlushBuffers` which fails with
+                    // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
+                    // this error, for POSIX compatibility.
+                    #[cfg(windows)]
+                    Err(e)
+                        if e.raw_os_error()
+                            == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
+                    {
+                        Ok(())
+                    }
+                    Err(e) => Err(e.into()),
                 }
-                Err(e) => Err(e.into()),
             }
-        } else if table.is_dir(&fd) {
-            let d = table.get_dir(&fd)?;
-            d.spawn_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_data()?))
-                .await
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
+            Descriptor::Dir(d) => {
+                d.spawn_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_data()?))
+                    .await
+            }
         }
     }
 
@@ -112,30 +112,29 @@ impl<T: WasiView> HostDescriptor for T {
         }
 
         let table = self.table();
-        if table.is_file(&fd) {
-            let f = table.get_file(&fd)?;
-            let flags = f.spawn_blocking(|f| f.get_fd_flags()).await?;
-            let mut flags = get_from_fdflags(flags);
-            if f.perms.contains(FilePerms::READ) {
-                flags |= DescriptorFlags::READ;
+        match table.get_resource(&fd)? {
+            Descriptor::File(f) => {
+                let flags = f.spawn_blocking(|f| f.get_fd_flags()).await?;
+                let mut flags = get_from_fdflags(flags);
+                if f.perms.contains(FilePerms::READ) {
+                    flags |= DescriptorFlags::READ;
+                }
+                if f.perms.contains(FilePerms::WRITE) {
+                    flags |= DescriptorFlags::WRITE;
+                }
+                Ok(flags)
             }
-            if f.perms.contains(FilePerms::WRITE) {
-                flags |= DescriptorFlags::WRITE;
+            Descriptor::Dir(d) => {
+                let flags = d.spawn_blocking(|d| d.get_fd_flags()).await?;
+                let mut flags = get_from_fdflags(flags);
+                if d.perms.contains(DirPerms::READ) {
+                    flags |= DescriptorFlags::READ;
+                }
+                if d.perms.contains(DirPerms::MUTATE) {
+                    flags |= DescriptorFlags::MUTATE_DIRECTORY;
+                }
+                Ok(flags)
             }
-            Ok(flags)
-        } else if table.is_dir(&fd) {
-            let d = table.get_dir(&fd)?;
-            let flags = d.spawn_blocking(|d| d.get_fd_flags()).await?;
-            let mut flags = get_from_fdflags(flags);
-            if d.perms.contains(DirPerms::READ) {
-                flags |= DescriptorFlags::READ;
-            }
-            if d.perms.contains(DirPerms::MUTATE) {
-                flags |= DescriptorFlags::MUTATE_DIRECTORY;
-            }
-            Ok(flags)
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
         }
     }
 
@@ -145,14 +144,12 @@ impl<T: WasiView> HostDescriptor for T {
     ) -> Result<types::DescriptorType, types::Error> {
         let table = self.table();
 
-        if table.is_file(&fd) {
-            let f = table.get_file(&fd)?;
-            let meta = f.spawn_blocking(|f| f.metadata()).await?;
-            Ok(descriptortype_from(meta.file_type()))
-        } else if table.is_dir(&fd) {
-            Ok(types::DescriptorType::Directory)
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
+        match table.get_resource(&fd)? {
+            Descriptor::File(f) => {
+                let meta = f.spawn_blocking(|f| f.metadata()).await?;
+                Ok(descriptortype_from(meta.file_type()))
+            }
+            Descriptor::Dir(_) => Ok(types::DescriptorType::Directory),
         }
     }
 
@@ -161,7 +158,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
         size: types::Filesize,
     ) -> Result<(), types::Error> {
-        let f = self.table().get_file(&fd)?;
+        let f = self.table().get_resource(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             Err(ErrorCode::NotPermitted)?;
         }
@@ -178,26 +175,25 @@ impl<T: WasiView> HostDescriptor for T {
         use fs_set_times::SetTimes;
 
         let table = self.table();
-        if table.is_file(&fd) {
-            let f = table.get_file(&fd)?;
-            if !f.perms.contains(FilePerms::WRITE) {
-                return Err(ErrorCode::NotPermitted.into());
+        match table.get_resource(&fd)? {
+            Descriptor::File(f) => {
+                if !f.perms.contains(FilePerms::WRITE) {
+                    return Err(ErrorCode::NotPermitted.into());
+                }
+                let atim = systemtimespec_from(atim)?;
+                let mtim = systemtimespec_from(mtim)?;
+                f.spawn_blocking(|f| f.set_times(atim, mtim)).await?;
+                Ok(())
             }
-            let atim = systemtimespec_from(atim)?;
-            let mtim = systemtimespec_from(mtim)?;
-            f.spawn_blocking(|f| f.set_times(atim, mtim)).await?;
-            Ok(())
-        } else if table.is_dir(&fd) {
-            let d = table.get_dir(&fd)?;
-            if !d.perms.contains(DirPerms::MUTATE) {
-                return Err(ErrorCode::NotPermitted.into());
+            Descriptor::Dir(d) => {
+                if !d.perms.contains(DirPerms::MUTATE) {
+                    return Err(ErrorCode::NotPermitted.into());
+                }
+                let atim = systemtimespec_from(atim)?;
+                let mtim = systemtimespec_from(mtim)?;
+                d.spawn_blocking(|d| d.set_times(atim, mtim)).await?;
+                Ok(())
             }
-            let atim = systemtimespec_from(atim)?;
-            let mtim = systemtimespec_from(mtim)?;
-            d.spawn_blocking(|d| d.set_times(atim, mtim)).await?;
-            Ok(())
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
         }
     }
 
@@ -212,7 +208,7 @@ impl<T: WasiView> HostDescriptor for T {
 
         let table = self.table();
 
-        let f = table.get_file(&fd)?;
+        let f = table.get_resource(&fd)?.file()?;
         if !f.perms.contains(FilePerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -249,7 +245,7 @@ impl<T: WasiView> HostDescriptor for T {
         use system_interface::fs::FileIoExt;
 
         let table = self.table();
-        let f = table.get_file(&fd)?;
+        let f = table.get_resource(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -266,7 +262,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
     ) -> Result<Resource<types::DirectoryEntryStream>, types::Error> {
         let table = self.table_mut();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -328,28 +324,28 @@ impl<T: WasiView> HostDescriptor for T {
 
     async fn sync(&mut self, fd: Resource<types::Descriptor>) -> Result<(), types::Error> {
         let table = self.table();
-        if table.is_file(&fd) {
-            let f = table.get_file(&fd)?;
-            match f.spawn_blocking(|f| f.sync_all()).await {
-                Ok(()) => Ok(()),
-                // On windows, `sync_data` uses `FileFlushBuffers` which fails with
-                // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
-                // this error, for POSIX compatibility.
-                #[cfg(windows)]
-                Err(e)
-                    if e.raw_os_error()
-                        == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
-                {
-                    Ok(())
+
+        match table.get_resource(&fd)? {
+            Descriptor::File(f) => {
+                match f.spawn_blocking(|f| f.sync_all()).await {
+                    Ok(()) => Ok(()),
+                    // On windows, `sync_data` uses `FileFlushBuffers` which fails with
+                    // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
+                    // this error, for POSIX compatibility.
+                    #[cfg(windows)]
+                    Err(e)
+                        if e.raw_os_error()
+                            == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
+                    {
+                        Ok(())
+                    }
+                    Err(e) => Err(e.into()),
                 }
-                Err(e) => Err(e.into()),
             }
-        } else if table.is_dir(&fd) {
-            let d = table.get_dir(&fd)?;
-            d.spawn_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_all()?))
-                .await
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
+            Descriptor::Dir(d) => {
+                d.spawn_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_all()?))
+                    .await
+            }
         }
     }
 
@@ -359,7 +355,7 @@ impl<T: WasiView> HostDescriptor for T {
         path: String,
     ) -> Result<(), types::Error> {
         let table = self.table();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -372,18 +368,17 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
     ) -> Result<types::DescriptorStat, types::Error> {
         let table = self.table();
-        if table.is_file(&fd) {
-            let f = table.get_file(&fd)?;
-            // No permissions check on stat: if opened, allowed to stat it
-            let meta = f.spawn_blocking(|f| f.metadata()).await?;
-            Ok(descriptorstat_from(meta))
-        } else if table.is_dir(&fd) {
-            let d = table.get_dir(&fd)?;
-            // No permissions check on stat: if opened, allowed to stat it
-            let meta = d.spawn_blocking(|d| d.dir_metadata()).await?;
-            Ok(descriptorstat_from(meta))
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
+        match table.get_resource(&fd)? {
+            Descriptor::File(f) => {
+                // No permissions check on stat: if opened, allowed to stat it
+                let meta = f.spawn_blocking(|f| f.metadata()).await?;
+                Ok(descriptorstat_from(meta))
+            }
+            Descriptor::Dir(d) => {
+                // No permissions check on stat: if opened, allowed to stat it
+                let meta = d.spawn_blocking(|d| d.dir_metadata()).await?;
+                Ok(descriptorstat_from(meta))
+            }
         }
     }
 
@@ -394,7 +389,7 @@ impl<T: WasiView> HostDescriptor for T {
         path: String,
     ) -> Result<types::DescriptorStat, types::Error> {
         let table = self.table();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -418,7 +413,7 @@ impl<T: WasiView> HostDescriptor for T {
         use cap_fs_ext::DirExt;
 
         let table = self.table();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -456,11 +451,11 @@ impl<T: WasiView> HostDescriptor for T {
         new_path: String,
     ) -> Result<(), types::Error> {
         let table = self.table();
-        let old_dir = table.get_dir(&fd)?;
+        let old_dir = table.get_resource(&fd)?.dir()?;
         if !old_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        let new_dir = table.get_dir(&new_descriptor)?;
+        let new_dir = table.get_resource(&new_descriptor)?.dir()?;
         if !new_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -490,10 +485,7 @@ impl<T: WasiView> HostDescriptor for T {
         use types::{DescriptorFlags, OpenFlags};
 
         let table = self.table_mut();
-        if table.is_file(&fd) {
-            Err(ErrorCode::NotDirectory)?;
-        }
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             Err(ErrorCode::NotPermitted)?;
         }
@@ -582,11 +574,14 @@ impl<T: WasiView> HostDescriptor for T {
             .await?;
 
         match opened {
-            OpenResult::Dir(dir) => Ok(table.push_dir(Dir::new(dir, d.perms, d.file_perms))?),
-
-            OpenResult::File(file) => {
-                Ok(table.push_file(File::new(file, mask_file_perms(d.file_perms, flags)))?)
+            OpenResult::Dir(dir) => {
+                Ok(table.push_resource(Descriptor::Dir(Dir::new(dir, d.perms, d.file_perms)))?)
             }
+
+            OpenResult::File(file) => Ok(table.push_resource(Descriptor::File(File::new(
+                file,
+                mask_file_perms(d.file_perms, flags),
+            )))?),
 
             OpenResult::NotDir => Err(ErrorCode::NotDirectory.into()),
         }
@@ -600,9 +595,7 @@ impl<T: WasiView> HostDescriptor for T {
         // tokio::fs::File just uses std::fs::File's Drop impl to close, so
         // it doesn't appear anyone else has found this to be a problem.
         // (Not that they could solve it without async drop...)
-        if table.delete_file(Resource::new_own(fd.rep())).is_err() {
-            table.delete_dir(fd)?;
-        }
+        table.delete_resource(fd)?;
 
         Ok(())
     }
@@ -613,7 +606,7 @@ impl<T: WasiView> HostDescriptor for T {
         path: String,
     ) -> Result<String, types::Error> {
         let table = self.table();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -630,7 +623,7 @@ impl<T: WasiView> HostDescriptor for T {
         path: String,
     ) -> Result<(), types::Error> {
         let table = self.table();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -645,11 +638,11 @@ impl<T: WasiView> HostDescriptor for T {
         new_path: String,
     ) -> Result<(), types::Error> {
         let table = self.table();
-        let old_dir = table.get_dir(&fd)?;
+        let old_dir = table.get_resource(&fd)?.dir()?;
         if !old_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        let new_dir = table.get_dir(&new_fd)?;
+        let new_dir = table.get_resource(&new_fd)?.dir()?;
         if !new_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -670,7 +663,7 @@ impl<T: WasiView> HostDescriptor for T {
         use cap_fs_ext::DirExt;
 
         let table = self.table();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -686,7 +679,7 @@ impl<T: WasiView> HostDescriptor for T {
         use cap_fs_ext::DirExt;
 
         let table = self.table();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
@@ -764,7 +757,7 @@ impl<T: WasiView> HostDescriptor for T {
         };
 
         // Trap if fd lookup fails:
-        let f = self.table().get_file(&fd)?;
+        let f = self.table().get_resource(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::READ) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -791,7 +784,7 @@ impl<T: WasiView> HostDescriptor for T {
         use crate::preview2::{filesystem::FileOutputStream, TableStreamExt};
 
         // Trap if fd lookup fails:
-        let f = self.table().get_file(&fd)?;
+        let f = self.table().get_resource(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -816,7 +809,7 @@ impl<T: WasiView> HostDescriptor for T {
         use crate::preview2::{filesystem::FileOutputStream, TableStreamExt};
 
         // Trap if fd lookup fails:
-        let f = self.table().get_file(&fd)?;
+        let f = self.table().get_resource(&fd)?.file()?;
 
         if !f.perms.contains(FilePerms::WRITE) {
             Err(types::ErrorCode::BadDescriptor)?;
@@ -874,7 +867,7 @@ impl<T: WasiView> HostDescriptor for T {
         path: String,
     ) -> Result<types::MetadataHashValue, types::Error> {
         let table = self.table();
-        let d = table.get_dir(&fd)?;
+        let d = table.get_resource(&fd)?.dir()?;
         // No permissions check on metadata: if dir opened, allowed to stat it
         let meta = d
             .spawn_blocking(move |d| {
@@ -910,16 +903,15 @@ async fn get_descriptor_metadata(
     table: &Table,
     fd: Resource<types::Descriptor>,
 ) -> Result<cap_std::fs::Metadata, types::Error> {
-    if table.is_file(&fd) {
-        let f = table.get_file(&fd)?;
-        // No permissions check on metadata: if opened, allowed to stat it
-        Ok(f.spawn_blocking(|f| f.metadata()).await?)
-    } else if table.is_dir(&fd) {
-        let d = table.get_dir(&fd)?;
-        // No permissions check on metadata: if opened, allowed to stat it
-        Ok(d.spawn_blocking(|d| d.dir_metadata()).await?)
-    } else {
-        Err(ErrorCode::BadDescriptor.into())
+    match table.get_resource(&fd)? {
+        Descriptor::File(f) => {
+            // No permissions check on metadata: if opened, allowed to stat it
+            Ok(f.spawn_blocking(|f| f.metadata()).await?)
+        }
+        Descriptor::Dir(d) => {
+            // No permissions check on metadata: if opened, allowed to stat it
+            Ok(d.spawn_blocking(|d| d.dir_metadata()).await?)
+        }
     }
 }
 
