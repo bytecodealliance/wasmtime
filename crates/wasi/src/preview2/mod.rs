@@ -44,7 +44,7 @@ pub use self::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, OutputStreamError,
     StreamRuntimeError, StreamState,
 };
-pub use self::table::{OccupiedEntry, Table, TableError};
+pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 

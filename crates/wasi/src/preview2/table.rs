@@ -64,32 +64,6 @@ impl TableEntry {
     }
 }
 
-/// Like [`std::collections::hash_map::OccupiedEntry`], with a subset of
-/// methods available in order to uphold [`Table`] invariants.
-pub struct OccupiedEntry<'a> {
-    table: &'a mut Table,
-    index: u32,
-}
-impl<'a> OccupiedEntry<'a> {
-    /// Get the dynamically-typed reference to the resource.
-    pub fn get(&self) -> &(dyn Any + Send + Sync + 'static) {
-        self.table.map.get(&self.index).unwrap().entry.as_ref()
-    }
-    /// Get the dynamically-typed mutable reference to the resource.
-    pub fn get_mut(&mut self) -> &mut (dyn Any + Send + Sync + 'static) {
-        self.table.map.get_mut(&self.index).unwrap().entry.as_mut()
-    }
-    /// Remove the resource from the table, returning the contents of the
-    /// resource.
-    /// May fail with [`TableError::HasChildren`] if the entry has any
-    /// children, see [`Table::push_child`].
-    /// If this method fails, the [`OccupiedEntry`] is consumed, but the
-    /// resource remains in the table.
-    pub fn remove_entry(self) -> Result<Box<dyn Any + Send + Sync>, TableError> {
-        self.table.delete_entry(self.index).map(|e| e.entry)
-    }
-}
-
 impl Table {
     /// Create an empty table
     pub fn new() -> Self {
@@ -122,8 +96,7 @@ impl Table {
     ///
     /// The parent must exist to create a child. All children resources must
     /// be destroyed before a parent can be destroyed - otherwise [`Table::delete`]
-    /// or [`OccupiedEntry::remove_entry`] will fail with
-    /// [`TableError::HasChildren`].
+    /// will fail with [`TableError::HasChildren`].
     ///
     /// Parent-child relationships are tracked inside the table to ensure that
     /// a parent resource is not deleted while it has live children. This
@@ -251,18 +224,6 @@ impl Table {
         key: &Resource<T>,
     ) -> Result<&mut T, TableError> {
         self.get_mut(key.rep())
-    }
-
-    /// Get an [`OccupiedEntry`] corresponding to a table entry, if it exists. This allows you to
-    /// remove or replace the entry based on its contents. The methods available are a subset of
-    /// [`std::collections::hash_map::OccupiedEntry`] - it does not give access to the key, it
-    /// restricts replacing the entry to items of the same type, and it does not allow for deletion.
-    pub fn entry<'a>(&'a mut self, index: u32) -> Result<OccupiedEntry<'a>, TableError> {
-        if self.map.contains_key(&index) {
-            Ok(OccupiedEntry { table: self, index })
-        } else {
-            Err(TableError::NotPresent)
-        }
     }
 
     fn delete_entry(&mut self, key: u32) -> Result<TableEntry, TableError> {
