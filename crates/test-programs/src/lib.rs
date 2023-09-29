@@ -1,5 +1,6 @@
 ///! This crate exists to build crates for wasm32-wasi in build.rs, and execute
 ///! these wasm programs in harnesses defined under tests/.
+use std::io::IsTerminal;
 
 #[cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
 pub mod http_server;
@@ -40,8 +41,7 @@ pub fn wasi_tests_environment() -> &'static [(&'static str, &'static str)] {
 }
 
 pub fn stdio_is_terminal() -> bool {
-    use is_terminal::is_terminal;
-    is_terminal(&std::io::stdin())
-        && is_terminal(&std::io::stdout())
-        && is_terminal(&std::io::stderr())
+    std::io::stdin().is_terminal()
+        && std::io::stdout().is_terminal()
+        && std::io::stderr().is_terminal()
 }

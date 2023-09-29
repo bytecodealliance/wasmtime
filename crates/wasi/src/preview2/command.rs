@@ -31,9 +31,7 @@ wasmtime::component::bindgen!({
     },
 });
 
-pub fn add_to_linker<T: WasiView + Sync>(
-    l: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()> {
+pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()> {
     crate::preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
@@ -93,7 +91,7 @@ pub mod sync {
         },
     });
 
-    pub fn add_to_linker<T: WasiView + Sync>(
+    pub fn add_to_linker<T: WasiView>(
         l: &mut wasmtime::component::Linker<T>,
     ) -> anyhow::Result<()> {
         crate::preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;

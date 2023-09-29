@@ -3,17 +3,17 @@ use crate::bindings::http::types::{
     IncomingResponse, Method, OutgoingBody, OutgoingRequest, OutgoingResponse, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
-use crate::body::{HostFutureTrailers, HostFutureTrailersState};
-use crate::types::FieldMap;
+use crate::body::{FinishMessage, HostFutureTrailers, HostFutureTrailersState};
+use crate::types::{HostIncomingRequest, HostOutgoingResponse};
 use crate::WasiHttpView;
 use crate::{
     body::{HostIncomingBodyBuilder, HostOutgoingBody},
     types::{
-        HostFields, HostFutureIncomingResponse, HostIncomingResponse, HostOutgoingRequest,
-        TableHttpExt,
+        self, FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingResponse,
+        HostOutgoingRequest, TableHttpExt,
     },
 };
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use std::any::Any;
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
@@ -114,42 +114,110 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[fields_clone] pushing fields")?;
         Ok(id)
     }
-    fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
-        todo!("we haven't implemented the server side of wasi-http yet")
-    }
-    fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
-        self.table().delete_outgoing_request(request)?;
+    fn drop_incoming_request(&mut self, id: IncomingRequest) -> wasmtime::Result<()> {
+        let _ = types::IncomingRequestLens::from(id).delete(self.table())?;
         Ok(())
     }
-    fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
+        types::OutgoingRequestLens::from(request).delete(self.table())?;
+        Ok(())
+    }
+    fn incoming_request_method(&mut self, request: IncomingRequest) -> wasmtime::Result<Method> {
+        let method = types::IncomingRequestLens::from(request)
+            .get(self.table())?
+            .parts
+            .method
+            .as_ref();
+
+        if method == hyper::Method::GET {
+            Ok(Method::Get)
+        } else if method == hyper::Method::HEAD {
+            Ok(Method::Head)
+        } else if method == hyper::Method::POST {
+            Ok(Method::Post)
+        } else if method == hyper::Method::PUT {
+            Ok(Method::Put)
+        } else if method == hyper::Method::DELETE {
+            Ok(Method::Delete)
+        } else if method == hyper::Method::CONNECT {
+            Ok(Method::Connect)
+        } else if method == hyper::Method::OPTIONS {
+            Ok(Method::Options)
+        } else if method == hyper::Method::TRACE {
+            Ok(Method::Trace)
+        } else if method == hyper::Method::PATCH {
+            Ok(Method::Patch)
+        } else {
+            Ok(Method::Other(method.to_owned()))
+        }
     }
     fn incoming_request_path_with_query(
         &mut self,
-        _request: IncomingRequest,
+        id: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        let req = types::IncomingRequestLens::from(id).get(self.table())?;
+        Ok(req
+            .parts
+            .uri
+            .path_and_query()
+            .map(|path_and_query| path_and_query.as_str().to_owned()))
     }
-    fn incoming_request_scheme(
-        &mut self,
-        _request: IncomingRequest,
-    ) -> wasmtime::Result<Option<Scheme>> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn incoming_request_scheme(&mut self, id: IncomingRequest) -> wasmtime::Result<Option<Scheme>> {
+        let req = types::IncomingRequestLens::from(id).get(self.table())?;
+        Ok(req.parts.uri.scheme().map(|scheme| {
+            if scheme == &http::uri::Scheme::HTTP {
+                return Scheme::Http;
+            }
+
+            if scheme == &http::uri::Scheme::HTTPS {
+                return Scheme::Https;
+            }
+
+            Scheme::Other(req.parts.uri.scheme_str().unwrap().to_owned())
+        }))
     }
     fn incoming_request_authority(
         &mut self,
-        _request: IncomingRequest,
+        id: IncomingRequest,
     ) -> wasmtime::Result<Option<String>> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        let req = types::IncomingRequestLens::from(id).get(self.table())?;
+        Ok(req
+            .parts
+            .uri
+            .authority()
+            .map(|auth| auth.as_str().to_owned()))
     }
-    fn incoming_request_headers(&mut self, _request: IncomingRequest) -> wasmtime::Result<Headers> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn incoming_request_headers(&mut self, id: IncomingRequest) -> wasmtime::Result<Headers> {
+        let _ = types::IncomingRequestLens::from(id).get(self.table())?;
+
+        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
+            &mut elem
+                .downcast_mut::<HostIncomingRequest>()
+                .unwrap()
+                .parts
+                .headers
+        }
+
+        let headers = self.table().push_fields(HostFields::Ref {
+            parent: id,
+            get_fields,
+        })?;
+
+        Ok(headers)
     }
     fn incoming_request_consume(
         &mut self,
-        _request: IncomingRequest,
-    ) -> wasmtime::Result<Result<Resource<InputStream>, ()>> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        id: IncomingRequest,
+    ) -> wasmtime::Result<Result<Resource<IncomingBody>, ()>> {
+        let req = types::IncomingRequestLens::from(id).get_mut(self.table())?;
+        match req.body.take() {
+            Some(builder) => {
+                let id = self.table().push_incoming_body(builder.build())?;
+                Ok(Ok(id))
+            }
+
+            None => Ok(Err(())),
+        }
     }
     fn new_outgoing_request(
         &mut self,
@@ -169,19 +237,17 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             scheme,
             body: None,
         };
-        let id = self
-            .table()
-            .push_outgoing_response(req)
-            .context("[new_outgoing_request] pushing request")?;
+        let id = types::OutgoingRequestLens::push(self.table(), req)
+            .context("[new_outgoing_request] pushing request")?
+            .into();
         Ok(id)
     }
     fn outgoing_request_write(
         &mut self,
         request: OutgoingRequest,
-    ) -> wasmtime::Result<Result<Resource<OutgoingBody>, ()>> {
-        let req = self
-            .table()
-            .get_outgoing_request_mut(request)
+    ) -> wasmtime::Result<Result<OutgoingBody, ()>> {
+        let req = types::OutgoingRequestLens::from(request)
+            .get_mut(self.table())
             .context("[outgoing_request_write] getting request")?;
 
         if req.body.is_some() {
@@ -198,15 +264,25 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         Ok(Ok(outgoing_body))
     }
-    fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn drop_response_outparam(&mut self, id: ResponseOutparam) -> wasmtime::Result<()> {
+        let _ = types::ResponseOutparamLens::from(id).delete(self.table())?;
+        Ok(())
     }
     fn set_response_outparam(
         &mut self,
-        _outparam: ResponseOutparam,
-        _response: Result<OutgoingResponse, Error>,
+        id: ResponseOutparam,
+        resp: Result<OutgoingResponse, Error>,
     ) -> wasmtime::Result<()> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        let val = match resp {
+            Ok(resp) => Ok(self.table().delete_outgoing_response(resp)?.try_into()?),
+            Err(e) => Err(e),
+        };
+
+        types::ResponseOutparamLens::from(id)
+            .delete(self.table())?
+            .result
+            .send(val)
+            .map_err(|_| anyhow::anyhow!("failed to initialize response"))
     }
     fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
         self.table()
@@ -214,8 +290,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             .context("[drop_incoming_response] deleting response")?;
         Ok(())
     }
-    fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+    fn drop_outgoing_response(&mut self, id: OutgoingResponse) -> wasmtime::Result<()> {
+        types::OutgoingResponseLens::from(id).delete(self.table())?;
+        Ok(())
     }
     fn incoming_response_status(
         &mut self,
@@ -319,16 +396,41 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
     fn new_outgoing_response(
         &mut self,
-        _status_code: StatusCode,
-        _headers: Headers,
+        status: StatusCode,
+        headers: Headers,
     ) -> wasmtime::Result<OutgoingResponse> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        let fields = self.table().get_fields(headers)?.clone();
+        self.table().delete_fields(headers)?;
+
+        let id = types::OutgoingResponseLens::push(
+            self.table(),
+            HostOutgoingResponse {
+                status,
+                headers: fields,
+                body: None,
+            },
+        )?
+        .into();
+
+        Ok(id)
     }
     fn outgoing_response_write(
         &mut self,
-        _response: OutgoingResponse,
-    ) -> wasmtime::Result<Result<Resource<OutgoingBody>, ()>> {
-        todo!("we haven't implemented the server side of wasi-http yet")
+        id: OutgoingResponse,
+    ) -> wasmtime::Result<Result<OutgoingBody, ()>> {
+        let resp = types::OutgoingResponseLens::from(id).get_mut(self.table())?;
+
+        if resp.body.is_some() {
+            return Ok(Err(()));
+        }
+
+        let (host, body) = HostOutgoingBody::new();
+
+        resp.body.replace(body);
+
+        let id = self.table().push_outgoing_body(host)?;
+
+        Ok(Ok(id))
     }
     fn drop_future_incoming_response(
         &mut self,
@@ -394,6 +496,58 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 
         Ok(pollable)
     }
+
+    fn outgoing_body_write(
+        &mut self,
+        id: OutgoingBody,
+    ) -> wasmtime::Result<Result<Resource<OutputStream>, ()>> {
+        let body = self.table().get_outgoing_body(id)?;
+        if let Some(stream) = body.body_output_stream.take() {
+            let dummy = Resource::<u32>::new_own(id);
+            let id = self.table().push_output_stream_child(stream, dummy)?;
+            Ok(Ok(id))
+        } else {
+            Ok(Err(()))
+        }
+    }
+
+    fn outgoing_body_finish(
+        &mut self,
+        id: OutgoingBody,
+        ts: Option<Trailers>,
+    ) -> wasmtime::Result<()> {
+        let mut body = self.table().delete_outgoing_body(id)?;
+
+        let sender = body
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        let message = if let Some(ts) = ts {
+            FinishMessage::Trailers(self.table().get_fields(ts)?.clone().into())
+        } else {
+            FinishMessage::Finished
+        };
+
+        // Ignoring failure: receiver died sending body, but we can't report that here.
+        let _ = sender.send(message.into());
+
+        Ok(())
+    }
+
+    fn drop_outgoing_body(&mut self, id: OutgoingBody) -> wasmtime::Result<()> {
+        let mut body = self.table().delete_outgoing_body(id)?;
+
+        let sender = body
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        // Ignoring failure: receiver died sending body, but we can't report that here.
+        let _ = sender.send(FinishMessage::Abort);
+
+        Ok(())
+    }
 }
 
 impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingBody for T {
@@ -421,46 +575,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingBody for T {
 
     fn drop(&mut self, id: Resource<IncomingBody>) -> wasmtime::Result<()> {
         let _ = self.table().delete_incoming_body(id)?;
-        Ok(())
-    }
-}
-
-impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
-    fn write(
-        &mut self,
-        id: Resource<OutgoingBody>,
-    ) -> wasmtime::Result<Result<Resource<OutputStream>, ()>> {
-        let body = self.table().get_outgoing_body(&id)?;
-        if let Some(stream) = body.body_output_stream.take() {
-            let id = self.table().push_output_stream_child(stream, id)?;
-            Ok(Ok(id))
-        } else {
-            Ok(Err(()))
-        }
-    }
-
-    fn write_trailers(&mut self, id: Resource<OutgoingBody>, ts: Trailers) -> wasmtime::Result<()> {
-        let mut body = self.table().delete_outgoing_body(id)?;
-        let trailers = self.table().get_fields(ts)?.clone();
-
-        match body
-            .trailers_sender
-            .take()
-            // Should be unreachable - this is the only place we take the trailers sender,
-            // at the end of the HostOutgoingBody's lifetime
-            .ok_or_else(|| anyhow!("trailers_sender missing"))?
-            .send(trailers.into())
-        {
-            Ok(()) => {}
-            Err(_) => {} // Ignoring failure: receiver died sending body, but we can't report that
-                         // here.
-        }
-
-        Ok(())
-    }
-
-    fn drop(&mut self, id: Resource<OutgoingBody>) -> wasmtime::Result<()> {
-        let _ = self.table().delete_outgoing_body(id)?;
         Ok(())
     }
 }

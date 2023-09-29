@@ -48,6 +48,12 @@ serde_json = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true }
 
+async-trait = { workspace = true }
+tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
+hyper = { workspace = true, optional = true }
+http-body = { workspace = true }
+http-body-util = { workspace = true }
+
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }
 
@@ -60,7 +66,7 @@ filecheck = { workspace = true }
 tempfile = { workspace = true }
 test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { workspace = true }
-tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread"] }
 wast = { workspace = true }
 criterion = "0.5.0"
 num_cpus = "1.13.0"
@@ -101,6 +107,7 @@ members = [
   "crates/jit-icache-coherence",
   "crates/test-programs/wasi-tests",
   "crates/test-programs/wasi-http-tests",
+  "crates/test-programs/wasi-http-proxy-tests",
   "crates/test-programs/wasi-sockets-tests",
   "crates/test-programs/command-tests",
   "crates/test-programs/reactor-tests",
@@ -251,7 +258,11 @@ tempfile = "3.1.0"
 filecheck = "0.5.0"
 libc = "0.2.60"
 file-per-thread-logger = "0.2.0"
-tokio = { version = "1.26.0" }
+tokio = { version = "1.26.0", features = [ "rt", "time" ] }
+hyper = "=1.0.0-rc.3"
+http = "0.2.9"
+http-body = "=1.0.0-rc.2"
+http-body-util = "=0.1.0-rc.2"
 bytes = "1.4"
 futures = { version = "0.3.27", default-features = false }
 indexmap = "2.0.0"
@@ -275,7 +286,7 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads"]
-wasi-http = ["dep:wasmtime-wasi-http", "wasmtime-wasi-http?/sync"]
+wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper", "wasmtime-wasi-http?/sync"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
 all-arch = ["wasmtime/all-arch"]
 component-model = [
@@ -285,6 +296,9 @@ component-model = [
 ]
 winch = ["wasmtime/winch"]
 wmemcheck = ["wasmtime/wmemcheck"]
+
+# Enable the `wasmtime serve` command
+serve = ["wasi-http", "component-model"]
 
 [[test]]
 name = "host_segfault"
