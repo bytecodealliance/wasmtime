@@ -17,9 +17,8 @@ use anyhow::Context;
 use std::any::Any;
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
-    bindings::io::poll::Pollable,
     bindings::io::streams::{InputStream, OutputStream},
-    HostPollable, PollableFuture, TablePollableExt,
+    Pollable, PollableFuture,
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
@@ -360,9 +359,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             Box::pin(elem.downcast_mut::<HostFutureTrailers>().unwrap().ready())
         }
 
+        // FIXME: this should use `push_child_resource`
         let id = self
             .table()
-            .push_host_pollable(HostPollable::TableEntry { index, make_future })?;
+            .push_resource(Pollable::TableEntry { index, make_future })?;
 
         Ok(id)
     }
@@ -489,7 +489,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
             )
         }
 
-        let pollable = self.table().push_host_pollable(HostPollable::TableEntry {
+        // FIXME: this should use `push_child_resource`
+        let pollable = self.table().push_resource(Pollable::TableEntry {
             index: id,
             make_future,
         })?;

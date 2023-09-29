@@ -1,7 +1,4 @@
-use crate::preview2::{
-    bindings::io::poll::{self, Pollable},
-    Table, TableError, WasiView,
-};
+use crate::preview2::{bindings::io::poll, WasiView};
 use anyhow::Result;
 use std::any::Any;
 use std::collections::{hash_map::Entry, HashMap};
@@ -19,8 +16,8 @@ pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + Sync +
 /// A pollable is not the same thing as a Rust Future: the same pollable may be used to
 /// repeatedly check for readiness of a given condition, e.g. if a stream is readable
 /// or writable. So, rather than containing a Future, which can only become Ready once, a
-/// HostPollable contains a way to create a Future in each call to `poll_list`.
-pub enum HostPollable {
+/// Pollable contains a way to create a Future in each call to `poll_list`.
+pub enum Pollable {
     /// Create a Future by calling a fn on another resource in the table. This
     /// indirection means the created Future can use a mut borrow of another
     /// resource in the Table (e.g. a stream)
@@ -29,33 +26,6 @@ pub enum HostPollable {
     /// pollables which do not share state with another resource in the Table
     /// (e.g. a timer)
     Closure(ClosureFuture),
-}
-
-pub trait TablePollableExt {
-    fn push_host_pollable(&mut self, p: HostPollable) -> Result<Resource<Pollable>, TableError>;
-    fn get_host_pollable_mut(
-        &mut self,
-        fd: &Resource<Pollable>,
-    ) -> Result<&mut HostPollable, TableError>;
-    fn delete_host_pollable(&mut self, fd: Resource<Pollable>) -> Result<HostPollable, TableError>;
-}
-
-impl TablePollableExt for Table {
-    fn push_host_pollable(&mut self, p: HostPollable) -> Result<Resource<Pollable>, TableError> {
-        Ok(Resource::new_own(match p {
-            HostPollable::TableEntry { index, .. } => self.push_child(Box::new(p), index)?,
-            HostPollable::Closure { .. } => self.push(Box::new(p))?,
-        }))
-    }
-    fn get_host_pollable_mut(
-        &mut self,
-        fd: &Resource<Pollable>,
-    ) -> Result<&mut HostPollable, TableError> {
-        self.get_mut::<HostPollable>(fd.rep())
-    }
-    fn delete_host_pollable(&mut self, fd: Resource<Pollable>) -> Result<HostPollable, TableError> {
-        self.delete::<HostPollable>(fd.rep())
-    }
 }
 
 #[async_trait::async_trait]
@@ -70,19 +40,17 @@ impl<T: WasiView> poll::Host for T {
 
         for (ix, p) in pollables.iter().enumerate() {
             let ix: u32 = ix.try_into()?;
-            match table.get_host_pollable_mut(&p)? {
-                HostPollable::Closure(f) => closure_futures.push((f(), vec![ix])),
-                HostPollable::TableEntry { index, make_future } => {
-                    match table_futures.entry(*index) {
-                        Entry::Vacant(v) => {
-                            v.insert((*make_future, vec![ix]));
-                        }
-                        Entry::Occupied(mut o) => {
-                            let (_, v) = o.get_mut();
-                            v.push(ix);
-                        }
+            match table.get_resource_mut(&p)? {
+                Pollable::Closure(f) => closure_futures.push((f(), vec![ix])),
+                Pollable::TableEntry { index, make_future } => match table_futures.entry(*index) {
+                    Entry::Vacant(v) => {
+                        v.insert((*make_future, vec![ix]));
                     }
-                }
+                    Entry::Occupied(mut o) => {
+                        let (_, v) = o.get_mut();
+                        v.push(ix);
+                    }
+                },
             }
         }
 
@@ -133,9 +101,9 @@ impl<T: WasiView> poll::Host for T {
 
         let table = self.table_mut();
 
-        let closure_future = match table.get_host_pollable_mut(&pollable)? {
-            HostPollable::Closure(f) => f(),
-            HostPollable::TableEntry { index, make_future } => {
+        let closure_future = match table.get_resource_mut(&pollable)? {
+            Pollable::Closure(f) => f(),
+            Pollable::TableEntry { index, make_future } => {
                 let index = *index;
                 let make_future = *make_future;
                 make_future(table.get_as_any_mut(index)?)
@@ -149,14 +117,14 @@ impl<T: WasiView> poll::Host for T {
 #[async_trait::async_trait]
 impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
     fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-        self.table_mut().delete_host_pollable(pollable)?;
+        self.table_mut().delete_resource(pollable)?;
         Ok(())
     }
 }
 
 pub mod sync {
     use crate::preview2::{
-        bindings::io::poll::{Host as AsyncHost, HostPollable as AsyncHostPollable},
+        bindings::io::poll as async_poll,
         bindings::sync_io::io::poll::{self, Pollable},
         in_tokio, WasiView,
     };
@@ -165,17 +133,17 @@ pub mod sync {
 
     impl<T: WasiView> poll::Host for T {
         fn poll_list(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
-            in_tokio(async { AsyncHost::poll_list(self, pollables).await })
+            in_tokio(async { async_poll::Host::poll_list(self, pollables).await })
         }
 
         fn poll_one(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-            in_tokio(async { AsyncHost::poll_one(self, pollable).await })
+            in_tokio(async { async_poll::Host::poll_one(self, pollable).await })
         }
     }
 
     impl<T: WasiView> crate::preview2::bindings::sync_io::io::poll::HostPollable for T {
         fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-            AsyncHostPollable::drop(self, pollable)
+            async_poll::HostPollable::drop(self, pollable)
         }
     }
 }

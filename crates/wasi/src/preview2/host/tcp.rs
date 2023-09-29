@@ -1,12 +1,10 @@
 use crate::preview2::bindings::{
-    io::poll::Pollable,
     io::streams::{InputStream, OutputStream},
     sockets::network::{self, ErrorCode, IpAddressFamily, IpSocketAddress, Network},
     sockets::tcp::{self, ShutdownType},
 };
-use crate::preview2::poll::TablePollableExt;
 use crate::preview2::tcp::{TcpSocket, TcpState};
-use crate::preview2::{HostPollable, PollableFuture, WasiView};
+use crate::preview2::{Pollable, PollableFuture, WasiView};
 use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
@@ -468,12 +466,12 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             join
         }
 
-        let pollable = HostPollable::TableEntry {
+        let pollable = Pollable::TableEntry {
             index: this.rep(),
             make_future: make_tcp_socket_future,
         };
 
-        Ok(self.table_mut().push_host_pollable(pollable)?)
+        Ok(self.table_mut().push_child_resource(pollable, &this)?)
     }
 
     fn shutdown(

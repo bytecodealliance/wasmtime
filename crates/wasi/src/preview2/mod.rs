@@ -37,7 +37,7 @@ pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
-pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, TablePollableExt};
+pub use self::poll::{ClosureFuture, MakeFuture, Pollable, PollableFuture};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
 pub use self::stream::{
@@ -152,6 +152,7 @@ pub mod bindings {
             "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,
             "wasi:io/streams/input-stream": super::stream::InputStream,
             "wasi:io/streams/output-stream": super::stream::OutputStream,
+            "wasi:io/poll/pollable": super::poll::Pollable,
         },
     });
 

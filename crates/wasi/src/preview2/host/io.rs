@@ -1,9 +1,8 @@
 use crate::preview2::{
-    bindings::io::poll::Pollable,
     bindings::io::streams::{self, InputStream, OutputStream},
     poll::PollableFuture,
     stream::{OutputStreamError, StreamRuntimeError, StreamState},
-    HostPollable, TableError, TablePollableExt, WasiView,
+    Pollable, TableError, WasiView,
 };
 use std::any::Any;
 use std::future::Future;
@@ -81,12 +80,13 @@ impl<T: WasiView> streams::HostOutputStream for T {
             })
         }
 
-        Ok(self
-            .table_mut()
-            .push_host_pollable(HostPollable::TableEntry {
+        Ok(self.table_mut().push_child_resource(
+            Pollable::TableEntry {
                 index: stream.rep(),
                 make_future: output_stream_ready,
-            })?)
+            },
+            &stream,
+        )?)
     }
 
     async fn blocking_write_and_flush(
@@ -360,7 +360,7 @@ impl<T: WasiView> streams::HostInputStream for T {
                     }
                 }
 
-                HostPollable::TableEntry {
+                Pollable::TableEntry {
                     index: stream.rep(),
                     make_future: input_stream_ready,
                 }
@@ -368,10 +368,10 @@ impl<T: WasiView> streams::HostInputStream for T {
             // Files are always "ready" immediately (because we have no way to actually wait on
             // readiness in epoll)
             InputStream::File(_) => {
-                HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
+                Pollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
             }
         };
-        Ok(self.table_mut().push_host_pollable(pollable)?)
+        Ok(self.table_mut().push_child_resource(pollable, &stream)?)
     }
 }
 
