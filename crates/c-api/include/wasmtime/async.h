@@ -2,6 +2,28 @@
  * \file wasmtime/async.h
  *
  * \brief Wasmtime async functionality
+ *
+ * Async functionality in Wasmtime is well documented here:
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support
+ *
+ * All WebAssembly executes synchronously, but an async support enables the Wasm code
+ * be executed on a seperate stack, so it can be paused and resumed. There are three
+ * mechanisms for yielding control from wasm to the caller: fuel, epochs, and async host functions.
+ *
+ * When WebAssembly is executed, a #wasmtime_call_future_t is returned. This struct represents the
+ * state of the execution and each call to #wasmtime_call_future_poll will execute the WebAssembly
+ * code on a seperate stack until the function returns or yields control back to the caller.
+ *
+ * It's expected these futures are pulled in a loop until completed, at which point the future 
+ * should be deleted. Functions that return a #wasmtime_call_future_t are special in that all 
+ * parameters to that function should not be modified in any way and must be kept alive until
+ * the future is deleted. This includes concurrent calls for a single store - another function
+ * on a store should not be called while there is a #wasmtime_call_future_t alive.
+ *
+ * As for asynchronous host calls - the reverse contract is upheld. Wasmtime will keep all parameters
+ * to the function alive and unmodified until the #wasmtime_func_async_continuation_callback_t returns
+ * as completed or returns a trap.
+ *
  */
 
 #ifndef WASMTIME_ASYNC_H
@@ -90,8 +112,6 @@ typedef bool (*wasmtime_func_async_continuation_callback_t)(
 
 /**
  * A continuation for the current state of the host function's execution.
- * 
- * This continutation can be polled via the callback and returns the current state.
  */
 typedef struct wasmtime_async_continuation_t {
   wasmtime_func_async_continuation_callback_t callback;
@@ -123,18 +143,18 @@ typedef wasmtime_async_continuation_t *(*wasmtime_func_async_callback_t)(
 /**
  * \brief The structure representing a asynchronously running function.
  *
- * This structure is always owned by the caller and must be deleted using wasmtime_call_future_delete.
+ * This structure is always owned by the caller and must be deleted using #wasmtime_call_future_delete.
  *
- *
- *
+ * Functions that return this type require that the parameters to the function are unmodified until 
+ * this future is destroyed.
  */
 typedef struct wasmtime_call_future wasmtime_call_future_t;
 
 /**
  * \brief Executes WebAssembly in the function.
  *
- * Returns true if the function call has completed, which then wasmtime_call_future_get_results should be called.
- * After this function returns true, it should *not* be called again for a given future.
+ * Returns true if the function call has completed. After this function returns true, it should *not* be 
+ * called again for a given future.
  *
  * This function returns false if execution has yielded either due to being out of fuel 
  * (see wasmtime_store_out_of_fuel_async_yield), or the epoch has been incremented enough 
@@ -152,8 +172,7 @@ WASM_API_EXTERN bool wasmtime_call_future_poll(wasmtime_call_future_t *future);
 /**
  * /brief Frees the underlying memory for a future.
  *
- * All wasmtime_call_future_t are owned by the caller and should be deleted using this function no 
- * matter the result.
+ * All wasmtime_call_future_t are owned by the caller and should be deleted using this function.
  */
 WASM_API_EXTERN void wasmtime_call_future_delete(wasmtime_call_future_t *future);
 
@@ -166,11 +185,15 @@ WASM_API_EXTERN void wasmtime_call_future_delete(wasmtime_call_future_t *future)
  * The result is a future that is owned by the caller and must be deleted via #wasmtime_call_future_delete. 
  *
  * The `args` and `results` pointers may be `NULL` if the corresponding length is zero.
+ * The `trap_ret` and `error_ret` pointers may *not* be `NULL`.
  *
  * Does not take ownership of #wasmtime_val_t arguments or #wasmtime_val_t results,
- * the arguments and results must be kept alive until the returned #wasmtime_call_future_t is deleted.
+ * and all parameters to this function must be kept alive and not modified until the
+ * returned #wasmtime_call_future_t is deleted. This includes the context and store
+ * parameters. Only a single future can be alive for a given store at a single time 
+ * (meaning only call this function after the previous call's future was deleted).
  *
- * See #wasmtime_call_future_t for for more information.
+ * See the header documentation for for more information.
  *
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Func.html#method.call_async
@@ -183,13 +206,15 @@ WASM_API_EXTERN wasmtime_call_future_t* wasmtime_func_call_async(
     wasmtime_val_t *results,
     size_t nresults,
     wasm_trap_t** trap_ret,
-    wasmtime_error_t** wasmtime_error_t);
+    wasmtime_error_t** error_ret);
 
 /**
  * \brief Defines a new async function in this linker.
  *
  * This function behaves similar to #wasmtime_linker_define_func, except it supports async
- * callbacks
+ * callbacks.
+ *
+ * The callback `cb` will be invoked on another stack (fiber for Windows).
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_linker_define_async_func(
     wasmtime_linker_t *linker,
@@ -208,10 +233,10 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_linker_define_async_func(
  * This is the same as #wasmtime_linker_instantiate but used for async stores 
  * (which requires functions are called asynchronously). The returning #wasmtime_call_future_t 
  * must be polled using #wasmtime_call_future_poll, and is owned and must be deleted using #wasmtime_call_future_delete.
- * The future's results are retrieved using `wasmtime_call_future_get_results after polling has returned true marking 
- * the future as completed.
  *
- * All arguments to this function must outlive the returned future.
+ * The `trap_ret` and `error_ret` pointers may *not* be `NULL`.
+ *
+ * All arguments to this function must outlive the returned future and be unmodified until the future is deleted.
  */
 WASM_API_EXTERN wasmtime_call_future_t *wasmtime_linker_instantiate_async(
     const wasmtime_linker_t *linker,
