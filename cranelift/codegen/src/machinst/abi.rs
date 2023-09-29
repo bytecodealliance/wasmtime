@@ -1559,7 +1559,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                 // We need to dereference the pointer.
                 let base = match &pointer {
                     &ABIArgSlot::Reg { reg, ty, .. } => {
-                        let tmp = vregs.alloc(ty).unwrap().only_reg().unwrap();
+                        let tmp = vregs.alloc_with_deferred_error(ty).only_reg().unwrap();
                         self.reg_args.push(ArgPair {
                             vreg: Writable::from_reg(tmp),
                             preg: reg.into(),
@@ -1621,9 +1621,10 @@ impl<M: ABIMachineSpec> Callee<M> {
                                     if n < word_bits =>
                                 {
                                     let signed = ext == ir::ArgumentExtension::Sext;
-                                    let dst = writable_value_regs(vregs.alloc(ty).unwrap())
-                                        .only_reg()
-                                        .unwrap();
+                                    let dst =
+                                        writable_value_regs(vregs.alloc_with_deferred_error(ty))
+                                            .only_reg()
+                                            .unwrap();
                                     ret.push(M::gen_extend(
                                         dst, from_reg, signed, from_bits,
                                         /* to_bits = */ word_bits,
@@ -1664,9 +1665,10 @@ impl<M: ABIMachineSpec> Callee<M> {
                                 {
                                     assert_eq!(M::word_reg_class(), from_reg.class());
                                     let signed = ext == ir::ArgumentExtension::Sext;
-                                    let dst = writable_value_regs(vregs.alloc(ty).unwrap())
-                                        .only_reg()
-                                        .unwrap();
+                                    let dst =
+                                        writable_value_regs(vregs.alloc_with_deferred_error(ty))
+                                            .only_reg()
+                                            .unwrap();
                                     ret.push(M::gen_extend(
                                         dst, from_reg, signed, from_bits,
                                         /* to_bits = */ word_bits,
