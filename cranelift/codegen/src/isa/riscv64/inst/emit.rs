@@ -4,7 +4,7 @@ use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp,
+    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp,
 };
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
@@ -859,6 +859,22 @@ impl Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
                 sink.put2(encode_cs_type(op, src, base, imm5));
+            }
+
+            // c.not
+            //
+            // This is an alias for `xori rd, rd, -1`
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Xori,
+                rd,
+                rs,
+                imm12,
+            } if has_zcb
+                && rd.to_reg() == rs
+                && reg_is_compressible(rs)
+                && imm12.as_i16() == -1 =>
+            {
+                sink.put2(encode_cszn_type(CsznOp::CNot, rd));
             }
 
             _ => return None,

@@ -782,6 +782,12 @@
   (CFld)
 ))
 
+;; Opcodes for the CSZN compressed instruction format
+(type CsznOp (enum
+  (CNot)
+))
+
+
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR
   (CsrRW)

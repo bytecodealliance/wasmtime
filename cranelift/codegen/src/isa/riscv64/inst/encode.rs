@@ -9,7 +9,7 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, VecAluOpRImm5,
+    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, CsznOp, VecAluOpRImm5,
     VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth,
     VecOpCategory, VecOpMasking,
 };
@@ -602,5 +602,20 @@ fn encode_cs_cl_type_bits(
     bits |= reg_to_compressed_gpr_num(base) << 7;
     bits |= unsigned_field_width(imm3 as u32, 3) << 10;
     bits |= unsigned_field_width(funct3, 3) << 13;
+    bits.try_into().unwrap()
+}
+
+// Encode a CSZN type instruction.
+//
+// This is an additional encoding format that is introduced in the Zcb extension.
+//
+// 0--1-2---------6-7--------9-10------15
+// |op |   funct5  |  rd/rs1  | funct6 |
+pub fn encode_cszn_type(op: CsznOp, rd: WritableReg) -> u16 {
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= unsigned_field_width(op.funct5(), 5) << 2;
+    bits |= reg_to_compressed_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(op.funct6(), 6) << 10;
     bits.try_into().unwrap()
 }
