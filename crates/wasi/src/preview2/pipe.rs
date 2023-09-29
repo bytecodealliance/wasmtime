@@ -301,24 +301,22 @@ mod test {
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn empty_read_stream() {
         let mut reader = AsyncReadStream::new(tokio::io::empty());
-        let (bs, state) = reader.read(10).unwrap();
-        assert!(bs.is_empty());
 
         // In a multi-threaded context, the value of state is not deterministic -- the spawned
         // reader task may run on a different thread.
-        match state {
+        match reader.read(10) {
             // The reader task ran before we tried to read, and noticed that the input was empty.
-            StreamState::Closed => {}
+            Err(StreamError::Closed) => {}
 
             // The reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            StreamState::Open => {
+            Ok(bs) => {
+                assert!(bs.is_empty());
                 resolves_immediately(reader.ready())
                     .await
                     .expect("ready is ok");
-                let (bs, state) = reader.read(0).unwrap();
-                assert!(bs.is_empty());
-                assert_eq!(state, StreamState::Closed);
+                assert!(matches!(reader.read(0), Err(StreamError::Closed)));
             }
+            res => panic!("unexpected: {res:?}"),
         }
     }
 
@@ -326,29 +324,25 @@ mod test {
     async fn infinite_read_stream() {
         let mut reader = AsyncReadStream::new(tokio::io::repeat(0));
 
-        let (bs, state) = reader.read(10).unwrap();
-        assert_eq!(state, StreamState::Open);
+        let bs = reader.read(10).unwrap();
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
             resolves_immediately(reader.ready())
                 .await
                 .expect("ready is ok");
             // Now a read should succeed
-            let (bs, state) = reader.read(10).unwrap();
+            let bs = reader.read(10).unwrap();
             assert_eq!(bs.len(), 10);
-            assert_eq!(state, StreamState::Open);
         } else {
             assert_eq!(bs.len(), 10);
         }
 
         // Subsequent reads should succeed
-        let (bs, state) = reader.read(10).unwrap();
-        assert_eq!(state, StreamState::Open);
+        let bs = reader.read(10).unwrap();
         assert_eq!(bs.len(), 10);
 
         // Even 0-length reads should succeed and show its open
-        let (bs, state) = reader.read(0).unwrap();
-        assert_eq!(state, StreamState::Open);
+        let bs = reader.read(0).unwrap();
         assert_eq!(bs.len(), 0);
     }
 
@@ -362,37 +356,33 @@ mod test {
     async fn finite_read_stream() {
         let mut reader = AsyncReadStream::new(finite_async_reader(&[1; 123]).await);
 
-        let (bs, state) = reader.read(123).unwrap();
-        assert_eq!(state, StreamState::Open);
+        let bs = reader.read(123).unwrap();
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
             resolves_immediately(reader.ready())
                 .await
                 .expect("ready is ok");
             // Now a read should succeed
-            let (bs, state) = reader.read(123).unwrap();
+            let bs = reader.read(123).unwrap();
             assert_eq!(bs.len(), 123);
-            assert_eq!(state, StreamState::Open);
         } else {
             assert_eq!(bs.len(), 123);
         }
 
         // The AsyncRead's should be empty now, but we have a race where the reader task hasn't
         // yet send that to the AsyncReadStream.
-        let (bs, state) = reader.read(0).unwrap();
-        assert!(bs.is_empty());
-        match state {
-            StreamState::Closed => {} // Correct!
-            StreamState::Open => {
+        match reader.read(0) {
+            Err(StreamError::Closed) => {} // Correct!
+            Ok(bs) => {
+                assert!(bs.is_empty());
                 // Need to await to give this side time to catch up
                 resolves_immediately(reader.ready())
                     .await
                     .expect("ready is ok");
                 // Now a read should show closed
-                let (bs, state) = reader.read(0).unwrap();
-                assert_eq!(bs.len(), 0);
-                assert_eq!(state, StreamState::Closed);
+                assert!(matches!(reader.read(0), Err(StreamError::Closed)));
             }
+            res => panic!("unexpected: {res:?}"),
         }
     }
 
@@ -405,33 +395,29 @@ mod test {
 
         w.write_all(&[123]).await.unwrap();
 
-        let (bs, state) = reader.read(1).unwrap();
-        assert_eq!(state, StreamState::Open);
+        let bs = reader.read(1).unwrap();
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
             resolves_immediately(reader.ready())
                 .await
                 .expect("ready is ok");
             // Now a read should succeed
-            let (bs, state) = reader.read(1).unwrap();
+            let bs = reader.read(1).unwrap();
             assert_eq!(*bs, [123u8]);
-            assert_eq!(state, StreamState::Open);
         } else {
             assert_eq!(*bs, [123u8]);
         }
 
         // The stream should be empty and open now:
-        let (bs, state) = reader.read(1).unwrap();
+        let bs = reader.read(1).unwrap();
         assert!(bs.is_empty());
-        assert_eq!(state, StreamState::Open);
 
         // We can wait on readiness and it will time out:
         never_resolves(reader.ready()).await;
 
         // Still open and empty:
-        let (bs, state) = reader.read(1).unwrap();
+        let bs = reader.read(1).unwrap();
         assert!(bs.is_empty());
-        assert_eq!(state, StreamState::Open);
 
         // Put something else in the stream:
         w.write_all(&[45]).await.unwrap();
@@ -443,22 +429,19 @@ mod test {
             .expect("the ready is ok");
 
         // read the something else back out:
-        let (bs, state) = reader.read(1).unwrap();
+        let bs = reader.read(1).unwrap();
         assert_eq!(*bs, [45u8]);
-        assert_eq!(state, StreamState::Open);
 
         // nothing else in there:
-        let (bs, state) = reader.read(1).unwrap();
+        let bs = reader.read(1).unwrap();
         assert!(bs.is_empty());
-        assert_eq!(state, StreamState::Open);
 
         // We can wait on readiness and it will time out:
         never_resolves(reader.ready()).await;
 
         // nothing else in there:
-        let (bs, state) = reader.read(1).unwrap();
+        let bs = reader.read(1).unwrap();
         assert!(bs.is_empty());
-        assert_eq!(state, StreamState::Open);
 
         // Now close the pipe:
         drop(w);
@@ -470,9 +453,7 @@ mod test {
             .expect("the ready is ok");
 
         // empty and now closed:
-        let (bs, state) = reader.read(1).unwrap();
-        assert!(bs.is_empty());
-        assert_eq!(state, StreamState::Closed);
+        assert!(matches!(reader.read(1), Err(StreamError::Closed)));
     }
 
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
@@ -495,9 +476,8 @@ mod test {
 
         // Now we expect the reader task has sent 4k from the stream to the reader.
         // Try to read out one bigger than the buffer available:
-        let (bs, state) = reader.read(4097).unwrap();
+        let bs = reader.read(4097).unwrap();
         assert_eq!(bs.len(), 4096);
-        assert_eq!(state, StreamState::Open);
 
         // Allow the crank to turn more:
         resolves_immediately(reader.ready())
@@ -506,9 +486,8 @@ mod test {
 
         // Again we expect the reader task has sent 4k from the stream to the reader.
         // Try to read out one bigger than the buffer available:
-        let (bs, state) = reader.read(4097).unwrap();
+        let bs = reader.read(4097).unwrap();
         assert_eq!(bs.len(), 4096);
-        assert_eq!(state, StreamState::Open);
 
         // The writer task is now finished - join with it:
         let w = resolves_immediately(writer_task).await;
@@ -522,9 +501,7 @@ mod test {
             .expect("ready is ok");
 
         // Now we expect the reader to be empty, and the stream closed:
-        let (bs, state) = reader.read(4097).unwrap();
-        assert_eq!(bs.len(), 0);
-        assert_eq!(state, StreamState::Closed);
+        assert!(matches!(reader.read(4097), Err(StreamError::Closed)));
     }
 
     #[test_log::test(test_log::test(tokio::test(flavor = "multi_thread")))]

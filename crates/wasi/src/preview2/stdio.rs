@@ -326,12 +326,10 @@ mod test {
                                     stdin.ready().await.unwrap();
 
                                     println!("child: reading input");
-                                    let (bytes, status) = stdin.read(1024).unwrap();
+                                    // We can't effectively test for the case where stdin was closed, so panic if it is...
+                                    let bytes = stdin.read(1024).unwrap();
 
-                                    println!("child: {:?}, {:?}", bytes, status);
-
-                                    // We can't effectively test for the case where stdin was closed.
-                                    assert_eq!(status, StreamState::Open);
+                                    println!("child got: {:?}", bytes);
 
                                     buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
                                     if let Some((line, rest)) = buffer.split_once('\n') {
