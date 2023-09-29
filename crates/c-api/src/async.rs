@@ -29,6 +29,8 @@ pub struct wasmtime_async_continuation_t {
     pub finalizer: Option<extern "C" fn(*mut c_void)>,
 }
 
+unsafe impl Send for wasmtime_async_continuation_t {}
+
 pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(
     *mut c_void,
     *mut wasmtime_caller_t,
@@ -38,10 +40,7 @@ pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(
 struct CHostCallFuture<'a> {
     pub callback: wasmtime_func_async_continuation_callback_t,
     pub env: crate::ForeignData,
-    pub caller: wasmtime_caller_t<'a>,
-    pub param_count: usize,
-    pub results: &'a mut [Val],
-    pub hostcall_val_storage: Vec<wasmtime_val_t>,
+    pub caller: &'a wasmtime_caller_t<'a>,
 }
 
 unsafe impl Send for CHostCallFuture<'_> {}
@@ -60,25 +59,70 @@ impl Future for CHostCallFuture<'_> {
         } else if !done {
             Poll::Pending
         } else {
-            // The contract is that once `Ready` is returned `poll` should never be called again.
-            unsafe {
-                // Translate the `wasmtime_val_t` results into the `results` space
-                let (_, out_results) = this.hostcall_val_storage.split_at_mut(this.param_count);
-                for (i, result) in out_results.iter().enumerate() {
-                    this.results[i] = result.to_val();
-                }
-
-                // Move our `vals` storage back into the store now that we no longer
-                // need it. This'll get picked up by the next hostcall and reuse our
-                // same storage.
-                let mut v = mem::take(&mut this.hostcall_val_storage);
-                v.truncate(0);
-                this.caller.caller.data_mut().hostcall_val_storage = v;
-
-                Poll::Ready(Ok(()))
-            }
+            Poll::Ready(Ok(()))
         }
     }
+}
+
+struct CallbackData {
+    env: *mut c_void,
+}
+unsafe impl Send for CallbackData {}
+
+async fn invoke_c_async_callback<'a>(
+    cb: wasmtime_func_async_callback_t,
+    data: CallbackData,
+    mut caller: Caller<'a, crate::StoreData>,
+    params: &'a [Val],
+    results: &'a mut [Val],
+) -> Result<()> {
+    // Convert `params/results` to `wasmtime_val_t`. Use the previous
+    // storage in `hostcall_val_storage` to help avoid allocations all the
+    // time.
+    let mut hostcall_val_storage = mem::take(&mut caller.data_mut().hostcall_val_storage);
+    debug_assert!(hostcall_val_storage.is_empty());
+    hostcall_val_storage.reserve(params.len() + results.len());
+    hostcall_val_storage.extend(params.iter().cloned().map(|p| wasmtime_val_t::from_val(p)));
+    hostcall_val_storage.extend((0..results.len()).map(|_| wasmtime_val_t {
+        kind: WASMTIME_I32,
+        of: wasmtime_val_union { i32: 0 },
+    }));
+    let (params, out_results) = hostcall_val_storage.split_at_mut(params.len());
+
+    // Invoke the C function pointer.
+    // The result will be a continutation which we will wrap in a Future.
+    let mut caller = wasmtime_caller_t { caller };
+    let continuation = cb(
+        data.env,
+        &mut caller,
+        params.as_ptr(),
+        params.len(),
+        out_results.as_mut_ptr(),
+        out_results.len(),
+    );
+
+    let fut = CHostCallFuture {
+        callback: continuation.callback,
+        env: crate::ForeignData {
+            data: continuation.env,
+            finalizer: continuation.finalizer,
+        },
+        caller: &caller,
+    };
+    fut.await?;
+    // Translate the `wasmtime_val_t` results into the `results` space
+    for (i, result) in out_results.iter().enumerate() {
+        unsafe {
+            results[i] = result.to_val();
+        }
+    }
+    // Move our `vals` storage back into the store now that we no longer
+    // need it. This'll get picked up by the next hostcall and reuse our
+    // same storage.
+    let mut v = mem::take(&mut hostcall_val_storage);
+    v.truncate(0);
+    caller.caller.data_mut().hostcall_val_storage = v;
+    Ok(())
 }
 
 unsafe fn c_async_callback_to_rust_fn(
@@ -94,47 +138,12 @@ unsafe fn c_async_callback_to_rust_fn(
        + Sync
        + 'static {
     let foreign = crate::ForeignData { data, finalizer };
-    move |mut caller, params, results| {
+    move |caller, params, results| {
         let _ = &foreign; // move entire foreign into this closure
-
-        // Convert `params/results` to `wasmtime_val_t`. Use the previous
-        // storage in `hostcall_val_storage` to help avoid allocations all the
-        // time.
-        let mut hostcall_val_storage = mem::take(&mut caller.data_mut().hostcall_val_storage);
-        debug_assert!(hostcall_val_storage.is_empty());
-        hostcall_val_storage.reserve(params.len() + results.len());
-        hostcall_val_storage.extend(params.iter().cloned().map(|p| wasmtime_val_t::from_val(p)));
-        hostcall_val_storage.extend((0..results.len()).map(|_| wasmtime_val_t {
-            kind: WASMTIME_I32,
-            of: wasmtime_val_union { i32: 0 },
-        }));
-        let (params, out_results) = hostcall_val_storage.split_at_mut(params.len());
-
-        // Invoke the C function pointer.
-        // The result will be a continutation which we will wrap in a Future.
-        // The future will take ownership of the vals, and caller as well as the continutation.
-        let mut caller = wasmtime_caller_t { caller };
-        let continuation = callback(
-            foreign.data,
-            &mut caller,
-            params.as_ptr(),
-            params.len(),
-            out_results.as_mut_ptr(),
-            out_results.len(),
-        );
-
-        let param_count = params.len();
-        return Box::new(CHostCallFuture {
-            callback: continuation.callback,
-            env: crate::ForeignData {
-                data: continuation.env,
-                finalizer: continuation.finalizer,
-            },
-            caller,
-            param_count,
-            results,
-            hostcall_val_storage,
-        });
+        let data = CallbackData { env: foreign.data };
+        Box::new(invoke_c_async_callback(
+            callback, data, caller, params, results,
+        ))
     }
 }
 
