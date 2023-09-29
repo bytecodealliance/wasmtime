@@ -634,7 +634,7 @@ where
             .builtins
             .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
 
-        FnCall::new_unchecked(&builtin.sig).with_lib(
+        FnCall::new(&builtin.sig).with_lib(
             self.masm,
             &mut self.context,
             &builtin,
@@ -667,7 +667,7 @@ where
                     ptr_type.into(),
                 );
 
-                call.reg(masm, cx, callee);
+                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
                 // We know the signature of the libcall in this case, so we assert that there's
                 // one element in the stack and that it's  the ABI signature's result register.
                 let top = cx.stack.peek().unwrap();

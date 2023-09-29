@@ -249,7 +249,7 @@ where
         }
     }
 
-    /// Emit a direct function call to:
+    /// Emit a function call to:
     /// * A locally defined function.
     /// * A function import.
     /// * A funcref.
@@ -288,20 +288,16 @@ where
                 stack.insert(location as usize, TypedReg::i64(callee_vmctx).into());
 
                 let abi_sig = <M::ABI as ABI>::sig(&sig, &CallingConvention::Default);
-                FnCall::new::<M>(&abi_sig, &mut self.context, self.masm).addr(
-                    self.masm,
-                    &mut self.context,
-                    callee_addr,
-                );
+                FnCall::new(&abi_sig)
+                    .save_live_registers(&mut self.context, self.masm)
+                    .addr(self.masm, &mut self.context, callee_addr);
             }
 
             Callee::Local(callee) => {
                 let abi_sig = <M::ABI as ABI>::sig(&callee.ty, &CallingConvention::Default);
-                FnCall::new::<M>(&abi_sig, &mut self.context, self.masm).direct(
-                    self.masm,
-                    &mut self.context,
-                    callee.index,
-                );
+                FnCall::new(&abi_sig)
+                    .save_live_registers(&mut self.context, self.masm)
+                    .direct(self.masm, &mut self.context, callee.index);
             }
 
             Callee::FuncRef(ty) => {
@@ -329,11 +325,9 @@ where
                 );
                 self.context.free_reg(funcref_ptr);
 
-                FnCall::new::<M>(&abi_sig, &mut self.context, self.masm).reg(
-                    self.masm,
-                    &mut self.context,
-                    funcref,
-                );
+                FnCall::new(&abi_sig)
+                    .save_live_registers(&mut self.context, self.masm)
+                    .reg(self.masm, &mut self.context, funcref);
             }
         };
     }
