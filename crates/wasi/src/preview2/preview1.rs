@@ -59,15 +59,34 @@ impl BlockingMode {
         host: &mut impl streams::Host,
         input_stream: Resource<streams::InputStream>,
         max_size: usize,
-    ) -> Result<Vec<u8>, streams::Error> {
+    ) -> Result<Vec<u8>, types::Error> {
         let max_size = max_size.try_into().unwrap_or(u64::MAX);
         match self {
             BlockingMode::Blocking => {
-                streams::HostInputStream::blocking_read(host, input_stream, max_size).await
+                match streams::HostInputStream::blocking_read(host, input_stream, max_size).await {
+                    Ok(r) if r.is_empty() => Err(types::Errno::Intr.into()),
+                    Ok(r) => Ok(r),
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => {
+                        Ok(Vec::new())
+                    }
+                    Err(e) => {
+                        tracing::trace!("throwing away read error to report as Errno::Io: {e:?}");
+                        Err(types::Errno::Io.into())
+                    }
+                }
             }
 
             BlockingMode::NonBlocking => {
-                streams::HostInputStream::read(host, input_stream, max_size).await
+                match streams::HostInputStream::read(host, input_stream, max_size).await {
+                    Ok(r) => Ok(r),
+                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => {
+                        Ok(Vec::new())
+                    }
+                    Err(e) => {
+                        tracing::trace!("throwing away read error to report as Errno::Io: {e:?}");
+                        Err(types::Errno::Io.into())
+                    }
+                }
             }
         }
     }
@@ -1386,9 +1405,6 @@ impl<
         if read.len() > buf.len() {
             return Err(types::Errno::Range.into());
         }
-        if read.len() == 0 {
-            return Err(types::Errno::Intr.into());
-        }
         let (buf, _) = buf.split_at_mut(read.len());
         buf.copy_from_slice(&read);
         let n = read.len().try_into()?;
@@ -1431,9 +1447,6 @@ impl<
         };
         if read.len() > buf.len() {
             return Err(types::Errno::Range.into());
-        }
-        if read.len() == 0 {
-            return Err(types::Errno::Intr.into());
         }
         let (buf, _) = buf.split_at_mut(read.len());
         buf.copy_from_slice(&read);
