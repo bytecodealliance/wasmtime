@@ -199,25 +199,20 @@ pub extern "C" fn wasmtime_call_future_get_results(
     }
 }
 
-async unsafe fn do_func_call_async(
+async fn do_func_call_async(
     mut store: CStoreContextMut<'_>,
     func: &Func,
-    args: *const wasmtime_val_t,
-    nargs: usize,
-    results: *mut MaybeUninit<wasmtime_val_t>,
-    nresults: usize,
+    args: impl ExactSizeIterator<Item = Val>,
+    results: &mut [MaybeUninit<wasmtime_val_t>],
 ) -> Result<()> {
     let mut store = store.as_context_mut();
     let mut params = mem::take(&mut store.data_mut().wasm_val_storage);
     let (wt_params, wt_results) = translate_args(
         &mut params,
-        crate::slice_from_raw_parts(args, nargs)
-            .iter()
-            .map(|i| i.to_val()),
-        nresults,
+        args,
+        results.len(),
     );
     func.call_async(&mut store, wt_params, wt_results).await?;
-    let results = crate::slice_from_raw_parts_mut(results, nresults);
     for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
         crate::initialize(slot, wasmtime_val_t::from_val(val.clone()));
     }
@@ -235,8 +230,10 @@ pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
     results: *mut MaybeUninit<wasmtime_val_t>,
     nresults: usize,
 ) -> Box<wasmtime_call_future_t<'a>> {
+    let args = crate::slice_from_raw_parts(args, nargs).iter().map(|i| i.to_val());
+    let results = crate::slice_from_raw_parts_mut(results, nresults);
     let fut = Box::pin(do_func_call_async(
-        store, func, args, nargs, results, nresults,
+        store, func, args, results,
     ));
     Box::new(wasmtime_call_future_t {
         state: CallFutureState::Called(fut),
