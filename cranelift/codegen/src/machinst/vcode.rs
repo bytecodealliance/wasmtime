@@ -1493,6 +1493,18 @@ impl<I: VCodeInst> VRegAllocator<I> {
         Ok(regs)
     }
 
+    /// Produce an bogus VReg placeholder with the proper number of
+    /// registers for the given type. This is meant to be used with
+    /// deferred allocation errors (see `Lower::alloc_tmp()`).
+    pub fn invalid(&self, ty: Type) -> ValueRegs<Reg> {
+        let (regclasses, _tys) = I::rc_for_type(ty).expect("must have valid type");
+        match regclasses {
+            &[rc0] => ValueRegs::one(VReg::new(0, rc0).into()),
+            &[rc0, rc1] => ValueRegs::two(VReg::new(0, rc0).into(), VReg::new(1, rc1).into()),
+            _ => panic!("Value must reside in 1 or 2 registers"),
+        }
+    }
+
     /// Set the type of this virtual register.
     pub fn set_vreg_type(&mut self, vreg: VirtualReg, ty: Type) {
         if self.vreg_types.len() <= vreg.index() {

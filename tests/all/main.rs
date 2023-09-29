@@ -3,6 +3,7 @@
 mod async_functions;
 mod call_hook;
 mod cli_tests;
+mod code_too_large;
 mod component_model;
 mod coredump;
 mod custom_signal_handler;
