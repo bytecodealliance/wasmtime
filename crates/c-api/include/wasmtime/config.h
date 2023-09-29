@@ -367,23 +367,6 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_enable(wasm_config_t*, const
  */
 WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const char *key, const char *value);
 
-/**
- * A callback to create a new LinearMemory from the specified parameters.
- *
- * The result should be written to `memory_ret` and optionally a finalizer for the returned memory 
- * can be returned in the finalizer pointer.
- *
- * For more information about the parameters see the Rust documentation at
- * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html#tymethod.new_memory
- */
-typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
-    wasm_memorytype_t *ty,
-    size_t minimum,
-    size_t maximum,
-    size_t reserved_size_in_bytes,
-    size_t guard_size_in_bytes,
-    void **memory_ret,
-    void (**finalizer)(void*));
 
 /**
  * Return the data from a LinearMemory instance created from a #wasmtime_new_memory_t callback.
@@ -391,11 +374,11 @@ typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
  * The size in bytes as well as the maximum number of bytes that can be allocated should be 
  * returned as well.
  *
- * For more information about the parameters see the Rust documentation at
+ * For more information about see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
  */
-typedef void *(*wasmtime_memory_get_callback_t)(
-    void *memory_ptr,
+typedef uint8_t *(*wasmtime_memory_get_callback_t)(
+    void *env,
     size_t *byte_size,
     size_t *maximum_byte_size);
 
@@ -406,8 +389,41 @@ typedef void *(*wasmtime_memory_get_callback_t)(
  * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html#tymethod.grow_to
  */
 typedef wasmtime_error_t *(*wasmtime_memory_grow_callback_t)(
-    void *memory_ptr,
+    void *env,
     size_t new_size);
+
+/**
+ * A LinearMemory instance created from a #wasmtime_new_memory_callback_t.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
+ */
+typedef struct {
+  void *env;
+  wasmtime_memory_get_callback_t get_memory;
+  wasmtime_memory_grow_callback_t grow_memory;
+  void (*finalizer)(void*);
+} wasmtime_linear_memory_t;
+
+/**
+ * A callback to create a new LinearMemory from the specified parameters.
+ *
+ * The result should be written to `memory_ret` and wasmtime will own the values written 
+ * into that struct.
+ *
+ * This callback must be thread-safe.
+ *
+ * For more information about the parameters see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html#tymethod.new_memory
+ */
+typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
+    void *env,
+    const wasm_memorytype_t *ty,
+    size_t minimum,
+    size_t maximum,
+    size_t reserved_size_in_bytes,
+    size_t guard_size_in_bytes,
+    wasmtime_linear_memory_t *memory_ret);
 
 /**
  * A representation of custom memory creator and methods for an instance of LinearMemory.
@@ -416,9 +432,9 @@ typedef wasmtime_error_t *(*wasmtime_memory_grow_callback_t)(
  * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html
  */
 typedef struct {
+  void* env;
   wasmtime_new_memory_callback_t new_memory;
-  wasmtime_memory_get_callback_t get_memory;
-  wasmtime_memory_grow_callback_t grow_memory;
+  void (*finalizer)(void*);
 } wasmtime_memory_creator_t;
 
 /**
@@ -426,6 +442,9 @@ typedef struct {
  *
  * Custom memory creators are used when creating host Memory objects or when creating instance
  * linear memories for the on-demand instance allocation strategy.
+ *
+ * The config does **not** take ownership of the #wasmtime_memory_creator_t passed in, but 
+ * instead copies all the values in the struct.
  *
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.with_host_memory

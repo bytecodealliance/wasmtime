@@ -3,9 +3,9 @@
 #![cfg_attr(not(feature = "cache"), allow(unused_imports))]
 
 use crate::{handle_result, wasm_memorytype_t, wasmtime_error_t};
+use std::mem::MaybeUninit;
 use std::ops::Range;
 use std::os::raw::c_char;
-use std::ptr;
 use std::{ffi::CStr, sync::Arc};
 use wasmtime::{
     Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, Result, Strategy,
@@ -260,33 +260,32 @@ pub unsafe extern "C" fn wasmtime_config_cranelift_flag_set(
     c.config.cranelift_flag_set(flag, value);
 }
 
+pub type wasmtime_memory_get_callback_t = extern "C" fn(
+    env: *mut std::ffi::c_void,
+    byte_size: &mut usize,
+    maximum_byte_size: &mut usize,
+) -> *mut u8;
+
+pub type wasmtime_memory_grow_callback_t =
+    extern "C" fn(env: *mut std::ffi::c_void, new_size: usize) -> Option<Box<wasmtime_error_t>>;
+
+#[repr(C)]
+pub struct wasmtime_linear_memory_t {
+    env: *mut std::ffi::c_void,
+    get_memory: wasmtime_memory_get_callback_t,
+    grow_memory: wasmtime_memory_grow_callback_t,
+    finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
+}
+
 pub type wasmtime_new_memory_callback_t = extern "C" fn(
+    env: *mut std::ffi::c_void,
     ty: &wasm_memorytype_t,
     minimum: usize,
     maximum: usize,
     reserved_size_in_bytes: usize,
     guard_size_in_bytes: usize,
-    memory_ret: &mut *mut std::ffi::c_void,
-    finalizer_ret: &mut Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
+    memory_ret: *mut wasmtime_linear_memory_t,
 ) -> Option<Box<wasmtime_error_t>>;
-
-pub type wasmtime_memory_get_callback_t = extern "C" fn(
-    memory_ptr: *mut std::ffi::c_void,
-    byte_size: &mut usize,
-    maximum_byte_size: &mut usize,
-) -> *mut u8;
-
-pub type wasmtime_memory_grow_callback_t = extern "C" fn(
-    memory_ptr: *mut std::ffi::c_void,
-    new_size: usize,
-) -> Option<Box<wasmtime_error_t>>;
-
-#[repr(C)]
-pub struct wasmtime_memory_creator_t {
-    new_memory: wasmtime_new_memory_callback_t,
-    get_memory: wasmtime_memory_get_callback_t,
-    grow_memory: wasmtime_memory_grow_callback_t,
-}
 
 struct CHostLinearMemory {
     foreign: crate::ForeignData,
@@ -340,8 +339,16 @@ unsafe impl LinearMemory for CHostLinearMemory {
     }
 }
 
+#[repr(C)]
+pub struct wasmtime_memory_creator_t {
+    env: *mut std::ffi::c_void,
+    new_memory: wasmtime_new_memory_callback_t,
+    finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
+}
+
 struct CHostMemoryCreator {
-    creator: Box<wasmtime_memory_creator_t>,
+    foreign: crate::ForeignData,
+    new_memory: wasmtime_new_memory_callback_t,
 }
 unsafe impl Send for CHostMemoryCreator {}
 unsafe impl Sync for CHostMemoryCreator {}
@@ -355,28 +362,28 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
         reserved_size_in_bytes: Option<usize>,
         guard_size_in_bytes: usize,
     ) -> Result<Box<dyn wasmtime::LinearMemory>, String> {
-        let mut memory = ptr::null_mut();
-        let mut finalizer = None;
-        let cb = self.creator.new_memory;
+        let mut memory = MaybeUninit::uninit();
+        let cb = self.new_memory;
         let error = cb(
+            self.foreign.data,
             &wasm_memorytype_t::new(ty),
             minimum,
             maximum.unwrap_or(usize::MAX),
             reserved_size_in_bytes.unwrap_or(0),
             guard_size_in_bytes,
-            &mut memory,
-            &mut finalizer,
+            memory.as_mut_ptr(),
         );
         match error {
             None => {
+                let memory = unsafe { memory.assume_init() };
                 let foreign = crate::ForeignData {
-                    data: memory,
-                    finalizer,
+                    data: memory.env,
+                    finalizer: memory.finalizer,
                 };
                 Ok(Box::new(CHostLinearMemory {
                     foreign,
-                    get_memory: self.creator.get_memory,
-                    grow_memory: self.creator.grow_memory,
+                    get_memory: memory.get_memory,
+                    grow_memory: memory.grow_memory,
                 }))
             }
             Some(err) => {
@@ -390,8 +397,13 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_config_host_memory_creator_set(
     c: &mut wasm_config_t,
-    creator: Box<wasmtime_memory_creator_t>,
+    creator: &wasmtime_memory_creator_t,
 ) {
-    c.config
-        .with_host_memory(Arc::new(CHostMemoryCreator { creator }));
+    c.config.with_host_memory(Arc::new(CHostMemoryCreator {
+        foreign: crate::ForeignData {
+            data: creator.env,
+            finalizer: creator.finalizer,
+        },
+        new_memory: creator.new_memory,
+    }));
 }
