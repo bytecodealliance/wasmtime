@@ -14,7 +14,10 @@ use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
-use std::any::Any;
+use std::{
+    any::Any,
+    net::{IpAddr, SocketAddr},
+};
 use tokio::io::Interest;
 
 use super::network::SystemError;
@@ -28,6 +31,8 @@ impl<T: WasiView> tcp::Host for T {
     ) -> Result<(), network::Error> {
         let table = self.table_mut();
         let socket = table.get_tcp_socket(this)?;
+        let network = table.get_network(network)?;
+        let local_address: SocketAddr = local_address.into();
 
         match socket.tcp_state {
             HostTcpState::Default => {}
@@ -35,7 +40,9 @@ impl<T: WasiView> tcp::Host for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let network = table.get_network(network)?;
+        validate_unicast(&local_address)?;
+        validate_address_family(&socket, &local_address)?;
+
         let binder = network.0.tcp_binder(local_address)?;
 
         // Perform the OS bind call.
@@ -75,6 +82,8 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table_mut();
         let r = {
             let socket = table.get_tcp_socket(this)?;
+            let network = table.get_network(network)?;
+            let remote_address: SocketAddr = remote_address.into();
 
             match socket.tcp_state {
                 HostTcpState::Default => {}
@@ -88,7 +97,10 @@ impl<T: WasiView> tcp::Host for T {
                 | HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
             }
 
-            let network = table.get_network(network)?;
+            validate_unicast(&remote_address)?;
+            validate_remote_address(&remote_address)?;
+            validate_address_family(&socket, &remote_address)?;
+
             let connecter = network.0.tcp_connecter(remote_address)?;
 
             // Do an OS `connect`. Our socket is non-blocking, so it'll either...
@@ -221,11 +233,31 @@ impl<T: WasiView> tcp::Host for T {
 
         // Do the OS accept call.
         let tcp_socket = socket.tcp_socket();
-        let (connection, _addr) = tcp_socket.try_io(Interest::READABLE, || {
-            tcp_socket
-                .as_socketlike_view::<TcpListener>()
-                .accept_with(Blocking::No)
-        })?;
+        let (connection, _addr) = tcp_socket
+            .try_io(Interest::READABLE, || {
+                tcp_socket
+                    .as_socketlike_view::<TcpListener>()
+                    .accept_with(Blocking::No)
+            })
+            .map_err(|error| match error.errno() {
+                // Normalize Linux' non-standard behavior.
+                // "Linux accept() passes already-pending network errors on the new socket as an error code from accept(). This behavior differs from other BSD socket implementations."
+                #[cfg(target_os = "linux")]
+                Some(
+                    Errno::CONNRESET
+                    | Errno::NETRESET
+                    | Errno::HOSTUNREACH
+                    | Errno::HOSTDOWN
+                    | Errno::NETDOWN
+                    | Errno::NETUNREACH
+                    | Errno::PROTO
+                    | Errno::NOPROTOOPT
+                    | Errno::NONET
+                    | Errno::OPNOTSUPP,
+                ) => ErrorCode::ConnectionAborted.into(),
+
+                _ => Into::<network::Error>::into(error),
+            })?;
         let mut tcp_socket = HostTcpSocket::from_tcp_stream(connection, socket.family)?;
 
         // Mark the socket as connected so that we can exit early from methods like `start-bind`.
@@ -364,6 +396,12 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
+        if value == 0 {
+            // A well-behaved IP application should never send out new packets with TTL 0.
+            // We validate the value ourselves because OS'es are not consistent in this.
+            // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
+            return Err(ErrorCode::InvalidArgument.into());
+        }
 
         match socket.family {
             AddressFamily::Ipv4 => sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?,
@@ -376,7 +414,9 @@ impl<T: WasiView> tcp::Host for T {
     fn receive_buffer_size(&mut self, this: tcp::TcpSocket) -> Result<u64, network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
-        Ok(sockopt::get_socket_recv_buffer_size(socket.tcp_socket())? as u64)
+
+        let value = sockopt::get_socket_recv_buffer_size(socket.tcp_socket())? as u64;
+        Ok(normalize_getsockopt_buffer_size(value))
     }
 
     fn set_receive_buffer_size(
@@ -386,17 +426,19 @@ impl<T: WasiView> tcp::Host for T {
     ) -> Result<(), network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
-        let value = value.try_into().map_err(|_| ErrorCode::OutOfMemory)?;
+
         Ok(sockopt::set_socket_recv_buffer_size(
             socket.tcp_socket(),
-            value,
+            normalize_setsockopt_buffer_size(value),
         )?)
     }
 
     fn send_buffer_size(&mut self, this: tcp::TcpSocket) -> Result<u64, network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
-        Ok(sockopt::get_socket_send_buffer_size(socket.tcp_socket())? as u64)
+
+        let value = sockopt::get_socket_send_buffer_size(socket.tcp_socket())? as u64;
+        Ok(normalize_getsockopt_buffer_size(value))
     }
 
     fn set_send_buffer_size(
@@ -406,10 +448,10 @@ impl<T: WasiView> tcp::Host for T {
     ) -> Result<(), network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
-        let value = value.try_into().map_err(|_| ErrorCode::OutOfMemory)?;
+
         Ok(sockopt::set_socket_send_buffer_size(
             socket.tcp_socket(),
-            value,
+            normalize_setsockopt_buffer_size(value),
         )?)
     }
 
@@ -518,3 +560,84 @@ const INPROGRESS: Errno = Errno::INPROGRESS;
 // <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
 #[cfg(windows)]
 const INPROGRESS: Errno = Errno::WOULDBLOCK;
+
+fn validate_unicast(addr: &SocketAddr) -> Result<(), network::Error> {
+    match to_canonical_compat(&addr.ip()) {
+        IpAddr::V4(ipv4) => {
+            if ipv4.is_multicast() || ipv4.is_broadcast() {
+                Err(ErrorCode::InvalidArgument.into())
+            } else {
+                Ok(())
+            }
+        }
+        IpAddr::V6(ipv6) => {
+            if ipv6.is_multicast() {
+                Err(ErrorCode::InvalidArgument.into())
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+fn validate_remote_address(addr: &SocketAddr) -> Result<(), network::Error> {
+    if to_canonical_compat(&addr.ip()).is_unspecified() {
+        return Err(ErrorCode::InvalidArgument.into());
+    }
+
+    if addr.port() == 0 {
+        return Err(ErrorCode::InvalidArgument.into());
+    }
+
+    Ok(())
+}
+
+fn validate_address_family(
+    socket: &HostTcpSocket,
+    addr: &SocketAddr,
+) -> Result<(), network::Error> {
+    match (socket.family, addr.ip()) {
+        (AddressFamily::Ipv4, IpAddr::V4(_)) => {}
+        (AddressFamily::Ipv6, IpAddr::V6(ipv6)) => {
+            if let Some(_) = ipv6.to_ipv4_mapped() {
+                if sockopt::get_ipv6_v6only(socket.tcp_socket())? {
+                    // Address is IPv4-mapped IPv6 address, but socket is IPv6-only.
+                    return Err(ErrorCode::InvalidArgument.into());
+                }
+            }
+        }
+        _ => return Err(ErrorCode::InvalidArgument.into()),
+    }
+
+    Ok(())
+}
+
+fn to_canonical_compat(addr: &IpAddr) -> IpAddr {
+    match addr {
+        IpAddr::V4(ipv4) => IpAddr::V4(*ipv4),
+        IpAddr::V6(ipv6) => {
+            if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                IpAddr::V4(ipv4)
+            } else if let Some(ipv4) = ipv6.to_ipv4() {
+                IpAddr::V4(ipv4)
+            } else {
+                IpAddr::V6(*ipv6)
+            }
+        }
+    }
+}
+
+fn normalize_setsockopt_buffer_size(value: u64) -> usize {
+    value.clamp(1, i32::MAX as u64).try_into().unwrap()
+}
+
+fn normalize_getsockopt_buffer_size(value: u64) -> u64 {
+    if cfg!(target_os = "linux") {
+        // Linux doubles the value passed to setsockopt to allow space for bookkeeping overhead.
+        // getsockopt returns this internally doubled value.
+        // We'll half the value to at least get it back into the same ballpark that the application requested it in.
+        value / 2
+    } else {
+        value
+    }
+}

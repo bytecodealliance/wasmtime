@@ -71,7 +71,21 @@ async fn tcp_sample_application() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn tcp_bind() {
+    run("tcp_bind").await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn tcp_connect() {
+    run("tcp_connect").await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn tcp_states() {
     run("tcp_states").await.unwrap();
 }
 
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn tcp_sockopts() {
+    run("tcp_sockopts").await.unwrap();
+}

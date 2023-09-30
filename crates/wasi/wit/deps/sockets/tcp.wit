@@ -74,7 +74,6 @@ interface tcp {
 	/// - `invalid-argument`:          `remote-address` is a non-IPv4-mapped IPv6 address, but the socket was bound to a specific IPv4-mapped IPv6 address. (or vice versa)
 	/// - `invalid-argument`:          The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EADDRNOTAVAIL on Windows)
 	/// - `invalid-argument`:          The port in `remote-address` is set to 0. (EADDRNOTAVAIL on Windows)
-	/// - `invalid-argument`:          The socket was explicitly bound and the `connect` call is trying to connect to this socket's own local binding.
 	/// - `invalid-argument`:          The socket is already attached to a different network. The `network` passed to `connect` must be identical to the one passed to `bind`.
 	/// - `invalid-state`:             The socket is already in the Connection state. (EISCONN)
 	/// - `invalid-state`:             The socket is already in the Listener state. (EOPNOTSUPP, EINVAL on Windows)
@@ -128,7 +127,14 @@ interface tcp {
 
 	/// Accept a new client socket.
 	/// 
-	/// The returned socket is bound and in the Connection state.
+	/// The returned socket is bound and in the Connection state. The following properties are inherited from the listener socket:
+	/// - `address-family`
+	/// - `ipv6-only`
+	/// - `keep-alive`
+	/// - `no-delay`
+	/// - `unicast-hop-limit`
+	/// - `receive-buffer-size`
+	/// - `send-buffer-size`
 	/// 
 	/// On success, this function returns the newly accepted client socket along with
 	/// a pair of streams that can be used to read & write to the connection.
@@ -207,12 +213,15 @@ interface tcp {
 	set-keep-alive: func(this: tcp-socket, value: bool) -> result<_, error-code>
 
 	/// Equivalent to the TCP_NODELAY socket option.
+	/// 
+	/// The default value is `false`.
 	no-delay: func(this: tcp-socket) -> result<bool, error-code>
 	set-no-delay: func(this: tcp-socket, value: bool) -> result<_, error-code>
 	
 	/// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
 	/// 
 	/// # Typical errors
+	/// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
 	/// - `invalid-state`:        (set) The socket is already in the Connection state.
 	/// - `invalid-state`:        (set) The socket is already in the Listener state.
 	unicast-hop-limit: func(this: tcp-socket) -> result<u8, error-code>
