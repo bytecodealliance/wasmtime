@@ -84,10 +84,15 @@ fn test_tcp_sockopt_inheritance(net: &NetworkResource, family: IpAddressFamily) 
     let bind_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let listener = TcpSocketResource::new(family).unwrap();
 
+    let default_ipv6_only = tcp::ipv6_only(listener.handle).unwrap_or(false);
     let default_keep_alive = tcp::keep_alive(listener.handle).unwrap();
 
     // Configure options on listener:
     {
+        if family == IpAddressFamily::Ipv6 {
+            tcp::set_ipv6_only(listener.handle, !default_ipv6_only).unwrap();
+        }
+
         tcp::set_keep_alive(listener.handle, !default_keep_alive).unwrap();
         tcp::set_no_delay(listener.handle, true).unwrap();
         tcp::set_unicast_hop_limit(listener.handle, 42).unwrap();
@@ -105,6 +110,10 @@ fn test_tcp_sockopt_inheritance(net: &NetworkResource, family: IpAddressFamily) 
 
     // Verify options on accepted socket:
     {
+        if family == IpAddressFamily::Ipv6 {
+            assert_eq!(tcp::ipv6_only(accepted_client.handle).unwrap(), !default_ipv6_only);
+        }
+
         assert_eq!(tcp::keep_alive(accepted_client.handle).unwrap(), !default_keep_alive);
         assert_eq!(tcp::no_delay(accepted_client.handle).unwrap(), true);
         assert_eq!(tcp::unicast_hop_limit(accepted_client.handle).unwrap(), 42);
