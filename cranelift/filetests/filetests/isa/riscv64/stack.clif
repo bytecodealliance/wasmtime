@@ -108,8 +108,7 @@ block0:
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a1,0(nominal_sp)
-;   ld a0,0(a1)
+;   ld a0,0(nominal_sp)
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -124,8 +123,7 @@ block0:
 ;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   mv a1, sp
-;   ld a0, 0(a1)
+;   ld a0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -151,8 +149,7 @@ block0:
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a1,0(nominal_sp)
-;   ld a0,0(a1)
+;   ld a0,0(nominal_sp)
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -177,8 +174,7 @@ block0:
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
 ; block1: ; offset 0x3c
-;   mv a1, sp
-;   ld a0, 0(a1)
+;   ld a0, 0(sp)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
 ;   add sp, t6, sp
@@ -202,8 +198,7 @@ block0(v0: i64):
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a2,0(nominal_sp)
-;   sd a0,0(a2)
+;   sd a0,0(nominal_sp)
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -218,8 +213,7 @@ block0(v0: i64):
 ;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   mv a2, sp
-;   sd a0, 0(a2)
+;   sd a0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -245,8 +239,7 @@ block0(v0: i64):
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a2,0(nominal_sp)
-;   sd a0,0(a2)
+;   sd a0,0(nominal_sp)
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -271,8 +264,7 @@ block0(v0: i64):
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
 ; block1: ; offset 0x3c
-;   mv a2, sp
-;   sd a0, 0(a2)
+;   sd a0, 0(sp)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
 ;   add sp, t6, sp
@@ -858,9 +850,8 @@ block0(v0: i128):
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a3,0(nominal_sp)
-;   sd a0,0(a3)
-;   sd a1,8(a3)
+;   sd a0,0(nominal_sp)
+;   sd a1,8(nominal_sp)
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -875,9 +866,8 @@ block0(v0: i128):
 ;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   mv a3, sp
-;   sd a0, 0(a3)
-;   sd a1, 8(a3)
+;   sd a0, 0(sp)
+;   sd a1, 8(sp)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -900,9 +890,8 @@ block0(v0: i128):
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   load_addr a3,32(nominal_sp)
-;   sd a0,0(a3)
-;   sd a1,8(a3)
+;   sd a0,32(nominal_sp)
+;   sd a1,40(nominal_sp)
 ;   add sp,+32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -917,9 +906,8 @@ block0(v0: i128):
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
-;   addi a3, sp, 0x20
-;   sd a0, 0(a3)
-;   sd a1, 8(a3)
+;   sd a0, 0x20(sp)
+;   sd a1, 0x28(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -945,9 +933,8 @@ block0(v0: i128):
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a3,0(nominal_sp)
-;   sd a0,0(a3)
-;   sd a1,8(a3)
+;   sd a0,0(nominal_sp)
+;   sd a1,8(nominal_sp)
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -972,9 +959,8 @@ block0(v0: i128):
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
 ; block1: ; offset 0x3c
-;   mv a3, sp
-;   sd a0, 0(a3)
-;   sd a1, 8(a3)
+;   sd a0, 0(sp)
+;   sd a1, 8(sp)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
 ;   add sp, t6, sp
@@ -998,9 +984,8 @@ block0:
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a2,0(nominal_sp)
-;   ld a0,0(a2)
-;   ld a1,8(a2)
+;   ld a0,0(nominal_sp)
+;   ld a1,8(nominal_sp)
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -1015,9 +1000,8 @@ block0:
 ;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   mv a2, sp
-;   ld a0, 0(a2)
-;   ld a1, 8(a2)
+;   ld a0, 0(sp)
+;   ld a1, 8(sp)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -1040,9 +1024,8 @@ block0:
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   load_addr a2,32(nominal_sp)
-;   ld a0,0(a2)
-;   ld a1,8(a2)
+;   ld a0,32(nominal_sp)
+;   ld a1,40(nominal_sp)
 ;   add sp,+32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -1057,9 +1040,8 @@ block0:
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
-;   addi a2, sp, 0x20
-;   ld a0, 0(a2)
-;   ld a1, 8(a2)
+;   ld a0, 0x20(sp)
+;   ld a1, 0x28(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -1085,9 +1067,8 @@ block0:
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a2,0(nominal_sp)
-;   ld a0,0(a2)
-;   ld a1,8(a2)
+;   ld a0,0(nominal_sp)
+;   ld a1,8(nominal_sp)
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -1112,9 +1093,8 @@ block0:
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
 ; block1: ; offset 0x3c
-;   mv a2, sp
-;   ld a0, 0(a2)
-;   ld a1, 8(a2)
+;   ld a0, 0(sp)
+;   ld a1, 8(sp)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
 ;   add sp, t6, sp

@@ -1,7 +1,6 @@
 use super::{HostInputStream, HostOutputStream, OutputStreamError};
-use crate::preview2::{
-    with_ambient_tokio_runtime, AbortOnDropJoinHandle, StreamState, Table, TableError,
-};
+use crate::preview2::stream::{InputStream, OutputStream};
+use crate::preview2::{with_ambient_tokio_runtime, AbortOnDropJoinHandle, StreamState};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
@@ -12,7 +11,7 @@ use std::sync::Arc;
 ///
 /// This represents the various states a socket can be in during the
 /// activities of binding, listening, accepting, and connecting.
-pub(crate) enum HostTcpState {
+pub(crate) enum TcpState {
     /// The initial state for a newly-created socket.
     Default,
 
@@ -46,13 +45,13 @@ pub(crate) enum HostTcpState {
 ///
 /// The inner state is wrapped in an Arc because the same underlying socket is
 /// used for implementing the stream types.
-pub(crate) struct HostTcpSocket {
-    /// The part of a `HostTcpSocket` which is reference-counted so that we
+pub struct TcpSocket {
+    /// The part of a `TcpSocket` which is reference-counted so that we
     /// can pass it to async tasks.
     pub(crate) inner: Arc<tokio::net::TcpStream>,
 
     /// The current state in the bind/listen/accept/connect progression.
-    pub(crate) tcp_state: HostTcpState,
+    pub(crate) tcp_state: TcpState,
 
     pub(crate) family: AddressFamily,
 }
@@ -218,7 +217,7 @@ impl HostOutputStream for TcpWriteStream {
     }
 }
 
-impl HostTcpSocket {
+impl TcpSocket {
     /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {
         // Create a new host socket and set it to non-blocking, which is needed
@@ -227,7 +226,7 @@ impl HostTcpSocket {
         Self::from_tcp_listener(tcp_listener, family)
     }
 
-    /// Create a `HostTcpSocket` from an existing socket.
+    /// Create a `TcpSocket` from an existing socket.
     ///
     /// The socket must be in non-blocking mode.
     pub fn from_tcp_stream(tcp_socket: cap_std::net::TcpStream, family: AddressFamily) -> io::Result<Self> {
@@ -242,7 +241,7 @@ impl HostTcpSocket {
 
         Ok(Self {
             inner: Arc::new(stream),
-            tcp_state: HostTcpState::Default,
+            tcp_state: TcpState::Default,
             family,
         })
     }
@@ -252,35 +251,9 @@ impl HostTcpSocket {
     }
 
     /// Create the input/output stream pair for a tcp socket.
-    pub fn as_split(&self) -> (Box<impl HostInputStream>, Box<impl HostOutputStream>) {
+    pub fn as_split(&self) -> (InputStream, OutputStream) {
         let input = Box::new(TcpReadStream::new(self.inner.clone()));
         let output = Box::new(TcpWriteStream::new(self.inner.clone()));
-        (input, output)
-    }
-}
-
-pub(crate) trait TableTcpSocketExt {
-    fn push_tcp_socket(&mut self, tcp_socket: HostTcpSocket) -> Result<u32, TableError>;
-    fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocket, TableError>;
-    fn is_tcp_socket(&self, fd: u32) -> bool;
-    fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocket, TableError>;
-    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocket, TableError>;
-}
-
-impl TableTcpSocketExt for Table {
-    fn push_tcp_socket(&mut self, tcp_socket: HostTcpSocket) -> Result<u32, TableError> {
-        self.push(Box::new(tcp_socket))
-    }
-    fn delete_tcp_socket(&mut self, fd: u32) -> Result<HostTcpSocket, TableError> {
-        self.delete(fd)
-    }
-    fn is_tcp_socket(&self, fd: u32) -> bool {
-        self.is::<HostTcpSocket>(fd)
-    }
-    fn get_tcp_socket(&self, fd: u32) -> Result<&HostTcpSocket, TableError> {
-        self.get(fd)
-    }
-    fn get_tcp_socket_mut(&mut self, fd: u32) -> Result<&mut HostTcpSocket, TableError> {
-        self.get_mut(fd)
+        (InputStream::Host(input), output)
     }
 }

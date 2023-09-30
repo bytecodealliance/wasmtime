@@ -12,16 +12,15 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true, default-features = false }
-hyper = { version = "=1.0.0-rc.3", features = ["full"] }
-tokio = { version = "1", default-features = false, features = [
+hyper = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = [
     "net",
     "rt-multi-thread",
     "time",
 ] }
-http = { version = "0.2.9" }
-http-body = "1.0.0-rc.2"
-http-body-util = "0.1.0-rc.2"
-thiserror = { workspace = true }
+http = { workspace = true }
+http-body = { workspace = true }
+http-body-util = { workspace = true }
 tracing = { workspace = true }
 wasmtime-wasi = { workspace = true, default-features = false, features = [
     "preview2",

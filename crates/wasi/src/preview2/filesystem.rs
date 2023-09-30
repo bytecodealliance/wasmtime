@@ -1,11 +1,46 @@
+use crate::preview2::bindings::filesystem::types;
 use crate::preview2::{
     AbortOnDropJoinHandle, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
-    Table, TableError,
 };
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use futures::future::{maybe_done, MaybeDone};
 use std::sync::Arc;
+
+pub enum Descriptor {
+    File(File),
+    Dir(Dir),
+}
+
+impl Descriptor {
+    pub fn file(&self) -> Result<&File, types::ErrorCode> {
+        match self {
+            Descriptor::File(f) => Ok(f),
+            Descriptor::Dir(_) => Err(types::ErrorCode::BadDescriptor),
+        }
+    }
+
+    pub fn dir(&self) -> Result<&Dir, types::ErrorCode> {
+        match self {
+            Descriptor::Dir(d) => Ok(d),
+            Descriptor::File(_) => Err(types::ErrorCode::NotDirectory),
+        }
+    }
+
+    pub fn is_file(&self) -> bool {
+        match self {
+            Descriptor::File(_) => true,
+            Descriptor::Dir(_) => false,
+        }
+    }
+
+    pub fn is_dir(&self) -> bool {
+        match self {
+            Descriptor::File(_) => false,
+            Descriptor::Dir(_) => true,
+        }
+    }
+}
 
 bitflags::bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -15,7 +50,7 @@ bitflags::bitflags! {
     }
 }
 
-pub(crate) struct File {
+pub struct File {
     /// Wrapped in an Arc because the same underlying file is used for
     /// implementing the stream types. Also needed for [`spawn_blocking`].
     ///
@@ -43,45 +78,6 @@ impl File {
         tokio::task::spawn_blocking(move || body(&f)).await.unwrap()
     }
 }
-pub(crate) trait TableFsExt {
-    fn push_file(&mut self, file: File) -> Result<u32, TableError>;
-    fn delete_file(&mut self, fd: u32) -> Result<File, TableError>;
-    fn is_file(&self, fd: u32) -> bool;
-    fn get_file(&self, fd: u32) -> Result<&File, TableError>;
-
-    fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError>;
-    fn delete_dir(&mut self, fd: u32) -> Result<Dir, TableError>;
-    fn is_dir(&self, fd: u32) -> bool;
-    fn get_dir(&self, fd: u32) -> Result<&Dir, TableError>;
-}
-
-impl TableFsExt for Table {
-    fn push_file(&mut self, file: File) -> Result<u32, TableError> {
-        self.push(Box::new(file))
-    }
-    fn delete_file(&mut self, fd: u32) -> Result<File, TableError> {
-        self.delete(fd)
-    }
-    fn is_file(&self, fd: u32) -> bool {
-        self.is::<File>(fd)
-    }
-    fn get_file(&self, fd: u32) -> Result<&File, TableError> {
-        self.get(fd)
-    }
-
-    fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError> {
-        self.push(Box::new(dir))
-    }
-    fn delete_dir(&mut self, fd: u32) -> Result<Dir, TableError> {
-        self.delete(fd)
-    }
-    fn is_dir(&self, fd: u32) -> bool {
-        self.is::<Dir>(fd)
-    }
-    fn get_dir(&self, fd: u32) -> Result<&Dir, TableError> {
-        self.get(fd)
-    }
-}
 
 bitflags::bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -91,7 +87,8 @@ bitflags::bitflags! {
     }
 }
 
-pub(crate) struct Dir {
+#[derive(Clone)]
+pub struct Dir {
     pub dir: Arc<cap_std::fs::Dir>,
     pub perms: DirPerms,
     pub file_perms: FilePerms,
@@ -118,7 +115,7 @@ impl Dir {
     }
 }
 
-pub(crate) struct FileInputStream {
+pub struct FileInputStream {
     file: Arc<cap_std::fs::File>,
     position: u64,
 }
@@ -273,5 +270,31 @@ impl HostOutputStream for FileOutputStream {
                 Err(OutputStreamError::LastOperationFailed(e.into()))
             }
         }
+    }
+}
+
+pub struct ReaddirIterator(
+    std::sync::Mutex<
+        Box<dyn Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static>,
+    >,
+);
+
+impl ReaddirIterator {
+    pub(crate) fn new(
+        i: impl Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static,
+    ) -> Self {
+        ReaddirIterator(std::sync::Mutex::new(Box::new(i)))
+    }
+    pub(crate) fn next(&self) -> Result<Option<types::DirectoryEntry>, types::Error> {
+        self.0.lock().unwrap().next().transpose()
+    }
+}
+
+impl IntoIterator for ReaddirIterator {
+    type Item = Result<types::DirectoryEntry, types::Error>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + Send>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_inner().unwrap()
     }
 }

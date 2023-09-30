@@ -194,9 +194,7 @@ impl Val {
                 if !f.comes_from_same_store(store) {
                     bail!("cross-`Store` values are not supported in tables");
                 }
-                Ok(TableElement::FuncRef(
-                    f.caller_checked_func_ref(store).as_ptr(),
-                ))
+                Ok(TableElement::FuncRef(f.vm_func_ref(store).as_ptr()))
             }
             (Val::FuncRef(None), ValType::FuncRef) => Ok(TableElement::FuncRef(ptr::null_mut())),
             (Val::ExternRef(Some(x)), ValType::ExternRef) => {

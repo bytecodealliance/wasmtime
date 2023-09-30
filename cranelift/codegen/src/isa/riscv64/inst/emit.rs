@@ -3,7 +3,9 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CiOp, CiwOp, CrOp};
+use crate::isa::riscv64::lower::isle::generated_code::{
+    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp,
+};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -432,8 +434,8 @@ impl MachInstEmit for Inst {
         let mut start_off = sink.cur_offset();
 
         // First try to emit this as a compressed instruction
-        let success = inst.try_emit_compressed(sink, emit_info, state, &mut start_off);
-        if !success {
+        let res = inst.try_emit_compressed(sink, emit_info, state, &mut start_off);
+        if res.is_none() {
             // If we can't lets emit it as a normal instruction
             inst.emit_uncompressed(sink, emit_info, state, &mut start_off);
         }
@@ -462,13 +464,14 @@ impl Inst {
         emit_info: &EmitInfo,
         state: &mut EmitState,
         start_off: &mut u32,
-    ) -> bool {
+    ) -> Option<()> {
         let has_zca = emit_info.isa_flags.has_zca();
+        let has_zcd = emit_info.isa_flags.has_zcd();
 
         // Currently all compressed extensions (Zcb, Zcd, Zcmp, Zcmt, etc..) require Zca
         // to be enabled, so check it early.
         if !has_zca {
-            return false;
+            return None;
         }
 
         fn reg_is_compressible(r: Reg) -> bool {
@@ -613,6 +616,17 @@ impl Inst {
                 sink.put2(encode_ciw_type(CiwOp::CAddi4spn, rd, imm));
             }
 
+            // c.li
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() != zero_reg() && rs == zero_reg() && imm12.as_i16() != 0 => {
+                let imm6 = Imm6::maybe_from_imm12(imm12)?;
+                sink.put2(encode_ci_type(CiOp::CLi, rd, imm6));
+            }
+
             // c.addi
             Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Addi,
@@ -620,11 +634,7 @@ impl Inst {
                 rs,
                 imm12,
             } if rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
-                let imm6 = match Imm6::maybe_from_imm12(imm12) {
-                    Some(imm6) => imm6,
-                    None => return false,
-                };
-
+                let imm6 = Imm6::maybe_from_imm12(imm12)?;
                 sink.put2(encode_ci_type(CiOp::CAddi, rd, imm6));
             }
 
@@ -635,11 +645,27 @@ impl Inst {
                 rs,
                 imm12,
             } if rd.to_reg() == rs && rs != zero_reg() => {
-                let imm6 = match Imm6::maybe_from_imm12(imm12) {
-                    Some(imm6) => imm6,
-                    None => return false,
-                };
+                let imm6 = Imm6::maybe_from_imm12(imm12)?;
                 sink.put2(encode_ci_type(CiOp::CAddiw, rd, imm6));
+            }
+
+            // c.lui
+            //
+            // c.lui loads the non-zero 6-bit immediate field into bits 17–12
+            // of the destination register, clears the bottom 12 bits, and
+            // sign-extends bit 17 into all higher bits of the destination.
+            Inst::Lui { rd, imm: imm20 }
+                if rd.to_reg() != zero_reg()
+                    && rd.to_reg() != stack_reg()
+                    && imm20.as_i32() != 0 =>
+            {
+                // Check that the top bits are sign extended
+                let imm = imm20.as_i32() << 14 >> 14;
+                if imm != imm20.as_i32() {
+                    return None;
+                }
+                let imm6 = Imm6::maybe_from_i32(imm)?;
+                sink.put2(encode_ci_type(CiOp::CLui, rd, imm6));
             }
 
             // c.slli
@@ -654,10 +680,187 @@ impl Inst {
                 let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
                 sink.put2(encode_ci_type(CiOp::CSlli, rd, imm6));
             }
-            _ => return false,
+
+            // c.srli / c.srai
+            Inst::AluRRImm12 {
+                alu_op: op @ (AluOPRRI::Srli | AluOPRRI::Srai),
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() == rs && reg_is_compressible(rs) && imm12.as_i16() != 0 => {
+                let op = match op {
+                    AluOPRRI::Srli => CbOp::CSrli,
+                    AluOPRRI::Srai => CbOp::CSrai,
+                    _ => unreachable!(),
+                };
+
+                // The shift amount is unsigned, but we encode it as signed.
+                let shift = imm12.as_i16() & 0x3f;
+                let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
+                sink.put2(encode_cb_type(op, rd, imm6));
+            }
+
+            // c.andi
+            Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Andi,
+                rd,
+                rs,
+                imm12,
+            } if rd.to_reg() == rs && reg_is_compressible(rs) => {
+                let imm6 = Imm6::maybe_from_imm12(imm12)?;
+                sink.put2(encode_cb_type(CbOp::CAndi, rd, imm6));
+            }
+
+            // Stack Based Loads
+            Inst::Load {
+                rd,
+                op: op @ (LoadOP::Lw | LoadOP::Ld | LoadOP::Fld),
+                from,
+                flags,
+            } if from.get_base_register() == Some(stack_reg())
+                && (from.get_offset_with_state(state) % op.size()) == 0 =>
+            {
+                // We encode the offset in multiples of the load size.
+                let offset = from.get_offset_with_state(state);
+                let imm6 = u8::try_from(offset / op.size())
+                    .ok()
+                    .and_then(Uimm6::maybe_from_u8)?;
+
+                // Some additional constraints on these instructions.
+                //
+                // Integer loads are not allowed to target x0, but floating point loads
+                // are, since f0 is not a special register.
+                //
+                // Floating point loads are not included in the base Zca extension
+                // but in a separate Zcd extension. Both of these are part of the C Extension.
+                let rd_is_zero = rd.to_reg() == zero_reg();
+                let op = match op {
+                    LoadOP::Lw if !rd_is_zero => CiOp::CLwsp,
+                    LoadOP::Ld if !rd_is_zero => CiOp::CLdsp,
+                    LoadOP::Fld if has_zcd => CiOp::CFldsp,
+                    _ => return None,
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put2(encode_ci_sp_load(op, rd, imm6));
+            }
+
+            // Regular Loads
+            Inst::Load {
+                rd,
+                op: op @ (LoadOP::Lw | LoadOP::Ld | LoadOP::Fld),
+                from,
+                flags,
+            } if reg_is_compressible(rd.to_reg())
+                && from
+                    .get_base_register()
+                    .map(reg_is_compressible)
+                    .unwrap_or(false)
+                && (from.get_offset_with_state(state) % op.size()) == 0 =>
+            {
+                let base = from.get_base_register().unwrap();
+
+                // We encode the offset in multiples of the store size.
+                let offset = from.get_offset_with_state(state);
+                let imm5 = u8::try_from(offset / op.size())
+                    .ok()
+                    .and_then(Uimm5::maybe_from_u8)?;
+
+                // Floating point loads are not included in the base Zca extension
+                // but in a separate Zcd extension. Both of these are part of the C Extension.
+                let op = match op {
+                    LoadOP::Lw => ClOp::CLw,
+                    LoadOP::Ld => ClOp::CLd,
+                    LoadOP::Fld if has_zcd => ClOp::CFld,
+                    _ => return None,
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put2(encode_cl_type(op, rd, base, imm5));
+            }
+
+            // Stack Based Stores
+            Inst::Store {
+                src,
+                op: op @ (StoreOP::Sw | StoreOP::Sd | StoreOP::Fsd),
+                to,
+                flags,
+            } if to.get_base_register() == Some(stack_reg())
+                && (to.get_offset_with_state(state) % op.size()) == 0 =>
+            {
+                // We encode the offset in multiples of the store size.
+                let offset = to.get_offset_with_state(state);
+                let imm6 = u8::try_from(offset / op.size())
+                    .ok()
+                    .and_then(Uimm6::maybe_from_u8)?;
+
+                // Floating point stores are not included in the base Zca extension
+                // but in a separate Zcd extension. Both of these are part of the C Extension.
+                let op = match op {
+                    StoreOP::Sw => CssOp::CSwsp,
+                    StoreOP::Sd => CssOp::CSdsp,
+                    StoreOP::Fsd if has_zcd => CssOp::CFsdsp,
+                    _ => return None,
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put2(encode_css_type(op, src, imm6));
+            }
+
+            // Regular Stores
+            Inst::Store {
+                src,
+                op: op @ (StoreOP::Sw | StoreOP::Sd | StoreOP::Fsd),
+                to,
+                flags,
+            } if reg_is_compressible(src)
+                && to
+                    .get_base_register()
+                    .map(reg_is_compressible)
+                    .unwrap_or(false)
+                && (to.get_offset_with_state(state) % op.size()) == 0 =>
+            {
+                let base = to.get_base_register().unwrap();
+
+                // We encode the offset in multiples of the store size.
+                let offset = to.get_offset_with_state(state);
+                let imm5 = u8::try_from(offset / op.size())
+                    .ok()
+                    .and_then(Uimm5::maybe_from_u8)?;
+
+                // Floating point stores are not included in the base Zca extension
+                // but in a separate Zcd extension. Both of these are part of the C Extension.
+                let op = match op {
+                    StoreOP::Sw => CsOp::CSw,
+                    StoreOP::Sd => CsOp::CSd,
+                    StoreOP::Fsd if has_zcd => CsOp::CFsd,
+                    _ => return None,
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put2(encode_cs_type(op, src, base, imm5));
+            }
+
+            _ => return None,
         }
 
-        return true;
+        return Some(());
     }
 
     fn emit_uncompressed(

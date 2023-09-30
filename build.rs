@@ -205,11 +205,17 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     // We ignore tests that assert for traps on windows, given
     // that Winch doesn't encode unwind information for Windows, yet.
     if strategy == "Winch" {
+        if testsuite == "misc_testsuite" {
+            // The misc/call_indirect is fully supported by Winch.
+            if testname == "call_indirect" {
+                return false;
+            }
+        }
         if testsuite != "winch" {
             return true;
         }
 
-        let assert_trap = ["i32", "i64"].contains(&testname);
+        let assert_trap = ["i32", "i64", "call_indirect"].contains(&testname);
 
         if assert_trap && env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() == "windows" {
             return true;

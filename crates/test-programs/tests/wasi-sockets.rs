@@ -48,12 +48,12 @@ async fn run(name: &str) -> anyhow::Result<()> {
     preview2::command::add_to_linker(&mut linker)?;
 
     // Create our wasi context.
-    let mut table = Table::new();
+    let table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .inherit_stdio()
         .inherit_network(ambient_authority())
         .arg(name)
-        .build(&mut table)?;
+        .build();
 
     let mut store = Store::new(&ENGINE, SocketsCtx { table, wasi });
 

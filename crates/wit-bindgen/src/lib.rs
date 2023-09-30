@@ -912,16 +912,28 @@ impl<'a> InterfaceGenerator<'a> {
         self.assert_type(id, &name);
     }
 
-    fn type_resource(&mut self, id: TypeId, _name: &str, resource: &TypeDef, docs: &Docs) {
-        let camel = resource
-            .name
-            .as_ref()
-            .expect("resources are required to be named")
-            .to_upper_camel_case();
+    fn type_resource(&mut self, id: TypeId, name: &str, resource: &TypeDef, docs: &Docs) {
+        let camel = name.to_upper_camel_case();
 
         if self.types_imported() {
             self.rustdoc(docs);
-            uwriteln!(self.src, "pub enum {camel} {{}}");
+
+            let with_key = match self.current_interface {
+                Some((_, key, _)) => format!("{}/{name}", self.resolve.name_world_key(key)),
+                None => name.to_string(),
+            };
+            match self.gen.opts.with.get(&with_key) {
+                Some(path) => {
+                    uwriteln!(
+                        self.src,
+                        "pub use {}{path} as {camel};",
+                        self.path_to_root()
+                    );
+                }
+                None => {
+                    uwriteln!(self.src, "pub enum {camel} {{}}");
+                }
+            }
 
             if self.gen.opts.async_.maybe_async() {
                 uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
@@ -1913,23 +1925,10 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("\n");
         }
     }
-}
 
-impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
-    fn resolve(&self) -> &'a Resolve {
-        self.resolve
-    }
-
-    fn ownership(&self) -> Ownership {
-        self.gen.opts.ownership
-    }
-
-    fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
+    fn path_to_root(&self) -> String {
         let mut path_to_root = String::new();
-        if let Some((cur, key, is_export)) = self.current_interface {
-            if cur == interface {
-                return None;
-            }
+        if let Some((_, key, is_export)) = self.current_interface {
             match key {
                 WorldKey::Name(_) => {
                     path_to_root.push_str("super::");
@@ -1942,6 +1941,26 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
                 path_to_root.push_str("super::");
             }
         }
+        path_to_root
+    }
+}
+
+impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
+    fn resolve(&self) -> &'a Resolve {
+        self.resolve
+    }
+
+    fn ownership(&self) -> Ownership {
+        self.gen.opts.ownership
+    }
+
+    fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
+        if let Some((cur, _, _)) = self.current_interface {
+            if cur == interface {
+                return None;
+            }
+        }
+        let mut path_to_root = self.path_to_root();
         let InterfaceName { path, .. } = &self.gen.interface_names[&interface];
         path_to_root.push_str(path);
         Some(path_to_root)

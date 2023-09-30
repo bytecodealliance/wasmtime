@@ -23,7 +23,7 @@ async fn run() {
     .context("localhost:3000 /post large")
     .unwrap();
 
-    println!("localhost:3000 /post large: {res:?}");
+    println!("localhost:3000 /post large: {}", res.status);
     assert_eq!(res.status, 200);
     let method = res.header("x-wasmtime-test-method").unwrap();
     assert_eq!(std::str::from_utf8(method).unwrap(), "POST");

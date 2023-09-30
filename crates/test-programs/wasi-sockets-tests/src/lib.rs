@@ -1,216 +1,126 @@
 wit_bindgen::generate!("test-command-with-sockets" in "../../wasi/wit");
 
-use wasi::io::streams;
-use wasi::poll::poll;
-use wasi::sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, IpAddress, Ipv4SocketAddress, Ipv6SocketAddress};
-use wasi::sockets::{instance_network, tcp, tcp_create_socket};
+use wasi::io::poll::{self, Pollable};
+use wasi::io::streams::{InputStream, OutputStream, StreamStatus};
+use wasi::sockets::instance_network;
+use wasi::sockets::network::{
+    ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
+    Network,
+};
+use wasi::sockets::tcp::TcpSocket;
+use wasi::sockets::tcp_create_socket;
 
-pub struct PollableResource {
-    pub handle: poll::Pollable,
-}
-
-impl Drop for PollableResource {
-    fn drop(&mut self) {
-        poll::drop_pollable(self.handle);
-    }
-}
-
-impl PollableResource {
+impl Pollable {
     pub fn wait(&self) {
-        loop {
-            let wait = poll::poll_oneoff(&[self.handle]);
-            if wait[0] {
-                break;
-            }
-        }
+        poll::poll_one(self);
     }
 }
 
-pub struct InputStreamResource {
-    pub handle: streams::InputStream,
-}
-
-impl Drop for InputStreamResource {
-    fn drop(&mut self) {
-        streams::drop_input_stream(self.handle);
-    }
-}
-
-impl InputStreamResource {
-    pub fn subscribe(&self) -> PollableResource {
-        PollableResource {
-            handle: streams::subscribe_to_input_stream(self.handle),
-        }
-    }
-}
-
-pub struct OutputStreamResource {
-    pub handle: streams::OutputStream,
-}
-
-impl Drop for OutputStreamResource {
-    fn drop(&mut self) {
-        streams::drop_output_stream(self.handle);
-    }
-}
-
-impl OutputStreamResource {
-    pub fn subscribe(&self) -> PollableResource {
-        PollableResource {
-            handle: streams::subscribe_to_output_stream(self.handle),
-        }
-    }
-
-    pub fn write(&self, mut bytes: &[u8]) -> (usize, streams::StreamStatus) {
+impl OutputStream {
+    pub fn blocking_write_util(&self, mut bytes: &[u8]) -> (usize, StreamStatus) {
         let total = bytes.len();
         let mut written = 0;
 
-        let s = self.subscribe();
+        let pollable = self.subscribe();
 
         while !bytes.is_empty() {
-            s.wait();
+            pollable.wait();
 
-            let permit = match streams::check_write(self.handle) {
+            let permit = match self.check_write() {
                 Ok(n) => n,
-                Err(_) => return (written, streams::StreamStatus::Ended),
+                Err(_) => return (written, StreamStatus::Ended),
             };
 
             let len = bytes.len().min(permit as usize);
             let (chunk, rest) = bytes.split_at(len);
 
-            match streams::write(self.handle, chunk) {
+            match self.write(chunk) {
                 Ok(()) => {}
-                Err(_) => return (written, streams::StreamStatus::Ended),
+                Err(_) => return (written, StreamStatus::Ended),
             }
 
-            match streams::blocking_flush(self.handle) {
+            match self.blocking_flush() {
                 Ok(()) => {}
-                Err(_) => return (written, streams::StreamStatus::Ended),
+                Err(_) => return (written, StreamStatus::Ended),
             }
 
             bytes = rest;
             written += len;
         }
 
-        (total, streams::StreamStatus::Open)
+        (total, StreamStatus::Open)
     }
 }
 
-pub struct NetworkResource {
-    pub handle: wasi::sockets::network::Network,
-}
-
-impl Drop for NetworkResource {
-    fn drop(&mut self) {
-        wasi::sockets::network::drop_network(self.handle);
+impl Network {
+    pub fn default() -> Network {
+        instance_network::instance_network()
     }
 }
 
-impl NetworkResource {
-    pub fn default() -> NetworkResource {
-        NetworkResource {
-            handle: instance_network::instance_network(),
-        }
-    }
-}
-
-pub struct TcpSocketResource {
-    pub handle: wasi::sockets::tcp::TcpSocket,
-}
-
-impl Drop for TcpSocketResource {
-    fn drop(&mut self) {
-        wasi::sockets::tcp::drop_tcp_socket(self.handle);
-    }
-}
-
-impl TcpSocketResource {
-    pub fn new(address_family: IpAddressFamily) -> Result<TcpSocketResource, ErrorCode> {
-        Ok(TcpSocketResource {
-            handle: tcp_create_socket::create_tcp_socket(address_family)?,
-        })
+impl TcpSocket {
+    pub fn new(address_family: IpAddressFamily) -> Result<TcpSocket, ErrorCode> {
+        tcp_create_socket::create_tcp_socket(address_family)
     }
 
-    pub fn subscribe(&self) -> PollableResource {
-        PollableResource {
-            handle: tcp::subscribe(self.handle),
-        }
-    }
-
-    pub fn bind(&self, network: &NetworkResource, local_address: IpSocketAddress) -> Result<(), ErrorCode> {
-        let sub = self.subscribe();
-
-        tcp::start_bind(self.handle, network.handle, local_address)?;
-
-        loop {
-            match tcp::finish_bind(self.handle) {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
-                result => return result,
-            }
-        }
-    }
-
-    pub fn listen(&self) -> Result<(), ErrorCode> {
-        let sub = self.subscribe();
-
-        tcp::start_listen(self.handle)?;
-
-        loop {
-            match tcp::finish_listen(self.handle) {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
-                result => return result,
-            }
-        }
-    }
-
-    pub fn connect(
+    pub fn blocking_bind(
         &self,
-        network: &NetworkResource,
+        network: &Network,
+        local_address: IpSocketAddress,
+    ) -> Result<(), ErrorCode> {
+        let sub = self.subscribe();
+
+        self.start_bind(&network, local_address)?;
+
+        loop {
+            match self.finish_bind() {
+                Err(ErrorCode::WouldBlock) => sub.wait(),
+                result => return result,
+            }
+        }
+    }
+
+    pub fn blocking_listen(&self) -> Result<(), ErrorCode> {
+        let sub = self.subscribe();
+
+        self.start_listen()?;
+
+        loop {
+            match self.finish_listen() {
+                Err(ErrorCode::WouldBlock) => sub.wait(),
+                result => return result,
+            }
+        }
+    }
+
+    pub fn blocking_connect(
+        &self,
+        network: &Network,
         remote_address: IpSocketAddress,
-    ) -> Result<(InputStreamResource, OutputStreamResource), ErrorCode> {
+    ) -> Result<(InputStream, OutputStream), ErrorCode> {
         let sub = self.subscribe();
 
-        tcp::start_connect(self.handle, network.handle, remote_address)?;
+        self.start_connect(&network, remote_address)?;
 
         loop {
-            match tcp::finish_connect(self.handle) {
+            match self.finish_connect() {
                 Err(ErrorCode::WouldBlock) => sub.wait(),
-                Err(e) => return Err(e),
-                Ok((input, output)) => {
-                    return Ok((
-                        InputStreamResource { handle: input },
-                        OutputStreamResource { handle: output },
-                    ))
-                }
+                result => return result,
             }
         }
     }
 
-    pub fn accept(
-        &self,
-    ) -> Result<(TcpSocketResource, InputStreamResource, OutputStreamResource), ErrorCode> {
+    pub fn blocking_accept(&self) -> Result<(TcpSocket, InputStream, OutputStream), ErrorCode> {
         let sub = self.subscribe();
 
         loop {
-            match tcp::accept(self.handle) {
+            match self.accept() {
                 Err(ErrorCode::WouldBlock) => sub.wait(),
-                Err(e) => return Err(e),
-                Ok((client, input, output)) => {
-                    return Ok((
-                        TcpSocketResource { handle: client },
-                        InputStreamResource { handle: input },
-                        OutputStreamResource { handle: output },
-                    ))
-                }
+                result => return result,
             }
         }
     }
 }
-
-
-
-
-
 
 impl IpAddress {
     pub const IPV4_BROADCAST: IpAddress = IpAddress::Ipv4((255, 255, 255, 255));

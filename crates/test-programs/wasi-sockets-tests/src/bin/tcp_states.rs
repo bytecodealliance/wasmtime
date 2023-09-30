@@ -1,329 +1,329 @@
-use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress};
-use wasi::sockets::tcp;
+use wasi::sockets::network::{Network, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress};
+use wasi::sockets::tcp::{TcpSocket, ShutdownType};
 use wasi_sockets_tests::*;
 
 fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
-    let sock = TcpSocketResource::new(family).unwrap();
+    let sock = TcpSocket::new(family).unwrap();
 
     // Skipping: tcp::start_bind
     assert!(matches!(
-        tcp::finish_bind(sock.handle),
+        sock.finish_bind(),
         Err(ErrorCode::NotInProgress)
     ));
     // Skipping: tcp::start_connect
     assert!(matches!(
-        tcp::finish_connect(sock.handle),
+        sock.finish_connect(),
         Err(ErrorCode::NotInProgress)
     ));
     assert!(matches!(
-        tcp::start_listen(sock.handle),
+        sock.start_listen(),
         Err(ErrorCode::InvalidState) // Unlike POSIX, trying to listen without an explicit bind should fail in WASI.
     ));
     assert!(matches!(
-        tcp::finish_listen(sock.handle),
+        sock.finish_listen(),
         Err(ErrorCode::NotInProgress)
     ));
     assert!(matches!(
-        tcp::accept(sock.handle),
+        sock.accept(),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::shutdown(sock.handle, tcp::ShutdownType::Both),
+        sock.shutdown(ShutdownType::Both),
         Err(ErrorCode::InvalidState)
     ));
 
     assert!(matches!(
-        tcp::local_address(sock.handle),
+        sock.local_address(),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::remote_address(sock.handle),
+        sock.remote_address(),
         Err(ErrorCode::InvalidState)
     ));
-    assert_eq!(tcp::address_family(sock.handle), family);
+    assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(tcp::ipv6_only(sock.handle), Ok(_)));
+        assert!(matches!(sock.ipv6_only(), Ok(_)));
 
         // Even on platforms that don't support dualstack sockets,
         // setting ipv6_only to true (disabling dualstack mode) should work.
-        assert!(matches!(tcp::set_ipv6_only(sock.handle, true), Ok(_)));
+        assert!(matches!(sock.set_ipv6_only(true), Ok(_)));
     } else {
         assert!(matches!(
-            tcp::ipv6_only(sock.handle),
+            sock.ipv6_only(),
             Err(ErrorCode::NotSupported)
         ));
         assert!(matches!(
-            tcp::set_ipv6_only(sock.handle, true),
+            sock.set_ipv6_only(true),
             Err(ErrorCode::NotSupported)
         ));
     }
 
-    // assert!(matches!(tcp::set_listen_backlog_size(sock.handle, 32), Ok(_))); // FIXME
-    assert!(matches!(tcp::keep_alive(sock.handle), Ok(_)));
-    assert!(matches!(tcp::set_keep_alive(sock.handle, false), Ok(_)));
-    assert!(matches!(tcp::no_delay(sock.handle), Ok(_)));
-    assert!(matches!(tcp::set_no_delay(sock.handle, false), Ok(_)));
-    assert!(matches!(tcp::unicast_hop_limit(sock.handle), Ok(_)));
+    // assert!(matches!(sock.set_listen_backlog_size(32), Ok(_))); // FIXME
+    assert!(matches!(sock.keep_alive(), Ok(_)));
+    assert!(matches!(sock.set_keep_alive(false), Ok(_)));
+    assert!(matches!(sock.no_delay(), Ok(_)));
+    assert!(matches!(sock.set_no_delay(false), Ok(_)));
+    assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(
-        tcp::set_unicast_hop_limit(sock.handle, 255),
+        sock.set_unicast_hop_limit(255),
         Ok(_)
     ));
-    assert!(matches!(tcp::receive_buffer_size(sock.handle), Ok(_)));
+    assert!(matches!(sock.receive_buffer_size(), Ok(_)));
     assert!(matches!(
-        tcp::set_receive_buffer_size(sock.handle, 16000),
+        sock.set_receive_buffer_size(16000),
         Ok(_)
     ));
-    assert!(matches!(tcp::send_buffer_size(sock.handle), Ok(_)));
+    assert!(matches!(sock.send_buffer_size(), Ok(_)));
     assert!(matches!(
-        tcp::set_send_buffer_size(sock.handle, 16000),
+        sock.set_send_buffer_size(16000),
         Ok(_)
     ));
 }
 
-fn test_tcp_bound_state_invariants(net: &NetworkResource, family: IpAddressFamily) {
+fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
     let bind_address = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let sock = TcpSocketResource::new(family).unwrap();
-    sock.bind(net, bind_address).unwrap();
+    let sock = TcpSocket::new(family).unwrap();
+    sock.blocking_bind(net, bind_address).unwrap();
 
     assert!(matches!(
-        tcp::start_bind(sock.handle, net.handle, bind_address),
+        sock.start_bind(net, bind_address),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::finish_bind(sock.handle),
+        sock.finish_bind(),
         Err(ErrorCode::NotInProgress)
     ));
     // Skipping: tcp::start_connect
     assert!(matches!(
-        tcp::finish_connect(sock.handle),
+        sock.finish_connect(),
         Err(ErrorCode::NotInProgress)
     ));
     // Skipping: tcp::start_listen
     assert!(matches!(
-        tcp::finish_listen(sock.handle),
+        sock.finish_listen(),
         Err(ErrorCode::NotInProgress)
     ));
     assert!(matches!(
-        tcp::accept(sock.handle),
+        sock.accept(),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::shutdown(sock.handle, tcp::ShutdownType::Both),
+        sock.shutdown(ShutdownType::Both),
         Err(ErrorCode::InvalidState)
     ));
 
-    assert!(matches!(tcp::local_address(sock.handle), Ok(_)));
+    assert!(matches!(sock.local_address(), Ok(_)));
     assert!(matches!(
-        tcp::remote_address(sock.handle),
+        sock.remote_address(),
         Err(ErrorCode::InvalidState)
     ));
-    assert_eq!(tcp::address_family(sock.handle), family);
+    assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(tcp::ipv6_only(sock.handle), Ok(_)));
+        assert!(matches!(sock.ipv6_only(), Ok(_)));
         assert!(matches!(
-            tcp::set_ipv6_only(sock.handle, true),
+            sock.set_ipv6_only(true),
             Err(ErrorCode::InvalidState)
         ));
     } else {
         assert!(matches!(
-            tcp::ipv6_only(sock.handle),
+            sock.ipv6_only(),
             Err(ErrorCode::NotSupported)
         ));
         assert!(matches!(
-            tcp::set_ipv6_only(sock.handle, true),
+            sock.set_ipv6_only(true),
             Err(ErrorCode::NotSupported)
         ));
     }
 
-    // assert!(matches!(tcp::set_listen_backlog_size(sock.handle, 32), Err(ErrorCode::AlreadyBound))); // FIXME
-    assert!(matches!(tcp::keep_alive(sock.handle), Ok(_)));
-    assert!(matches!(tcp::set_keep_alive(sock.handle, false), Ok(_)));
-    assert!(matches!(tcp::no_delay(sock.handle), Ok(_)));
-    assert!(matches!(tcp::set_no_delay(sock.handle, false), Ok(_)));
-    assert!(matches!(tcp::unicast_hop_limit(sock.handle), Ok(_)));
+    // assert!(matches!(sock.set_listen_backlog_size(32), Err(ErrorCode::AlreadyBound))); // FIXME
+    assert!(matches!(sock.keep_alive(), Ok(_)));
+    assert!(matches!(sock.set_keep_alive(false), Ok(_)));
+    assert!(matches!(sock.no_delay(), Ok(_)));
+    assert!(matches!(sock.set_no_delay(false), Ok(_)));
+    assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(
-        tcp::set_unicast_hop_limit(sock.handle, 255),
+        sock.set_unicast_hop_limit(255),
         Ok(_)
     ));
-    assert!(matches!(tcp::receive_buffer_size(sock.handle), Ok(_)));
+    assert!(matches!(sock.receive_buffer_size(), Ok(_)));
     assert!(matches!(
-        tcp::set_receive_buffer_size(sock.handle, 16000),
+        sock.set_receive_buffer_size(16000),
         Ok(_)
     ));
-    assert!(matches!(tcp::send_buffer_size(sock.handle), Ok(_)));
+    assert!(matches!(sock.send_buffer_size(), Ok(_)));
     assert!(matches!(
-        tcp::set_send_buffer_size(sock.handle, 16000),
+        sock.set_send_buffer_size(16000),
         Ok(_)
     ));
 }
 
-fn test_tcp_listening_state_invariants(net: &NetworkResource, family: IpAddressFamily) {
+fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
     let bind_address = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let sock = TcpSocketResource::new(family).unwrap();
-    sock.bind(net, bind_address).unwrap();
-    sock.listen().unwrap();
+    let sock = TcpSocket::new(family).unwrap();
+    sock.blocking_bind(net, bind_address).unwrap();
+    sock.blocking_listen().unwrap();
 
     assert!(matches!(
-        tcp::start_bind(sock.handle, net.handle, bind_address),
+        sock.start_bind(net, bind_address),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::finish_bind(sock.handle),
+        sock.finish_bind(),
         Err(ErrorCode::NotInProgress)
     ));
     assert!(matches!(
-        tcp::start_connect(sock.handle, net.handle, bind_address), // Actual address shouldn't matter
+        sock.start_connect(net, bind_address), // Actual address shouldn't matter
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::finish_connect(sock.handle),
+        sock.finish_connect(),
         Err(ErrorCode::NotInProgress)
     ));
     assert!(matches!(
-        tcp::start_listen(sock.handle),
+        sock.start_listen(),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::finish_listen(sock.handle),
+        sock.finish_listen(),
         Err(ErrorCode::NotInProgress)
     ));
     // Skipping: tcp::accept
     assert!(matches!(
-        tcp::shutdown(sock.handle, tcp::ShutdownType::Both),
+        sock.shutdown(ShutdownType::Both),
         Err(ErrorCode::InvalidState)
     ));
 
-    assert!(matches!(tcp::local_address(sock.handle), Ok(_)));
+    assert!(matches!(sock.local_address(), Ok(_)));
     assert!(matches!(
-        tcp::remote_address(sock.handle),
+        sock.remote_address(),
         Err(ErrorCode::InvalidState)
     ));
-    assert_eq!(tcp::address_family(sock.handle), family);
+    assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(tcp::ipv6_only(sock.handle), Ok(_)));
+        assert!(matches!(sock.ipv6_only(), Ok(_)));
         assert!(matches!(
-            tcp::set_ipv6_only(sock.handle, true),
+            sock.set_ipv6_only(true),
             Err(ErrorCode::InvalidState)
         ));
     } else {
         assert!(matches!(
-            tcp::ipv6_only(sock.handle),
+            sock.ipv6_only(),
             Err(ErrorCode::NotSupported)
         ));
         assert!(matches!(
-            tcp::set_ipv6_only(sock.handle, true),
+            sock.set_ipv6_only(true),
             Err(ErrorCode::NotSupported)
         ));
     }
 
-    // assert!(matches!(tcp::set_listen_backlog_size(sock.handle, 32), Err(ErrorCode::AlreadyBound))); // FIXME
-    assert!(matches!(tcp::keep_alive(sock.handle), Ok(_)));
-    assert!(matches!(tcp::set_keep_alive(sock.handle, false), Ok(_)));
-    assert!(matches!(tcp::no_delay(sock.handle), Ok(_)));
-    assert!(matches!(tcp::set_no_delay(sock.handle, false), Ok(_)));
-    assert!(matches!(tcp::unicast_hop_limit(sock.handle), Ok(_)));
+    // assert!(matches!(sock.set_listen_backlog_size(32), Err(ErrorCode::AlreadyBound))); // FIXME
+    assert!(matches!(sock.keep_alive(), Ok(_)));
+    assert!(matches!(sock.set_keep_alive(false), Ok(_)));
+    assert!(matches!(sock.no_delay(), Ok(_)));
+    assert!(matches!(sock.set_no_delay(false), Ok(_)));
+    assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(
-        tcp::set_unicast_hop_limit(sock.handle, 255),
+        sock.set_unicast_hop_limit(255),
         Ok(_)
     ));
-    assert!(matches!(tcp::receive_buffer_size(sock.handle), Ok(_)));
+    assert!(matches!(sock.receive_buffer_size(), Ok(_)));
     assert!(matches!(
-        tcp::set_receive_buffer_size(sock.handle, 16000),
+        sock.set_receive_buffer_size(16000),
         Ok(_)
     ));
-    assert!(matches!(tcp::send_buffer_size(sock.handle), Ok(_)));
+    assert!(matches!(sock.send_buffer_size(), Ok(_)));
     assert!(matches!(
-        tcp::set_send_buffer_size(sock.handle, 16000),
+        sock.set_send_buffer_size(16000),
         Ok(_)
     ));
 }
 
-fn test_tcp_connected_state_invariants(net: &NetworkResource, family: IpAddressFamily) {
+fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
     let bind_address = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let sock_listener = TcpSocketResource::new(family).unwrap();
-    sock_listener.bind(net, bind_address).unwrap();
-    sock_listener.listen().unwrap();
-    let addr_listener = tcp::local_address(sock_listener.handle).unwrap();
-    let sock = TcpSocketResource::new(family).unwrap();
-    let (_input, _output) = sock.connect(net, addr_listener).unwrap();
+    let sock_listener = TcpSocket::new(family).unwrap();
+    sock_listener.blocking_bind(net, bind_address).unwrap();
+    sock_listener.blocking_listen().unwrap();
+    let addr_listener = sock_listener.local_address().unwrap();
+    let sock = TcpSocket::new(family).unwrap();
+    let (_input, _output) = sock.blocking_connect(net, addr_listener).unwrap();
 
     assert!(matches!(
-        tcp::start_bind(sock.handle, net.handle, bind_address),
+        sock.start_bind(net, bind_address),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::finish_bind(sock.handle),
+        sock.finish_bind(),
         Err(ErrorCode::NotInProgress)
     ));
     assert!(matches!(
-        tcp::start_connect(sock.handle, net.handle, addr_listener),
+        sock.start_connect(net, addr_listener),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::finish_connect(sock.handle),
+        sock.finish_connect(),
         Err(ErrorCode::NotInProgress)
     ));
     assert!(matches!(
-        tcp::start_listen(sock.handle),
+        sock.start_listen(),
         Err(ErrorCode::InvalidState)
     ));
     assert!(matches!(
-        tcp::finish_listen(sock.handle),
+        sock.finish_listen(),
         Err(ErrorCode::NotInProgress)
     ));
     assert!(matches!(
-        tcp::accept(sock.handle),
+        sock.accept(),
         Err(ErrorCode::InvalidState)
     ));
     // Skipping: tcp::shutdown
 
-    assert!(matches!(tcp::local_address(sock.handle), Ok(_)));
-    assert!(matches!(tcp::remote_address(sock.handle), Ok(_)));
-    assert_eq!(tcp::address_family(sock.handle), family);
+    assert!(matches!(sock.local_address(), Ok(_)));
+    assert!(matches!(sock.remote_address(), Ok(_)));
+    assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(tcp::ipv6_only(sock.handle), Ok(_)));
+        assert!(matches!(sock.ipv6_only(), Ok(_)));
         assert!(matches!(
-            tcp::set_ipv6_only(sock.handle, true),
+            sock.set_ipv6_only(true),
             Err(ErrorCode::InvalidState)
         ));
     } else {
         assert!(matches!(
-            tcp::ipv6_only(sock.handle),
+            sock.ipv6_only(),
             Err(ErrorCode::NotSupported)
         ));
         assert!(matches!(
-            tcp::set_ipv6_only(sock.handle, true),
+            sock.set_ipv6_only(true),
             Err(ErrorCode::NotSupported)
         ));
     }
 
-    assert!(matches!(tcp::keep_alive(sock.handle), Ok(_)));
-    assert!(matches!(tcp::set_keep_alive(sock.handle, false), Ok(_)));
-    assert!(matches!(tcp::no_delay(sock.handle), Ok(_)));
-    assert!(matches!(tcp::set_no_delay(sock.handle, false), Ok(_)));
-    assert!(matches!(tcp::unicast_hop_limit(sock.handle), Ok(_)));
+    assert!(matches!(sock.keep_alive(), Ok(_)));
+    assert!(matches!(sock.set_keep_alive(false), Ok(_)));
+    assert!(matches!(sock.no_delay(), Ok(_)));
+    assert!(matches!(sock.set_no_delay(false), Ok(_)));
+    assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(
-        tcp::set_unicast_hop_limit(sock.handle, 255),
+        sock.set_unicast_hop_limit(255),
         Ok(_)
     ));
-    assert!(matches!(tcp::receive_buffer_size(sock.handle), Ok(_)));
+    assert!(matches!(sock.receive_buffer_size(), Ok(_)));
     assert!(matches!(
-        tcp::set_receive_buffer_size(sock.handle, 16000),
+        sock.set_receive_buffer_size(16000),
         Ok(_)
     ));
-    assert!(matches!(tcp::send_buffer_size(sock.handle), Ok(_)));
+    assert!(matches!(sock.send_buffer_size(), Ok(_)));
     assert!(matches!(
-        tcp::set_send_buffer_size(sock.handle, 16000),
+        sock.set_send_buffer_size(16000),
         Ok(_)
     ));
 }
 
 fn main() {
-    let net = NetworkResource::default();
+    let net = Network::default();
 
     test_tcp_unbound_state_invariants(IpAddressFamily::Ipv4);
     test_tcp_unbound_state_invariants(IpAddressFamily::Ipv6);

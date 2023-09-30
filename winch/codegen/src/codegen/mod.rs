@@ -1,22 +1,25 @@
 use crate::{
     abi::{ABISig, ABI},
-    masm::{MacroAssembler, OperandSize},
+    isa::reg::Reg,
+    masm::{CmpKind, MacroAssembler, OperandSize, TrapCode},
     stack::{TypedReg, Val},
     CallingConvention,
 };
 use anyhow::Result;
-use call::FnCall;
 use smallvec::SmallVec;
 use wasmparser::{BinaryReader, FuncValidator, Operator, ValidatorResources, VisitOperator};
-use wasmtime_environ::{FuncIndex, WasmFuncType, WasmType};
+use wasmtime_environ::{PtrSize, TypeIndex, WasmFuncType, WasmType};
 
 mod context;
 pub(crate) use context::*;
 mod env;
 pub use env::*;
-pub mod call;
+mod call;
+pub(crate) use call::*;
 mod control;
 pub(crate) use control::*;
+mod builtin;
+pub(crate) use builtin::*;
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, M>
@@ -173,8 +176,7 @@ where
     ) -> Result<()> {
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
-        self.masm
-            .zero_mem_range(defined_locals_range.as_range(), &mut self.context.regalloc);
+        self.masm.zero_mem_range(defined_locals_range.as_range());
 
         // Save the vmctx pointer to its local slot in case we need to reload it
         // at any point.
@@ -247,51 +249,131 @@ where
         }
     }
 
-    /// Emit a direct function call.
-    pub fn emit_call(&mut self, index: FuncIndex) {
-        let callee = self.env.callee_from_index(index);
-        let (sig, callee_addr): (ABISig, Option<<M as MacroAssembler>::Address>) = if callee.import
-        {
-            let mut params = vec![WasmType::I64, WasmType::I64];
-            params.extend_from_slice(callee.ty.params());
-            let sig = WasmFuncType::new(params.into(), callee.ty.returns().into());
+    /// Emit a function call to:
+    /// * A locally defined function.
+    /// * A function import.
+    /// * A funcref.
+    pub fn emit_call(&mut self, callee: Callee) {
+        match callee {
+            Callee::Import(callee) => {
+                let mut params = Vec::with_capacity(callee.ty.params().len() + 2);
+                params.extend_from_slice(&self.env.vmctx_args_type());
+                params.extend_from_slice(callee.ty.params());
+                let sig = WasmFuncType::new(params.into(), callee.ty.returns().into());
 
-            let caller_vmctx = <M::ABI as ABI>::vmctx_reg();
-            let callee_vmctx = self.context.any_gpr(self.masm);
-            let callee_vmctx_offset = self.env.vmoffsets.vmctx_vmfunction_import_vmctx(index);
-            let callee_vmctx_addr = self.masm.address_at_reg(caller_vmctx, callee_vmctx_offset);
-            // FIXME Remove harcoded operand size, this will be needed
-            // once 32-bit architectures are supported.
-            self.masm
-                .load(callee_vmctx_addr, callee_vmctx, OperandSize::S64);
+                let caller_vmctx = <M::ABI as ABI>::vmctx_reg();
+                let callee_vmctx = self.context.any_gpr(self.masm);
+                let callee_vmctx_offset = self
+                    .env
+                    .vmoffsets
+                    .vmctx_vmfunction_import_vmctx(callee.index);
+                let callee_vmctx_addr = self.masm.address_at_vmctx(callee_vmctx_offset);
+                // FIXME Remove harcoded operand size, this will be needed
+                // once 32-bit architectures are supported.
+                self.masm
+                    .load(callee_vmctx_addr, callee_vmctx, OperandSize::S64);
 
-            let callee_body_offset = self.env.vmoffsets.vmctx_vmfunction_import_wasm_call(index);
-            let callee_addr = self.masm.address_at_reg(caller_vmctx, callee_body_offset);
+                let callee_body_offset = self
+                    .env
+                    .vmoffsets
+                    .vmctx_vmfunction_import_wasm_call(callee.index);
+                let callee_addr = self.masm.address_at_vmctx(callee_body_offset);
 
-            // Put the callee / caller vmctx at the start of the
-            // range of the stack so that they are used as first
-            // and second arguments.
-            let stack = &mut self.context.stack;
-            let location = stack.len() - (sig.params().len() - 2);
-            stack.insert(location as usize, TypedReg::i64(caller_vmctx).into());
-            stack.insert(location as usize, TypedReg::i64(callee_vmctx).into());
-            (
-                <M::ABI as ABI>::sig(&sig, &CallingConvention::Default),
-                Some(callee_addr),
-            )
-        } else {
-            (
-                <M::ABI as ABI>::sig(&callee.ty, &CallingConvention::Default),
-                None,
-            )
+                // Put the callee / caller vmctx at the start of the
+                // range of the stack so that they are used as first
+                // and second arguments.
+                let stack = &mut self.context.stack;
+                let location = stack.len() - (sig.params().len() - 2);
+                stack.insert(location as usize, TypedReg::i64(caller_vmctx).into());
+                stack.insert(location as usize, TypedReg::i64(callee_vmctx).into());
+
+                let abi_sig = <M::ABI as ABI>::sig(&sig, &CallingConvention::Default);
+                FnCall::new(&abi_sig)
+                    .save_live_registers(&mut self.context, self.masm)
+                    .addr(self.masm, &mut self.context, callee_addr);
+            }
+
+            Callee::Local(callee) => {
+                let abi_sig = <M::ABI as ABI>::sig(&callee.ty, &CallingConvention::Default);
+                FnCall::new(&abi_sig)
+                    .save_live_registers(&mut self.context, self.masm)
+                    .direct(self.masm, &mut self.context, callee.index);
+            }
+
+            Callee::FuncRef(ty) => {
+                // Get type for the caller and callee VMContext.
+                let ptr_type = self.env.ptr_type();
+                let abi_sig = <M::ABI as ABI>::sig(&ty, &CallingConvention::Default);
+                // Pop the funcref pointer to a register and allocate a register to hold the
+                // address of the funcref. Since the callee is not addressed from a global non
+                // allocatable register (like the vmctx in the case of an import), we load the
+                // funcref to a register ensuring that it doesn't get assigned to a non-arg
+                // register.
+                let (funcref_ptr, funcref) = self.context.without::<_, M, _>(
+                    abi_sig.param_regs(),
+                    abi_sig.param_regs(),
+                    self.masm,
+                    |cx, masm| (cx.pop_to_reg(masm, None).into(), cx.any_gpr(masm)),
+                );
+                self.masm.load(
+                    self.masm.address_at_reg(
+                        funcref_ptr,
+                        self.env.vmoffsets.ptr.vm_func_ref_wasm_call().into(),
+                    ),
+                    funcref,
+                    ptr_type.into(),
+                );
+                self.context.free_reg(funcref_ptr);
+
+                FnCall::new(&abi_sig)
+                    .save_live_registers(&mut self.context, self.masm)
+                    .reg(self.masm, &mut self.context, funcref);
+            }
         };
+    }
 
-        let fncall = FnCall::new::<M>(&sig, &mut self.context, self.masm);
-        if let Some(addr) = callee_addr {
-            fncall.indirect::<M>(self.masm, &mut self.context, addr);
-        } else {
-            fncall.direct::<M>(self.masm, &mut self.context, index);
-        }
+    /// Emits a a series of instructions that will type check a function reference call.
+    pub fn emit_typecheck_funcref(&mut self, funcref_ptr: Reg, type_index: TypeIndex) {
+        let ptr_size: OperandSize = self.env.ptr_type().into();
+        let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_signature_index();
+        let sig_size = OperandSize::from_bytes(sig_index_bytes);
+        let sig_index = self.env.translation.module.types[type_index].unwrap_function();
+        let sig_offset = sig_index
+            .as_u32()
+            .checked_mul(sig_index_bytes.into())
+            .unwrap();
+        let signatures_base_offset = self.env.vmoffsets.vmctx_signature_ids_array();
+        let scratch = <M::ABI as ABI>::scratch_reg();
+        let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref_type_index();
+
+        // Load the signatures address into the scratch register.
+        self.masm.load(
+            self.masm.address_at_vmctx(signatures_base_offset),
+            scratch,
+            ptr_size,
+        );
+
+        // Get the caller id.
+        let caller_id = self.context.any_gpr(self.masm);
+        self.masm.load(
+            self.masm.address_at_reg(scratch, sig_offset),
+            caller_id,
+            sig_size,
+        );
+
+        let callee_id = self.context.any_gpr(self.masm);
+        self.masm.load(
+            self.masm
+                .address_at_reg(funcref_ptr, funcref_sig_offset.into()),
+            callee_id,
+            sig_size,
+        );
+
+        // Typecheck.
+        self.masm.cmp(callee_id.into(), caller_id, OperandSize::S32);
+        self.masm.trapif(CmpKind::Ne, TrapCode::BadSignature);
+        self.context.free_reg(callee_id);
+        self.context.free_reg(caller_id);
     }
 
     /// Emit the usual function end instruction sequence.

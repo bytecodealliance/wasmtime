@@ -1,148 +1,148 @@
-use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress};
-use wasi::sockets::tcp;
+use wasi::sockets::network::{Network, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress};
+use wasi::sockets::tcp::TcpSocket;
 use wasi_sockets_tests::*;
 
 fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
 
-    let sock = TcpSocketResource::new(family).unwrap();
+    let sock = TcpSocket::new(family).unwrap();
 
-    assert_eq!(tcp::address_family(sock.handle), family);
+    assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {
-        tcp::ipv6_only(sock.handle).unwrap(); // Only verify that it has a default value at all, but either value is valid.
+        sock.ipv6_only().unwrap(); // Only verify that it has a default value at all, but either value is valid.
     }
 
-    tcp::keep_alive(sock.handle).unwrap(); // Only verify that it has a default value at all, but either value is valid.
-    assert_eq!(tcp::no_delay(sock.handle).unwrap(), false);
-    assert!(tcp::unicast_hop_limit(sock.handle).unwrap() > 0);
-    assert!(tcp::receive_buffer_size(sock.handle).unwrap() > 0);
-    assert!(tcp::send_buffer_size(sock.handle).unwrap() > 0);
+    sock.keep_alive().unwrap(); // Only verify that it has a default value at all, but either value is valid.
+    assert_eq!(sock.no_delay().unwrap(), false);
+    assert!(sock.unicast_hop_limit().unwrap() > 0);
+    assert!(sock.receive_buffer_size().unwrap() > 0);
+    assert!(sock.send_buffer_size().unwrap() > 0);
 }
 
 fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
 
-    let sock = TcpSocketResource::new(family).unwrap();
+    let sock = TcpSocket::new(family).unwrap();
 
     if family == IpAddressFamily::Ipv6 {
-        assert!(matches!(tcp::set_ipv6_only(sock.handle, true), Ok(_)));
-        assert!(matches!(tcp::set_ipv6_only(sock.handle, false), Ok(_)));
+        assert!(matches!(sock.set_ipv6_only(true), Ok(_)));
+        assert!(matches!(sock.set_ipv6_only(false), Ok(_)));
     }
 
     // FIXME: #7034
-    // assert!(matches!(tcp::set_listen_backlog_size(sock.handle, 0), Ok(_))); // Unsupported sizes should be silently capped.
-    // assert!(matches!(tcp::set_listen_backlog_size(sock.handle, u64::MAX), Ok(_))); // Unsupported sizes should be silently capped.
+    // assert!(matches!(sock.set_listen_backlog_size(0), Ok(_))); // Unsupported sizes should be silently capped.
+    // assert!(matches!(sock.set_listen_backlog_size(u64::MAX), Ok(_))); // Unsupported sizes should be silently capped.
 
-    assert!(matches!(tcp::set_keep_alive(sock.handle, true), Ok(_)));
-    assert!(matches!(tcp::set_keep_alive(sock.handle, false), Ok(_)));
+    assert!(matches!(sock.set_keep_alive(true), Ok(_)));
+    assert!(matches!(sock.set_keep_alive(false), Ok(_)));
 
-    assert!(matches!(tcp::set_no_delay(sock.handle, true), Ok(_)));
-    assert!(matches!(tcp::set_no_delay(sock.handle, false), Ok(_)));
+    assert!(matches!(sock.set_no_delay(true), Ok(_)));
+    assert!(matches!(sock.set_no_delay(false), Ok(_)));
 
-    assert!(matches!(tcp::set_unicast_hop_limit(sock.handle, 0), Err(ErrorCode::InvalidArgument)));
-    assert!(matches!(tcp::set_unicast_hop_limit(sock.handle, 1), Ok(_)));
-    assert!(matches!(tcp::set_unicast_hop_limit(sock.handle, u8::MAX), Ok(_)));
+    assert!(matches!(sock.set_unicast_hop_limit(0), Err(ErrorCode::InvalidArgument)));
+    assert!(matches!(sock.set_unicast_hop_limit(1), Ok(_)));
+    assert!(matches!(sock.set_unicast_hop_limit(u8::MAX), Ok(_)));
 
-    assert!(matches!(tcp::set_receive_buffer_size(sock.handle, 0), Ok(_))); // Unsupported sizes should be silently capped.
-    assert!(matches!(tcp::set_receive_buffer_size(sock.handle, u64::MAX), Ok(_))); // Unsupported sizes should be silently capped.
-    assert!(matches!(tcp::set_send_buffer_size(sock.handle, 0), Ok(_))); // Unsupported sizes should be silently capped.
-    assert!(matches!(tcp::set_send_buffer_size(sock.handle, u64::MAX), Ok(_))); // Unsupported sizes should be silently capped.
+    assert!(matches!(sock.set_receive_buffer_size(0), Ok(_))); // Unsupported sizes should be silently capped.
+    assert!(matches!(sock.set_receive_buffer_size(u64::MAX), Ok(_))); // Unsupported sizes should be silently capped.
+    assert!(matches!(sock.set_send_buffer_size(0), Ok(_))); // Unsupported sizes should be silently capped.
+    assert!(matches!(sock.set_send_buffer_size(u64::MAX), Ok(_))); // Unsupported sizes should be silently capped.
 }
 
 fn test_tcp_sockopt_readback(family: IpAddressFamily) {
 
-    let sock = TcpSocketResource::new(family).unwrap();
+    let sock = TcpSocket::new(family).unwrap();
 
     if family == IpAddressFamily::Ipv6 {
-        tcp::set_ipv6_only(sock.handle, true).unwrap();
-        assert_eq!(tcp::ipv6_only(sock.handle).unwrap(), true);
-        tcp::set_ipv6_only(sock.handle, false).unwrap();
-        assert_eq!(tcp::ipv6_only(sock.handle).unwrap(), false);
+        sock.set_ipv6_only(true).unwrap();
+        assert_eq!(sock.ipv6_only().unwrap(), true);
+        sock.set_ipv6_only(false).unwrap();
+        assert_eq!(sock.ipv6_only().unwrap(), false);
     }
 
-    tcp::set_keep_alive(sock.handle, true).unwrap();
-    assert_eq!(tcp::keep_alive(sock.handle).unwrap(), true);
-    tcp::set_keep_alive(sock.handle, false).unwrap();
-    assert_eq!(tcp::keep_alive(sock.handle).unwrap(), false);
+    sock.set_keep_alive(true).unwrap();
+    assert_eq!(sock.keep_alive().unwrap(), true);
+    sock.set_keep_alive(false).unwrap();
+    assert_eq!(sock.keep_alive().unwrap(), false);
 
-    tcp::set_no_delay(sock.handle, true).unwrap();
-    assert_eq!(tcp::no_delay(sock.handle).unwrap(), true);
-    tcp::set_no_delay(sock.handle, false).unwrap();
-    assert_eq!(tcp::no_delay(sock.handle).unwrap(), false);
+    sock.set_no_delay(true).unwrap();
+    assert_eq!(sock.no_delay().unwrap(), true);
+    sock.set_no_delay(false).unwrap();
+    assert_eq!(sock.no_delay().unwrap(), false);
 
-    tcp::set_unicast_hop_limit(sock.handle, 42).unwrap();
-    assert_eq!(tcp::unicast_hop_limit(sock.handle).unwrap(), 42);
+    sock.set_unicast_hop_limit(42).unwrap();
+    assert_eq!(sock.unicast_hop_limit().unwrap(), 42);
 
-    tcp::set_receive_buffer_size(sock.handle, 0x10000).unwrap();
-    assert_eq!(tcp::receive_buffer_size(sock.handle).unwrap(), 0x10000);
+    sock.set_receive_buffer_size(0x10000).unwrap();
+    assert_eq!(sock.receive_buffer_size().unwrap(), 0x10000);
 
-    tcp::set_send_buffer_size(sock.handle, 0x10000).unwrap();
-    assert_eq!(tcp::send_buffer_size(sock.handle).unwrap(), 0x10000);
+    sock.set_send_buffer_size(0x10000).unwrap();
+    assert_eq!(sock.send_buffer_size().unwrap(), 0x10000);
 }
 
-fn test_tcp_sockopt_inheritance(net: &NetworkResource, family: IpAddressFamily) {
+fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
     
     let bind_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
-    let listener = TcpSocketResource::new(family).unwrap();
+    let listener = TcpSocket::new(family).unwrap();
 
-    let default_ipv6_only = tcp::ipv6_only(listener.handle).unwrap_or(false);
-    let default_keep_alive = tcp::keep_alive(listener.handle).unwrap();
+    let default_ipv6_only = listener.ipv6_only().unwrap_or(false);
+    let default_keep_alive = listener.keep_alive().unwrap();
 
     // Configure options on listener:
     {
         if family == IpAddressFamily::Ipv6 {
-            tcp::set_ipv6_only(listener.handle, !default_ipv6_only).unwrap();
+            listener.set_ipv6_only(!default_ipv6_only).unwrap();
         }
 
-        tcp::set_keep_alive(listener.handle, !default_keep_alive).unwrap();
-        tcp::set_no_delay(listener.handle, true).unwrap();
-        tcp::set_unicast_hop_limit(listener.handle, 42).unwrap();
-        tcp::set_receive_buffer_size(listener.handle, 0x10000).unwrap();
-        tcp::set_send_buffer_size(listener.handle, 0x10000).unwrap();
+        listener.set_keep_alive(!default_keep_alive).unwrap();
+        listener.set_no_delay(true).unwrap();
+        listener.set_unicast_hop_limit(42).unwrap();
+        listener.set_receive_buffer_size(0x10000).unwrap();
+        listener.set_send_buffer_size(0x10000).unwrap();
     }
 
 
-    listener.bind(&net, bind_addr).unwrap();
-    listener.listen().unwrap();
-    let bound_addr = tcp::local_address(listener.handle).unwrap();
-    let client = TcpSocketResource::new(family).unwrap();
-    client.connect(&net, bound_addr).unwrap();
+    listener.blocking_bind(&net, bind_addr).unwrap();
+    listener.blocking_listen().unwrap();
+    let bound_addr = listener.local_address().unwrap();
+    let client = TcpSocket::new(family).unwrap();
+    client.blocking_connect(&net, bound_addr).unwrap();
     let (accepted_client, _, _) = listener.accept().unwrap();
 
     // Verify options on accepted socket:
     {
         if family == IpAddressFamily::Ipv6 {
-            assert_eq!(tcp::ipv6_only(accepted_client.handle).unwrap(), !default_ipv6_only);
+            assert_eq!(accepted_client.ipv6_only().unwrap(), !default_ipv6_only);
         }
 
-        assert_eq!(tcp::keep_alive(accepted_client.handle).unwrap(), !default_keep_alive);
-        assert_eq!(tcp::no_delay(accepted_client.handle).unwrap(), true);
-        assert_eq!(tcp::unicast_hop_limit(accepted_client.handle).unwrap(), 42);
-        assert_eq!(tcp::receive_buffer_size(accepted_client.handle).unwrap(), 0x10000);
-        assert_eq!(tcp::send_buffer_size(accepted_client.handle).unwrap(), 0x10000);
+        assert_eq!(accepted_client.keep_alive().unwrap(), !default_keep_alive);
+        assert_eq!(accepted_client.no_delay().unwrap(), true);
+        assert_eq!(accepted_client.unicast_hop_limit().unwrap(), 42);
+        assert_eq!(accepted_client.receive_buffer_size().unwrap(), 0x10000);
+        assert_eq!(accepted_client.send_buffer_size().unwrap(), 0x10000);
     }
 
     // Update options on listener to something else:
     {
-        tcp::set_keep_alive(listener.handle, default_keep_alive).unwrap();
-        tcp::set_no_delay(listener.handle, false).unwrap();
-        tcp::set_unicast_hop_limit(listener.handle, 43).unwrap();
-        tcp::set_receive_buffer_size(listener.handle, 0x20000).unwrap();
-        tcp::set_send_buffer_size(listener.handle, 0x20000).unwrap();
+        listener.set_keep_alive(default_keep_alive).unwrap();
+        listener.set_no_delay(false).unwrap();
+        listener.set_unicast_hop_limit(43).unwrap();
+        listener.set_receive_buffer_size(0x20000).unwrap();
+        listener.set_send_buffer_size(0x20000).unwrap();
     }
 
     // Verify that the already accepted socket was not affected:
     {
-        assert_eq!(tcp::keep_alive(accepted_client.handle).unwrap(), !default_keep_alive);
-        assert_eq!(tcp::no_delay(accepted_client.handle).unwrap(), true);
-        assert_eq!(tcp::unicast_hop_limit(accepted_client.handle).unwrap(), 42);
-        assert_eq!(tcp::receive_buffer_size(accepted_client.handle).unwrap(), 0x10000);
-        assert_eq!(tcp::send_buffer_size(accepted_client.handle).unwrap(), 0x10000);
+        assert_eq!(accepted_client.keep_alive().unwrap(), !default_keep_alive);
+        assert_eq!(accepted_client.no_delay().unwrap(), true);
+        assert_eq!(accepted_client.unicast_hop_limit().unwrap(), 42);
+        assert_eq!(accepted_client.receive_buffer_size().unwrap(), 0x10000);
+        assert_eq!(accepted_client.send_buffer_size().unwrap(), 0x10000);
     }
 }
 
 
 fn main() {
-    let net = NetworkResource::default();
+    let net = Network::default();
 
     test_tcp_sockopt_defaults(IpAddressFamily::Ipv4);
     test_tcp_sockopt_defaults(IpAddressFamily::Ipv6);

@@ -1,42 +1,38 @@
+use super::network::SystemError;
 use crate::preview2::bindings::{
     io::streams::{InputStream, OutputStream},
-    poll::poll::Pollable,
     sockets::network::{self, ErrorCode, IpAddressFamily, IpSocketAddress, Network},
     sockets::tcp::{self, ShutdownType},
 };
-use crate::preview2::network::TableNetworkExt;
-use crate::preview2::poll::TablePollableExt;
-use crate::preview2::stream::TableStreamExt;
-use crate::preview2::tcp::{HostTcpSocket, HostTcpState, TableTcpSocketExt};
-use crate::preview2::{HostPollable, PollableFuture, WasiView};
+use crate::preview2::tcp::{TcpSocket, TcpState};
+use crate::preview2::{Pollable, PollableFuture, WasiView};
 use cap_net_ext::{AddressFamily, Blocking, PoolExt, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
-use std::{
-    any::Any,
-    net::{IpAddr, SocketAddr},
-};
+use std::any::Any;
+use std::net::{IpAddr, SocketAddr};
 use tokio::io::Interest;
+use wasmtime::component::Resource;
 
-use super::network::SystemError;
+impl<T: WasiView> tcp::Host for T {}
 
-impl<T: WasiView> tcp::Host for T {
+impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     fn start_bind(
         &mut self,
-        this: tcp::TcpSocket,
-        network: Network,
+        this: Resource<tcp::TcpSocket>,
+        network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> Result<(), network::Error> {
         let table = self.table_mut();
-        let socket = table.get_tcp_socket(this)?;
-        let network = table.get_network(network)?;
+        let socket = table.get_resource(&this)?;
+        let network = table.get_resource(&network)?;
         let local_address: SocketAddr = local_address.into();
 
         match socket.tcp_state {
-            HostTcpState::Default => {}
-            HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+            TcpState::Default => {}
+            TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
@@ -55,48 +51,48 @@ impl<T: WasiView> tcp::Host for T {
                 _ => Into::<network::Error>::into(error),
             })?;
 
-        let socket = table.get_tcp_socket_mut(this)?;
-        socket.tcp_state = HostTcpState::BindStarted;
+        let socket = table.get_resource_mut(&this)?;
+        socket.tcp_state = TcpState::BindStarted;
 
         Ok(())
     }
 
-    fn finish_bind(&mut self, this: tcp::TcpSocket) -> Result<(), network::Error> {
+    fn finish_bind(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), network::Error> {
         let table = self.table_mut();
-        let socket = table.get_tcp_socket_mut(this)?;
+        let socket = table.get_resource_mut(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::BindStarted => {}
+            TcpState::BindStarted => {}
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
 
-        socket.tcp_state = HostTcpState::Bound;
+        socket.tcp_state = TcpState::Bound;
 
         Ok(())
     }
 
     fn start_connect(
         &mut self,
-        this: tcp::TcpSocket,
-        network: Network,
+        this: Resource<tcp::TcpSocket>,
+        network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> Result<(), network::Error> {
         let table = self.table_mut();
         let r = {
-            let socket = table.get_tcp_socket(this)?;
-            let network = table.get_network(network)?;
+            let socket = table.get_resource(&this)?;
+            let network = table.get_resource(&network)?;
             let remote_address: SocketAddr = remote_address.into();
 
             match socket.tcp_state {
-                HostTcpState::Default => {}
-                HostTcpState::Bound
-                | HostTcpState::Connected
-                | HostTcpState::ConnectFailed
-                | HostTcpState::Listening => return Err(ErrorCode::InvalidState.into()),
-                HostTcpState::Connecting
-                | HostTcpState::ConnectReady
-                | HostTcpState::ListenStarted
-                | HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+                TcpState::Default => {}
+                TcpState::Bound
+                | TcpState::Connected
+                | TcpState::ConnectFailed
+                | TcpState::Listening => return Err(ErrorCode::InvalidState.into()),
+                TcpState::Connecting
+                | TcpState::ConnectReady
+                | TcpState::ListenStarted
+                | TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
             }
 
             validate_unicast(&remote_address)?;
@@ -116,8 +112,8 @@ impl<T: WasiView> tcp::Host for T {
         match r {
             // succeed immediately,
             Ok(()) => {
-                let socket = table.get_tcp_socket_mut(this)?;
-                socket.tcp_state = HostTcpState::ConnectReady;
+                let socket = table.get_resource_mut(&this)?;
+                socket.tcp_state = TcpState::ConnectReady;
                 return Ok(());
             }
             // continue in progress,
@@ -131,22 +127,22 @@ impl<T: WasiView> tcp::Host for T {
             }
         }
 
-        let socket = table.get_tcp_socket_mut(this)?;
-        socket.tcp_state = HostTcpState::Connecting;
+        let socket = table.get_resource_mut(&this)?;
+        socket.tcp_state = TcpState::Connecting;
 
         Ok(())
     }
 
     fn finish_connect(
         &mut self,
-        this: tcp::TcpSocket,
-    ) -> Result<(InputStream, OutputStream), network::Error> {
+        this: Resource<tcp::TcpSocket>,
+    ) -> Result<(Resource<InputStream>, Resource<OutputStream>), network::Error> {
         let table = self.table_mut();
-        let socket = table.get_tcp_socket_mut(this)?;
+        let socket = table.get_resource_mut(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::ConnectReady => {}
-            HostTcpState::Connecting => {
+            TcpState::ConnectReady => {}
+            TcpState::Connecting => {
                 // Do a `poll` to test for completion, using a timeout of zero
                 // to avoid blocking.
                 match rustix::event::poll(
@@ -165,7 +161,7 @@ impl<T: WasiView> tcp::Host for T {
                 match sockopt::get_socket_error(socket.tcp_socket()) {
                     Ok(Ok(())) => {}
                     Err(err) | Ok(Err(err)) => {
-                        socket.tcp_state = HostTcpState::ConnectFailed;
+                        socket.tcp_state = TcpState::ConnectFailed;
                         return Err(err.into());
                     }
                 }
@@ -173,28 +169,28 @@ impl<T: WasiView> tcp::Host for T {
             _ => return Err(ErrorCode::NotInProgress.into()),
         };
 
-        socket.tcp_state = HostTcpState::Connected;
+        socket.tcp_state = TcpState::Connected;
         let (input, output) = socket.as_split();
-        let input_stream = self.table_mut().push_input_stream_child(input, this)?;
-        let output_stream = self.table_mut().push_output_stream_child(output, this)?;
+        let input_stream = self.table_mut().push_child_resource(input, &this)?;
+        let output_stream = self.table_mut().push_child_resource(output, &this)?;
 
         Ok((input_stream, output_stream))
     }
 
-    fn start_listen(&mut self, this: tcp::TcpSocket) -> Result<(), network::Error> {
+    fn start_listen(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), network::Error> {
         let table = self.table_mut();
-        let socket = table.get_tcp_socket_mut(this)?;
+        let socket = table.get_resource_mut(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::Bound => {}
-            HostTcpState::Default
-            | HostTcpState::Connected
-            | HostTcpState::ConnectFailed
-            | HostTcpState::Listening => return Err(ErrorCode::InvalidState.into()),
-            HostTcpState::ListenStarted
-            | HostTcpState::Connecting
-            | HostTcpState::ConnectReady
-            | HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+            TcpState::Bound => {}
+            TcpState::Default
+            | TcpState::Connected
+            | TcpState::ConnectFailed
+            | TcpState::Listening => return Err(ErrorCode::InvalidState.into()),
+            TcpState::ListenStarted
+            | TcpState::Connecting
+            | TcpState::ConnectReady
+            | TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
         }
 
         socket
@@ -207,34 +203,41 @@ impl<T: WasiView> tcp::Host for T {
                 _ => Into::<network::Error>::into(error),
             })?;
 
-        socket.tcp_state = HostTcpState::ListenStarted;
+        socket.tcp_state = TcpState::ListenStarted;
 
         Ok(())
     }
 
-    fn finish_listen(&mut self, this: tcp::TcpSocket) -> Result<(), network::Error> {
+    fn finish_listen(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), network::Error> {
         let table = self.table_mut();
-        let socket = table.get_tcp_socket_mut(this)?;
+        let socket = table.get_resource_mut(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::ListenStarted => {}
+            TcpState::ListenStarted => {}
             _ => return Err(ErrorCode::NotInProgress.into()),
         }
 
-        socket.tcp_state = HostTcpState::Listening;
+        socket.tcp_state = TcpState::Listening;
 
         Ok(())
     }
 
     fn accept(
         &mut self,
-        this: tcp::TcpSocket,
-    ) -> Result<(tcp::TcpSocket, InputStream, OutputStream), network::Error> {
+        this: Resource<tcp::TcpSocket>,
+    ) -> Result<
+        (
+            Resource<tcp::TcpSocket>,
+            Resource<InputStream>,
+            Resource<OutputStream>,
+        ),
+        network::Error,
+    > {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::Listening => {}
+            TcpState::Listening => {}
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
@@ -268,31 +271,31 @@ impl<T: WasiView> tcp::Host for T {
 
                 _ => Into::<network::Error>::into(error),
             })?;
-        let mut tcp_socket = HostTcpSocket::from_tcp_stream(connection, socket.family)?;
+        let mut tcp_socket = TcpSocket::from_tcp_stream(connection, socket.family)?;
 
         // Mark the socket as connected so that we can exit early from methods like `start-bind`.
-        tcp_socket.tcp_state = HostTcpState::Connected;
+        tcp_socket.tcp_state = TcpState::Connected;
 
         let (input, output) = tcp_socket.as_split();
+        let output: OutputStream = output;
 
-        let tcp_socket = self.table_mut().push_tcp_socket(tcp_socket)?;
-        let input_stream = self
-            .table_mut()
-            .push_input_stream_child(input, tcp_socket)?;
-        let output_stream = self
-            .table_mut()
-            .push_output_stream_child(output, tcp_socket)?;
+        let tcp_socket = self.table_mut().push_resource(tcp_socket)?;
+        let input_stream = self.table_mut().push_child_resource(input, &tcp_socket)?;
+        let output_stream = self.table_mut().push_child_resource(output, &tcp_socket)?;
 
         Ok((tcp_socket, input_stream, output_stream))
     }
 
-    fn local_address(&mut self, this: tcp::TcpSocket) -> Result<IpSocketAddress, network::Error> {
+    fn local_address(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+    ) -> Result<IpSocketAddress, network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::Default => return Err(ErrorCode::InvalidState.into()),
-            HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
+            TcpState::Default => return Err(ErrorCode::InvalidState.into()),
+            TcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
             _ => {}
         }
 
@@ -303,12 +306,15 @@ impl<T: WasiView> tcp::Host for T {
         Ok(addr.into())
     }
 
-    fn remote_address(&mut self, this: tcp::TcpSocket) -> Result<IpSocketAddress, network::Error> {
+    fn remote_address(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+    ) -> Result<IpSocketAddress, network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::Connected => {}
+            TcpState::Connected => {}
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
@@ -319,16 +325,19 @@ impl<T: WasiView> tcp::Host for T {
         Ok(addr.into())
     }
 
-    fn address_family(&mut self, this: tcp::TcpSocket) -> Result<IpAddressFamily, anyhow::Error> {
+    fn address_family(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+    ) -> Result<IpAddressFamily, anyhow::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         Ok(socket.family.into())
     }
 
-    fn ipv6_only(&mut self, this: tcp::TcpSocket) -> Result<bool, network::Error> {
+    fn ipv6_only(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         match socket.family {
             AddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
@@ -336,15 +345,19 @@ impl<T: WasiView> tcp::Host for T {
         }
     }
 
-    fn set_ipv6_only(&mut self, this: tcp::TcpSocket, value: bool) -> Result<(), network::Error> {
+    fn set_ipv6_only(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: bool,
+    ) -> Result<(), network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         match socket.family {
             AddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
             AddressFamily::Ipv6 => match socket.tcp_state {
-                HostTcpState::Default => Ok(sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?),
-                HostTcpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
+                TcpState::Default => Ok(sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?),
+                TcpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
                 _ => Err(ErrorCode::InvalidState.into()),
             },
         }
@@ -352,14 +365,14 @@ impl<T: WasiView> tcp::Host for T {
 
     fn set_listen_backlog_size(
         &mut self,
-        this: tcp::TcpSocket,
+        this: Resource<tcp::TcpSocket>,
         value: u64,
     ) -> Result<(), network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::Listening => {}
+            TcpState::Listening => {}
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
@@ -367,36 +380,46 @@ impl<T: WasiView> tcp::Host for T {
         Ok(rustix::net::listen(socket.tcp_socket(), value)?)
     }
 
-    fn keep_alive(&mut self, this: tcp::TcpSocket) -> Result<bool, network::Error> {
+    fn keep_alive(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
         Ok(sockopt::get_socket_keepalive(socket.tcp_socket())?)
     }
 
-    fn set_keep_alive(&mut self, this: tcp::TcpSocket, value: bool) -> Result<(), network::Error> {
+    fn set_keep_alive(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: bool,
+    ) -> Result<(), network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
         Ok(sockopt::set_socket_keepalive(socket.tcp_socket(), value)?)
     }
 
-    fn no_delay(&mut self, this: tcp::TcpSocket) -> Result<bool, network::Error> {
+    fn no_delay(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
         Ok(sockopt::get_tcp_nodelay(socket.tcp_socket())?)
     }
 
-    fn set_no_delay(&mut self, this: tcp::TcpSocket, value: bool) -> Result<(), network::Error> {
+    fn set_no_delay(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: bool,
+    ) -> Result<(), network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
         Ok(sockopt::set_tcp_nodelay(socket.tcp_socket(), value)?)
     }
 
-    fn unicast_hop_limit(&mut self, this: tcp::TcpSocket) -> Result<u8, network::Error> {
+    fn unicast_hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> Result<u8, network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         let ttl = match socket.family {
-            AddressFamily::Ipv4 => sockopt::get_ip_ttl(socket.tcp_socket())?.try_into().unwrap(),
+            AddressFamily::Ipv4 => sockopt::get_ip_ttl(socket.tcp_socket())?
+                .try_into()
+                .unwrap(),
             AddressFamily::Ipv6 => sockopt::get_ipv6_unicast_hops(socket.tcp_socket())?,
         };
 
@@ -405,11 +428,11 @@ impl<T: WasiView> tcp::Host for T {
 
     fn set_unicast_hop_limit(
         &mut self,
-        this: tcp::TcpSocket,
+        this: Resource<tcp::TcpSocket>,
         value: u8,
     ) -> Result<(), network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         if value == 0 {
             // A well-behaved IP application should never send out new packets with TTL 0.
@@ -420,15 +443,20 @@ impl<T: WasiView> tcp::Host for T {
 
         match socket.family {
             AddressFamily::Ipv4 => sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?,
-            AddressFamily::Ipv6 => sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value))?,
+            AddressFamily::Ipv6 => {
+                sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value))?
+            }
         }
 
         Ok(())
     }
 
-    fn receive_buffer_size(&mut self, this: tcp::TcpSocket) -> Result<u64, network::Error> {
+    fn receive_buffer_size(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+    ) -> Result<u64, network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         let value = sockopt::get_socket_recv_buffer_size(socket.tcp_socket())? as u64;
         Ok(normalize_getsockopt_buffer_size(value))
@@ -436,11 +464,11 @@ impl<T: WasiView> tcp::Host for T {
 
     fn set_receive_buffer_size(
         &mut self,
-        this: tcp::TcpSocket,
+        this: Resource<tcp::TcpSocket>,
         value: u64,
     ) -> Result<(), network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         Ok(sockopt::set_socket_recv_buffer_size(
             socket.tcp_socket(),
@@ -448,9 +476,9 @@ impl<T: WasiView> tcp::Host for T {
         )?)
     }
 
-    fn send_buffer_size(&mut self, this: tcp::TcpSocket) -> Result<u64, network::Error> {
+    fn send_buffer_size(&mut self, this: Resource<tcp::TcpSocket>) -> Result<u64, network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         let value = sockopt::get_socket_send_buffer_size(socket.tcp_socket())? as u64;
         Ok(normalize_getsockopt_buffer_size(value))
@@ -458,11 +486,11 @@ impl<T: WasiView> tcp::Host for T {
 
     fn set_send_buffer_size(
         &mut self,
-        this: tcp::TcpSocket,
+        this: Resource<tcp::TcpSocket>,
         value: u64,
     ) -> Result<(), network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         Ok(sockopt::set_socket_send_buffer_size(
             socket.tcp_socket(),
@@ -470,17 +498,17 @@ impl<T: WasiView> tcp::Host for T {
         )?)
     }
 
-    fn subscribe(&mut self, this: tcp::TcpSocket) -> anyhow::Result<Pollable> {
+    fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
         fn make_tcp_socket_future<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
             let socket = stream
-                .downcast_mut::<HostTcpSocket>()
-                .expect("downcast to HostTcpSocket failed");
+                .downcast_mut::<TcpSocket>()
+                .expect("downcast to TcpSocket failed");
 
             // Some states are ready immediately.
             match socket.tcp_state {
-                HostTcpState::BindStarted
-                | HostTcpState::ListenStarted
-                | HostTcpState::ConnectReady => return Box::pin(async { Ok(()) }),
+                TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => {
+                    return Box::pin(async { Ok(()) })
+                }
                 _ => {}
             }
 
@@ -497,25 +525,25 @@ impl<T: WasiView> tcp::Host for T {
             join
         }
 
-        let pollable = HostPollable::TableEntry {
-            index: this,
+        let pollable = Pollable::TableEntry {
+            index: this.rep(),
             make_future: make_tcp_socket_future,
         };
 
-        Ok(self.table_mut().push_host_pollable(pollable)?)
+        Ok(self.table_mut().push_child_resource(pollable, &this)?)
     }
 
     fn shutdown(
         &mut self,
-        this: tcp::TcpSocket,
+        this: Resource<tcp::TcpSocket>,
         shutdown_type: ShutdownType,
     ) -> Result<(), network::Error> {
         let table = self.table();
-        let socket = table.get_tcp_socket(this)?;
+        let socket = table.get_resource(&this)?;
 
         match socket.tcp_state {
-            HostTcpState::Connected => {}
-            HostTcpState::Connecting | HostTcpState::ConnectReady => {
+            TcpState::Connected => {}
+            TcpState::Connecting | TcpState::ConnectReady => {
                 return Err(ErrorCode::ConcurrencyConflict.into())
             }
             _ => return Err(ErrorCode::InvalidState.into()),
@@ -534,25 +562,25 @@ impl<T: WasiView> tcp::Host for T {
         Ok(())
     }
 
-    fn drop_tcp_socket(&mut self, this: tcp::TcpSocket) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), anyhow::Error> {
         let table = self.table_mut();
 
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
-        let dropped = table.delete_tcp_socket(this)?;
+        let dropped = table.delete_resource(this)?;
 
         // If we might have an `event::poll` waiting on the socket, wake it up.
         #[cfg(not(unix))]
         {
             match dropped.tcp_state {
-                HostTcpState::Default
-                | HostTcpState::BindStarted
-                | HostTcpState::Bound
-                | HostTcpState::ListenStarted
-                | HostTcpState::ConnectFailed
-                | HostTcpState::ConnectReady => {}
+                TcpState::Default
+                | TcpState::BindStarted
+                | TcpState::Bound
+                | TcpState::ListenStarted
+                | TcpState::ConnectFailed
+                | TcpState::ConnectReady => {}
 
-                HostTcpState::Listening | HostTcpState::Connecting | HostTcpState::Connected => {
+                TcpState::Listening | TcpState::Connecting | TcpState::Connected => {
                     match rustix::net::shutdown(&dropped.inner, rustix::net::Shutdown::ReadWrite) {
                         Ok(()) | Err(Errno::NOTCONN) => {}
                         Err(err) => Err(err).unwrap(),
@@ -608,10 +636,7 @@ fn validate_remote_address(addr: &SocketAddr) -> Result<(), network::Error> {
     Ok(())
 }
 
-fn validate_address_family(
-    socket: &HostTcpSocket,
-    addr: &SocketAddr,
-) -> Result<(), network::Error> {
+fn validate_address_family(socket: &TcpSocket, addr: &SocketAddr) -> Result<(), network::Error> {
     match (socket.family, addr.ip()) {
         (AddressFamily::Ipv4, IpAddr::V4(_)) => {}
         (AddressFamily::Ipv6, IpAddr::V6(ipv6)) => {

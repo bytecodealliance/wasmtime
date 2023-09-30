@@ -26,7 +26,9 @@ use wasmtime_runtime::{
 
 mod registry;
 
-pub use registry::{is_wasm_trap_pc, register_code, unregister_code, ModuleRegistry};
+pub use registry::{
+    is_wasm_trap_pc, register_code, unregister_code, ModuleRegistry, RegisteredModuleId,
+};
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -128,6 +130,14 @@ struct ModuleInner {
 
     /// Runtime offset information for `VMContext`.
     offsets: VMOffsets<HostPtr>,
+}
+
+impl std::fmt::Debug for Module {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Module")
+            .field("name", &self.name())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Module {
@@ -1093,6 +1103,10 @@ impl Module {
             let loc = self.compiled_module().func_loc(f);
             (loc.start as usize, loc.length as usize)
         })
+    }
+
+    pub(crate) fn id(&self) -> CompiledModuleId {
+        self.inner.module.unique_id()
     }
 }
 

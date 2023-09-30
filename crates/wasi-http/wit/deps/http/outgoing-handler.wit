@@ -6,13 +6,15 @@
 //   that takes a `request` parameter and returns a `response` result.
 //
 interface outgoing-handler {
-  use types.{outgoing-request, request-options, future-incoming-response}
+  use types.{outgoing-request, request-options, future-incoming-response, error}
 
   // The parameter and result types of the `handle` function allow the caller
   // to concurrently stream the bodies of the outgoing request and the incoming
   // response.
+  // Consumes the outgoing-request. Gives an error if the outgoing-request
+  // is invalid or cannot be satisfied by this handler.
   handle: func(
-    request: outgoing-request,
+    request: /* own */ outgoing-request,
     options: option<request-options>
-  ) -> future-incoming-response
+  ) -> result<future-incoming-response, error>
 }

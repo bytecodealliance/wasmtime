@@ -374,7 +374,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 8.0.4
+      QEMU_BUILD_VERSION: 8.1.1
     strategy:
       fail-fast: true
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
@@ -435,7 +435,6 @@ jobs:
         # quickly.
         curl https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz | tar xJf -
         cd qemu-$QEMU_BUILD_VERSION
-        patch -p1 < $GITHUB_WORKSPACE/ci/qemu-cpuinfo.patch
         ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built

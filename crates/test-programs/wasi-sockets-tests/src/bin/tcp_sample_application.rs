@@ -1,31 +1,31 @@
 use wasi::io::streams;
 use wasi::sockets::network::{
-    self, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
+    IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress, Network,
 };
-use wasi::sockets::tcp;
+use wasi::sockets::tcp::TcpSocket;
 use wasi_sockets_tests::*;
 
-fn test_sample_application(family: network::IpAddressFamily, bind_address: IpSocketAddress) {
+fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddress) {
     let first_message = b"Hello, world!";
     let second_message = b"Greetings, planet!";
 
-    let net = NetworkResource::default();
-    let listener = TcpSocketResource::new(family).unwrap();
+    let net = Network::default();
+    let listener = TcpSocket::new(family).unwrap();
 
-    listener.bind(&net, bind_address).unwrap();
-    listener.listen().unwrap();
+    listener.blocking_bind(&net, bind_address).unwrap();
+    listener.blocking_listen().unwrap();
 
-    let addr = tcp::local_address(listener.handle).unwrap();
+    let addr = listener.local_address().unwrap();
 
     {
-        let client = TcpSocketResource::new(family).unwrap();
-        let (_client_input, client_output) = client.connect(&net, addr).unwrap();
+        let client = TcpSocket::new(family).unwrap();
+        let (_client_input, client_output) = client.blocking_connect(&net, addr).unwrap();
 
-        let (n, status) = client_output.write(&[]);
+        let (n, status) = client_output.blocking_write_util(&[]);
         assert_eq!(n, 0);
         assert_eq!(status, streams::StreamStatus::Open);
 
-        let (n, status) = client_output.write(first_message);
+        let (n, status) = client_output.blocking_write_util(first_message);
         assert_eq!(n, first_message.len());
         assert_eq!(status, streams::StreamStatus::Open);
     }
@@ -33,12 +33,11 @@ fn test_sample_application(family: network::IpAddressFamily, bind_address: IpSoc
     {
         let (_accepted, input, _output) = listener.accept().unwrap();
 
-        let (empty_data, status) = streams::read(input.handle, 0).unwrap();
+        let (empty_data, status) = input.read(0).unwrap();
         assert!(empty_data.is_empty());
         assert_eq!(status, streams::StreamStatus::Open);
 
-        let (data, status) =
-            streams::blocking_read(input.handle, first_message.len() as u64).unwrap();
+        let (data, status) = input.blocking_read(first_message.len() as u64).unwrap();
         assert_eq!(status, streams::StreamStatus::Open);
 
         // Check that we sent and recieved our message!
@@ -47,18 +46,17 @@ fn test_sample_application(family: network::IpAddressFamily, bind_address: IpSoc
 
     // Another client
     {
-        let client = TcpSocketResource::new(family).unwrap();
-        let (_client_input, client_output) = client.connect(&net, addr).unwrap();
+        let client = TcpSocket::new(family).unwrap();
+        let (_client_input, client_output) = client.blocking_connect(&net, addr).unwrap();
 
-        let (n, status) = client_output.write(second_message);
+        let (n, status) = client_output.blocking_write_util(second_message);
         assert_eq!(n, second_message.len());
         assert_eq!(status, streams::StreamStatus::Open);
     }
 
     {
         let (_accepted, input, _output) = listener.accept().unwrap();
-        let (data, status) =
-            streams::blocking_read(input.handle, second_message.len() as u64).unwrap();
+        let (data, status) = input.blocking_read(second_message.len() as u64).unwrap();
         assert_eq!(status, streams::StreamStatus::Open);
 
         // Check that we sent and recieved our message!

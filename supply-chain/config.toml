@@ -169,6 +169,9 @@ audit-as-crates-io = true
 [policy.wasmtime-wit-bindgen]
 audit-as-crates-io = true
 
+[policy.wasmtime-wmemcheck]
+audit-as-crates-io = true
+
 [policy.wiggle]
 audit-as-crates-io = true
 

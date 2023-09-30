@@ -1456,6 +1456,12 @@ pub struct VRegAllocator<I> {
     /// reftype-status of each vreg) for efficient iteration.
     reftyped_vregs: Vec<VReg>,
 
+    /// A deferred error, to be bubbled up to the top level of the
+    /// lowering algorithm. We take this approach because we cannot
+    /// currently propagate a `Result` upward through ISLE code (the
+    /// lowering rules) or some ABI code.
+    deferred_error: Option<CodegenError>,
+
     /// The type of instruction that this allocator makes registers for.
     _inst: core::marker::PhantomData<I>,
 }
@@ -1468,12 +1474,16 @@ impl<I: VCodeInst> VRegAllocator<I> {
             vreg_types: vec![],
             reftyped_vregs_set: FxHashSet::default(),
             reftyped_vregs: vec![],
+            deferred_error: None,
             _inst: core::marker::PhantomData::default(),
         }
     }
 
     /// Allocate a fresh ValueRegs.
     pub fn alloc(&mut self, ty: Type) -> CodegenResult<ValueRegs<Reg>> {
+        if self.deferred_error.is_some() {
+            return Err(CodegenError::CodeTooLarge);
+        }
         let v = self.next_vreg;
         let (regclasses, tys) = I::rc_for_type(ty)?;
         self.next_vreg += regclasses.len();
@@ -1493,6 +1503,38 @@ impl<I: VCodeInst> VRegAllocator<I> {
             self.set_vreg_type(reg.to_virtual_reg().unwrap(), reg_ty);
         }
         Ok(regs)
+    }
+
+    /// Allocate a fresh ValueRegs, deferring any out-of-vregs
+    /// errors. This is useful in places where we cannot bubble a
+    /// `CodegenResult` upward easily, and which are known to be
+    /// invoked from within the lowering loop that checks the deferred
+    /// error status below.
+    pub fn alloc_with_deferred_error(&mut self, ty: Type) -> ValueRegs<Reg> {
+        match self.alloc(ty) {
+            Ok(x) => x,
+            Err(e) => {
+                self.deferred_error = Some(e);
+                self.bogus_for_deferred_error(ty)
+            }
+        }
+    }
+
+    /// Take any deferred error that was accumulated by `alloc_with_deferred_error`.
+    pub fn take_deferred_error(&mut self) -> Option<CodegenError> {
+        self.deferred_error.take()
+    }
+
+    /// Produce an bogus VReg placeholder with the proper number of
+    /// registers for the given type. This is meant to be used with
+    /// deferred allocation errors (see `Lower::alloc_tmp()`).
+    fn bogus_for_deferred_error(&self, ty: Type) -> ValueRegs<Reg> {
+        let (regclasses, _tys) = I::rc_for_type(ty).expect("must have valid type");
+        match regclasses {
+            &[rc0] => ValueRegs::one(VReg::new(0, rc0).into()),
+            &[rc0, rc1] => ValueRegs::two(VReg::new(0, rc0).into(), VReg::new(1, rc1).into()),
+            _ => panic!("Value must reside in 1 or 2 registers"),
+        }
     }
 
     /// Set the type of this virtual register.

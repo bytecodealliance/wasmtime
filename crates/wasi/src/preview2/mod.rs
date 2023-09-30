@@ -31,19 +31,20 @@ mod stdio;
 mod stream;
 mod table;
 mod tcp;
+mod write_stream;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
-pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, TablePollableExt};
+pub use self::poll::{ClosureFuture, MakeFuture, Pollable, PollableFuture};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
 pub use self::stream::{
-    HostInputStream, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
-    TableStreamExt,
+    HostInputStream, HostOutputStream, InputStream, OutputStream, OutputStreamError,
+    StreamRuntimeError, StreamState,
 };
-pub use self::table::{OccupiedEntry, Table, TableError};
+pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 
@@ -57,7 +58,7 @@ pub mod bindings {
             wasmtime::component::bindgen!({
                 path: "wit",
                 interfaces: "
-                    import wasi:poll/poll
+                    import wasi:io/poll
                     import wasi:io/streams
                     import wasi:filesystem/types
                 ",
@@ -68,10 +69,15 @@ pub mod bindings {
                 },
                 with: {
                     "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
+                    "wasi:filesystem/types/descriptor": super::super::filesystem::types::Descriptor,
+                    "wasi:filesystem/types/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
+                    "wasi:io/poll/pollable": super::super::io::poll::Pollable,
+                    "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
+                    "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
                 }
             });
         }
-        pub use self::_internal::wasi::{filesystem, io, poll};
+        pub use self::_internal::wasi::{filesystem, io};
     }
 
     wasmtime::component::bindgen!({
@@ -87,55 +93,69 @@ pub mod bindings {
             // which in theory can be shared across interfaces, so this may
             // need fancier syntax in the future.
             only_imports: [
-                "access-at",
-                "advise",
-                "blocking-flush",
-                "blocking-read",
-                "blocking-skip",
-                "blocking-splice",
-                "blocking-write",
-                "blocking-write-and-flush",
-                "change-directory-permissions-at",
-                "change-file-permissions-at",
-                "create-directory-at",
-                "forward",
-                "get-flags",
-                "get-type",
-                "is-same-object",
-                "link-at",
-                "lock-exclusive",
-                "lock-shared",
-                "metadata-hash",
-                "metadata-hash-at",
-                "open-at",
-                "poll-oneoff",
-                "read",
-                "read-directory",
-                "read-directory-entry",
-                "readlink-at",
-                "remove-directory-at",
-                "rename-at",
-                "set-size",
-                "set-times",
-                "set-times-at",
-                "skip",
-                "splice",
-                "stat",
-                "stat-at",
-                "symlink-at",
-                "sync",
-                "sync-data",
-                "try-lock-exclusive",
-                "try-lock-shared",
-                "unlink-file-at",
-                "unlock",
-                "write",
+                "[method]descriptor.access-at",
+                "[method]descriptor.advise",
+                "[method]descriptor.change-directory-permissions-at",
+                "[method]descriptor.change-file-permissions-at",
+                "[method]descriptor.create-directory-at",
+                "[method]descriptor.get-flags",
+                "[method]descriptor.get-type",
+                "[method]descriptor.is-same-object",
+                "[method]descriptor.link-at",
+                "[method]descriptor.lock-exclusive",
+                "[method]descriptor.lock-shared",
+                "[method]descriptor.metadata-hash",
+                "[method]descriptor.metadata-hash-at",
+                "[method]descriptor.open-at",
+                "[method]descriptor.read",
+                "[method]descriptor.read-directory",
+                "[method]descriptor.readlink-at",
+                "[method]descriptor.remove-directory-at",
+                "[method]descriptor.rename-at",
+                "[method]descriptor.set-size",
+                "[method]descriptor.set-times",
+                "[method]descriptor.set-times-at",
+                "[method]descriptor.stat",
+                "[method]descriptor.stat-at",
+                "[method]descriptor.symlink-at",
+                "[method]descriptor.sync",
+                "[method]descriptor.sync-data",
+                "[method]descriptor.try-lock-exclusive",
+                "[method]descriptor.try-lock-shared",
+                "[method]descriptor.unlink-file-at",
+                "[method]descriptor.unlock",
+                "[method]descriptor.write",
+                "[method]input-stream.read",
+                "[method]input-stream.blocking-read",
+                "[method]input-stream.blocking-skip",
+                "[method]input-stream.skip",
+                "[method]output-stream.forward",
+                "[method]output-stream.splice",
+                "[method]output-stream.blocking-splice",
+                "[method]output-stream.blocking-flush",
+                "[method]output-stream.blocking-write",
+                "[method]output-stream.blocking-write-and-flush",
+                "[method]output-stream.blocking-write-zeroes-and-flush",
+                "[method]directory-entry-stream.read-directory-entry",
+                "poll-list",
+                "poll-one",
             ],
         },
         trappable_error_type: {
             "wasi:io/streams"::"write-error": Error,
             "wasi:filesystem/types"::"error-code": Error,
             "wasi:sockets/network"::"error-code": Error,
+        },
+        with: {
+            "wasi:sockets/network/network": super::network::Network,
+            "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
+            "wasi:filesystem/types/directory-entry-stream": super::filesystem::ReaddirIterator,
+            "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,
+            "wasi:io/streams/input-stream": super::stream::InputStream,
+            "wasi:io/streams/output-stream": super::stream::OutputStream,
+            "wasi:io/poll/pollable": super::poll::Pollable,
+            "wasi:cli/terminal-input/terminal-input": super::stdio::TerminalInput,
+            "wasi:cli/terminal-output/terminal-output": super::stdio::TerminalOutput,
         },
     });
 
@@ -151,7 +171,7 @@ pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
             .unwrap()
     });
 
-pub(crate) struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
+pub struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
 impl<T> Drop for AbortOnDropJoinHandle<T> {
     fn drop(&mut self) {
         self.0.abort()
@@ -188,7 +208,7 @@ impl<T> std::future::Future for AbortOnDropJoinHandle<T> {
     }
 }
 
-pub(crate) fn spawn<F, G>(f: F) -> AbortOnDropJoinHandle<G>
+pub fn spawn<F, G>(f: F) -> AbortOnDropJoinHandle<G>
 where
     F: std::future::Future<Output = G> + Send + 'static,
     G: Send + 'static,

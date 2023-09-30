@@ -1,6 +1,7 @@
 use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle};
 use crate::memory::Memory;
+use crate::mpk::ProtectionKey;
 use crate::table::Table;
 use crate::{CompiledModuleId, ModuleRuntimeInfo, Store};
 use anyhow::{anyhow, bail, Result};
@@ -42,7 +43,8 @@ pub struct InstanceAllocationRequest<'a> {
 
     /// A pointer to the "store" for this instance to be allocated. The store
     /// correlates with the `Store` in wasmtime itself, and lots of contextual
-    /// information about the execution of wasm can be learned through the store.
+    /// information about the execution of wasm can be learned through the
+    /// store.
     ///
     /// Note that this is a raw pointer and has a static lifetime, both of which
     /// are a bit of a lie. This is done purely so a store can learn about
@@ -58,6 +60,10 @@ pub struct InstanceAllocationRequest<'a> {
 
     /// Indicates '--wmemcheck' flag.
     pub wmemcheck: bool,
+
+    /// Request that the instance's memories be protected by a specific
+    /// protection key.
+    pub pkey: Option<ProtectionKey>,
 }
 
 /// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct
@@ -172,7 +178,7 @@ pub unsafe trait InstanceAllocatorImpl {
     //    associated types are not object safe.
     //
     // 2. We would want a parameterized `Drop` implementation so that we could
-    //    pass in the `InstaceAllocatorImpl` on drop, but this doesn't exist in
+    //    pass in the `InstanceAllocatorImpl` on drop, but this doesn't exist in
     //    Rust. Therefore, we would be forced to add reference counting and
     //    stuff like that to keep a handle on the instance allocator from this
     //    theoretical type. That's a bummer.
@@ -250,11 +256,13 @@ pub unsafe trait InstanceAllocatorImpl {
     #[cfg(feature = "async")]
     fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack>;
 
-    /// Deallocates a fiber stack that was previously allocated with `allocate_fiber_stack`.
+    /// Deallocates a fiber stack that was previously allocated with
+    /// `allocate_fiber_stack`.
     ///
     /// # Safety
     ///
-    /// The provided stack is required to have been allocated with `allocate_fiber_stack`.
+    /// The provided stack is required to have been allocated with
+    /// `allocate_fiber_stack`.
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
 
@@ -264,6 +272,24 @@ pub unsafe trait InstanceAllocatorImpl {
     /// Primarily present for the pooling allocator to remove mappings of
     /// this module from slots in linear memory.
     fn purge_module(&self, module: CompiledModuleId);
+
+    /// Use the next available protection key.
+    ///
+    /// The pooling allocator can use memory protection keys (MPK) for
+    /// compressing the guard regions protecting against OOB. Each
+    /// pool-allocated store needs its own key.
+    fn next_available_pkey(&self) -> Option<ProtectionKey>;
+
+    /// Restrict access to memory regions protected by `pkey`.
+    ///
+    /// This is useful for the pooling allocator, which can use memory
+    /// protection keys (MPK). Note: this may still allow access to other
+    /// protection keys, such as the default kernel key; see implementations of
+    /// this.
+    fn restrict_to_pkey(&self, pkey: ProtectionKey);
+
+    /// Allow access to memory regions protected by any protection key.
+    fn allow_all_pkeys(&self);
 }
 
 /// A thing that can allocate instances.

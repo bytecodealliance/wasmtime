@@ -1,5 +1,6 @@
 use crate::{isa::reg::Reg, masm::StackSlot};
 use std::collections::VecDeque;
+use std::ops::RangeBounds;
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::WasmType;
 
@@ -14,12 +15,12 @@ pub struct TypedReg {
 }
 
 impl TypedReg {
-    /// Create a new TypedReg.
+    /// Create a new [`TypedReg`].
     pub fn new(ty: WasmType, reg: Reg) -> Self {
         Self { ty, reg }
     }
 
-    /// Create an i64 TypedReg.
+    /// Create an i64 [`TypedReg`].
     pub fn i64(reg: Reg) -> Self {
         Self {
             ty: WasmType::I64,
@@ -86,6 +87,13 @@ impl From<Local> for Val {
 impl From<Memory> for Val {
     fn from(mem: Memory) -> Self {
         Val::Memory(mem)
+    }
+}
+
+impl TryFrom<u32> for Val {
+    type Error = anyhow::Error;
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        i32::try_from(value).map(Val::i32).map_err(Into::into)
     }
 }
 
@@ -293,6 +301,18 @@ impl Stack {
     /// Get a mutable reference to the inner stack representation.
     pub fn inner_mut(&mut self) -> &mut VecDeque<Val> {
         &mut self.inner
+    }
+
+    /// Calculates size in bytes of memory entries within the specified range of
+    /// the stack.
+    pub fn sizeof<R>(&self, range: R) -> u32
+    where
+        R: RangeBounds<usize>,
+    {
+        self.inner.range(range).fold(0, |acc, v| match v {
+            Val::Memory(m) => acc + m.slot.size,
+            _ => acc,
+        })
     }
 }
 

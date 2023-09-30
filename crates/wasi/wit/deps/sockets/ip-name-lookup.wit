@@ -1,6 +1,6 @@
 
 interface ip-name-lookup {
-	use wasi:poll/poll.{pollable}
+	use wasi:io/poll.{pollable}
 	use network.{network, error-code, ip-address, ip-address-family}
 
 
@@ -34,36 +34,28 @@ interface ip-name-lookup {
 	/// - <https://man7.org/linux/man-pages/man3/getaddrinfo.3.html>
 	/// - <https://learn.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfo>
 	/// - <https://man.freebsd.org/cgi/man.cgi?query=getaddrinfo&sektion=3>
-	resolve-addresses: func(network: network, name: string, address-family: option<ip-address-family>, include-unavailable: bool) -> result<resolve-address-stream, error-code>
+	resolve-addresses: func(network: borrow<network>, name: string, address-family: option<ip-address-family>, include-unavailable: bool) -> result<resolve-address-stream, error-code>
 
+	resource resolve-address-stream {
+		/// Returns the next address from the resolver.
+		/// 
+		/// This function should be called multiple times. On each call, it will
+		/// return the next address in connection order preference. If all
+		/// addresses have been exhausted, this function returns `none`.
+		/// 
+		/// This function never returns IPv4-mapped IPv6 addresses.
+		/// 
+		/// # Typical errors
+		/// - `name-unresolvable`:          Name does not exist or has no suitable associated IP addresses. (EAI_NONAME, EAI_NODATA, EAI_ADDRFAMILY)
+		/// - `temporary-resolver-failure`: A temporary failure in name resolution occurred. (EAI_AGAIN)
+		/// - `permanent-resolver-failure`: A permanent failure in name resolution occurred. (EAI_FAIL)
+		/// - `would-block`:                A result is not available yet. (EWOULDBLOCK, EAGAIN)
+		resolve-next-address: func() -> result<option<ip-address>, error-code>
 
-
-    type resolve-address-stream = u32
-
-	/// Returns the next address from the resolver.
-	/// 
-	/// This function should be called multiple times. On each call, it will
-	/// return the next address in connection order preference. If all
-	/// addresses have been exhausted, this function returns `none`.
-	/// After which, you should release the stream with `drop-resolve-address-stream`.
-	/// 
-	/// This function never returns IPv4-mapped IPv6 addresses.
-	/// 
-	/// # Typical errors
-	/// - `name-unresolvable`:          Name does not exist or has no suitable associated IP addresses. (EAI_NONAME, EAI_NODATA, EAI_ADDRFAMILY)
-	/// - `temporary-resolver-failure`: A temporary failure in name resolution occurred. (EAI_AGAIN)
-	/// - `permanent-resolver-failure`: A permanent failure in name resolution occurred. (EAI_FAIL)
-	/// - `would-block`:                A result is not available yet. (EWOULDBLOCK, EAGAIN)
-	resolve-next-address: func(this: resolve-address-stream) -> result<option<ip-address>, error-code>
-
-	/// Dispose of the specified `resolve-address-stream`, after which it may no longer be used.
-	/// 
-	/// Note: this function is scheduled to be removed when Resources are natively supported in Wit.
-	drop-resolve-address-stream: func(this: resolve-address-stream)
-
-	/// Create a `pollable` which will resolve once the stream is ready for I/O.
-	/// 
-	/// Note: this function is here for WASI Preview2 only.
-	/// It's planned to be removed when `future` is natively supported in Preview3.
-	subscribe: func(this: resolve-address-stream) -> pollable
+		/// Create a `pollable` which will resolve once the stream is ready for I/O.
+		/// 
+		/// Note: this function is here for WASI Preview2 only.
+		/// It's planned to be removed when `future` is natively supported in Preview3.
+		subscribe: func() -> pollable
+	}
 }

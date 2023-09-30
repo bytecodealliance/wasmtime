@@ -1,8 +1,7 @@
 //! x64 addressing mode.
 
-use cranelift_codegen::ir::Constant;
-
 use crate::reg::Reg;
+use cranelift_codegen::ir::Constant;
 
 /// Memory address representation.
 #[derive(Debug, Copy, Clone)]

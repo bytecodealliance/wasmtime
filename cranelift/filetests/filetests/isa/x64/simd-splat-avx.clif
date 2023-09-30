@@ -178,8 +178,8 @@ block0(v0: i64):
 ;   uninit  %xmm2
 ;   vpinsrb $0, %xmm2, 0(%rdi), %xmm4
 ;   uninit  %xmm6
-;   vpxor   %xmm6, %xmm6, %xmm8
-;   vpshufb %xmm4, %xmm8, %xmm0
+;   vpxor   %xmm6, %xmm6, %xmm0
+;   vpshufb %xmm4, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -190,8 +190,8 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   vpinsrb $0, (%rdi), %xmm2, %xmm4 ; trap: heap_oob
-;   vpxor %xmm6, %xmm6, %xmm8
-;   vpshufb %xmm8, %xmm4, %xmm0
+;   vpxor %xmm6, %xmm6, %xmm0
+;   vpshufb %xmm0, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -12,8 +12,8 @@ use std::fmt;
 use std::sync::OnceLock;
 
 use bindings::wasi::http::{outgoing_handler, types as http_types};
+use bindings::wasi::io::poll;
 use bindings::wasi::io::streams;
-use bindings::wasi::poll::poll;
 
 pub struct Response {
     pub status: http_types::StatusCode,
@@ -42,29 +42,22 @@ impl Response {
     }
 }
 
-struct DropPollable {
-    pollable: poll::Pollable,
-}
-
-impl Drop for DropPollable {
-    fn drop(&mut self) {
-        poll::drop_pollable(self.pollable);
-    }
-}
-
 pub async fn request(
     method: http_types::Method,
     scheme: http_types::Scheme,
     authority: &str,
     path_with_query: &str,
     body: Option<&[u8]>,
-    additional_headers: Option<&[(String, String)]>,
+    additional_headers: Option<&[(String, Vec<u8>)]>,
 ) -> Result<Response> {
+    fn header_val(v: &str) -> Vec<u8> {
+        v.to_string().into_bytes()
+    }
     let headers = http_types::new_fields(
         &[
             &[
-                ("User-agent".to_string(), "WASI-HTTP/0.0.1".to_string()),
-                ("Content-type".to_string(), "application/json".to_string()),
+                ("User-agent".to_string(), header_val("WASI-HTTP/0.0.1")),
+                ("Content-type".to_string(), header_val("application/json")),
             ],
             additional_headers.unwrap_or(&[]),
         ]
@@ -79,17 +72,18 @@ pub async fn request(
         headers,
     );
 
-    let request_body = http_types::outgoing_request_write(request)
+    let outgoing_body = http_types::outgoing_request_write(request)
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
     if let Some(mut buf) = body {
-        let sub = DropPollable {
-            pollable: streams::subscribe_to_output_stream(request_body),
-        };
-        while !buf.is_empty() {
-            poll::poll_oneoff(&[sub.pollable]);
+        let request_body = http_types::outgoing_body_write(outgoing_body)
+            .map_err(|_| anyhow!("outgoing request write failed"))?;
 
-            let permit = match streams::check_write(request_body) {
+        let pollable = request_body.subscribe();
+        while !buf.is_empty() {
+            poll::poll_list(&[&pollable]);
+
+            let permit = match request_body.check_write() {
                 Ok(n) => n,
                 Err(_) => anyhow::bail!("output stream error"),
             };
@@ -98,46 +92,45 @@ pub async fn request(
             let (chunk, rest) = buf.split_at(len);
             buf = rest;
 
-            match streams::write(request_body, chunk) {
+            match request_body.write(chunk) {
                 Err(_) => anyhow::bail!("output stream error"),
                 _ => {}
             }
         }
 
-        match streams::flush(request_body) {
+        match request_body.flush() {
             Err(_) => anyhow::bail!("output stream error"),
             _ => {}
         }
 
-        poll::poll_oneoff(&[sub.pollable]);
+        poll::poll_list(&[&pollable]);
 
-        match streams::check_write(request_body) {
+        match request_body.check_write() {
             Ok(_) => {}
             Err(_) => anyhow::bail!("output stream error"),
         };
     }
 
-    let future_response = outgoing_handler::handle(request, None);
+    let future_response = outgoing_handler::handle(request, None)?;
+
+    // TODO: The current implementation requires this drop after the request is sent.
+    // The ownership semantics are unclear in wasi-http we should clarify exactly what is
+    // supposed to happen here.
+    http_types::outgoing_body_finish(outgoing_body, None);
 
     let incoming_response = match http_types::future_incoming_response_get(future_response) {
-        Some(result) => result,
+        Some(result) => result.map_err(|_| anyhow!("incoming response errored"))?,
         None => {
             let pollable = http_types::listen_to_future_incoming_response(future_response);
-            let _ = poll::poll_oneoff(&[pollable]);
+            let _ = poll::poll_list(&[&pollable]);
             http_types::future_incoming_response_get(future_response)
                 .expect("incoming response available")
+                .map_err(|_| anyhow!("incoming response errored"))?
         }
     }
     // TODO: maybe anything that appears in the Result<_, E> position should impl
     // Error? anyway, just use its Debug here:
     .map_err(|e| anyhow!("{e:?}"))?;
-
-    // TODO: The current implementation requires this drop after the request is sent.
-    // The ownership semantics are unclear in wasi-http we should clarify exactly what is
-    // supposed to happen here.
-    streams::drop_output_stream(request_body);
-
-    http_types::drop_outgoing_request(request);
 
     http_types::drop_future_incoming_response(future_response);
 
@@ -147,26 +140,29 @@ pub async fn request(
     let headers = http_types::fields_entries(headers_handle);
     http_types::drop_fields(headers_handle);
 
-    let body_stream = http_types::incoming_response_consume(incoming_response)
+    let incoming_body = http_types::incoming_response_consume(incoming_response)
         .map_err(|()| anyhow!("incoming response has no body stream"))?;
-    let input_stream_pollable = streams::subscribe_to_input_stream(body_stream);
+
+    http_types::drop_incoming_response(incoming_response);
+
+    let input_stream = incoming_body.stream().unwrap();
+    let input_stream_pollable = input_stream.subscribe();
 
     let mut body = Vec::new();
     let mut eof = streams::StreamStatus::Open;
     while eof != streams::StreamStatus::Ended {
-        let (mut body_chunk, stream_status) =
-            streams::read(body_stream, u64::MAX).map_err(|_| anyhow!("body_stream read failed"))?;
-        eof = if body_chunk.is_empty() {
-            streams::StreamStatus::Ended
-        } else {
-            stream_status
-        };
-        body.append(&mut body_chunk);
-    }
+        poll::poll_list(&[&input_stream_pollable]);
 
-    poll::drop_pollable(input_stream_pollable);
-    streams::drop_input_stream(body_stream);
-    http_types::drop_incoming_response(incoming_response);
+        let (mut body_chunk, stream_status) = input_stream
+            .read(1024 * 1024)
+            .map_err(|_| anyhow!("input_stream read failed"))?;
+
+        eof = stream_status;
+
+        if !body_chunk.is_empty() {
+            body.append(&mut body_chunk);
+        }
+    }
 
     Ok(Response {
         status,

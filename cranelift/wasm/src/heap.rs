@@ -31,8 +31,8 @@ entity_impl!(Heap, "heap");
 ///    always present.
 ///
 /// 2. The *unmapped pages* is a possibly empty range of address space that may
-///    be mapped in the future when the heap is grown. They are addressable
-///    but not accessible.
+///    be mapped in the future when the heap is grown. They are addressable but
+///    not accessible.
 ///
 /// 3. The *offset-guard pages* is a range of address space that is guaranteed
 ///    to always cause a trap when accessed. It is used to optimize bounds
@@ -48,10 +48,10 @@ entity_impl!(Heap, "heap");
 ///
 /// #### Static heaps
 ///
-/// A *static heap* starts out with all the address space it will ever need, so it
-/// never moves to a different address. At the base address is a number of mapped
-/// pages corresponding to the heap's current size. Then follows a number of
-/// unmapped pages where the heap can grow up to its maximum size. After the
+/// A *static heap* starts out with all the address space it will ever need, so
+/// it never moves to a different address. At the base address is a number of
+/// mapped pages corresponding to the heap's current size. Then follows a number
+/// of unmapped pages where the heap can grow up to its maximum size. After the
 /// unmapped pages follow the offset-guard pages which are also guaranteed to
 /// generate a trap when accessed.
 ///
