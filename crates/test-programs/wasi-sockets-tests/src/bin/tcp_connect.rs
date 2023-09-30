@@ -92,14 +92,7 @@ fn test_tcp_connect_dual_stack(net: &NetworkResource) {
         Err(ErrorCode::InvalidArgument)
     ));
 
-    match tcp::set_ipv6_only(v6_client.handle, false) {
-        Err(ErrorCode::NotSupported) => {
-            println!("Skipping dual stack test");
-            return;
-        }
-        Err(e) => panic!("Unexpected set_ipv6_only error code: {:?}", e),
-        Ok(_) => {}
-    }
+    tcp::set_ipv6_only(v6_client.handle, false).unwrap();
 
     v6_client.connect(net, v6_listener_addr).unwrap();
 

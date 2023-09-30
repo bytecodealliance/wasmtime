@@ -98,20 +98,13 @@ fn test_tcp_bind_dual_stack(net: &NetworkResource) {
         Err(ErrorCode::InvalidArgument)
     ));
 
-    match tcp::set_ipv6_only(sock.handle, false) {
-        Err(ErrorCode::NotSupported) => {
-            println!("Skipping dual stack test");
-            return;
-        }
-        Err(e) => panic!("Unexpected set_ipv6_only error code: {:?}", e),
-        Ok(_) => {
-            sock.bind(net, addr).unwrap();
+    tcp::set_ipv6_only(sock.handle, false).unwrap();
 
-            let bound_addr = tcp::local_address(sock.handle).unwrap();
+    sock.bind(net, addr).unwrap();
 
-            assert_eq!(bound_addr.family(), IpAddressFamily::Ipv6);
-        }
-    }
+    let bound_addr = tcp::local_address(sock.handle).unwrap();
+
+    assert_eq!(bound_addr.family(), IpAddressFamily::Ipv6);
 }
 
 fn main() {

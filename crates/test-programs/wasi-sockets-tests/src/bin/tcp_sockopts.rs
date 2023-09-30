@@ -25,7 +25,7 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
 
     if family == IpAddressFamily::Ipv6 {
         assert!(matches!(tcp::set_ipv6_only(sock.handle, true), Ok(_)));
-        assert!(matches!(tcp::set_ipv6_only(sock.handle, false), Ok(_) | Err(ErrorCode::NotSupported)));
+        assert!(matches!(tcp::set_ipv6_only(sock.handle, false), Ok(_)));
     }
 
     // FIXME: #7034
@@ -55,10 +55,8 @@ fn test_tcp_sockopt_readback(family: IpAddressFamily) {
     if family == IpAddressFamily::Ipv6 {
         tcp::set_ipv6_only(sock.handle, true).unwrap();
         assert_eq!(tcp::ipv6_only(sock.handle).unwrap(), true);
-
-        if let Ok(_) = tcp::set_ipv6_only(sock.handle, false) {
-            assert_eq!(tcp::ipv6_only(sock.handle).unwrap(), false);
-        }
+        tcp::set_ipv6_only(sock.handle, false).unwrap();
+        assert_eq!(tcp::ipv6_only(sock.handle).unwrap(), false);
     }
 
     tcp::set_keep_alive(sock.handle, true).unwrap();
