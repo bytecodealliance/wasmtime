@@ -140,6 +140,38 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
     }
 }
 
+fn test_tcp_sockopt_after_listen(net: &Network, family: IpAddressFamily) {
+    
+    let bind_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
+    let listener = TcpSocket::new(family).unwrap();
+    listener.blocking_bind(&net, bind_addr).unwrap();
+    listener.blocking_listen().unwrap();
+    let bound_addr = listener.local_address().unwrap();
+
+    let default_keep_alive = listener.keep_alive().unwrap();
+
+    // Update options while the socket is already listening:
+    {
+        listener.set_keep_alive(!default_keep_alive).unwrap();
+        listener.set_no_delay(true).unwrap();
+        listener.set_unicast_hop_limit(42).unwrap();
+        listener.set_receive_buffer_size(0x10000).unwrap();
+        listener.set_send_buffer_size(0x10000).unwrap();
+    }
+
+    let client = TcpSocket::new(family).unwrap();
+    client.blocking_connect(&net, bound_addr).unwrap();
+    let (accepted_client, _, _) = listener.accept().unwrap();
+
+    // Verify options on accepted socket:
+    {
+        assert_eq!(accepted_client.keep_alive().unwrap(), !default_keep_alive);
+        assert_eq!(accepted_client.no_delay().unwrap(), true);
+        assert_eq!(accepted_client.unicast_hop_limit().unwrap(), 42);
+        assert_eq!(accepted_client.receive_buffer_size().unwrap(), 0x10000);
+        assert_eq!(accepted_client.send_buffer_size().unwrap(), 0x10000);
+    }
+}
 
 fn main() {
     let net = Network::default();
@@ -155,4 +187,7 @@ fn main() {
 
     test_tcp_sockopt_inheritance(&net, IpAddressFamily::Ipv4);
     test_tcp_sockopt_inheritance(&net, IpAddressFamily::Ipv6);
+
+    test_tcp_sockopt_after_listen(&net, IpAddressFamily::Ipv4);
+    test_tcp_sockopt_after_listen(&net, IpAddressFamily::Ipv6);
 }
