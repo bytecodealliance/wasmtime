@@ -9,7 +9,7 @@ use crate::preview2::poll::TablePollableExt;
 use crate::preview2::stream::TableStreamExt;
 use crate::preview2::tcp::{HostTcpSocket, HostTcpState, TableTcpSocketExt};
 use crate::preview2::{HostPollable, PollableFuture, WasiView};
-use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
+use cap_net_ext::{AddressFamily, Blocking, PoolExt, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
@@ -226,7 +226,7 @@ impl<T: WasiView> tcp::Host for T {
                 .as_socketlike_view::<TcpListener>()
                 .accept_with(Blocking::No)
         })?;
-        let mut tcp_socket = HostTcpSocket::from_tcp_stream(connection)?;
+        let mut tcp_socket = HostTcpSocket::from_tcp_stream(connection, socket.family)?;
 
         // Mark the socket as connected so that we can exit early from methods like `start-bind`.
         tcp_socket.tcp_state = HostTcpState::Connected;
@@ -281,45 +281,7 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
-        // If `SO_DOMAIN` is available, use it.
-        //
-        // TODO: OpenBSD also supports this; upstream PRs are posted.
-        #[cfg(not(any(
-            windows,
-            target_os = "ios",
-            target_os = "macos",
-            target_os = "netbsd",
-            target_os = "openbsd"
-        )))]
-        {
-            use rustix::net::AddressFamily;
-
-            let family = sockopt::get_socket_domain(socket.tcp_socket())?;
-            let family = match family {
-                AddressFamily::INET => IpAddressFamily::Ipv4,
-                AddressFamily::INET6 => IpAddressFamily::Ipv6,
-                _ => return Err(ErrorCode::NotSupported.into()),
-            };
-            Ok(family)
-        }
-
-        // When `SO_DOMAIN` is not available, emulate it.
-        #[cfg(any(
-            windows,
-            target_os = "ios",
-            target_os = "macos",
-            target_os = "netbsd",
-            target_os = "openbsd"
-        ))]
-        {
-            if let Ok(_) = sockopt::get_ipv6_unicast_hops(socket.tcp_socket()) {
-                return Ok(IpAddressFamily::Ipv6);
-            }
-            if let Ok(_) = sockopt::get_ip_ttl(socket.tcp_socket()) {
-                return Ok(IpAddressFamily::Ipv4);
-            }
-            Err(ErrorCode::NotSupported.into())
-        }
+        Ok(socket.family.into())
     }
 
     fn ipv6_only(&mut self, this: tcp::TcpSocket) -> Result<bool, network::Error> {
@@ -386,17 +348,12 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
-        // We don't track whether the socket is IPv4 or IPv6 so try one and
-        // fall back to the other.
-        match sockopt::get_ipv6_unicast_hops(socket.tcp_socket()) {
-            Ok(value) => Ok(value),
-            Err(Errno::NOPROTOOPT | Errno::OPNOTSUPP) => {
-                let value = sockopt::get_ip_ttl(socket.tcp_socket())?;
-                let value = value.try_into().unwrap();
-                Ok(value)
-            }
-            Err(err) => Err(err.into()),
-        }
+        let ttl = match socket.family {
+            AddressFamily::Ipv4 => sockopt::get_ip_ttl(socket.tcp_socket())?.try_into().unwrap(),
+            AddressFamily::Ipv6 => sockopt::get_ipv6_unicast_hops(socket.tcp_socket())?,
+        };
+
+        Ok(ttl)
     }
 
     fn set_unicast_hop_limit(
@@ -407,13 +364,13 @@ impl<T: WasiView> tcp::Host for T {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
-        // We don't track whether the socket is IPv4 or IPv6 so try one and
-        // fall back to the other.
-        match sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value)) {
-            Ok(()) => Ok(()),
-            Err(Errno::NOPROTOOPT | Errno::OPNOTSUPP) => Ok(sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?),
-            Err(err) => Err(err.into()),
+
+        match socket.family {
+            AddressFamily::Ipv4 => sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?,
+            AddressFamily::Ipv6 => sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value))?,
         }
+
+        Ok(())
     }
 
     fn receive_buffer_size(&mut self, this: tcp::TcpSocket) -> Result<u64, network::Error> {

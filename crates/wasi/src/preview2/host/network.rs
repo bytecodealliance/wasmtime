@@ -232,3 +232,12 @@ impl From<IpAddressFamily> for cap_net_ext::AddressFamily {
         }
     }
 }
+
+impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
+    fn from(family: cap_net_ext::AddressFamily) -> Self {
+        match family {
+            cap_net_ext::AddressFamily::Ipv4 => IpAddressFamily::Ipv4,
+            cap_net_ext::AddressFamily::Ipv6 => IpAddressFamily::Ipv6,
+        }
+    }
+}
