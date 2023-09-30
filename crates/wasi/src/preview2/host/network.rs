@@ -19,7 +19,6 @@ impl<T: WasiView> network::Host for T {
     }
 }
 
-
 /// Unfortunately, Rust's io::ErrorKind is missing more than half of the relevant error codes.
 /// This trait provides access to a unified error code.
 pub(crate) trait SystemError: std::error::Error {
@@ -42,26 +41,25 @@ impl SystemError for std::io::Error {
         match self.kind() {
             std::io::ErrorKind::AddrInUse => Some(Errno::ADDRINUSE),
             std::io::ErrorKind::AddrNotAvailable => Some(Errno::ADDRNOTAVAIL),
-            std::io::ErrorKind::AlreadyExists => Some(Errno::EXIST),
-            std::io::ErrorKind::BrokenPipe => Some(Errno::PIPE),
             std::io::ErrorKind::ConnectionAborted => Some(Errno::CONNABORTED),
             std::io::ErrorKind::ConnectionRefused => Some(Errno::CONNREFUSED),
             std::io::ErrorKind::ConnectionReset => Some(Errno::CONNRESET),
             std::io::ErrorKind::Interrupted => Some(Errno::INTR),
             std::io::ErrorKind::InvalidInput => Some(Errno::INVAL),
             std::io::ErrorKind::NotConnected => Some(Errno::NOTCONN),
-            std::io::ErrorKind::NotFound => Some(Errno::NOENT),
+            #[cfg(windows)]
+            std::io::ErrorKind::OutOfMemory => Some(Errno::NOBUFS),
+            #[cfg(not(windows))]
             std::io::ErrorKind::OutOfMemory => Some(Errno::NOMEM),
             std::io::ErrorKind::PermissionDenied => Some(Errno::ACCESS), // Alternative: EPERM
             std::io::ErrorKind::TimedOut => Some(Errno::TIMEDOUT),
-            std::io::ErrorKind::Unsupported => Some(Errno::NOTSUP),
+            std::io::ErrorKind::Unsupported => Some(Errno::OPNOTSUPP),
             std::io::ErrorKind::WouldBlock => Some(Errno::WOULDBLOCK), // Alternative: EAGAIN
 
             _ => None,
         }
     }
 }
-
 
 impl From<TableError> for network::Error {
     fn from(error: TableError) -> Self {

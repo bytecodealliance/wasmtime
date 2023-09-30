@@ -50,6 +50,8 @@ impl<T: WasiView> tcp::Host for T {
             .bind_existing_tcp_listener(&*socket.tcp_socket().as_socketlike_view::<TcpListener>())
             .map_err(|error| match error.errno() {
                 Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(),
+                #[cfg(windows)]
+                Some(Errno::NOBUFS) => ErrorCode::AddressInUse.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
                 _ => Into::<network::Error>::into(error),
             })?;
 
@@ -198,7 +200,12 @@ impl<T: WasiView> tcp::Host for T {
         socket
             .tcp_socket()
             .as_socketlike_view::<TcpListener>()
-            .listen(None)?;
+            .listen(None)
+            .map_err(|error| match error.errno() {
+                #[cfg(windows)]
+                Some(Errno::MFILE) => ErrorCode::OutOfMemory.into(), // We're not trying to create a new socket. Rewrite it to less surprising error code.
+                _ => Into::<network::Error>::into(error),
+            })?;
 
         socket.tcp_state = HostTcpState::ListenStarted;
 
@@ -240,6 +247,9 @@ impl<T: WasiView> tcp::Host for T {
                     .accept_with(Blocking::No)
             })
             .map_err(|error| match error.errno() {
+                #[cfg(windows)]
+                Some(Errno::INPROGRESS) => ErrorCode::WouldBlock.into(), // "A blocking Windows Sockets 1.1 call is in progress, or the service provider is still processing a callback function."
+
                 // Normalize Linux' non-standard behavior.
                 // "Linux accept() passes already-pending network errors on the new socket as an error code from accept(). This behavior differs from other BSD socket implementations."
                 #[cfg(target_os = "linux")]
@@ -319,20 +329,25 @@ impl<T: WasiView> tcp::Host for T {
     fn ipv6_only(&mut self, this: tcp::TcpSocket) -> Result<bool, network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
-        Ok(sockopt::get_ipv6_v6only(socket.tcp_socket())?)
+
+        match socket.family {
+            AddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
+            AddressFamily::Ipv6 => Ok(sockopt::get_ipv6_v6only(socket.tcp_socket())?),
+        }
     }
 
     fn set_ipv6_only(&mut self, this: tcp::TcpSocket, value: bool) -> Result<(), network::Error> {
         let table = self.table();
         let socket = table.get_tcp_socket(this)?;
 
-        match socket.tcp_state {
-            HostTcpState::Default => {}
-            HostTcpState::BindStarted => return Err(ErrorCode::ConcurrencyConflict.into()),
-            _ => return Err(ErrorCode::InvalidState.into()),
+        match socket.family {
+            AddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
+            AddressFamily::Ipv6 => match socket.tcp_state {
+                HostTcpState::Default => Ok(sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?),
+                HostTcpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
+                _ => Err(ErrorCode::InvalidState.into()),
+            },
         }
-
-        Ok(sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?)
     }
 
     fn set_listen_backlog_size(
@@ -534,6 +549,7 @@ impl<T: WasiView> tcp::Host for T {
                 | HostTcpState::BindStarted
                 | HostTcpState::Bound
                 | HostTcpState::ListenStarted
+                | HostTcpState::ConnectFailed
                 | HostTcpState::ConnectReady => {}
 
                 HostTcpState::Listening | HostTcpState::Connecting | HostTcpState::Connected => {
