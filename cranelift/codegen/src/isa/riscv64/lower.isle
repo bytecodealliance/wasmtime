@@ -754,12 +754,17 @@
   (lower_cls_i128 x))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type out_ty (uextend val @ (value_type in_ty))))
-  (extend val (ExtendOp.Zero) in_ty out_ty))
+(rule 0 (lower (has_type (fits_in_64 _) (uextend val @ (value_type in_ty))))
+  (zext val in_ty $I64))
+(rule 1 (lower (has_type $I128 (uextend val @ (value_type in_ty))))
+  (value_regs (zext val in_ty $I64) (imm $I64 0)))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type out_ty (sextend val @ (value_type in_ty))))
-  (extend val (ExtendOp.Signed) in_ty out_ty))
+(rule 0 (lower (has_type (fits_in_64 _) (sextend val @ (value_type in_ty))))
+  (sext val in_ty $I64))
+(rule 1 (lower (has_type $I128 (sextend val @ (value_type in_ty))))
+  (let ((lo XReg (sext val in_ty $I64)))
+    (value_regs lo (rv_srai lo (imm12_const 63)))))
 
 ;; The instructions below are present in RV64I and sign-extend the result to 64 bits.
 

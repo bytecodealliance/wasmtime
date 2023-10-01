@@ -2047,7 +2047,7 @@
         ;; Only add the top half if the bottom is zero
         (high XReg (gen_select_reg (IntCC.Equal) x_lo (zero_reg) high (zero_reg)))
         (result XReg (rv_add low high)))
-    (extend result (ExtendOp.Zero) $I64 $I128)))
+    (value_regs result (imm $I64 0))))
 
 (decl lower_clz (Type XReg) XReg)
 (rule (lower_clz ty rs)
@@ -2082,7 +2082,7 @@
         ;; Only add the bottom zeros if the top half is zero
         (low XReg (gen_select_reg (IntCC.Equal) x_hi (zero_reg) low (zero_reg)))
         (result XReg (rv_add high low)))
-    (extend result (ExtendOp.Zero) $I64 $I128)))
+    (value_regs result (imm $I64 0))))
 
 
 (decl lower_cls (Type XReg) XReg)
@@ -2104,7 +2104,7 @@
         (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
         (count XReg (value_regs_get tmp 0))
         (result XReg (rv_addi count (imm12_const -1))))
-    (extend result (ExtendOp.Zero) $I64 $I128)))
+    (value_regs result (imm $I64 0))))
 
 
 (decl gen_cltz (bool XReg Type) XReg)
@@ -2210,22 +2210,6 @@
   (if-let $true (has_zba))
   (let ((val XReg (value_regs_get val 0)))
     (rv_zextw val)))
-
-;;; Signed rules extending to I128
-;; Extend the bottom part, and extract the sign bit from the bottom as the top
-(rule 3 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
-  (let ((val XReg (value_regs_get val 0))
-        (low XReg (sext val from_ty $I64))
-        (high XReg (rv_srai low (imm12_const 63))))
-    (value_regs low high)))
-
-;;; Unsigned rules extending to I128
-;; Extend the bottom register to I64 and then just zero out the top half.
-(rule 3 (extend val (ExtendOp.Zero) (fits_in_64 from_ty) $I128)
-  (let ((val XReg (value_regs_get val 0))
-        (low XReg (zext val from_ty $I64))
-        (high XReg (imm $I64 0)))
-    (value_regs low high)))
 
 ;; Catch all rule for ignoring extensions of the same type.
 (rule 4 (extend val _ ty ty) val)
