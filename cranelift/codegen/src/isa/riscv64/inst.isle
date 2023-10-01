@@ -2684,24 +2684,6 @@
       (high XReg (rv_sub high_tmp borrow)))
     (value_regs low high)))
 
-
-;;; Returns the sum in the first register, and the overflow test in the second.
-(decl lower_uadd_overflow (XReg XReg Type) ValueRegs)
-
-(rule 1
-  (lower_uadd_overflow x y $I64)
-  (let ((tmp XReg (rv_add x y))
-        (test XReg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
-    (value_regs tmp test)))
-
-(rule
-  (lower_uadd_overflow x y (fits_in_32 ty))
-  (let ((tmp_x XReg (zext x ty))
-        (tmp_y XReg (zext y ty))
-        (sum XReg (rv_add tmp_x tmp_y))
-        (test XReg (rv_srli sum (imm12_const (ty_bits ty)))))
-    (value_regs sum test)))
-
 ;; int scalar zero regs.
 (decl int_zero_reg (Type) ValueRegs)
 (extern constructor int_zero_reg int_zero_reg)

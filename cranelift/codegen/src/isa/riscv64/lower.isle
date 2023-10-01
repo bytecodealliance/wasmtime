@@ -294,12 +294,19 @@
   (rv_vnmsac_vx z y x (unmasked) ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
-(rule
-  (lower (has_type (fits_in_64 ty) (uadd_overflow_trap x y tc)))
-  (let ((res ValueRegs (lower_uadd_overflow x y ty))
-        (_ InstOutput (gen_trapnz (value_regs_get res 1) tc)))
-    (value_regs_get res 0)))
+(rule 0 (lower (has_type (fits_in_32 ty) (uadd_overflow_trap x y tc)))
+  (let ((tmp_x XReg (zext x ty))
+        (tmp_y XReg (zext y ty))
+        (sum XReg (rv_add tmp_x tmp_y))
+        (test XReg (rv_srli sum (imm12_const (ty_bits ty))))
+        (_ InstOutput (gen_trapnz test tc)))
+    sum))
 
+(rule 1 (lower (has_type $I64 (uadd_overflow_trap x y tc)))
+  (let ((tmp XReg (rv_add x y))
+        (test XReg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64))
+        (_ InstOutput (gen_trapnz test tc)))
+    tmp))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
