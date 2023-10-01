@@ -8,7 +8,7 @@ use crate::ir::condcodes::CondCode;
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
 
 use crate::isa::riscv64::lower::isle::generated_code::{
-    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, CsznOp,
+    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
 };
 use crate::machinst::isle::WritableReg;
 
@@ -2153,6 +2153,28 @@ impl CsznOp {
             | CsznOp::CZextw
             | CsznOp::CSextb
             | CsznOp::CSexth => COpcodeSpace::C1,
+        }
+    }
+}
+
+impl ZcbMemOp {
+    pub fn funct6(&self) -> u32 {
+        // https://github.com/michaeljclark/riscv-meta/blob/master/opcodes
+        match self {
+            ZcbMemOp::CLbu => 0b100_000,
+            // These two opcodes are differentiated in the imm field of the instruction.
+            ZcbMemOp::CLhu | ZcbMemOp::CLh => 0b100_001,
+            ZcbMemOp::CSb => 0b100_010,
+            ZcbMemOp::CSh => 0b100_011,
+        }
+    }
+
+    pub fn op(&self) -> COpcodeSpace {
+        // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
+        match self {
+            ZcbMemOp::CLbu | ZcbMemOp::CLhu | ZcbMemOp::CLh | ZcbMemOp::CSb | ZcbMemOp::CSh => {
+                COpcodeSpace::C0
+            }
         }
     }
 }

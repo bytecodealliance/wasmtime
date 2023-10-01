@@ -792,6 +792,18 @@
   (CSexth)
 ))
 
+;; This is a mix of all Zcb memory adressing instructions
+;;
+;; Technically they are split across 4 different formats.
+;; But they are all very similar, so we just group them all together.
+(type ZcbMemOp (enum
+  (CLbu)
+  (CLhu)
+  (CLh)
+  (CSb)
+  (CSh)
+))
+
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR

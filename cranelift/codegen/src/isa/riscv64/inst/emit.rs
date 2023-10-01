@@ -4,7 +4,7 @@ use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp,
+    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
 };
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
@@ -774,7 +774,9 @@ impl Inst {
             // Regular Loads
             Inst::Load {
                 rd,
-                op: op @ (LoadOP::Lw | LoadOP::Ld | LoadOP::Fld),
+                op:
+                    op
+                    @ (LoadOP::Lw | LoadOP::Ld | LoadOP::Fld | LoadOP::Lbu | LoadOP::Lhu | LoadOP::Lh),
                 from,
                 flags,
             } if reg_is_compressible(rd.to_reg())
@@ -788,17 +790,44 @@ impl Inst {
 
                 // We encode the offset in multiples of the store size.
                 let offset = from.get_offset_with_state(state);
-                let imm5 = u8::try_from(offset / op.size())
-                    .ok()
-                    .and_then(Uimm5::maybe_from_u8)?;
+                let offset = u8::try_from(offset / op.size()).ok()?;
 
-                // Floating point loads are not included in the base Zca extension
-                // but in a separate Zcd extension. Both of these are part of the C Extension.
-                let op = match op {
-                    LoadOP::Lw => ClOp::CLw,
-                    LoadOP::Ld => ClOp::CLd,
-                    LoadOP::Fld if has_zcd => ClOp::CFld,
-                    _ => return None,
+                // We mix two different formats here.
+                //
+                // c.lw / c.ld / c.fld instructions are available in the standard Zca
+                // extension using the CL format.
+                //
+                // c.lbu / c.lhu / c.lh are only available in the Zcb extension and
+                // are also encoded differently. Technically they each have a different
+                // format, but they are similar enough that we can group them.
+                let is_zcb_load = matches!(op, LoadOP::Lbu | LoadOP::Lhu | LoadOP::Lh);
+                let encoded = if is_zcb_load {
+                    if !has_zcb {
+                        return None;
+                    }
+
+                    let op = match op {
+                        LoadOP::Lbu => ZcbMemOp::CLbu,
+                        LoadOP::Lhu => ZcbMemOp::CLhu,
+                        LoadOP::Lh => ZcbMemOp::CLh,
+                        _ => unreachable!(),
+                    };
+
+                    let imm2 = Uimm2::maybe_from_u8(offset)?;
+
+                    encode_zcbmem_load(op, rd, base, imm2)
+                } else {
+                    // Floating point loads are not included in the base Zca extension
+                    // but in a separate Zcd extension. Both of these are part of the C Extension.
+                    let op = match op {
+                        LoadOP::Lw => ClOp::CLw,
+                        LoadOP::Ld => ClOp::CLd,
+                        LoadOP::Fld if has_zcd => ClOp::CFld,
+                        _ => return None,
+                    };
+                    let imm5 = Uimm5::maybe_from_u8(offset)?;
+
+                    encode_cl_type(op, rd, base, imm5)
                 };
 
                 let srcloc = state.cur_srcloc();
@@ -806,7 +835,7 @@ impl Inst {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
-                sink.put2(encode_cl_type(op, rd, base, imm5));
+                sink.put2(encoded);
             }
 
             // Stack Based Stores
@@ -844,7 +873,7 @@ impl Inst {
             // Regular Stores
             Inst::Store {
                 src,
-                op: op @ (StoreOP::Sw | StoreOP::Sd | StoreOP::Fsd),
+                op: op @ (StoreOP::Sw | StoreOP::Sd | StoreOP::Fsd | StoreOP::Sh | StoreOP::Sb),
                 to,
                 flags,
             } if reg_is_compressible(src)
@@ -858,17 +887,41 @@ impl Inst {
 
                 // We encode the offset in multiples of the store size.
                 let offset = to.get_offset_with_state(state);
-                let imm5 = u8::try_from(offset / op.size())
-                    .ok()
-                    .and_then(Uimm5::maybe_from_u8)?;
+                let offset = u8::try_from(offset / op.size()).ok()?;
 
-                // Floating point stores are not included in the base Zca extension
-                // but in a separate Zcd extension. Both of these are part of the C Extension.
-                let op = match op {
-                    StoreOP::Sw => CsOp::CSw,
-                    StoreOP::Sd => CsOp::CSd,
-                    StoreOP::Fsd if has_zcd => CsOp::CFsd,
-                    _ => return None,
+                // We mix two different formats here.
+                //
+                // c.sw / c.sd / c.fsd instructions are available in the standard Zca
+                // extension using the CL format.
+                //
+                // c.sb / c.sh are only available in the Zcb extension and are also
+                // encoded differently.
+                let is_zcb_store = matches!(op, StoreOP::Sh | StoreOP::Sb);
+                let encoded = if is_zcb_store {
+                    if !has_zcb {
+                        return None;
+                    }
+
+                    let op = match op {
+                        StoreOP::Sh => ZcbMemOp::CSh,
+                        StoreOP::Sb => ZcbMemOp::CSb,
+                        _ => unreachable!(),
+                    };
+                    let imm2 = Uimm2::maybe_from_u8(offset)?;
+
+                    encode_zcbmem_store(op, src, base, imm2)
+                } else {
+                    // Floating point stores are not included in the base Zca extension
+                    // but in a separate Zcd extension. Both of these are part of the C Extension.
+                    let op = match op {
+                        StoreOP::Sw => CsOp::CSw,
+                        StoreOP::Sd => CsOp::CSd,
+                        StoreOP::Fsd if has_zcd => CsOp::CFsd,
+                        _ => return None,
+                    };
+                    let imm5 = Uimm5::maybe_from_u8(offset)?;
+
+                    encode_cs_type(op, src, base, imm5)
                 };
 
                 let srcloc = state.cur_srcloc();
@@ -876,7 +929,7 @@ impl Inst {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
-                sink.put2(encode_cs_type(op, src, base, imm5));
+                sink.put2(encoded);
             }
 
             // c.not

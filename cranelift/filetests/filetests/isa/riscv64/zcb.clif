@@ -116,3 +116,124 @@ block0(v0: i16):
 ;   .byte 0x6d, 0x9d
 ;   c.jr ra
 
+
+function %c_lbu(i64) -> i16, i64 {
+block0(v0: i64):
+  v1 = uload8.i16 v0+0
+  v2 = uload8.i64 v0+3
+  return v1, v2
+}
+
+; VCode:
+; block0:
+;   lbu a3,0(a0)
+;   mv a4,a3
+;   lbu a1,3(a0)
+;   mv a0,a4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x14, 0x81
+;   c.mv a4, a3
+;   .byte 0x6c, 0x81
+;   c.mv a0, a4
+;   c.jr ra
+
+function %c_lhu(i64) -> i32, i64 {
+block0(v0: i64):
+  v1 = uload16.i32 v0+0
+  v2 = uload16.i64 v0+2
+  return v1, v2
+}
+
+; VCode:
+; block0:
+;   lhu a3,0(a0)
+;   mv a4,a3
+;   lhu a1,2(a0)
+;   mv a0,a4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x14, 0x85
+;   c.mv a4, a3
+;   .byte 0x2c, 0x85
+;   c.mv a0, a4
+;   c.jr ra
+
+function %c_lh(i64) -> i16, i16 {
+block0(v0: i64):
+  v1 = load.i16 v0+0
+  v2 = load.i16 v0+2
+  return v1, v2
+}
+
+; VCode:
+; block0:
+;   lh a3,0(a0)
+;   mv a4,a3
+;   lh a1,2(a0)
+;   mv a0,a4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x54, 0x85
+;   c.mv a4, a3
+;   .byte 0x6c, 0x85
+;   c.mv a0, a4
+;   c.jr ra
+
+
+function %c_sb(i64, i8) {
+block0(v0: i64, v1: i8):
+  store.i8 v1, v0+0
+  store.i8 v1, v0+1
+  store.i8 v1, v0+2
+  store.i8 v1, v0+3
+  store.i8 v1, v0+4
+  return
+}
+
+; VCode:
+; block0:
+;   sb a1,0(a0)
+;   sb a1,1(a0)
+;   sb a1,2(a0)
+;   sb a1,3(a0)
+;   sb a1,4(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x0c, 0x89
+;   .byte 0x2c, 0x89
+;   .byte 0x4c, 0x89
+;   .byte 0x6c, 0x89
+;   sb a1, 4(a0)
+;   c.jr ra
+
+function %c_sh(i64, i16) {
+block0(v0: i64, v1: i16):
+  store.i16 v1, v0+0
+  store.i16 v1, v0+2
+  store.i16 v1, v0+3
+  return
+}
+
+; VCode:
+; block0:
+;   sh a1,0(a0)
+;   sh a1,2(a0)
+;   sh a1,3(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x0c, 0x8d
+;   .byte 0x2c, 0x8d
+;   sh a1, 3(a0)
+;   c.jr ra
+
