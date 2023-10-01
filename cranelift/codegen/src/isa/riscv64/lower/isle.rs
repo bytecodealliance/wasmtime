@@ -208,25 +208,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         .iter()
         .for_each(|i| self.emit(i));
     }
-    fn lower_br_icmp(
-        &mut self,
-        cc: &IntCC,
-        a: ValueRegs,
-        b: ValueRegs,
-        targets: &VecMachLabel,
-        ty: Type,
-    ) -> Unit {
-        let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty);
-        self.emit(&MInst::CondBr {
-            taken: CondBrTarget::Label(targets[0]),
-            not_taken: CondBrTarget::Label(targets[1]),
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: test,
-                rs2: zero_reg(),
-            },
-        });
-    }
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
             let tmp = self.temp_writable_reg(I64);

@@ -2084,29 +2084,6 @@
         (result XReg (rv_add high low)))
     (value_regs result (imm $I64 0))))
 
-
-(decl lower_cls (Type XReg) XReg)
-(rule (lower_cls ty r)
-  (let ((tmp XReg (sext r ty))
-        (tmp2 XReg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
-        (tmp3 XReg (lower_clz ty tmp2)))
-    (rv_addi tmp3 (imm12_const -1))))
-
-;; If the sign bit is set, we count the leading zeros of the inverted value.
-;; Otherwise we can just count the leading zeros of the original value.
-;; Subtract 1 since the sign bit does not count.
-(decl lower_cls_i128 (ValueRegs) ValueRegs)
-(rule (lower_cls_i128 x)
-  (let ((low XReg (value_regs_get x 0))
-        (high XReg (value_regs_get x 1))
-        (low XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not low) low))
-        (high XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not high) high))
-        (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
-        (count XReg (value_regs_get tmp 0))
-        (result XReg (rv_addi count (imm12_const -1))))
-    (value_regs result (imm $I64 0))))
-
-
 (decl gen_cltz (bool XReg Type) XReg)
 (rule (gen_cltz leading rs ty)
   (let ((tmp WritableXReg (temp_writable_xreg))
@@ -2120,8 +2097,9 @@
 (rule (zext val from_ty) (value_regs_get (extend val (ExtendOp.Zero) from_ty) 0))
 
 ;; Performs a signed extension of the given value
-(decl sext (XReg Type) XReg)
-(rule (sext val from_ty) (value_regs_get (extend val (ExtendOp.Signed) from_ty) 0))
+(decl sext (Value) XReg)
+(rule (sext val @ (value_type from_ty))
+  (extend val (ExtendOp.Signed) from_ty))
 
 (type ExtendOp
   (enum
@@ -2701,17 +2679,6 @@
     (move_x_to_f tmp (float_int_of_same_size ty))))
 
 
-;;; lower icmp
-(decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
-(rule 0 (lower_icmp cc x y (fits_in_64 ty))
-  (gen_icmp cc (zext (value_regs_get x 0) ty) (zext (value_regs_get y 0) ty) ty))
-(rule 1 (lower_icmp cc x y (fits_in_64 ty))
-  (if (signed_cond_code cc))
-  (gen_icmp cc (sext (value_regs_get x 0) ty) (sext (value_regs_get y 0) ty) ty))
-(rule 2 (lower_icmp cc x y $I128)
-  (gen_icmp cc x y $I128))
-
-
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
 (rule
   (i128_sub x y )
@@ -2743,10 +2710,6 @@
         (sum XReg (rv_add tmp_x tmp_y))
         (test XReg (rv_srli sum (imm12_const (ty_bits ty)))))
     (value_regs sum test)))
-
-;;; cc a b targets Type
-(decl lower_br_icmp (IntCC ValueRegs ValueRegs VecMachLabel Type) Unit)
-(extern constructor lower_br_icmp lower_br_icmp)
 
 ;; int scalar zero regs.
 (decl int_zero_reg (Type) ValueRegs)
@@ -2787,11 +2750,6 @@
   (lower_cond_br (IntCC.NotEqual) (zext v ty) targets ty))
 (rule 2 (lower_branch (brif v @ (value_type $I128)_ _) targets)
     (lower_cond_br (IntCC.NotEqual) (truthy_to_reg v) targets $I64))
-
-;; Branching on the result of an icmp
-(rule 1
-  (lower_branch (brif (maybe_uextend (icmp cc a @ (value_type ty) b)) _ _) targets)
-  (lower_br_icmp cc a b targets ty))
 
 ;; Branching on the result of an fcmp
 (rule 1

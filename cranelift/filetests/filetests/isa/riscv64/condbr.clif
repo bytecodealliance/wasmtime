@@ -245,8 +245,9 @@ block2:
 
 ; VCode:
 ; block0:
-;   eq a5,a0,a1##ty=i64
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   eq a0,a0,a1##ty=i64
+;   andi a0,a0,255
+;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,2
 ;   ret
@@ -257,14 +258,15 @@ block2:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a0, a1, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-;   bnez a5, 0xc
-; block1: ; offset 0x14
+;   mv a0, zero
+;   andi a0, a0, 0xff
+;   bnez a0, 0xc
+; block1: ; offset 0x18
 ;   addi a0, zero, 2
 ;   ret
-; block2: ; offset 0x1c
+; block2: ; offset 0x20
 ;   addi a0, zero, 1
 ;   ret
 
@@ -280,8 +282,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   eq a4,a0,a1##ty=i64
-;   bne a4,zero,taken(label1),not_taken(label2)
+;   eq a5,a0,a1##ty=i64
+;   andi a5,a5,255
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -293,10 +296,11 @@ block1:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a0, a1, 0xc
-;   addi a4, zero, 1
+;   addi a5, zero, 1
 ;   j 8
-;   mv a4, zero
-; block1: ; offset 0x10
+;   mv a5, zero
+;   andi a5, a5, 0xff
+; block1: ; offset 0x14
 ;   addi a0, zero, 1
 ;   ret
 
@@ -337,8 +341,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   eq a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   eq a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -350,10 +355,11 @@ block1:
 ; block0: ; offset 0x0
 ;   bne a1, a3, 0x10
 ;   bne a0, a2, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x14
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x18
 ;   ret
 
 function %i128_bricmp_ne(i128, i128) {
@@ -367,8 +373,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   ne a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   ne a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -380,10 +387,11 @@ block1:
 ; block0: ; offset 0x0
 ;   bne a1, a3, 8
 ;   beq a0, a2, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x14
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x18
 ;   ret
 
 function %i128_bricmp_slt(i128, i128) {
@@ -397,8 +405,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   slt a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   slt a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -411,10 +420,11 @@ block1:
 ;   blt a1, a3, 0xc
 ;   bne a1, a3, 0x10
 ;   bgeu a0, a2, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x18
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x1c
 ;   ret
 
 function %i128_bricmp_ult(i128, i128) {
@@ -428,8 +438,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   ult a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   ult a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -442,10 +453,11 @@ block1:
 ;   bltu a1, a3, 0xc
 ;   bne a1, a3, 0x10
 ;   bgeu a0, a2, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x18
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x1c
 ;   ret
 
 function %i128_bricmp_sle(i128, i128) {
@@ -459,8 +471,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   sle a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   sle a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -473,10 +486,11 @@ block1:
 ;   blt a1, a3, 0xc
 ;   bne a1, a3, 0x10
 ;   bltu a2, a0, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x18
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x1c
 ;   ret
 
 function %i128_bricmp_ule(i128, i128) {
@@ -490,8 +504,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   ule a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   ule a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -504,10 +519,11 @@ block1:
 ;   bltu a1, a3, 0xc
 ;   bne a1, a3, 0x10
 ;   bltu a2, a0, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x18
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x1c
 ;   ret
 
 function %i128_bricmp_sgt(i128, i128) {
@@ -521,8 +537,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   sgt a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   sgt a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -535,10 +552,11 @@ block1:
 ;   blt a3, a1, 0xc
 ;   bne a1, a3, 0x10
 ;   bgeu a2, a0, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x18
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x1c
 ;   ret
 
 function %i128_bricmp_ugt(i128, i128) {
@@ -552,8 +570,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   ugt a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   ugt a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -566,10 +585,11 @@ block1:
 ;   bltu a3, a1, 0xc
 ;   bne a1, a3, 0x10
 ;   bgeu a2, a0, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x18
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x1c
 ;   ret
 
 function %i128_bricmp_sge(i128, i128) {
@@ -583,8 +603,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   sge a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   sge a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -597,10 +618,11 @@ block1:
 ;   blt a3, a1, 0xc
 ;   bne a1, a3, 0x10
 ;   bltu a0, a2, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x18
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x1c
 ;   ret
 
 function %i128_bricmp_uge(i128, i128) {
@@ -614,8 +636,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   uge a5,[a0,a1],[a2,a3]##ty=i128
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   uge a0,[a0,a1],[a2,a3]##ty=i128
+;   andi a0,a0,255
+;   bne a0,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -628,10 +651,11 @@ block1:
 ;   bltu a3, a1, 0xc
 ;   bne a1, a3, 0x10
 ;   bltu a0, a2, 0xc
-;   addi a5, zero, 1
+;   addi a0, zero, 1
 ;   j 8
-;   mv a5, zero
-; block1: ; offset 0x18
+;   mv a0, zero
+;   andi a0, a0, 0xff
+; block1: ; offset 0x1c
 ;   ret
 
 function %i8_brif(i8){

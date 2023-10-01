@@ -471,7 +471,7 @@
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (smulhi x y)))
-  (lower_smlhi ty (sext x ty) (sext y ty)))
+  (lower_smlhi ty (sext x) (sext y)))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smulhi x y)))
   (rv_vmulh_vv x y (unmasked) ty))
@@ -505,8 +505,8 @@
 
 (rule -1 (lower (has_type (fits_in_32 ty) (sdiv x y)))
   (let
-    ((a XReg (sext x ty))
-      (b XReg (sext y ty))
+    ((a XReg (sext x))
+      (b XReg (sext y))
       (_ InstOutput (gen_div_overflow a b ty))
       (_ InstOutput (gen_div_by_zero b)))
     (rv_divw a b)))
@@ -532,13 +532,13 @@
 
 (rule -1 (lower (has_type (fits_in_16 ty) (srem x y)))
   (let
-    ((y2 XReg (sext y ty))
+    ((y2 XReg (sext y))
       (_ InstOutput (gen_div_by_zero y2)))
-    (rv_remw (sext x ty) y2)))
+    (rv_remw (sext x) y2)))
 
 (rule (lower (has_type $I32 (srem x y)))
   (let
-    ((y2 XReg (sext y $I32))
+    ((y2 XReg (sext y))
       (_ InstOutput (gen_div_by_zero y2)))
    (rv_remw x y2)))
 
@@ -748,10 +748,25 @@
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (cls x)))
-  (lower_cls ty x))
+  (let ((tmp XReg (sext x))
+        (tmp2 XReg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
+        (tmp3 XReg (lower_clz ty tmp2)))
+    (rv_addi tmp3 (imm12_const -1))))
 
+;; If the sign bit is set, we count the leading zeros of the inverted value.
+;; Otherwise we can just count the leading zeros of the original value.
+;; Subtract 1 since the sign bit does not count.
 (rule 1 (lower (has_type $I128 (cls x)))
-  (lower_cls_i128 x))
+  (let ((x ValueRegs x)
+        (low XReg (value_regs_get x 0))
+        (high XReg (value_regs_get x 1))
+        (low XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not low) low))
+        (high XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not high) high))
+        (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
+        (count XReg (value_regs_get tmp 0))
+        (result XReg (rv_addi count (imm12_const -1))))
+    (value_regs result (imm $I64 0))))
+
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (uextend val @ (value_type in_ty))))
@@ -761,9 +776,9 @@
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (sextend val @ (value_type in_ty))))
-  (sext val in_ty))
+  (sext val))
 (rule 1 (lower (has_type $I128 (sextend val @ (value_type in_ty))))
-  (let ((lo XReg (sext val in_ty)))
+  (let ((lo XReg (sext val)))
     (value_regs lo (rv_srai lo (imm12_const 63)))))
 
 ;; The instructions below are present in RV64I and sign-extend the result to 64 bits.
@@ -968,7 +983,7 @@
 ;; zero extended.
 (rule 0 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x y)))
   (if-let mask (u64_to_imm12 (shift_mask ty)))
-  (rv_sraw (sext x ty) (rv_andi (value_regs_get y 0) mask)))
+  (rv_sraw (sext x) (rv_andi (value_regs_get y 0) mask)))
 
 ;; Using the 32bit version of `sra` automatically masks the shift amount.
 (rule 1 (lower (has_type $I32 (sshr x y)))
@@ -980,7 +995,7 @@
 
 ;; When the RHS is known we can just encode it in the instruction.
 (rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x (maybe_uextend (imm12_from_value y)))))
-  (rv_sraiw (sext x ty) (imm12_and y (shift_mask ty))))
+  (rv_sraiw (sext x) (imm12_and y (shift_mask ty))))
 
 (rule 3 (lower (has_type $I32 (sshr x (maybe_uextend (imm12_from_value y)))))
   (rv_sraiw x y))
@@ -1125,7 +1140,7 @@
 (rule 2
   (lower
     (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomic_rmw_max_etc op $true) addr x)))
-  (gen_atomic_rmw_loop op ty addr (sext x ty)))
+  (gen_atomic_rmw_loop op ty addr (sext x)))
 
 
 (rule 2
@@ -1349,8 +1364,8 @@
 
 (rule 2 (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type (fits_in_64 in_ty))) x y)))
   (if (signed_cond_code cc))
-  (let ((a XReg (sext a in_ty))
-        (b XReg (sext b in_ty)))
+  (let ((a XReg (sext a))
+        (b XReg (sext b)))
     (gen_select_reg cc a b x y)))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
@@ -1365,7 +1380,7 @@
 ;; For vectors, we also do the same operation.
 ;; We can technically use any type in the bitwise operations, but prefer
 ;; using the type of the inputs so that we avoid emitting unnecessary
-;; `vsetvl` instructions. It's likeley that the vector unit is already
+;; `vsetvl` instructions. it's likeley that the vector unit is already
 ;; configured for that type.
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bitselect c x y)))
   (let ((tmp_x VReg (rv_vand_vv c x (unmasked) ty))
@@ -1414,7 +1429,7 @@
 ;;;;;  Rules for `smax`;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (smax x y)))
-  (gen_int_select ty (IntSelectOP.Smax) (sext x ty) (sext y ty)))
+  (gen_int_select ty (IntSelectOP.Smax) (sext x) (sext y)))
 
 (rule 1 (lower (has_type $I128 (smax x y)))
   (gen_int_select $I128 (IntSelectOP.Smax) x y))
@@ -1431,7 +1446,7 @@
 ;;;;;  Rules for `smin`;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (smin x y)))
-  (gen_int_select ty (IntSelectOP.Smin) (sext x ty) (sext y ty)))
+  (gen_int_select ty (IntSelectOP.Smin) (sext x) (sext y)))
 
 (rule 1 (lower (has_type $I128 (smin x y)))
   (gen_int_select $I128 (IntSelectOP.Smin) x y))
@@ -1622,9 +1637,16 @@
     result))
 
 (rule 0 (lower (icmp cc x @ (value_type (ty_int ty)) y))
-  (lower_icmp cc x y ty))
+  (gen_icmp cc (zext x ty) (zext y ty) ty))
 
-(rule 1 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
+(rule 1 (lower (icmp cc x @ (value_type (ty_int ty)) y))
+  (if (signed_cond_code cc))
+  (gen_icmp cc (sext x) (sext y) ty))
+
+(rule 2 (lower (icmp cc x @ (value_type $I128) y))
+  (gen_icmp cc x y $I128))
+
+(rule 3 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
   (gen_expand_mask ty (gen_icmp_mask ty cc x y)))
 
 
@@ -1671,7 +1693,7 @@
 
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
 (rule 0 (lower (has_type $F32 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtsl (sext v ty)))
+  (rv_fcvtsl (sext v)))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I32))))
   (rv_fcvtsw v))
@@ -1680,7 +1702,7 @@
   (rv_fcvtsl v))
 
 (rule 0 (lower (has_type $F64 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtdl (sext v ty)))
+  (rv_fcvtdl (sext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I32))))
   (rv_fcvtdw v))
@@ -1804,7 +1826,7 @@
 ;;   neg a1, a0
 ;;   max a0, a0, a1
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iabs x)))
-  (let ((extended XReg (sext x ty))
+  (let ((extended XReg (sext x))
         (negated XReg (rv_neg extended)))
     (max $I64 extended negated)))
 

@@ -43,11 +43,12 @@
 ;; block0:
 ;;   ld a3,8(a2)
 ;;   ugt a3,a0,a3##ty=i64
+;;   andi a3,a3,255
 ;;   bne a3,zero,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a2,0(a2)
-;;   add a2,a2,a0
-;;   sw a1,4096(a2)
+;;   ld a3,0(a2)
+;;   add a3,a3,a0
+;;   sw a1,4096(a3)
 ;;   j label2
 ;; block2:
 ;;   ret
@@ -58,11 +59,12 @@
 ;; block0:
 ;;   ld a2,8(a1)
 ;;   ugt a2,a0,a2##ty=i64
+;;   andi a2,a2,255
 ;;   bne a2,zero,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld a2,0(a1)
-;;   add a2,a2,a0
-;;   lw a0,4096(a2)
+;;   ld a3,0(a1)
+;;   add a3,a3,a0
+;;   lw a0,4096(a3)
 ;;   j label2
 ;; block2:
 ;;   ret
