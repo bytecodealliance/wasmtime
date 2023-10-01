@@ -446,10 +446,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
-    fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
-        FpuOPRR::int_convert_2_float_op(from, is_signed, to)
-    }
-
     fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
         AMode::RegOffset(base, offset, ty)
     }

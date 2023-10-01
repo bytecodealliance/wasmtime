@@ -1435,6 +1435,38 @@
 (decl rv_fcvtsd (FReg) FReg)
 (rule (rv_fcvtsd rs1) (fpu_rr (FpuOPRR.FcvtSD) $F64 rs1))
 
+;; Helper for emitting the `fcvt.s.w` instruction.
+(decl rv_fcvtsw (XReg) FReg)
+(rule (rv_fcvtsw rs1) (fpu_rr (FpuOPRR.FcvtSw) $F32 rs1))
+
+;; Helper for emitting the `fcvt.s.wu` instruction.
+(decl rv_fcvtswu (XReg) FReg)
+(rule (rv_fcvtswu rs1) (fpu_rr (FpuOPRR.FcvtSwU) $F32 rs1))
+
+;; Helper for emitting the `fcvt.d.w` instruction.
+(decl rv_fcvtdw (XReg) FReg)
+(rule (rv_fcvtdw rs1) (fpu_rr (FpuOPRR.FcvtDW) $F32 rs1))
+
+;; Helper for emitting the `fcvt.d.wu` instruction.
+(decl rv_fcvtdwu (XReg) FReg)
+(rule (rv_fcvtdwu rs1) (fpu_rr (FpuOPRR.FcvtDWU) $F32 rs1))
+
+;; Helper for emitting the `fcvt.s.l` instruction.
+(decl rv_fcvtsl (XReg) FReg)
+(rule (rv_fcvtsl rs1) (fpu_rr (FpuOPRR.FcvtSL) $F32 rs1))
+
+;; Helper for emitting the `fcvt.s.lu` instruction.
+(decl rv_fcvtslu (XReg) FReg)
+(rule (rv_fcvtslu rs1) (fpu_rr (FpuOPRR.FcvtSLU) $F32 rs1))
+
+;; Helper for emitting the `fcvt.d.l` instruction.
+(decl rv_fcvtdl (XReg) FReg)
+(rule (rv_fcvtdl rs1) (fpu_rr (FpuOPRR.FcvtDL) $F32 rs1))
+
+;; Helper for emitting the `fcvt.d.lu` instruction.
+(decl rv_fcvtdlu (XReg) FReg)
+(rule (rv_fcvtdlu rs1) (fpu_rr (FpuOPRR.FcvtDLu) $F32 rs1))
+
 ;; Helper for emitting the `fsgnj` ("Floating Point Sign Injection") instruction.
 ;; The output of this instruction is `rs1` with the sign bit from `rs2`
 ;; This implements the `copysign` operation
@@ -2683,9 +2715,6 @@
             (_ Unit (emit (MInst.ElfTlsGetAddr dst name))))
         dst))
 
-(decl int_convert_2_float_op (Type bool Type) FpuOPRR)
-(extern constructor int_convert_2_float_op int_convert_2_float_op)
-
 ;;;;
 (decl gen_fcvt_int (bool FReg bool Type Type) XReg)
 (rule
@@ -2775,12 +2804,6 @@
 
 (rule (normalize_cmp_value $I64  r _) r)
 (rule (normalize_cmp_value $I128 r _) r)
-
-(decl normalize_fcvt_from_int (XReg Type ExtendOp) XReg)
-(rule 2 (normalize_fcvt_from_int r (fits_in_16 ty) op)
-  (value_regs_get (extend r op ty $I64) 0))
-(rule 1 (normalize_fcvt_from_int r _ _)
-  r)
 
 ;; Convert a truthy value, possibly of more than one register (an
 ;; I128), to one register. If narrower than 64 bits, must have already

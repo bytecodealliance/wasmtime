@@ -2479,7 +2479,11 @@ impl Inst {
                 .emit(&[], sink, emit_info, state);
                 //convert back.
                 Inst::FpuRR {
-                    alu_op: FpuOPRR::int_convert_2_float_op(I64, true, ty),
+                    alu_op: if ty == F32 {
+                        FpuOPRR::FcvtSL
+                    } else {
+                        FpuOPRR::FcvtDL
+                    },
                     frm: Some(op.to_frm()),
                     rd,
                     rs: int_tmp.to_reg(),

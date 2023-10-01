@@ -1649,21 +1649,47 @@
     (rv_vmerge_vim cvt zero is_nan from_ty)))
 
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
-(rule 0 (lower (has_type (ty_scalar_float to) (fcvt_from_sint v @ (value_type from_ty))))
-  (let ((float_op FpuOPRR (int_convert_2_float_op from_ty $true to))
-        (value XReg (normalize_fcvt_from_int v from_ty (ExtendOp.Signed))))
-    (fpu_rr float_op to value)))
+(rule 0 (lower (has_type $F32 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
+  (rv_fcvtsl (sext v ty $I64)))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_sint v @ (value_type from_ty))))
+(rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I32))))
+  (rv_fcvtsw v))
+
+(rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I64))))
+  (rv_fcvtsl v))
+
+(rule 0 (lower (has_type $F64 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
+  (rv_fcvtdl (sext v ty $I64)))
+
+(rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I32))))
+  (rv_fcvtdw v))
+
+(rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I64))))
+  (rv_fcvtdl v))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_sint v @ (value_type from_ty))))
   (rv_vfcvt_f_x_v v (unmasked) from_ty))
 
 ;;;;;  Rules for `fcvt_from_uint`;;;;;;;;;
-(rule 0 (lower (has_type (ty_scalar_float to) (fcvt_from_uint v @ (value_type from_ty))))
-  (let ((float_op FpuOPRR (int_convert_2_float_op from_ty $false to))
-        (value XReg (normalize_fcvt_from_int v from_ty (ExtendOp.Zero))))
-    (fpu_rr float_op to value)))
+(rule 0 (lower (has_type $F32 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
+  (rv_fcvtslu (zext v ty $I64)))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_uint v @ (value_type from_ty))))
+(rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I32))))
+  (rv_fcvtswu v))
+
+(rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I64))))
+  (rv_fcvtslu v))
+
+(rule 0 (lower (has_type $F64 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
+  (rv_fcvtdlu (zext v ty $I64)))
+
+(rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I32))))
+  (rv_fcvtdwu v))
+
+(rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I64))))
+  (rv_fcvtdlu v))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_uint v @ (value_type from_ty))))
   (rv_vfcvt_f_xu_v v (unmasked) from_ty))
 
 ;;;;;  Rules for `symbol_value`;;;;;;;;;
