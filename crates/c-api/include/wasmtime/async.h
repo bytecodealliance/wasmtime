@@ -73,7 +73,7 @@ WASMTIME_CONFIG_PROP(void, async_stack_size, uint64_t)
 /**
  * \brief Configures a Store to yield execution of async WebAssembly code periodically.
  *
- * When a Store is configured to consume fuel with #wasmtime_config_consume_fuel 
+ * When a Store is configured to consume fuel with `wasmtime_config_consume_fuel` 
  * this method will configure what happens when fuel runs out. Specifically executing
  * WebAssembly will be suspended and control will be yielded back to the caller.
  *
@@ -110,8 +110,11 @@ typedef bool (*wasmtime_func_async_continuation_callback_t)(void *env);
  * A continuation for the current state of the host function's execution.
  */
 typedef struct wasmtime_async_continuation_t {
+  /// Callback for if the async function has completed.
   wasmtime_func_async_continuation_callback_t callback;
+  /// User-provided argument to pass to the callback.
   void *env;
+  /// A finalizer for the user-provided *env
   void (*finalizer)(void *);
 } wasmtime_async_continuation_t;
 
@@ -124,7 +127,14 @@ typedef struct wasmtime_async_continuation_t {
  * All the arguments to this function will be kept alive until the continuation
  * returns that it has errored or has completed.
  *
- * \param trap_ret if assigned a non `NULL` value then the called function will
+ * \param env user-provided argument passed to #wasmtime_linker_define_async_func
+ * \param caller a temporary object that can only be used during this function
+ * call. Used to acquire #wasmtime_context_t or caller's state
+ * \param args the arguments provided to this function invocation
+ * \param nargs how many arguments are provided
+ * \param results where to write the results of this function
+ * \param nresults how many results must be produced
+ * \param trap_ret if assigned a not `NULL` value then the called function will
  *        trap with the returned error. Note that ownership of trap is transferred
  *        to wasmtime.
  *
