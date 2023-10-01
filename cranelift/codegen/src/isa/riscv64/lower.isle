@@ -748,33 +748,77 @@
   (lower_ctz ty x))
 
 (rule 1 (lower (has_type $I128 (ctz x)))
-  (lower_ctz_128 x))
+  (let ((x_lo XReg (value_regs_get x 0))
+        (x_hi XReg (value_regs_get x 1))
+        ;; Count both halves
+        (high XReg (lower_ctz $I64 x_hi))
+        (low XReg (lower_ctz $I64 x_lo))
+        ;; Only add the top half if the bottom is zero
+        (high XReg (gen_select_reg (IntCC.Equal) x_lo (zero_reg) high (zero_reg)))
+        (result XReg (rv_add low high)))
+    (value_regs result (imm $I64 0))))
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (clz x)))
-  (lower_clz ty x))
+(rule 0 (lower (has_type (fits_in_64 ty) (clz x)))
+  (gen_cltz $true x ty))
 
 (rule 1 (lower (has_type $I128 (clz x)))
-  (lower_clz_i128 x))
+  (let ((x_lo XReg (value_regs_get x 0))
+        (x_hi XReg (value_regs_get x 1))
+        ;; Count both halves
+        (high XReg (gen_clz x_hi))
+        (low XReg (gen_clz x_lo))
+        ;; Only add the bottom zeros if the top half is zero
+        (low XReg (gen_select_reg (IntCC.Equal) x_hi (zero_reg) low (zero_reg))))
+    (value_regs (rv_add high low) (imm $I64 0))))
+
+(rule 2 (lower (has_type (fits_in_16 ty) (clz x)))
+  (if-let $true (has_zbb))
+  (let ((tmp XReg (zext x ty))
+        (count XReg (rv_clz tmp)))
+    ;; We always do the operation on the full 64-bit register, so subtract 64 from the result.
+    (rv_addi count (imm12_const_add (ty_bits ty) -64))))
+
+(rule 3 (lower (has_type $I32 (clz x)))
+  (if-let $true (has_zbb))
+  (rv_clzw x))
+
+(rule 3 (lower (has_type $I64 (clz x)))
+  (if-let $true (has_zbb))
+  (rv_clz x))
+
+(decl gen_clz (XReg) XReg)
+(rule 0 (gen_clz rs)
+  (gen_cltz $true rs $I64))
+(rule 1 (gen_clz rs)
+  (if-let $true (has_zbb))
+  (rv_clz rs))
 
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule (lower (has_type (fits_in_64 ty) (cls x)))
   (let ((tmp XReg (sext x))
         (tmp2 XReg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
-        (tmp3 XReg (lower_clz ty tmp2)))
-    (rv_addi tmp3 (imm12_const -1))))
+        (tmp3 XReg (gen_clz tmp2)))
+    ;; clz counted the full register width, so subtract (64-$width), and then
+    ;; additionally subtract one more, meaning here -65+width is added.
+    (rv_addi tmp3 (imm12_const_add (ty_bits ty) -65))))
 
 ;; If the sign bit is set, we count the leading zeros of the inverted value.
 ;; Otherwise we can just count the leading zeros of the original value.
 ;; Subtract 1 since the sign bit does not count.
 (rule 1 (lower (has_type $I128 (cls x)))
-  (let ((x ValueRegs x)
-        (low XReg (value_regs_get x 0))
+  (let ((low XReg (value_regs_get x 0))
         (high XReg (value_regs_get x 1))
         (low XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not low) low))
         (high XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not high) high))
-        (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
-        (count XReg (value_regs_get tmp 0))
+
+        ;; Count both halves
+        (high_cnt XReg (gen_clz high))
+        (low_cnt XReg (gen_clz low))
+        ;; Only add the bottom zeros if the top half is zero
+        (low_cnt XReg (gen_select_reg (IntCC.Equal) high (zero_reg) low_cnt (zero_reg)))
+        (count XReg (rv_add high_cnt low_cnt))
         (result XReg (rv_addi count (imm12_const -1))))
     (value_regs result (imm $I64 0))))
 
