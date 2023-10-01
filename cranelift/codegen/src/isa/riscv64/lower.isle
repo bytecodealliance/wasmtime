@@ -1413,58 +1413,70 @@
 
 ;;;;;  Rules for `smax`;;;;;;;;;
 
-(rule 0 (lower (has_type (ty_int ty)  (smax x y)))
-  (gen_int_select ty (IntSelectOP.Smax) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+(rule 0 (lower (has_type (fits_in_64 ty) (smax x y)))
+  (gen_int_select ty (IntSelectOP.Smax) (sext x ty) (sext y ty)))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smax x y)))
+(rule 1 (lower (has_type $I128 (smax x y)))
+  (gen_int_select $I128 (IntSelectOP.Smax) x y))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smax x y)))
   (rv_vmax_vv x y (unmasked) ty))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smax x (splat y))))
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (smax x (splat y))))
   (rv_vmax_vx x y (unmasked) ty))
 
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (smax (splat x) y)))
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (smax (splat x) y)))
   (rv_vmax_vx y x (unmasked) ty))
 
 ;;;;;  Rules for `smin`;;;;;;;;;
 
-(rule 0 (lower (has_type (ty_int ty)  (smin x y)))
-  (gen_int_select ty (IntSelectOP.Smin) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+(rule 0 (lower (has_type (fits_in_64 ty) (smin x y)))
+  (gen_int_select ty (IntSelectOP.Smin) (sext x ty) (sext y ty)))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smin x y)))
+(rule 1 (lower (has_type $I128 (smin x y)))
+  (gen_int_select $I128 (IntSelectOP.Smin) x y))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smin x y)))
   (rv_vmin_vv x y (unmasked) ty))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smin x (splat y))))
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (smin x (splat y))))
   (rv_vmin_vx x y (unmasked) ty))
 
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (smin (splat x) y)))
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (smin (splat x) y)))
   (rv_vmin_vx y x (unmasked) ty))
 
 ;;;;;  Rules for `umax`;;;;;;;;;
 
-(rule 0 (lower (has_type (ty_int ty)  (umax x y)))
-  (gen_int_select ty (IntSelectOP.Umax) (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
+(rule 0 (lower (has_type (fits_in_64 ty) (umax x y)))
+  (gen_int_select ty (IntSelectOP.Umax) (zext x ty) (zext y ty)))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umax x y)))
+(rule 1 (lower (has_type $I128 (umax x y)))
+  (gen_int_select $I128 (IntSelectOP.Umax) x y))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umax x y)))
   (rv_vmaxu_vv x y (unmasked) ty))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umax x (splat y))))
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umax x (splat y))))
   (rv_vmaxu_vx x y (unmasked) ty))
 
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umax (splat x) y)))
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (umax (splat x) y)))
   (rv_vmaxu_vx y x (unmasked) ty))
 
 ;;;;;  Rules for `umin`;;;;;;;;;
 
-(rule 0 (lower (has_type (ty_int ty) (umin x y)))
-  (gen_int_select ty (IntSelectOP.Umin) (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
+(rule 0 (lower (has_type (fits_in_64 ty) (umin x y)))
+  (gen_int_select ty (IntSelectOP.Umin) (zext x ty) (zext y ty)))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umin x y)))
+(rule 1 (lower (has_type $I128 (umin x y)))
+  (gen_int_select $I128 (IntSelectOP.Umin) x y))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umin x y)))
   (rv_vminu_vv x y (unmasked) ty))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umin x (splat y))))
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umin x (splat y))))
   (rv_vminu_vx x y (unmasked) ty))
 
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umin (splat x) y)))
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (umin (splat x) y)))
   (rv_vminu_vx y x (unmasked) ty))
 
 

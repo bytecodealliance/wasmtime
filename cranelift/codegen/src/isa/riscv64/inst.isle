@@ -2115,19 +2115,6 @@
         (_ Unit (emit (MInst.Cltz leading sum step tmp rs ty))))
     sum))
 
-
-;; Extends an integer if it is smaller than 64 bits.
-(decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
-;;; For values smaller than 64 bits, we need to extend them to 64 bits
-(rule 0 (ext_int_if_need $true val (fits_in_32 (ty_int ty)))
-  (extend (value_regs_get val 0) (ExtendOp.Signed) ty))
-(rule 0 (ext_int_if_need $false val (fits_in_32 (ty_int ty)))
-  (extend (value_regs_get val 0) (ExtendOp.Zero) ty))
-;; If the value is larger than one machine register, we don't need to do anything
-(rule 1 (ext_int_if_need _ r $I64) r)
-(rule 2 (ext_int_if_need _ r $I128) r)
-
-
 ;; Performs a zero extension of the given value
 (decl zext (XReg Type) XReg)
 (rule (zext val from_ty) (value_regs_get (extend val (ExtendOp.Zero) from_ty) 0))
@@ -2716,11 +2703,13 @@
 
 ;;; lower icmp
 (decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
-(rule 1 (lower_icmp cc x y ty)
+(rule 0 (lower_icmp cc x y (fits_in_64 ty))
+  (gen_icmp cc (zext (value_regs_get x 0) ty) (zext (value_regs_get y 0) ty) ty))
+(rule 1 (lower_icmp cc x y (fits_in_64 ty))
   (if (signed_cond_code cc))
-  (gen_icmp cc (ext_int_if_need $true x ty) (ext_int_if_need $true y ty) ty))
-(rule (lower_icmp cc x y ty)
-  (gen_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
+  (gen_icmp cc (sext (value_regs_get x 0) ty) (sext (value_regs_get y 0) ty) ty))
+(rule 2 (lower_icmp cc x y $I128)
+  (gen_icmp cc x y $I128))
 
 
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
