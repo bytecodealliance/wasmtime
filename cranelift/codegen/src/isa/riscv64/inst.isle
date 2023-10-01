@@ -2793,29 +2793,19 @@
 (decl intcc_to_extend_op (IntCC) ExtendOp)
 (extern constructor intcc_to_extend_op intcc_to_extend_op)
 
-;; Normalize a value for comparision.
+;; Convert a truthy value, possibly of more than one register (an I128), to
+;; one register.
 ;;
-;; This ensures that types smaller than a register don't accidentally
-;; pass undefined high bits when being compared as a full register.
-(decl normalize_cmp_value (Type ValueRegs ExtendOp) ValueRegs)
-
-(rule 1 (normalize_cmp_value (fits_in_32 ity) r op)
-      (extend r op ity $I64))
-
-(rule (normalize_cmp_value $I64  r _) r)
-(rule (normalize_cmp_value $I128 r _) r)
-
-;; Convert a truthy value, possibly of more than one register (an
-;; I128), to one register. If narrower than 64 bits, must have already
-;; been masked (e.g. by `normalize_cmp_value`).
-(decl truthy_to_reg (Type ValueRegs) XReg)
-(rule 1 (truthy_to_reg (fits_in_64 _) regs)
-      (value_regs_get regs 0))
-(rule 0 (truthy_to_reg $I128 regs)
-      (let ((lo XReg (value_regs_get regs 0))
+;; Zero-extends as necessary to ensure that the returned register only contains
+;; nonzero if the input value was logically nonzero.
+(decl truthy_to_reg (Value) XReg)
+(rule 1 (truthy_to_reg val @ (value_type (fits_in_64 ty)))
+  (zext val ty $I64))
+(rule 0 (truthy_to_reg val @ (value_type $I128))
+      (let ((regs ValueRegs val)
+            (lo XReg (value_regs_get regs 0))
             (hi XReg (value_regs_get regs 1)))
         (rv_or lo hi)))
-
 
 (decl label_to_br_target (MachLabel) CondBrTarget)
 (extern constructor label_to_br_target label_to_br_target)
@@ -2828,16 +2818,10 @@
       (emit_side_effect (SideEffectNoResult.Inst (MInst.Jal (vec_label_get targets 0)))))
 
 ;; Default behavior for branching based on an input value.
-(rule
-  (lower_branch (brif v @ (value_type ty) _ _) targets)
-  (lower_cond_br (IntCC.NotEqual) (normalize_cmp_value ty v (ExtendOp.Zero)) targets ty))
-
-;; Special case for SI128 to reify the comparison value and branch on it.
-(rule 2
-  (lower_branch (brif v @ (value_type $I128) _ _) targets)
-  (let ((zero ValueRegs (value_regs (zero_reg) (zero_reg)))
-        (cmp XReg (gen_icmp (IntCC.NotEqual) v zero $I128)))
-    (lower_cond_br (IntCC.NotEqual) cmp targets $I64)))
+(rule (lower_branch (brif v @ (value_type (fits_in_64 ty)) _ _) targets)
+  (lower_cond_br (IntCC.NotEqual) (zext v ty $I64) targets ty))
+(rule 2 (lower_branch (brif v @ (value_type $I128)_ _) targets)
+    (lower_cond_br (IntCC.NotEqual) (truthy_to_reg v) targets $I64))
 
 ;; Branching on the result of an icmp
 (rule 1
@@ -3001,11 +2985,8 @@
 
 ;; Generates either 0 if `Value` is zero or -1 otherwise.
 (decl gen_bmask (Value) XReg)
-(rule 0 (gen_bmask val @ (value_type (fits_in_64 ty)))
-  (let ((non_zero XReg (rv_snez (truthy_to_reg ty (zext val ty $I64)))))
-    (rv_neg non_zero)))
-(rule 1 (gen_bmask val @ (value_type $I128))
-  (let ((non_zero XReg (rv_snez (truthy_to_reg $I128 val))))
+(rule (gen_bmask val)
+  (let ((non_zero XReg (rv_snez (truthy_to_reg val))))
     (rv_neg non_zero)))
 
 (decl lower_bmask (Value Type) ValueRegs)

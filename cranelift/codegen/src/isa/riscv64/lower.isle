@@ -1334,14 +1334,18 @@
   (rv_seqz (rv_addi v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
-(rule
-  (lower (has_type ty (select c @ (value_type cty) x y)))
-  (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c (ExtendOp.Zero))) x y))
+(rule 0 (lower (has_type ty (select c x y)))
+  (gen_select ty (truthy_to_reg c) x y))
 
-(rule 1
-  (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type (fits_in_64 in_ty))) x y)))
-  (let ((a XReg (truthy_to_reg in_ty (normalize_cmp_value in_ty a (intcc_to_extend_op cc))))
-        (b XReg (truthy_to_reg in_ty (normalize_cmp_value in_ty b (intcc_to_extend_op cc)))))
+(rule 1 (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type (fits_in_64 in_ty))) x y)))
+  (let ((a XReg (zext a in_ty $I64))
+        (b XReg (zext b in_ty $I64)))
+    (gen_select_reg cc a b x y)))
+
+(rule 2 (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type (fits_in_64 in_ty))) x y)))
+  (if (signed_cond_code cc))
+  (let ((a XReg (sext a in_ty $I64))
+        (b XReg (sext b in_ty $I64)))
     (gen_select_reg cc a b x y)))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
