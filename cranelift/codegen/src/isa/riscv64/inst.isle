@@ -1344,8 +1344,6 @@
 (rule (rv_remu rs1 rs2)
   (alu_rrr (AluOPRRR.RemU) rs1 rs2))
 
-
-
 ;; RV64M Extension
 ;; TODO: Enable these instructions only when we have the M extension
 
