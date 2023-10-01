@@ -889,22 +889,24 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   mv a5,a0
-;   popcnt a0,a5##ty=i32 tmp=a2 step=a3
+;   slli a2,a0,32
+;   srli a4,a2,32
+;   popcnt a0,a4##ty=i64 tmp=a2 step=a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a0
+;   slli a2, a0, 0x20
+;   srli a4, a2, 0x20
 ;   mv a0, zero
-;   addi a3, zero, 0x20
+;   addi a1, zero, 0x40
 ;   addi a2, zero, 1
-;   slli a2, a2, 0x1f
-;   blez a3, 0x1c
-;   and t5, a2, a5
+;   slli a2, a2, 0x3f
+;   blez a1, 0x1c
+;   and t5, a2, a4
 ;   beq zero, t5, 8
 ;   addi a0, a0, 1
-;   addi a3, a3, -1
+;   addi a1, a1, -1
 ;   srli a2, a2, 1
 ;   j -0x18
 ;   ret
@@ -917,22 +919,24 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   mv a5,a0
-;   popcnt a0,a5##ty=i16 tmp=a2 step=a3
+;   slli a2,a0,48
+;   srli a4,a2,48
+;   popcnt a0,a4##ty=i64 tmp=a2 step=a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a0
+;   slli a2, a0, 0x30
+;   srli a4, a2, 0x30
 ;   mv a0, zero
-;   addi a3, zero, 0x10
+;   addi a1, zero, 0x40
 ;   addi a2, zero, 1
-;   slli a2, a2, 0xf
-;   blez a3, 0x1c
-;   and t5, a2, a5
+;   slli a2, a2, 0x3f
+;   blez a1, 0x1c
+;   and t5, a2, a4
 ;   beq zero, t5, 8
 ;   addi a0, a0, 1
-;   addi a3, a3, -1
+;   addi a1, a1, -1
 ;   srli a2, a2, 1
 ;   j -0x18
 ;   ret
@@ -945,23 +949,23 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   mv a5,a0
-;   popcnt a0,a5##ty=i8 tmp=a2 step=a3
+;   andi a2,a0,255
+;   popcnt a0,a2##ty=i64 tmp=a4 step=a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a0
+;   andi a2, a0, 0xff
 ;   mv a0, zero
-;   addi a3, zero, 8
-;   addi a2, zero, 1
-;   slli a2, a2, 7
-;   blez a3, 0x1c
-;   and t5, a2, a5
+;   addi a5, zero, 0x40
+;   addi a4, zero, 1
+;   slli a4, a4, 0x3f
+;   blez a5, 0x1c
+;   and t5, a4, a2
 ;   beq zero, t5, 8
 ;   addi a0, a0, 1
-;   addi a3, a3, -1
-;   srli a2, a2, 1
+;   addi a5, a5, -1
+;   srli a4, a4, 1
 ;   j -0x18
 ;   ret
 

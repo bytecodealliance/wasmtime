@@ -1585,6 +1585,11 @@
 (rule (rv_cpop rs1)
   (alu_rr_funct12 (AluOPRRI.Cpop) rs1))
 
+;; Helper for emitting the `cpopw` ("Count Population") instruction.
+(decl rv_cpopw (XReg) XReg)
+(rule (rv_cpopw rs1)
+  (alu_rr_funct12 (AluOPRRI.Cpopw) rs1))
+
 ;; Helper for emitting the `max` instruction.
 (decl rv_max (XReg XReg) XReg)
 (rule (rv_max rs1 rs2)
@@ -2307,36 +2312,15 @@
   (rv_bseti val (imm12_const (u64_as_i32 bit))))
 
 
-(decl gen_popcnt (Reg Type) Reg)
-(rule
-  (gen_popcnt rs ty)
+(decl gen_popcnt (XReg) Reg)
+(rule (gen_popcnt rs)
   (let
     ((tmp WritableXReg (temp_writable_xreg))
       (step WritableXReg (temp_writable_xreg))
       (sum WritableXReg (temp_writable_xreg))
-      (_ Unit (emit (MInst.Popcnt sum step tmp rs ty))))
+      (_ Unit (emit (MInst.Popcnt sum step tmp rs $I64))))
     (writable_reg_to_reg sum)))
 
-(decl lower_popcnt (XReg Type) XReg)
-(rule 1 (lower_popcnt rs ty)
-  (if-let $true (has_zbb))
-  (rv_cpop (zext rs ty)))
-
-(rule (lower_popcnt rs ty)
-  (if-let $false (has_zbb))
-  (gen_popcnt rs ty))
-
-(decl lower_popcnt_i128 (ValueRegs) ValueRegs)
-(rule
-  (lower_popcnt_i128 a)
-  (let
-    ( ;; low part.
-      (low XReg (lower_popcnt (value_regs_get a 0) $I64))
-      ;; high part.
-      (high XReg (lower_popcnt (value_regs_get a 1) $I64))
-      ;; add toghter.
-      (result XReg (rv_add low high)))
-    (value_regs result (imm $I64 0))))
 
 (decl lower_i128_rotl (ValueRegs ValueRegs) ValueRegs)
 (rule

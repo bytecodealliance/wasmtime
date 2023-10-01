@@ -827,11 +827,33 @@
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (popcnt x)))
-  (lower_popcnt x ty))
+(rule 0 (lower (has_type (fits_in_64 ty) (popcnt x)))
+  (gen_popcnt (zext x ty)))
 
 (rule 1 (lower (has_type $I128 (popcnt x)))
-  (lower_popcnt_i128 x))
+  (let
+    ((x ValueRegs x)
+     (low XReg (gen_popcnt (value_regs_get x 0)))
+     (high XReg (gen_popcnt (value_regs_get x 1)))
+     (result XReg (rv_add low high)))
+    (value_regs result (imm $I64 0))))
+
+(rule 2 (lower (has_type (fits_in_64 ty) (popcnt x)))
+  (if-let $true (has_zbb))
+  (rv_cpop (zext x ty)))
+
+(rule 3 (lower (has_type $I32 (popcnt x)))
+  (if-let $true (has_zbb))
+  (rv_cpopw x))
+
+(rule 3 (lower (has_type $I128 (popcnt x)))
+  (if-let $true (has_zbb))
+  (let
+    ((x ValueRegs x)
+     (low XReg (rv_cpop (value_regs_get x 0)))
+     (high XReg (rv_cpop (value_regs_get x 1)))
+     (result XReg (rv_add low high)))
+    (value_regs result (imm $I64 0))))
 
 ;; Popcount using multiply.
 ;; This is popcount64c() from
@@ -845,7 +867,7 @@
 ;;
 ;; TODO: LLVM generates a much better implementation for I8X16. See: https://godbolt.org/z/qr6vf9Gr3
 ;; For the other types it seems to be largely the same.
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (popcnt x)))
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (popcnt x)))
   (if-let one (u64_to_uimm5 1))
   (if-let two (u64_to_uimm5 2))
   (if-let four (u64_to_uimm5 4))
