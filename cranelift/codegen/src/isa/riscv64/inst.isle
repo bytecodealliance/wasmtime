@@ -2183,15 +2183,6 @@
       (high XReg (alu_rrr op (value_regs_get a 1) (value_regs_get b 1))))
     (value_regs low high)))
 
-(decl lower_umlhi (Type XReg XReg) XReg)
-(rule 1 (lower_umlhi $I64 rs1 rs2)
-  (rv_mulhu rs1 rs2))
-
-(rule (lower_umlhi ty rs1 rs2)
-  (let
-    ((tmp XReg (rv_mul (zext rs1 ty) (zext rs2 ty))))
-    (rv_srli tmp (imm12_const (ty_bits ty)))))
-
 (decl lower_smlhi (Type XReg XReg) XReg)
 (rule 1
   (lower_smlhi $I64 rs1 rs2)

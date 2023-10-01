@@ -483,16 +483,20 @@
   (rv_vmulh_vx x y (unmasked) ty))
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (umulhi x y)))
-  (lower_umlhi ty (zext x ty) (zext y ty)))
+(rule 0 (lower (has_type (fits_in_32 ty) (umulhi x y)))
+  (let ((tmp XReg (rv_mul (zext x ty) (zext y ty))))
+    (rv_srli tmp (imm12_const (ty_bits ty)))))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x y)))
+(rule 1 (lower (has_type $I64 (umulhi x y)))
+  (rv_mulhu x y))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x y)))
   (rv_vmulhu_vv x y (unmasked) ty))
 
-(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umulhi (splat x) y)))
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umulhi (splat x) y)))
   (rv_vmulhu_vx y x (unmasked) ty))
 
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x (splat y))))
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x (splat y))))
   (rv_vmulhu_vx x y (unmasked) ty))
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
