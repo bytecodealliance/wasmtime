@@ -22,6 +22,7 @@ wiggle = { workspace = true, optional = true }
 libc = { workspace = true }
 once_cell = { workspace = true }
 log = { workspace = true }
+url = { workspace = true }
 
 tokio = { workspace = true, optional = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net"] }
 bytes = { workspace = true }

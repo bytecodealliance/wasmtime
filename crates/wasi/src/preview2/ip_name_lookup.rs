@@ -26,7 +26,18 @@ impl<T: WasiView> Host for T {
         family: Option<IpAddressFamily>,
         include_unavailable: bool,
     ) -> Result<Resource<ResolveAddressStream>, Error> {
-        if !self.table().get_resource(&network)?.allow_ip_name_lookup {
+        let network = self.table().get_resource(&network)?;
+
+        // `Host::parse` serves us two functions:
+        // 1. validate the input is not an IP address,
+        // 2. convert unicode domains to punycode.
+        let name = match url::Host::parse(&name).map_err(|_| ErrorCode::InvalidName)? {
+            url::Host::Domain(name) => name,
+            url::Host::Ipv4(_) => return Err(ErrorCode::InvalidName.into()),
+            url::Host::Ipv6(_) => return Err(ErrorCode::InvalidName.into()),
+        };
+
+        if !network.allow_ip_name_lookup {
             return Err(ErrorCode::PermanentResolverFailure.into());
         }
 
