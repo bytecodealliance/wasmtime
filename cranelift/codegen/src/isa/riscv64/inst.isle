@@ -1973,7 +1973,7 @@
         ;; with the bottom half.
         (shifted XReg (rv_srli x half_size))
         (swap_bot XReg (gen_bswap half_ty shifted))
-        (bot XReg (zext swap_bot half_ty $I64)))
+        (bot XReg (zext swap_bot half_ty)))
     (rv_or top bot)))
 
 ;; With `zbb` we can use `rev8` and shift the result
@@ -2055,7 +2055,7 @@
 
 (rule 1 (lower_clz (fits_in_16 ty) r)
   (if-let $true (has_zbb))
-  (let ((tmp XReg (zext r ty $I64))
+  (let ((tmp XReg (zext r ty))
         (count XReg (rv_clz tmp))
         ;; We always do the operation on the full 64-bit register, so subtract 64 from the result.
         (result XReg (rv_addi count (imm12_const_add (ty_bits ty) -64))))
@@ -2087,7 +2087,7 @@
 
 (decl lower_cls (Type XReg) XReg)
 (rule (lower_cls ty r)
-  (let ((tmp XReg (sext r ty $I64))
+  (let ((tmp XReg (sext r ty))
         (tmp2 XReg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
         (tmp3 XReg (lower_clz ty tmp2)))
     (rv_addi tmp3 (imm12_const -1))))
@@ -2120,29 +2120,30 @@
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
 ;;; For values smaller than 64 bits, we need to extend them to 64 bits
 (rule 0 (ext_int_if_need $true val (fits_in_32 (ty_int ty)))
-  (extend val (ExtendOp.Signed) ty $I64))
+  (extend (value_regs_get val 0) (ExtendOp.Signed) ty))
 (rule 0 (ext_int_if_need $false val (fits_in_32 (ty_int ty)))
-  (extend val (ExtendOp.Zero) ty $I64))
+  (extend (value_regs_get val 0) (ExtendOp.Zero) ty))
 ;; If the value is larger than one machine register, we don't need to do anything
 (rule 1 (ext_int_if_need _ r $I64) r)
 (rule 2 (ext_int_if_need _ r $I128) r)
 
 
 ;; Performs a zero extension of the given value
-(decl zext (XReg Type Type) XReg)
-(rule (zext val from_ty (fits_in_64 to_ty)) (value_regs_get (extend val (ExtendOp.Zero) from_ty to_ty) 0))
+(decl zext (XReg Type) XReg)
+(rule (zext val from_ty) (value_regs_get (extend val (ExtendOp.Zero) from_ty) 0))
 
 ;; Performs a signed extension of the given value
-(decl sext (XReg Type Type) XReg)
-(rule (sext val from_ty (fits_in_64 to_ty)) (value_regs_get (extend val (ExtendOp.Signed) from_ty to_ty) 0))
+(decl sext (XReg Type) XReg)
+(rule (sext val from_ty) (value_regs_get (extend val (ExtendOp.Signed) from_ty) 0))
 
 (type ExtendOp
   (enum
     (Zero)
     (Signed)))
 
-;; Performs either a sign or zero extension of the given value
-(decl extend (ValueRegs ExtendOp Type Type) ValueRegs)
+;; Performs either a sign or zero extension of the given value to a full
+;; register width.
+(decl extend (XReg ExtendOp Type) XReg)
 
 ;;; Generic Rules Extending to I64
 (decl pure extend_shift_op (ExtendOp) AluOPRRI)
@@ -2151,68 +2152,59 @@
 
 ;; In the most generic case, we shift left and then shift right.
 ;; The type of right shift is determined by the extend op.
-(rule 0 (extend val extend_op (fits_in_32 from_ty) (fits_in_64 to_ty))
-  (let ((val XReg (value_regs_get val 0))
-        (shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
+(rule 0 (extend val extend_op (fits_in_32 from_ty))
+  (let ((shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
         (left XReg (rv_slli val shift))
         (shift_op AluOPRRI (extend_shift_op extend_op))
         (right XReg (alu_rr_imm12 shift_op left shift)))
     right))
 
 ;; If we are zero extending a U8 we can use a `andi` instruction.
-(rule 1 (extend val (ExtendOp.Zero) $I8 (fits_in_64 to_ty))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_andi val (imm12_const 255))))
+(rule 1 (extend val (ExtendOp.Zero) $I8)
+  (rv_andi val (imm12_const 255)))
 
 ;; When signed extending from 32 to 64 bits we can use a
 ;; `addiw val 0`. Also known as a `sext.w`
-(rule 1 (extend val (ExtendOp.Signed) $I32 $I64)
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_sextw val)))
+(rule 1 (extend val (ExtendOp.Signed) $I32)
+  (rv_sextw val))
 
 
 ;; No point in trying to use `packh` here to zero extend 8 bit values
 ;; since we can just use `andi` instead which is part of the base ISA.
 
 ;; If we have the `zbkb` extension `packw` can be used to zero extend 16 bit values
-(rule 1 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
+(rule 1 (extend val (ExtendOp.Zero) $I16)
   (if-let $true (has_zbkb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_packw val (zero_reg))))
+  (rv_packw val (zero_reg)))
 
 ;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
-(rule 1 (extend val (ExtendOp.Zero) $I32 $I64)
+(rule 1 (extend val (ExtendOp.Zero) $I32)
   (if-let $true (has_zbkb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_pack val (zero_reg))))
+  (rv_pack val (zero_reg)))
 
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
-(rule 1 (extend val (ExtendOp.Signed) $I8 (fits_in_64 _))
+(rule 1 (extend val (ExtendOp.Signed) $I8)
   (if-let $true (has_zbb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_sextb val)))
+  (rv_sextb val))
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
-(rule 1 (extend val (ExtendOp.Signed) $I16 (fits_in_64 _))
+(rule 1 (extend val (ExtendOp.Signed) $I16)
   (if-let $true (has_zbb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_sexth val)))
+  (rv_sexth val))
 
 ;; If we have the `zbb` extension we can use the dedicated `zext.h` instruction.
-(rule 2 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
+(rule 2 (extend val (ExtendOp.Zero) $I16)
   (if-let $true (has_zbb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_zexth val)))
+  (rv_zexth val))
 
 ;; With `zba` we have a `zext.w` instruction
-(rule 2 (extend val (ExtendOp.Zero) $I32 $I64)
+(rule 2 (extend val (ExtendOp.Zero) $I32)
   (if-let $true (has_zba))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_zextw val)))
+  (rv_zextw val))
 
-;; Catch all rule for ignoring extensions of the same type.
-(rule 4 (extend val _ ty ty) val)
+;; Ignore sign extensions which are already at the full register width.
+(rule 4 (extend val _ $I64) val)
 
 
 
@@ -2232,7 +2224,7 @@
 
 (rule (lower_umlhi ty rs1 rs2)
   (let
-    ((tmp XReg (rv_mul (zext rs1 ty $I64) (zext rs2 ty $I64))))
+    ((tmp XReg (rv_mul (zext rs1 ty) (zext rs2 ty))))
     (rv_srli tmp (imm12_const (ty_bits ty)))))
 
 (decl lower_smlhi (Type XReg XReg) XReg)
@@ -2372,7 +2364,7 @@
 (decl lower_popcnt (XReg Type) XReg)
 (rule 1 (lower_popcnt rs ty)
   (if-let $true (has_zbb))
-  (rv_cpop (zext rs ty $I64)))
+  (rv_cpop (zext rs ty)))
 
 (rule (lower_popcnt rs ty)
   (if-let $false (has_zbb))
@@ -2757,8 +2749,8 @@
 
 (rule
   (lower_uadd_overflow x y (fits_in_32 ty))
-  (let ((tmp_x XReg (zext x ty $I64))
-        (tmp_y XReg (zext y ty $I64))
+  (let ((tmp_x XReg (zext x ty))
+        (tmp_y XReg (zext y ty))
         (sum XReg (rv_add tmp_x tmp_y))
         (test XReg (rv_srli sum (imm12_const (ty_bits ty)))))
     (value_regs sum test)))
@@ -2784,7 +2776,7 @@
 ;; nonzero if the input value was logically nonzero.
 (decl truthy_to_reg (Value) XReg)
 (rule 1 (truthy_to_reg val @ (value_type (fits_in_64 ty)))
-  (zext val ty $I64))
+  (zext val ty))
 (rule 0 (truthy_to_reg val @ (value_type $I128))
       (let ((regs ValueRegs val)
             (lo XReg (value_regs_get regs 0))
@@ -2803,7 +2795,7 @@
 
 ;; Default behavior for branching based on an input value.
 (rule (lower_branch (brif v @ (value_type (fits_in_64 ty)) _ _) targets)
-  (lower_cond_br (IntCC.NotEqual) (zext v ty $I64) targets ty))
+  (lower_cond_br (IntCC.NotEqual) (zext v ty) targets ty))
 (rule 2 (lower_branch (brif v @ (value_type $I128)_ _) targets)
     (lower_cond_br (IntCC.NotEqual) (truthy_to_reg v) targets $I64))
 
