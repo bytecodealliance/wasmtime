@@ -1,15 +1,12 @@
-use wasi::sockets::network::{Network, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress};
-use wasi::sockets::tcp::{TcpSocket, ShutdownType};
+use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network};
+use wasi::sockets::tcp::{ShutdownType, TcpSocket};
 use wasi_sockets_tests::*;
 
 fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
     let sock = TcpSocket::new(family).unwrap();
 
     // Skipping: tcp::start_bind
-    assert!(matches!(
-        sock.finish_bind(),
-        Err(ErrorCode::NotInProgress)
-    ));
+    assert!(matches!(sock.finish_bind(), Err(ErrorCode::NotInProgress)));
     // Skipping: tcp::start_connect
     assert!(matches!(
         sock.finish_connect(),
@@ -23,19 +20,13 @@ fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
         sock.finish_listen(),
         Err(ErrorCode::NotInProgress)
     ));
-    assert!(matches!(
-        sock.accept(),
-        Err(ErrorCode::InvalidState)
-    ));
+    assert!(matches!(sock.accept(), Err(ErrorCode::InvalidState)));
     assert!(matches!(
         sock.shutdown(ShutdownType::Both),
         Err(ErrorCode::InvalidState)
     ));
 
-    assert!(matches!(
-        sock.local_address(),
-        Err(ErrorCode::InvalidState)
-    ));
+    assert!(matches!(sock.local_address(), Err(ErrorCode::InvalidState)));
     assert!(matches!(
         sock.remote_address(),
         Err(ErrorCode::InvalidState)
@@ -49,10 +40,7 @@ fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
         // setting ipv6_only to true (disabling dualstack mode) should work.
         assert!(matches!(sock.set_ipv6_only(true), Ok(_)));
     } else {
-        assert!(matches!(
-            sock.ipv6_only(),
-            Err(ErrorCode::NotSupported)
-        ));
+        assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
         assert!(matches!(
             sock.set_ipv6_only(true),
             Err(ErrorCode::NotSupported)
@@ -65,20 +53,11 @@ fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
     assert!(matches!(sock.no_delay(), Ok(_)));
     assert!(matches!(sock.set_no_delay(false), Ok(_)));
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
-    assert!(matches!(
-        sock.set_unicast_hop_limit(255),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
-    assert!(matches!(
-        sock.set_receive_buffer_size(16000),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_receive_buffer_size(16000), Ok(_)));
     assert!(matches!(sock.send_buffer_size(), Ok(_)));
-    assert!(matches!(
-        sock.set_send_buffer_size(16000),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_send_buffer_size(16000), Ok(_)));
 }
 
 fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
@@ -90,10 +69,7 @@ fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
         sock.start_bind(net, bind_address),
         Err(ErrorCode::InvalidState)
     ));
-    assert!(matches!(
-        sock.finish_bind(),
-        Err(ErrorCode::NotInProgress)
-    ));
+    assert!(matches!(sock.finish_bind(), Err(ErrorCode::NotInProgress)));
     // Skipping: tcp::start_connect
     assert!(matches!(
         sock.finish_connect(),
@@ -104,10 +80,7 @@ fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
         sock.finish_listen(),
         Err(ErrorCode::NotInProgress)
     ));
-    assert!(matches!(
-        sock.accept(),
-        Err(ErrorCode::InvalidState)
-    ));
+    assert!(matches!(sock.accept(), Err(ErrorCode::InvalidState)));
     assert!(matches!(
         sock.shutdown(ShutdownType::Both),
         Err(ErrorCode::InvalidState)
@@ -127,10 +100,7 @@ fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
             Err(ErrorCode::InvalidState)
         ));
     } else {
-        assert!(matches!(
-            sock.ipv6_only(),
-            Err(ErrorCode::NotSupported)
-        ));
+        assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
         assert!(matches!(
             sock.set_ipv6_only(true),
             Err(ErrorCode::NotSupported)
@@ -143,20 +113,11 @@ fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
     assert!(matches!(sock.no_delay(), Ok(_)));
     assert!(matches!(sock.set_no_delay(false), Ok(_)));
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
-    assert!(matches!(
-        sock.set_unicast_hop_limit(255),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
-    assert!(matches!(
-        sock.set_receive_buffer_size(16000),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_receive_buffer_size(16000), Ok(_)));
     assert!(matches!(sock.send_buffer_size(), Ok(_)));
-    assert!(matches!(
-        sock.set_send_buffer_size(16000),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_send_buffer_size(16000), Ok(_)));
 }
 
 fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
@@ -169,10 +130,7 @@ fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
         sock.start_bind(net, bind_address),
         Err(ErrorCode::InvalidState)
     ));
-    assert!(matches!(
-        sock.finish_bind(),
-        Err(ErrorCode::NotInProgress)
-    ));
+    assert!(matches!(sock.finish_bind(), Err(ErrorCode::NotInProgress)));
     assert!(matches!(
         sock.start_connect(net, bind_address), // Actual address shouldn't matter
         Err(ErrorCode::InvalidState)
@@ -181,10 +139,7 @@ fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
         sock.finish_connect(),
         Err(ErrorCode::NotInProgress)
     ));
-    assert!(matches!(
-        sock.start_listen(),
-        Err(ErrorCode::InvalidState)
-    ));
+    assert!(matches!(sock.start_listen(), Err(ErrorCode::InvalidState)));
     assert!(matches!(
         sock.finish_listen(),
         Err(ErrorCode::NotInProgress)
@@ -209,10 +164,7 @@ fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
             Err(ErrorCode::InvalidState)
         ));
     } else {
-        assert!(matches!(
-            sock.ipv6_only(),
-            Err(ErrorCode::NotSupported)
-        ));
+        assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
         assert!(matches!(
             sock.set_ipv6_only(true),
             Err(ErrorCode::NotSupported)
@@ -225,20 +177,11 @@ fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
     assert!(matches!(sock.no_delay(), Ok(_)));
     assert!(matches!(sock.set_no_delay(false), Ok(_)));
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
-    assert!(matches!(
-        sock.set_unicast_hop_limit(255),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
-    assert!(matches!(
-        sock.set_receive_buffer_size(16000),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_receive_buffer_size(16000), Ok(_)));
     assert!(matches!(sock.send_buffer_size(), Ok(_)));
-    assert!(matches!(
-        sock.set_send_buffer_size(16000),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_send_buffer_size(16000), Ok(_)));
 }
 
 fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
@@ -254,10 +197,7 @@ fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
         sock.start_bind(net, bind_address),
         Err(ErrorCode::InvalidState)
     ));
-    assert!(matches!(
-        sock.finish_bind(),
-        Err(ErrorCode::NotInProgress)
-    ));
+    assert!(matches!(sock.finish_bind(), Err(ErrorCode::NotInProgress)));
     assert!(matches!(
         sock.start_connect(net, addr_listener),
         Err(ErrorCode::InvalidState)
@@ -266,18 +206,12 @@ fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
         sock.finish_connect(),
         Err(ErrorCode::NotInProgress)
     ));
-    assert!(matches!(
-        sock.start_listen(),
-        Err(ErrorCode::InvalidState)
-    ));
+    assert!(matches!(sock.start_listen(), Err(ErrorCode::InvalidState)));
     assert!(matches!(
         sock.finish_listen(),
         Err(ErrorCode::NotInProgress)
     ));
-    assert!(matches!(
-        sock.accept(),
-        Err(ErrorCode::InvalidState)
-    ));
+    assert!(matches!(sock.accept(), Err(ErrorCode::InvalidState)));
     // Skipping: tcp::shutdown
 
     assert!(matches!(sock.local_address(), Ok(_)));
@@ -291,10 +225,7 @@ fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
             Err(ErrorCode::InvalidState)
         ));
     } else {
-        assert!(matches!(
-            sock.ipv6_only(),
-            Err(ErrorCode::NotSupported)
-        ));
+        assert!(matches!(sock.ipv6_only(), Err(ErrorCode::NotSupported)));
         assert!(matches!(
             sock.set_ipv6_only(true),
             Err(ErrorCode::NotSupported)
@@ -306,20 +237,11 @@ fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
     assert!(matches!(sock.no_delay(), Ok(_)));
     assert!(matches!(sock.set_no_delay(false), Ok(_)));
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
-    assert!(matches!(
-        sock.set_unicast_hop_limit(255),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
-    assert!(matches!(
-        sock.set_receive_buffer_size(16000),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_receive_buffer_size(16000), Ok(_)));
     assert!(matches!(sock.send_buffer_size(), Ok(_)));
-    assert!(matches!(
-        sock.set_send_buffer_size(16000),
-        Ok(_)
-    ));
+    assert!(matches!(sock.set_send_buffer_size(16000), Ok(_)));
 }
 
 fn main() {

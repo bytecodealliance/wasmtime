@@ -229,12 +229,18 @@ impl TcpSocket {
     /// Create a `TcpSocket` from an existing socket.
     ///
     /// The socket must be in non-blocking mode.
-    pub fn from_tcp_stream(tcp_socket: cap_std::net::TcpStream, family: AddressFamily) -> io::Result<Self> {
+    pub fn from_tcp_stream(
+        tcp_socket: cap_std::net::TcpStream,
+        family: AddressFamily,
+    ) -> io::Result<Self> {
         let tcp_listener = TcpListener::from(rustix::fd::OwnedFd::from(tcp_socket));
         Self::from_tcp_listener(tcp_listener, family)
     }
 
-    pub fn from_tcp_listener(tcp_listener: cap_std::net::TcpListener, family: AddressFamily) -> io::Result<Self> {
+    pub fn from_tcp_listener(
+        tcp_listener: cap_std::net::TcpListener,
+        family: AddressFamily,
+    ) -> io::Result<Self> {
         let fd = tcp_listener.into_raw_socketlike();
         let std_stream = unsafe { std::net::TcpStream::from_raw_socketlike(fd) };
         let stream = with_ambient_tokio_runtime(|| tokio::net::TcpStream::try_from(std_stream))?;

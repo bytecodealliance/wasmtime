@@ -1,9 +1,8 @@
-use wasi::sockets::network::{Network, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress};
+use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network};
 use wasi::sockets::tcp::TcpSocket;
 use wasi_sockets_tests::*;
 
 fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
-
     let sock = TcpSocket::new(family).unwrap();
 
     assert_eq!(sock.address_family(), family);
@@ -20,7 +19,6 @@ fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
 }
 
 fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
-
     let sock = TcpSocket::new(family).unwrap();
 
     if family == IpAddressFamily::Ipv6 {
@@ -38,7 +36,10 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
     assert!(matches!(sock.set_no_delay(true), Ok(_)));
     assert!(matches!(sock.set_no_delay(false), Ok(_)));
 
-    assert!(matches!(sock.set_unicast_hop_limit(0), Err(ErrorCode::InvalidArgument)));
+    assert!(matches!(
+        sock.set_unicast_hop_limit(0),
+        Err(ErrorCode::InvalidArgument)
+    ));
     assert!(matches!(sock.set_unicast_hop_limit(1), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(u8::MAX), Ok(_)));
 
@@ -49,7 +50,6 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
 }
 
 fn test_tcp_sockopt_readback(family: IpAddressFamily) {
-
     let sock = TcpSocket::new(family).unwrap();
 
     if family == IpAddressFamily::Ipv6 {
@@ -80,7 +80,6 @@ fn test_tcp_sockopt_readback(family: IpAddressFamily) {
 }
 
 fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
-    
     let bind_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let listener = TcpSocket::new(family).unwrap();
 
@@ -99,7 +98,6 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
         listener.set_receive_buffer_size(0x10000).unwrap();
         listener.set_send_buffer_size(0x10000).unwrap();
     }
-
 
     listener.blocking_bind(&net, bind_addr).unwrap();
     listener.blocking_listen().unwrap();
@@ -141,7 +139,6 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
 }
 
 fn test_tcp_sockopt_after_listen(net: &Network, family: IpAddressFamily) {
-    
     let bind_addr = IpSocketAddress::new(IpAddress::new_loopback(family), 0);
     let listener = TcpSocket::new(family).unwrap();
     listener.blocking_bind(&net, bind_addr).unwrap();

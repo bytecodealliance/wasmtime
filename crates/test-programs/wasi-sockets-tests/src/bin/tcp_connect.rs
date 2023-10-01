@@ -1,4 +1,4 @@
-use wasi::sockets::network::{Network, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress};
+use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network};
 use wasi::sockets::tcp::TcpSocket;
 use wasi_sockets_tests::*;
 
