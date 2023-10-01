@@ -813,7 +813,12 @@ impl Inst {
                         _ => unreachable!(),
                     };
 
+                    // Byte stores & loads have 2 bits of immediate offset. Halfword stores
+                    // and loads only have 1 bit.
                     let imm2 = Uimm2::maybe_from_u8(offset)?;
+                    if (offset & !((1 << op.imm_bits()) - 1)) != 0 {
+                        return None;
+                    }
 
                     encode_zcbmem_load(op, rd, base, imm2)
                 } else {
@@ -907,7 +912,13 @@ impl Inst {
                         StoreOP::Sb => ZcbMemOp::CSb,
                         _ => unreachable!(),
                     };
+
+                    // Byte stores & loads have 2 bits of immediate offset. Halfword stores
+                    // and loads only have 1 bit.
                     let imm2 = Uimm2::maybe_from_u8(offset)?;
+                    if (offset & !((1 << op.imm_bits()) - 1)) != 0 {
+                        return None;
+                    }
 
                     encode_zcbmem_store(op, src, base, imm2)
                 } else {

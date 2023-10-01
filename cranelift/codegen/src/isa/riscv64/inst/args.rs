@@ -2169,6 +2169,13 @@ impl ZcbMemOp {
         }
     }
 
+    pub fn imm_bits(&self) -> u8 {
+        match self {
+            ZcbMemOp::CLhu | ZcbMemOp::CLh | ZcbMemOp::CSh => 1,
+            ZcbMemOp::CLbu | ZcbMemOp::CSb => 2,
+        }
+    }
+
     pub fn op(&self) -> COpcodeSpace {
         // https://five-embeddev.com/riscv-isa-manual/latest/rvc-opcode-map.html#rvcopcodemap
         match self {
