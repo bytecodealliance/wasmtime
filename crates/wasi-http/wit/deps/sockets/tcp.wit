@@ -30,12 +30,13 @@ interface tcp {
 		/// Unlike in POSIX, this function is async. This enables interactive WASI hosts to inject permission prompts.
 		/// 
 		/// # Typical `start` errors
-		/// - `address-family-mismatch`:   The `local-address` has the wrong address family. (EINVAL)
-		/// - `already-bound`:             The socket is already bound. (EINVAL)
-		/// - `concurrency-conflict`:      Another `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
+		/// - `invalid-argument`:          The `local-address` has the wrong address family. (EAFNOSUPPORT, EFAULT on Windows)
+		/// - `invalid-argument`:          `local-address` is not a unicast address. (EINVAL)
+		/// - `invalid-argument`:          `local-address` is an IPv4-mapped IPv6 address, but the socket has `ipv6-only` enabled. (EINVAL)
+		/// - `invalid-state`:             The socket is already bound. (EINVAL)
 		/// 
 		/// # Typical `finish` errors
-		/// - `ephemeral-ports-exhausted`: No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
+		/// - `address-in-use`:            No ephemeral ports available. (EADDRINUSE, ENOBUFS on Windows)
 		/// - `address-in-use`:            Address is already in use. (EADDRINUSE)
 		/// - `address-not-bindable`:      `local-address` is not an address that the `network` can bind to. (EADDRNOTAVAIL)
 		/// - `not-in-progress`:           A `bind` operation is not in progress.
@@ -55,21 +56,33 @@ interface tcp {
 		/// - the socket is transitioned into the Connection state
 		/// - a pair of streams is returned that can be used to read & write to the connection
 		/// 
+		/// POSIX mentions:
+		/// > If connect() fails, the state of the socket is unspecified. Conforming applications should
+		/// > close the file descriptor and create a new socket before attempting to reconnect.
+		/// 
+		/// WASI prescribes the following behavior:
+		/// - If `connect` fails because an input/state validation error, the socket should remain usable.
+		/// - If a connection was actually attempted but failed, the socket should become unusable for further network communication.
+		///   Besides `drop`, any method after such a failure may return an error.
+		/// 
 		/// # Typical `start` errors
-		/// - `address-family-mismatch`:   The `remote-address` has the wrong address family. (EAFNOSUPPORT)
-		/// - `invalid-remote-address`:    The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EADDRNOTAVAIL on Windows)
-		/// - `invalid-remote-address`:    The port in `remote-address` is set to 0. (EADDRNOTAVAIL on Windows)
-		/// - `already-attached`:          The socket is already attached to a different network. The `network` passed to `connect` must be identical to the one passed to `bind`.
-		/// - `already-connected`:         The socket is already in the Connection state. (EISCONN)
-		/// - `already-listening`:         The socket is already in the Listener state. (EOPNOTSUPP, EINVAL on Windows)
-		/// - `concurrency-conflict`:      Another `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
+		/// - `invalid-argument`:          The `remote-address` has the wrong address family. (EAFNOSUPPORT)
+		/// - `invalid-argument`:          `remote-address` is not a unicast address. (EINVAL, ENETUNREACH on Linux, EAFNOSUPPORT on MacOS)
+		/// - `invalid-argument`:          `remote-address` is an IPv4-mapped IPv6 address, but the socket has `ipv6-only` enabled. (EINVAL, EADDRNOTAVAIL on Illumos)
+		/// - `invalid-argument`:          `remote-address` is a non-IPv4-mapped IPv6 address, but the socket was bound to a specific IPv4-mapped IPv6 address. (or vice versa)
+		/// - `invalid-argument`:          The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EADDRNOTAVAIL on Windows)
+		/// - `invalid-argument`:          The port in `remote-address` is set to 0. (EADDRNOTAVAIL on Windows)
+		/// - `invalid-argument`:          The socket is already attached to a different network. The `network` passed to `connect` must be identical to the one passed to `bind`.
+		/// - `invalid-state`:             The socket is already in the Connection state. (EISCONN)
+		/// - `invalid-state`:             The socket is already in the Listener state. (EOPNOTSUPP, EINVAL on Windows)
 		/// 
 		/// # Typical `finish` errors
 		/// - `timeout`:                   Connection timed out. (ETIMEDOUT)
 		/// - `connection-refused`:        The connection was forcefully rejected. (ECONNREFUSED)
 		/// - `connection-reset`:          The connection was reset. (ECONNRESET)
+		/// - `connection-aborted`:        The connection was aborted. (ECONNABORTED)
 		/// - `remote-unreachable`:        The remote address is not reachable. (EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
-		/// - `ephemeral-ports-exhausted`: Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
+		/// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
 		/// - `not-in-progress`:           A `connect` operation is not in progress.
 		/// - `would-block`:               Can't finish the operation, it is still in progress. (EWOULDBLOCK, EAGAIN)
 		/// 
@@ -90,13 +103,12 @@ interface tcp {
 		/// - the socket must already be explicitly bound.
 		/// 
 		/// # Typical `start` errors
-		/// - `not-bound`:                 The socket is not bound to any local address. (EDESTADDRREQ)
-		/// - `already-connected`:         The socket is already in the Connection state. (EISCONN, EINVAL on BSD)
-		/// - `already-listening`:         The socket is already in the Listener state.
-		/// - `concurrency-conflict`:      Another `bind`, `connect` or `listen` operation is already in progress. (EINVAL on BSD)
+		/// - `invalid-state`:             The socket is not bound to any local address. (EDESTADDRREQ)
+		/// - `invalid-state`:             The socket is already in the Connection state. (EISCONN, EINVAL on BSD)
+		/// - `invalid-state`:             The socket is already in the Listener state.
 		///
 		/// # Typical `finish` errors
-		/// - `ephemeral-ports-exhausted`: Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE)
+		/// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE)
 		/// - `not-in-progress`:           A `listen` operation is not in progress.
 		/// - `would-block`:               Can't finish the operation, it is still in progress. (EWOULDBLOCK, EAGAIN)
 		///
@@ -110,16 +122,23 @@ interface tcp {
 
 		/// Accept a new client socket.
 		/// 
-		/// The returned socket is bound and in the Connection state.
+		/// The returned socket is bound and in the Connection state. The following properties are inherited from the listener socket:
+		/// - `address-family`
+		/// - `ipv6-only`
+		/// - `keep-alive`
+		/// - `no-delay`
+		/// - `unicast-hop-limit`
+		/// - `receive-buffer-size`
+		/// - `send-buffer-size`
 		/// 
 		/// On success, this function returns the newly accepted client socket along with
 		/// a pair of streams that can be used to read & write to the connection.
-		/// 
+		///
 		/// # Typical errors
-		/// - `not-listening`: Socket is not in the Listener state. (EINVAL)
-		/// - `would-block`:   No pending connections at the moment. (EWOULDBLOCK, EAGAIN)
-		/// 
-		/// Host implementations must skip over transient errors returned by the native accept syscall.
+		/// - `invalid-state`:      Socket is not in the Listener state. (EINVAL)
+		/// - `would-block`:        No pending connections at the moment. (EWOULDBLOCK, EAGAIN)
+		/// - `connection-aborted`: An incoming connection was pending, but was terminated by the client before this listener could accept it. (ECONNABORTED)
+		/// - `new-socket-limit`:   The new socket resource could not be created because of a system limit. (EMFILE, ENFILE)
 		/// 
 		/// # References
 		/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/accept.html>
@@ -130,8 +149,14 @@ interface tcp {
 
 		/// Get the bound local address.
 		/// 
+		/// POSIX mentions:
+		/// > If the socket has not been bound to a local name, the value
+		/// > stored in the object pointed to by `address` is unspecified.
+		///
+		/// WASI is stricter and requires `local-address` to return `invalid-state` when the socket hasn't been bound yet.
+		/// 
 		/// # Typical errors
-		/// - `not-bound`: The socket is not bound to any local address.
+		/// - `invalid-state`: The socket is not bound to any local address.
 		/// 
 		/// # References
 		/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/getsockname.html>
@@ -140,10 +165,10 @@ interface tcp {
 		/// - <https://man.freebsd.org/cgi/man.cgi?getsockname>
 		local-address: func() -> result<ip-socket-address, error-code>
 
-		/// Get the bound remote address.
+		/// Get the remote address.
 		/// 
 		/// # Typical errors
-		/// - `not-connected`: The socket is not connected to a remote address. (ENOTCONN)
+		/// - `invalid-state`: The socket is not connected to a remote address. (ENOTCONN)
 		/// 
 		/// # References
 		/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/getpeername.html>
@@ -162,40 +187,34 @@ interface tcp {
 		/// Equivalent to the IPV6_V6ONLY socket option.
 		/// 
 		/// # Typical errors
-		/// - `ipv6-only-operation`:  (get/set) `this` socket is an IPv4 socket.
-		/// - `already-bound`:        (set) The socket is already bound.
+		/// - `invalid-state`:        (set) The socket is already bound.
+		/// - `not-supported`:        (get/set) `this` socket is an IPv4 socket.
 		/// - `not-supported`:        (set) Host does not support dual-stack sockets. (Implementations are not required to.)
-		/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 		ipv6-only: func() -> result<bool, error-code>
 		set-ipv6-only: func(value: bool) -> result<_, error-code>
 
 		/// Hints the desired listen queue size. Implementations are free to ignore this.
 		/// 
 		/// # Typical errors
-		/// - `already-connected`:    (set) The socket is already in the Connection state.
-		/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
+		/// - `invalid-state`:        (set) The socket is already in the Connection state.
 		set-listen-backlog-size: func(value: u64) -> result<_, error-code>
 
 		/// Equivalent to the SO_KEEPALIVE socket option.
-		/// 
-		/// # Typical errors
-		/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
 		keep-alive: func() -> result<bool, error-code>
 		set-keep-alive: func(value: bool) -> result<_, error-code>
 
 		/// Equivalent to the TCP_NODELAY socket option.
 		/// 
-		/// # Typical errors
-		/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
+		/// The default value is `false`.
 		no-delay: func() -> result<bool, error-code>
 		set-no-delay: func(value: bool) -> result<_, error-code>
 	
 		/// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
 		/// 
 		/// # Typical errors
-		/// - `already-connected`:    (set) The socket is already in the Connection state.
-		/// - `already-listening`:    (set) The socket is already in the Listener state.
-		/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
+		/// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
+		/// - `invalid-state`:        (set) The socket is already in the Connection state.
+		/// - `invalid-state`:        (set) The socket is already in the Listener state.
 		unicast-hop-limit: func() -> result<u8, error-code>
 		set-unicast-hop-limit: func(value: u8) -> result<_, error-code>
 
@@ -211,9 +230,8 @@ interface tcp {
 		/// Equivalent to the SO_RCVBUF and SO_SNDBUF socket options.
 		/// 
 		/// # Typical errors
-		/// - `already-connected`:    (set) The socket is already in the Connection state.
-		/// - `already-listening`:    (set) The socket is already in the Listener state.
-		/// - `concurrency-conflict`: (set) A `bind`, `connect` or `listen` operation is already in progress. (EALREADY)
+		/// - `invalid-state`:        (set) The socket is already in the Connection state.
+		/// - `invalid-state`:        (set) The socket is already in the Listener state.
 		receive-buffer-size: func() -> result<u64, error-code>
 		set-receive-buffer-size: func(value: u64) -> result<_, error-code>
 		send-buffer-size: func() -> result<u64, error-code>
@@ -237,7 +255,7 @@ interface tcp {
 		/// The shutdown function does not close (drop) the socket.
 		/// 
 		/// # Typical errors
-		/// - `not-connected`: The socket is not in the Connection state. (ENOTCONN)
+		/// - `invalid-state`: The socket is not in the Connection state. (ENOTCONN)
 		/// 
 		/// # References
 		/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/shutdown.html>
