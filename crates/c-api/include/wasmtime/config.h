@@ -399,9 +399,13 @@ typedef wasmtime_error_t *(*wasmtime_memory_grow_callback_t)(
  * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
  */
 typedef struct {
+  /// User provided value to be passed to get_memory and grow_memory
   void *env;
+  /// Callback to get the memory and size of this LinearMemory
   wasmtime_memory_get_callback_t get_memory;
+  /// Callback to request growing the memory
   wasmtime_memory_grow_callback_t grow_memory;
+  /// An optional finalizer for env
   void (*finalizer)(void*);
 } wasmtime_linear_memory_t;
 
@@ -432,8 +436,11 @@ typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
  * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html
  */
 typedef struct {
+  /// User provided value to be passed to new_memory
   void* env;
+  /// The callback to create new memory, must be thread safe
   wasmtime_new_memory_callback_t new_memory;
+  /// An optional finalizer for env.
   void (*finalizer)(void*);
 } wasmtime_memory_creator_t;
 
