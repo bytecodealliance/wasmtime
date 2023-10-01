@@ -2091,7 +2091,16 @@
 ;; and `sext` above to skip the extension instruction entirely in some
 ;; circumstances.
 (decl pure partial val_already_extended (Value) bool)
-(rule (val_already_extended v @ (value_type $I64)) $true)
+(rule 0 (val_already_extended v @ (value_type $I64)) $true)
+
+;; When extending our backend always extends to the full register width, so
+;; there's no need to extend-an-extend.
+(rule 1 (val_already_extended (uextend _)) $true)
+(rule 1 (val_already_extended (sextend _)) $true)
+
+;; The result of `icmp` is zero or one, meaning that it's already sign extended
+;; to the full register width.
+(rule 1 (val_already_extended (icmp _ _ _)) $true)
 
 (type ExtendOp
   (enum
