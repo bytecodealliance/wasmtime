@@ -369,7 +369,7 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const ch
 
 
 /**
- * Return the data from a LinearMemory instance created from a #wasmtime_new_memory_t callback.
+ * Return the data from a LinearMemory instance.
  *
  * The size in bytes as well as the maximum number of bytes that can be allocated should be 
  * returned as well.
