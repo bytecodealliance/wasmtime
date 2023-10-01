@@ -2017,8 +2017,9 @@
     sum))
 
 ;; Performs a zero extension of the given value
-(decl zext (XReg Type) XReg)
-(rule (zext val from_ty) (value_regs_get (extend val (ExtendOp.Zero) from_ty) 0))
+(decl zext (Value) XReg)
+(rule (zext val @ (value_type from_ty))
+  (extend val (ExtendOp.Zero) from_ty))
 
 ;; Performs a signed extension of the given value
 (decl sext (Value) XReg)
@@ -2603,8 +2604,8 @@
 ;; Zero-extends as necessary to ensure that the returned register only contains
 ;; nonzero if the input value was logically nonzero.
 (decl truthy_to_reg (Value) XReg)
-(rule 1 (truthy_to_reg val @ (value_type (fits_in_64 ty)))
-  (zext val ty))
+(rule 1 (truthy_to_reg val @ (value_type (fits_in_64 _)))
+  (zext val))
 (rule 0 (truthy_to_reg val @ (value_type $I128))
       (let ((regs ValueRegs val)
             (lo XReg (value_regs_get regs 0))
@@ -2623,7 +2624,7 @@
 
 ;; Default behavior for branching based on an input value.
 (rule (lower_branch (brif v @ (value_type (fits_in_64 ty)) _ _) targets)
-  (lower_cond_br (IntCC.NotEqual) (zext v ty) targets ty))
+  (lower_cond_br (IntCC.NotEqual) (zext v) targets ty))
 (rule 2 (lower_branch (brif v @ (value_type $I128)_ _) targets)
     (lower_cond_br (IntCC.NotEqual) (truthy_to_reg v) targets $I64))
 

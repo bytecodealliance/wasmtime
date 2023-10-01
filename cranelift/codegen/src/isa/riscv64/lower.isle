@@ -295,8 +295,8 @@
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_32 ty) (uadd_overflow_trap x y tc)))
-  (let ((tmp_x XReg (zext x ty))
-        (tmp_y XReg (zext y ty))
+  (let ((tmp_x XReg (zext x))
+        (tmp_y XReg (zext y))
         (sum XReg (rv_add tmp_x tmp_y))
         (test XReg (rv_srli sum (imm12_const (ty_bits ty))))
         (_ InstOutput (gen_trapnz test tc)))
@@ -491,7 +491,7 @@
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_32 ty) (umulhi x y)))
-  (let ((tmp XReg (rv_mul (zext x ty) (zext y ty))))
+  (let ((tmp XReg (rv_mul (zext x) (zext y))))
     (rv_srli tmp (imm12_const (ty_bits ty)))))
 
 (rule 1 (lower (has_type $I64 (umulhi x y)))
@@ -510,9 +510,9 @@
 
 (rule -1 (lower (has_type (fits_in_32 ty) (udiv x y)))
   (let
-    ((y2 XReg (zext y ty))
+    ((y2 XReg (zext y))
       (_ InstOutput (gen_div_by_zero y2)))
-    (rv_divuw (zext x ty) y2)))
+    (rv_divuw (zext x) y2)))
 
 (rule -1 (lower (has_type (fits_in_32 ty) (sdiv x y)))
   (let
@@ -537,9 +537,9 @@
 
 (rule -1 (lower (has_type (fits_in_16 ty) (urem x y)))
   (let
-    ((y2 XReg (zext y ty))
+    ((y2 XReg (zext y))
       (_ InstOutput (gen_div_by_zero y2)))
-    (rv_remuw (zext x ty) y2)))
+    (rv_remuw (zext x) y2)))
 
 (rule -1 (lower (has_type (fits_in_16 ty) (srem x y)))
   (let
@@ -555,7 +555,7 @@
 
 (rule (lower (has_type $I32 (urem x y)))
   (let
-    ((y2 XReg (zext y $I32))
+    ((y2 XReg (zext y))
         (_ InstOutput (gen_div_by_zero y2)))
     (rv_remuw x y2)))
 
@@ -813,7 +813,7 @@
 
 (rule 2 (lower (has_type (fits_in_16 ty) (clz x)))
   (if-let $true (has_zbb))
-  (let ((tmp XReg (zext x ty))
+  (let ((tmp XReg (zext x))
         (count XReg (rv_clz tmp)))
     ;; We always do the operation on the full 64-bit register, so subtract 64 from the result.
     (rv_addi count (imm12_const_add (ty_bits ty) -64))))
@@ -863,10 +863,10 @@
 
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (fits_in_64 _) (uextend val @ (value_type in_ty))))
-  (zext val in_ty))
-(rule 1 (lower (has_type $I128 (uextend val @ (value_type in_ty))))
-  (value_regs (zext val in_ty) (imm $I64 0)))
+(rule 0 (lower (has_type (fits_in_64 _) (uextend val)))
+  (zext val))
+(rule 1 (lower (has_type $I128 (uextend val)))
+  (value_regs (zext val) (imm $I64 0)))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (fits_in_64 _) (sextend val @ (value_type in_ty))))
@@ -910,8 +910,8 @@
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (has_type (fits_in_64 ty) (popcnt x)))
-  (gen_popcnt (zext x ty)))
+(rule 0 (lower (has_type (fits_in_64 _) (popcnt x)))
+  (gen_popcnt (zext x)))
 
 (rule 1 (lower (has_type $I128 (popcnt x)))
   (let
@@ -921,9 +921,9 @@
      (result XReg (rv_add low high)))
     (value_regs result (imm $I64 0))))
 
-(rule 2 (lower (has_type (fits_in_64 ty) (popcnt x)))
+(rule 2 (lower (has_type (fits_in_64 _) (popcnt x)))
   (if-let $true (has_zbb))
-  (rv_cpop (zext x ty)))
+  (rv_cpop (zext x)))
 
 (rule 3 (lower (has_type $I32 (popcnt x)))
   (if-let $true (has_zbb))
@@ -1045,7 +1045,7 @@
 ;; zero extended.
 (rule 0 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x y)))
   (if-let mask (u64_to_imm12 (shift_mask ty)))
-  (rv_srlw (zext x ty) (rv_andi (value_regs_get y 0) mask)))
+  (rv_srlw (zext x) (rv_andi (value_regs_get y 0) mask)))
 
 ;; Using the 32bit version of `srl` automatically masks the shift amount.
 (rule 1 (lower (has_type $I32 (ushr x y)))
@@ -1057,7 +1057,7 @@
 
 ;; When the RHS is known we can just encode it in the instruction.
 (rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x (maybe_uextend (imm12_from_value y)))))
-  (rv_srliw (zext x ty) (imm12_and y (shift_mask ty))))
+  (rv_srliw (zext x) (imm12_and y (shift_mask ty))))
 
 (rule 3 (lower (has_type $I32 (ushr x (maybe_uextend (imm12_from_value y)))))
   (rv_srliw x y))
@@ -1155,14 +1155,14 @@
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (rotl x y)))
-  (lower_rotl ty (zext x ty) (value_regs_get y 0)))
+  (lower_rotl ty (zext x) (value_regs_get y 0)))
 
 (rule 1 (lower (has_type $I128 (rotl x y)))
   (lower_i128_rotl x y))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (rotr x y)))
-  (lower_rotr ty (zext x ty) (value_regs_get y 0)))
+  (lower_rotr ty (zext x) (value_regs_get y 0)))
 
 (rule 1 (lower (has_type $I128 (rotr x y)))
   (lower_i128_rotr x y))
@@ -1264,7 +1264,7 @@
   (lower
     (has_type (valid_atomic_transaction (fits_in_16 ty)) (atomic_rmw flags (is_atomic_rmw_max_etc op $false) addr x)))
   ;;
-  (gen_atomic_rmw_loop op ty addr (zext x ty)))
+  (gen_atomic_rmw_loop op ty addr (zext x)))
 
 ;;;;;  Rules for `AtomicRmwOp.Sub`
 (rule
@@ -1325,7 +1325,7 @@
   (let
     ((t0 WritableReg (temp_writable_reg ty))
       (dst WritableReg (temp_writable_reg ty))
-      (_ Unit (emit (MInst.AtomicCas (gen_atomic_offset p ty) t0 dst (zext e ty) (gen_atomic_p p ty) x ty))))
+      (_ Unit (emit (MInst.AtomicCas (gen_atomic_offset p ty) t0 dst (zext e) (gen_atomic_p p ty) x ty))))
     (writable_reg_to_reg dst)))
 
 ;;;;;  Rules for `ireduce`;;;;;;;;;;;;;;;;;
@@ -1474,8 +1474,8 @@
   (gen_select ty (truthy_to_reg c) x y))
 
 (rule 1 (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type (fits_in_64 in_ty))) x y)))
-  (let ((a XReg (zext a in_ty))
-        (b XReg (zext b in_ty)))
+  (let ((a XReg (zext a))
+        (b XReg (zext b)))
     (gen_select_reg cc a b x y)))
 
 (rule 2 (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type (fits_in_64 in_ty))) x y)))
@@ -1579,7 +1579,7 @@
 ;;;;;  Rules for `umax`;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (umax x y)))
-  (gen_int_select ty (IntSelectOP.Umax) (zext x ty) (zext y ty)))
+  (gen_int_select ty (IntSelectOP.Umax) (zext x) (zext y)))
 
 (rule 1 (lower (has_type $I128 (umax x y)))
   (gen_int_select $I128 (IntSelectOP.Umax) x y))
@@ -1596,7 +1596,7 @@
 ;;;;;  Rules for `umin`;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (umin x y)))
-  (gen_int_select ty (IntSelectOP.Umin) (zext x ty) (zext y ty)))
+  (gen_int_select ty (IntSelectOP.Umin) (zext x) (zext y)))
 
 (rule 1 (lower (has_type $I128 (umin x y)))
   (gen_int_select $I128 (IntSelectOP.Umin) x y))
@@ -1753,7 +1753,7 @@
     result))
 
 (rule 0 (lower (icmp cc x @ (value_type (ty_int ty)) y))
-  (gen_icmp cc (zext x ty) (zext y ty) ty))
+  (gen_icmp cc (zext x) (zext y) ty))
 
 (rule 1 (lower (icmp cc x @ (value_type (ty_int ty)) y))
   (if (signed_cond_code cc))
@@ -1831,7 +1831,7 @@
 
 ;;;;;  Rules for `fcvt_from_uint`;;;;;;;;;
 (rule 0 (lower (has_type $F32 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtslu (zext v ty)))
+  (rv_fcvtslu (zext v)))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I32))))
   (rv_fcvtswu v))
@@ -1840,7 +1840,7 @@
   (rv_fcvtslu v))
 
 (rule 0 (lower (has_type $F64 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtdlu (zext v ty)))
+  (rv_fcvtdlu (zext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I32))))
   (rv_fcvtdwu v))
