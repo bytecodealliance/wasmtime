@@ -94,21 +94,17 @@ WASM_API_EXTERN void wasmtime_context_out_of_fuel_async_yield(
  * See the Rust documentation for more:
  * https://docs.wasmtime.dev/api/wasmtime/struct.Store.html#method.epoch_deadline_async_yield_and_update
  */
-WASM_API_EXTERN void wasmtime_context_epoch_deadline_async_yield_and_update(wasmtime_context_t *context, uint64_t delta);
+WASM_API_EXTERN void wasmtime_context_epoch_deadline_async_yield_and_update(
+    wasmtime_context_t *context,
+    uint64_t delta);
 
 /**
  * The callback to determine a continuation's current state.
  *
  * Return true if the host call has completed, otherwise false will 
  * continue to yield WebAssembly execution.
- *
- * \param if error is assigned a non `NULL` value then the called function will 
- *        trap with the returned error. Note that ownership of error is transferred 
- *        to wasmtime.
  */
-typedef bool (*wasmtime_func_async_continuation_callback_t)(
-    void *env,
-    wasm_trap_t **error);
+typedef bool (*wasmtime_func_async_continuation_callback_t)(void *env);
 
 /**
  * A continuation for the current state of the host function's execution.
@@ -128,6 +124,10 @@ typedef struct wasmtime_async_continuation_t {
  * All the arguments to this function will be kept alive until the continuation
  * returns that it has errored or has completed.
  *
+ * \param trap_ret if assigned a non `NULL` value then the called function will
+ *        trap with the returned error. Note that ownership of trap is transferred
+ *        to wasmtime.
+ *
  * Only supported for async stores.
  *
  * See #wasmtime_func_callback_t for more information.
@@ -138,7 +138,8 @@ typedef wasmtime_async_continuation_t *(*wasmtime_func_async_callback_t)(
     const wasmtime_val_t *args,
     size_t nargs, 
     wasmtime_val_t *results,
-    size_t nresults);
+    size_t nresults,
+    wasm_trap_t** trap_ret);
 
 /**
  * \brief The structure representing a asynchronously running function.

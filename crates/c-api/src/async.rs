@@ -47,6 +47,7 @@ pub type wasmtime_func_async_callback_t = extern "C" fn(
     usize,
     *mut wasmtime_val_t,
     usize,
+    &mut Option<Box<wasm_trap_t>>,
 ) -> Box<wasmtime_async_continuation_t>;
 
 #[repr(C)]
@@ -66,26 +67,19 @@ impl Drop for wasmtime_async_continuation_t {
     }
 }
 impl Future for wasmtime_async_continuation_t {
-    type Output = Result<()>;
+    type Output = ();
     fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
         let this = self.get_mut();
-        let mut trap = None;
-        let done = {
-            let cb = this.callback;
-            cb(this.env, &mut trap)
-        };
-        if let Some(trap) = trap {
-            Poll::Ready(Err(trap.error))
-        } else if !done {
-            Poll::Pending
+        let cb = this.callback;
+        if cb(this.env) {
+            Poll::Ready(())
         } else {
-            Poll::Ready(Ok(()))
+            Poll::Pending
         }
     }
 }
 
-pub type wasmtime_func_async_continuation_callback_t =
-    extern "C" fn(*mut c_void, trap_ret: *mut Option<Box<wasm_trap_t>>) -> bool;
+pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(*mut c_void) -> bool;
 
 struct CallbackData {
     env: *mut c_void,
@@ -115,6 +109,7 @@ async fn invoke_c_async_callback<'a>(
     // Invoke the C function pointer.
     // The result will be a continutation which we will wrap in a Future.
     let mut caller = wasmtime_caller_t { caller };
+    let mut trap = None;
     let continuation = cb(
         data.env,
         &mut caller,
@@ -122,8 +117,13 @@ async fn invoke_c_async_callback<'a>(
         params.len(),
         out_results.as_mut_ptr(),
         out_results.len(),
+        &mut trap,
     );
-    continuation.await?;
+    continuation.await;
+
+    if let Some(trap) = trap {
+        return Err(trap.error);
+    }
 
     // Translate the `wasmtime_val_t` results into the `results` space
     for (i, result) in out_results.iter().enumerate() {

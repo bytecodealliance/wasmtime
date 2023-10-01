@@ -24,21 +24,16 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-async
 
 #include <assert.h>
 #include <chrono>
-#include <condition_variable>
 #include <cstdlib>
 #include <fstream>
 #include <future>
 #include <iostream>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <sstream>
-#include <stdio.h>
-#include <stdlib.h>
 #include <streambuf>
 #include <string>
 #include <thread>
-#include <wasm.h>
 #include <wasmtime.h>
 
 using namespace std::chrono_literals;
@@ -123,32 +118,49 @@ compile_wat_module_from_file(wasm_engine_t *engine,
   return mod;
 }
 
-struct printer_thread_state {
-  std::promise<int32_t> value_to_print;
-  std::promise<void> print_finished;
-  std::optional<std::future<void>> print_finished_future;
-
-  bool result_is_pending() {
-    return print_finished_future.has_value() &&
-           print_finished_future->wait_for(0s) != std::future_status::ready;
+class printer_thread_state {
+public:
+  void set_value_to_print(int32_t v) {
+    _print_finished_future = _print_finished.get_future();
+    _value_to_print.set_value(v);
   }
+  int32_t get_value_to_print() { return _value_to_print.get_future().get(); }
+
+  bool print_is_pending() const {
+    return _print_finished_future.has_value() &&
+           _print_finished_future->wait_for(0s) != std::future_status::ready;
+  }
+  void wait_for_print_result() const { _print_finished_future->wait(); }
+  void get_print_result() {
+    std::exchange(_print_finished_future, std::nullopt)->get();
+  }
+  void set_print_success() { _print_finished.set_value(); }
+
+private:
+  std::promise<int32_t> _value_to_print;
+  std::promise<void> _print_finished;
+  std::optional<std::future<void>> _print_finished_future;
 };
 
 printer_thread_state printer_state;
 
-bool poll_print_finished_state(void *, wasm_trap_t **trap) {
+struct async_call_env {
+  wasm_trap_t **trap_ret;
+};
+
+bool poll_print_finished_state(void *env) {
   std::cout << "polling async host function result" << std::endl;
+  auto *async_env = static_cast<async_call_env *>(env);
   // Don't block, just poll the future state.
-  if (printer_state.result_is_pending()) {
+  if (printer_state.print_is_pending()) {
     return false;
   }
   try {
-    printer_state.print_finished_future->get();
+    printer_state.get_print_result();
   } catch (const std::exception &ex) {
     std::string_view msg = ex.what();
-    *trap = wasmtime_trap_new(msg.data(), msg.size());
+    *async_env->trap_ret = wasmtime_trap_new(msg.data(), msg.size());
   }
-  printer_state.print_finished_future = std::nullopt;
   return true;
 }
 } // namespace
@@ -156,13 +168,13 @@ bool poll_print_finished_state(void *, wasm_trap_t **trap) {
 int main() {
   // A thread that will async perform host function calls.
   std::thread printer_thread([]() {
-    int32_t value_to_print = printer_state.value_to_print.get_future().get();
+    int32_t value_to_print = printer_state.get_value_to_print();
     std::cout << "recieved value to print!" << std::endl;
     std::this_thread::sleep_for(1s);
     std::cout << "printing: " << value_to_print << std::endl;
     std::this_thread::sleep_for(1s);
     std::cout << "signaling that value is printed" << std::endl;
-    printer_state.print_finished.set_value();
+    printer_state.set_print_success();
   });
 
   handle<wasmtime_error_t, wasmtime_error_delete> error;
@@ -178,6 +190,7 @@ int main() {
 
   auto compiled_module =
       compile_wat_module_from_file(engine.get(), "examples/async.wat");
+
   auto linker = create_linker(engine.get());
   constexpr std::string_view host_module_name = "host";
   constexpr std::string_view host_func_name = "print";
@@ -195,15 +208,16 @@ int main() {
       linker.get(), host_module_name.data(), host_module_name.size(),
       host_func_name.data(), host_func_name.size(), functype.get(),
       [](void *, wasmtime_caller_t *, const wasmtime_val_t *args, size_t,
-         wasmtime_val_t *, size_t) {
+         wasmtime_val_t *, size_t, wasm_trap_t **trap_ret) {
         std::cout << "invoking async host function" << std::endl;
-        printer_state.print_finished_future =
-            printer_state.print_finished.get_future();
-        printer_state.value_to_print.set_value(args[0].of.i32);
-        return new wasmtime_async_continuation_t{.callback =
-                                                     &poll_print_finished_state,
-                                                 .env = nullptr,
-                                                 .finalizer = nullptr};
+        printer_state.set_value_to_print(args[0].of.i32);
+        return new wasmtime_async_continuation_t{
+            .callback = &poll_print_finished_state,
+            .env = new async_call_env{trap_ret},
+            .finalizer = [](void *env) {
+              std::cout << "deleting async_call_env" << std::endl;
+              delete static_cast<async_call_env *>(env);
+            }};
       },
       /*env=*/nullptr, /*finalizer=*/nullptr));
   if (error) {
@@ -228,6 +242,8 @@ int main() {
   }
   // delete call future - it's no longer needed
   call_future = nullptr;
+  // delete the linker now that we've created our instance
+  linker = nullptr;
 
   // Grab our exported function
   constexpr std::string_view guest_func_name = "print_fibonacci";
@@ -251,9 +267,9 @@ int main() {
   while (!wasmtime_call_future_poll(call_future.get())) {
     // if we have an async host call pending then wait for that future to finish
     // before continuing.
-    if (printer_state.result_is_pending()) {
+    if (printer_state.print_is_pending()) {
       std::cout << "waiting for async host function to complete" << std::endl;
-      printer_state.print_finished_future->wait();
+      printer_state.wait_for_print_result();
       std::cout << "async host function completed" << std::endl;
       continue;
     }
@@ -270,6 +286,7 @@ int main() {
   call_future = nullptr;
   // At this point, if our host function returned results they would be
   // available in the `results` array.
+  std::cout << "async function call complete!" << std::endl;
 
   // Join our thread and exit.
   printer_thread.join();
