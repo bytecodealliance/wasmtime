@@ -2999,45 +2999,21 @@
 
 ;;;; Helpers for bmask ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl lower_bmask (Type Type ValueRegs) ValueRegs)
+;; Generates either 0 if `Value` is zero or -1 otherwise.
+(decl gen_bmask (Value) XReg)
+(rule 0 (gen_bmask val @ (value_type (fits_in_64 ty)))
+  (let ((non_zero XReg (rv_snez (truthy_to_reg ty (zext val ty $I64)))))
+    (rv_neg non_zero)))
+(rule 1 (gen_bmask val @ (value_type $I128))
+  (let ((non_zero XReg (rv_snez (truthy_to_reg $I128 val))))
+    (rv_neg non_zero)))
 
-;; Produces -1 if the 64-bit value is non-zero, and 0 otherwise.
-;; If the type is smaller than 64 bits, we need to mask off the
-;; high bits.
-(rule
-  0
-  (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
-  (let ((input XReg (truthy_to_reg in_ty (normalize_cmp_value in_ty val (ExtendOp.Zero))))
-        (non_zero XReg (rv_snez input)))
-    (value_reg (rv_neg non_zero))))
-
-;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
-;; though it was a 64-bit value.
-(rule
-  1
-  (lower_bmask (fits_in_64 ty) $I128 val)
-  (let ((lo XReg (value_regs_get val 0))
-        (hi XReg (value_regs_get val 1))
-        (combined XReg (rv_or lo hi)))
-    (lower_bmask ty $I64 (value_reg combined))))
-
-;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of the
-;; bmask of the 64-bit value into both result registers of the i128.
-(rule
-  2
-  (lower_bmask $I128 (fits_in_64 in_ty) val)
-  (let ((res ValueRegs (lower_bmask $I64 in_ty val)))
-    (value_regs (value_regs_get res 0) (value_regs_get res 0))))
-
-;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of
-;; bmasking the 128-bit value to a 64-bit value into both registers of the
-;; 128-bit result.
-(rule
-  3
-  (lower_bmask $I128 $I128 val)
-  (let ((res ValueRegs (lower_bmask $I64 $I128 val)))
-    (value_regs (value_regs_get res 0) (value_regs_get res 0))))
-
+(decl lower_bmask (Value Type) ValueRegs)
+(rule 0 (lower_bmask val (fits_in_64 _))
+  (value_reg (gen_bmask val)))
+(rule 1 (lower_bmask val $I128)
+  (let ((bits XReg (gen_bmask val)))
+    (value_regs bits bits)))
 
 ;;;; Helpers for physical registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
