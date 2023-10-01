@@ -392,6 +392,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_v()
     }
 
+    fn has_m(&mut self) -> bool {
+        self.backend.isa_flags.has_m()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
@@ -499,22 +503,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn sp_reg(&mut self) -> PReg {
         px_reg(2)
-    }
-
-    fn shift_int_to_most_significant(&mut self, v: XReg, ty: Type) -> XReg {
-        assert!(ty.is_int() && ty.bits() <= 64);
-        if ty == I64 {
-            return v;
-        }
-        let tmp = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRImm12 {
-            alu_op: AluOPRRI::Slli,
-            rd: tmp,
-            rs: v.to_reg(),
-            imm12: Imm12::from_i16((64 - ty.bits()) as i16),
-        });
-
-        self.xreg_new(tmp.to_reg())
     }
 
     #[inline]

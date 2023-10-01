@@ -505,68 +505,147 @@
 (rule 4 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x (splat y))))
   (rv_vmulhu_vx x y (unmasked) ty))
 
-;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule -1 (lower (has_type (fits_in_32 ty) (udiv x y)))
-  (let
-    ((y2 XReg (zext y))
-      (_ InstOutput (gen_div_by_zero y2)))
-    (rv_divuw (zext x) y2)))
+(rule 0 (lower (has_type (fits_in_16 ty) (udiv x y)))
+  (if-let $true (has_m))
+  (rv_divuw (zext x) (nonzero_divisor (zext y))))
 
-(rule -1 (lower (has_type (fits_in_32 ty) (sdiv x y)))
-  (let
-    ((a XReg (sext x))
-      (b XReg (sext y))
-      (_ InstOutput (gen_div_overflow a b ty))
-      (_ InstOutput (gen_div_by_zero b)))
-    (rv_divw a b)))
+(rule 1 (lower (has_type (fits_in_16 ty) (udiv x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 ty imm))
+  (rv_divuw (zext x) (zext y)))
 
-(rule (lower (has_type $I64 (sdiv x y)))
-  (let
-    ((_ InstOutput (gen_div_overflow x y $I64))
-      (_ InstOutput (gen_div_by_zero y))    )
-    (rv_div x y)))
+(rule 2 (lower (has_type $I32 (udiv x y)))
+  (if-let $true (has_m))
+  (rv_divuw x (nonzero_divisor (zext y))))
 
-(rule (lower (has_type $I64 (udiv x y)))
-  (let
-    ((_ InstOutput (gen_div_by_zero y)))
-    (rv_divu x y)))
+(rule 3 (lower (has_type $I32 (udiv x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 $I32 imm))
+  (rv_divuw x y))
 
-;;;; Rules for `rem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule 2 (lower (has_type $I64 (udiv x y)))
+  (if-let $true (has_m))
+  (rv_divu x (nonzero_divisor y)))
 
-(rule -1 (lower (has_type (fits_in_16 ty) (urem x y)))
-  (let
-    ((y2 XReg (zext y))
-      (_ InstOutput (gen_div_by_zero y2)))
-    (rv_remuw (zext x) y2)))
+(rule 3 (lower (has_type $I64 (udiv x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 $I64 imm))
+  (rv_divu x y))
 
-(rule -1 (lower (has_type (fits_in_16 ty) (srem x y)))
-  (let
-    ((y2 XReg (sext y))
-      (_ InstOutput (gen_div_by_zero y2)))
-    (rv_remw (sext x) y2)))
+;; Traps if the input register is zero, otherwise returns the same register.
+(decl nonzero_divisor (XReg) XReg)
+(rule (nonzero_divisor val)
+  (let ((_ InstOutput (gen_trapif (IntCC.Equal) val (zero_reg) (TrapCode.IntegerDivisionByZero))))
+    val))
 
-(rule (lower (has_type $I32 (srem x y)))
-  (let
-    ((y2 XReg (sext y))
-      (_ InstOutput (gen_div_by_zero y2)))
-   (rv_remw x y2)))
+;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (urem x y)))
-  (let
-    ((y2 XReg (zext y))
-        (_ InstOutput (gen_div_by_zero y2)))
-    (rv_remuw x y2)))
+(rule 0 (lower (has_type (fits_in_16 ty) (sdiv x y)))
+  (if-let $true (has_m))
+  (let ((x XReg (sext x)))
+    (rv_divw x (safe_sdiv_divisor ty x (sext y)))))
 
-(rule (lower (has_type $I64 (srem x y)))
-  (let
-    ((_ InstOutput (gen_div_by_zero y)))
-    (rv_rem x y)))
+(rule 1 (lower (has_type (fits_in_16 ty) (sdiv x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 ty imm))
+  (rv_divw (sext x) y))
 
-(rule (lower (has_type $I64 (urem x y)))
-  (let
-    ((_ InstOutput (gen_div_by_zero y)))
-    (rv_remu x y)))
+(rule 2 (lower (has_type $I32 (sdiv x y)))
+  (if-let $true (has_m))
+  (let ((x XReg (sext x)))
+    (rv_divw x (safe_sdiv_divisor $I32 x (sext y)))))
+
+(rule 3 (lower (has_type $I32 (sdiv x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 $I32 imm))
+  (rv_divw x y))
+
+(rule 2 (lower (has_type $I64 (sdiv x y)))
+  (if-let $true (has_m))
+  (rv_div x (safe_sdiv_divisor $I64 x y)))
+
+(rule 3 (lower (has_type $I64 (sdiv x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 $I64 imm))
+  (rv_div x y))
+
+;; Check for two trapping conditions:
+;;
+;; * the divisor is 0, or...
+;; * the divisor is -1 and the dividend is $ty::MIN
+(decl safe_sdiv_divisor (Type XReg XReg) XReg)
+(rule (safe_sdiv_divisor ty x y)
+  (let (
+      (y XReg (nonzero_divisor y))
+      (min XReg (imm $I64 (u64_shl 1 (u64_sub (ty_bits ty) 1))))
+      (x_is_not_min XReg (rv_xor x min))
+      (y_is_not_neg_one XReg (rv_not y))
+      (no_int_overflow XReg (rv_or x_is_not_min y_is_not_neg_one))
+      (_ InstOutput (gen_trapif
+                      (IntCC.Equal)
+                      no_int_overflow (zero_reg)
+                      (TrapCode.IntegerOverflow))))
+      y))
+
+;;;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_16 ty) (urem x y)))
+  (if-let $true (has_m))
+  (rv_remuw (zext x) (nonzero_divisor (zext y))))
+
+(rule 1 (lower (has_type (fits_in_16 ty) (urem x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 ty imm))
+  (rv_remuw (zext x) y))
+
+(rule 2 (lower (has_type $I32 (urem x y)))
+  (if-let $true (has_m))
+  (rv_remuw x (nonzero_divisor (zext y))))
+
+(rule 3 (lower (has_type $I32 (urem x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 $I32 imm))
+  (rv_remuw x y))
+
+(rule 2 (lower (has_type $I64 (urem x y)))
+  (if-let $true (has_m))
+  (rv_remu x (nonzero_divisor y)))
+
+(rule 3 (lower (has_type $I64 (urem x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 $I64 imm))
+  (rv_remu x y))
+
+;;;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_16 ty) (srem x y)))
+  (if-let $true (has_m))
+  (rv_remw (sext x) (nonzero_divisor (sext y))))
+
+(rule 1 (lower (has_type (fits_in_16 ty) (srem x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 ty imm))
+  (rv_remw (sext x) y))
+
+(rule 2 (lower (has_type $I32 (srem x y)))
+  (if-let $true (has_m))
+  (rv_remw x (nonzero_divisor (sext y))))
+
+(rule 3 (lower (has_type $I32 (srem x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 $I32 imm))
+  (rv_remw x y))
+
+(rule 2 (lower (has_type $I64 (srem x y)))
+  (if-let $true (has_m))
+  (rv_rem x (nonzero_divisor y)))
+
+(rule 3 (lower (has_type $I64 (srem x y @ (iconst imm))))
+  (if-let $true (has_m))
+  (if (safe_divisor_from_imm64 $I64 imm))
+  (rv_rem x y))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int ty) (band x y)))
