@@ -2018,85 +2018,85 @@
 
 ;; Performs a zero extension of the given value
 (decl zext (Value) XReg)
-(rule (zext val @ (value_type from_ty))
-  (extend val (ExtendOp.Zero) from_ty))
-
-;; Performs a signed extension of the given value
-(decl sext (Value) XReg)
-(rule (sext val @ (value_type from_ty))
-  (extend val (ExtendOp.Signed) from_ty))
-
-(type ExtendOp
-  (enum
-    (Zero)
-    (Signed)))
-
-;; Performs either a sign or zero extension of the given value to a full
-;; register width.
-(decl extend (XReg ExtendOp Type) XReg)
-
-;;; Generic Rules Extending to I64
-(decl pure extend_shift_op (ExtendOp) AluOPRRI)
-(rule (extend_shift_op (ExtendOp.Zero)) (AluOPRRI.Srli))
-(rule (extend_shift_op (ExtendOp.Signed)) (AluOPRRI.Srai))
 
 ;; In the most generic case, we shift left and then shift right.
-;; The type of right shift is determined by the extend op.
-(rule 0 (extend val extend_op (fits_in_32 from_ty))
-  (let ((shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
-        (left XReg (rv_slli val shift))
-        (shift_op AluOPRRI (extend_shift_op extend_op))
-        (right XReg (alu_rr_imm12 shift_op left shift)))
-    right))
+(rule 0 (zext val @ (value_type (fits_in_32 ty)))
+  (let ((shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits ty)))))
+    (rv_srli (rv_slli val shift) shift)))
 
 ;; If we are zero extending a U8 we can use a `andi` instruction.
-(rule 1 (extend val (ExtendOp.Zero) $I8)
-  (rv_andi val (imm12_const 255)))
-
-;; When signed extending from 32 to 64 bits we can use a
-;; `addiw val 0`. Also known as a `sext.w`
-(rule 1 (extend val (ExtendOp.Signed) $I32)
-  (rv_sextw val))
-
+(rule 1 (zext val @ (value_type $I8))
+  (rv_andi val (imm12_const 0xff)))
 
 ;; No point in trying to use `packh` here to zero extend 8 bit values
 ;; since we can just use `andi` instead which is part of the base ISA.
 
 ;; If we have the `zbkb` extension `packw` can be used to zero extend 16 bit values
-(rule 1 (extend val (ExtendOp.Zero) $I16)
+(rule 1 (zext val @ (value_type $I16))
   (if-let $true (has_zbkb))
   (rv_packw val (zero_reg)))
 
 ;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
-(rule 1 (extend val (ExtendOp.Zero) $I32)
+(rule 1 (zext val @ (value_type $I32))
   (if-let $true (has_zbkb))
   (rv_pack val (zero_reg)))
 
-
-;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
-(rule 1 (extend val (ExtendOp.Signed) $I8)
-  (if-let $true (has_zbb))
-  (rv_sextb val))
-
-;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
-(rule 1 (extend val (ExtendOp.Signed) $I16)
-  (if-let $true (has_zbb))
-  (rv_sexth val))
-
 ;; If we have the `zbb` extension we can use the dedicated `zext.h` instruction.
-(rule 2 (extend val (ExtendOp.Zero) $I16)
+(rule 2 (zext val @ (value_type $I16))
   (if-let $true (has_zbb))
   (rv_zexth val))
 
 ;; With `zba` we have a `zext.w` instruction
-(rule 2 (extend val (ExtendOp.Zero) $I32)
+(rule 2 (zext val @ (value_type $I32))
   (if-let $true (has_zba))
   (rv_zextw val))
 
-;; Ignore sign extensions which are already at the full register width.
-(rule 4 (extend val _ $I64) val)
+;; Ignore sign extensions for values whose representation is already the full
+;; register width.
+(rule 3 (zext val)
+  (if (val_already_extended val))
+  val)
 
+;; Performs a signed extension of the given value
+(decl sext (Value) XReg)
 
+;; Same base case as `zext`, shift left-then-right.
+(rule 0 (sext val @ (value_type (fits_in_32 ty)))
+  (let ((shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits ty)))))
+    (rv_srai (rv_slli val shift) shift)))
+
+;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
+(rule 1 (sext val @ (value_type $I8))
+  (if-let $true (has_zbb))
+  (rv_sextb val))
+
+;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
+(rule 1 (sext val @ (value_type $I16))
+  (if-let $true (has_zbb))
+  (rv_sexth val))
+
+;; When signed extending from 32 to 64 bits we can use a
+;; `addiw val 0`. Also known as a `sext.w`
+(rule 1 (sext val @ (value_type $I32))
+  (rv_sextw val))
+
+;; Ignore sign extensions for values whose representation is already the full
+;; register width.
+(rule 2 (sext val)
+  (if (val_already_extended val))
+  val)
+
+;; Helper matcher for when a value's representation is already sign or zero
+;; extended to the full 64-bit register representation. This is used by `zext`
+;; and `sext` above to skip the extension instruction entirely in some
+;; circumstances.
+(decl pure partial val_already_extended (Value) bool)
+(rule (val_already_extended v @ (value_type $I64)) $true)
+
+(type ExtendOp
+  (enum
+    (Zero)
+    (Signed)))
 
 (decl lower_b128_binary (AluOPRRR ValueRegs ValueRegs) ValueRegs)
 (rule
@@ -2594,9 +2594,6 @@
 
 (decl lower_cond_br (IntCC ValueRegs VecMachLabel Type) Unit)
 (extern constructor lower_cond_br lower_cond_br)
-
-(decl intcc_to_extend_op (IntCC) ExtendOp)
-(extern constructor intcc_to_extend_op intcc_to_extend_op)
 
 ;; Convert a truthy value, possibly of more than one register (an I128), to
 ;; one register.
