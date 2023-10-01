@@ -734,6 +734,7 @@
     (value_regs hi_rev lo_rev)))
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bswap x)))
   (gen_bswap ty x))
 
@@ -742,6 +743,44 @@
     (gen_bswap $I64 (value_regs_get x 1))
     (gen_bswap $I64 (value_regs_get x 0))))
 
+(rule 3 (lower (has_type (fits_in_32 ty) (bswap x)))
+  (if-let $true (has_zbb))
+  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
+  (rv_srli (rv_rev8 x) shift_amt))
+
+(rule 4 (lower (has_type $I64 (bswap x)))
+  (if-let $true (has_zbb))
+  (rv_rev8 x))
+
+(rule 5 (lower (has_type $I128 (bswap x)))
+  (if-let $true (has_zbb))
+  (value_regs
+    (rv_rev8 (value_regs_get x 1))
+    (rv_rev8 (value_regs_get x 0))))
+
+;; Helper to generate a fallback byte-swap sequence when `zbb` isn't available.
+(decl gen_bswap (Type XReg) XReg)
+
+;; This is only here to make the rule below work. bswap.i8 isn't valid
+(rule 0 (gen_bswap $I8 x) x)
+(rule 1 (gen_bswap (ty_int_ref_16_to_64 ty) x)
+  (if-let half_ty (ty_half_width ty))
+  (if-let half_size (u64_to_imm12 (ty_bits half_ty)))
+  (let (;; This swaps the top bytes and zeroes the bottom bytes, so that
+        ;; we can or it with the bottom bytes later.
+        (swap_top XReg (gen_bswap half_ty x))
+        (top XReg (rv_slli swap_top half_size))
+
+        ;; Get the top half, swap it, and zero extend it so we can `or` it
+        ;; with the bottom half. Note that zero extension here already knows
+        ;; that `zbb` isn't available and that `half_ty` is not `$I64`, so this
+        ;; falls back to the shift-then-shift sequence.
+        (shifted XReg (rv_srli x half_size))
+        (swap_bot XReg (gen_bswap half_ty shifted))
+        (shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits half_ty))))
+        (bot_shifted_left XReg (rv_slli swap_bot shift))
+        (bot XReg (rv_srli bot_shifted_left shift)))
+    (rv_or top bot)))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (ctz x)))
