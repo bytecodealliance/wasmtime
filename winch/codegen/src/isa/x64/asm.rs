@@ -903,7 +903,7 @@ impl Assembler {
             tmp1: Writable::from_reg(tmp1.into()),
             tmp2: Writable::from_reg(tmp2.into()),
             default_target: default,
-            targets: Box::new(targets),
+            targets: Box::new(targets.to_vec()),
         })
     }
 
