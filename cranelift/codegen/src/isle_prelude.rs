@@ -169,6 +169,14 @@ macro_rules! isle_common_prelude_methods {
             x & 1 == 1
         }
 
+        fn i64_shr(&mut self, a: i64, b: i64) -> i64 {
+            a >> b
+        }
+
+        fn i64_ctz(&mut self, a: i64) -> i64 {
+            a.trailing_zeros().into()
+        }
+
         #[inline]
         fn i64_sextend_u64(&mut self, ty: Type, x: u64) -> i64 {
             let shift_amt = std::cmp::max(0, 64 - ty.bits());

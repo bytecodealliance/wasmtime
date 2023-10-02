@@ -1753,8 +1753,21 @@
   (if-let (i64_generate_imm imm20 imm12) (i64_sextend_u64 ty c))
   (rv_addi (rv_lui imm20) imm12))
 
-;; Otherwise we fall back to loading the immediate from the constant pool.
+;; Combine one of the above rules with a shift-left if possible, This chops off
+;; all trailing zeros from the input constant and then attempts if the resulting
+;; constant can itself use one of the above rules via the `i64_generate_imm`
+;; matcher. This will then recurse on the above rules to materialize a smaller
+;; constant which is then shifted left to create the desired constant.
 (rule 0 (imm (ty_int ty) c)
+  (if-let c_extended (i64_sextend_u64 ty c))      ;; constant to make
+  (if-let shamt (i64_ctz c_extended))             ;; number of trailing zeros to chop
+  (if-let c_shifted (i64_shr c_extended shamt))   ;; smaller constant
+  (if-let (i64_generate_imm _ _) c_shifted)       ;; can the smaller constant be made?
+  (if-let (imm12_from_i64 shimm) shamt)           ;; create the shift immediate
+  (rv_slli (imm ty (i64_as_u64 c_shifted)) shimm))
+
+;; Otherwise we fall back to loading the immediate from the constant pool.
+(rule -1 (imm (ty_int ty) c)
   (gen_load
     (gen_const_amode (emit_u64_le_const c))
     (LoadOP.Ld)
