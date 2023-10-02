@@ -188,6 +188,12 @@
 (decl pure u64_lt (u64 u64) bool)
 (extern constructor u64_lt u64_lt)
 
+(decl pure i64_shr (i64 i64) i64)
+(extern constructor i64_shr i64_shr)
+
+(decl pure i64_ctz (i64) i64)
+(extern constructor i64_ctz i64_ctz)
+
 ;; Sign extends a u64 from ty bits up to 64bits
 (decl pure i64_sextend_u64 (Type u64) i64)
 (extern constructor i64_sextend_u64 i64_sextend_u64)
