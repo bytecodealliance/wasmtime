@@ -22,7 +22,7 @@
  *
  * As for asynchronous host calls - the reverse contract is upheld. Wasmtime will keep all parameters
  * to the function alive and unmodified until the #wasmtime_func_async_continuation_callback_t returns
- * as completed or returns a trap.
+ * true.
  *
  */
 
