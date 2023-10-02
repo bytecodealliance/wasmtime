@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, ExtendOp, MInst};
+use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{VecAluOpRR, VecLmul};
@@ -174,22 +174,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             _ => unreachable!(),
         }
     }
-    fn intcc_to_extend_op(&mut self, cc: &IntCC) -> ExtendOp {
-        use IntCC::*;
-        match *cc {
-            Equal
-            | NotEqual
-            | UnsignedLessThan
-            | UnsignedGreaterThanOrEqual
-            | UnsignedGreaterThan
-            | UnsignedLessThanOrEqual => ExtendOp::Zero,
 
-            SignedLessThan
-            | SignedGreaterThanOrEqual
-            | SignedGreaterThan
-            | SignedLessThanOrEqual => ExtendOp::Signed,
-        }
-    }
     fn lower_cond_br(
         &mut self,
         cc: &IntCC,
@@ -207,25 +192,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         )
         .iter()
         .for_each(|i| self.emit(i));
-    }
-    fn lower_br_icmp(
-        &mut self,
-        cc: &IntCC,
-        a: ValueRegs,
-        b: ValueRegs,
-        targets: &VecMachLabel,
-        ty: Type,
-    ) -> Unit {
-        let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty);
-        self.emit(&MInst::CondBr {
-            taken: CondBrTarget::Label(targets[0]),
-            not_taken: CondBrTarget::Label(targets[1]),
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: test,
-                rs2: zero_reg(),
-            },
-        });
     }
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
@@ -444,10 +410,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn has_zbs(&mut self) -> bool {
         self.backend.isa_flags.has_zbs()
-    }
-
-    fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
-        FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }
 
     fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {

@@ -311,7 +311,7 @@ block1:
 
 ; VCode:
 ; block0:
-;   ne a3,[a0,a1],[zerozero]##ty=i128
+;   or a3,a0,a1
 ;   bne a3,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
@@ -322,12 +322,8 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bnez a1, 8
-;   beqz a0, 0xc
-;   addi a3, zero, 1
-;   j 8
-;   mv a3, zero
-; block1: ; offset 0x14
+;   or a3, a0, a1
+; block1: ; offset 0x4
 ;   ret
 
 function %i128_bricmp_eq(i128, i128) {
