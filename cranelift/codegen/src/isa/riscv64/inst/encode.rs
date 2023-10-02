@@ -635,7 +635,8 @@ fn encode_zcbmem_bits(op: ZcbMemOp, dest_src: Reg, base: Reg, imm: Uimm2) -> u16
             let opcode_bit = (op == ZcbMemOp::CLh) as u8;
             imm | (opcode_bit << 1)
         }
-        _ => imm,
+        // In the rest of the ops the imm is reversed.
+        _ => ((imm & 1) << 1) | ((imm >> 1) & 1),
     };
 
     let mut bits = 0;

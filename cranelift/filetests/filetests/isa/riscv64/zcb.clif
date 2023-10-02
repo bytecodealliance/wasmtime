@@ -209,8 +209,8 @@ block0(v0: i64, v1: i8):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x0c, 0x89
-;   .byte 0x2c, 0x89
 ;   .byte 0x4c, 0x89
+;   .byte 0x2c, 0x89
 ;   .byte 0x6c, 0x89
 ;   sb a1, 4(a0)
 ;   c.jr ra
