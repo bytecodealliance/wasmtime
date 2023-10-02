@@ -122,7 +122,6 @@ typedef struct wasmtime_async_continuation_t {
  * \brief Callback signature for #wasmtime_linker_define_async_func.
  *
  * This is a host function that returns a continuation to be called later. 
- * The continuation returned is owned by wasmtime and will be deleted when it completes.
  *
  * All the arguments to this function will be kept alive until the continuation
  * returns that it has errored or has completed.
@@ -137,19 +136,22 @@ typedef struct wasmtime_async_continuation_t {
  * \param trap_ret if assigned a not `NULL` value then the called function will
  *        trap with the returned error. Note that ownership of trap is transferred
  *        to wasmtime.
+ * \param continuation_ret the returned continuation that determines when the 
+ *        async function has completed executing.
  *
  * Only supported for async stores.
  *
  * See #wasmtime_func_callback_t for more information.
  */
-typedef wasmtime_async_continuation_t *(*wasmtime_func_async_callback_t)(
+typedef void (*wasmtime_func_async_callback_t)(
     void *env,
     wasmtime_caller_t *caller, 
     const wasmtime_val_t *args,
     size_t nargs, 
     wasmtime_val_t *results,
     size_t nresults,
-    wasm_trap_t** trap_ret);
+    wasm_trap_t** trap_ret,
+    wasmtime_async_continuation_t * continuation_ret);
 
 /**
  * \brief The structure representing a asynchronously running function.
@@ -169,10 +171,9 @@ typedef struct wasmtime_call_future wasmtime_call_future_t;
  *
  * This function returns false if execution has yielded either due to being out of fuel 
  * (see wasmtime_store_out_of_fuel_async_yield), or the epoch has been incremented enough 
- * (see wasmtime_store_epoch_deadline_async_yield_and_update).
- *
- * The function may also return false if asynchronous host functions have been called, which then calling this 
- * function will call the continuation from the async host function.
+ * (see wasmtime_store_epoch_deadline_async_yield_and_update). The function may also return false if 
+ * asynchronous host functions have been called, which then calling this  function will call the 
+ * continuation from the async host function.
  *
  * For more see the information at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#asynchronous-wasm
@@ -245,7 +246,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_linker_define_async_func(
  * (which requires functions are called asynchronously). The returning #wasmtime_call_future_t 
  * must be polled using #wasmtime_call_future_poll, and is owned and must be deleted using #wasmtime_call_future_delete.
  *
- * The `trap_ret` and `error_ret` pointers may *not* be `NULL`.
+ * The `trap_ret` and `error_ret` pointers may *not* be `NULL` and the returned memory is owned by the caller.
  *
  * All arguments to this function must outlive the returned future and be unmodified until the future is deleted.
  */

@@ -48,7 +48,8 @@ pub type wasmtime_func_async_callback_t = extern "C" fn(
     *mut wasmtime_val_t,
     usize,
     &mut Option<Box<wasm_trap_t>>,
-) -> Box<wasmtime_async_continuation_t>;
+    *mut wasmtime_async_continuation_t,
+);
 
 #[repr(C)]
 pub struct wasmtime_async_continuation_t {
@@ -110,7 +111,8 @@ async fn invoke_c_async_callback<'a>(
     // The result will be a continutation which we will wrap in a Future.
     let mut caller = wasmtime_caller_t { caller };
     let mut trap = None;
-    let continuation = cb(
+    let mut continuation = MaybeUninit::uninit();
+    cb(
         data.env,
         &mut caller,
         params.as_ptr(),
@@ -118,7 +120,9 @@ async fn invoke_c_async_callback<'a>(
         out_results.as_mut_ptr(),
         out_results.len(),
         &mut trap,
+        continuation.as_mut_ptr(),
     );
+    let continuation = unsafe { continuation.assume_init() };
     continuation.await;
 
     if let Some(trap) = trap {
@@ -134,9 +138,8 @@ async fn invoke_c_async_callback<'a>(
     // Move our `vals` storage back into the store now that we no longer
     // need it. This'll get picked up by the next hostcall and reuse our
     // same storage.
-    let mut v = mem::take(&mut hostcall_val_storage);
-    v.truncate(0);
-    caller.caller.data_mut().hostcall_val_storage = v;
+    hostcall_val_storage.truncate(0);
+    caller.caller.data_mut().hostcall_val_storage = hostcall_val_storage;
     Ok(())
 }
 
