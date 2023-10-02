@@ -32,7 +32,7 @@ block5(v5: i32):
 ;   clgfi %r3, 3
 ;   jghe label4
 ;   sllg %r3, %r3, 2
-;   larl %r1, 14 ; agf %r1, 0(%r1, %r3) ; br %r1 ; jt_entries label3 label2 label1
+;   larl %r1, 14 ; agf %r1, 0(%r1, %r3) ; br %r1 ; jt_entries label2 label1
 ; block1:
 ;   lhi %r5, 3
 ;   jg label5

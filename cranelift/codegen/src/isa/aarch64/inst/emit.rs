@@ -3275,7 +3275,8 @@ impl MachInstEmit for Inst {
                 ridx,
                 rtmp1,
                 rtmp2,
-                ref info,
+                default,
+                ref targets,
                 ..
             } => {
                 let ridx = allocs.next(ridx);
@@ -3287,7 +3288,7 @@ impl MachInstEmit for Inst {
 
                 // Branch to default when condition code from prior comparison indicates.
                 let br = enc_conditional_br(
-                    info.default_target,
+                    BranchTarget::Label(default),
                     CondBrKind::Cond(Cond::Hs),
                     &mut AllocationConsumer::default(),
                 );
@@ -3296,9 +3297,7 @@ impl MachInstEmit for Inst {
                 // will not be merged with any other branch, flipped, or elided (it is not preceded
                 // or succeeded by any other branch). Just emit it with the label use.
                 let default_br_offset = sink.cur_offset();
-                if let BranchTarget::Label(l) = info.default_target {
-                    sink.use_label_at_offset(default_br_offset, l, LabelUse::Branch19);
-                }
+                sink.use_label_at_offset(default_br_offset, default, LabelUse::Branch19);
                 sink.put4(br);
 
                 // Overwrite the index with a zero when the above
@@ -3347,18 +3346,14 @@ impl MachInstEmit for Inst {
                 inst.emit(&[], sink, emit_info, state);
                 // Emit jump table (table of 32-bit offsets).
                 let jt_off = sink.cur_offset();
-                for &target in info.targets.iter() {
+                for &target in targets.iter() {
                     let word_off = sink.cur_offset();
                     // off_into_table is an addend here embedded in the label to be later patched
                     // at the end of codegen. The offset is initially relative to this jump table
                     // entry; with the extra addend, it'll be relative to the jump table's start,
                     // after patching.
                     let off_into_table = word_off - jt_off;
-                    sink.use_label_at_offset(
-                        word_off,
-                        target.as_label().unwrap(),
-                        LabelUse::PCRel32,
-                    );
+                    sink.use_label_at_offset(word_off, target, LabelUse::PCRel32);
                     sink.put4(off_into_table);
                 }
 

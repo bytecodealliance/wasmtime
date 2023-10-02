@@ -3656,12 +3656,9 @@ impl Inst {
                 inst.emit(&[], sink, emit_info, state);
 
                 // Emit jump table (table of 32-bit offsets).
-                // The first entry is the default target, which is not emitted
-                // into the jump table, so we skip it here.  It is only in the
-                // list so MachTerminator will see the potential target.
                 sink.bind_label(table_label, &mut state.ctrl_plane);
                 let jt_off = sink.cur_offset();
-                for &target in targets.iter().skip(1) {
+                for &target in targets.iter() {
                     let word_off = sink.cur_offset();
                     let off_into_table = word_off - jt_off;
                     sink.use_label_at_offset(word_off, target, LabelUse::PCRel32);

@@ -728,26 +728,6 @@
 (type BoxCallInfo extern (enum))
 (type BoxReturnCallInfo extern (enum))
 
-(type BoxVecMachLabel extern (enum))
-
-(type MachLabelSlice extern (enum))
-
-;; The size of the jump table.
-(decl jump_table_size (BoxVecMachLabel) u32)
-(extern constructor jump_table_size jump_table_size)
-
-;; Extract a the target from a MachLabelSlice with exactly one target.
-(decl single_target (MachLabel) MachLabelSlice)
-(extern extractor single_target single_target)
-
-;; Extract a the targets from a MachLabelSlice with exactly two targets.
-(decl two_targets (MachLabel MachLabel) MachLabelSlice)
-(extern extractor two_targets two_targets)
-
-;; Extract the default target and jump table from a MachLabelSlice.
-(decl jump_table_targets (MachLabel BoxVecMachLabel) MachLabelSlice)
-(extern extractor jump_table_targets jump_table_targets)
-
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
