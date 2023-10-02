@@ -1,8 +1,8 @@
 use crate::bindings::http::{
     outgoing_handler,
-    types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme},
+    types::{RequestOptions, Scheme},
 };
-use crate::types::{self, HostFutureIncomingResponse, IncomingResponseInternal, TableHttpExt};
+use crate::types::{self, HostFutureIncomingResponse, IncomingResponseInternal};
 use crate::WasiHttpView;
 use anyhow::Context;
 use bytes::Bytes;
@@ -11,14 +11,17 @@ use hyper::Method;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
+use types::HostOutgoingRequest;
+use wasmtime::component::Resource;
 use wasmtime_wasi::preview2;
 
 impl<T: WasiHttpView> outgoing_handler::Host for T {
     fn handle(
         &mut self,
-        request_id: OutgoingRequest,
+        request_id: Resource<HostOutgoingRequest>,
         options: Option<RequestOptions>,
-    ) -> wasmtime::Result<Result<FutureIncomingResponse, outgoing_handler::Error>> {
+    ) -> wasmtime::Result<Result<Resource<HostFutureIncomingResponse>, outgoing_handler::Error>>
+    {
         let connect_timeout = Duration::from_millis(
             options
                 .and_then(|opts| opts.connect_timeout_ms)
@@ -37,7 +40,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 .unwrap_or(600 * 1000) as u64,
         );
 
-        let req = types::OutgoingRequestLens::from(request_id).delete(self.table())?;
+        let req = self.table().delete_resource(request_id)?;
 
         let method = match req.method {
             crate::bindings::http::types::Method::Get => Method::GET,
@@ -175,7 +178,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
 
         let fut = self
             .table()
-            .push_future_incoming_response(HostFutureIncomingResponse::new(handle))?;
+            .push_resource(HostFutureIncomingResponse::new(handle))?;
 
         Ok(Ok(fut))
     }
