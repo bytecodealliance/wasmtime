@@ -1846,7 +1846,11 @@
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule 0 (lower (fcmp cc x @ (value_type (ty_scalar_float ty)) y))
-  (cmp_value (emit_fcmp cc ty x y)))
+  (lower_fcmp (emit_fcmp cc ty x y)))
+
+(decl lower_fcmp (FCmp) XReg)
+(rule (lower_fcmp (FCmp.One r)) r)
+(rule (lower_fcmp (FCmp.Zero r)) (rv_seqz r))
 
 (rule 1 (lower (fcmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
   (gen_expand_mask ty (gen_fcmp_mask ty cc x y)))
