@@ -318,7 +318,7 @@ mod test {
                                 let mut buffer = String::new();
                                 loop {
                                     println!("child: waiting for stdin to be ready");
-                                    stdin.ready().await.unwrap();
+                                    stdin.ready().await;
 
                                     println!("child: reading input");
                                     let (bytes, status) = stdin.read(1024).unwrap();

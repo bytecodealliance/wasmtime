@@ -4,13 +4,12 @@ use crate::preview2::bindings::{
     sockets::tcp::{self, ShutdownType},
 };
 use crate::preview2::tcp::{TcpSocket, TcpState};
-use crate::preview2::{Pollable, PollableFuture, WasiView};
+use crate::preview2::{Pollable, WasiView};
 use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
-use std::any::Any;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
 
@@ -440,38 +439,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     }
 
     fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
-        fn make_tcp_socket_future<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-            let socket = stream
-                .downcast_mut::<TcpSocket>()
-                .expect("downcast to TcpSocket failed");
-
-            // Some states are ready immediately.
-            match socket.tcp_state {
-                TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => {
-                    return Box::pin(async { Ok(()) })
-                }
-                _ => {}
-            }
-
-            // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-            let join = Box::pin(async move {
-                socket
-                    .inner
-                    .ready(Interest::READABLE | Interest::WRITABLE)
-                    .await
-                    .unwrap();
-                Ok(())
-            });
-
-            join
-        }
-
-        let pollable = Pollable::TableEntry {
-            index: this.rep(),
-            make_future: make_tcp_socket_future,
-        };
-
-        Ok(self.table_mut().push_child_resource(pollable, &this)?)
+        crate::preview2::poll::subscribe(self.table_mut(), this)
     }
 
     fn shutdown(

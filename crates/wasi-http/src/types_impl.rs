@@ -18,7 +18,7 @@ use std::any::Any;
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
-    Pollable, PollableFuture,
+    Pollable,
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
@@ -352,19 +352,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         &mut self,
         index: FutureTrailers,
     ) -> wasmtime::Result<Resource<Pollable>> {
-        // Eagerly force errors about the validity of the index.
-        let _ = self.table().get_future_trailers(index)?;
-
-        fn make_future(elem: &mut dyn Any) -> PollableFuture {
-            Box::pin(elem.downcast_mut::<HostFutureTrailers>().unwrap().ready())
-        }
-
-        // FIXME: this should use `push_child_resource`
-        let id = self
-            .table()
-            .push_resource(Pollable::TableEntry { index, make_future })?;
-
-        Ok(id)
+        wasmtime_wasi::preview2::subscribe(
+            self.table(),
+            Resource::<HostFutureTrailers>::new_borrow(index),
+        )
     }
 
     fn future_trailers_get(
@@ -480,22 +471,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
         &mut self,
         id: FutureIncomingResponse,
     ) -> wasmtime::Result<Resource<Pollable>> {
-        let _ = self.table().get_future_incoming_response(id)?;
-
-        fn make_future<'a>(elem: &'a mut dyn Any) -> PollableFuture<'a> {
-            Box::pin(
-                elem.downcast_mut::<HostFutureIncomingResponse>()
-                    .expect("parent resource is HostFutureIncomingResponse"),
-            )
-        }
-
-        // FIXME: this should use `push_child_resource`
-        let pollable = self.table().push_resource(Pollable::TableEntry {
-            index: id,
-            make_future,
-        })?;
-
-        Ok(pollable)
+        wasmtime_wasi::preview2::subscribe(
+            self.table(),
+            Resource::<HostFutureIncomingResponse>::new_borrow(id),
+        )
     }
 
     fn outgoing_body_write(

@@ -153,23 +153,29 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
     ];
     let out = poll_oneoff_with_retry(&r#in).unwrap();
     assert_eq!(out.len(), 2, "should return 2 events, got: {:?}", out);
+
+    let (read, write) = if out[0].userdata == 1 {
+        (&out[0], &out[1])
+    } else {
+        (&out[1], &out[0])
+    };
     assert_eq!(
-        out[0].userdata, 1,
+        read.userdata, 1,
         "the event.userdata should contain fd userdata specified by the user"
     );
-    assert_errno!(out[0].error, error_code);
+    assert_errno!(read.error, error_code);
     assert_eq!(
-        out[0].type_,
+        read.type_,
         wasi::EVENTTYPE_FD_READ,
         "the event.type_ should equal FD_READ"
     );
     assert_eq!(
-        out[1].userdata, 2,
+        write.userdata, 2,
         "the event.userdata should contain fd userdata specified by the user"
     );
-    assert_errno!(out[1].error, error_code);
+    assert_errno!(write.error, error_code);
     assert_eq!(
-        out[1].type_,
+        write.type_,
         wasi::EVENTTYPE_FD_WRITE,
         "the event.type_ should equal FD_WRITE"
     );
