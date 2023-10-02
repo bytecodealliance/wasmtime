@@ -49,9 +49,16 @@ const array = [
     "rust": "msrv",
   },
   {
-    "os": "macos-latest",
-    "name": "Test macOS x86_64",
-    "filter": "macos-x64"
+    "os": "macos-latest-xlarge",
+    "name": "Test macOS aarch64",
+    "filter": "macos-aarch64",
+    "isa": "aarch64",
+  },
+  {
+    "os": "macos-latest-large",
+    "name": "Test macOS x86-64",
+    "filter": "macos-x64",
+    "isa": "x64",
   },
   {
     "os": "windows-latest",

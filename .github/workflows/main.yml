@@ -668,9 +668,9 @@ jobs:
         - build: x86_64-linux
           os: ubuntu-latest
         - build: x86_64-macos
-          os: macos-latest
+          os: macos-latest-xlarge
         - build: aarch64-macos
-          os: macos-latest
+          os: macos-latest-xlarge
           target: aarch64-apple-darwin
         - build: x86_64-windows
           os: windows-latest
