@@ -513,7 +513,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                 | TcpState::ConnectReady => {}
 
                 TcpState::Listening | TcpState::Connecting | TcpState::Connected => {
-                    match rustix::net::shutdown(&dropped.inner, rustix::net::Shutdown::ReadWrite) {
+                    match rustix::net::shutdown(&*dropped.inner, rustix::net::Shutdown::ReadWrite) {
                         Ok(()) | Err(Errno::NOTCONN) => {}
                         Err(err) => Err(err).unwrap(),
                     }
