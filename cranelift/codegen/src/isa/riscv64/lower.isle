@@ -304,8 +304,7 @@
 
 (rule 1 (lower (has_type $I64 (uadd_overflow_trap x y tc)))
   (let ((tmp XReg (rv_add x y))
-        (test XReg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64))
-        (_ InstOutput (gen_trapnz test tc)))
+        (_ InstOutput (gen_trapif (IntCC.UnsignedLessThan) tmp x tc)))
     tmp))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

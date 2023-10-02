@@ -42,25 +42,24 @@
 ;; function u0:0:
 ;; block0:
 ;;   slli a3,a0,32
-;;   srli a4,a3,32
-;;   ld a3,[const(1)]
-;;   add a3,a4,a3
-;;   ult a5,a3,a4##ty=i64
-;;   trap_if heap_oob##(a5 ne zero)
+;;   srli a3,a3,32
+;;   ld a4,[const(1)]
+;;   add a4,a3,a4
+;;   trap_if heap_oob##(a4 ult a3)
 ;;   ld a5,8(a2)
-;;   ugt a5,a3,a5##ty=i64
-;;   ld a0,0(a2)
-;;   add a4,a0,a4
-;;   ld a0,[const(0)]
-;;   add a4,a4,a0
-;;   li a0,0
-;;   sltu a5,zero,a5
-;;   sub a2,zero,a5
-;;   and a3,a0,a2
-;;   not a5,a2
-;;   and a2,a4,a5
-;;   or a3,a3,a2
-;;   sb a1,0(a3)
+;;   ugt a4,a4,a5##ty=i64
+;;   ld a5,0(a2)
+;;   add a3,a5,a3
+;;   ld a5,[const(0)]
+;;   add a3,a3,a5
+;;   li a5,0
+;;   sltu a4,zero,a4
+;;   sub a0,zero,a4
+;;   and a2,a5,a0
+;;   not a4,a0
+;;   and a0,a3,a4
+;;   or a2,a2,a0
+;;   sb a1,0(a2)
 ;;   j label1
 ;; block1:
 ;;   ret
@@ -68,25 +67,24 @@
 ;; function u0:1:
 ;; block0:
 ;;   slli a2,a0,32
-;;   srli a4,a2,32
-;;   ld a3,[const(1)]
-;;   add a2,a4,a3
-;;   ult a5,a2,a4##ty=i64
-;;   trap_if heap_oob##(a5 ne zero)
-;;   ld a5,8(a1)
-;;   ugt a5,a2,a5##ty=i64
-;;   ld a0,0(a1)
-;;   add a4,a0,a4
-;;   ld a0,[const(0)]
-;;   add a4,a4,a0
-;;   li a0,0
-;;   sltu a5,zero,a5
-;;   sub a1,zero,a5
-;;   and a3,a0,a1
-;;   not a5,a1
-;;   and a1,a4,a5
-;;   or a3,a3,a1
-;;   lbu a0,0(a3)
+;;   srli a3,a2,32
+;;   ld a2,[const(1)]
+;;   add a2,a3,a2
+;;   trap_if heap_oob##(a2 ult a3)
+;;   ld a4,8(a1)
+;;   ugt a4,a2,a4##ty=i64
+;;   ld a5,0(a1)
+;;   add a3,a5,a3
+;;   ld a5,[const(0)]
+;;   add a3,a3,a5
+;;   li a5,0
+;;   sltu a4,zero,a4
+;;   sub a0,zero,a4
+;;   and a2,a5,a0
+;;   not a4,a0
+;;   and a0,a3,a4
+;;   or a2,a2,a0
+;;   lbu a0,0(a2)
 ;;   j label1
 ;; block1:
 ;;   ret
