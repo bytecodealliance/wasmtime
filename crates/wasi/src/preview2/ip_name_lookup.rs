@@ -3,7 +3,7 @@ use crate::preview2::bindings::sockets::network::{
     Error, ErrorCode, IpAddress, IpAddressFamily, Network,
 };
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
-use crate::preview2::{AbortOnDropJoinHandle, WasiView};
+use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, WasiView};
 use anyhow::Result;
 use std::io;
 use std::mem;
@@ -50,7 +50,7 @@ impl<T: WasiView> Host for T {
         // the usage of the `ToSocketAddrs` trait. This blocks the current
         // thread, so use `spawn_blocking`. Finally note that this is only
         // resolving names, not ports, so force the port to be 0.
-        let task = tokio::task::spawn_blocking(move || -> io::Result<Vec<_>> {
+        let task = spawn_blocking(move || -> io::Result<Vec<_>> {
             let result = (name.as_str(), 0).to_socket_addrs()?;
             Ok(result
                 .filter_map(|addr| {
@@ -75,7 +75,6 @@ impl<T: WasiView> Host for T {
                 })
                 .collect())
         });
-        let task = AbortOnDropJoinHandle(task);
         let resource = self
             .table_mut()
             .push_resource(ResolveAddressStream::Waiting(task))?;

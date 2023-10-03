@@ -213,13 +213,16 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
-    let j = match tokio::runtime::Handle::try_current() {
-        Ok(_) => tokio::task::spawn(f),
-        Err(_) => {
-            let _enter = RUNTIME.enter();
-            tokio::task::spawn(f)
-        }
-    };
+    let j = with_ambient_tokio_runtime(|| tokio::task::spawn(f));
+    AbortOnDropJoinHandle(j)
+}
+
+pub fn spawn_blocking<F, R>(f: F) -> AbortOnDropJoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let j = with_ambient_tokio_runtime(|| tokio::task::spawn_blocking(f));
     AbortOnDropJoinHandle(j)
 }
 

@@ -1,5 +1,7 @@
 use crate::preview2::bindings::filesystem::types;
-use crate::preview2::{AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe};
+use crate::preview2::{
+    spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe,
+};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
@@ -74,7 +76,7 @@ impl File {
         R: Send + 'static,
     {
         let f = self.file.clone();
-        tokio::task::spawn_blocking(move || body(&f)).await.unwrap()
+        spawn_blocking(move || body(&f)).await
     }
 }
 
@@ -110,7 +112,7 @@ impl Dir {
         R: Send + 'static,
     {
         let d = self.dir.clone();
-        tokio::task::spawn_blocking(move || body(&d)).await.unwrap()
+        spawn_blocking(move || body(&d)).await
     }
 }
 
@@ -127,13 +129,12 @@ impl FileInputStream {
         use system_interface::fs::FileIoExt;
         let f = Arc::clone(&self.file);
         let p = self.position;
-        let (r, mut buf) = tokio::task::spawn_blocking(move || {
+        let (r, mut buf) = spawn_blocking(move || {
             let mut buf = BytesMut::zeroed(size);
             let r = f.read_at(&mut buf, p);
             (r, buf)
         })
-        .await
-        .unwrap();
+        .await;
         let n = read_result(r)?;
         buf.truncate(n);
         self.position += n as u64;
@@ -213,7 +214,7 @@ impl HostOutputStream for FileOutputStream {
 
         let f = Arc::clone(&self.file);
         let m = self.mode;
-        let task = AbortOnDropJoinHandle::from(tokio::task::spawn_blocking(move || match m {
+        let task = spawn_blocking(move || match m {
             FileOutputMode::Position(mut p) => {
                 let mut buf = buf;
                 while !buf.is_empty() {
@@ -232,7 +233,7 @@ impl HostOutputStream for FileOutputStream {
                 }
                 Ok(())
             }
-        }));
+        });
         self.state = OutputState::Waiting(task);
         Ok(())
     }
