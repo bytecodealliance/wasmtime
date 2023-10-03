@@ -261,6 +261,18 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Some((base, shift))
     }
 
+    fn i64_shift(&mut self, imm: i64) -> Option<(i64, Imm12)> {
+        let trailing = imm.trailing_zeros();
+        // We can do without this condition but in this case there is no need to go further
+        if trailing == 0 {
+            return None;
+        }
+
+        let shift = Imm12::from_i16(trailing as i16);
+        let base = imm >> trailing;
+        Some((base, shift))
+    }
+
     #[inline]
     fn emit(&mut self, arg0: &MInst) -> Unit {
         self.lower_ctx.emit(arg0.clone());

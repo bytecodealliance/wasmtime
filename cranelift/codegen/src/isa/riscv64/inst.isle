@@ -1723,8 +1723,13 @@
 (decl i64_generate_imm (Imm20 Imm12) i64)
 (extern extractor i64_generate_imm i64_generate_imm)
 
+;; Helper for generating a i64 from a shift of a Imm20 constant with LUI
 (decl i64_shift_for_lui (i64 Imm12) i64)
 (extern extractor i64_shift_for_lui i64_shift_for_lui)
+
+;; Helper for generating a i64 from a shift of a Imm20 constant
+(decl i64_shift (i64 Imm12) i64)
+(extern extractor i64_shift i64_shift)
 
 ;; Immediate Loading rules
 ;; TODO: Loading the zero reg directly causes a bunch of regalloc errors, we should look into it.
@@ -1768,12 +1773,9 @@
 ;; matcher. This will then recurse on the above rules to materialize a smaller
 ;; constant which is then shifted left to create the desired constant.
 (rule 0 (imm (ty_int ty) c)
-  (if-let c_extended (i64_sextend_u64 ty c))      ;; constant to make
-  (if-let shamt (i64_ctz c_extended))             ;; number of trailing zeros to chop
-  (if-let c_shifted (i64_shr c_extended shamt))   ;; smaller constant
-  (if-let (i64_generate_imm _ _) c_shifted)       ;; can the smaller constant be made?
-  (if-let (imm12_from_i64 shimm) shamt)           ;; create the shift immediate
-  (rv_slli (imm ty (i64_as_u64 c_shifted)) shimm))
+  (if-let (i64_shift c_shifted shift) (i64_sextend_u64 ty c))  ;; constant to make
+  (if-let (i64_generate_imm _ _) c_shifted)                    ;; can the smaller constant be made?
+  (rv_slli (imm ty (i64_as_u64 c_shifted)) shift))
 
 ;; Otherwise we fall back to loading the immediate from the constant pool.
 (rule -1 (imm (ty_int ty) c)
