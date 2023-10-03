@@ -222,7 +222,6 @@
     ;; select x or y base on condition
     (Select
       (dst VecWritableReg)
-      (ty Type)
       (condition Reg)
       (x ValueRegs)
       (y ValueRegs))
@@ -2574,7 +2573,7 @@
     ((dst VecWritableReg (alloc_vec_writable ty))
       ;;
       (reuslt VecWritableReg (vec_writable_clone dst))
-      (_ Unit (emit (MInst.Select dst ty c x y))))
+      (_ Unit (emit (MInst.Select dst c x y))))
     (vec_writable_to_regs reuslt)))
 
 ;; Parameters are "intcc compare_a compare_b rs1 rs2".

@@ -86,7 +86,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ; VCode:
 ; block0:
 ;   andi a4,a0,255
-;   select_i8 a0,a1,a2##condition=a4
+;   select a0,a1,a2##condition=a4
 ;   ret
 ;
 ; Disassembled:
@@ -145,7 +145,7 @@ block0(v0: i8, v1: i128, v2: i128):
 ; block0:
 ;   mv s4,a1
 ;   andi a5,a0,255
-;   select_i128 [a0,a1],[s4,a2],[a3,a4]##condition=a5
+;   select [a0,a1],[s4,a2],[a3,a4]##condition=a5
 ;   add sp,+16
 ;   ld s4,-8(sp)
 ;   ld ra,8(sp)

@@ -1787,7 +1787,6 @@ impl Inst {
                 condition,
                 ref x,
                 ref y,
-                ty: _ty,
             } => {
                 let mut insts = SmallInstVec::new();
                 let label_false = sink.get_label();
@@ -3633,7 +3632,6 @@ impl Inst {
                 condition,
                 ref x,
                 ref y,
-                ty,
             } => {
                 let condition = allocs.next(condition);
                 let x = alloc_value_regs(x, allocs);
@@ -3649,7 +3647,6 @@ impl Inst {
                     condition,
                     x,
                     y,
-                    ty,
                 }
             }
             Inst::Jalr { rd, base, offset } => {

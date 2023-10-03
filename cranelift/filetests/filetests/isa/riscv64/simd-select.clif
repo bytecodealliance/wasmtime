@@ -16,7 +16,7 @@ block0(v0: i64, v1: i64x2, v2: i64x2):
 ; block0:
 ;   vle8.v v10,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v12,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
-;   select_i64x2 v15,v10,v12##condition=a0
+;   select v15,v10,v12##condition=a0
 ;   vse8.v v15,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -61,7 +61,7 @@ block0(v0: i32, v1: i32x4, v2: i32x4):
 ;   vle8.v v12,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   slli a2,a0,32
 ;   srli a3,a2,32
-;   select_i32x4 v11,v10,v12##condition=a3
+;   select v11,v10,v12##condition=a3
 ;   vse8.v v11,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -108,7 +108,7 @@ block0(v0: i16, v1: i16x8, v2: i16x8):
 ;   vle8.v v12,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   slli a2,a0,48
 ;   srli a3,a2,48
-;   select_i16x8 v11,v10,v12##condition=a3
+;   select v11,v10,v12##condition=a3
 ;   vse8.v v11,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -154,7 +154,7 @@ block0(v0: i8, v1: i8x16, v2: i8x16):
 ;   vle8.v v10,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v12,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   andi a2,a0,255
-;   select_i8x16 v9,v10,v12##condition=a2
+;   select v9,v10,v12##condition=a2
 ;   vse8.v v9,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -198,7 +198,7 @@ block0(v0: i64, v1: f64x2, v2: f64x2):
 ; block0:
 ;   vle8.v v10,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v12,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
-;   select_f64x2 v15,v10,v12##condition=a0
+;   select v15,v10,v12##condition=a0
 ;   vse8.v v15,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -241,7 +241,7 @@ block0(v0: i64, v1: f32x4, v2: f32x4):
 ; block0:
 ;   vle8.v v10,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v12,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
-;   select_f32x4 v15,v10,v12##condition=a0
+;   select v15,v10,v12##condition=a0
 ;   vse8.v v15,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)

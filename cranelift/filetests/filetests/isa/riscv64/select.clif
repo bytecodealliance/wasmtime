@@ -131,7 +131,7 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   andi a0,a0,255
 ;   andi a5,a5,255
 ;   eq a5,a0,a5##ty=i8
-;   select_i128 [a0,a1],[s10,a2],[a3,a4]##condition=a5
+;   select [a0,a1],[s10,a2],[a3,a4]##condition=a5
 ;   add sp,+16
 ;   ld s10,-8(sp)
 ;   ld ra,8(sp)
@@ -310,7 +310,7 @@ block0(v0: i16, v1: i128, v2: i128):
 ;   slli a5,a5,48
 ;   srli a5,a5,48
 ;   eq a5,a0,a5##ty=i16
-;   select_i128 [a0,a1],[t2,a2],[a3,a4]##condition=a5
+;   select [a0,a1],[t2,a2],[a3,a4]##condition=a5
 ;   ret
 ;
 ; Disassembled:
@@ -474,7 +474,7 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   slli a5,a5,32
 ;   srli a5,a5,32
 ;   eq a5,a0,a5##ty=i32
-;   select_i128 [a0,a1],[t2,a2],[a3,a4]##condition=a5
+;   select [a0,a1],[t2,a2],[a3,a4]##condition=a5
 ;   ret
 ;
 ; Disassembled:
@@ -608,7 +608,7 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   mv s6,a1
 ;   li a5,42
 ;   eq a5,a0,a5##ty=i64
-;   select_i128 [a0,a1],[s6,a2],[a3,a4]##condition=a5
+;   select [a0,a1],[s6,a2],[a3,a4]##condition=a5
 ;   add sp,+16
 ;   ld s6,-8(sp)
 ;   ld ra,8(sp)
@@ -658,7 +658,7 @@ block0(v0: i128, v1: i8, v2: i8):
 ;   li a4,42
 ;   li a5,0
 ;   eq a4,[a0,a1],[a4,a5]##ty=i128
-;   select_i8 a0,a2,a3##condition=a4
+;   select a0,a2,a3##condition=a4
 ;   ret
 ;
 ; Disassembled:
@@ -690,7 +690,7 @@ block0(v0: i128, v1: i16, v2: i16):
 ;   li a4,42
 ;   li a5,0
 ;   eq a4,[a0,a1],[a4,a5]##ty=i128
-;   select_i16 a0,a2,a3##condition=a4
+;   select a0,a2,a3##condition=a4
 ;   ret
 ;
 ; Disassembled:
@@ -722,7 +722,7 @@ block0(v0: i128, v1: i32, v2: i32):
 ;   li a4,42
 ;   li a5,0
 ;   eq a4,[a0,a1],[a4,a5]##ty=i128
-;   select_i32 a0,a2,a3##condition=a4
+;   select a0,a2,a3##condition=a4
 ;   ret
 ;
 ; Disassembled:
@@ -754,7 +754,7 @@ block0(v0: i128, v1: i64, v2: i64):
 ;   li a4,42
 ;   li a5,0
 ;   eq a4,[a0,a1],[a4,a5]##ty=i128
-;   select_i64 a0,a2,a3##condition=a4
+;   select a0,a2,a3##condition=a4
 ;   ret
 ;
 ; Disassembled:
@@ -794,7 +794,7 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   li s5,42
 ;   li s6,0
 ;   eq a0,[a0,a1],[s5,s6]##ty=i128
-;   select_i128 [s4,a1],[a2,a3],[a4,a5]##condition=a0
+;   select [s4,a1],[a2,a3],[a4,a5]##condition=a0
 ;   mv a0,s4
 ;   add sp,+32
 ;   ld s4,-8(sp)

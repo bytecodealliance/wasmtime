@@ -1735,14 +1735,13 @@ impl Inst {
                 condition,
                 ref x,
                 ref y,
-                ty,
             } => {
                 let condition = format_reg(condition, allocs);
                 let x = format_regs(x.regs(), allocs);
                 let y = format_regs(y.regs(), allocs);
                 let dst: Vec<_> = dst.clone().into_iter().map(|r| r.to_reg()).collect();
                 let dst = format_regs(&dst[..], allocs);
-                format!("select_{} {},{},{}##condition={}", ty, dst, x, y, condition)
+                format!("select {},{},{}##condition={}", dst, x, y, condition)
             }
             &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
