@@ -53,6 +53,9 @@ pub struct TcpSocket {
 
     /// The current state in the bind/listen/accept/connect progression.
     pub(crate) tcp_state: TcpState,
+
+    /// The desired listen queue size. Set to None to use the system's default.
+    pub(crate) listen_backlog_size: Option<i32>,
 }
 
 pub(crate) struct TcpReadStream {
@@ -264,6 +267,7 @@ impl TcpSocket {
         Ok(Self {
             inner: Arc::new(stream),
             tcp_state: TcpState::Default,
+            listen_backlog_size: None,
         })
     }
 
