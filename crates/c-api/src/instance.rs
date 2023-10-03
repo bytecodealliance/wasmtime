@@ -11,15 +11,6 @@ pub struct wasm_instance_t {
     instance: Instance,
 }
 
-#[repr(transparent)]
-pub struct wasmtime_instance_pre_t {
-    pub(crate) underlying: InstancePre<StoreData>,
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_instance_pre_delete(_instance_pre: Box<wasmtime_instance_pre_t>) {
-}
-
 wasmtime_c_api_macros::declare_ref!(wasm_instance_t);
 
 impl wasm_instance_t {
@@ -158,6 +149,15 @@ pub unsafe extern "C" fn wasmtime_instance_export_nth(
         }
         None => false,
     }
+}
+
+#[repr(transparent)]
+pub struct wasmtime_instance_pre_t {
+    pub(crate) underlying: InstancePre<StoreData>,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_instance_pre_delete(_instance_pre: Box<wasmtime_instance_pre_t>) {
 }
 
 #[no_mangle]
