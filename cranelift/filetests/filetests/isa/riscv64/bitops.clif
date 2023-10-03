@@ -457,8 +457,8 @@ block0(v0: i8):
 ;   srai a4,a2,56
 ;   not a0,a4
 ;   select_reg a2,a0,a4##condition=(a4 slt zero)
-;   clz a0,a2##ty=i8 tmp=a4 step=a5
-;   addi a0,a0,-1
+;   clz a0,a2##ty=i64 tmp=a4 step=a5
+;   addi a0,a0,-57
 ;   ret
 ;
 ; Disassembled:
@@ -471,9 +471,9 @@ block0(v0: i8):
 ;   j 8
 ;   mv a2, a0
 ;   mv a0, zero
-;   addi a5, zero, 8
+;   addi a5, zero, 0x40
 ;   addi a4, zero, 1
-;   slli a4, a4, 7
+;   slli a4, a4, 0x3f
 ;   blez a5, 0x1c
 ;   and t5, a4, a2
 ;   bne zero, t5, 0x14
@@ -481,7 +481,7 @@ block0(v0: i8):
 ;   addi a5, a5, -1
 ;   srli a4, a4, 1
 ;   j -0x18
-;   addi a0, a0, -1
+;   addi a0, a0, -0x39
 ;   ret
 
 function %c(i16) -> i16 {
@@ -496,8 +496,8 @@ block0(v0: i16):
 ;   srai a4,a2,48
 ;   not a0,a4
 ;   select_reg a2,a0,a4##condition=(a4 slt zero)
-;   clz a0,a2##ty=i16 tmp=a4 step=a5
-;   addi a0,a0,-1
+;   clz a0,a2##ty=i64 tmp=a4 step=a5
+;   addi a0,a0,-49
 ;   ret
 ;
 ; Disassembled:
@@ -510,9 +510,9 @@ block0(v0: i16):
 ;   j 8
 ;   mv a2, a0
 ;   mv a0, zero
-;   addi a5, zero, 0x10
+;   addi a5, zero, 0x40
 ;   addi a4, zero, 1
-;   slli a4, a4, 0xf
+;   slli a4, a4, 0x3f
 ;   blez a5, 0x1c
 ;   and t5, a4, a2
 ;   bne zero, t5, 0x14
@@ -520,7 +520,7 @@ block0(v0: i16):
 ;   addi a5, a5, -1
 ;   srli a4, a4, 1
 ;   j -0x18
-;   addi a0, a0, -1
+;   addi a0, a0, -0x31
 ;   ret
 
 function %c(i32) -> i32 {
@@ -534,8 +534,8 @@ block0(v0: i32):
 ;   sext.w a2,a0
 ;   not a4,a2
 ;   select_reg a0,a4,a2##condition=(a2 slt zero)
-;   clz a4,a0##ty=i32 tmp=a2 step=a3
-;   addi a0,a4,-1
+;   clz a4,a0##ty=i64 tmp=a2 step=a3
+;   addi a0,a4,-33
 ;   ret
 ;
 ; Disassembled:
@@ -547,9 +547,9 @@ block0(v0: i32):
 ;   j 8
 ;   mv a0, a4
 ;   mv a4, zero
-;   addi a3, zero, 0x20
+;   addi a3, zero, 0x40
 ;   addi a2, zero, 1
-;   slli a2, a2, 0x1f
+;   slli a2, a2, 0x3f
 ;   blez a3, 0x1c
 ;   and t5, a2, a0
 ;   bne zero, t5, 0x14
@@ -557,7 +557,7 @@ block0(v0: i32):
 ;   addi a3, a3, -1
 ;   srli a2, a2, 1
 ;   j -0x18
-;   addi a0, a4, -1
+;   addi a0, a4, -0x21
 ;   ret
 
 function %c(i64) -> i64 {
@@ -611,7 +611,6 @@ block0(v0: i128):
 ;   clz a0,a5##ty=i64 tmp=a2 step=a4
 ;   select_reg a2,a0,zero##condition=(a3 eq zero)
 ;   add a3,a1,a2
-;   li a5,0
 ;   addi a0,a3,-1
 ;   li a1,0
 ;   ret
@@ -655,7 +654,6 @@ block0(v0: i128):
 ;   j 8
 ;   mv a2, a0
 ;   add a3, a1, a2
-;   mv a5, zero
 ;   addi a0, a3, -1
 ;   mv a1, zero
 ;   ret
@@ -889,22 +887,24 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   mv a5,a0
-;   popcnt a0,a5##ty=i32 tmp=a2 step=a3
+;   slli a2,a0,32
+;   srli a4,a2,32
+;   popcnt a0,a4##ty=i64 tmp=a2 step=a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a0
+;   slli a2, a0, 0x20
+;   srli a4, a2, 0x20
 ;   mv a0, zero
-;   addi a3, zero, 0x20
+;   addi a1, zero, 0x40
 ;   addi a2, zero, 1
-;   slli a2, a2, 0x1f
-;   blez a3, 0x1c
-;   and t5, a2, a5
+;   slli a2, a2, 0x3f
+;   blez a1, 0x1c
+;   and t5, a2, a4
 ;   beq zero, t5, 8
 ;   addi a0, a0, 1
-;   addi a3, a3, -1
+;   addi a1, a1, -1
 ;   srli a2, a2, 1
 ;   j -0x18
 ;   ret
@@ -917,22 +917,24 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   mv a5,a0
-;   popcnt a0,a5##ty=i16 tmp=a2 step=a3
+;   slli a2,a0,48
+;   srli a4,a2,48
+;   popcnt a0,a4##ty=i64 tmp=a2 step=a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a0
+;   slli a2, a0, 0x30
+;   srli a4, a2, 0x30
 ;   mv a0, zero
-;   addi a3, zero, 0x10
+;   addi a1, zero, 0x40
 ;   addi a2, zero, 1
-;   slli a2, a2, 0xf
-;   blez a3, 0x1c
-;   and t5, a2, a5
+;   slli a2, a2, 0x3f
+;   blez a1, 0x1c
+;   and t5, a2, a4
 ;   beq zero, t5, 8
 ;   addi a0, a0, 1
-;   addi a3, a3, -1
+;   addi a1, a1, -1
 ;   srli a2, a2, 1
 ;   j -0x18
 ;   ret
@@ -945,23 +947,23 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   mv a5,a0
-;   popcnt a0,a5##ty=i8 tmp=a2 step=a3
+;   andi a2,a0,255
+;   popcnt a0,a2##ty=i64 tmp=a4 step=a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a5, a0
+;   andi a2, a0, 0xff
 ;   mv a0, zero
-;   addi a3, zero, 8
-;   addi a2, zero, 1
-;   slli a2, a2, 7
-;   blez a3, 0x1c
-;   and t5, a2, a5
+;   addi a5, zero, 0x40
+;   addi a4, zero, 1
+;   slli a4, a4, 0x3f
+;   blez a5, 0x1c
+;   and t5, a4, a2
 ;   beq zero, t5, 8
 ;   addi a0, a0, 1
-;   addi a3, a3, -1
-;   srli a2, a2, 1
+;   addi a5, a5, -1
+;   srli a4, a4, 1
 ;   j -0x18
 ;   ret
 

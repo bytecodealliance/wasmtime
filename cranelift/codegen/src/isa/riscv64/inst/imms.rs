@@ -263,6 +263,34 @@ impl Display for Uimm5 {
     }
 }
 
+/// A unsigned 2-bit immediate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Uimm2 {
+    value: u8,
+}
+
+impl Uimm2 {
+    /// Create an unsigned 2-bit immediate from an u8
+    pub fn maybe_from_u8(value: u8) -> Option<Self> {
+        if value <= 3 {
+            Some(Self { value })
+        } else {
+            None
+        }
+    }
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u8 {
+        self.value & 0x3
+    }
+}
+
+impl Display for Uimm2 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 impl Inst {
     pub(crate) fn imm_min() -> i64 {
         let imm20_max: i64 = (1 << 19) << 12;

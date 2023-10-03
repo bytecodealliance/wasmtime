@@ -1069,6 +1069,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
 
             self.finish_bb();
+
+            // Check for any deferred vreg-temp allocation errors, and
+            // bubble one up at this time if it exists.
+            if let Some(e) = self.vregs.take_deferred_error() {
+                return Err(e);
+            }
         }
 
         // Now that we've emitted all instructions into the
@@ -1319,7 +1325,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get a new temp.
     pub fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>> {
-        writable_value_regs(self.vregs.alloc(ty).unwrap())
+        writable_value_regs(self.vregs.alloc_with_deferred_error(ty))
     }
 
     /// Emit a machine instruction.

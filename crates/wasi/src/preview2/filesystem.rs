@@ -1,10 +1,45 @@
-use crate::preview2::bindings::filesystem::types::Descriptor;
-use crate::preview2::{AbortOnDropJoinHandle, HostOutputStream, StreamError, Table, TableError};
+use crate::preview2::bindings::filesystem::types;
+use crate::preview2::{AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
-use futures::future::{maybe_done, MaybeDone};
+use std::io;
+use std::mem;
 use std::sync::Arc;
-use wasmtime::component::Resource;
+
+pub enum Descriptor {
+    File(File),
+    Dir(Dir),
+}
+
+impl Descriptor {
+    pub fn file(&self) -> Result<&File, types::ErrorCode> {
+        match self {
+            Descriptor::File(f) => Ok(f),
+            Descriptor::Dir(_) => Err(types::ErrorCode::BadDescriptor),
+        }
+    }
+
+    pub fn dir(&self) -> Result<&Dir, types::ErrorCode> {
+        match self {
+            Descriptor::Dir(d) => Ok(d),
+            Descriptor::File(_) => Err(types::ErrorCode::NotDirectory),
+        }
+    }
+
+    pub fn is_file(&self) -> bool {
+        match self {
+            Descriptor::File(_) => true,
+            Descriptor::Dir(_) => false,
+        }
+    }
+
+    pub fn is_dir(&self) -> bool {
+        match self {
+            Descriptor::File(_) => false,
+            Descriptor::Dir(_) => true,
+        }
+    }
+}
 
 bitflags::bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -14,7 +49,7 @@ bitflags::bitflags! {
     }
 }
 
-pub(crate) struct File {
+pub struct File {
     /// Wrapped in an Arc because the same underlying file is used for
     /// implementing the stream types. Also needed for [`spawn_blocking`].
     ///
@@ -42,45 +77,6 @@ impl File {
         tokio::task::spawn_blocking(move || body(&f)).await.unwrap()
     }
 }
-pub(crate) trait TableFsExt {
-    fn push_file(&mut self, file: File) -> Result<Resource<Descriptor>, TableError>;
-    fn delete_file(&mut self, fd: Resource<Descriptor>) -> Result<File, TableError>;
-    fn is_file(&self, fd: &Resource<Descriptor>) -> bool;
-    fn get_file(&self, fd: &Resource<Descriptor>) -> Result<&File, TableError>;
-
-    fn push_dir(&mut self, dir: Dir) -> Result<Resource<Descriptor>, TableError>;
-    fn delete_dir(&mut self, fd: Resource<Descriptor>) -> Result<Dir, TableError>;
-    fn is_dir(&self, fd: &Resource<Descriptor>) -> bool;
-    fn get_dir(&self, fd: &Resource<Descriptor>) -> Result<&Dir, TableError>;
-}
-
-impl TableFsExt for Table {
-    fn push_file(&mut self, file: File) -> Result<Resource<Descriptor>, TableError> {
-        Ok(Resource::new_own(self.push(Box::new(file))?))
-    }
-    fn delete_file(&mut self, fd: Resource<Descriptor>) -> Result<File, TableError> {
-        self.delete(fd.rep())
-    }
-    fn is_file(&self, fd: &Resource<Descriptor>) -> bool {
-        self.is::<File>(fd.rep())
-    }
-    fn get_file(&self, fd: &Resource<Descriptor>) -> Result<&File, TableError> {
-        self.get(fd.rep())
-    }
-
-    fn push_dir(&mut self, dir: Dir) -> Result<Resource<Descriptor>, TableError> {
-        Ok(Resource::new_own(self.push(Box::new(dir))?))
-    }
-    fn delete_dir(&mut self, fd: Resource<Descriptor>) -> Result<Dir, TableError> {
-        self.delete(fd.rep())
-    }
-    fn is_dir(&self, fd: &Resource<Descriptor>) -> bool {
-        self.is::<Dir>(fd.rep())
-    }
-    fn get_dir(&self, fd: &Resource<Descriptor>) -> Result<&Dir, TableError> {
-        self.get(fd.rep())
-    }
-}
 
 bitflags::bitflags! {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -91,7 +87,7 @@ bitflags::bitflags! {
 }
 
 #[derive(Clone)]
-pub(crate) struct Dir {
+pub struct Dir {
     pub dir: Arc<cap_std::fs::Dir>,
     pub perms: DirPerms,
     pub file_perms: FilePerms,
@@ -118,7 +114,7 @@ impl Dir {
     }
 }
 
-pub(crate) struct FileInputStream {
+pub struct FileInputStream {
     file: Arc<cap_std::fs::File>,
     position: u64,
 }
@@ -150,12 +146,12 @@ impl FileInputStream {
     }
 }
 
-fn read_result(r: Result<usize, std::io::Error>) -> Result<usize, StreamError> {
+fn read_result(r: io::Result<usize>) -> Result<usize, StreamError> {
     match r {
         Ok(0) => Err(StreamError::Closed),
         Ok(n) => Ok(n),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok(0),
-        Err(e) => Err(StreamError::Trap(e.into())),
+        Err(e) => Err(StreamError::LastOperationFailed(e.into())),
     }
 }
 
@@ -168,26 +164,32 @@ pub(crate) enum FileOutputMode {
 pub(crate) struct FileOutputStream {
     file: Arc<cap_std::fs::File>,
     mode: FileOutputMode,
-    // Allows join future to be awaited in a cancellable manner. Gone variant indicates
-    // no task is currently outstanding.
-    task: MaybeDone<AbortOnDropJoinHandle<Result<(), std::io::Error>>>,
-    closed: bool,
+    state: OutputState,
 }
+
+enum OutputState {
+    Ready,
+    /// Allows join future to be awaited in a cancellable manner. Gone variant indicates
+    /// no task is currently outstanding.
+    Waiting(AbortOnDropJoinHandle<io::Result<()>>),
+    /// The last I/O operation failed with this error.
+    Error(io::Error),
+    Closed,
+}
+
 impl FileOutputStream {
     pub fn write_at(file: Arc<cap_std::fs::File>, position: u64) -> Self {
         Self {
             file,
             mode: FileOutputMode::Position(position),
-            task: MaybeDone::Gone,
-            closed: false,
+            state: OutputState::Ready,
         }
     }
     pub fn append(file: Arc<cap_std::fs::File>) -> Self {
         Self {
             file,
             mode: FileOutputMode::Append,
-            task: MaybeDone::Gone,
-            closed: false,
+            state: OutputState::Ready,
         }
     }
 }
@@ -195,74 +197,105 @@ impl FileOutputStream {
 // FIXME: configurable? determine from how much space left in file?
 const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 
-#[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         use system_interface::fs::FileIoExt;
+        match self.state {
+            OutputState::Ready => {}
+            OutputState::Closed => return Err(StreamError::Closed),
+            OutputState::Waiting(_) | OutputState::Error(_) => {
+                // a write is pending - this call was not permitted
+                return Err(StreamError::Trap(anyhow!(
+                    "write not permitted: check_write not called first"
+                )));
+            }
+        }
 
-        if self.closed {
-            return Err(StreamError::Closed);
-        }
-        if !matches!(self.task, MaybeDone::Gone) {
-            // a write is pending - this call was not permitted
-            return Err(StreamError::Trap(anyhow!(
-                "write not permitted: FileOutputStream write pending"
-            )));
-        }
         let f = Arc::clone(&self.file);
         let m = self.mode;
-        self.task = maybe_done(AbortOnDropJoinHandle::from(tokio::task::spawn_blocking(
-            move || match m {
-                FileOutputMode::Position(mut p) => {
-                    let mut buf = buf;
-                    while !buf.is_empty() {
-                        let nwritten = f.write_at(buf.as_ref(), p)?;
-                        // afterwards buf contains [nwritten, len):
-                        let _ = buf.split_to(nwritten);
-                        p += nwritten as u64;
-                    }
-                    Ok(())
+        let task = AbortOnDropJoinHandle::from(tokio::task::spawn_blocking(move || match m {
+            FileOutputMode::Position(mut p) => {
+                let mut buf = buf;
+                while !buf.is_empty() {
+                    let nwritten = f.write_at(buf.as_ref(), p)?;
+                    // afterwards buf contains [nwritten, len):
+                    let _ = buf.split_to(nwritten);
+                    p += nwritten as u64;
                 }
-                FileOutputMode::Append => {
-                    let mut buf = buf;
-                    while !buf.is_empty() {
-                        let nwritten = f.append(buf.as_ref())?;
-                        let _ = buf.split_to(nwritten);
-                    }
-                    Ok(())
+                Ok(())
+            }
+            FileOutputMode::Append => {
+                let mut buf = buf;
+                while !buf.is_empty() {
+                    let nwritten = f.append(buf.as_ref())?;
+                    let _ = buf.split_to(nwritten);
                 }
-            },
-        )));
+                Ok(())
+            }
+        }));
+        self.state = OutputState::Waiting(task);
         Ok(())
     }
     fn flush(&mut self) -> Result<(), StreamError> {
-        if self.closed {
-            return Err(StreamError::Closed);
+        match self.state {
+            // Only userland buffering of file writes is in the blocking task,
+            // so there's nothing extra that needs to be done to request a
+            // flush.
+            OutputState::Ready | OutputState::Waiting(_) => Ok(()),
+            OutputState::Closed => Err(StreamError::Closed),
+            OutputState::Error(_) => match mem::replace(&mut self.state, OutputState::Closed) {
+                OutputState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
+                _ => unreachable!(),
+            },
         }
-        // Only userland buffering of file writes is in the blocking task.
-        Ok(())
     }
-    async fn write_ready(&mut self) -> Result<usize, StreamError> {
-        if self.closed {
-            return Err(StreamError::Closed);
+    fn check_write(&mut self) -> Result<usize, StreamError> {
+        match self.state {
+            OutputState::Ready => Ok(FILE_WRITE_CAPACITY),
+            OutputState::Closed => Err(StreamError::Closed),
+            OutputState::Error(_) => match mem::replace(&mut self.state, OutputState::Closed) {
+                OutputState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
+                _ => unreachable!(),
+            },
+            OutputState::Waiting(_) => Ok(0),
         }
-        // If there is no outstanding task, accept more input:
-        if matches!(self.task, MaybeDone::Gone) {
-            return Ok(FILE_WRITE_CAPACITY);
-        }
-        // Wait for outstanding task:
-        std::pin::Pin::new(&mut self.task).await;
+    }
+}
 
-        // Mark task as finished, and handle output:
-        match std::pin::Pin::new(&mut self.task)
-            .take_output()
-            .expect("just awaited for MaybeDone completion")
-        {
-            Ok(()) => Ok(FILE_WRITE_CAPACITY),
-            Err(e) => {
-                self.closed = true;
-                Err(StreamError::LastOperationFailed(e.into()))
-            }
+#[async_trait::async_trait]
+impl Subscribe for FileOutputStream {
+    async fn ready(&mut self) {
+        if let OutputState::Waiting(task) = &mut self.state {
+            self.state = match task.await {
+                Ok(()) => OutputState::Ready,
+                Err(e) => OutputState::Error(e),
+            };
         }
+    }
+}
+
+pub struct ReaddirIterator(
+    std::sync::Mutex<
+        Box<dyn Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static>,
+    >,
+);
+
+impl ReaddirIterator {
+    pub(crate) fn new(
+        i: impl Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static,
+    ) -> Self {
+        ReaddirIterator(std::sync::Mutex::new(Box::new(i)))
+    }
+    pub(crate) fn next(&self) -> Result<Option<types::DirectoryEntry>, types::Error> {
+        self.0.lock().unwrap().next().transpose()
+    }
+}
+
+impl IntoIterator for ReaddirIterator {
+    type Item = Result<types::DirectoryEntry, types::Error>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + Send>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_inner().unwrap()
     }
 }

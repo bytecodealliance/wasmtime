@@ -23,9 +23,9 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
+use crate::preview2::poll::Subscribe;
 use crate::preview2::stdio::StdinStream;
 use crate::preview2::{HostInputStream, StreamError};
-use anyhow::Error;
 use bytes::{Bytes, BytesMut};
 use std::io::{IsTerminal, Read};
 use std::mem;
@@ -145,8 +145,11 @@ impl HostInputStream for Stdin {
             }
         }
     }
+}
 
-    async fn ready(&mut self) -> Result<(), Error> {
+#[async_trait::async_trait]
+impl Subscribe for Stdin {
+    async fn ready(&mut self) {
         let g = GlobalStdin::get();
 
         // Scope the synchronous `state.lock()` to this block which does not
@@ -161,12 +164,10 @@ impl HostInputStream for Stdin {
                     g.read_completed.notified()
                 }
                 StdinState::ReadRequested => g.read_completed.notified(),
-                StdinState::Data(_) | StdinState::Closed | StdinState::Error(_) => return Ok(()),
+                StdinState::Data(_) | StdinState::Closed | StdinState::Error(_) => return,
             }
         };
 
         notified.await;
-
-        Ok(())
     }
 }

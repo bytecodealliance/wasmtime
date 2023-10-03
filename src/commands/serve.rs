@@ -14,14 +14,12 @@ struct Host {
 }
 
 impl Host {
-    fn new() -> Result<Self> {
-        let mut table = Table::new();
-        let ctx = WasiCtxBuilder::new().build(&mut table)?;
-        Ok(Host {
-            table,
-            ctx,
+    fn new() -> Self {
+        Host {
+            table: Table::new(),
+            ctx: WasiCtxBuilder::new().build(),
             http: WasiHttpCtx,
-        })
+        }
     }
 }
 
@@ -168,8 +166,7 @@ impl hyper::service::Service<Request> for ProxyHandler {
 
         // TODO: need to track the join handle, but don't want to block the response on it
         tokio::task::spawn(async move {
-            let host = Host::new()?;
-            let mut store = Store::new(&handler.engine, host);
+            let mut store = Store::new(&handler.engine, Host::new());
 
             let req = store.data_mut().new_incoming_request(
                 req.map(|body| body.map_err(|e| anyhow::anyhow!(e)).boxed()),
