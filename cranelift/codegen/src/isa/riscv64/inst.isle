@@ -1723,38 +1723,44 @@
 (decl i64_generate_imm (Imm20 Imm12) i64)
 (extern extractor i64_generate_imm i64_generate_imm)
 
+(decl i64_shift_for_lui (i64 Imm12) i64)
+(extern extractor i64_shift_for_lui i64_shift_for_lui)
 
 ;; Immediate Loading rules
 ;; TODO: Loading the zero reg directly causes a bunch of regalloc errors, we should look into it.
-;; TODO: We can load constants like 0x3ff0000000000000 by loading the bits then doing a shift left.
 ;; TODO: Load floats using `fld` instead of `ld`
 (decl imm (Type u64) Reg)
 
 ;; Refs get loaded as integers.
-(rule 4 (imm $R32 c) (imm $I32 c))
-(rule 4 (imm $R64 c) (imm $I64 c))
+(rule 5 (imm $R32 c) (imm $I32 c))
+(rule 5 (imm $R64 c) (imm $I64 c))
 
 ;; Floats get loaded as integers and then moved into an F register.
-(rule 4 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
-(rule 4 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
+(rule 5 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
+(rule 5 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
 
 ;; Try to match just an imm12
-(rule 3 (imm (ty_int ty) c)
+(rule 4 (imm (ty_int ty) c)
   (if-let (i64_generate_imm (imm20_is_zero) imm12) (i64_sextend_u64 ty c))
   (rv_addi (zero_reg) imm12))
 
 ;; We can also try to load using a single LUI.
 ;; LUI takes a 20 bit immediate, places it on bits 13 to 32 of the register.
 ;; In RV64 this value is then sign extended to 64bits.
-(rule 2 (imm (ty_int ty) c)
+(rule 3 (imm (ty_int ty) c)
   (if-let (i64_generate_imm imm20 (imm12_is_zero)) (i64_sextend_u64 ty c))
   (rv_lui imm20))
 
 ;; We can combo addi + lui to represent all 32-bit immediates
 ;; And some 64-bit immediates as well.
-(rule 1 (imm (ty_int ty) c)
+(rule 2 (imm (ty_int ty) c)
   (if-let (i64_generate_imm imm20 imm12) (i64_sextend_u64 ty c))
   (rv_addi (rv_lui imm20) imm12))
+
+;; If the non-zero bits of the immediate fit in 20 bits, we can use LUI + shift
+(rule 1 (imm (ty_int ty) c)
+  (if-let (i64_shift_for_lui (imm20_from_i64 base) shift) (i64_sextend_u64 ty c))
+  (rv_slli (rv_lui base) shift))
 
 ;; Combine one of the above rules with a shift-left if possible, This chops off
 ;; all trailing zeros from the input constant and then attempts if the resulting
@@ -1825,6 +1831,9 @@
 ;; Extractor that matches if a Imm20 is zero
 (decl pure imm20_is_zero () Imm20)
 (extern extractor imm20_is_zero imm20_is_zero)
+
+(decl imm20_from_i64 (Imm20) i64)
+(extern extractor imm20_from_i64 imm20_from_i64)
 
 
 ;; Imm5 Extractors

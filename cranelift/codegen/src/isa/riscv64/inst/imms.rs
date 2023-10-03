@@ -74,6 +74,18 @@ pub struct Imm20 {
 impl Imm20 {
     pub(crate) const ZERO: Self = Self { bits: 0 };
 
+    pub fn maybe_from_u64(val: u64) -> Option<Imm20> {
+        if val <= 0xfffff {
+            Some(Imm20 { bits: val as u32 })
+        } else {
+            None
+        }
+    }
+
+    pub fn maybe_from_i64(val: i64) -> Option<Imm20> {
+        Self::maybe_from_u64(val as u64)
+    }
+
     #[inline]
     pub fn from_i32(bits: i32) -> Self {
         assert!(bits >= -(0x7_ffff + 1) && bits <= 0x7_ffff);
