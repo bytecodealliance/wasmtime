@@ -9,7 +9,7 @@ use wasmtime::{Func, Instance, Linker};
 
 #[repr(C)]
 pub struct wasmtime_linker_t {
-    linker: Linker<crate::StoreData>,
+    pub(crate) linker: Linker<crate::StoreData>,
 }
 
 wasmtime_c_api_macros::declare_own!(wasmtime_linker_t);
@@ -37,6 +37,8 @@ macro_rules! to_str {
         }
     };
 }
+
+pub(crate) use to_str;
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_define(
