@@ -8,12 +8,10 @@ pub mod bindings {
 }
 
 use anyhow::{anyhow, Result};
-use std::fmt;
-use std::sync::OnceLock;
-
 use bindings::wasi::http::{outgoing_handler, types as http_types};
 use bindings::wasi::io::poll;
 use bindings::wasi::io::streams;
+use std::fmt;
 
 pub struct Response {
     pub status: http_types::StatusCode,
