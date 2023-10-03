@@ -97,12 +97,11 @@ impl Worker {
             state.error = Some(e.into());
             state.flush_pending = false;
         }
-        self.write_ready_changed.notify_waiters();
+        self.write_ready_changed.notify_one();
     }
     async fn work<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(&self, mut writer: T) {
         use tokio::io::AsyncWriteExt;
         loop {
-            let notified = self.new_work.notified();
             while let Some(job) = self.pop() {
                 match job {
                     Job::Flush => {
@@ -130,10 +129,9 @@ impl Worker {
                     }
                 }
 
-                self.write_ready_changed.notify_waiters();
+                self.write_ready_changed.notify_one();
             }
-
-            notified.await;
+            self.new_work.notified().await;
         }
     }
 }
@@ -180,7 +178,7 @@ impl HostOutputStream for AsyncWriteStream {
             None => return Err(OutputStreamError::Trap(anyhow!("write exceeded budget"))),
         }
         drop(state);
-        self.worker.new_work.notify_waiters();
+        self.worker.new_work.notify_one();
         Ok(())
     }
     fn flush(&mut self) -> Result<(), OutputStreamError> {
@@ -188,7 +186,7 @@ impl HostOutputStream for AsyncWriteStream {
         state.check_error()?;
 
         state.flush_pending = true;
-        self.worker.new_work.notify_waiters();
+        self.worker.new_work.notify_one();
 
         Ok(())
     }
