@@ -282,35 +282,33 @@ impl Subscribe for ClosedOutputStream {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::time::Duration;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
     // This is a gross way to handle CI running under qemu for non-x86 architectures.
     #[cfg(not(target_arch = "x86_64"))]
     const TEST_ITERATIONS: usize = 10;
 
-    // This is a gross way to handle CI running under qemu for non-x86 architectures.
-    #[cfg(not(target_arch = "x86_64"))]
-    const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(200);
-
     #[cfg(target_arch = "x86_64")]
     const TEST_ITERATIONS: usize = 100;
-
-    #[cfg(target_arch = "x86_64")]
-    const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(10);
 
     async fn resolves_immediately<F, O>(fut: F) -> O
     where
         F: futures::Future<Output = O>,
     {
-        tokio::time::timeout(REASONABLE_DURATION, fut)
+        // The input `fut` should resolve immediately, but in case it
+        // accidentally doesn't don't hang the test indefinitely. Provide a
+        // generous timeout to account for CI sensitivity and various systems.
+        tokio::time::timeout(Duration::from_secs(2), fut)
             .await
             .expect("operation timed out")
     }
 
-    // TODO: is there a way to get tokio to warp through timeouts when it knows nothing is
-    // happening?
     async fn never_resolves<F: futures::Future>(fut: F) {
-        tokio::time::timeout(REASONABLE_DURATION, fut)
+        // The input `fut` should never resolve, so only give it a small window
+        // of budget before we time out. If `fut` is actually resolved this
+        // should show up as a flaky test.
+        tokio::time::timeout(Duration::from_millis(10), fut)
             .await
             .err()
             .expect("operation should time out");
