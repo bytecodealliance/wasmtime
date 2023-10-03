@@ -579,7 +579,7 @@
 (rule (safe_sdiv_divisor ty x y)
   (let (
       (y XReg (nonzero_divisor y))
-      (min XReg (imm $I64 (u64_shl 1 (u64_sub (ty_bits ty) 1))))
+      (min XReg (imm $I64 (u64_shl 0xffffffff_ffffffff (u64_sub (ty_bits ty) 1))))
       (x_is_not_min XReg (rv_xor x min))
       (y_is_not_neg_one XReg (rv_not y))
       (no_int_overflow XReg (rv_or x_is_not_min y_is_not_neg_one))

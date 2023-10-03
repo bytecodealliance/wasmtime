@@ -220,12 +220,11 @@ block0(v0: i32, v1: i32):
 ;   sext.w a3,a0
 ;   sext.w a5,a1
 ;   trap_if int_divz##(a5 eq zero)
-;   li a2,1
-;   slli a4,a2,31
-;   xor a0,a3,a4
-;   not a2,a5
-;   or a4,a0,a2
-;   trap_if int_ovf##(a4 eq zero)
+;   lui a2,-524288
+;   xor a4,a3,a2
+;   not a0,a5
+;   or a2,a4,a0
+;   trap_if int_ovf##(a2 eq zero)
 ;   divw a0,a3,a5
 ;   ret
 ;
@@ -235,12 +234,11 @@ block0(v0: i32, v1: i32):
 ;   sext.w a5, a1
 ;   bnez a5, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   addi a2, zero, 1
-;   slli a4, a2, 0x1f
-;   xor a0, a3, a4
-;   not a2, a5
-;   or a4, a0, a2
-;   bnez a4, 8
+;   lui a2, 0x80000
+;   xor a4, a3, a2
+;   not a0, a5
+;   or a2, a4, a0
+;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   divw a0, a3, a5
 ;   ret
