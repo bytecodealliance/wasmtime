@@ -19,6 +19,17 @@ pub mod bindings {
         with: {
             "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
             "wasi:io/poll": wasmtime_wasi::preview2::bindings::io::poll,
+
+            "wasi:http/types/outgoing-body": super::body::HostOutgoingBody,
+            "wasi:http/types/future-incoming-response": super::types::HostFutureIncomingResponse,
+            "wasi:http/types/outgoing-response": super::types::HostOutgoingResponse,
+            "wasi:http/types/future-trailers": super::body::HostFutureTrailers,
+            "wasi:http/types/incoming-body": super::body::HostIncomingBody,
+            "wasi:http/types/incoming-response": super::types::HostIncomingResponse,
+            "wasi:http/types/response-outparam": super::types::HostResponseOutparam,
+            "wasi:http/types/outgoing-request": super::types::HostOutgoingRequest,
+            "wasi:http/types/incoming-request": super::types::HostIncomingRequest,
+            "wasi:http/types/fields": super::types::HostFields,
         }
     });
 

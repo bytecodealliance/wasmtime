@@ -30,35 +30,38 @@ interface types {
   // This type enumerates the different kinds of errors that may occur when
   // initially returning a response.
   variant error {
-      invalid-url(string),
-      timeout-error(string),
-      protocol-error(string),
-      unexpected-error(string)
+    invalid-url(string),
+    timeout-error(string),
+    protocol-error(string),
+    unexpected-error(string)
   }
 
   // This following block defines the `fields` resource which corresponds to
   // HTTP standard Fields. Soon, when resource types are added, the `type
   // fields = u32` type alias can be replaced by a proper `resource fields`
   // definition containing all the functions using the method syntactic sugar.
-  type fields = u32
-  drop-fields: func(fields: /* own */ fields)
-  // Multiple values for a header are multiple entries in the list with the
-  // same key.
-  new-fields: func(entries: list<tuple<string,list<u8>>>) -> fields
-  // Values off wire are not necessarily well formed, so they are given by
-  // list<u8> instead of string.
-  fields-get: func(fields: /* borrow */ fields, name: string) -> list<list<u8>>
-  // Values off wire are not necessarily well formed, so they are given by
-  // list<u8> instead of string.
-  fields-set: func(fields: /* borrow */ fields, name: string, value: list<list<u8>>)
-  fields-delete: func(fields: /* borrow */ fields, name: string)
-  fields-append: func(fields: /* borrow */  fields, name: string, value: list<u8>)
+  resource fields {
+    // Multiple values for a header are multiple entries in the list with the
+    // same key.
+    constructor(entries: list<tuple<string,list<u8>>>)
 
-  // Values off wire are not necessarily well formed, so they are given by
-  // list<u8> instead of string.
-  fields-entries: func(fields: /* borrow */  fields) -> list<tuple<string,list<u8>>>
-  // Deep copy of all contents in a fields.
-  fields-clone: func(fields: /* borrow */ fields) -> fields
+    // Values off wire are not necessarily well formed, so they are given by
+    // list<u8> instead of string.
+    get: func(name: string) -> list<list<u8>>
+
+    // Values off wire are not necessarily well formed, so they are given by
+    // list<u8> instead of string.
+    set: func(name: string, value: list<list<u8>>)
+    delete: func(name: string)
+    append: func(name: string, value: list<u8>)
+
+    // Values off wire are not necessarily well formed, so they are given by
+    // list<u8> instead of string.
+    entries: func() -> list<tuple<string,list<u8>>>
+
+    // Deep copy of all contents in a fields.
+    clone: func() -> fields
+  }
 
   type headers = fields
   type trailers = fields
@@ -71,31 +74,35 @@ interface types {
   // a single `request` type (that uses the single `stream` type mentioned
   // above). The `consume` and `write` methods may only be called once (and
   // return failure thereafter).
-  type incoming-request = u32
-  drop-incoming-request: func(request: /* own */ incoming-request)
-  incoming-request-method: func(request: /* borrow */ incoming-request) -> method
-  incoming-request-path-with-query: func(request: /* borrow */ incoming-request) -> option<string>
-  incoming-request-scheme: func(request: /* borrow */ incoming-request) -> option<scheme>
-  incoming-request-authority: func(request: /* borrow */ incoming-request) -> option<string>
+  resource incoming-request {
+    method: func() -> method
 
-  incoming-request-headers: func(request: /* borrow */ incoming-request) -> /* child */ headers
-  // Will return the input-stream child at most once. If called more than
-  // once, subsequent calls will return error.
-  incoming-request-consume: func(request: /* borrow */ incoming-request) -> result< /* own */ incoming-body>
+    path-with-query: func() -> option<string>
 
-  type outgoing-request = u32
-  drop-outgoing-request: func(request: /* own */ outgoing-request)
-  new-outgoing-request: func(
-    method: method,
-    path-with-query: option<string>,
-    scheme: option<scheme>,
-    authority: option<string>,
-    headers: /* borrow */ headers
-  ) -> outgoing-request
+    scheme: func() -> option<scheme>
 
-  // Will return the outgoing-body child at most once. If called more than
-  // once, subsequent calls will return error.
-  outgoing-request-write: func(request: /* borrow */ outgoing-request) -> result< /* child */ outgoing-body>
+    authority: func() -> option<string>
+
+    headers: func() -> /* child */ headers
+    // Will return the input-stream child at most once. If called more than
+    // once, subsequent calls will return error.
+
+    consume: func() -> result< /* own */ incoming-body>
+  }
+
+  resource outgoing-request {
+    constructor(
+      method: method,
+      path-with-query: option<string>,
+      scheme: option<scheme>,
+      authority: option<string>,
+      headers: /* borrow */ headers
+    )
+
+    // Will return the outgoing-body child at most once. If called more than
+    // once, subsequent calls will return error.
+    write: func() -> result< /* child */ outgoing-body>
+  }
 
   // Additional optional parameters that can be set when making a request.
   record request-options {
@@ -119,9 +126,9 @@ interface types {
   // definition. Later, with Preview3, the need for an outparam goes away entirely
   // (the `wasi:http/handler` interface used for both incoming and outgoing can
   // simply return a `stream`).
-  type response-outparam = u32
-  drop-response-outparam: func(response: /* own */ response-outparam)
-  set-response-outparam: func(param: /* own */ response-outparam, response: result< /* own */ outgoing-response, error>)
+  resource response-outparam {
+    set: static func(param: /* own */ response-outparam, response: result< /* own */ outgoing-response, error>)
+  }
 
   // This type corresponds to the HTTP standard Status Code.
   type status-code = u16
@@ -133,58 +140,58 @@ interface types {
   // Preview2 will allow both types to be merged together into a single `response`
   // type (that uses the single `stream` type mentioned above). The `consume` and
   // `write` methods may only be called once (and return failure thereafter).
-  type incoming-response = u32
-  drop-incoming-response: func(response: /* own */ incoming-response)
-  incoming-response-status: func(response: /* borrow */ incoming-response) -> status-code
-  incoming-response-headers: func(response: /* borrow */ incoming-response) -> /* child */ headers
-  // May be called at most once. returns error if called additional times.
-  // TODO: make incoming-request-consume work the same way, giving a child
-  // incoming-body.
-  incoming-response-consume: func(response: /* borrow */ incoming-response) -> result</* own */ incoming-body>
+  resource incoming-response {
+    status: func() -> status-code
+
+    headers: func() -> /* child */ headers
+
+    // May be called at most once. returns error if called additional times.
+    // TODO: make incoming-request-consume work the same way, giving a child
+    // incoming-body.
+    consume: func() -> result</* own */ incoming-body>
+  }
 
   resource incoming-body {
     // returned input-stream is a child - the implementation may trap if
     // incoming-body is dropped (or consumed by call to
     // incoming-body-finish) before the input-stream is dropped.
     // May be called at most once. returns error if called additional times.
-    %stream: func() ->
-      result</* child */ input-stream>
+    %stream: func() -> result</* child */ input-stream>
+
     // takes ownership of incoming-body. this will trap if the
     // incoming-body-stream child is still alive!
-    finish: func() ->
-      /* transitive child of the incoming-response of incoming-body */ future-trailers
+    finish: static func(this: /* own */ incoming-body) ->
+    /* transitive child of the incoming-response of incoming-body */ future-trailers
   }
 
-  type future-trailers = u32
-  drop-future-trailers: func(this: /* own */ future-trailers)
-  /// Pollable that resolves when the body has been fully read, and the trailers
-  /// are ready to be consumed.
-  future-trailers-subscribe: func(this: /* borrow */ future-trailers) -> /* child */ pollable
+  resource future-trailers {
+    /// Pollable that resolves when the body has been fully read, and the trailers
+    /// are ready to be consumed.
+    subscribe: func() -> /* child */ pollable
 
-  /// Retrieve reference to trailers, if they are ready.
-  future-trailers-get: func(response: /* borrow */ future-trailers) -> option<result</* child */ trailers, error>>
+    /// Retrieve reference to trailers, if they are ready.
+    get: func() -> option<result</* child */ trailers, error>>
+  }
 
-  type outgoing-response = u32
-  drop-outgoing-response: func(response: /* own */ outgoing-response)
-  new-outgoing-response: func(
-    status-code: status-code,
-    headers: /* borrow */ headers
-  ) -> outgoing-response
+  resource outgoing-response {
+    constructor(status-code: status-code, headers: /* borrow */ headers)
 
-  /// Will give the child outgoing-response at most once. subsequent calls will
-  /// return an error.
-  outgoing-response-write: func(this: /* borrow */ outgoing-response) -> result</* own */ outgoing-body>
+    /// Will give the child outgoing-response at most once. subsequent calls will
+    /// return an error.
+    write: func() -> result</* own */ outgoing-body>
+  }
 
-  type outgoing-body = u32
-  drop-outgoing-body: func(this: /* own */ outgoing-body)
-  /// Will give the child output-stream at most once. subsequent calls will
-  /// return an error.
-  outgoing-body-write: func(this: /* borrow */ outgoing-body) -> result</* child */ output-stream>
-  /// Finalize an outgoing body, optionally providing trailers. This must be
-  /// called to signal that the response is complete. If the `outgoing-body` is
-  /// dropped without calling `outgoing-body-finalize`, the implementation
-  /// should treat the body as corrupted.
-  outgoing-body-finish: func(this: /* own */ outgoing-body, trailers: /* own */ option<trailers>)
+  resource outgoing-body {
+    /// Will give the child output-stream at most once. subsequent calls will
+    /// return an error.
+    write: func() -> result</* child */ output-stream>
+
+    /// Finalize an outgoing body, optionally providing trailers. This must be
+    /// called to signal that the response is complete. If the `outgoing-body` is
+    /// dropped without calling `outgoing-body-finalize`, the implementation
+    /// should treat the body as corrupted.
+    finish: static func(this: /* own */ outgoing-body, trailers: /* own */ option<trailers>)
+  }
 
   /// The following block defines a special resource type used by the
   /// `wasi:http/outgoing-handler` interface to emulate
@@ -193,14 +200,15 @@ interface types {
   /// method to get the result if it is available. If the result is not available,
   /// the client can call `listen` to get a `pollable` that can be passed to
   /// `wasi:io/poll.poll-list`.
-  type future-incoming-response = u32
-  drop-future-incoming-response: func(f: /* own */ future-incoming-response)
-  /// option indicates readiness.
-  /// outer result indicates you are allowed to get the
-  /// incoming-response-or-error at most once. subsequent calls after ready
-  /// will return an error here.
-  /// inner result indicates whether the incoming-response was available, or an
-  /// error occured.
-  future-incoming-response-get: func(f: /* borrow */ future-incoming-response) -> option<result<result</* NOT a child*/ incoming-response, error>>>
-  listen-to-future-incoming-response: func(f: /* borrow */ future-incoming-response) -> /* child */ pollable
+  resource future-incoming-response {
+    /// option indicates readiness.
+    /// outer result indicates you are allowed to get the
+    /// incoming-response-or-error at most once. subsequent calls after ready
+    /// will return an error here.
+    /// inner result indicates whether the incoming-response was available, or an
+    /// error occured.
+    get: func() -> option<result<result</* NOT a child*/ incoming-response, error>>>
+
+    subscribe: func() -> /* child */ pollable
+  }
 }
