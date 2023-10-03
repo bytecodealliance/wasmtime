@@ -245,8 +245,7 @@ block2:
 
 ; VCode:
 ; block0:
-;   eq a5,a0,a1##ty=i64
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   beq a0,a1,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,2
 ;   ret
@@ -256,15 +255,11 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bne a0, a1, 0xc
-;   addi a5, zero, 1
-;   j 8
-;   mv a5, zero
-;   bnez a5, 0xc
-; block1: ; offset 0x14
+;   beq a0, a1, 0xc
+; block1: ; offset 0x4
 ;   addi a0, zero, 2
 ;   ret
-; block2: ; offset 0x1c
+; block2: ; offset 0xc
 ;   addi a0, zero, 1
 ;   ret
 
@@ -280,8 +275,7 @@ block1:
 
 ; VCode:
 ; block0:
-;   eq a4,a0,a1##ty=i64
-;   bne a4,zero,taken(label1),not_taken(label2)
+;   beq a0,a1,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -292,11 +286,6 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bne a0, a1, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-; block1: ; offset 0x10
 ;   addi a0, zero, 1
 ;   ret
 
@@ -672,7 +661,7 @@ block1:
 ; VCode:
 ; block0:
 ;   slli a2,a0,48
-;   srli a4,a2,48
+;   srai a4,a2,48
 ;   bne a4,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
@@ -684,7 +673,7 @@ block1:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a2, a0, 0x30
-;   srli a4, a2, 0x30
+;   srai a4, a2, 0x30
 ; block1: ; offset 0x8
 ;   ret
 
@@ -699,9 +688,8 @@ block1:
 
 ; VCode:
 ; block0:
-;   slli a2,a0,32
-;   srli a4,a2,32
-;   bne a4,zero,taken(label1),not_taken(label2)
+;   sext.w a2,a0
+;   bne a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -711,9 +699,8 @@ block1:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a2, a0, 0x20
-;   srli a4, a2, 0x20
-; block1: ; offset 0x8
+;   sext.w a2, a0
+; block1: ; offset 0x4
 ;   ret
 
 function %i64_brif(i64){

@@ -184,12 +184,12 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   sd a3,368(nominal_sp)
 ;   sw a2,376(nominal_sp)
 ;   sh a0,380(nominal_sp)
-;   zext.w a2,a1
-;   select v13,v12,v12##condition=a2
-;   zext.w a2,a1
-;   select v14,v13,v13##condition=a2
-;   zext.w a2,a1
-;   select v12,v14,v14##condition=a2
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
 ;   vfsqrt.v v10,v11 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   lui a0,4095
 ;   slli a2,a0,39
@@ -204,109 +204,109 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   vfmv.v.f v13,fa4 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmfne.vv v0,v10,v10 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmerge.vvm v11,v10,v13,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
-;   zext.w a2,a1
-;   select v13,v12,v12##condition=a2
-;   zext.w a2,a1
-;   select v12,v13,v13##condition=a2
-;   zext.w a2,a1
-;   select v13,v12,v12##condition=a2
-;   zext.w a2,a1
-;   select v12,v13,v13##condition=a2
-;   zext.w a2,a1
-;   select v13,v12,v12##condition=a2
-;   zext.w a2,a1
-;   select v12,v13,v13##condition=a2
-;   zext.w a2,a1
-;   select v13,v12,v12##condition=a2
-;   zext.w a2,a1
-;   select v12,v13,v13##condition=a2
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
+;   sext.w a2,a1
+;   select v12,v12,v12##condition=(a2 ne zero)
 ;   add a2,a1,a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
 ;   vmax.vv v10,v15,v15 #avl=2, #vtype=(e64, m1, ta, ma)
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
 ;   load_addr a3,3(nominal_sp)
 ;   addi a3,a3,0
 ;   andi a0,a3,3
 ;   slli a4,a0,3
 ;   andi a1,a3,-4
 ;   atomic_rmw.i8 and a0,a5,(a1)##t0=a3 offset=a4
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v14,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v12,v14,v14##condition=a1
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
 ;   vse64.v v10,33(nominal_sp) #avl=2, #vtype=(e64, m1, ta, ma)
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
-;   zext.w a1,a2
-;   select v13,v12,v12##condition=a1
-;   zext.w a1,a2
-;   select v12,v13,v13##condition=a1
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
+;   sext.w a1,a2
+;   select v12,v12,v12##condition=(a1 ne zero)
 ;   vse8.v v11,0(a6) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v12,16(a6) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v11,32(a6) #avl=16, #vtype=(e8, m1, ta, ma)
@@ -392,21 +392,9 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   sd a3, 0x170(sp)
 ;   sw a2, 0x178(sp)
 ;   sh a0, 0x17c(sp)
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0x57, 0x37, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x37, 0xd0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0x57, 0x36, 0xe0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xe0, 0x9e
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x15, 0xb0, 0x4e
 ;   lui a0, 0xfff
@@ -422,78 +410,22 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   .byte 0xd7, 0x56, 0x07, 0x5e
 ;   .byte 0x57, 0x10, 0xa5, 0x72
 ;   .byte 0xd7, 0x85, 0xa6, 0x5c
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0x3b, 0x86, 0x05, 0x08
-;   beqz a2, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
+;   sext.w a2, a1
 ;   add a2, a1, a1
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
 ;   .byte 0x57, 0x85, 0xf7, 0x1e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
+;   sext.w a1, a2
 ;   addi a3, sp, 3
 ;   mv a3, a3
 ;   andi a0, a3, 3
@@ -513,173 +445,41 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   or t5, t5, t6
 ;   sc.w.aqrl a3, t5, (a1)
 ;   bnez a3, -0x34
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x37, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x37, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xe0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xe0, 0x9e
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
 ;   addi t6, sp, 0x21
 ;   .byte 0x27, 0xf5, 0x0f, 0x02
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   j 8
-;   .byte 0xd7, 0x36, 0xc0, 0x9e
-;   .byte 0xbb, 0x05, 0x06, 0x08
-;   beqz a1, 0xc
-;   .byte 0x57, 0x36, 0xd0, 0x9e
-;   j 8
-;   .byte 0x57, 0x36, 0xd0, 0x9e
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
+;   sext.w a1, a2
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   .byte 0xa7, 0x05, 0x08, 0x02
 ;   addi t6, a6, 0x10

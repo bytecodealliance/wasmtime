@@ -55,8 +55,7 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 
 pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRRI, AluOPRRR, AtomicOP, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FloatRoundOP,
-    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, CSR,
-    FRM,
+    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
 
@@ -523,11 +522,25 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             y,
             ..
         } => {
-            collector.reg_use(condition);
+            collector.reg_use(condition.rs1);
+            collector.reg_use(condition.rs2);
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
-            for d in dst.iter() {
-                collector.reg_early_def(d.clone());
+            // If there's more than one destination register then use
+            // `reg_early_def` to prevent destination registers from overlapping
+            // with any operands. This ensures that the lowering doesn't have to
+            // deal with a situation such as when the input registers need to be
+            // swapped when moved to the destination.
+            //
+            // When there's only one destination register though don't use an
+            // early def because once the register is written no other inputs
+            // are read so it's ok for the destination to overlap the sources.
+            if dst.regs().len() > 1 {
+                for d in dst.regs() {
+                    collector.reg_early_def(d.clone());
+                }
+            } else {
+                collector.reg_defs(dst.regs());
             }
         }
         &Inst::AtomicCas {
@@ -543,18 +556,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
-        &Inst::IntSelect {
-            ref dst,
-            ref x,
-            ref y,
-            ..
-        } => {
-            collector.reg_uses(x.regs());
-            collector.reg_uses(y.regs());
-            for d in dst.iter() {
-                collector.reg_early_def(d.clone());
-            }
-        }
 
         &Inst::Icmp { rd, a, b, .. } => {
             collector.reg_uses(a.regs());
@@ -562,18 +563,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
 
-        &Inst::SelectReg {
-            rd,
-            rs1,
-            rs2,
-            condition,
-        } => {
-            collector.reg_use(condition.rs1);
-            collector.reg_use(condition.rs2);
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
-            collector.reg_def(rd);
-        }
         &Inst::FcvtToInt { rd, rs, tmp, .. } => {
             collector.reg_use(rs);
             collector.reg_early_def(tmp);
@@ -1283,25 +1272,6 @@ impl Inst {
                     tmp
                 )
             }
-            &Inst::SelectReg {
-                rd,
-                rs1,
-                rs2,
-                ref condition,
-            } => {
-                let c_rs1 = format_reg(condition.rs1, allocs);
-                let c_rs2 = format_reg(condition.rs2, allocs);
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "select_reg {},{},{}##condition={}",
-                    rd,
-                    rs1,
-                    rs2,
-                    format!("({} {} {})", c_rs1, condition.kind.to_static_str(), c_rs2),
-                )
-            }
             &Inst::AtomicCas {
                 offset,
                 t0,
@@ -1327,19 +1297,6 @@ impl Inst {
                 let b = format_regs(b.regs(), allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{} {},{},{}##ty={}", cc.to_static_str(), rd, a, b, ty)
-            }
-            &Inst::IntSelect {
-                op,
-                ref dst,
-                x,
-                y,
-                ty,
-            } => {
-                let x = format_regs(x.regs(), allocs);
-                let y = format_regs(y.regs(), allocs);
-                let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
-                let dst = format_regs(&dst[..], allocs);
-                format!("{} {},{},{}##ty={}", op.op_name(), dst, x, y, ty,)
             }
             &Inst::BrTable {
                 index,
@@ -1736,12 +1693,21 @@ impl Inst {
                 ref x,
                 ref y,
             } => {
-                let condition = format_reg(condition, allocs);
+                let c_rs1 = format_reg(condition.rs1, allocs);
+                let c_rs2 = format_reg(condition.rs2, allocs);
                 let x = format_regs(x.regs(), allocs);
                 let y = format_regs(y.regs(), allocs);
-                let dst: Vec<_> = dst.clone().into_iter().map(|r| r.to_reg()).collect();
-                let dst = format_regs(&dst[..], allocs);
-                format!("select {},{},{}##condition={}", dst, x, y, condition)
+                let dst = dst.map(|r| r.to_reg());
+                let dst = format_regs(dst.regs(), allocs);
+                format!(
+                    "select {},{},{}##condition=({} {} {})",
+                    dst,
+                    x,
+                    y,
+                    c_rs1,
+                    condition.kind.to_static_str(),
+                    c_rs2
+                )
             }
             &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),

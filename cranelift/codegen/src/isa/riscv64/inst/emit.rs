@@ -358,9 +358,7 @@ impl Inst {
             | Inst::Atomic { .. }
             | Inst::Select { .. }
             | Inst::AtomicCas { .. }
-            | Inst::IntSelect { .. }
             | Inst::Icmp { .. }
-            | Inst::SelectReg { .. }
             | Inst::FcvtToInt { .. }
             | Inst::RawData { .. }
             | Inst::AtomicStore { .. }
@@ -1788,33 +1786,29 @@ impl Inst {
                 ref x,
                 ref y,
             } => {
-                let mut insts = SmallInstVec::new();
+                let label_true = sink.get_label();
                 let label_false = sink.get_label();
-                insts.push(Inst::CondBr {
-                    taken: CondBrTarget::Label(label_false),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: condition,
-                        rs2: zero_reg(),
-                    },
-                });
+                let label_end = sink.get_label();
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(label_true),
+                    not_taken: CondBrTarget::Label(label_false),
+                    kind: condition,
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_true, &mut state.ctrl_plane);
                 // here is the true
                 // select the first value
-                insts.extend(gen_moves(&dst[..], x.regs()));
-                let label_jump_over = sink.get_label();
-                insts.push(Inst::gen_jump(label_jump_over));
-                // here is false
-                insts
-                    .drain(..)
-                    .for_each(|i: Inst| i.emit(&[], sink, emit_info, state));
+                for i in gen_moves(dst.regs(), x.regs()) {
+                    i.emit(&[], sink, emit_info, state);
+                }
+                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
+
                 sink.bind_label(label_false, &mut state.ctrl_plane);
-                // select second value1
-                insts.extend(gen_moves(&dst[..], y.regs()));
-                insts
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
+                for i in gen_moves(dst.regs(), y.regs()) {
+                    i.emit(&[], sink, emit_info, state);
+                }
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::Jalr { rd, base, offset } => {
                 sink.put4(enc_jalr(rd, base, offset));
@@ -2142,80 +2136,6 @@ impl Inst {
                 .emit(&[], sink, emit_info, state);
             }
 
-            &Inst::IntSelect {
-                op,
-                ref dst,
-                x,
-                y,
-                ty,
-            } => {
-                let label_true = sink.get_label();
-                let label_false = sink.get_label();
-                let label_done = sink.get_label();
-                Inst::lower_br_icmp(
-                    op.to_int_cc(),
-                    x,
-                    y,
-                    CondBrTarget::Label(label_true),
-                    CondBrTarget::Label(label_false),
-                    ty,
-                )
-                .into_iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                let gen_move = |dst: &Vec<Writable<Reg>>,
-                                val: &ValueRegs<Reg>,
-                                sink: &mut MachBuffer<Inst>,
-                                state: &mut EmitState| {
-                    let mut insts = SmallInstVec::new();
-                    insts.push(Inst::Mov {
-                        rd: dst[0],
-                        rm: val.regs()[0],
-                        ty: I64,
-                    });
-                    if ty.bits() == 128 {
-                        insts.push(Inst::Mov {
-                            rd: dst[1],
-                            rm: val.regs()[1],
-                            ty,
-                        });
-                    }
-                    insts
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
-                };
-                //here is true , use x.
-                sink.bind_label(label_true, &mut state.ctrl_plane);
-                gen_move(dst, &x, sink, state);
-                Inst::gen_jump(label_done).emit(&[], sink, emit_info, state);
-                // here is false use y
-                sink.bind_label(label_false, &mut state.ctrl_plane);
-                gen_move(dst, &y, sink, state);
-                sink.bind_label(label_done, &mut state.ctrl_plane);
-            }
-
-            &Inst::SelectReg {
-                condition,
-                rd,
-                rs1,
-                rs2,
-            } => {
-                let label_true = sink.get_label();
-                let label_jump_over = sink.get_label();
-                let ty = Inst::canonical_type_for_rc(rs1.class());
-
-                sink.use_label_at_offset(sink.cur_offset(), label_true, LabelUse::B12);
-                let x = condition.emit();
-                sink.put4(x);
-                // here is false , use rs2
-                Inst::gen_move(rd, rs2, ty).emit(&[], sink, emit_info, state);
-                // and jump over
-                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
-                // here condition is true , use rs1
-                sink.bind_label(label_true, &mut state.ctrl_plane);
-                Inst::gen_move(rd, rs1, ty).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
             &Inst::FcvtToInt {
                 is_sat,
                 rd,
@@ -3411,6 +3331,13 @@ impl Inst {
             }
         }
 
+        fn alloc_writable_value_regs(
+            origin: &ValueRegs<Writable<Reg>>,
+            alloc: &mut AllocationConsumer,
+        ) -> ValueRegs<Writable<Reg>> {
+            alloc_value_regs(&origin.map(|r| r.to_reg()), alloc).map(Writable::from_reg)
+        }
+
         match self {
             Inst::Nop0 => self,
             Inst::Nop4 => self,
@@ -3633,14 +3560,12 @@ impl Inst {
                 ref x,
                 ref y,
             } => {
-                let condition = allocs.next(condition);
+                let mut condition: IntegerCompare = condition.clone();
+                condition.rs1 = allocs.next(condition.rs1);
+                condition.rs2 = allocs.next(condition.rs2);
                 let x = alloc_value_regs(x, allocs);
                 let y = alloc_value_regs(y, allocs);
-                let dst: Vec<_> = dst
-                    .clone()
-                    .into_iter()
-                    .map(|r| allocs.next_writable(r))
-                    .collect();
+                let dst = alloc_writable_value_regs(dst, allocs);
 
                 Inst::Select {
                     dst,
@@ -3710,36 +3635,6 @@ impl Inst {
                 t0: allocs.next_writable(t0),
                 dst: allocs.next_writable(dst),
             },
-
-            Inst::IntSelect {
-                op,
-                dst,
-                ref x,
-                ref y,
-                ty,
-            } => {
-                let x = alloc_value_regs(x, allocs);
-                let y = alloc_value_regs(y, allocs);
-                let dst: Vec<_> = dst.iter().map(|r| allocs.next_writable(*r)).collect();
-                Inst::IntSelect { op, ty, dst, x, y }
-            }
-
-            Inst::SelectReg {
-                condition,
-                rd,
-                rs1,
-                rs2,
-            } => {
-                let mut condition: IntegerCompare = condition.clone();
-                condition.rs1 = allocs.next(condition.rs1);
-                condition.rs2 = allocs.next(condition.rs2);
-                Inst::SelectReg {
-                    condition,
-                    rs1: allocs.next(rs1),
-                    rs2: allocs.next(rs2),
-                    rd: allocs.next_writable(rd),
-                }
-            }
 
             Inst::FcvtToInt {
                 is_sat,

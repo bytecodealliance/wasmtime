@@ -14,7 +14,7 @@ block0(v0: i8, v1: i8):
 ;   srai a5,a3,56
 ;   slli a1,a1,56
 ;   srai a3,a1,56
-;   smin a0,a5,a3##ty=i8
+;   select a0,a5,a3##condition=(a5 slt a3)
 ;   ret
 ;
 ; Disassembled:
@@ -41,7 +41,7 @@ block0(v0: i16, v1: i16):
 ;   srai a5,a3,48
 ;   slli a1,a1,48
 ;   srai a3,a1,48
-;   smin a0,a5,a3##ty=i16
+;   select a0,a5,a3##condition=(a5 slt a3)
 ;   ret
 ;
 ; Disassembled:
@@ -66,7 +66,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   sext.w a3,a0
 ;   sext.w a5,a1
-;   smin a0,a3,a5##ty=i32
+;   select a0,a3,a5##condition=(a3 slt a5)
 ;   ret
 ;
 ; Disassembled:
@@ -87,16 +87,12 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   mv a4,a0
-;   smin a0,a4,a1##ty=i64
+;   select a0,a0,a1##condition=(a0 slt a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv a4, a0
-;   bge a4, a1, 0xc
-;   mv a0, a4
-;   j 8
+;   blt a0, a1, 8
 ;   mv a0, a1
 ;   ret
 
@@ -107,23 +103,51 @@ block0(v0: i128, v1: i128):
 }
 
 ; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s3,-8(sp)
+;   add sp,-16
 ; block0:
+;   slt a5,[a0,a1],[a2,a3]##ty=i128
 ;   mv a4,a0
-;   mv a5,a1
-;   smin [a0,a1],[a4,a5],[a2,a3]##ty=i128
+;   mv s3,a1
+;   select [a0,a1],[a4,s3],[a2,a3]##condition=(a5 ne zero)
+;   add sp,+16
+;   ld s3,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   sd s3, -8(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x18
+;   blt a1, a3, 0xc
+;   bne a1, a3, 0x10
+;   bgeu a0, a2, 0xc
+;   addi a5, zero, 1
+;   j 8
+;   mv a5, zero
 ;   mv a4, a0
-;   mv a5, a1
-;   blt a5, a3, 0xc
-;   bne a5, a3, 0x14
-;   bgeu a4, a2, 0x10
+;   mv s3, a1
+;   beqz a5, 0x10
 ;   mv a0, a4
-;   mv a1, a5
+;   mv a1, s3
 ;   j 0xc
 ;   mv a0, a2
 ;   mv a1, a3
+;   addi sp, sp, 0x10
+;   ld s3, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
 

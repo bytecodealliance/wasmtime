@@ -157,7 +157,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ; VCode:
 ; block0:
 ;   andi a4,a0,255
-;   select a0,a1,a2##condition=a4
+;   select a0,a1,a2##condition=(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
