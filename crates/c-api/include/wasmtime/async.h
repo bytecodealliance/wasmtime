@@ -256,7 +256,31 @@ WASM_API_EXTERN wasmtime_call_future_t *wasmtime_linker_instantiate_async(
     const wasmtime_module_t *module,
     wasmtime_instance_t *instance,
     wasm_trap_t** trap_ret,
-    wasmtime_error_t** wasmtime_error_t);
+    wasmtime_error_t** error_ret);
+
+/**
+ * \brief Instantiates instance within the given store.
+ *
+ * This will also run the function's startup function, if there is one.
+ *
+ * For more information on async instantiation see #wasmtime_linker_instantiate_async.
+ *
+ * \param instance_pre the pre-initialized instance
+ * \param store the store in which to create the instance
+ * \param instance where to store the returned instance
+ * \param trap_ret where to store the returned trap
+ * \param error_ret where to store the returned trap
+ *
+ * The `trap_ret` and `error_ret` pointers may *not* be `NULL` and the returned memory is owned by the caller.
+ *
+ * All arguments to this function must outlive the returned future and be unmodified until the future is deleted.
+ */
+WASM_API_EXTERN wasmtime_call_future_t *wasmtime_instance_pre_instantiate_async(
+    const wasmtime_instance_pre_t* instance_pre,
+    wasmtime_context_t *store,
+    wasmtime_instance_t *instance,
+    wasm_trap_t** trap_ret,
+    wasmtime_error_t** error_ret);
 
 #ifdef __cplusplus
 }  // extern "C"
