@@ -42,7 +42,7 @@ impl Response {
     }
 }
 
-pub async fn request(
+pub fn request(
     method: http_types::Method,
     scheme: http_types::Scheme,
     authority: &str,
@@ -169,25 +169,4 @@ pub async fn request(
         headers,
         body,
     })
-}
-
-static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-
-pub fn in_tokio<F: std::future::Future>(f: F) -> F::Output {
-    match tokio::runtime::Handle::try_current() {
-        Ok(h) => {
-            let _enter = h.enter();
-            h.block_on(f)
-        }
-        Err(_) => {
-            let runtime = RUNTIME.get_or_init(|| {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-            });
-            let _enter = runtime.enter();
-            runtime.block_on(f)
-        }
-    }
 }

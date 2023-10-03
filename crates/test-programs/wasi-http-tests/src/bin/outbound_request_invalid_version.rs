@@ -1,19 +1,8 @@
 use wasi_http_tests::bindings::wasi::http::types::{Method, Scheme};
 
 fn main() {
-    wasi_http_tests::in_tokio(async { run().await })
-}
-
-async fn run() {
-    let res = wasi_http_tests::request(
-        Method::Connect,
-        Scheme::Http,
-        "localhost:3001",
-        "/",
-        None,
-        Some(&[]),
-    )
-    .await;
+    let addr = std::env::var("HTTP_SERVER").unwrap();
+    let res = wasi_http_tests::request(Method::Connect, Scheme::Http, &addr, "/", None, Some(&[]));
 
     let error = res.unwrap_err().to_string();
     if error.ne("Error::ProtocolError(\"invalid HTTP version parsed\")")

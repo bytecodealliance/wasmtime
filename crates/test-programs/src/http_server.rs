@@ -1,14 +1,11 @@
-use anyhow::Context;
+use anyhow::{Context, Result};
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::{body::Bytes, service::service_fn, Request, Response};
 use std::{
     future::Future,
-    net::{SocketAddr, TcpListener},
-    sync::{mpsc, OnceLock},
-    time::Duration,
+    net::{SocketAddr, TcpListener, TcpStream},
+    thread::JoinHandle,
 };
-
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(50);
 
 async fn test(
     mut req: Request<hyper::body::Incoming>,
@@ -26,66 +23,93 @@ async fn test(
         .body(Full::<Bytes>::from(buf).boxed())
 }
 
-struct ServerHttp1 {
-    receiver: mpsc::Receiver<anyhow::Result<()>>,
+pub struct Server {
+    addr: SocketAddr,
+    worker: Option<JoinHandle<Result<()>>>,
 }
 
-impl ServerHttp1 {
-    fn new() -> Self {
-        tracing::debug!("initializing http1 server");
-        static CELL_HTTP1: OnceLock<TcpListener> = OnceLock::new();
-        let listener = CELL_HTTP1.get_or_init(|| {
-            let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-            tracing::debug!("preparing tcp listener at localhost:3000");
-            TcpListener::bind(addr).unwrap()
-        });
-        let (sender, receiver) = mpsc::channel::<anyhow::Result<()>>();
-        std::thread::spawn(move || {
+impl Server {
+    fn new<F>(run: impl FnOnce(tokio::net::TcpStream) -> F + Send + Sync + 'static) -> Result<Self>
+    where
+        F: Future<Output = Result<()>>,
+    {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+        let listener = TcpListener::bind(addr).context("failed to bind")?;
+        let addr = listener.local_addr().context("failed to get local addr")?;
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .context("failed to start tokio runtime")?;
+        let worker = std::thread::spawn(move || {
             tracing::debug!("dedicated thread to start listening");
-            match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(rt) => {
-                    tracing::debug!("using tokio runtime");
-                    sender
-                        .send(rt.block_on(async move {
-                            tracing::debug!("preparing to accept connection");
-                            let (stream, _) = listener.accept().map_err(anyhow::Error::from)?;
-                            tracing::trace!("tcp stream {:?}", stream);
-
-                            let mut builder = hyper::server::conn::http1::Builder::new();
-                            let http = builder.keep_alive(false).pipeline_flush(true);
-                            let io = tokio::net::TcpStream::from_std(stream)
-                                .map_err(anyhow::Error::from)?;
-
-                            tracing::debug!("preparing to bind connection to service");
-                            let conn = http.serve_connection(io, service_fn(test)).await;
-                            tracing::trace!("connection result {:?}", conn);
-                            conn.map_err(anyhow::Error::from)
-                        }))
-                        .expect("value sent from http1 server dedicated thread");
-                }
-                Err(e) => {
-                    tracing::debug!("unable to start tokio runtime");
-                    sender.send(Err(anyhow::Error::from(e))).unwrap()
-                }
-            };
+            rt.block_on(async move {
+                tracing::debug!("preparing to accept connection");
+                let (stream, _) = listener.accept().map_err(anyhow::Error::from)?;
+                let io = tokio::net::TcpStream::from_std(stream).map_err(anyhow::Error::from)?;
+                run(io).await
+            })
         });
-        Self { receiver }
+        Ok(Self {
+            worker: Some(worker),
+            addr,
+        })
     }
 
-    fn shutdown(self) -> anyhow::Result<()> {
+    pub fn http1() -> Result<Self> {
+        tracing::debug!("initializing http1 server");
+        Self::new(|io| async move {
+            let mut builder = hyper::server::conn::http1::Builder::new();
+            let http = builder.keep_alive(false).pipeline_flush(true);
+
+            tracing::debug!("preparing to bind connection to service");
+            let conn = http.serve_connection(io, service_fn(test)).await;
+            tracing::trace!("connection result {:?}", conn);
+            conn?;
+            Ok(())
+        })
+    }
+
+    pub fn http2() -> Result<Self> {
+        tracing::debug!("initializing http2 server");
+        Self::new(|io| async move {
+            let mut builder = hyper::server::conn::http2::Builder::new(TokioExecutor);
+            let http = builder.max_concurrent_streams(20);
+
+            tracing::debug!("preparing to bind connection to service");
+            let conn = http.serve_connection(io, service_fn(test)).await;
+            tracing::trace!("connection result {:?}", conn);
+            if let Err(e) = &conn {
+                let message = e.to_string();
+                if message.contains("connection closed before reading preface")
+                    || message.contains("unspecific protocol error detected")
+                {
+                    return Ok(());
+                }
+            }
+            conn?;
+            Ok(())
+        })
+    }
+
+    pub fn addr(&self) -> &SocketAddr {
+        &self.addr
+    }
+}
+
+impl Drop for Server {
+    fn drop(&mut self) {
         tracing::debug!("shutting down http1 server");
-        self.receiver
-            .recv_timeout(DEFAULT_TIMEOUT)
-            .context("value received from http1 server dedicated thread")?
+        // Force a connection to happen in case one hasn't happened already.
+        let _ = TcpStream::connect(&self.addr);
+        let worker = self.worker.take().unwrap();
+        worker.join().unwrap().unwrap();
     }
 }
 
 #[derive(Clone)]
 /// An Executor that uses the tokio runtime.
-pub struct TokioExecutor;
+struct TokioExecutor;
 
 impl<F> hyper::rt::Executor<F> for TokioExecutor
 where
@@ -95,140 +119,4 @@ where
     fn execute(&self, fut: F) {
         tokio::task::spawn(fut);
     }
-}
-
-struct ServerHttp2 {
-    receiver: mpsc::Receiver<anyhow::Result<()>>,
-}
-
-impl ServerHttp2 {
-    fn new() -> Self {
-        tracing::debug!("initializing http2 server");
-        static CELL_HTTP2: OnceLock<TcpListener> = OnceLock::new();
-        let listener = CELL_HTTP2.get_or_init(|| {
-            let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
-            tracing::debug!("preparing tcp listener at localhost:3001");
-            TcpListener::bind(addr).unwrap()
-        });
-        let (sender, receiver) = mpsc::channel::<anyhow::Result<()>>();
-        std::thread::spawn(move || {
-            tracing::debug!("dedicated thread to start listening");
-            match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(rt) => {
-                    tracing::debug!("using tokio runtime");
-                    sender
-                        .send(rt.block_on(async move {
-                            tracing::debug!("preparing to accept incoming connection");
-                            let (stream, _) = listener.accept().map_err(anyhow::Error::from)?;
-                            tracing::trace!("tcp stream {:?}", stream);
-
-                            let mut builder =
-                                hyper::server::conn::http2::Builder::new(TokioExecutor);
-                            let http = builder.max_concurrent_streams(20);
-                            let io = tokio::net::TcpStream::from_std(stream)
-                                .map_err(anyhow::Error::from)?;
-
-                            tracing::debug!("preparing to bind connection to service");
-                            let conn = http.serve_connection(io, service_fn(test)).await;
-                            tracing::trace!("connection result {:?}", conn);
-                            if let Err(e) = &conn {
-                                let message = e.to_string();
-                                if message.contains("connection closed before reading preface")
-                                    || message.contains("unspecific protocol error detected")
-                                {
-                                    return Ok(());
-                                }
-                            }
-                            conn.map_err(anyhow::Error::from)
-                        }))
-                        .expect("value sent from http2 server dedicated thread");
-                }
-                Err(e) => {
-                    tracing::debug!("unable to start tokio runtime");
-                    sender.send(Err(anyhow::Error::from(e))).unwrap()
-                }
-            };
-        });
-        Self { receiver }
-    }
-
-    fn shutdown(self) -> anyhow::Result<()> {
-        tracing::debug!("shutting down http2 server");
-        self.receiver
-            .recv_timeout(DEFAULT_TIMEOUT)
-            .context("value received from http2 server dedicated thread")?
-    }
-}
-
-pub async fn setup_http1(f: impl Future<Output = anyhow::Result<()>>) -> anyhow::Result<()> {
-    tracing::debug!("preparing http1 server asynchronously");
-    let server = ServerHttp1::new();
-
-    tracing::debug!("running inner function (future)");
-    let result = f.await;
-
-    if let Err(err) = server.shutdown() {
-        tracing::error!("[host/server] failure {:?}", err);
-    }
-    result
-}
-
-pub fn setup_http1_sync<F>(f: F) -> anyhow::Result<()>
-where
-    F: FnOnce() -> anyhow::Result<()> + Send + 'static,
-{
-    tracing::debug!("preparing http1 server synchronously");
-    let server = ServerHttp1::new();
-
-    let (tx, rx) = mpsc::channel::<anyhow::Result<()>>();
-    tracing::debug!("running inner function in a dedicated thread");
-    std::thread::spawn(move || {
-        let _ = tx.send(f());
-    });
-    let result = rx
-        .recv_timeout(DEFAULT_TIMEOUT)
-        .context("value received from request dedicated thread");
-
-    if let Err(err) = server.shutdown() {
-        tracing::error!("[host/server] failure {:?}", err);
-    }
-    result?
-}
-
-pub async fn setup_http2(f: impl Future<Output = anyhow::Result<()>>) -> anyhow::Result<()> {
-    tracing::debug!("preparing http2 server asynchronously");
-    let server = ServerHttp2::new();
-
-    tracing::debug!("running inner function (future)");
-    let result = f.await;
-
-    if let Err(err) = server.shutdown() {
-        tracing::error!("[host/server] Failure: {:?}", err);
-    }
-    result
-}
-
-pub fn setup_http2_sync<F>(f: F) -> anyhow::Result<()>
-where
-    F: FnOnce() -> anyhow::Result<()> + Send + 'static,
-{
-    tracing::debug!("preparing http2 server synchronously");
-    let server = ServerHttp2::new();
-
-    let (tx, rx) = mpsc::channel::<anyhow::Result<()>>();
-    tracing::debug!("running inner function in a dedicated thread");
-    std::thread::spawn(move || {
-        let _ = tx.send(f());
-    });
-    let result = rx
-        .recv_timeout(DEFAULT_TIMEOUT)
-        .context("value received from request dedicated thread");
-
-    if let Err(err) = server.shutdown() {
-        tracing::error!("[host/server] failure {:?}", err);
-    }
-    result?
 }
