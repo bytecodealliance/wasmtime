@@ -1,13 +1,9 @@
 use crate::preview2::{
     bindings::io::streams::{self, InputStream, OutputStream},
-    poll::PollableFuture,
+    poll::subscribe,
     stream::{OutputStreamError, StreamRuntimeError, StreamState},
     Pollable, TableError, WasiView,
 };
-use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use wasmtime::component::Resource;
 
 impl From<StreamState> for streams::StreamStatus {
@@ -48,14 +44,8 @@ impl<T: WasiView> streams::HostOutputStream for T {
     }
 
     fn check_write(&mut self, stream: Resource<OutputStream>) -> Result<u64, streams::Error> {
-        let s = self.table_mut().get_resource_mut(&stream)?;
-        let mut ready = s.write_ready();
-        let mut task = Context::from_waker(futures::task::noop_waker_ref());
-        match Pin::new(&mut ready).poll(&mut task) {
-            Poll::Ready(Ok(permit)) => Ok(permit as u64),
-            Poll::Ready(Err(e)) => Err(e.into()),
-            Poll::Pending => Ok(0),
-        }
+        let bytes = self.table_mut().get_resource_mut(&stream)?.check_write()?;
+        Ok(bytes as u64)
     }
 
     fn write(
@@ -70,23 +60,7 @@ impl<T: WasiView> streams::HostOutputStream for T {
     }
 
     fn subscribe(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<Resource<Pollable>> {
-        fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-            let stream = stream
-                .downcast_mut::<OutputStream>()
-                .expect("downcast to OutputStream failed");
-            Box::pin(async move {
-                let _ = stream.write_ready().await?;
-                Ok(())
-            })
-        }
-
-        Ok(self.table_mut().push_child_resource(
-            Pollable::TableEntry {
-                index: stream.rep(),
-                make_future: output_stream_ready,
-            },
-            &stream,
-        )?)
+        subscribe(self.table_mut(), stream)
     }
 
     async fn blocking_write_and_flush(
@@ -291,7 +265,7 @@ impl<T: WasiView> streams::HostInputStream for T {
         len: u64,
     ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
         if let InputStream::Host(s) = self.table_mut().get_resource_mut(&stream)? {
-            s.ready().await?;
+            s.ready().await;
         }
         self.read(stream, len).await
     }
@@ -341,37 +315,13 @@ impl<T: WasiView> streams::HostInputStream for T {
         len: u64,
     ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
         if let InputStream::Host(s) = self.table_mut().get_resource_mut(&stream)? {
-            s.ready().await?;
+            s.ready().await;
         }
         self.skip(stream, len).await
     }
 
     fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
-        // Ensure that table element is an input-stream:
-        let pollable = match self.table_mut().get_resource(&stream)? {
-            InputStream::Host(_) => {
-                fn input_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-                    let stream = stream
-                        .downcast_mut::<InputStream>()
-                        .expect("downcast to InputStream failed");
-                    match *stream {
-                        InputStream::Host(ref mut hs) => hs.ready(),
-                        _ => unreachable!(),
-                    }
-                }
-
-                Pollable::TableEntry {
-                    index: stream.rep(),
-                    make_future: input_stream_ready,
-                }
-            }
-            // Files are always "ready" immediately (because we have no way to actually wait on
-            // readiness in epoll)
-            InputStream::File(_) => {
-                Pollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
-            }
-        };
-        Ok(self.table_mut().push_child_resource(pollable, &stream)?)
+        crate::preview2::poll::subscribe(self.table_mut(), stream)
     }
 }
 

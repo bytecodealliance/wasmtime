@@ -1,5 +1,7 @@
 use crate::preview2::filesystem::FileInputStream;
+use crate::preview2::poll::Subscribe;
 use anyhow::Error;
+use anyhow::Result;
 use bytes::Bytes;
 use std::fmt;
 
@@ -44,7 +46,7 @@ impl StreamState {
 /// Host trait for implementing the `wasi:io/streams.input-stream` resource: A
 /// bytestream which can be read from.
 #[async_trait::async_trait]
-pub trait HostInputStream: Send + Sync {
+pub trait HostInputStream: Subscribe {
     /// Read bytes. On success, returns a pair holding the number of bytes
     /// read and a flag indicating whether the end of the stream was reached.
     /// Important: this read must be non-blocking!
@@ -69,11 +71,6 @@ pub trait HostInputStream: Send + Sync {
 
         Ok((nread, state))
     }
-
-    /// Check for read readiness: this method blocks until the stream is ready
-    /// for reading.
-    /// Returning an error will trap execution.
-    async fn ready(&mut self) -> Result<(), Error>;
 }
 
 #[derive(Debug)]
@@ -103,7 +100,7 @@ impl std::error::Error for OutputStreamError {
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
-pub trait HostOutputStream: Send + Sync {
+pub trait HostOutputStream: Subscribe {
     /// Write bytes after obtaining a permit to write those bytes
     /// Prior to calling [`write`](Self::write)
     /// the caller must call [`write_ready`](Self::write_ready),
@@ -141,16 +138,17 @@ pub trait HostOutputStream: Send + Sync {
     /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
     fn flush(&mut self) -> Result<(), OutputStreamError>;
 
-    /// Returns a future, which:
-    /// - when pending, indicates 0 bytes are permitted for writing
-    /// - when ready, returns a non-zero number of bytes permitted to write
+    /// Returns the number of bytes that are ready to be written to this stream.
+    ///
+    /// Zero bytes indicates that this stream is not currently ready for writing
+    /// and `ready()` must be awaited first.
     ///
     /// # Errors
     ///
     /// Returns an [OutputStreamError] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
-    async fn write_ready(&mut self) -> Result<usize, OutputStreamError>;
+    fn check_write(&mut self) -> Result<usize, OutputStreamError>;
 
     /// Repeatedly write a byte to a stream.
     /// Important: this write must be non-blocking!
@@ -163,11 +161,36 @@ pub trait HostOutputStream: Send + Sync {
         self.write(bs)?;
         Ok(())
     }
+
+    /// Simultaneously waits for this stream to be writable and then returns how
+    /// much may be written or the last error that happened.
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        self.ready().await;
+        self.check_write()
+    }
+}
+
+#[async_trait::async_trait]
+impl Subscribe for Box<dyn HostOutputStream> {
+    async fn ready(&mut self) {
+        (**self).ready().await
+    }
 }
 
 pub enum InputStream {
     Host(Box<dyn HostInputStream>),
     File(FileInputStream),
+}
+
+#[async_trait::async_trait]
+impl Subscribe for InputStream {
+    async fn ready(&mut self) {
+        match self {
+            InputStream::Host(stream) => stream.ready().await,
+            // Files are always ready
+            InputStream::File(_) => {}
+        }
+    }
 }
 
 pub type OutputStream = Box<dyn HostOutputStream>;

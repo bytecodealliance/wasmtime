@@ -12,10 +12,8 @@ use crate::{
     },
 };
 use std::any::Any;
-use std::pin::Pin;
-use std::task;
 use wasmtime::component::Resource;
-use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Table, TableError};
+use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Subscribe, Table, TableError};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx;
@@ -167,21 +165,11 @@ impl HostFutureIncomingResponse {
     }
 }
 
-impl std::future::Future for HostFutureIncomingResponse {
-    type Output = anyhow::Result<()>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
-        let s = self.get_mut();
-        match s {
-            Self::Pending(ref mut handle) => match Pin::new(handle).poll(cx) {
-                task::Poll::Pending => task::Poll::Pending,
-                task::Poll::Ready(r) => {
-                    *s = Self::Ready(r);
-                    task::Poll::Ready(Ok(()))
-                }
-            },
-
-            Self::Consumed | Self::Ready(_) => task::Poll::Ready(Ok(())),
+#[async_trait::async_trait]
+impl Subscribe for HostFutureIncomingResponse {
+    async fn ready(&mut self) {
+        if let Self::Pending(handle) = self {
+            *self = Self::Ready(handle.await);
         }
     }
 }
