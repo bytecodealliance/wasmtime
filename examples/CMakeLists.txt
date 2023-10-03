@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(wasmtime-examples)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 11)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../crates/c-api ${CMAKE_CURRENT_BINARY_DIR}/wasmtime)
 

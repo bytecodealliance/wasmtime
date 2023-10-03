@@ -9,7 +9,7 @@ You can compile and run this example on Linux with:
        -I crates/c-api/include \
        -I crates/c-api/wasm-c-api/include \
        target/release/libwasmtime.a \
-       -std=c++17 \
+       -std=c++11 \
        -lpthread -ldl -lm \
        -o async
    ./async
@@ -36,17 +36,15 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-async
 #include <thread>
 #include <wasmtime.h>
 
-using namespace std::chrono_literals;
-
 namespace {
 
-template <typename T, auto fn> struct deleter {
+template <typename T, void (*fn)(T *)> struct deleter {
   void operator()(T *ptr) { fn(ptr); }
 };
-template <typename T, auto fn>
+template <typename T, void (*fn)(T *)>
 using handle = std::unique_ptr<T, deleter<T, fn>>;
 
-void exit_with_error(std::string_view msg, wasmtime_error_t *err,
+void exit_with_error(std::string msg, wasmtime_error_t *err,
                      wasm_trap_t *trap) {
   std::cerr << "error: " << msg << std::endl;
   wasm_byte_vec_t error_message;
@@ -55,8 +53,7 @@ void exit_with_error(std::string_view msg, wasmtime_error_t *err,
   } else {
     wasm_trap_message(trap, &error_message);
   }
-  std::cerr << std::string_view(error_message.data, error_message.size)
-            << std::endl;
+  std::cerr << std::string(error_message.data, error_message.size) << std::endl;
   wasm_byte_vec_delete(&error_message);
   std::exit(1);
 }
@@ -127,19 +124,18 @@ public:
   int32_t get_value_to_print() { return _value_to_print.get_future().get(); }
 
   bool print_is_pending() const {
-    return _print_finished_future.has_value() &&
-           _print_finished_future->wait_for(0s) != std::future_status::ready;
+    return _print_finished_future.valid() &&
+           _print_finished_future.wait_for(std::chrono::seconds(0)) !=
+               std::future_status::ready;
   }
-  void wait_for_print_result() const { _print_finished_future->wait(); }
-  void get_print_result() {
-    std::exchange(_print_finished_future, std::nullopt)->get();
-  }
+  void wait_for_print_result() const { _print_finished_future.wait(); }
+  void get_print_result() { _print_finished_future.get(); }
   void set_print_success() { _print_finished.set_value(); }
 
 private:
   std::promise<int32_t> _value_to_print;
   std::promise<void> _print_finished;
-  std::optional<std::future<void>> _print_finished_future;
+  std::future<void> _print_finished_future;
 };
 
 printer_thread_state printer_state;
@@ -158,7 +154,7 @@ bool poll_print_finished_state(void *env) {
   try {
     printer_state.get_print_result();
   } catch (const std::exception &ex) {
-    std::string_view msg = ex.what();
+    std::string msg = ex.what();
     *async_env->trap_ret = wasmtime_trap_new(msg.data(), msg.size());
   }
   return true;
@@ -170,9 +166,9 @@ int main() {
   std::thread printer_thread([]() {
     int32_t value_to_print = printer_state.get_value_to_print();
     std::cout << "recieved value to print!" << std::endl;
-    std::this_thread::sleep_for(1s);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::cout << "printing: " << value_to_print << std::endl;
-    std::this_thread::sleep_for(1s);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     std::cout << "signaling that value is printed" << std::endl;
     printer_state.set_print_success();
   });
@@ -192,8 +188,8 @@ int main() {
       compile_wat_module_from_file(engine.get(), "examples/async.wat");
 
   auto linker = create_linker(engine.get());
-  constexpr std::string_view host_module_name = "host";
-  constexpr std::string_view host_func_name = "print";
+  static std::string host_module_name = "host";
+  static std::string host_func_name = "print";
 
   // Declare our async host function's signature and definition.
   wasm_valtype_vec_t arg_types;
@@ -247,7 +243,7 @@ int main() {
   linker = nullptr;
 
   // Grab our exported function
-  constexpr std::string_view guest_func_name = "print_fibonacci";
+  static std::string guest_func_name = "print_fibonacci";
   wasmtime_extern_t guest_func_extern;
   bool found =
       wasmtime_instance_export_get(context, &instance, guest_func_name.data(),
