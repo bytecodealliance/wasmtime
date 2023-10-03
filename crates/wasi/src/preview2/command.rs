@@ -54,6 +54,7 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::bindings::sockets::tcp_create_socket::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::sockets::instance_network::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::sockets::network::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::sockets::ip_name_lookup::add_to_linker(l, |t| t)?;
     Ok(())
 }
 
@@ -116,6 +117,7 @@ pub mod sync {
         crate::preview2::bindings::sockets::tcp_create_socket::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sockets::instance_network::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sockets::network::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::sockets::ip_name_lookup::add_to_linker(l, |t| t)?;
         Ok(())
     }
 }

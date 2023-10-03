@@ -67,7 +67,11 @@ impl From<io::Error> for network::Error {
                 Some(libc::EADDRINUSE) => ErrorCode::AddressInUse,
                 Some(_) => return Self::trap(error.into()),
             },
-            _ => return Self::trap(error.into()),
+
+            _ => {
+                log::debug!("unknown I/O error: {error}");
+                ErrorCode::Unknown
+            }
         }
         .into()
     }
