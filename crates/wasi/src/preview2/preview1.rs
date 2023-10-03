@@ -1382,12 +1382,7 @@ impl<
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0);
                 };
-                let read = streams::HostInputStream::blocking_read(
-                    self,
-                    input,
-                    buf.len().try_into().unwrap_or(u64::MAX),
-                )
-                .await?;
+                let read = BlockingMode::Blocking.read(self, input, buf.len()).await?;
                 (buf, read)
             }
             _ => return Err(types::Errno::Badf.into()),
