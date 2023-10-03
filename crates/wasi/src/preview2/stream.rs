@@ -7,17 +7,24 @@ use bytes::Bytes;
 /// bytestream which can be read from.
 #[async_trait::async_trait]
 pub trait HostInputStream: Subscribe {
-    /// Read bytes. On success, returns a pair holding the number of bytes
-    /// read and a flag indicating whether the end of the stream was reached.
-    /// Important: this read must be non-blocking!
-    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
-    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
+    /// Reads up to `size` bytes, returning a buffer holding these bytes on
+    /// success.
+    ///
+    /// This function does not block the current thread and is the equivalent of
+    /// a non-blocking read. On success all bytes read are returned through
+    /// `Bytes`, which is no larger than the `size` provided. If the returned
+    /// list of `Bytes` is empty then no data is ready to be read at this time.
+    ///
+    /// # Errors
+    ///
+    /// The [`StreamError`] return value communicates when this stream is
+    /// closed, when a read fails, or when a trap should be generated.
     fn read(&mut self, size: usize) -> Result<Bytes, StreamError>;
 
-    /// Read bytes from a stream and discard them. Important: this method must
-    /// be non-blocking!
-    /// Returning an Error which downcasts to a StreamRuntimeError will be
-    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
+    /// Same as the `read` method except that bytes are skipped.
+    ///
+    /// Note that this method is non-blocking like `read` and returns the same
+    /// errors.
     fn skip(&mut self, nelem: usize) -> Result<usize, StreamError> {
         let bs = self.read(nelem)?;
         Ok(bs.len())
@@ -53,18 +60,18 @@ impl std::error::Error for StreamError {
 #[async_trait::async_trait]
 pub trait HostOutputStream: Subscribe {
     /// Write bytes after obtaining a permit to write those bytes
-    /// Prior to calling [`write`](Self::write)
-    /// the caller must call [`write_ready`](Self::write_ready),
-    /// which resolves to a non-zero permit
     ///
-    /// This method must never block.
-    /// [`write_ready`](Self::write_ready) permit indicates the maximum amount of bytes that are
-    /// permitted to be written in a single [`write`](Self::write) following the
-    /// [`write_ready`](Self::write_ready) resolution
+    /// Prior to calling [`write`](Self::write) the caller must call
+    /// [`check_write`](Self::check_write), which resolves to a non-zero permit
+    ///
+    /// This method must never block.  The [`check_write`](Self::check_write)
+    /// permit indicates the maximum amount of bytes that are permitted to be
+    /// written in a single [`write`](Self::write) following the
+    /// [`check_write`](Self::check_write) resolution.
     ///
     /// # Errors
     ///
-    /// Returns an [OutputStreamError] if:
+    /// Returns a [`StreamError`] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
@@ -74,16 +81,18 @@ pub trait HostOutputStream: Subscribe {
     ///
     /// This method may be called at any time and must never block.
     ///
-    /// After this method is called, [`write_ready`](Self::write_ready) must pend until flush is
-    /// complete.
-    /// When [`write_ready`](Self::write_ready) becomes ready after a flush, that guarantees that
-    /// all prior writes have been flushed from the implementation successfully, or that any error
-    /// associated with those writes is reported in the return value of [`flush`](Self::flush) or
-    /// [`write_ready`](Self::write_ready)
+    /// After this method is called, [`check_write`](Self::check_write) must
+    /// pend until flush is complete.
+    ///
+    /// When [`check_write`](Self::check_write) becomes ready after a flush,
+    /// that guarantees that all prior writes have been flushed from the
+    /// implementation successfully, or that any error associated with those
+    /// writes is reported in the return value of [`flush`](Self::flush) or
+    /// [`check_write`](Self::check_write)
     ///
     /// # Errors
     ///
-    /// Returns an [OutputStreamError] if:
+    /// Returns a [`StreamError`] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
@@ -94,16 +103,18 @@ pub trait HostOutputStream: Subscribe {
     /// Zero bytes indicates that this stream is not currently ready for writing
     /// and `ready()` must be awaited first.
     ///
+    /// Note that this method does not block.
+    ///
     /// # Errors
     ///
-    /// Returns an [OutputStreamError] if:
+    /// Returns an [`StreamError`] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     fn check_write(&mut self) -> Result<usize, StreamError>;
 
     /// Repeatedly write a byte to a stream.
     /// Important: this write must be non-blocking!
-    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
+    /// Returning an Err which downcasts to a [`StreamError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
     fn write_zeroes(&mut self, nelem: usize) -> Result<(), StreamError> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
