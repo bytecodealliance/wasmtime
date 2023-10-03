@@ -2,8 +2,8 @@ use std::ffi::c_void;
 use std::future::Future;
 use std::mem::{self, MaybeUninit};
 use std::pin::Pin;
-use std::str;
 use std::task::{Context, Poll};
+use std::{ptr, str};
 
 use wasmtime::{AsContextMut, Caller, Func, Instance, Result, Trap, Val};
 
@@ -48,7 +48,7 @@ pub type wasmtime_func_async_callback_t = extern "C" fn(
     *mut wasmtime_val_t,
     usize,
     &mut Option<Box<wasm_trap_t>>,
-    *mut wasmtime_async_continuation_t,
+    &mut wasmtime_async_continuation_t,
 );
 
 #[repr(C)]
@@ -111,7 +111,14 @@ async fn invoke_c_async_callback<'a>(
     // The result will be a continutation which we will wrap in a Future.
     let mut caller = wasmtime_caller_t { caller };
     let mut trap = None;
-    let mut continuation = MaybeUninit::uninit();
+    extern "C" fn panic_callback(_: *mut c_void) -> bool {
+        panic!("callback must be set")
+    }
+    let mut continuation = wasmtime_async_continuation_t {
+        callback: panic_callback,
+        env: ptr::null_mut(),
+        finalizer: None,
+    };
     cb(
         data.env,
         &mut caller,
@@ -120,9 +127,8 @@ async fn invoke_c_async_callback<'a>(
         out_results.as_mut_ptr(),
         out_results.len(),
         &mut trap,
-        continuation.as_mut_ptr(),
+        &mut continuation,
     );
-    let continuation = unsafe { continuation.assume_init() };
     continuation.await;
 
     if let Some(trap) = trap {
