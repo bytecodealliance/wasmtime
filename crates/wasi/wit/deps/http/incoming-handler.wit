@@ -12,13 +12,13 @@ interface incoming-handler {
   // The `handle` function takes an outparam instead of returning its response
   // so that the component may stream its response while streaming any other
   // request or response bodies. The callee MUST write a response to the
-  // `response-out` and then finish the response before returning. The `handle`
+  // `response-outparam` and then finish the response before returning. The `handle`
   // function is allowed to continue execution after finishing the response's
   // output stream. While this post-response execution is taken off the
   // critical path, since there is no return value, there is no way to report
   // its success or failure.
   handle: func(
-    request: incoming-request,
-    response-out: response-outparam
+    request: /* own */ incoming-request,
+    response-out: /* own */ response-outparam
   )
 }

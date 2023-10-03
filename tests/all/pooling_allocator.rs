@@ -1169,7 +1169,7 @@ fn total_memories_limit() -> Result<()> {
         Err(e) => assert_eq!(
             e.to_string(),
             format!(
-                "maximum concurrent memory limit of {} reached",
+                "maximum concurrent memory limit of {} reached for stripe 0",
                 TOTAL_MEMORIES
             ),
         ),

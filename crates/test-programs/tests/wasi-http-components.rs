@@ -4,9 +4,7 @@ use wasmtime::{
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
-    command::{add_to_linker, Command},
-    pipe::MemoryOutputPipe,
-    IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    command::Command, pipe::MemoryOutputPipe, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
@@ -47,10 +45,10 @@ impl WasiView for Ctx {
 }
 
 impl WasiHttpView for Ctx {
-    fn http_ctx(&self) -> &WasiHttpCtx {
-        &self.http
+    fn table(&mut self) -> &mut Table {
+        &mut self.table
     }
-    fn http_ctx_mut(&mut self) -> &mut WasiHttpCtx {
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
     }
 }
@@ -60,7 +58,6 @@ async fn instantiate_component(
     ctx: Ctx,
 ) -> Result<(Store<Ctx>, Command), anyhow::Error> {
     let mut linker = Linker::new(&ENGINE);
-    add_to_linker(&mut linker)?;
     wasmtime_wasi_http::proxy::add_to_linker(&mut linker)?;
 
     let mut store = Store::new(&ENGINE, ctx);
@@ -73,28 +70,23 @@ async fn run(name: &str) -> anyhow::Result<()> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
     let r = {
-        let mut table = Table::new();
+        let table = Table::new();
         let component = get_component(name);
 
         // Create our wasi context.
         let mut builder = WasiCtxBuilder::new();
-        builder.stdout(stdout.clone(), IsATTY::No);
-        builder.stderr(stderr.clone(), IsATTY::No);
+        builder.stdout(stdout.clone());
+        builder.stderr(stderr.clone());
         builder.arg(name);
         for (var, val) in test_programs::wasi_tests_environment() {
             builder.env(var, val);
         }
-        let wasi = builder.build(&mut table)?;
-        let http = WasiHttpCtx::new();
+        let wasi = builder.build();
+        let http = WasiHttpCtx;
 
         let (mut store, command) =
             instantiate_component(component, Ctx { table, wasi, http }).await?;
-        command
-            .wasi_cli_run()
-            .call_run(&mut store)
-            .await?
-            .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
-        Ok(())
+        command.wasi_cli_run().call_run(&mut store).await
     };
     r.map_err(move |trap: anyhow::Error| {
         let stdout = stdout.try_into_inner().expect("single ref to stdout");
@@ -109,7 +101,8 @@ async fn run(name: &str) -> anyhow::Result<()> {
             "error while testing wasi-tests {} with http-components",
             name
         ))
-    })?;
+    })?
+    .map_err(|()| anyhow::anyhow!("run returned an error"))?;
     Ok(())
 }
 

@@ -58,20 +58,20 @@
 ;; block0:
 ;;   uninit  %xmm7
 ;;   xorps   %xmm7, %xmm7, %xmm7
-;;   movdqa  %xmm0, %xmm12
-;;   maxps   %xmm12, %xmm7, %xmm12
+;;   movdqa  %xmm0, %xmm4
+;;   maxps   %xmm4, %xmm7, %xmm4
 ;;   pcmpeqd %xmm7, %xmm7, %xmm7
 ;;   psrld   %xmm7, $1, %xmm7
 ;;   cvtdq2ps %xmm7, %xmm1
-;;   cvttps2dq %xmm12, %xmm15
-;;   subps   %xmm12, %xmm1, %xmm12
-;;   cmpps   $2, %xmm1, %xmm12, %xmm1
-;;   cvttps2dq %xmm12, %xmm0
+;;   cvttps2dq %xmm4, %xmm7
+;;   subps   %xmm4, %xmm1, %xmm4
+;;   cmpps   $2, %xmm1, %xmm4, %xmm1
+;;   cvttps2dq %xmm4, %xmm0
 ;;   pxor    %xmm0, %xmm1, %xmm0
-;;   uninit  %xmm10
-;;   pxor    %xmm10, %xmm10, %xmm10
-;;   pmaxsd  %xmm0, %xmm10, %xmm0
-;;   paddd   %xmm0, %xmm15, %xmm0
+;;   uninit  %xmm2
+;;   pxor    %xmm2, %xmm2, %xmm2
+;;   pmaxsd  %xmm0, %xmm2, %xmm0
+;;   paddd   %xmm0, %xmm7, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -99,10 +99,9 @@
 ;; block0:
 ;;   uninit  %xmm4
 ;;   xorpd   %xmm4, %xmm4, %xmm4
-;;   movdqa  %xmm0, %xmm8
-;;   maxpd   %xmm8, %xmm4, %xmm8
-;;   minpd   %xmm8, const(0), %xmm8
-;;   roundpd $3, %xmm8, %xmm0
+;;   maxpd   %xmm0, %xmm4, %xmm0
+;;   minpd   %xmm0, const(0), %xmm0
+;;   roundpd $3, %xmm0, %xmm0
 ;;   addpd   %xmm0, const(1), %xmm0
 ;;   shufps  $136, %xmm0, %xmm4, %xmm0
 ;;   jmp     label1
@@ -132,9 +131,10 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movdqa  %xmm0, %xmm8
-;;   movdqa  %xmm1, %xmm0
-;;   pmaddubsw %xmm0, %xmm8, %xmm0
+;;   movdqa  %xmm1, %xmm3
+;;   movdqa  %xmm0, %xmm1
+;;   movdqa  %xmm3, %xmm0
+;;   pmaddubsw %xmm0, %xmm1, %xmm0
 ;;   pmaddwd %xmm0, const(0), %xmm0
 ;;   paddd   %xmm0, %xmm2, %xmm0
 ;;   jmp     label1

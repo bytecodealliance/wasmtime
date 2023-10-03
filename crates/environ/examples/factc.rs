@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use wasmparser::{Validator, WasmFeatures};
 use wasmtime_environ::component::*;
@@ -179,7 +179,7 @@ impl Factc {
             wasmprinter::print_bytes(&wasm)
                 .context("failed to convert binary wasm to text")?
                 .into_bytes()
-        } else if self.output.is_none() && atty::is(atty::Stream::Stdout) {
+        } else if self.output.is_none() && std::io::stdout().is_terminal() {
             bail!("cannot print binary wasm output to a terminal unless `-t` flag is passed")
         } else {
             wasm.clone()

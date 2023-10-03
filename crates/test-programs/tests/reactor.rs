@@ -81,10 +81,8 @@ async fn instantiate(
 
 #[test_log::test(tokio::test)]
 async fn reactor_tests() -> Result<()> {
-    let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new()
-        .env("GOOD_DOG", "gussie")
-        .build(&mut table)?;
+    let table = Table::new();
+    let wasi = WasiCtxBuilder::new().env("GOOD_DOG", "gussie").build();
 
     let (mut store, reactor) =
         instantiate(get_component("reactor_tests"), ReactorCtx { table, wasi }).await?;
@@ -104,10 +102,8 @@ async fn reactor_tests() -> Result<()> {
     // Note, this works because of the add_to_linker invocations using the
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let writepipe = preview2::pipe::MemoryOutputPipe::new(4096);
-    let table_ix = preview2::TableStreamExt::push_output_stream(
-        store.data_mut().table_mut(),
-        Box::new(writepipe.clone()),
-    )?;
+    let stream: preview2::OutputStream = Box::new(writepipe.clone());
+    let table_ix = store.data_mut().table_mut().push_resource(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 
@@ -116,20 +112,20 @@ async fn reactor_tests() -> Result<()> {
     // Show that the `with` invocation in the macro means we get to re-use the
     // type definitions from inside the `host` crate for these structures:
     let ds = filesystem::DescriptorStat {
-        data_access_timestamp: wall_clock::Datetime {
+        data_access_timestamp: Some(wall_clock::Datetime {
             nanoseconds: 123,
             seconds: 45,
-        },
-        data_modification_timestamp: wall_clock::Datetime {
+        }),
+        data_modification_timestamp: Some(wall_clock::Datetime {
             nanoseconds: 789,
             seconds: 10,
-        },
+        }),
         link_count: 0,
         size: 0,
-        status_change_timestamp: wall_clock::Datetime {
+        status_change_timestamp: Some(wall_clock::Datetime {
             nanoseconds: 0,
             seconds: 1,
-        },
+        }),
         type_: filesystem::DescriptorType::Unknown,
     };
     let expected = format!("{ds:?}");

@@ -5,7 +5,7 @@ use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::preview2::{
     pipe::MemoryOutputPipe,
     preview1::{add_to_linker_async, WasiPreview1Adapter, WasiPreview1View},
-    DirPerms, FilePerms, IsATTY, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 lazy_static::lazy_static! {
@@ -43,9 +43,7 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         if inherit_stdio {
             builder.inherit_stdio();
         } else {
-            builder
-                .stdout(stdout.clone(), IsATTY::No)
-                .stderr(stderr.clone(), IsATTY::No);
+            builder.stdout(stdout.clone()).stderr(stderr.clone());
         }
         builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);
@@ -56,8 +54,8 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
             builder.env(var, val);
         }
 
-        let mut table = Table::new();
-        let wasi = builder.build(&mut table)?;
+        let table = Table::new();
+        let wasi = builder.build();
         struct Ctx {
             wasi: WasiCtx,
             table: Table,
@@ -260,13 +258,10 @@ async fn path_symlink_trailing_slashes() {
     run("path_symlink_trailing_slashes", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[should_panic]
 async fn poll_oneoff_files() {
     run("poll_oneoff_files", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-// This is a known bug with the preview 2 implementation:
-#[should_panic]
 async fn poll_oneoff_stdio() {
     run("poll_oneoff_stdio", true).await.unwrap()
 }

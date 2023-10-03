@@ -1,7 +1,8 @@
 //! Like v4.rs, but with IPv6.
 
+use wasi::io::poll;
 use wasi::sockets::network::{IpAddressFamily, IpSocketAddress, Ipv6SocketAddress};
-use wasi::sockets::{instance_network, tcp, tcp_create_socket};
+use wasi::sockets::{instance_network, tcp_create_socket};
 use wasi_sockets_tests::*;
 
 fn main() {
@@ -16,14 +17,14 @@ fn main() {
         scope_id: 0,
     });
 
-    let sub = tcp::subscribe(sock);
+    let sub = sock.subscribe();
 
-    tcp::start_bind(sock, net, addr).unwrap();
+    sock.start_bind(&net, addr).unwrap();
 
-    wait(sub);
-    wasi::poll::poll::drop_pollable(sub);
+    poll::poll_one(&sub);
+    drop(sub);
 
-    tcp::finish_bind(sock).unwrap();
+    sock.finish_bind().unwrap();
 
     example_body(net, sock, IpAddressFamily::Ipv6)
 }

@@ -1,4 +1,4 @@
-use self::regs::{scratch, ALL_GPR};
+use self::regs::{ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_GPR};
 use crate::{
     abi::ABI,
     codegen::{CodeGen, CodeGenContext, FuncEnv},
@@ -6,7 +6,7 @@ use crate::{
     isa::{Builder, CallingConvention, TargetIsa},
     masm::MacroAssembler,
     regalloc::RegAlloc,
-    regset::RegSet,
+    regset::RegBitSet,
     stack::Stack,
     TrampolineKind,
 };
@@ -17,7 +17,7 @@ use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypes, WasmFuncType};
 
 mod abi;
 mod address;
@@ -85,6 +85,7 @@ impl TargetIsa for Aarch64 {
     fn compile_function(
         &self,
         sig: &WasmFuncType,
+        types: &ModuleTypes,
         body: &FunctionBody,
         translation: &ModuleTranslation,
         validator: &mut FuncValidator<ValidatorResources>,
@@ -96,10 +97,21 @@ impl TargetIsa for Aarch64 {
 
         let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
+        let gpr = RegBitSet::int(
+            ALL_GPR.into(),
+            NON_ALLOCATABLE_GPR.into(),
+            usize::try_from(MAX_GPR).unwrap(),
+        );
         // TODO: Add floating point bitmask
-        let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
+        let fpr = RegBitSet::float(0, 0, usize::try_from(MAX_FPR).unwrap());
+        let regalloc = RegAlloc::from(gpr, fpr);
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let env = FuncEnv::new(self.pointer_bytes(), translation);
+        let env = FuncEnv::new(
+            self.pointer_bytes(),
+            translation,
+            types,
+            self.wasmtime_call_conv(),
+        );
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;

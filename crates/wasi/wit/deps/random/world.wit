@@ -1,0 +1,7 @@
+package wasi:random
+
+world imports {
+    import random
+    import insecure
+    import insecure-seed
+}

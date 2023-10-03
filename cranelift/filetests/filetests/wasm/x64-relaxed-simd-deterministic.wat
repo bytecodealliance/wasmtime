@@ -47,10 +47,10 @@
 ;;   vcmpps  $0, %xmm0, %xmm0, %xmm3
 ;;   vandps  %xmm0, %xmm3, %xmm5
 ;;   vpxor   %xmm3, %xmm5, %xmm7
-;;   vcvttps2dq %xmm5, %xmm9
-;;   vpand   %xmm9, %xmm7, %xmm11
-;;   vpsrad  %xmm11, $31, %xmm13
-;;   vpxor   %xmm13, %xmm9, %xmm0
+;;   vcvttps2dq %xmm5, %xmm1
+;;   vpand   %xmm1, %xmm7, %xmm3
+;;   vpsrad  %xmm3, $31, %xmm5
+;;   vpxor   %xmm5, %xmm1, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -65,19 +65,19 @@
 ;; block0:
 ;;   uninit  %xmm3
 ;;   vxorps  %xmm3, %xmm3, %xmm5
-;;   vmaxps  %xmm0, %xmm5, %xmm7
-;;   vpcmpeqd %xmm5, %xmm5, %xmm9
-;;   vpsrld  %xmm9, $1, %xmm11
-;;   vcvtdq2ps %xmm11, %xmm13
-;;   vcvttps2dq %xmm7, %xmm15
-;;   vsubps  %xmm7, %xmm13, %xmm1
-;;   vcmpps  $2, %xmm13, %xmm1, %xmm3
+;;   vmaxps  %xmm0, %xmm5, %xmm0
+;;   vpcmpeqd %xmm5, %xmm5, %xmm1
+;;   vpsrld  %xmm1, $1, %xmm3
+;;   vcvtdq2ps %xmm3, %xmm5
+;;   vcvttps2dq %xmm0, %xmm7
+;;   vsubps  %xmm0, %xmm5, %xmm1
+;;   vcmpps  $2, %xmm5, %xmm1, %xmm3
 ;;   vcvttps2dq %xmm1, %xmm5
-;;   vpxor   %xmm5, %xmm3, %xmm7
-;;   uninit  %xmm9
-;;   vpxor   %xmm9, %xmm9, %xmm11
-;;   vpmaxsd %xmm7, %xmm11, %xmm13
-;;   vpaddd  %xmm13, %xmm15, %xmm0
+;;   vpxor   %xmm5, %xmm3, %xmm0
+;;   uninit  %xmm1
+;;   vpxor   %xmm1, %xmm1, %xmm3
+;;   vpmaxsd %xmm0, %xmm3, %xmm5
+;;   vpaddd  %xmm5, %xmm7, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -109,10 +109,10 @@
 ;;   uninit  %xmm3
 ;;   vxorpd  %xmm3, %xmm3, %xmm5
 ;;   vmaxpd  %xmm0, %xmm5, %xmm7
-;;   vminpd  %xmm7, const(0), %xmm9
-;;   vroundpd $3, %xmm9, %xmm11
-;;   vaddpd  %xmm11, const(1), %xmm13
-;;   vshufps $136, %xmm13, %xmm5, %xmm0
+;;   vminpd  %xmm7, const(0), %xmm1
+;;   vroundpd $3, %xmm1, %xmm3
+;;   vaddpd  %xmm3, const(1), %xmm6
+;;   vshufps $136, %xmm6, %xmm5, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -125,15 +125,15 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   vpmovsxbw %xmm0, %xmm12
-;;   vpmovsxbw %xmm1, %xmm13
-;;   vpmullw %xmm12, %xmm13, %xmm12
-;;   vpalignr $8, %xmm0, %xmm0, %xmm11
-;;   vpmovsxbw %xmm11, %xmm13
-;;   vpalignr $8, %xmm1, %xmm1, %xmm11
-;;   vpmovsxbw %xmm11, %xmm14
-;;   vpmullw %xmm13, %xmm14, %xmm13
-;;   vphaddw %xmm12, %xmm13, %xmm0
+;;   vpmovsxbw %xmm0, %xmm4
+;;   vpmovsxbw %xmm1, %xmm5
+;;   vpmullw %xmm4, %xmm5, %xmm4
+;;   vpalignr $8, %xmm0, %xmm0, %xmm3
+;;   vpmovsxbw %xmm3, %xmm5
+;;   vpalignr $8, %xmm1, %xmm1, %xmm3
+;;   vpmovsxbw %xmm3, %xmm6
+;;   vpmullw %xmm5, %xmm6, %xmm5
+;;   vphaddw %xmm4, %xmm5, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -146,17 +146,17 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   vpmovsxbw %xmm0, %xmm15
+;;   vpmovsxbw %xmm0, %xmm7
 ;;   vpmovsxbw %xmm1, %xmm3
-;;   vpmullw %xmm15, %xmm3, %xmm15
-;;   vpalignr $8, %xmm0, %xmm0, %xmm14
-;;   vpmovsxbw %xmm14, %xmm0
-;;   vpalignr $8, %xmm1, %xmm1, %xmm14
-;;   vpmovsxbw %xmm14, %xmm1
+;;   vpmullw %xmm7, %xmm3, %xmm7
+;;   vpalignr $8, %xmm0, %xmm0, %xmm6
+;;   vpmovsxbw %xmm6, %xmm0
+;;   vpalignr $8, %xmm1, %xmm1, %xmm6
+;;   vpmovsxbw %xmm6, %xmm1
 ;;   vpmullw %xmm0, %xmm1, %xmm0
-;;   vphaddw %xmm15, %xmm0, %xmm15
-;;   vpmaddwd %xmm15, const(0), %xmm15
-;;   vpaddd  %xmm15, %xmm2, %xmm0
+;;   vphaddw %xmm7, %xmm0, %xmm7
+;;   vpmaddwd %xmm7, const(0), %xmm7
+;;   vpaddd  %xmm7, %xmm2, %xmm0
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp

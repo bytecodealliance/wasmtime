@@ -1,10 +1,9 @@
 use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};
 use io_lifetimes::AsFilelike;
-use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
-use std::io;
+use std::io::{self, IsTerminal};
 use system_interface::{
     fs::{FileIoExt, GetSetFdFlags},
     io::{IoExt, ReadReady},
@@ -128,7 +127,10 @@ impl WasiFile for File {
         Ok(self.0.num_ready_bytes()?)
     }
     fn isatty(&self) -> bool {
-        self.0.is_terminal()
+        #[cfg(unix)]
+        return self.0.as_fd().is_terminal();
+        #[cfg(windows)]
+        return self.0.as_handle().is_terminal();
     }
 }
 

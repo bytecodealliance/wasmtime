@@ -19,11 +19,13 @@ block0(v0: f64x2, v1: f64x2):
 ;   vmfeq.vv v14,v9,v9 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmfeq.vv v8,v11,v11 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmand.mm v0,v14,v8 #avl=2, #vtype=(e64, m1, ta, ma)
-;   ld a1,[const(0)]
-;   vmv.v.x v14,a1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vfmin.vv v8,v9,v11 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vmerge.vvm v10,v14,v8,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   lui a1,1
+;   addi a2,a1,-1
+;   slli a4,a2,51
+;   vmv.v.x v10,a4 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vfmin.vv v12,v9,v11 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v14,v10,v12,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v14,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -45,19 +47,18 @@ block0(v0: f64x2, v1: f64x2):
 ;   .byte 0x57, 0x97, 0x94, 0x62
 ;   .byte 0x57, 0x94, 0xb5, 0x62
 ;   .byte 0x57, 0x20, 0xe4, 0x66
-;   auipc a1, 0
-;   ld a1, 0x2c(a1)
-;   .byte 0x57, 0xc7, 0x05, 0x5e
-;   .byte 0x57, 0x94, 0x95, 0x12
-;   .byte 0x57, 0x05, 0xe4, 0x5c
+;   lui a1, 1
+;   addi a2, a1, -1
+;   slli a4, a2, 0x33
+;   .byte 0x57, 0x45, 0x07, 0x5e
+;   .byte 0x57, 0x96, 0x95, 0x12
+;   .byte 0x57, 0x07, 0xa6, 0x5c
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x07, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0xf8, 0x7f
 
 function %fmin_f32x4(f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4):

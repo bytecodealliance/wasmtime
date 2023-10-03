@@ -346,7 +346,7 @@ fn tiny_static_heap() -> Result<()> {
 
                     (loop
                         (if (i32.eq (local.get $i) (i32.const 65536))
-                            (return))
+                            (then (return)))
                         (drop (i32.load8_u (local.get $i)))
                         (local.set $i (i32.add (local.get $i) (i32.const 1)))
                         br 0

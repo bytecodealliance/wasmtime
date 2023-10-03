@@ -1,0 +1,6 @@
+package wasi:io
+
+world imports {
+    import streams
+    import poll
+}

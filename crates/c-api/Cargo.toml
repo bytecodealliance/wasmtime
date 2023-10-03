@@ -11,7 +11,7 @@ publish = false
 
 [lib]
 name = "wasmtime"
-crate-type = ["staticlib", "cdylib"]
+crate-type = ["staticlib", "cdylib", "rlib"]
 doc = false
 test = false
 doctest = false
@@ -32,8 +32,12 @@ wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 cap-std = { workspace = true, optional = true }
 wasi-common = { workspace = true, optional = true }
 
+# Optional dependencies for the `async` feature
+futures = { workspace = true, optional = true }
+
 [features]
-default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation']
+default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation', 'async']
+async = ['wasmtime/async', 'futures']
 jitdump = ["wasmtime/jitdump"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']

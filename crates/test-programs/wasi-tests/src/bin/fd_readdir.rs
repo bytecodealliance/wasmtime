@@ -205,6 +205,40 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
     }
 }
 
+unsafe fn test_fd_readdir_unicode_boundary(dir_fd: wasi::Fd) {
+    let filename = "Действие";
+    let file_fd = wasi::path_open(
+        dir_fd,
+        0,
+        filename,
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("failed to create file");
+    assert!(
+        file_fd > libc::STDERR_FILENO as wasi::Fd,
+        "file descriptor range check",
+    );
+    wasi::fd_close(file_fd).expect("closing a file");
+
+    let mut buf = Vec::new();
+    'outer: loop {
+        let len = wasi::fd_readdir(dir_fd, buf.as_mut_ptr(), buf.capacity(), 0).unwrap();
+        buf.set_len(len);
+
+        for entry in ReadDir::from_slice(&buf) {
+            if entry.name == filename {
+                break 'outer;
+            }
+        }
+        buf = Vec::with_capacity(buf.capacity() + 1);
+    }
+
+    wasi::path_unlink_file(dir_fd, filename).expect("removing a file");
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -227,4 +261,5 @@ fn main() {
     // Run the tests.
     unsafe { test_fd_readdir(dir_fd) }
     unsafe { test_fd_readdir_lots(dir_fd) }
+    unsafe { test_fd_readdir_unicode_boundary(dir_fd) }
 }

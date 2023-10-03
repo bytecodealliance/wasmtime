@@ -5,6 +5,7 @@ cargo test \
     --features wasi-threads \
     --features wasi-http \
     --features component-model \
+    --features serve \
     --workspace \
     --exclude 'wasmtime-wasi-*' \
     --exclude wasi-tests \

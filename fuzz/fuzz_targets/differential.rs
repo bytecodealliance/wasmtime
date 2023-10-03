@@ -374,7 +374,8 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | F32Abs { .. }
                         | F64Abs { .. }
                         | F32Neg { .. }
-                        | F64Neg { .. } => {}
+                        | F64Neg { .. }
+                        | CallIndirect { .. } => {}
                         _ => {
                             supported = false;
                             break 'main;

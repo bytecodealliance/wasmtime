@@ -2,15 +2,17 @@ use crate::preview2::bindings::sockets::network::{
     self, ErrorCode, IpAddressFamily, IpSocketAddress, Ipv4Address, Ipv4SocketAddress, Ipv6Address,
     Ipv6SocketAddress,
 };
-use crate::preview2::network::TableNetworkExt;
 use crate::preview2::{TableError, WasiView};
 use std::io;
+use wasmtime::component::Resource;
 
-impl<T: WasiView> network::Host for T {
-    fn drop_network(&mut self, this: network::Network) -> Result<(), anyhow::Error> {
+impl<T: WasiView> network::Host for T {}
+
+impl<T: WasiView> crate::preview2::bindings::sockets::network::HostNetwork for T {
+    fn drop(&mut self, this: Resource<network::Network>) -> Result<(), anyhow::Error> {
         let table = self.table_mut();
 
-        table.delete_network(this)?;
+        table.delete_resource(this)?;
 
         Ok(())
     }

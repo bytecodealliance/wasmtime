@@ -1,6 +1,7 @@
 use crate::preview2::filesystem::FileInputStream;
-use crate::preview2::{Table, TableError};
+use crate::preview2::poll::Subscribe;
 use anyhow::Error;
+use anyhow::Result;
 use bytes::Bytes;
 use std::fmt;
 
@@ -45,7 +46,7 @@ impl StreamState {
 /// Host trait for implementing the `wasi:io/streams.input-stream` resource: A
 /// bytestream which can be read from.
 #[async_trait::async_trait]
-pub trait HostInputStream: Send + Sync {
+pub trait HostInputStream: Subscribe {
     /// Read bytes. On success, returns a pair holding the number of bytes
     /// read and a flag indicating whether the end of the stream was reached.
     /// Important: this read must be non-blocking!
@@ -70,11 +71,6 @@ pub trait HostInputStream: Send + Sync {
 
         Ok((nread, state))
     }
-
-    /// Check for read readiness: this method blocks until the stream is ready
-    /// for reading.
-    /// Returning an error will trap execution.
-    async fn ready(&mut self) -> Result<(), Error>;
 }
 
 #[derive(Debug)]
@@ -104,7 +100,7 @@ impl std::error::Error for OutputStreamError {
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
-pub trait HostOutputStream: Send + Sync {
+pub trait HostOutputStream: Subscribe {
     /// Write bytes after obtaining a permit to write those bytes
     /// Prior to calling [`write`](Self::write)
     /// the caller must call [`write_ready`](Self::write_ready),
@@ -142,16 +138,17 @@ pub trait HostOutputStream: Send + Sync {
     /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
     fn flush(&mut self) -> Result<(), OutputStreamError>;
 
-    /// Returns a future, which:
-    /// - when pending, indicates 0 bytes are permitted for writing
-    /// - when ready, returns a non-zero number of bytes permitted to write
+    /// Returns the number of bytes that are ready to be written to this stream.
+    ///
+    /// Zero bytes indicates that this stream is not currently ready for writing
+    /// and `ready()` must be awaited first.
     ///
     /// # Errors
     ///
     /// Returns an [OutputStreamError] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
-    async fn write_ready(&mut self) -> Result<usize, OutputStreamError>;
+    fn check_write(&mut self) -> Result<usize, OutputStreamError>;
 
     /// Repeatedly write a byte to a stream.
     /// Important: this write must be non-blocking!
@@ -164,184 +161,36 @@ pub trait HostOutputStream: Send + Sync {
         self.write(bs)?;
         Ok(())
     }
+
+    /// Simultaneously waits for this stream to be writable and then returns how
+    /// much may be written or the last error that happened.
+    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
+        self.ready().await;
+        self.check_write()
+    }
 }
 
-pub(crate) enum InternalInputStream {
+#[async_trait::async_trait]
+impl Subscribe for Box<dyn HostOutputStream> {
+    async fn ready(&mut self) {
+        (**self).ready().await
+    }
+}
+
+pub enum InputStream {
     Host(Box<dyn HostInputStream>),
     File(FileInputStream),
 }
 
-pub(crate) trait InternalTableStreamExt {
-    fn push_internal_input_stream(
-        &mut self,
-        istream: InternalInputStream,
-    ) -> Result<u32, TableError>;
-    fn push_internal_input_stream_child(
-        &mut self,
-        istream: InternalInputStream,
-        parent: u32,
-    ) -> Result<u32, TableError>;
-    fn get_internal_input_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut InternalInputStream, TableError>;
-    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError>;
-}
-impl InternalTableStreamExt for Table {
-    fn push_internal_input_stream(
-        &mut self,
-        istream: InternalInputStream,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(istream))
-    }
-    fn push_internal_input_stream_child(
-        &mut self,
-        istream: InternalInputStream,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        self.push_child(Box::new(istream), parent)
-    }
-    fn get_internal_input_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut InternalInputStream, TableError> {
-        self.get_mut(fd)
-    }
-    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError> {
-        self.delete(fd)
-    }
-}
-
-/// Extension trait for managing [`HostInputStream`]s and [`HostOutputStream`]s in the [`Table`].
-pub trait TableStreamExt {
-    /// Push a [`HostInputStream`] into a [`Table`], returning the table index.
-    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
-    /// Same as [`push_input_stream`](Self::push_output_stream) except assigns a parent resource to
-    /// the input-stream created.
-    fn push_input_stream_child(
-        &mut self,
-        istream: Box<dyn HostInputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError>;
-    /// Get a mutable reference to a [`HostInputStream`] in a [`Table`].
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError>;
-    /// Remove [`HostInputStream`] from table:
-    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError>;
-
-    /// Push a [`HostOutputStream`] into a [`Table`], returning the table index.
-    fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
-        -> Result<u32, TableError>;
-    /// Same as [`push_output_stream`](Self::push_output_stream) except assigns a parent resource
-    /// to the output-stream created.
-    fn push_output_stream_child(
-        &mut self,
-        ostream: Box<dyn HostOutputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError>;
-    /// Get a mutable reference to a [`HostOutputStream`] in a [`Table`].
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError>;
-
-    /// Remove [`HostOutputStream`] from table:
-    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError>;
-}
-impl TableStreamExt for Table {
-    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
-        self.push_internal_input_stream(InternalInputStream::Host(istream))
-    }
-    fn push_input_stream_child(
-        &mut self,
-        istream: Box<dyn HostInputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        self.push_internal_input_stream_child(InternalInputStream::Host(istream), parent)
-    }
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError> {
-        match self.get_internal_input_stream_mut(fd)? {
-            InternalInputStream::Host(ref mut h) => Ok(h.as_mut()),
-            _ => Err(TableError::WrongType),
+#[async_trait::async_trait]
+impl Subscribe for InputStream {
+    async fn ready(&mut self) {
+        match self {
+            InputStream::Host(stream) => stream.ready().await,
+            // Files are always ready
+            InputStream::File(_) => {}
         }
     }
-    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError> {
-        let occ = self.entry(fd)?;
-        match occ.get().downcast_ref::<InternalInputStream>() {
-            Some(InternalInputStream::Host(_)) => {
-                let any = occ.remove_entry()?;
-                match *any.downcast().expect("downcast checked above") {
-                    InternalInputStream::Host(h) => Ok(h),
-                    _ => unreachable!("variant checked above"),
-                }
-            }
-            _ => Err(TableError::WrongType),
-        }
-    }
-
-    fn push_output_stream(
-        &mut self,
-        ostream: Box<dyn HostOutputStream>,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(ostream))
-    }
-    fn push_output_stream_child(
-        &mut self,
-        ostream: Box<dyn HostOutputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        self.push_child(Box::new(ostream), parent)
-    }
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError> {
-        let boxed: &mut Box<dyn HostOutputStream> = self.get_mut(fd)?;
-        Ok(boxed.as_mut())
-    }
-    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError> {
-        self.delete(fd)
-    }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn input_stream_in_table() {
-        let dummy = crate::preview2::pipe::ClosedInputStream;
-        let mut table = Table::new();
-        // Put it into the table:
-        let ix = table.push_input_stream(Box::new(dummy)).unwrap();
-        // Get a mut ref to it:
-        let _ = table.get_input_stream_mut(ix).unwrap();
-        // Fails at wrong type:
-        assert!(matches!(
-            table.get_output_stream_mut(ix),
-            Err(TableError::WrongType)
-        ));
-        // Delete it:
-        let _ = table.delete_input_stream(ix).unwrap();
-        // Now absent from table:
-        assert!(matches!(
-            table.get_input_stream_mut(ix),
-            Err(TableError::NotPresent)
-        ));
-    }
-
-    #[test]
-    fn output_stream_in_table() {
-        let dummy = crate::preview2::pipe::SinkOutputStream;
-        let mut table = Table::new();
-        // Put it in the table:
-        let ix = table.push_output_stream(Box::new(dummy)).unwrap();
-        // Get a mut ref to it:
-        let _ = table.get_output_stream_mut(ix).unwrap();
-        // Fails at wrong type:
-        assert!(matches!(
-            table.get_input_stream_mut(ix),
-            Err(TableError::WrongType)
-        ));
-        // Delete it:
-        let _ = table.delete_output_stream(ix).unwrap();
-        // Now absent:
-        assert!(matches!(
-            table.get_output_stream_mut(ix),
-            Err(TableError::NotPresent)
-        ));
-    }
-}
+pub type OutputStream = Box<dyn HostOutputStream>;

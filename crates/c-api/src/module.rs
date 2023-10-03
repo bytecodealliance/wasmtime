@@ -184,6 +184,17 @@ pub extern "C" fn wasmtime_module_serialize(
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_module_image_range(
+    module: &wasmtime_module_t,
+    start: &mut usize,
+    end: &mut usize,
+) {
+    let range = module.module.image_range();
+    *start = range.start;
+    *end = range.end;
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn wasmtime_module_deserialize(
     engine: &wasm_engine_t,
     bytes: *const u8,

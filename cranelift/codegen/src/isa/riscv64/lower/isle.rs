@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, ExtendOp, MInst};
+use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{VecAluOpRR, VecLmul};
@@ -174,22 +174,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             _ => unreachable!(),
         }
     }
-    fn intcc_to_extend_op(&mut self, cc: &IntCC) -> ExtendOp {
-        use IntCC::*;
-        match *cc {
-            Equal
-            | NotEqual
-            | UnsignedLessThan
-            | UnsignedGreaterThanOrEqual
-            | UnsignedGreaterThan
-            | UnsignedLessThanOrEqual => ExtendOp::Zero,
 
-            SignedLessThan
-            | SignedGreaterThanOrEqual
-            | SignedGreaterThan
-            | SignedLessThanOrEqual => ExtendOp::Signed,
-        }
-    }
     fn lower_cond_br(
         &mut self,
         cc: &IntCC,
@@ -207,25 +192,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         )
         .iter()
         .for_each(|i| self.emit(i));
-    }
-    fn lower_br_icmp(
-        &mut self,
-        cc: &IntCC,
-        a: ValueRegs,
-        b: ValueRegs,
-        targets: &VecMachLabel,
-        ty: Type,
-    ) -> Unit {
-        let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty);
-        self.emit(&MInst::CondBr {
-            taken: CondBrTarget::Label(targets[0]),
-            not_taken: CondBrTarget::Label(targets[1]),
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: test,
-                rs2: zero_reg(),
-            },
-        });
     }
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
@@ -426,6 +392,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_v()
     }
 
+    fn has_m(&mut self) -> bool {
+        self.backend.isa_flags.has_m()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
@@ -446,16 +416,24 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
-    fn default_memflags(&mut self) -> MemFlags {
-        MemFlags::new()
+    fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
+        AMode::RegOffset(base, offset, ty)
     }
 
-    fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
-        FpuOPRR::int_convert_2_float_op(from, is_signed, to)
+    fn gen_sp_offset_amode(&mut self, offset: i64, ty: Type) -> AMode {
+        AMode::SPOffset(offset, ty)
     }
 
-    fn gen_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {
-        AMode::RegOffset(base, i64::from(offset), ty)
+    fn gen_fp_offset_amode(&mut self, offset: i64, ty: Type) -> AMode {
+        AMode::FPOffset(offset, ty)
+    }
+
+    fn gen_stack_slot_amode(&mut self, ss: StackSlot, offset: i64, ty: Type) -> AMode {
+        // Offset from beginning of stackslot area, which is at nominal SP (see
+        // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
+        let stack_off = self.lower_ctx.abi().sized_stackslot_offsets()[ss] as i64;
+        let sp_off: i64 = stack_off + offset;
+        AMode::NominalSPOffset(sp_off, ty)
     }
 
     fn gen_const_amode(&mut self, c: VCodeConstant) -> AMode {
@@ -495,10 +473,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         tmp.to_reg()
     }
 
-    fn offset32_add(&mut self, a: Offset32, adden: i64) -> Offset32 {
-        a.try_add_i64(adden).expect("offset exceed range.")
-    }
-
     fn gen_stack_addr(&mut self, slot: StackSlot, offset: Offset32) -> Reg {
         let result = self.temp_writable_reg(I64);
         let i = self
@@ -529,22 +503,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn sp_reg(&mut self) -> PReg {
         px_reg(2)
-    }
-
-    fn shift_int_to_most_significant(&mut self, v: XReg, ty: Type) -> XReg {
-        assert!(ty.is_int() && ty.bits() <= 64);
-        if ty == I64 {
-            return v;
-        }
-        let tmp = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRImm12 {
-            alu_op: AluOPRRI::Slli,
-            rd: tmp,
-            rs: v.to_reg(),
-            imm12: Imm12::from_i16((64 - ty.bits()) as i16),
-        });
-
-        self.xreg_new(tmp.to_reg())
     }
 
     #[inline]

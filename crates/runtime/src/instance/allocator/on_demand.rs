@@ -3,6 +3,7 @@ use super::{
 };
 use crate::instance::RuntimeMemoryCreator;
 use crate::memory::{DefaultMemoryCreator, Memory};
+use crate::mpk::ProtectionKey;
 use crate::table::Table;
 use crate::CompiledModuleId;
 use anyhow::Result;
@@ -151,4 +152,25 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
     }
 
     fn purge_module(&self, _: CompiledModuleId) {}
+
+    fn next_available_pkey(&self) -> Option<ProtectionKey> {
+        // The on-demand allocator cannot use protection keys--it requires
+        // back-to-back allocation of memory slots that this allocator cannot
+        // guarantee.
+        None
+    }
+
+    fn restrict_to_pkey(&self, _: ProtectionKey) {
+        // The on-demand allocator cannot use protection keys; an on-demand
+        // allocator will never hand out protection keys to the stores its
+        // engine creates.
+        unreachable!()
+    }
+
+    fn allow_all_pkeys(&self) {
+        // The on-demand allocator cannot use protection keys; an on-demand
+        // allocator will never hand out protection keys to the stores its
+        // engine creates.
+        unreachable!()
+    }
 }

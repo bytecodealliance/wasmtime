@@ -3,7 +3,8 @@ use serde_derive::{Deserialize, Serialize};
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone, Hash, Serialize, Deserialize)]
 pub struct Tunables {
-    /// For static heaps, the size in wasm pages of the heap protected by bounds checking.
+    /// For static heaps, the size in wasm pages of the heap protected by bounds
+    /// checking.
     pub static_memory_bound: u64,
 
     /// The size in bytes of the offset guard for static heaps.
@@ -31,7 +32,8 @@ pub struct Tunables {
     /// Whether or not we use epoch-based interruption.
     pub epoch_interruption: bool,
 
-    /// Whether or not to treat the static memory bound as the maximum for unbounded heaps.
+    /// Whether or not to treat the static memory bound as the maximum for
+    /// unbounded heaps.
     pub static_memory_bound_is_maximum: bool,
 
     /// Whether or not linear memory allocations will have a guard region at the

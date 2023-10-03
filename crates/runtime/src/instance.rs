@@ -350,6 +350,15 @@ impl Instance {
         unsafe { *self.vmctx_plus_offset(self.offsets().vmctx_vmmemory_pointer(index)) }
     }
 
+    /// Return the memories defined within this instance (not imported).
+    pub fn defined_memories<'a>(
+        &'a self,
+    ) -> impl ExactSizeIterator<Item = (DefinedMemoryIndex, &'a Memory)> + 'a {
+        self.memories
+            .iter()
+            .map(|(index, (_alloc_index, memory))| (index, memory))
+    }
+
     /// Return the indexed `VMGlobalDefinition`.
     fn global(&mut self, index: DefinedGlobalIndex) -> &VMGlobalDefinition {
         unsafe { &*self.global_ptr(index) }
@@ -375,7 +384,49 @@ impl Instance {
         }
     }
 
+    /// Get all globals within this instance.
+    ///
+    /// Returns both import and defined globals.
+    ///
+    /// Returns both exported and non-exported globals.
+    ///
+    /// Gives access to the full globals space.
+    pub fn all_globals<'a>(
+        &'a mut self,
+    ) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + 'a {
+        let module = self.module().clone();
+        module.globals.keys().map(move |idx| {
+            (
+                idx,
+                ExportGlobal {
+                    definition: self.defined_or_imported_global_ptr(idx),
+                    global: self.module().globals[idx],
+                },
+            )
+        })
+    }
+
+    /// Get the globals defined in this instance (not imported).
+    pub fn defined_globals<'a>(
+        &'a mut self,
+    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, ExportGlobal)> + 'a {
+        let module = self.module().clone();
+        module
+            .globals
+            .keys()
+            .skip(module.num_imported_globals)
+            .map(move |global_idx| {
+                let def_idx = module.defined_global_index(global_idx).unwrap();
+                let global = ExportGlobal {
+                    definition: self.global_ptr(def_idx),
+                    global: self.module().globals[global_idx],
+                };
+                (def_idx, global)
+            })
+    }
+
     /// Return a pointer to the interrupts structure
+    #[inline]
     pub fn runtime_limits(&mut self) -> *mut *const VMRuntimeLimits {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_runtime_limits()) }
     }
@@ -1320,6 +1371,52 @@ impl InstanceHandle {
     ) -> *mut Table {
         let index = self.instance().module().table_index(index);
         self.instance_mut().get_table_with_lazy_init(index, range)
+    }
+
+    /// Get all memories within this instance.
+    ///
+    /// Returns both import and defined memories.
+    ///
+    /// Returns both exported and non-exported memories.
+    ///
+    /// Gives access to the full memories space.
+    pub fn all_memories<'a>(
+        &'a mut self,
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + 'a {
+        let indices = (0..self.module().memory_plans.len())
+            .map(|i| MemoryIndex::new(i))
+            .collect::<Vec<_>>();
+        indices
+            .into_iter()
+            .map(|i| (i, self.get_exported_memory(i)))
+    }
+
+    /// Return the memories defined in this instance (not imported).
+    pub fn defined_memories<'a>(&'a mut self) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
+        let num_imported = self.module().num_imported_memories;
+        self.all_memories()
+            .skip(num_imported)
+            .map(|(_i, memory)| memory)
+    }
+
+    /// Get all globals within this instance.
+    ///
+    /// Returns both import and defined globals.
+    ///
+    /// Returns both exported and non-exported globals.
+    ///
+    /// Gives access to the full globals space.
+    pub fn all_globals<'a>(
+        &'a mut self,
+    ) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + 'a {
+        self.instance_mut().all_globals()
+    }
+
+    /// Get the globals defined in this instance (not imported).
+    pub fn defined_globals<'a>(
+        &'a mut self,
+    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, ExportGlobal)> + 'a {
+        self.instance_mut().defined_globals()
     }
 
     /// Return a reference to the contained `Instance`.

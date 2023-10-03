@@ -225,8 +225,8 @@ impl RunCommand {
         let main = self.load_module(&engine, &self.module_and_args[0])?;
 
         // Validate coredump-on-trap argument
-        if let Some(coredump_path) = &self.common.debug.coredump {
-            if coredump_path.contains("%") {
+        if let Some(path) = &self.common.debug.coredump {
+            if path.contains("%") {
                 bail!("the coredump-on-trap path does not support patterns yet.")
             }
         }
@@ -529,7 +529,7 @@ impl RunCommand {
                     .wasi_cli_run()
                     .call_run(&mut *store)
                     .context("failed to invoke `run` function")
-                    .map_err(|e| self.handle_coredump(e));
+                    .map_err(|e| self.handle_core_dump(&mut *store, e));
 
                 // Translate the `Result<(),()>` produced by wasm into a feigned
                 // explicit exit here with status 1 if `Err(())` is returned.
@@ -583,16 +583,18 @@ impl RunCommand {
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
         let mut results = vec![Val::null(); ty.results().len()];
-        let invoke_res = func.call(store, &values, &mut results).with_context(|| {
-            if let Some(name) = &self.invoke {
-                format!("failed to invoke `{}`", name)
-            } else {
-                format!("failed to invoke command default")
-            }
-        });
+        let invoke_res = func
+            .call(&mut *store, &values, &mut results)
+            .with_context(|| {
+                if let Some(name) = &self.invoke {
+                    format!("failed to invoke `{}`", name)
+                } else {
+                    format!("failed to invoke command default")
+                }
+            });
 
         if let Err(err) = invoke_res {
-            return Err(self.handle_coredump(err));
+            return Err(self.handle_core_dump(&mut *store, err));
         }
 
         if !results.is_empty() {
@@ -617,7 +619,7 @@ impl RunCommand {
         Ok(())
     }
 
-    fn handle_coredump(&self, err: Error) -> Error {
+    fn handle_core_dump(&self, store: &mut Store<Host>, err: Error) -> Error {
         let coredump_path = match &self.common.debug.coredump {
             Some(path) => path,
             None => return err,
@@ -629,7 +631,7 @@ impl RunCommand {
             .to_str()
             .unwrap_or_else(|| "unknown");
 
-        if let Err(coredump_err) = generate_coredump(&err, &source_name, coredump_path) {
+        if let Err(coredump_err) = write_core_dump(store, &err, &source_name, coredump_path) {
             eprintln!("warning: coredump failed to generate: {}", coredump_err);
             err
         } else {
@@ -744,7 +746,7 @@ impl RunCommand {
     #[cfg(feature = "component-model")]
     fn ensure_allow_components(&self) -> Result<()> {
         if self.common.wasm.component_model != Some(true) {
-            bail!("cannot execute a component without `--wasm-features component-model`");
+            bail!("cannot execute a component without `--wasm component-model`");
         }
 
         Ok(())
@@ -848,22 +850,22 @@ impl RunCommand {
         }
 
         if self.common.wasi.http == Some(true) {
-            #[cfg(not(feature = "wasi-http"))]
+            #[cfg(not(all(feature = "wasi-http", feature = "component-model")))]
             {
                 bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
             }
-            #[cfg(feature = "wasi-http")]
+            #[cfg(all(feature = "wasi-http", feature = "component-model"))]
             {
                 match linker {
-                    CliLinker::Core(linker) => {
-                        wasmtime_wasi_http::sync::add_to_linker(linker)?;
+                    CliLinker::Core(_) => {
+                        bail!("Cannot enable wasi-http for core wasm modules");
                     }
-                    #[cfg(feature = "component-model")]
                     CliLinker::Component(linker) => {
-                        wasmtime_wasi_http::proxy::sync::add_to_linker(linker)?;
+                        wasmtime_wasi_http::proxy::add_to_linker(linker)?;
                     }
                 }
-                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
+
+                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx {}));
             }
         }
 
@@ -935,10 +937,7 @@ impl RunCommand {
             builder.inherit_network(ambient_authority());
         }
 
-        let data = store.data_mut();
-        let table = Arc::get_mut(&mut data.preview2_table).unwrap();
-        let ctx = builder.build(table)?;
-        data.preview2_ctx = Some(Arc::new(ctx));
+        store.data_mut().preview2_ctx = Some(Arc::new(builder.build()));
         Ok(())
     }
 }
@@ -998,13 +997,13 @@ impl preview2::preview1::WasiPreview1View for Host {
 
 #[cfg(feature = "wasi-http")]
 impl wasmtime_wasi_http::types::WasiHttpView for Host {
-    fn http_ctx(&self) -> &WasiHttpCtx {
-        self.wasi_http.as_ref().unwrap()
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        let ctx = self.wasi_http.as_mut().unwrap();
+        Arc::get_mut(ctx).expect("preview2 is not compatible with threads")
     }
 
-    fn http_ctx_mut(&mut self) -> &mut WasiHttpCtx {
-        let ctx = self.wasi_http.as_mut().unwrap();
-        Arc::get_mut(ctx).expect("wasi-http is not compatible with threads")
+    fn table(&mut self) -> &mut preview2::Table {
+        Arc::get_mut(&mut self.preview2_table).expect("preview2 is not compatible with threads")
     }
 }
 
@@ -1037,36 +1036,22 @@ fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<u
     Ok(num_fd)
 }
 
-fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str) -> Result<()> {
-    let bt = err
-        .downcast_ref::<wasmtime::WasmBacktrace>()
-        .ok_or_else(|| anyhow!("no wasm backtrace found to generate coredump with"))?;
+fn write_core_dump(
+    store: &mut Store<Host>,
+    err: &anyhow::Error,
+    name: &str,
+    path: &str,
+) -> Result<()> {
+    let core_dump = err
+        .downcast_ref::<wasmtime::WasmCoreDump>()
+        .expect("should have been configured to capture core dumps");
 
-    let coredump = wasm_encoder::CoreDumpSection::new(source_name);
-    let mut stacksection = wasm_encoder::CoreDumpStackSection::new("main");
-    for f in bt.frames() {
-        // We don't have the information at this point to map frames to
-        // individual instances of a module, so we won't be able to create the
-        // "frame ∈ instance ∈ module" hierarchy described in the core dump spec
-        // until we move core dump generation into the runtime. So for now
-        // instanceidx will be 0 for all frames
-        let instanceidx = 0;
-        stacksection.frame(
-            instanceidx,
-            f.func_index(),
-            u32::try_from(f.func_offset().unwrap_or(0)).unwrap(),
-            // We don't currently have access to locals/stack values
-            [],
-            [],
-        );
-    }
-    let mut module = wasm_encoder::Module::new();
-    module.section(&coredump);
-    module.section(&stacksection);
+    let core_dump = core_dump.serialize(store, name);
 
-    let mut f = File::create(coredump_path)
-        .context(format!("failed to create file at `{}`", coredump_path))?;
-    f.write_all(module.as_slice())
-        .with_context(|| format!("failed to write coredump file at `{}`", coredump_path))?;
+    let mut core_dump_file =
+        File::create(path).context(format!("failed to create file at `{}`", path))?;
+    core_dump_file
+        .write_all(&core_dump)
+        .with_context(|| format!("failed to write core dump file at `{}`", path))?;
     Ok(())
 }

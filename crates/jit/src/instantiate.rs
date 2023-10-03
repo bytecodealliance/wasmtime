@@ -509,6 +509,7 @@ impl CompiledModule {
     /// Returns the text section of the ELF image for this compiled module.
     ///
     /// This memory should have the read/execute permissions.
+    #[inline]
     pub fn text(&self) -> &[u8] {
         self.code_memory.text()
     }
@@ -575,6 +576,7 @@ impl CompiledModule {
     ///
     /// These trampolines are used for native callers (e.g. `Func::wrap`)
     /// calling Wasm callees.
+    #[inline]
     pub fn native_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
         let loc = self.funcs[index].native_to_wasm_trampoline?;
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
