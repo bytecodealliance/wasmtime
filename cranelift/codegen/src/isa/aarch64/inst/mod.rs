@@ -140,16 +140,6 @@ pub struct ReturnCallInfo {
     pub key: Option<APIKey>,
 }
 
-/// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct JTSequenceInfo {
-    /// Possible branch targets.
-    pub targets: Vec<BranchTarget>,
-    /// Default branch target.
-    pub default_target: BranchTarget,
-}
-
 fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
     let mut count = 0;
     for _ in 0..num_half_words {
@@ -2677,7 +2667,8 @@ impl Inst {
             &Inst::Word4 { data } => format!("data.i32 {}", data),
             &Inst::Word8 { data } => format!("data.i64 {}", data),
             &Inst::JTSequence {
-                ref info,
+                default,
+                ref targets,
                 ridx,
                 rtmp1,
                 rtmp2,
@@ -2686,7 +2677,7 @@ impl Inst {
                 let ridx = pretty_print_reg(ridx, allocs);
                 let rtmp1 = pretty_print_reg(rtmp1.to_reg(), allocs);
                 let rtmp2 = pretty_print_reg(rtmp2.to_reg(), allocs);
-                let default_target = info.default_target.pretty_print(0, allocs);
+                let default_target = BranchTarget::Label(default).pretty_print(0, allocs);
                 format!(
                     concat!(
                         "b.hs {} ; ",
@@ -2709,7 +2700,7 @@ impl Inst {
                     rtmp1,
                     rtmp2,
                     rtmp1,
-                    info.targets
+                    targets
                 )
             }
             &Inst::LoadExtName {

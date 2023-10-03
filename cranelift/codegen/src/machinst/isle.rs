@@ -32,6 +32,8 @@ pub type InstOutput = SmallVec<[ValueRegs; 2]>;
 pub type InstOutputBuilder = Cell<InstOutput>;
 pub type BoxExternalName = Box<ExternalName>;
 pub type Range = (usize, usize);
+pub type MachLabelSlice = [MachLabel];
+pub type BoxVecMachLabel = Box<Vec<MachLabel>>;
 
 pub enum RangeView {
     Empty,
@@ -636,6 +638,40 @@ macro_rules! isle_lower_prelude_methods {
             } else {
                 Some(bits as u64)
             }
+        }
+
+        fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
+            if targets.len() == 1 {
+                Some(targets[0])
+            } else {
+                None
+            }
+        }
+
+        fn two_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, MachLabel)> {
+            if targets.len() == 2 {
+                Some((targets[0], targets[1]))
+            } else {
+                None
+            }
+        }
+
+        fn jump_table_targets(
+            &mut self,
+            targets: &MachLabelSlice,
+        ) -> Option<(MachLabel, BoxVecMachLabel)> {
+            use std::boxed::Box;
+            if targets.is_empty() {
+                return None;
+            }
+
+            let default_label = targets[0];
+            let jt_targets = Box::new(targets[1..].to_vec());
+            Some((default_label, jt_targets))
+        }
+
+        fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
+            targets.len() as u32
         }
     };
 }

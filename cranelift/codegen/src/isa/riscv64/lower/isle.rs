@@ -175,13 +175,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
-    fn lower_cond_br(
-        &mut self,
-        cc: &IntCC,
-        a: ValueRegs,
-        targets: &VecMachLabel,
-        ty: Type,
-    ) -> Unit {
+    fn lower_cond_br(&mut self, cc: &IntCC, a: ValueRegs, targets: &[MachLabel], ty: Type) -> Unit {
         MInst::lower_br_icmp(
             *cc,
             a,
@@ -214,10 +208,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         } else {
             ValueRegs::one(self.zero_reg())
         }
-    }
-
-    fn vec_label_get(&mut self, val: &VecMachLabel, x: u8) -> MachLabel {
-        val[x as usize]
     }
 
     fn label_to_br_target(&mut self, label: MachLabel) -> CondBrTarget {
@@ -486,14 +476,14 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         AMO::SeqCst
     }
 
-    fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> Unit {
+    fn lower_br_table(&mut self, index: Reg, targets: &[MachLabel]) -> Unit {
         let tmp1 = self.temp_writable_reg(I64);
         let tmp2 = self.temp_writable_reg(I64);
         self.emit(&MInst::BrTable {
             index,
             tmp1,
             tmp2,
-            targets: targets.clone(),
+            targets: targets.to_vec(),
         });
     }
 
