@@ -113,7 +113,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
 
 /// Places the `args` into `dst` and additionally reserves space in `dst` for `results_size`
 /// returns. The params/results slices are then returned separately.
-fn translate_args<'a>(
+pub(crate) fn translate_args<'a>(
     dst: &'a mut Vec<Val>,
     args: impl ExactSizeIterator<Item = Val>,
     results_size: usize,
@@ -200,7 +200,7 @@ pub extern "C" fn wasm_func_as_extern_const(f: &wasm_func_t) -> &wasm_extern_t {
 
 #[repr(C)]
 pub struct wasmtime_caller_t<'a> {
-    caller: Caller<'a, crate::StoreData>,
+    pub(crate) caller: Caller<'a, crate::StoreData>,
 }
 
 pub type wasmtime_func_callback_t = extern "C" fn(
