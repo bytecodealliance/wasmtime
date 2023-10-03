@@ -159,7 +159,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         socket
             .tcp_socket()
             .as_socketlike_view::<TcpListener>()
-            .listen(None)?;
+            .listen(socket.listen_backlog_size)?;
 
         socket.tcp_state = TcpState::ListenStarted;
 
