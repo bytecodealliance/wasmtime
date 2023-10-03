@@ -22,6 +22,7 @@ You can also build using cmake:
 mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-async
 */
 
+#include <array>
 #include <assert.h>
 #include <chrono>
 #include <cstdlib>
