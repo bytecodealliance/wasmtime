@@ -175,18 +175,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
-    fn lower_cond_br(&mut self, cc: &IntCC, a: ValueRegs, targets: &[MachLabel], ty: Type) -> Unit {
-        MInst::lower_br_icmp(
-            *cc,
-            a,
-            self.int_zero_reg(ty),
-            CondBrTarget::Label(targets[0]),
-            CondBrTarget::Label(targets[1]),
-            ty,
-        )
-        .iter()
-        .for_each(|i| self.emit(i));
-    }
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
             let tmp = self.temp_writable_reg(I64);
