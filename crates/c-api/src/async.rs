@@ -9,8 +9,8 @@ use wasmtime::{AsContextMut, Caller, Func, Instance, Result, Trap, Val};
 
 use crate::{
     bad_utf8, handle_result, to_str, translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t,
-    wasmtime_caller_t, wasmtime_error_t, wasmtime_linker_t, wasmtime_module_t, wasmtime_val_t,
-    wasmtime_val_union, CStoreContextMut, WASMTIME_I32,
+    wasmtime_caller_t, wasmtime_error_t, wasmtime_instance_pre_t, wasmtime_linker_t,
+    wasmtime_module_t, wasmtime_val_t, wasmtime_val_union, CStoreContextMut, WASMTIME_I32,
 };
 
 #[no_mangle]
@@ -297,6 +297,38 @@ pub extern "C" fn wasmtime_linker_instantiate_async<'a>(
         linker,
         store,
         module,
+        instance_ptr,
+        trap_ret,
+        err_ret,
+    ));
+    Box::new(crate::wasmtime_call_future_t { underlying: fut })
+}
+
+async fn do_instance_pre_instantiate_async(
+    instance_pre: &wasmtime_instance_pre_t,
+    store: CStoreContextMut<'_>,
+    instance_ptr: &mut Instance,
+    trap_ret: &mut *mut wasm_trap_t,
+    err_ret: &mut *mut wasmtime_error_t,
+) {
+    let result = instance_pre.underlying.instantiate_async(store).await;
+    match result {
+        Ok(instance) => *instance_ptr = instance,
+        Err(err) => handle_call_error(err, trap_ret, err_ret),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_instance_pre_instantiate_async<'a>(
+    instance_pre: &'a wasmtime_instance_pre_t,
+    store: CStoreContextMut<'a>,
+    instance_ptr: &'a mut Instance,
+    trap_ret: &'a mut *mut wasm_trap_t,
+    err_ret: &'a mut *mut wasmtime_error_t,
+) -> Box<crate::wasmtime_call_future_t<'a>> {
+    let fut = Box::pin(do_instance_pre_instantiate_async(
+        instance_pre,
+        store,
         instance_ptr,
         trap_ret,
         err_ret,
