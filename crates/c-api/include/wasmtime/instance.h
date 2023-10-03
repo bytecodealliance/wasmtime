@@ -121,7 +121,7 @@ WASM_API_EXTERN bool wasmtime_instance_export_nth(
     wasmtime_extern_t *item
 );
 
-/*
+/**
  * \brief A #wasmtime_instance_t, pre-instantiation, that is ready to be instantiated.
  *
  * Must be deleted using #wasmtime_instance_pre_delete.
