@@ -1724,7 +1724,7 @@
 (extern extractor i64_generate_imm i64_generate_imm)
 
 ;; Helper for generating a i64 from a shift of a Imm20 constant with LUI
-(decl i64_shift_for_lui (i64 Imm12) i64)
+(decl i64_shift_for_lui (u64 Imm12) i64)
 (extern extractor i64_shift_for_lui i64_shift_for_lui)
 
 ;; Helper for generating a i64 from a shift of a Imm20 constant
@@ -1764,7 +1764,7 @@
 
 ;; If the non-zero bits of the immediate fit in 20 bits, we can use LUI + shift
 (rule 1 (imm (ty_int ty) c)
-  (if-let (i64_shift_for_lui (imm20_from_i64 base) shift) (i64_sextend_u64 ty c))
+  (if-let (i64_shift_for_lui (imm20_from_u64 base) shift) (i64_sextend_u64 ty c))
   (rv_slli (rv_lui base) shift))
 
 ;; Combine one of the above rules with a shift-left if possible, This chops off
@@ -1833,6 +1833,9 @@
 ;; Extractor that matches if a Imm20 is zero
 (decl pure imm20_is_zero () Imm20)
 (extern extractor imm20_is_zero imm20_is_zero)
+
+(decl imm20_from_u64 (Imm20) u64)
+(extern extractor imm20_from_u64 imm20_from_u64)
 
 (decl imm20_from_i64 (Imm20) i64)
 (extern extractor imm20_from_i64 imm20_from_i64)

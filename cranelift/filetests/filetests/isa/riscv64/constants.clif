@@ -112,14 +112,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a0,-1
-;   slli a0,a0,48
+;   lui a0,65535
+;   slli a0,a0,36
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a0, zero, -1
-;   slli a0, a0, 0x30
+;   lui a0, 0xffff
+;   slli a0, a0, 0x24
 ;   ret
 
 function %f() -> i64 {
@@ -462,15 +462,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a0,-1021
-;   slli a2,a0,52
+;   lui a0,3075
+;   slli a2,a0,40
 ;   fmv.d.x fa0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a0, zero, -0x3fd
-;   slli a2, a0, 0x34
+;   lui a0, 0xc03
+;   slli a2, a0, 0x28
 ;   fmv.d.x fa0, a2
 ;   ret
 
