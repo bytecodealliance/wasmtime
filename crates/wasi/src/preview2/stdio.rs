@@ -229,7 +229,7 @@ impl<T: WasiView> terminal_stderr::Host for T {
 
 #[cfg(all(unix, test))]
 mod test {
-    use crate::preview2::{HostInputStream, StreamState};
+    use crate::preview2::HostInputStream;
     use libc;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Write};
@@ -321,12 +321,10 @@ mod test {
                                     stdin.ready().await;
 
                                     println!("child: reading input");
-                                    let (bytes, status) = stdin.read(1024).unwrap();
+                                    // We can't effectively test for the case where stdin was closed, so panic if it is...
+                                    let bytes = stdin.read(1024).unwrap();
 
-                                    println!("child: {:?}, {:?}", bytes, status);
-
-                                    // We can't effectively test for the case where stdin was closed.
-                                    assert_eq!(status, StreamState::Open);
+                                    println!("child got: {:?}", bytes);
 
                                     buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
                                     if let Some((line, rest)) = buffer.split_once('\n') {

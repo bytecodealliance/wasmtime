@@ -10,8 +10,7 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::preview2::{
-    self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, OutputStreamError,
-    StreamRuntimeError, StreamState, Subscribe,
+    self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError, Subscribe,
 };
 
 pub type HyperIncomingBody = BoxBody<Bytes, anyhow::Error>;
@@ -146,21 +145,21 @@ impl HostIncomingBodyStream {
 
 #[async_trait::async_trait]
 impl HostInputStream for HostIncomingBodyStream {
-    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+    fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         use mpsc::error::TryRecvError;
 
         if !self.buffer.is_empty() {
             let len = size.min(self.buffer.len());
             let chunk = self.buffer.split_to(len);
-            return Ok((chunk, StreamState::Open));
+            return Ok(chunk);
         }
 
         if let Some(e) = self.error.take() {
-            return Err(StreamRuntimeError::from(e).into());
+            return Err(StreamError::LastOperationFailed(e));
         }
 
         if !self.open {
-            return Ok((Bytes::new(), StreamState::Closed));
+            return Err(StreamError::Closed);
         }
 
         match self.receiver.try_recv() {
@@ -171,21 +170,21 @@ impl HostInputStream for HostIncomingBodyStream {
                     self.buffer = bytes;
                 }
 
-                return Ok((chunk, StreamState::Open));
+                return Ok(chunk);
             }
 
             Ok(Err(e)) => {
                 self.open = false;
-                return Err(StreamRuntimeError::from(e).into());
+                return Err(StreamError::LastOperationFailed(e));
             }
 
             Err(TryRecvError::Empty) => {
-                return Ok((Bytes::new(), StreamState::Open));
+                return Ok(Bytes::new());
             }
 
             Err(TryRecvError::Disconnected) => {
                 self.open = false;
-                return Ok((Bytes::new(), StreamState::Closed));
+                return Err(StreamError::Closed);
             }
         }
     }
@@ -332,12 +331,12 @@ struct WorkerState {
 }
 
 impl WorkerState {
-    fn check_error(&mut self) -> Result<(), OutputStreamError> {
+    fn check_error(&mut self) -> Result<(), StreamError> {
         if let Some(e) = self.error.take() {
-            return Err(OutputStreamError::LastOperationFailed(e));
+            return Err(StreamError::LastOperationFailed(e));
         }
         if !self.alive {
-            return Err(OutputStreamError::Closed);
+            return Err(StreamError::Closed);
         }
         Ok(())
     }
@@ -382,7 +381,7 @@ impl Worker {
             self.write_ready_changed.notified().await;
         }
     }
-    fn check_write(&self) -> Result<usize, OutputStreamError> {
+    fn check_write(&self) -> Result<usize, StreamError> {
         let mut state = self.state();
         if let Err(e) = state.check_error() {
             return Err(e);
@@ -476,11 +475,11 @@ impl BodyWriteStream {
 
 #[async_trait::async_trait]
 impl HostOutputStream for BodyWriteStream {
-    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut state = self.worker.state();
         state.check_error()?;
         if state.flush_pending {
-            return Err(OutputStreamError::Trap(anyhow!(
+            return Err(StreamError::Trap(anyhow!(
                 "write not permitted while flush pending"
             )));
         }
@@ -489,13 +488,13 @@ impl HostOutputStream for BodyWriteStream {
                 state.write_budget = remaining_budget;
                 state.items.push_back(bytes);
             }
-            None => return Err(OutputStreamError::Trap(anyhow!("write exceeded budget"))),
+            None => return Err(StreamError::Trap(anyhow!("write exceeded budget"))),
         }
         drop(state);
         self.worker.new_work.notify_one();
         Ok(())
     }
-    fn flush(&mut self) -> Result<(), OutputStreamError> {
+    fn flush(&mut self) -> Result<(), StreamError> {
         let mut state = self.worker.state();
         state.check_error()?;
 
@@ -505,7 +504,7 @@ impl HostOutputStream for BodyWriteStream {
         Ok(())
     }
 
-    fn check_write(&mut self) -> Result<usize, OutputStreamError> {
+    fn check_write(&mut self) -> Result<usize, StreamError> {
         self.worker.check_write()
     }
 }

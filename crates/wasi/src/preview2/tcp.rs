@@ -1,7 +1,7 @@
-use super::{HostInputStream, HostOutputStream, OutputStreamError};
-use crate::preview2::poll::Subscribe;
-use crate::preview2::stream::{InputStream, OutputStream};
-use crate::preview2::{with_ambient_tokio_runtime, AbortOnDropJoinHandle, StreamState};
+use super::{HostInputStream, HostOutputStream, StreamError};
+use crate::preview2::{
+    with_ambient_tokio_runtime, AbortOnDropJoinHandle, InputStream, OutputStream, Subscribe,
+};
 use anyhow::{Error, Result};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
 use cap_std::net::TcpListener;
@@ -70,20 +70,16 @@ impl TcpReadStream {
             closed: false,
         }
     }
-    fn stream_state(&self) -> StreamState {
-        if self.closed {
-            StreamState::Closed
-        } else {
-            StreamState::Open
-        }
-    }
 }
 
 #[async_trait::async_trait]
 impl HostInputStream for TcpReadStream {
-    fn read(&mut self, size: usize) -> Result<(bytes::Bytes, StreamState), anyhow::Error> {
-        if size == 0 || self.closed {
-            return Ok((bytes::Bytes::new(), self.stream_state()));
+    fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
+        if self.closed {
+            return Err(StreamError::Closed);
+        }
+        if size == 0 {
+            return Ok(bytes::Bytes::new());
         }
 
         let mut buf = bytes::BytesMut::with_capacity(size);
@@ -100,14 +96,13 @@ impl HostInputStream for TcpReadStream {
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => 0,
 
             Err(e) => {
-                tracing::debug!("unexpected error on TcpReadStream read: {e:?}");
                 self.closed = true;
-                0
+                return Err(StreamError::LastOperationFailed(e.into()));
             }
         };
 
         buf.truncate(n);
-        Ok((buf.freeze(), self.stream_state()))
+        Ok(buf.freeze())
     }
 }
 
@@ -171,11 +166,11 @@ impl TcpWriteStream {
 }
 
 impl HostOutputStream for TcpWriteStream {
-    fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), OutputStreamError> {
+    fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
         match self.last_write {
             LastWrite::Done => {}
             LastWrite::Waiting(_) | LastWrite::Error(_) => {
-                return Err(OutputStreamError::Trap(anyhow::anyhow!(
+                return Err(StreamError::Trap(anyhow::anyhow!(
                     "unpermitted: must call check_write first"
                 )));
             }
@@ -194,28 +189,28 @@ impl HostOutputStream for TcpWriteStream {
                     return Ok(());
                 }
 
-                Err(e) => return Err(OutputStreamError::LastOperationFailed(e.into())),
+                Err(e) => return Err(StreamError::LastOperationFailed(e.into())),
             }
         }
 
         Ok(())
     }
 
-    fn flush(&mut self) -> Result<(), OutputStreamError> {
+    fn flush(&mut self) -> Result<(), StreamError> {
         // `flush` is a no-op here, as we're not managing any internal buffer. Additionally,
         // `write_ready` will join the background write task if it's active, so following `flush`
         // with `write_ready` will have the desired effect.
         Ok(())
     }
 
-    fn check_write(&mut self) -> Result<usize, OutputStreamError> {
+    fn check_write(&mut self) -> Result<usize, StreamError> {
         match mem::replace(&mut self.last_write, LastWrite::Done) {
             LastWrite::Waiting(task) => {
                 self.last_write = LastWrite::Waiting(task);
                 return Ok(0);
             }
             LastWrite::Done => {}
-            LastWrite::Error(e) => return Err(OutputStreamError::LastOperationFailed(e.into())),
+            LastWrite::Error(e) => return Err(StreamError::LastOperationFailed(e.into())),
         }
 
         let writable = self.stream.writable();

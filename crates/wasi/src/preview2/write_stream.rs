@@ -1,4 +1,4 @@
-use crate::preview2::{HostOutputStream, OutputStreamError, Subscribe};
+use crate::preview2::{HostOutputStream, StreamError, Subscribe};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
@@ -13,12 +13,12 @@ struct WorkerState {
 }
 
 impl WorkerState {
-    fn check_error(&mut self) -> Result<(), OutputStreamError> {
+    fn check_error(&mut self) -> Result<(), StreamError> {
         if let Some(e) = self.error.take() {
-            return Err(OutputStreamError::LastOperationFailed(e));
+            return Err(StreamError::LastOperationFailed(e));
         }
         if !self.alive {
-            return Err(OutputStreamError::Closed);
+            return Err(StreamError::Closed);
         }
         Ok(())
     }
@@ -63,7 +63,7 @@ impl Worker {
             self.write_ready_changed.notified().await;
         }
     }
-    fn check_write(&self) -> Result<usize, OutputStreamError> {
+    fn check_write(&self) -> Result<usize, StreamError> {
         let mut state = self.state();
         if let Err(e) = state.check_error() {
             return Err(e);
@@ -162,11 +162,11 @@ impl AsyncWriteStream {
 }
 
 impl HostOutputStream for AsyncWriteStream {
-    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut state = self.worker.state();
         state.check_error()?;
         if state.flush_pending {
-            return Err(OutputStreamError::Trap(anyhow!(
+            return Err(StreamError::Trap(anyhow!(
                 "write not permitted while flush pending"
             )));
         }
@@ -175,13 +175,13 @@ impl HostOutputStream for AsyncWriteStream {
                 state.write_budget = remaining_budget;
                 state.items.push_back(bytes);
             }
-            None => return Err(OutputStreamError::Trap(anyhow!("write exceeded budget"))),
+            None => return Err(StreamError::Trap(anyhow!("write exceeded budget"))),
         }
         drop(state);
         self.worker.new_work.notify_one();
         Ok(())
     }
-    fn flush(&mut self) -> Result<(), OutputStreamError> {
+    fn flush(&mut self) -> Result<(), StreamError> {
         let mut state = self.worker.state();
         state.check_error()?;
 
@@ -191,7 +191,7 @@ impl HostOutputStream for AsyncWriteStream {
         Ok(())
     }
 
-    fn check_write(&mut self) -> Result<usize, OutputStreamError> {
+    fn check_write(&mut self) -> Result<usize, StreamError> {
         self.worker.check_write()
     }
 }

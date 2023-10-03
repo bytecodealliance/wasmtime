@@ -1,8 +1,5 @@
 use crate::preview2::bindings::filesystem::types;
-use crate::preview2::{
-    AbortOnDropJoinHandle, HostOutputStream, OutputStreamError, StreamRuntimeError, StreamState,
-    Subscribe,
-};
+use crate::preview2::{AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
@@ -126,7 +123,7 @@ impl FileInputStream {
         Self { file, position }
     }
 
-    pub async fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+    pub async fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         use system_interface::fs::FileIoExt;
         let f = Arc::clone(&self.file);
         let p = self.position;
@@ -137,33 +134,24 @@ impl FileInputStream {
         })
         .await
         .unwrap();
-        let (n, state) = read_result(r)?;
+        let n = read_result(r)?;
         buf.truncate(n);
         self.position += n as u64;
-        Ok((buf.freeze(), state))
+        Ok(buf.freeze())
     }
 
-    pub async fn skip(&mut self, nelem: usize) -> anyhow::Result<(usize, StreamState)> {
-        let mut nread = 0;
-        let mut state = StreamState::Open;
-
-        let (bs, read_state) = self.read(nelem).await?;
-        // TODO: handle the case where `bs.len()` is less than `nelem`
-        nread += bs.len();
-        if read_state.is_closed() {
-            state = read_state;
-        }
-
-        Ok((nread, state))
+    pub async fn skip(&mut self, nelem: usize) -> Result<usize, StreamError> {
+        let bs = self.read(nelem).await?;
+        Ok(bs.len())
     }
 }
 
-fn read_result(r: io::Result<usize>) -> Result<(usize, StreamState), anyhow::Error> {
+fn read_result(r: io::Result<usize>) -> Result<usize, StreamError> {
     match r {
-        Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n, StreamState::Open)),
-        Err(e) if e.kind() == io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
-        Err(e) => Err(StreamRuntimeError::from(anyhow!(e)).into()),
+        Ok(0) => Err(StreamError::Closed),
+        Ok(n) => Ok(n),
+        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok(0),
+        Err(e) => Err(StreamError::LastOperationFailed(e.into())),
     }
 }
 
@@ -210,14 +198,14 @@ impl FileOutputStream {
 const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 
 impl HostOutputStream for FileOutputStream {
-    fn write(&mut self, buf: Bytes) -> Result<(), OutputStreamError> {
+    fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         use system_interface::fs::FileIoExt;
         match self.state {
             OutputState::Ready => {}
-            OutputState::Closed => return Err(OutputStreamError::Closed),
+            OutputState::Closed => return Err(StreamError::Closed),
             OutputState::Waiting(_) | OutputState::Error(_) => {
                 // a write is pending - this call was not permitted
-                return Err(OutputStreamError::Trap(anyhow!(
+                return Err(StreamError::Trap(anyhow!(
                     "write not permitted: check_write not called first"
                 )));
             }
@@ -248,25 +236,25 @@ impl HostOutputStream for FileOutputStream {
         self.state = OutputState::Waiting(task);
         Ok(())
     }
-    fn flush(&mut self) -> Result<(), OutputStreamError> {
+    fn flush(&mut self) -> Result<(), StreamError> {
         match self.state {
             // Only userland buffering of file writes is in the blocking task,
             // so there's nothing extra that needs to be done to request a
             // flush.
             OutputState::Ready | OutputState::Waiting(_) => Ok(()),
-            OutputState::Closed => Err(OutputStreamError::Closed),
+            OutputState::Closed => Err(StreamError::Closed),
             OutputState::Error(_) => match mem::replace(&mut self.state, OutputState::Closed) {
-                OutputState::Error(e) => Err(OutputStreamError::LastOperationFailed(e.into())),
+                OutputState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
                 _ => unreachable!(),
             },
         }
     }
-    fn check_write(&mut self) -> Result<usize, OutputStreamError> {
+    fn check_write(&mut self) -> Result<usize, StreamError> {
         match self.state {
             OutputState::Ready => Ok(FILE_WRITE_CAPACITY),
-            OutputState::Closed => Err(OutputStreamError::Closed),
+            OutputState::Closed => Err(StreamError::Closed),
             OutputState::Error(_) => match mem::replace(&mut self.state, OutputState::Closed) {
-                OutputState::Error(e) => Err(OutputStreamError::LastOperationFailed(e.into())),
+                OutputState::Error(e) => Err(StreamError::LastOperationFailed(e.into())),
                 _ => unreachable!(),
             },
             OutputState::Waiting(_) => Ok(0),
