@@ -6,7 +6,7 @@ function_1:
   SP + 1 => SP
   RR :MSTORE(SP)
   2 + 3 => A
-  0 + 5 => B
+  5 => B
   B :ASSERT
   $ => RR :MLOAD(SP)
   SP - 1 => SP

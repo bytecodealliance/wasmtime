@@ -273,13 +273,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         imm: u32,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
-        if let Some(imm12) = Imm12::maybe_from_u64(imm as u64) {
-            insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Addi,
-                rd: into_reg,
-                rs: from_reg,
-                imm12,
-            });
+        if let Some(_imm12) = Imm12::maybe_from_u64(imm as u64) {
+            todo!();
         } else {
             insts.extend(Inst::load_constant_u32(
                 writable_spilltmp_reg2(),

@@ -5,7 +5,6 @@
 #![allow(non_camel_case_types)]
 #![allow(warnings)]
 
-use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpMasking};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
@@ -32,8 +31,6 @@ pub mod args;
 pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
-pub mod vector;
-pub use self::vector::*;
 pub mod encode;
 pub use self::encode::*;
 pub mod unwind;
@@ -55,11 +52,11 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 //=============================================================================
 // Instructions (top level): definition
 
+use crate::isa::zkasm::lower::isle::generated_code::MInst;
 pub use crate::isa::zkasm::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, FClassResult, FFlagsException, FloatRoundOP, FloatSelectOP,
-    FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
+    AluOPRRI, AluOPRRR, FClassResult, FFlagsException, FloatRoundOP, FpuOPRR, FpuOPRRR, FpuOPRRRR,
+    IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
 };
-use crate::isa::zkasm::lower::isle::generated_code::{MInst, VecAluOpRRImm5, VecAluOpRRR};
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -187,42 +184,7 @@ impl Inst {
 
     #[inline]
     pub(crate) fn load_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
-        Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Addi,
-            rd,
-            rs: zero_reg(),
-            imm12: imm,
-        }
-    }
-
-    /// Immediates can be loaded using lui and addi instructions.
-    fn load_const_imm<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> Option<SmallInstVec<Inst>> {
-        Inst::generate_imm(value, |imm20, imm12| {
-            let mut insts = SmallVec::new();
-
-            let rs = if let Some(imm) = imm20 {
-                let rd = if imm12.is_some() { alloc_tmp(I64) } else { rd };
-                insts.push(Inst::Lui { rd, imm });
-                rd.to_reg()
-            } else {
-                zero_reg()
-            };
-
-            if let Some(imm12) = imm12 {
-                insts.push(Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Addi,
-                    rd,
-                    rs,
-                    imm12,
-                })
-            }
-
-            insts
-        })
+        todo!()
     }
 
     pub(crate) fn load_constant_u32<F: FnMut(Type) -> Writable<Reg>>(
@@ -230,13 +192,10 @@ impl Inst {
         value: u64,
         alloc_tmp: &mut F,
     ) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
-        insts.unwrap_or_else(|| {
-            smallvec![Inst::LoadConst32 {
-                rd,
-                imm: value as u32
-            }]
-        })
+        smallvec![Inst::LoadConst32 {
+            rd,
+            imm: value as u32
+        }]
     }
 
     pub fn load_constant_u64<F: FnMut(Type) -> Writable<Reg>>(
@@ -244,8 +203,7 @@ impl Inst {
         value: u64,
         alloc_tmp: &mut F,
     ) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
-        insts.unwrap_or_else(|| smallvec![Inst::LoadConst64 { rd, imm: value }])
+        smallvec![Inst::LoadConst64 { rd, imm: value }]
     }
 
     pub(crate) fn construct_auipc_and_jalr(
@@ -281,12 +239,7 @@ impl Inst {
             const_data as u64,
             &mut alloc_tmp,
         ));
-        insts.push(Inst::FpuRR {
-            frm: None,
-            alu_op: FpuOPRR::move_x_to_f_op(F32),
-            rd,
-            rs: tmp.to_reg(),
-        });
+        todo!();
         insts
     }
 
@@ -299,83 +252,32 @@ impl Inst {
         let mut insts = SmallInstVec::new();
         let tmp = alloc_tmp(I64);
         insts.extend(Self::load_constant_u64(tmp, const_data, &mut alloc_tmp));
-        insts.push(Inst::FpuRR {
-            frm: None,
-            alu_op: FpuOPRR::move_x_to_f_op(F64),
-            rd,
-            rs: tmp.to_reg(),
-        });
+        todo!();
         insts
     }
 
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
-        if ty.is_vector() {
-            Inst::VecLoad {
-                eew: VecElementWidth::from_type(ty),
-                to: into_reg,
-                from: VecAMode::UnitStride { base: mem },
-                flags,
-                mask: VecOpMasking::Disabled,
-                vstate: VState::from_type(ty),
-            }
-        } else {
-            Inst::Load {
-                rd: into_reg,
-                op: LoadOP::from_type(ty),
-                from: mem,
-                flags,
-            }
+        Inst::Load {
+            rd: into_reg,
+            op: LoadOP::from_type(ty),
+            from: mem,
+            flags,
         }
     }
 
     /// Generic constructor for a store.
     pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
-        if ty.is_vector() {
-            Inst::VecStore {
-                eew: VecElementWidth::from_type(ty),
-                to: VecAMode::UnitStride { base: mem },
-                from: from_reg,
-                flags,
-                mask: VecOpMasking::Disabled,
-                vstate: VState::from_type(ty),
-            }
-        } else {
-            Inst::Store {
-                src: from_reg,
-                op: StoreOP::from_type(ty),
-                to: mem,
-                flags,
-            }
+        Inst::Store {
+            src: from_reg,
+            op: StoreOP::from_type(ty),
+            to: mem,
+            flags,
         }
     }
 }
 
 //=============================================================================
-
-fn vec_mask_operands<F: Fn(VReg) -> VReg>(
-    mask: &VecOpMasking,
-    collector: &mut OperandCollector<'_, F>,
-) {
-    match mask {
-        VecOpMasking::Enabled { reg } => {
-            collector.reg_fixed_use(*reg, pv_reg(0).into());
-        }
-        VecOpMasking::Disabled => {}
-    }
-}
-fn vec_mask_late_operands<F: Fn(VReg) -> VReg>(
-    mask: &VecOpMasking,
-    collector: &mut OperandCollector<'_, F>,
-) {
-    match mask {
-        VecOpMasking::Enabled { reg } => {
-            collector.reg_fixed_late_use(*reg, pv_reg(0).into());
-        }
-        VecOpMasking::Disabled => {}
-    }
-}
-
 fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
         &Inst::Nop0 => {}
@@ -395,15 +297,6 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_fixed_use(rs1, a0());
             collector.reg_fixed_use(rs2, b0());
-            collector.reg_def(rd);
-        }
-        &Inst::FpuRRR { rd, rs1, rs2, .. } => {
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
-            collector.reg_def(rd);
-        }
-        &Inst::AluRRImm12 { rd, rs, .. } => {
-            collector.reg_use(rs);
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
@@ -502,29 +395,12 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
             collector.reg_def(rd);
         }
-        &Inst::Fence { .. } => {}
-        &Inst::FenceI => {}
         &Inst::ECall => {}
         &Inst::EBreak => {}
         &Inst::Udf { .. } => {}
-        &Inst::FpuRR { rd, rs, .. } => {
-            collector.reg_use(rs);
-            collector.reg_def(rd);
-        }
-        &Inst::FpuRRRR {
-            rd, rs1, rs2, rs3, ..
-        } => {
-            collector.reg_uses(&[rs1, rs2, rs3]);
-            collector.reg_def(rd);
-        }
 
         &Inst::Jalr { rd, base, .. } => {
             collector.reg_use(base);
-            collector.reg_def(rd);
-        }
-        &Inst::Atomic { rd, addr, src, .. } => {
-            collector.reg_use(addr);
-            collector.reg_use(src);
             collector.reg_def(rd);
         }
         &Inst::Select {
@@ -540,19 +416,6 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             for d in dst.iter() {
                 collector.reg_early_def(d.clone());
             }
-        }
-        &Inst::AtomicCas {
-            offset,
-            t0,
-            dst,
-            e,
-            addr,
-            v,
-            ..
-        } => {
-            collector.reg_uses(&[offset, e, addr, v]);
-            collector.reg_early_def(t0);
-            collector.reg_early_def(dst);
         }
         &Inst::IntSelect {
             ref dst,
@@ -596,32 +459,7 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(rs2);
             collector.reg_def(rd);
         }
-        &Inst::FcvtToInt { rd, rs, tmp, .. } => {
-            collector.reg_use(rs);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(rd);
-        }
         &Inst::RawData { .. } => {}
-        &Inst::AtomicStore { src, p, .. } => {
-            collector.reg_use(src);
-            collector.reg_use(p);
-        }
-        &Inst::AtomicLoad { rd, p, .. } => {
-            collector.reg_use(p);
-            collector.reg_def(rd);
-        }
-        &Inst::AtomicRmwLoop {
-            offset,
-            dst,
-            p,
-            x,
-            t0,
-            ..
-        } => {
-            collector.reg_uses(&[offset, p, x]);
-            collector.reg_early_def(t0);
-            collector.reg_early_def(dst);
-        }
         &Inst::TrapIfC { rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
@@ -629,25 +467,6 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::Unwind { .. } => {}
         &Inst::DummyUse { reg } => {
             collector.reg_use(reg);
-        }
-        &Inst::FloatRound {
-            rd,
-            int_tmp,
-            f_tmp,
-            rs,
-            ..
-        } => {
-            collector.reg_use(rs);
-            collector.reg_early_def(int_tmp);
-            collector.reg_early_def(f_tmp);
-            collector.reg_early_def(rd);
-        }
-        &Inst::FloatSelect {
-            rd, tmp, rs1, rs2, ..
-        } => {
-            collector.reg_uses(&[rs1, rs2]);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(rd);
         }
         &Inst::Popcnt {
             sum, step, rs, tmp, ..
@@ -691,161 +510,9 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             // gen_prologue is called at emit stage.
             // no need let reg alloc know.
         }
-        &Inst::VecAluRRRR {
-            op,
-            vd,
-            vd_src,
-            vs1,
-            vs2,
-            ref mask,
-            ..
-        } => {
-            debug_assert_eq!(vd_src.class(), RegClass::Vector);
-            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
-            debug_assert_eq!(vs2.class(), RegClass::Vector);
-            debug_assert_eq!(vs1.class(), op.vs1_regclass());
-
-            collector.reg_late_use(vs1);
-            collector.reg_late_use(vs2);
-            collector.reg_use(vd_src);
-            collector.reg_reuse_def(vd, 2); // `vd` == `vd_src`.
-            vec_mask_late_operands(mask, collector);
-        }
 
         Inst::AddImm32 { rd, src1, src2 } => {
             collector.reg_def(*rd);
-        }
-
-        &Inst::VecAluRRRImm5 {
-            op,
-            vd,
-            vd_src,
-            vs2,
-            ref mask,
-            ..
-        } => {
-            debug_assert_eq!(vd_src.class(), RegClass::Vector);
-            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
-            debug_assert_eq!(vs2.class(), RegClass::Vector);
-
-            // If the operation forbids source/destination overlap we need to
-            // ensure that the source and destination registers are different.
-            if op.forbids_src_dst_overlaps() {
-                collector.reg_late_use(vs2);
-                collector.reg_use(vd_src);
-                collector.reg_reuse_def(vd, 1); // `vd` == `vd_src`.
-                vec_mask_late_operands(mask, collector);
-            } else {
-                collector.reg_use(vs2);
-                collector.reg_use(vd_src);
-                collector.reg_reuse_def(vd, 1); // `vd` == `vd_src`.
-                vec_mask_operands(mask, collector);
-            }
-        }
-        &Inst::VecAluRRR {
-            op,
-            vd,
-            vs1,
-            vs2,
-            ref mask,
-            ..
-        } => {
-            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
-            debug_assert_eq!(vs2.class(), RegClass::Vector);
-            debug_assert_eq!(vs1.class(), op.vs1_regclass());
-
-            collector.reg_use(vs1);
-            collector.reg_use(vs2);
-
-            // If the operation forbids source/destination overlap, then we must
-            // register it as an early_def. This encodes the constraint that
-            // these must not overlap.
-            if op.forbids_src_dst_overlaps() {
-                collector.reg_early_def(vd);
-            } else {
-                collector.reg_def(vd);
-            }
-
-            vec_mask_operands(mask, collector);
-        }
-        &Inst::VecAluRRImm5 {
-            op,
-            vd,
-            vs2,
-            ref mask,
-            ..
-        } => {
-            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
-            debug_assert_eq!(vs2.class(), RegClass::Vector);
-
-            collector.reg_use(vs2);
-
-            // If the operation forbids source/destination overlap, then we must
-            // register it as an early_def. This encodes the constraint that
-            // these must not overlap.
-            if op.forbids_src_dst_overlaps() {
-                collector.reg_early_def(vd);
-            } else {
-                collector.reg_def(vd);
-            }
-
-            vec_mask_operands(mask, collector);
-        }
-        &Inst::VecAluRR {
-            op,
-            vd,
-            vs,
-            ref mask,
-            ..
-        } => {
-            debug_assert_eq!(vd.to_reg().class(), op.dst_regclass());
-            debug_assert_eq!(vs.class(), op.src_regclass());
-
-            collector.reg_use(vs);
-
-            // If the operation forbids source/destination overlap, then we must
-            // register it as an early_def. This encodes the constraint that
-            // these must not overlap.
-            if op.forbids_src_dst_overlaps() {
-                collector.reg_early_def(vd);
-            } else {
-                collector.reg_def(vd);
-            }
-
-            vec_mask_operands(mask, collector);
-        }
-        &Inst::VecAluRImm5 { vd, ref mask, .. } => {
-            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
-
-            collector.reg_def(vd);
-            vec_mask_operands(mask, collector);
-        }
-        &Inst::VecSetState { rd, .. } => {
-            collector.reg_def(rd);
-        }
-        &Inst::VecLoad {
-            to,
-            ref from,
-            ref mask,
-            ..
-        } => {
-            if let Some(r) = from.get_allocatable_register() {
-                collector.reg_use(r);
-            }
-            collector.reg_def(to);
-            vec_mask_operands(mask, collector);
-        }
-        &Inst::VecStore {
-            ref to,
-            from,
-            ref mask,
-            ..
-        } => {
-            if let Some(r) = to.get_allocatable_register() {
-                collector.reg_use(r);
-            }
-            collector.reg_use(from);
-            vec_mask_operands(mask, collector);
         }
     }
 }
@@ -1068,19 +735,6 @@ impl Inst {
             reg_name(reg)
         };
 
-        let format_vec_amode = |amode: &VecAMode, allocs: &mut AllocationConsumer<'_>| -> String {
-            match amode {
-                VecAMode::UnitStride { base } => base.to_string_with_alloc(allocs),
-            }
-        };
-
-        let format_mask = |mask: &VecOpMasking, allocs: &mut AllocationConsumer<'_>| -> String {
-            match mask {
-                VecOpMasking::Enabled { reg } => format!(",{}.t", format_reg(*reg, allocs)),
-                VecOpMasking::Disabled => format!(""),
-            }
-        };
-
         let format_regs = |regs: &[Reg], allocs: &mut AllocationConsumer<'_>| -> String {
             let mut x = if regs.len() > 1 {
                 String::from("[")
@@ -1147,86 +801,10 @@ impl Inst {
                     guard_size, probe_count, tmp
                 )
             }
-            &Inst::FloatRound {
-                op,
-                rd,
-                int_tmp,
-                f_tmp,
-                rs,
-                ty,
-            } => {
-                let rs = format_reg(rs, allocs);
-                let int_tmp = format_reg(int_tmp.to_reg(), allocs);
-                let f_tmp = format_reg(f_tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "{} {},{}##int_tmp={} f_tmp={} ty={}",
-                    op.op_name(),
-                    rd,
-                    rs,
-                    int_tmp,
-                    f_tmp,
-                    ty
-                )
-            }
-            &Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "f{}.{} {},{},{}##tmp={} ty={}",
-                    op.op_name(),
-                    if ty == F32 { "s" } else { "d" },
-                    rd,
-                    rs1,
-                    rs2,
-                    tmp,
-                    ty
-                )
-            }
-            &Inst::AtomicStore { src, ty, p } => {
-                let src = format_reg(src, allocs);
-                let p = format_reg(p, allocs);
-                format!("atomic_store.{} {},({})", ty, src, p)
-            }
             &Inst::DummyUse { reg } => {
                 let reg = format_reg(reg, allocs);
                 format!("dummy_use {}", reg)
             }
-
-            &Inst::AtomicLoad { rd, ty, p } => {
-                let p = format_reg(p, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("atomic_load.{} {},({})", ty, rd, p)
-            }
-            &Inst::AtomicRmwLoop {
-                offset,
-                op,
-                dst,
-                ty,
-                p,
-                x,
-                t0,
-            } => {
-                let offset = format_reg(offset, allocs);
-                let p = format_reg(p, allocs);
-                let x = format_reg(x, allocs);
-                let t0 = format_reg(t0.to_reg(), allocs);
-                let dst = format_reg(dst.to_reg(), allocs);
-                format!(
-                    "atomic_rmw.{} {} {},{},({})##t0={} offset={}",
-                    ty, op, dst, x, p, t0, offset
-                )
-            }
-
             &Inst::RawData { ref data } => match data.len() {
                 4 => {
                     let mut bytes = [0; 4];
@@ -1309,29 +887,6 @@ impl Inst {
                     step
                 )
             }
-            &Inst::FcvtToInt {
-                is_sat,
-                rd,
-                rs,
-                is_signed,
-                in_type,
-                out_type,
-                tmp,
-            } => {
-                let rs = format_reg(rs, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "fcvt_to_{}int{}.{} {},{}##in_ty={} tmp={}",
-                    if is_signed { "s" } else { "u" },
-                    if is_sat { "_sat" } else { "" },
-                    out_type,
-                    rd,
-                    rs,
-                    in_type,
-                    tmp
-                )
-            }
             &Inst::SelectReg {
                 rd,
                 rs1,
@@ -1349,26 +904,6 @@ impl Inst {
                     rs1,
                     rs2,
                     format!("({} {} {})", c_rs1, condition.kind.to_static_str(), c_rs2),
-                )
-            }
-            &Inst::AtomicCas {
-                offset,
-                t0,
-                dst,
-                e,
-                addr,
-                v,
-                ty,
-            } => {
-                let offset = format_reg(offset, allocs);
-                let e = format_reg(e, allocs);
-                let addr = format_reg(addr, allocs);
-                let v = format_reg(v, allocs);
-                let t0 = format_reg(t0.to_reg(), allocs);
-                let dst = format_reg(dst.to_reg(), allocs);
-                format!(
-                    "atomic_cas.{} {},{},{},({})##t0={} offset={}",
-                    ty, dst, e, v, addr, t0, offset,
                 )
             }
             &Inst::Icmp { cc, rd, a, b, ty } => {
@@ -1464,114 +999,6 @@ impl Inst {
                 format!("{src1} + {src2} => {rd};")
             }
 
-            &Inst::FpuRR {
-                frm,
-                alu_op,
-                rd,
-                rs,
-            } => {
-                let rs = format_reg(rs, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}{}", alu_op.op_name(), rd, rs, format_frm(frm))
-            }
-            &Inst::FpuRRR {
-                alu_op,
-                rd,
-                rs1,
-                rs2,
-                frm,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                let rs1_is_rs2 = rs1 == rs2;
-                if rs1_is_rs2 && alu_op.is_copy_sign() {
-                    // this is move instruction.
-                    format!(
-                        "fmv.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
-                } else if rs1_is_rs2 && alu_op.is_copy_neg_sign() {
-                    format!(
-                        "fneg.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
-                } else if rs1_is_rs2 && alu_op.is_copy_xor_sign() {
-                    format!(
-                        "fabs.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
-                } else {
-                    format!(
-                        "{} {},{},{}{}",
-                        alu_op.op_name(),
-                        rd,
-                        rs1,
-                        rs2,
-                        format_frm(frm)
-                    )
-                }
-            }
-            &Inst::FpuRRRR {
-                alu_op,
-                rd,
-                rs1,
-                rs2,
-                rs3,
-                frm,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rs3 = format_reg(rs3, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "{} {},{},{},{}{}",
-                    alu_op.op_name(),
-                    rd,
-                    rs1,
-                    rs2,
-                    rs3,
-                    format_frm(frm)
-                )
-            }
-            &Inst::AluRRImm12 {
-                alu_op,
-                rd,
-                rs,
-                ref imm12,
-            } => {
-                let rs_s = format_reg(rs, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-
-                // Some of these special cases are better known as
-                // their pseudo-instruction version, so prefer printing those.
-                match (alu_op, rs, imm12) {
-                    (AluOPRRI::Addi, rs, _) if rs == zero_reg() => {
-                        return format!("li {},{}", rd, imm12.as_i16());
-                    }
-                    (AluOPRRI::Addiw, _, imm12) if imm12.as_i16() == 0 => {
-                        return format!("sext.w {},{}", rd, rs_s);
-                    }
-                    (AluOPRRI::Xori, _, imm12) if imm12.as_i16() == -1 => {
-                        return format!("not {},{}", rd, rs_s);
-                    }
-                    (AluOPRRI::SltiU, _, imm12) if imm12.as_i16() == 1 => {
-                        return format!("seqz {},{}", rd, rs_s);
-                    }
-                    (alu_op, _, _) if alu_op.option_funct12().is_some() => {
-                        format!("{} {},{}", alu_op.op_name(), rd, rs_s)
-                    }
-                    (alu_op, _, imm12) => {
-                        format!("{} {},{},{}", alu_op.op_name(), rd, rs_s, imm12.as_i16())
-                    }
-                }
-            }
             &Inst::Load {
                 rd,
                 op,
@@ -1713,23 +1140,6 @@ impl Inst {
                     x
                 }
             }
-            &MInst::Atomic {
-                op,
-                rd,
-                addr,
-                src,
-                amo,
-            } => {
-                let op_name = op.op_name(amo);
-                let addr = format_reg(addr, allocs);
-                let src = format_reg(src, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                if op.is_load() {
-                    format!("{} {},({})", op_name, rd, addr)
-                } else {
-                    format!("{} {},{},({})", op_name, rd, src, addr)
-                }
-            }
             &MInst::LoadExtName {
                 rd,
                 ref name,
@@ -1757,14 +1167,6 @@ impl Inst {
                 let rm = reg_name(Reg::from(rm));
                 format!("mv {},{}", rd, rm)
             }
-            &MInst::Fence { pred, succ } => {
-                format!(
-                    "fence {},{}",
-                    Inst::fence_req_to_string(pred),
-                    Inst::fence_req_to_string(succ),
-                )
-            }
-            &MInst::FenceI => "fence.i".into(),
             &MInst::Select {
                 ref dst,
                 condition,
@@ -1782,170 +1184,6 @@ impl Inst {
             &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
-            &Inst::VecAluRRRR {
-                op,
-                vd,
-                vd_src,
-                vs1,
-                vs2,
-                ref mask,
-                ref vstate,
-            } => {
-                let vs1_s = format_reg(vs1, allocs);
-                let vs2_s = format_reg(vs2, allocs);
-                let vd_src_s = format_reg(vd_src, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
-
-                let vd_fmt = if vd_s != vd_src_s {
-                    format!("{},{}", vd_s, vd_src_s)
-                } else {
-                    vd_s
-                };
-
-                // Note: vs2 and vs1 here are opposite to the standard scalar ordering.
-                // This is noted in Section 10.1 of the RISC-V Vector spec.
-                format!("{op} {vd_fmt},{vs2_s},{vs1_s}{mask} {vstate}")
-            }
-            &Inst::VecAluRRRImm5 {
-                op,
-                vd,
-                imm,
-                vs2,
-                ref mask,
-                ref vstate,
-                ..
-            } => {
-                let vs2_s = format_reg(vs2, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
-
-                // Some opcodes interpret the immediate as unsigned, lets show the
-                // correct number here.
-                let imm_s = if op.imm_is_unsigned() {
-                    format!("{}", imm.bits())
-                } else {
-                    format!("{}", imm)
-                };
-
-                format!("{op} {vd_s},{vs2_s},{imm_s}{mask} {vstate}")
-            }
-            &Inst::VecAluRRR {
-                op,
-                vd,
-                vs1,
-                vs2,
-                ref mask,
-                ref vstate,
-            } => {
-                let vs1_s = format_reg(vs1, allocs);
-                let vs2_s = format_reg(vs2, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
-
-                // Note: vs2 and vs1 here are opposite to the standard scalar ordering.
-                // This is noted in Section 10.1 of the RISC-V Vector spec.
-                match (op, vs2, vs1) {
-                    (VecAluOpRRR::VrsubVX, _, vs1) if vs1 == zero_reg() => {
-                        format!("vneg.v {vd_s},{vs2_s}{mask} {vstate}")
-                    }
-                    (VecAluOpRRR::VfsgnjnVV, vs2, vs1) if vs2 == vs1 => {
-                        format!("vfneg.v {vd_s},{vs2_s}{mask} {vstate}")
-                    }
-                    (VecAluOpRRR::VfsgnjxVV, vs2, vs1) if vs2 == vs1 => {
-                        format!("vfabs.v {vd_s},{vs2_s}{mask} {vstate}")
-                    }
-                    (VecAluOpRRR::VmnandMM, vs2, vs1) if vs2 == vs1 => {
-                        format!("vmnot.m {vd_s},{vs2_s}{mask} {vstate}")
-                    }
-                    _ => format!("{op} {vd_s},{vs2_s},{vs1_s}{mask} {vstate}"),
-                }
-            }
-            &Inst::VecAluRRImm5 {
-                op,
-                vd,
-                imm,
-                vs2,
-                ref mask,
-                ref vstate,
-            } => {
-                let vs2_s = format_reg(vs2, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
-
-                // Some opcodes interpret the immediate as unsigned, lets show the
-                // correct number here.
-                let imm_s = if op.imm_is_unsigned() {
-                    format!("{}", imm.bits())
-                } else {
-                    format!("{}", imm)
-                };
-
-                match (op, imm) {
-                    (VecAluOpRRImm5::VxorVI, imm) if imm == Imm5::maybe_from_i8(-1).unwrap() => {
-                        format!("vnot.v {vd_s},{vs2_s}{mask} {vstate}")
-                    }
-                    _ => format!("{op} {vd_s},{vs2_s},{imm_s}{mask} {vstate}"),
-                }
-            }
-            &Inst::VecAluRR {
-                op,
-                vd,
-                vs,
-                ref mask,
-                ref vstate,
-            } => {
-                let vs_s = format_reg(vs, allocs);
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
-
-                format!("{op} {vd_s},{vs_s}{mask} {vstate}")
-            }
-            &Inst::VecAluRImm5 {
-                op,
-                vd,
-                imm,
-                ref mask,
-                ref vstate,
-            } => {
-                let vd_s = format_reg(vd.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
-
-                format!("{op} {vd_s},{imm}{mask} {vstate}")
-            }
-            &Inst::VecSetState { rd, ref vstate } => {
-                let rd_s = format_reg(rd.to_reg(), allocs);
-                assert!(vstate.avl.is_static());
-                format!("vsetivli {}, {}, {}", rd_s, vstate.avl, vstate.vtype)
-            }
-            Inst::VecLoad {
-                eew,
-                to,
-                from,
-                ref mask,
-                ref vstate,
-                ..
-            } => {
-                let base = format_vec_amode(from, allocs);
-                let vd = format_reg(to.to_reg(), allocs);
-                let mask = format_mask(mask, allocs);
-
-                format!("vl{eew}.v {vd},{base}{mask} {vstate}")
-            }
-            Inst::VecStore {
-                eew,
-                to,
-                from,
-                ref mask,
-                ref vstate,
-                ..
-            } => {
-                let dst = format_vec_amode(to, allocs);
-                let vs3 = format_reg(*from, allocs);
-                let mask = format_mask(mask, allocs);
-
-                format!("vs{eew}.v {vs3},{dst}{mask} {vstate}")
-            }
         }
     }
 }

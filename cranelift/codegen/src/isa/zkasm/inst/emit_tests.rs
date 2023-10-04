@@ -52,7 +52,6 @@ fn test_zkasm_binemit() {
         },
         "fa1 => fa0", // FIXME: wrong register names!
     ));
-    //
     // insns.push(TestUnit::new(
     //     Inst::AluRRImm12 {
     //         alu_op: AluOPRRI::Brev8,

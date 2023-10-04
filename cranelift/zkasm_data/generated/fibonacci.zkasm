@@ -6,20 +6,20 @@ function_1:
   SP + 1 => SP
   RR :MSTORE(SP)
   SP + 1 => SP
-  0 + 0 => A
+  0 => A
   A => D
-  0 + 0 => A
-  0 + 1 => B
+  0 => A
+  1 => B
   B :MSTORE(SP)
   :JMP(L1_1)
 L1_1:
   $ => A :ADD
   A => C
   B :MSTORE(SP)
-  0 + 1 => B
+  1 => B
   D => A
   $ => A :ADD
-  0 + 10 => B
+  10 => B
   $ => E :EQ
   E :JMPNZ(L1_3)
   C => B
@@ -27,7 +27,7 @@ L1_1:
   $ => A :MLOAD(SP)
   :JMP(L1_1)
 L1_3:
-  0 + 89 => B
+  89 => B
   C => A
   B :ASSERT
   SP - 1 => SP

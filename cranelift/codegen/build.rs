@@ -288,7 +288,6 @@ fn get_isle_compilations(
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
                     src_isa_zkasm.join("inst.isle"),
-                    src_isa_zkasm.join("inst_vector.isle"),
                     src_isa_zkasm.join("lower.isle"),
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],

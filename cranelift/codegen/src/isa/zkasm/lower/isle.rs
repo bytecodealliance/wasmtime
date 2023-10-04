@@ -6,7 +6,6 @@ pub mod generated_code;
 use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use self::generated_code::{VecAluOpRR, VecLmul};
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::zkasm::abi::Riscv64ABICallSite;
 use crate::isa::zkasm::lower::args::{FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg};
@@ -16,8 +15,8 @@ use crate::machinst::{isle::*, MachInst, SmallInstVec};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
-        immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
-        MemFlags, StackSlot, TrapCode, Value, ValueList,
+        immediates::*, types::*, BlockCall, ExternalName, Inst, InstructionData, MemFlags,
+        StackSlot, TrapCode, Value, ValueList,
     },
     isa::zkasm::inst::*,
     machinst::{ArgPair, InstOutput, Lower},
@@ -43,20 +42,13 @@ where
 {
     pub lower_ctx: &'a mut Lower<'b, I>,
     pub backend: &'a B,
-    /// Precalucated value for the minimum vector register size. Will be 0 if
-    /// vectors are not supported.
-    min_vec_reg_size: u64,
 }
 
 impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
     isle_prelude_method_helpers!(Riscv64ABICallSite);
 
     fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a Riscv64Backend) -> Self {
-        Self {
-            lower_ctx,
-            backend,
-            min_vec_reg_size: backend.isa_flags.min_vec_reg_size(),
-        }
+        Self { lower_ctx, backend }
     }
 
     #[inline]
@@ -390,31 +382,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
 
     //
-    fn gen_shamt(&mut self, ty: Type, shamt: XReg) -> ValueRegs {
-        let ty_bits = if ty.bits() > 64 { 64 } else { ty.bits() };
-        let shamt = {
-            let tmp = self.temp_writable_reg(I64);
-            self.emit(&MInst::AluRRImm12 {
-                alu_op: AluOPRRI::Andi,
-                rd: tmp,
-                rs: shamt.to_reg(),
-                imm12: Imm12::from_bits((ty_bits - 1) as i16),
-            });
-            tmp.to_reg()
-        };
-        let len_sub_shamt = {
-            let tmp = self.temp_writable_reg(I64);
-            self.emit(&MInst::load_imm12(tmp, Imm12::from_bits(ty_bits as i16)));
-            let len_sub_shamt = self.temp_writable_reg(I64);
-            self.emit(&MInst::AluRRR {
-                alu_op: AluOPRRR::Sub,
-                rd: len_sub_shamt,
-                rs1: tmp.to_reg(),
-                rs2: shamt,
-            });
-            len_sub_shamt.to_reg()
-        };
-        ValueRegs::two(shamt, len_sub_shamt)
+    fn gen_shamt(&mut self, _ty: Type, _shamt: XReg) -> ValueRegs {
+        todo!()
     }
 
     fn has_v(&mut self) -> bool {
@@ -471,16 +440,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             None
         }
     }
-    fn is_atomic_rmw_max_etc(&mut self, op: &AtomicRmwOp) -> Option<(AtomicRmwOp, bool)> {
-        let op = *op;
-        match op {
-            crate::ir::AtomicRmwOp::Umin => Some((op, false)),
-            crate::ir::AtomicRmwOp::Umax => Some((op, false)),
-            crate::ir::AtomicRmwOp::Smin => Some((op, true)),
-            crate::ir::AtomicRmwOp::Smax => Some((op, true)),
-            _ => None,
-        }
-    }
     fn load_op(&mut self, ty: Type) -> LoadOP {
         LoadOP::from_type(ty)
     }
@@ -510,9 +469,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.emit(&i);
         result.to_reg()
     }
-    fn atomic_amo(&mut self) -> AMO {
-        AMO::SeqCst
-    }
 
     fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> Unit {
         let tmp1 = self.temp_writable_reg(I64);
@@ -538,20 +494,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         px_reg(2)
     }
 
-    fn shift_int_to_most_significant(&mut self, v: XReg, ty: Type) -> XReg {
-        assert!(ty.is_int() && ty.bits() <= 64);
-        if ty == I64 {
-            return v;
-        }
-        let tmp = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRImm12 {
-            alu_op: AluOPRRI::Slli,
-            rd: tmp,
-            rs: v.to_reg(),
-            imm12: Imm12::from_bits((64 - ty.bits()) as i16),
-        });
-
-        self.xreg_new(tmp.to_reg())
+    fn shift_int_to_most_significant(&mut self, _v: XReg, _ty: Type) -> XReg {
+        todo!()
     }
 
     #[inline]
@@ -561,39 +505,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             rs1: rs1.to_reg(),
             rs2: rs2.to_reg(),
         }
-    }
-
-    #[inline]
-    fn vstate_from_type(&mut self, ty: Type) -> VState {
-        VState::from_type(ty)
-    }
-
-    #[inline]
-    fn vstate_mf2(&mut self, vs: VState) -> VState {
-        VState {
-            vtype: VType {
-                lmul: VecLmul::LmulF2,
-                ..vs.vtype
-            },
-            ..vs
-        }
-    }
-
-    fn min_vec_reg_size(&mut self) -> u64 {
-        self.min_vec_reg_size
-    }
-
-    #[inline]
-    fn ty_vec_fits_in_register(&mut self, ty: Type) -> Option<Type> {
-        if ty.is_vector() && (ty.bits() as u64) <= self.min_vec_reg_size() {
-            Some(ty)
-        } else {
-            None
-        }
-    }
-
-    fn vec_alu_rr_dst_type(&mut self, op: &VecAluOpRR) -> Type {
-        MInst::canonical_type_for_rc(op.dst_regclass())
     }
 }
 
