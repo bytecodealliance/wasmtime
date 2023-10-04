@@ -63,7 +63,7 @@ const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
 
 /// Runs a WebAssembly module
 #[derive(Parser)]
-#[structopt(name = "run")]
+#[structopt(name = "serve")]
 pub struct ServeCommand {
     #[clap(flatten)]
     run: RunCommon,
@@ -79,7 +79,9 @@ pub struct ServeCommand {
 
 impl ServeCommand {
     /// Start a server to run the given wasi-http proxy component
-    pub fn execute(self) -> Result<()> {
+    pub fn execute(mut self) -> Result<()> {
+        self.run.common.init_logging();
+
         // We force cli errors before starting to listen for connections so tha we don't
         // accidentally delay them to the first request.
         if self.run.common.wasi.nn == Some(true) {
@@ -102,6 +104,15 @@ impl ServeCommand {
 
         if self.run.common.wasi.threads == Some(true) {
             bail!("wasi-threads does not support components yet")
+        }
+
+        // The serve command requires both wasi-http and the component model, so we enable those by
+        // default here.
+        if self.run.common.wasi.http.replace(true) == Some(false) {
+            bail!("wasi-http is required for the serve command, and must not be disabled");
+        }
+        if self.run.common.wasm.component_model.replace(true) == Some(false) {
+            bail!("components are required for the serve command, and must not be disabled");
         }
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -193,8 +204,6 @@ impl ServeCommand {
 
     async fn serve(mut self) -> Result<()> {
         use hyper::server::conn::http1;
-
-        self.run.common.init_logging();
 
         let mut config = self.run.common.config(None)?;
         config.wasm_component_model(true);
