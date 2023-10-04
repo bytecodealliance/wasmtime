@@ -81,6 +81,7 @@ pub mod bindings {
                     "wasi:io/poll/pollable": super::super::io::poll::Pollable,
                     "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
                     "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
+                    "wasi:io/streams/error": super::super::io::streams::Error,
                 }
             });
         }
@@ -163,6 +164,7 @@ pub mod bindings {
             "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,
             "wasi:io/streams/input-stream": super::stream::InputStream,
             "wasi:io/streams/output-stream": super::stream::OutputStream,
+            "wasi:io/streams/error": super::stream::Error,
             "wasi:io/poll/pollable": super::poll::Pollable,
             "wasi:cli/terminal-input/terminal-input": super::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": super::stdio::TerminalOutput,

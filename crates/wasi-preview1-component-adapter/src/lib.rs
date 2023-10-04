@@ -900,7 +900,9 @@ pub unsafe extern "C" fn fd_read(
                         *nread = 0;
                         return Ok(());
                     }
-                    Err(_) => Err(ERRNO_IO)?,
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        Err(stream_error_to_errno(e))?
+                    }
                 };
 
                 assert_eq!(data.as_ptr(), ptr);
@@ -923,6 +925,13 @@ pub unsafe extern "C" fn fd_read(
             Descriptor::Closed(_) => Err(ERRNO_BADF),
         }
     })
+}
+
+fn stream_error_to_errno(err: streams::Error) -> Errno {
+    match filesystem::filesystem_error_code(&err) {
+        Some(code) => code.into(),
+        None => ERRNO_IO,
+    }
 }
 
 /// Read directory entries from a directory.
@@ -2160,7 +2169,10 @@ impl BlockingMode {
                     bytes = rest;
                     match output_stream.blocking_write_and_flush(chunk) {
                         Ok(()) => {}
-                        Err(_) => return Err(ERRNO_IO),
+                        Err(streams::StreamError::Closed) => return Err(ERRNO_IO),
+                        Err(streams::StreamError::LastOperationFailed(e)) => {
+                            return Err(stream_error_to_errno(e))
+                        }
                     }
                 }
                 Ok(total)
@@ -2170,7 +2182,9 @@ impl BlockingMode {
                 let permit = match output_stream.check_write() {
                     Ok(n) => n,
                     Err(streams::StreamError::Closed) => 0,
-                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        return Err(stream_error_to_errno(e))
+                    }
                 };
 
                 let len = bytes.len().min(permit as usize);
@@ -2181,13 +2195,17 @@ impl BlockingMode {
                 match output_stream.write(&bytes[..len]) {
                     Ok(_) => {}
                     Err(streams::StreamError::Closed) => return Ok(0),
-                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        return Err(stream_error_to_errno(e))
+                    }
                 }
 
                 match output_stream.blocking_flush() {
                     Ok(_) => {}
                     Err(streams::StreamError::Closed) => return Ok(0),
-                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::LastOperationFailed(e)) => {
+                        return Err(stream_error_to_errno(e))
+                    }
                 }
 
                 Ok(len)

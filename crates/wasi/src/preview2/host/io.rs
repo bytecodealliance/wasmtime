@@ -5,17 +5,26 @@ use crate::preview2::{
 };
 use wasmtime::component::Resource;
 
-#[async_trait::async_trait]
 impl<T: WasiView> streams::Host for T {
     fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
         match err {
             StreamError::Closed => Ok(streams::StreamError::Closed),
-            StreamError::LastOperationFailed(e) => {
-                log::debug!("dropping error {e:?}");
-                Ok(streams::StreamError::LastOperationFailed)
-            }
+            StreamError::LastOperationFailed(e) => Ok(streams::StreamError::LastOperationFailed(
+                self.table_mut().push_resource(e)?,
+            )),
             StreamError::Trap(e) => Err(e),
         }
+    }
+}
+
+impl<T: WasiView> streams::HostError for T {
+    fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
+        self.table_mut().delete_resource(err)?;
+        Ok(())
+    }
+
+    fn to_debug_string(&mut self, err: Resource<streams::Error>) -> anyhow::Result<String> {
+        Ok(format!("{:?}", self.table_mut().get_resource(&err)?))
     }
 }
 
@@ -241,8 +250,8 @@ impl<T: WasiView> streams::HostInputStream for T {
 pub mod sync {
     use crate::preview2::{
         bindings::io::streams::{
-            self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,
-            HostOutputStream as AsyncHostOutputStream,
+            self as async_streams, Host as AsyncHost, HostError as AsyncHostError,
+            HostInputStream as AsyncHostInputStream, HostOutputStream as AsyncHostOutputStream,
         },
         bindings::sync_io::io::poll::Pollable,
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
@@ -253,7 +262,7 @@ pub mod sync {
     impl From<async_streams::StreamError> for streams::StreamError {
         fn from(other: async_streams::StreamError) -> Self {
             match other {
-                async_streams::StreamError::LastOperationFailed => Self::LastOperationFailed,
+                async_streams::StreamError::LastOperationFailed(e) => Self::LastOperationFailed(e),
                 async_streams::StreamError::Closed => Self::Closed,
             }
         }
@@ -265,6 +274,16 @@ pub mod sync {
             err: StreamError,
         ) -> anyhow::Result<streams::StreamError> {
             Ok(AsyncHost::convert_stream_error(self, err)?.into())
+        }
+    }
+
+    impl<T: WasiView> streams::HostError for T {
+        fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
+            AsyncHostError::drop(self, err)
+        }
+
+        fn to_debug_string(&mut self, err: Resource<streams::Error>) -> anyhow::Result<String> {
+            AsyncHostError::to_debug_string(self, err)
         }
     }
 

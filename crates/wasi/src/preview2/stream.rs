@@ -32,6 +32,13 @@ pub trait HostInputStream: Subscribe {
     }
 }
 
+/// Representation of the `error` resource type in the `wasi:io/streams`
+/// interface.
+///
+/// This is currently `anyhow::Error` to retain full type information for
+/// errors.
+pub type Error = anyhow::Error;
+
 pub type StreamResult<T> = Result<T, StreamError>;
 
 #[derive(Debug)]

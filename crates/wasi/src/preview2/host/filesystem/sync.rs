@@ -6,7 +6,14 @@ use wasmtime::component::Resource;
 
 impl<T: async_filesystem::Host> sync_filesystem::Host for T {
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<sync_filesystem::ErrorCode> {
-        Ok(err.downcast()?.into())
+        Ok(async_filesystem::Host::convert_error_code(self, err)?.into())
+    }
+
+    fn filesystem_error_code(
+        &mut self,
+        err: Resource<streams::Error>,
+    ) -> anyhow::Result<Option<sync_filesystem::ErrorCode>> {
+        Ok(async_filesystem::Host::filesystem_error_code(self, err)?.map(|e| e.into()))
     }
 }
 

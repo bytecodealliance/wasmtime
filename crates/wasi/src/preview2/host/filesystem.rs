@@ -33,6 +33,21 @@ impl<T: WasiView> types::Host for T {
     fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
         err.downcast()
     }
+
+    fn filesystem_error_code(
+        &mut self,
+        err: Resource<anyhow::Error>,
+    ) -> anyhow::Result<Option<ErrorCode>> {
+        let err = self.table_mut().get_resource(&err)?;
+
+        // Currently `err` always comes from the stream implementation which
+        // uses standard reads/writes so only check for `std::io::Error` here.
+        if let Some(err) = err.downcast_ref::<std::io::Error>() {
+            return Ok(Some(ErrorCode::from(err.clone())));
+        }
+
+        Ok(None)
+    }
 }
 
 #[async_trait::async_trait]
@@ -989,6 +1004,12 @@ fn from_raw_os_error(raw_os_error: Option<i32>) -> Option<ErrorCode> {
 
 impl From<std::io::Error> for ErrorCode {
     fn from(err: std::io::Error) -> ErrorCode {
+        ErrorCode::from(&err)
+    }
+}
+
+impl<'a> From<&'a std::io::Error> for ErrorCode {
+    fn from(err: &'a std::io::Error) -> ErrorCode {
         match from_raw_os_error(err.raw_os_error()) {
             Some(errno) => errno,
             None => {
