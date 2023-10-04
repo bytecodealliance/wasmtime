@@ -1,4 +1,4 @@
-use crate::common::{Profile, RunCommon};
+use crate::common::{Profile, RunCommon, RunTarget};
 use anyhow::{bail, Result};
 use clap::Parser;
 use std::{
@@ -9,7 +9,7 @@ use std::{
         Arc,
     },
 };
-use wasmtime::component::{Component, InstancePre, Linker};
+use wasmtime::component::{InstancePre, Linker};
 use wasmtime::{Engine, Store, StoreLimits};
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
@@ -220,7 +220,10 @@ impl ServeCommand {
 
         self.add_to_linker(&mut linker)?;
 
-        let component = Component::from_file(&engine, &self.component)?;
+        let component = match self.run.load_module(&engine, &self.component)? {
+            RunTarget::Core(_) => bail!("The serve command currently requires a component"),
+            RunTarget::Component(c) => c,
+        };
 
         let instance = linker.instantiate_pre(&component)?;
 

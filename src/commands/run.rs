@@ -5,25 +5,22 @@
     allow(irrefutable_let_patterns, unreachable_patterns)
 )]
 
-use crate::common::{Profile, RunCommon};
+use crate::common::{Profile, RunCommon, RunTarget};
 
 use anyhow::{anyhow, bail, Context as _, Error, Result};
 use clap::Parser;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use wasmtime::{
-    AsContextMut, Engine, Func, GuestProfiler, Module, Precompiled, Store, StoreLimits,
-    UpdateDeadline, Val, ValType,
+    AsContextMut, Engine, Func, GuestProfiler, Module, Store, StoreLimits, UpdateDeadline, Val,
+    ValType,
 };
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::preview2;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
-
-#[cfg(feature = "component-model")]
-use wasmtime::component::Component;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -114,30 +111,6 @@ enum CliLinker {
     Component(wasmtime::component::Linker<Host>),
 }
 
-enum CliModule {
-    Core(wasmtime::Module),
-    #[cfg(feature = "component-model")]
-    Component(Component),
-}
-
-impl CliModule {
-    fn unwrap_core(&self) -> &Module {
-        match self {
-            CliModule::Core(module) => module,
-            #[cfg(feature = "component-model")]
-            CliModule::Component(_) => panic!("expected a core wasm module, not a component"),
-        }
-    }
-
-    #[cfg(feature = "component-model")]
-    fn unwrap_component(&self) -> &Component {
-        match self {
-            CliModule::Component(c) => c,
-            CliModule::Core(_) => panic!("expected a component, not a core wasm module"),
-        }
-    }
-}
-
 impl RunCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
@@ -162,7 +135,7 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        let main = self.load_module(&engine, &self.module_and_args[0])?;
+        let main = self.run.load_module(&engine, &self.module_and_args[0])?;
 
         // Validate coredump-on-trap argument
         if let Some(path) = &self.run.common.debug.coredump {
@@ -172,9 +145,9 @@ impl RunCommand {
         }
 
         let mut linker = match &main {
-            CliModule::Core(_) => CliLinker::Core(wasmtime::Linker::new(&engine)),
+            RunTarget::Core(_) => CliLinker::Core(wasmtime::Linker::new(&engine)),
             #[cfg(feature = "component-model")]
-            CliModule::Component(_) => {
+            RunTarget::Component(_) => {
                 CliLinker::Component(wasmtime::component::Linker::new(&engine))
             }
         };
@@ -205,15 +178,15 @@ impl RunCommand {
 
         // Load the preload wasm modules.
         let mut modules = Vec::new();
-        if let CliModule::Core(m) = &main {
+        if let RunTarget::Core(m) = &main {
             modules.push((String::new(), m.clone()));
         }
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
-            let module = match self.load_module(&engine, path)? {
-                CliModule::Core(m) => m,
+            let module = match self.run.load_module(&engine, path)? {
+                RunTarget::Core(m) => m,
                 #[cfg(feature = "component-model")]
-                CliModule::Component(_) => bail!("components cannot be loaded with `--preload`"),
+                RunTarget::Component(_) => bail!("components cannot be loaded with `--preload`"),
             };
             modules.push((name.clone(), module.clone()));
 
@@ -385,7 +358,7 @@ impl RunCommand {
         &self,
         store: &mut Store<Host>,
         linker: &mut CliLinker,
-        module: &CliModule,
+        module: &RunTarget,
         modules: Vec<(String, Module)>,
     ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
@@ -560,125 +533,12 @@ impl RunCommand {
         }
     }
 
-    fn load_module(&self, engine: &Engine, path: &Path) -> Result<CliModule> {
-        let path = match path.to_str() {
-            #[cfg(unix)]
-            Some("-") => "/dev/stdin".as_ref(),
-            _ => path,
-        };
-
-        // First attempt to load the module as an mmap. If this succeeds then
-        // detection can be done with the contents of the mmap and if a
-        // precompiled module is detected then `deserialize_file` can be used
-        // which is a slightly more optimal version than `deserialize` since we
-        // can leave most of the bytes on disk until they're referenced.
-        //
-        // If the mmap fails, for example if stdin is a pipe, then fall back to
-        // `std::fs::read` to load the contents. At that point precompiled
-        // modules must go through the `deserialize` functions.
-        //
-        // Note that this has the unfortunate side effect for precompiled
-        // modules on disk that they're opened once to detect what they are and
-        // then again internally in Wasmtime as part of the `deserialize_file`
-        // API. Currently there's no way to pass the `MmapVec` here through to
-        // Wasmtime itself (that'd require making `wasmtime-runtime` a public
-        // dependency or `MmapVec` a public type, both of which aren't ready to
-        // happen at this time). It's hoped though that opening a file twice
-        // isn't too bad in the grand scheme of things with respect to the CLI.
-        match wasmtime_runtime::MmapVec::from_file(path) {
-            Ok(map) => self.load_module_contents(
-                engine,
-                path,
-                &map,
-                || unsafe { Module::deserialize_file(engine, path) },
-                #[cfg(feature = "component-model")]
-                || unsafe { Component::deserialize_file(engine, path) },
-            ),
-            Err(_) => {
-                let bytes = std::fs::read(path)
-                    .with_context(|| format!("failed to read file: {}", path.display()))?;
-                self.load_module_contents(
-                    engine,
-                    path,
-                    &bytes,
-                    || unsafe { Module::deserialize(engine, &bytes) },
-                    #[cfg(feature = "component-model")]
-                    || unsafe { Component::deserialize(engine, &bytes) },
-                )
-            }
-        }
-    }
-
-    fn load_module_contents(
-        &self,
-        engine: &Engine,
-        path: &Path,
-        bytes: &[u8],
-        deserialize_module: impl FnOnce() -> Result<Module>,
-        #[cfg(feature = "component-model")] deserialize_component: impl FnOnce() -> Result<Component>,
-    ) -> Result<CliModule> {
-        Ok(match engine.detect_precompiled(bytes) {
-            Some(Precompiled::Module) => {
-                self.ensure_allow_precompiled()?;
-                CliModule::Core(deserialize_module()?)
-            }
-            #[cfg(feature = "component-model")]
-            Some(Precompiled::Component) => {
-                self.ensure_allow_precompiled()?;
-                self.ensure_allow_components()?;
-                CliModule::Component(deserialize_component()?)
-            }
-            #[cfg(not(feature = "component-model"))]
-            Some(Precompiled::Component) => {
-                bail!("support for components was not enabled at compile time");
-            }
-            None => {
-                // Parse the text format here specifically to add the `path` to
-                // the error message if there's a syntax error.
-                let wasm = wat::parse_bytes(bytes).map_err(|mut e| {
-                    e.set_path(path);
-                    e
-                })?;
-                if wasmparser::Parser::is_component(&wasm) {
-                    #[cfg(feature = "component-model")]
-                    {
-                        self.ensure_allow_components()?;
-                        CliModule::Component(Component::new(engine, &wasm)?)
-                    }
-                    #[cfg(not(feature = "component-model"))]
-                    {
-                        bail!("support for components was not enabled at compile time");
-                    }
-                } else {
-                    CliModule::Core(Module::new(engine, &wasm)?)
-                }
-            }
-        })
-    }
-
-    fn ensure_allow_precompiled(&self) -> Result<()> {
-        if self.run.allow_precompiled {
-            Ok(())
-        } else {
-            bail!("running a precompiled module requires the `--allow-precompiled` flag")
-        }
-    }
-
-    #[cfg(feature = "component-model")]
-    fn ensure_allow_components(&self) -> Result<()> {
-        if self.run.common.wasm.component_model != Some(true) {
-            bail!("cannot execute a component without `--wasm component-model`");
-        }
-
-        Ok(())
-    }
-
     /// Populates the given `Linker` with WASI APIs.
     fn populate_with_wasi(
         &self,
         linker: &mut CliLinker,
         store: &mut Store<Host>,
-        module: &CliModule,
+        module: &RunTarget,
     ) -> Result<()> {
         if self.run.common.wasi.common != Some(false) {
             match linker {
