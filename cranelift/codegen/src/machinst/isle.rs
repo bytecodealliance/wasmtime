@@ -64,6 +64,16 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn writable_value_regs(&mut self, r1: WritableReg, r2: WritableReg) -> WritableValueRegs {
+            WritableValueRegs::two(r1, r2)
+        }
+
+        #[inline]
+        fn writable_value_reg(&mut self, r: WritableReg) -> WritableValueRegs {
+            WritableValueRegs::one(r)
+        }
+
+        #[inline]
         fn value_regs_invalid(&mut self) -> ValueRegs {
             ValueRegs::invalid()
         }

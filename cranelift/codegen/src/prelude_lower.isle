@@ -40,9 +40,17 @@
 (decl value_reg (Reg) ValueRegs)
 (extern constructor value_reg value_reg)
 
+;; Construct a `WritableValueRegs` of one register.
+(decl writable_value_reg (WritableReg) WritableValueRegs)
+(extern constructor writable_value_reg writable_value_reg)
+
 ;; Construct a `ValueRegs` of two registers.
 (decl value_regs (Reg Reg) ValueRegs)
 (extern constructor value_regs value_regs)
+
+;; Construct a `WritableValueRegs` of two registers.
+(decl writable_value_regs (WritableReg WritableReg) WritableValueRegs)
+(extern constructor writable_value_regs writable_value_regs)
 
 ;; Construct an empty `ValueRegs` containing only invalid register sentinels.
 (decl value_regs_invalid () ValueRegs)
@@ -130,7 +138,7 @@
 (extern constructor value_regs_get value_regs_get)
 
 ;; Get the number of registers in a `ValueRegs`.
-(decl value_regs_len (ValueRegs) usize)
+(decl pure value_regs_len (ValueRegs) usize)
 (extern constructor value_regs_len value_regs_len)
 
 ;; Get a range for the number of regs in a `ValueRegs`.
@@ -1037,6 +1045,7 @@
 
 (convert Inst Value def_inst)
 (convert Reg ValueRegs value_reg)
+(convert WritableReg WritableValueRegs writable_value_reg)
 (convert Value Reg put_in_reg)
 (convert Value ValueRegs put_in_regs)
 (convert WritableReg Reg writable_reg_to_reg)

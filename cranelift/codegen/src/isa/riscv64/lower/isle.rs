@@ -167,14 +167,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         *arg0
     }
 
-    fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
-        match val.len() {
-            1 => ValueRegs::one(val[0].to_reg()),
-            2 => ValueRegs::two(val[0].to_reg(), val[1].to_reg()),
-            _ => unreachable!(),
-        }
-    }
-
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
             let tmp = self.temp_writable_reg(I64);
@@ -202,26 +194,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         CondBrTarget::Label(label)
     }
 
-    fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {
-        v.clone()
-    }
-
     fn imm12_and(&mut self, imm: Imm12, x: u64) -> Imm12 {
         Imm12::from_i16(imm.as_i16() & (x as i16))
-    }
-
-    fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
-        if ty.is_int() || ty == R32 || ty == R64 {
-            if ty.bits() <= 64 {
-                vec![self.temp_writable_reg(I64)]
-            } else {
-                vec![self.temp_writable_reg(I64), self.temp_writable_reg(I64)]
-            }
-        } else if ty.is_float() || ty.is_vector() {
-            vec![self.temp_writable_reg(ty)]
-        } else {
-            unimplemented!("ty:{:?}", ty)
-        }
     }
 
     fn i64_generate_imm(&mut self, imm: i64) -> Option<(Imm20, Imm12)> {
@@ -336,21 +310,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn frm_bits(&mut self, frm: &FRM) -> UImm5 {
         UImm5::maybe_from_u8(frm.bits()).unwrap()
-    }
-
-    fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
-        let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
-        self.emit(&MInst::SelectReg {
-            rd,
-            rs1,
-            rs2,
-            condition: IntegerCompare {
-                kind: *cc,
-                rs1: a.to_reg(),
-                rs2: b.to_reg(),
-            },
-        });
-        rd.to_reg()
     }
 
     fn u8_as_i32(&mut self, x: u8) -> i32 {

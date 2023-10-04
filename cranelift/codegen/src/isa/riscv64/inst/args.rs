@@ -1628,37 +1628,6 @@ impl AtomicOP {
     }
 }
 
-impl IntSelectOP {
-    #[inline]
-    pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
-        match op {
-            crate::ir::Opcode::Smax => Self::Smax,
-            crate::ir::Opcode::Umax => Self::Umax,
-            crate::ir::Opcode::Smin => Self::Smin,
-            crate::ir::Opcode::Umin => Self::Umin,
-            _ => unreachable!(),
-        }
-    }
-    #[inline]
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            IntSelectOP::Smax => "smax",
-            IntSelectOP::Umax => "umax",
-            IntSelectOP::Smin => "smin",
-            IntSelectOP::Umin => "umin",
-        }
-    }
-    #[inline]
-    pub(crate) fn to_int_cc(self) -> IntCC {
-        match self {
-            IntSelectOP::Smax => IntCC::SignedGreaterThan,
-            IntSelectOP::Umax => IntCC::UnsignedGreaterThan,
-            IntSelectOP::Smin => IntCC::SignedLessThan,
-            IntSelectOP::Umin => IntCC::UnsignedLessThan,
-        }
-    }
-}
-
 ///Atomic Memory ordering.
 #[derive(Copy, Clone, Debug)]
 pub enum AMO {

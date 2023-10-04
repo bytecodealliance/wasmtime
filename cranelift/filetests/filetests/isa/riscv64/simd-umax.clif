@@ -2,7 +2,6 @@ test compile precise-output
 set unwind_info=false
 target riscv64 has_v
 
-
 function %umax_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
     v2 = umax v0, v1

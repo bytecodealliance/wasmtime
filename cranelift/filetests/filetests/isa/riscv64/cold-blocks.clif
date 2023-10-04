@@ -16,9 +16,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   slli a5,a0,32
-;   srli a1,a5,32
-;   bne a1,zero,taken(label1),not_taken(label2)
+;   sext.w a5,a0
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -29,12 +28,11 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a5, a0, 0x20
-;   srli a1, a5, 0x20
-;   bnez a1, 8
-; block1: ; offset 0xc
+;   sext.w a5, a0
+;   bnez a5, 8
+; block1: ; offset 0x8
 ;   addi a0, zero, 0x61
-; block2: ; offset 0x10
+; block2: ; offset 0xc
 ;   ret
 
 function %cold_annotation(i32) -> i32 {
@@ -51,9 +49,8 @@ block2 cold:
 
 ; VCode:
 ; block0:
-;   slli a5,a0,32
-;   srli a1,a5,32
-;   bne a1,zero,taken(label1),not_taken(label2)
+;   sext.w a5,a0
+;   bne a5,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block3:
@@ -64,12 +61,11 @@ block2 cold:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli a5, a0, 0x20
-;   srli a1, a5, 0x20
-;   beqz a1, 8
-; block1: ; offset 0xc
+;   sext.w a5, a0
+;   beqz a5, 8
+; block1: ; offset 0x8
 ;   ret
-; block2: ; offset 0x10
+; block2: ; offset 0xc
 ;   addi a0, zero, 0x61
 ;   j -8
 
