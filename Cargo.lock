@@ -3063,7 +3063,6 @@ name = "wasi-http-tests"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "tokio",
  "wit-bindgen",
 ]
 

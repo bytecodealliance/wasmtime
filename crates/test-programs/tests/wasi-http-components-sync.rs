@@ -1,4 +1,7 @@
 #![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
+
+use anyhow::Result;
+use test_programs::http_server::Server;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -7,8 +10,6 @@ use wasmtime_wasi::preview2::{
     command::sync::Command, pipe::MemoryOutputPipe, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-
-use test_programs::http_server::{setup_http1_sync, setup_http2_sync};
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -66,7 +67,7 @@ fn instantiate_component(
     Ok((store, command))
 }
 
-fn run(name: &str) -> anyhow::Result<()> {
+fn run(name: &str, server: &Server) -> Result<()> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
     let r = {
@@ -81,6 +82,7 @@ fn run(name: &str) -> anyhow::Result<()> {
         for (var, val) in test_programs::wasi_tests_environment() {
             builder.env(var, val);
         }
+        builder.env("HTTP_SERVER", server.addr().to_string());
         let wasi = builder.build();
         let http = WasiHttpCtx {};
 
@@ -109,70 +111,55 @@ fn run(name: &str) -> anyhow::Result<()> {
 }
 
 #[test_log::test]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-fn outbound_request_get() {
-    setup_http1_sync(|| run("outbound_request_get")).unwrap();
+fn outbound_request_get() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_get", &server)
 }
 
 #[test_log::test]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-fn outbound_request_post() {
-    setup_http1_sync(|| run("outbound_request_post")).unwrap();
+fn outbound_request_post() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_post", &server)
 }
 
 #[test_log::test]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-fn outbound_request_large_post() {
-    setup_http1_sync(|| run("outbound_request_large_post")).unwrap();
+fn outbound_request_large_post() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_large_post", &server)
 }
 
 #[test_log::test]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-fn outbound_request_put() {
-    setup_http1_sync(|| run("outbound_request_put")).unwrap();
+fn outbound_request_put() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_put", &server)
 }
 
 #[test_log::test]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-fn outbound_request_invalid_version() {
-    setup_http2_sync(|| run("outbound_request_invalid_version")).unwrap();
+fn outbound_request_invalid_version() -> Result<()> {
+    let server = Server::http2()?;
+    run("outbound_request_invalid_version", &server)
 }
 
 #[test_log::test]
-fn outbound_request_unknown_method() {
-    run("outbound_request_unknown_method").unwrap();
+fn outbound_request_unknown_method() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_unknown_method", &server)
 }
 
 #[test_log::test]
-fn outbound_request_unsupported_scheme() {
-    run("outbound_request_unsupported_scheme").unwrap();
+fn outbound_request_unsupported_scheme() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_unsupported_scheme", &server)
 }
 
 #[test_log::test]
-fn outbound_request_invalid_port() {
-    run("outbound_request_invalid_port").unwrap();
+fn outbound_request_invalid_port() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_invalid_port", &server)
 }
 
 #[test_log::test]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-fn outbound_request_invalid_dnsname() {
-    run("outbound_request_invalid_dnsname").unwrap();
+fn outbound_request_invalid_dnsname() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_invalid_dnsname", &server)
 }

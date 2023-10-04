@@ -1,4 +1,7 @@
 #![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
+
+use anyhow::Result;
+use test_programs::http_server::Server;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -7,8 +10,6 @@ use wasmtime_wasi::preview2::{
     command::Command, pipe::MemoryOutputPipe, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-
-use test_programs::http_server::{setup_http1, setup_http2};
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -66,7 +67,7 @@ async fn instantiate_component(
     Ok((store, command))
 }
 
-async fn run(name: &str) -> anyhow::Result<()> {
+async fn run(name: &str, server: &Server) -> Result<()> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
     let r = {
@@ -81,6 +82,7 @@ async fn run(name: &str) -> anyhow::Result<()> {
         for (var, val) in test_programs::wasi_tests_environment() {
             builder.env(var, val);
         }
+        builder.env("HTTP_SERVER", server.addr());
         let wasi = builder.build();
         let http = WasiHttpCtx;
 
@@ -107,74 +109,55 @@ async fn run(name: &str) -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-async fn outbound_request_get() {
-    setup_http1(run("outbound_request_get")).await.unwrap();
+async fn outbound_request_get() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_get", &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-async fn outbound_request_post() {
-    setup_http1(run("outbound_request_post")).await.unwrap();
+async fn outbound_request_post() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_post", &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-async fn outbound_request_large_post() {
-    setup_http1(run("outbound_request_large_post"))
-        .await
-        .unwrap();
+async fn outbound_request_large_post() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_large_post", &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-async fn outbound_request_put() {
-    setup_http1(run("outbound_request_put")).await.unwrap();
+async fn outbound_request_put() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_put", &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-async fn outbound_request_invalid_version() {
-    setup_http2(run("outbound_request_invalid_version"))
-        .await
-        .unwrap();
+async fn outbound_request_invalid_version() -> Result<()> {
+    let server = Server::http2()?;
+    run("outbound_request_invalid_version", &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn outbound_request_unknown_method() {
-    run("outbound_request_unknown_method").await.unwrap();
+async fn outbound_request_unknown_method() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_unknown_method", &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn outbound_request_unsupported_scheme() {
-    run("outbound_request_unsupported_scheme").await.unwrap();
+async fn outbound_request_unsupported_scheme() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_unsupported_scheme", &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn outbound_request_invalid_port() {
-    run("outbound_request_invalid_port").await.unwrap();
+async fn outbound_request_invalid_port() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_invalid_port", &server).await
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
-async fn outbound_request_invalid_dnsname() {
-    run("outbound_request_invalid_dnsname").await.unwrap();
+async fn outbound_request_invalid_dnsname() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_invalid_dnsname", &server).await
 }
