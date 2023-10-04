@@ -121,22 +121,18 @@ block0(v0: i32, v1: f32, v2: f32):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   slli a5,a0,32
-;   srli a1,a5,32
-;   slli a3,a3,32
-;   srli a5,a3,32
-;   select fa0,fa0,fa1##condition=(a1 eq a5)
+;   li a1,42
+;   sext.w a5,a0
+;   sext.w a1,a1
+;   select fa0,fa0,fa1##condition=(a5 eq a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   slli a5, a0, 0x20
-;   srli a1, a5, 0x20
-;   slli a3, a3, 0x20
-;   srli a5, a3, 0x20
-;   beq a1, a5, 8
+;   addi a1, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a1, a1
+;   beq a5, a1, 8
 ;   fmv.d fa0, fa1
 ;   ret
 
@@ -150,22 +146,18 @@ block0(v0: i32, v1: f64, v2: f64):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   slli a5,a0,32
-;   srli a1,a5,32
-;   slli a3,a3,32
-;   srli a5,a3,32
-;   select fa0,fa0,fa1##condition=(a1 eq a5)
+;   li a1,42
+;   sext.w a5,a0
+;   sext.w a1,a1
+;   select fa0,fa0,fa1##condition=(a5 eq a1)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   slli a5, a0, 0x20
-;   srli a1, a5, 0x20
-;   slli a3, a3, 0x20
-;   srli a5, a3, 0x20
-;   beq a1, a5, 8
+;   addi a1, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a1, a1
+;   beq a5, a1, 8
 ;   fmv.d fa0, fa1
 ;   ret
 

@@ -2721,10 +2721,20 @@
 ;; that's returned. Note that comparisons compare full registers so
 ;; sign-extension according to the integer comparison performed here is
 ;; required.
+;;
+;; Also note that as a small optimization `Equal` and `NotEqual` use
+;; sign-extension for 32-bit values since the same result is produced with
+;; either zero-or-sign extension and many values are already sign-extended given
+;; the RV64 instruction set (e.g. `addw` adds 32-bit values and sign extends),
+;; theoretically resulting in more efficient codegen.
 (rule 2 (lower_int_compare (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 in_ty)))))
   (int_compare cc (zext a) (zext b)))
 (rule 3 (lower_int_compare (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 in_ty)))))
   (if (signed_cond_code cc))
+  (int_compare cc (sext a) (sext b)))
+(rule 4 (lower_int_compare (maybe_uextend (icmp cc @ (IntCC.Equal) a b @ (value_type $I32))))
+  (int_compare cc (sext a) (sext b)))
+(rule 4 (lower_int_compare (maybe_uextend (icmp cc @ (IntCC.NotEqual) a b @ (value_type $I32))))
   (int_compare cc (sext a) (sext b)))
 
 ;; If the input is an `fcmp` then the `FCmp` return value is directly

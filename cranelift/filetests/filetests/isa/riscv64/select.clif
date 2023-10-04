@@ -365,21 +365,17 @@ block0(v0: i32, v1: i8, v2: i8):
 ; VCode:
 ; block0:
 ;   li a3,42
-;   slli a5,a0,32
-;   srli a4,a5,32
-;   slli a3,a3,32
-;   srli a5,a3,32
-;   select a0,a1,a2##condition=(a4 eq a5)
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
-;   slli a5, a0, 0x20
-;   srli a4, a5, 0x20
-;   slli a3, a3, 0x20
-;   srli a5, a3, 0x20
-;   bne a4, a5, 0xc
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
 ;   mv a0, a1
 ;   j 8
 ;   mv a0, a2
@@ -396,21 +392,17 @@ block0(v0: i32, v1: i16, v2: i16):
 ; VCode:
 ; block0:
 ;   li a3,42
-;   slli a5,a0,32
-;   srli a4,a5,32
-;   slli a3,a3,32
-;   srli a5,a3,32
-;   select a0,a1,a2##condition=(a4 eq a5)
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
-;   slli a5, a0, 0x20
-;   srli a4, a5, 0x20
-;   slli a3, a3, 0x20
-;   srli a5, a3, 0x20
-;   bne a4, a5, 0xc
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
 ;   mv a0, a1
 ;   j 8
 ;   mv a0, a2
@@ -427,21 +419,17 @@ block0(v0: i32, v1: i32, v2: i32):
 ; VCode:
 ; block0:
 ;   li a3,42
-;   slli a5,a0,32
-;   srli a4,a5,32
-;   slli a3,a3,32
-;   srli a5,a3,32
-;   select a0,a1,a2##condition=(a4 eq a5)
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
-;   slli a5, a0, 0x20
-;   srli a4, a5, 0x20
-;   slli a3, a3, 0x20
-;   srli a5, a3, 0x20
-;   bne a4, a5, 0xc
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
 ;   mv a0, a1
 ;   j 8
 ;   mv a0, a2
@@ -458,21 +446,17 @@ block0(v0: i32, v1: i64, v2: i64):
 ; VCode:
 ; block0:
 ;   li a3,42
-;   slli a5,a0,32
-;   srli a4,a5,32
-;   slli a3,a3,32
-;   srli a5,a3,32
-;   select a0,a1,a2##condition=(a4 eq a5)
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
-;   slli a5, a0, 0x20
-;   srli a4, a5, 0x20
-;   slli a3, a3, 0x20
-;   srli a5, a3, 0x20
-;   bne a4, a5, 0xc
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
 ;   mv a0, a1
 ;   j 8
 ;   mv a0, a2
@@ -491,20 +475,18 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s6,-8(sp)
-;   sd s7,-16(sp)
+;   sd s1,-8(sp)
+;   sd s8,-16(sp)
 ;   add sp,-16
 ; block0:
-;   mv t0,a1
-;   li s6,42
-;   slli a1,a0,32
-;   srli a5,a1,32
-;   slli a0,s6,32
-;   srli s7,a0,32
-;   select [a0,a1],[t0,a2],[a3,a4]##condition=(a5 eq s7)
+;   mv s8,a1
+;   li a5,42
+;   sext.w s1,a0
+;   sext.w a5,a5
+;   select [a0,a1],[s8,a2],[a3,a4]##condition=(s1 eq a5)
 ;   add sp,+16
-;   ld s6,-8(sp)
-;   ld s7,-16(sp)
+;   ld s1,-8(sp)
+;   ld s8,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -516,25 +498,23 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s6, -8(sp)
-;   sd s7, -0x10(sp)
+;   sd s1, -8(sp)
+;   sd s8, -0x10(sp)
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x1c
-;   mv t0, a1
-;   addi s6, zero, 0x2a
-;   slli a1, a0, 0x20
-;   srli a5, a1, 0x20
-;   slli a0, s6, 0x20
-;   srli s7, a0, 0x20
-;   bne a5, s7, 0x10
-;   mv a0, t0
+;   mv s8, a1
+;   addi a5, zero, 0x2a
+;   sext.w s1, a0
+;   sext.w a5, a5
+;   bne s1, a5, 0x10
+;   mv a0, s8
 ;   mv a1, a2
 ;   j 0xc
 ;   mv a0, a3
 ;   mv a1, a4
 ;   addi sp, sp, 0x10
-;   ld s6, -8(sp)
-;   ld s7, -0x10(sp)
+;   ld s1, -8(sp)
+;   ld s8, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
