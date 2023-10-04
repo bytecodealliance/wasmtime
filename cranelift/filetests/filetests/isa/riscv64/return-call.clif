@@ -96,16 +96,16 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   li a3,1027
-;   slli a5,a3,52
+;   lui a3,1027
+;   slli a5,a3,40
 ;   fmv.d.x fa1,a5
 ;   fadd.d ft0,ft0,fa1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x403
-;   slli a5, a3, 0x34
+;   lui a3, 0x403
+;   slli a5, a3, 0x28
 ;   fmv.d.x fa1, a5
 ;   fadd.d ft0, ft0, fa1
 ;   ret

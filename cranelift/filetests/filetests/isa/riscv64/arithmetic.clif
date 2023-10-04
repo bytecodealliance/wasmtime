@@ -91,8 +91,8 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   trap_if int_divz##(a1 eq zero)
-;   li a4,-1
-;   slli a2,a4,63
+;   lui a4,1
+;   slli a2,a4,51
 ;   xor a2,a0,a2
 ;   not a4,a1
 ;   or a2,a2,a4
@@ -104,8 +104,8 @@ block0(v0: i64, v1: i64):
 ; block0: ; offset 0x0
 ;   bnez a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   addi a4, zero, -1
-;   slli a2, a4, 0x3f
+;   lui a4, 1
+;   slli a2, a4, 0x33
 ;   xor a2, a0, a2
 ;   not a4, a1
 ;   or a2, a2, a4
@@ -752,8 +752,8 @@ block0(v0: i64):
 ; block0:
 ;   li a2,-1
 ;   trap_if int_divz##(a2 eq zero)
-;   li a4,-1
-;   slli a1,a4,63
+;   lui a4,1
+;   slli a1,a4,51
 ;   xor a3,a0,a1
 ;   not a4,a2
 ;   or a1,a3,a4
@@ -766,8 +766,8 @@ block0(v0: i64):
 ;   addi a2, zero, -1
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   addi a4, zero, -1
-;   slli a1, a4, 0x3f
+;   lui a4, 1
+;   slli a1, a4, 0x33
 ;   xor a3, a0, a1
 ;   not a4, a2
 ;   or a1, a3, a4

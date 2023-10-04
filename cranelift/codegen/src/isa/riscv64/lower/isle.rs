@@ -228,6 +228,29 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         MInst::generate_imm(imm as u64)
     }
 
+    fn i64_shift_for_lui(&mut self, imm: i64) -> Option<(u64, Imm12)> {
+        let trailing = imm.trailing_zeros();
+        if trailing < 12 {
+            return None;
+        }
+
+        let shift = Imm12::from_i16(trailing as i16 - 12);
+        let base = (imm as u64) >> trailing;
+        Some((base, shift))
+    }
+
+    fn i64_shift(&mut self, imm: i64) -> Option<(i64, Imm12)> {
+        let trailing = imm.trailing_zeros();
+        // We can do without this condition but in this case there is no need to go further
+        if trailing == 0 {
+            return None;
+        }
+
+        let shift = Imm12::from_i16(trailing as i16);
+        let base = imm >> trailing;
+        Some((base, shift))
+    }
+
     #[inline]
     fn emit(&mut self, arg0: &MInst) -> Unit {
         self.lower_ctx.emit(arg0.clone());
@@ -249,6 +272,14 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
+    #[inline]
+    fn imm20_from_u64(&mut self, arg0: u64) -> Option<Imm20> {
+        Imm20::maybe_from_u64(arg0)
+    }
+    #[inline]
+    fn imm20_from_i64(&mut self, arg0: i64) -> Option<Imm20> {
+        Imm20::maybe_from_i64(arg0)
+    }
     #[inline]
     fn imm20_is_zero(&mut self, imm: Imm20) -> Option<()> {
         if imm.as_i32() == 0 {
