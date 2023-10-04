@@ -1,10 +1,17 @@
 use crate::common::{Profile, RunCommon};
 use anyhow::{bail, Result};
 use clap::Parser;
-use std::{path::PathBuf, pin::Pin, sync::Arc};
+use std::{
+    path::PathBuf,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use wasmtime::component::{Component, InstancePre, Linker};
 use wasmtime::{Engine, Store, StoreLimits};
-use wasmtime_wasi::preview2::{self, Table, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::preview2::{Table, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
 #[cfg(feature = "wasi-nn")]
@@ -220,11 +227,7 @@ impl ServeCommand {
         let listener = tokio::net::TcpListener::bind(self.addr).await?;
 
         let _epoch_thread = if let Some(timeout) = self.run.common.wasm.timeout {
-            let engine = engine.clone();
-            Some(preview2::spawn(async move {
-                tokio::time::sleep(timeout).await;
-                engine.increment_epoch();
-            }))
+            Some(EpochThread::spawn(timeout, engine.clone()))
         } else {
             None
         };
@@ -243,6 +246,38 @@ impl ServeCommand {
                     eprintln!("error: {e:?}");
                 }
             });
+        }
+    }
+}
+
+struct EpochThread {
+    shutdown: Arc<AtomicBool>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl EpochThread {
+    fn spawn(timeout: std::time::Duration, engine: Engine) -> Self {
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let handle = {
+            let shutdown = Arc::clone(&shutdown);
+            let handle = std::thread::spawn(move || {
+                while !shutdown.load(Ordering::Relaxed) {
+                    std::thread::sleep(timeout);
+                    engine.increment_epoch();
+                }
+            });
+            Some(handle)
+        };
+
+        EpochThread { shutdown, handle }
+    }
+}
+
+impl Drop for EpochThread {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            self.shutdown.store(true, Ordering::Relaxed);
+            handle.join().unwrap();
         }
     }
 }
