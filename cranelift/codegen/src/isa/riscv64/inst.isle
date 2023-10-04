@@ -1599,6 +1599,21 @@
 (rule (rv_max rs1 rs2)
   (alu_rrr (AluOPRRR.Max) rs1 rs2))
 
+;; Helper for emitting the `maxu` instruction.
+(decl rv_maxu (XReg XReg) XReg)
+(rule (rv_maxu rs1 rs2)
+  (alu_rrr (AluOPRRR.Maxu) rs1 rs2))
+
+;; Helper for emitting the `min` instruction.
+(decl rv_min (XReg XReg) XReg)
+(rule (rv_min rs1 rs2)
+  (alu_rrr (AluOPRRR.Max) rs1 rs2))
+
+;; Helper for emitting the `minu` instruction.
+(decl rv_minu (XReg XReg) XReg)
+(rule (rv_minu rs1 rs2)
+  (alu_rrr (AluOPRRR.Minu) rs1 rs2))
+
 ;; Helper for emitting the `sext.b` instruction.
 (decl rv_sextb (XReg) XReg)
 (rule (rv_sextb rs1)
@@ -2546,11 +2561,34 @@
 (extern constructor gen_stack_addr gen_stack_addr)
 
 (decl gen_select_xreg (IntegerCompare XReg XReg) XReg)
-(rule (gen_select_xreg c x y)
+
+(rule 1 (gen_select_xreg (int_compare_decompose cc x y) x y)
+  (if-let (IntCC.UnsignedLessThan) (intcc_without_eq cc))
+  (if-let $true (has_zbb))
+  (rv_minu x y))
+
+(rule 1 (gen_select_xreg (int_compare_decompose cc x y) x y)
+  (if-let (IntCC.SignedLessThan) (intcc_without_eq cc))
+  (if-let $true (has_zbb))
+  (rv_min x y))
+
+(rule 1 (gen_select_xreg (int_compare_decompose cc x y) x y)
+  (if-let (IntCC.UnsignedGreaterThan) (intcc_without_eq cc))
+  (if-let $true (has_zbb))
+  (rv_maxu x y))
+
+(rule 1 (gen_select_xreg (int_compare_decompose cc x y) x y)
+  (if-let (IntCC.SignedGreaterThan) (intcc_without_eq cc))
+  (if-let $true (has_zbb))
+  (rv_max x y))
+
+(rule 0 (gen_select_xreg c x y)
   (let
     ((dst WritableReg (temp_writable_xreg))
      (_ Unit (emit (MInst.Select dst c x y))))
     (writable_reg_to_reg dst)))
+
+
 (decl gen_select_vreg (IntegerCompare VReg VReg) VReg)
 (rule (gen_select_vreg c x y)
   (let
@@ -2648,6 +2686,10 @@
 ;; Construct an IntegerCompare value.
 (decl int_compare (IntCC XReg XReg) IntegerCompare)
 (extern constructor int_compare int_compare)
+
+;; Extract the components of an `IntegerCompare`
+(decl int_compare_decompose (IntCC XReg XReg) IntegerCompare)
+(extern extractor infallible int_compare_decompose int_compare_decompose)
 
 (decl label_to_br_target (MachLabel) CondBrTarget)
 (extern constructor label_to_br_target label_to_br_target)
@@ -2824,17 +2866,6 @@
 
 (rule 2 (neg $I128 val)
   (i128_sub (value_regs_zero) val))
-
-
-;; Selects the greatest of two registers as signed values.
-(decl max (Type XReg XReg) XReg)
-(rule (max (fits_in_64 (ty_int ty)) x y)
-  (if-let $true (has_zbb))
-  (rv_max x y))
-
-(rule (max (fits_in_64 (ty_int ty)) x y)
-  (if-let $false (has_zbb))
-  (gen_select_xreg (cmp_gt x y) x y))
 
 
 ;; Builds an instruction sequence that traps if the comparision succeeds.

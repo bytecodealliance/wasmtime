@@ -337,6 +337,12 @@
 (decl intcc_complement (IntCC) IntCC)
 (extern constructor intcc_complement intcc_complement)
 
+;; This is a direct import of `IntCC::without_equal`.
+;; Get the corresponding IntCC with the equal component removed.
+;; For conditions without a zero component, this is a no-op.
+(decl pure intcc_without_eq (IntCC) IntCC)
+(extern constructor intcc_without_eq intcc_without_eq)
+
 ;; Swap args of a FloatCC flag.
 (decl floatcc_swap_args (FloatCC) FloatCC)
 (extern constructor floatcc_swap_args floatcc_swap_args)

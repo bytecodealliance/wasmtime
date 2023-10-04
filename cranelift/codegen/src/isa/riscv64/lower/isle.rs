@@ -483,6 +483,11 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
 
     #[inline]
+    fn int_compare_decompose(&mut self, cmp: IntegerCompare) -> (IntCC, XReg, XReg) {
+        (cmp.kind, self.xreg_new(cmp.rs1), self.xreg_new(cmp.rs2))
+    }
+
+    #[inline]
     fn vstate_from_type(&mut self, ty: Type) -> VState {
         VState::from_type(ty)
     }
