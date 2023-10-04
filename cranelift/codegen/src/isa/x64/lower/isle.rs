@@ -624,11 +624,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
-        x.without_equal()
-    }
-
-    #[inline]
     fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
         CC::from_intcc(*intcc)
     }

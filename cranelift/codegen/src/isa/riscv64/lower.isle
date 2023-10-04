@@ -2044,7 +2044,7 @@
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iabs x)))
   (let ((extended XReg (sext x))
         (negated XReg (rv_neg extended)))
-    (max $I64 extended negated)))
+    (gen_select_xreg (cmp_gt extended negated) extended negated)))
 
 ;; For vectors we generate the same code, but with vector instructions
 ;; we can skip the sign extension, since the vector unit will only process
