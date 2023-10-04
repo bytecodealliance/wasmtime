@@ -1,10 +1,11 @@
 use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::{braced, token, Ident, Token};
+use syn::{braced, token, Token};
 use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError};
 use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
 
@@ -335,7 +336,7 @@ fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<TrappableError>
     input.parse::<Token![::]>()?;
     let wit_type_name = ident_or_str(input)?;
     input.parse::<Token![:]>()?;
-    let rust_type_name = input.parse::<Ident>()?.to_string();
+    let rust_type_name = input.parse::<syn::Path>()?.to_token_stream().to_string();
     Ok(TrappableError {
         wit_package_path,
         wit_type_name,

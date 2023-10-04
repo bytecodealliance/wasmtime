@@ -8,7 +8,7 @@ use crate::preview2::bindings::{
     filesystem::{preopens, types as filesystem},
     io::{poll, streams},
 };
-use crate::preview2::{IsATTY, StreamError, TableError, WasiView};
+use crate::preview2::{FsError, IsATTY, StreamError, StreamResult, TableError, WasiView};
 use anyhow::{anyhow, bail, Context};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashSet};
@@ -63,26 +63,16 @@ impl BlockingMode {
                 match streams::HostInputStream::blocking_read(host, input_stream, max_size).await {
                     Ok(r) if r.is_empty() => Err(types::Errno::Intr.into()),
                     Ok(r) => Ok(r),
-                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => {
-                        Ok(Vec::new())
-                    }
-                    Err(e) => {
-                        tracing::trace!("throwing away read error to report as Errno::Io: {e:?}");
-                        Err(types::Errno::Io.into())
-                    }
+                    Err(StreamError::Closed) => Ok(Vec::new()),
+                    Err(e) => Err(e.into()),
                 }
             }
 
             BlockingMode::NonBlocking => {
                 match streams::HostInputStream::read(host, input_stream, max_size).await {
                     Ok(r) => Ok(r),
-                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => {
-                        Ok(Vec::new())
-                    }
-                    Err(e) => {
-                        tracing::trace!("throwing away read error to report as Errno::Io: {e:?}");
-                        Err(types::Errno::Io.into())
-                    }
+                    Err(StreamError::Closed) => Ok(Vec::new()),
+                    Err(e) => Err(e.into()),
                 }
             }
         }
@@ -92,7 +82,7 @@ impl BlockingMode {
         host: &mut (impl streams::Host + poll::Host),
         output_stream: Resource<streams::OutputStream>,
         mut bytes: &[u8],
-    ) -> Result<usize, streams::Error> {
+    ) -> StreamResult<usize> {
         use streams::HostOutputStream as Streams;
 
         match self {
@@ -117,7 +107,7 @@ impl BlockingMode {
             BlockingMode::NonBlocking => {
                 let n = match Streams::check_write(host, output_stream.borrowed()) {
                     Ok(n) => n,
-                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => 0,
+                    Err(StreamError::Closed) => 0,
                     Err(e) => Err(e)?,
                 };
 
@@ -128,17 +118,13 @@ impl BlockingMode {
 
                 match Streams::write(host, output_stream.borrowed(), bytes[..len].to_vec()) {
                     Ok(()) => {}
-                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => {
-                        return Ok(0)
-                    }
+                    Err(StreamError::Closed) => return Ok(0),
                     Err(e) => Err(e)?,
                 }
 
                 match Streams::blocking_flush(host, output_stream.borrowed()).await {
                     Ok(()) => {}
-                    Err(e) if matches!(e.downcast_ref(), Some(streams::StreamError::Closed)) => {
-                        return Ok(0)
-                    }
+                    Err(StreamError::Closed) => return Ok(0),
                     Err(e) => Err(e)?,
                 };
 
@@ -576,25 +562,25 @@ impl wiggle::GuestErrorType for types::Errno {
 
 impl From<StreamError> for types::Error {
     fn from(err: StreamError) -> Self {
-        types::Error::from(streams::Error::from(err))
-    }
-}
-
-impl From<streams::Error> for types::Error {
-    fn from(err: streams::Error) -> Self {
-        match err.downcast() {
-            Ok(se) => se.into(),
-            Err(t) => types::Error::trap(t),
+        match err {
+            StreamError::Closed => types::Errno::Io.into(),
+            StreamError::LastOperationFailed(e) => match e.downcast::<std::io::Error>() {
+                Ok(err) => filesystem::ErrorCode::from(err).into(),
+                Err(e) => {
+                    log::debug!("dropping error {e:?}");
+                    types::Errno::Io.into()
+                }
+            },
+            StreamError::Trap(e) => types::Error::trap(e),
         }
     }
 }
 
-impl From<streams::StreamError> for types::Error {
-    fn from(err: streams::StreamError) -> Self {
-        match err {
-            streams::StreamError::Closed | streams::StreamError::LastOperationFailed => {
-                types::Errno::Io.into()
-            }
+impl From<FsError> for types::Error {
+    fn from(err: FsError) -> Self {
+        match err.downcast() {
+            Ok(code) => code.into(),
+            Err(e) => types::Error::trap(e),
         }
     }
 }
@@ -785,28 +771,6 @@ impl From<GuestError> for types::Error {
 impl From<filesystem::ErrorCode> for types::Error {
     fn from(code: filesystem::ErrorCode) -> Self {
         types::Errno::from(code).into()
-    }
-}
-
-impl TryFrom<filesystem::Error> for types::Errno {
-    type Error = anyhow::Error;
-
-    fn try_from(err: filesystem::Error) -> Result<Self, Self::Error> {
-        match err.downcast() {
-            Ok(code) => Ok(code.into()),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl TryFrom<filesystem::Error> for types::Error {
-    type Error = anyhow::Error;
-
-    fn try_from(err: filesystem::Error) -> Result<Self, Self::Error> {
-        match err.downcast() {
-            Ok(code) => Ok(code.into()),
-            Err(e) => Err(e),
-        }
     }
 }
 
@@ -2231,12 +2195,8 @@ impl<
                             let fd = fd.borrowed();
                             let position = position.clone();
                             drop(t);
-                            match self
-                                .stat(fd)
-                                .await
-                                .map_err(|e| e.try_into().context("failed to call `stat`"))
-                            {
-                                Ok(filesystem::DescriptorStat { size, .. }) => {
+                            match self.stat(fd).await? {
+                                filesystem::DescriptorStat { size, .. } => {
                                     let pos = position.load(Ordering::Relaxed);
                                     let nbytes = size.saturating_sub(pos);
                                     types::Event {
@@ -2253,16 +2213,6 @@ impl<
                                         },
                                     }
                                 }
-                                Err(Ok(error)) => types::Event {
-                                    userdata: sub.userdata,
-                                    error,
-                                    type_: types::Eventtype::FdRead,
-                                    fd_readwrite: types::EventFdReadwrite {
-                                        flags: types::Eventrwflags::empty(),
-                                        nbytes: 1,
-                                    },
-                                },
-                                Err(Err(error)) => return Err(types::Error::trap(error)),
                             }
                         }
                         // TODO: Support sockets
