@@ -82,7 +82,7 @@ async fn run(name: &str, server: &Server) -> Result<()> {
         for (var, val) in test_programs::wasi_tests_environment() {
             builder.env(var, val);
         }
-        builder.env("HTTP_SERVER", &server.addr().to_string());
+        builder.env("HTTP_SERVER", server.addr());
         let wasi = builder.build();
         let http = WasiHttpCtx;
 
@@ -109,10 +109,6 @@ async fn run(name: &str, server: &Server) -> Result<()> {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(
-    windows,
-    ignore = "test is currently flaky in ci and needs to be debugged"
-)]
 async fn outbound_request_get() -> Result<()> {
     let server = Server::http1()?;
     run("outbound_request_get", &server).await

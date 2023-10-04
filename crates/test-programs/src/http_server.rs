@@ -3,9 +3,10 @@ use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::{body::Bytes, service::service_fn, Request, Response};
 use std::{
     future::Future,
-    net::{SocketAddr, TcpListener, TcpStream},
+    net::{SocketAddr, TcpStream},
     thread::JoinHandle,
 };
+use tokio::net::TcpListener;
 
 async fn test(
     mut req: Request<hyper::body::Incoming>,
@@ -34,20 +35,21 @@ impl Server {
         F: Future<Output = Result<()>>,
     {
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-        let listener = TcpListener::bind(addr).context("failed to bind")?;
-        let addr = listener.local_addr().context("failed to get local addr")?;
 
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .context("failed to start tokio runtime")?;
+
+        let listener =
+            rt.block_on(async move { TcpListener::bind(addr).await.context("failed to bind") })?;
+        let addr = listener.local_addr().context("failed to get local addr")?;
         let worker = std::thread::spawn(move || {
             tracing::debug!("dedicated thread to start listening");
             rt.block_on(async move {
                 tracing::debug!("preparing to accept connection");
-                let (stream, _) = listener.accept().map_err(anyhow::Error::from)?;
-                let io = tokio::net::TcpStream::from_std(stream).map_err(anyhow::Error::from)?;
-                run(io).await
+                let (stream, _) = listener.accept().await.map_err(anyhow::Error::from)?;
+                run(stream).await
             })
         });
         Ok(Self {
@@ -92,8 +94,8 @@ impl Server {
         })
     }
 
-    pub fn addr(&self) -> &SocketAddr {
-        &self.addr
+    pub fn addr(&self) -> String {
+        format!("localhost:{}", self.addr.port())
     }
 }
 

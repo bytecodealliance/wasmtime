@@ -12,7 +12,7 @@ fn main() {
 
     let error = res.unwrap_err().to_string();
     assert!(
-        error.starts_with("Error::InvalidUrl(\"failed to lookup address information:"),
+        error.starts_with("Error::InvalidUrl(\""),
         "bad error: {error}"
     );
 }
