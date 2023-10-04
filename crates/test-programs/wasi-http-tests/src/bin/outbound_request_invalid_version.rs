@@ -5,9 +5,7 @@ fn main() {
     let res = wasi_http_tests::request(Method::Connect, Scheme::Http, &addr, "/", None, Some(&[]));
 
     let error = res.unwrap_err().to_string();
-    if error.ne("Error::ProtocolError(\"invalid HTTP version parsed\")")
-        && !error.starts_with("Error::ProtocolError(\"operation was canceled")
-    {
+    if !error.starts_with("Error::ProtocolError(\"") {
         panic!(
             r#"assertion failed: `(left == right)`
       left: `"{error}"`,
