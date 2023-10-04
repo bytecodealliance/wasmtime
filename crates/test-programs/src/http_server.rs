@@ -34,15 +34,18 @@ impl Server {
     where
         F: Future<Output = Result<()>>,
     {
-        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .context("failed to start tokio runtime")?;
-
-        let listener =
-            rt.block_on(async move { TcpListener::bind(addr).await.context("failed to bind") })?;
+        let thread = std::thread::spawn(|| -> Result<_> {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .context("failed to start tokio runtime")?;
+            let listener = rt.block_on(async move {
+                let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+                TcpListener::bind(addr).await.context("failed to bind")
+            })?;
+            Ok((rt, listener))
+        });
+        let (rt, listener) = thread.join().unwrap()?;
         let addr = listener.local_addr().context("failed to get local addr")?;
         let worker = std::thread::spawn(move || {
             tracing::debug!("dedicated thread to start listening");
