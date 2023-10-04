@@ -1,4 +1,4 @@
-use crate::preview2::{HostOutputStream, OutputStreamError};
+use crate::preview2::{HostOutputStream, StreamError, Subscribe};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
@@ -13,12 +13,12 @@ struct WorkerState {
 }
 
 impl WorkerState {
-    fn check_error(&mut self) -> Result<(), OutputStreamError> {
+    fn check_error(&mut self) -> Result<(), StreamError> {
         if let Some(e) = self.error.take() {
-            return Err(OutputStreamError::LastOperationFailed(e));
+            return Err(StreamError::LastOperationFailed(e));
         }
         if !self.alive {
-            return Err(OutputStreamError::Closed);
+            return Err(StreamError::Closed);
         }
         Ok(())
     }
@@ -35,11 +35,6 @@ enum Job {
     Write(Bytes),
 }
 
-enum WriteStatus<'a> {
-    Done(Result<usize, OutputStreamError>),
-    Pending(tokio::sync::futures::Notified<'a>),
-}
-
 impl Worker {
     fn new(write_budget: usize) -> Self {
         Self {
@@ -54,17 +49,31 @@ impl Worker {
             write_ready_changed: tokio::sync::Notify::new(),
         }
     }
-    fn check_write(&self) -> WriteStatus<'_> {
+    async fn ready(&self) {
+        loop {
+            {
+                let state = self.state();
+                if state.error.is_some()
+                    || !state.alive
+                    || (!state.flush_pending && state.write_budget > 0)
+                {
+                    return;
+                }
+            }
+            self.write_ready_changed.notified().await;
+        }
+    }
+    fn check_write(&self) -> Result<usize, StreamError> {
         let mut state = self.state();
         if let Err(e) = state.check_error() {
-            return WriteStatus::Done(Err(e));
+            return Err(e);
         }
 
         if state.flush_pending || state.write_budget == 0 {
-            return WriteStatus::Pending(self.write_ready_changed.notified());
+            return Ok(0);
         }
 
-        WriteStatus::Done(Ok(state.write_budget))
+        Ok(state.write_budget)
     }
     fn state(&self) -> std::sync::MutexGuard<WorkerState> {
         self.state.lock().unwrap()
@@ -88,12 +97,11 @@ impl Worker {
             state.error = Some(e.into());
             state.flush_pending = false;
         }
-        self.write_ready_changed.notify_waiters();
+        self.write_ready_changed.notify_one();
     }
     async fn work<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(&self, mut writer: T) {
         use tokio::io::AsyncWriteExt;
         loop {
-            let notified = self.new_work.notified();
             while let Some(job) = self.pop() {
                 match job {
                     Job::Flush => {
@@ -121,10 +129,9 @@ impl Worker {
                     }
                 }
 
-                self.write_ready_changed.notify_waiters();
+                self.write_ready_changed.notify_one();
             }
-
-            notified.await;
+            self.new_work.notified().await;
         }
     }
 }
@@ -154,13 +161,12 @@ impl AsyncWriteStream {
     }
 }
 
-#[async_trait::async_trait]
 impl HostOutputStream for AsyncWriteStream {
-    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
+    fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut state = self.worker.state();
         state.check_error()?;
         if state.flush_pending {
-            return Err(OutputStreamError::Trap(anyhow!(
+            return Err(StreamError::Trap(anyhow!(
                 "write not permitted while flush pending"
             )));
         }
@@ -169,28 +175,29 @@ impl HostOutputStream for AsyncWriteStream {
                 state.write_budget = remaining_budget;
                 state.items.push_back(bytes);
             }
-            None => return Err(OutputStreamError::Trap(anyhow!("write exceeded budget"))),
+            None => return Err(StreamError::Trap(anyhow!("write exceeded budget"))),
         }
         drop(state);
-        self.worker.new_work.notify_waiters();
+        self.worker.new_work.notify_one();
         Ok(())
     }
-    fn flush(&mut self) -> Result<(), OutputStreamError> {
+    fn flush(&mut self) -> Result<(), StreamError> {
         let mut state = self.worker.state();
         state.check_error()?;
 
         state.flush_pending = true;
-        self.worker.new_work.notify_waiters();
+        self.worker.new_work.notify_one();
 
         Ok(())
     }
 
-    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
-        loop {
-            match self.worker.check_write() {
-                WriteStatus::Done(r) => return r,
-                WriteStatus::Pending(notifier) => notifier.await,
-            }
-        }
+    fn check_write(&mut self) -> Result<usize, StreamError> {
+        self.worker.check_write()
+    }
+}
+#[async_trait::async_trait]
+impl Subscribe for AsyncWriteStream {
+    async fn ready(&mut self) {
+        self.worker.ready().await;
     }
 }

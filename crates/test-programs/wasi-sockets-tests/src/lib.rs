@@ -1,7 +1,7 @@
 wit_bindgen::generate!("test-command-with-sockets" in "../../wasi/wit");
 
 use wasi::io::poll::{self, Pollable};
-use wasi::io::streams::{InputStream, OutputStream, StreamStatus};
+use wasi::io::streams::{InputStream, OutputStream, StreamError};
 use wasi::sockets::instance_network;
 use wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
@@ -17,38 +17,24 @@ impl Pollable {
 }
 
 impl OutputStream {
-    pub fn blocking_write_util(&self, mut bytes: &[u8]) -> (usize, StreamStatus) {
-        let total = bytes.len();
-        let mut written = 0;
-
+    pub fn blocking_write_util(&self, mut bytes: &[u8]) -> Result<(), StreamError> {
         let pollable = self.subscribe();
 
         while !bytes.is_empty() {
             pollable.wait();
 
-            let permit = match self.check_write() {
-                Ok(n) => n,
-                Err(_) => return (written, StreamStatus::Ended),
-            };
+            let permit = self.check_write()?;
 
             let len = bytes.len().min(permit as usize);
             let (chunk, rest) = bytes.split_at(len);
 
-            match self.write(chunk) {
-                Ok(()) => {}
-                Err(_) => return (written, StreamStatus::Ended),
-            }
+            self.write(chunk)?;
 
-            match self.blocking_flush() {
-                Ok(()) => {}
-                Err(_) => return (written, StreamStatus::Ended),
-            }
+            self.blocking_flush()?;
 
             bytes = rest;
-            written += len;
         }
-
-        (total, StreamStatus::Open)
+        Ok(())
     }
 }
 

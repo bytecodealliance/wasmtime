@@ -9,9 +9,9 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, VecAluOpRImm5,
+    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, CsznOp, VecAluOpRImm5,
     VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth,
-    VecOpCategory, VecOpMasking,
+    VecOpCategory, VecOpMasking, ZcbMemOp,
 };
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -603,4 +603,55 @@ fn encode_cs_cl_type_bits(
     bits |= unsigned_field_width(imm3 as u32, 3) << 10;
     bits |= unsigned_field_width(funct3, 3) << 13;
     bits.try_into().unwrap()
+}
+
+// Encode a CSZN type instruction.
+//
+// This is an additional encoding format that is introduced in the Zcb extension.
+//
+// 0--1-2---------6-7--------9-10------15
+// |op |   funct5  |  rd/rs1  | funct6 |
+pub fn encode_cszn_type(op: CsznOp, rd: WritableReg) -> u16 {
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= unsigned_field_width(op.funct5(), 5) << 2;
+    bits |= reg_to_compressed_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(op.funct6(), 6) << 10;
+    bits.try_into().unwrap()
+}
+
+// Encodes the various memory operations in the Zcb extension.
+//
+// 0--1-2----------4-5----------6-7---------9-10-------15
+// |op |  dest/src  | imm(2-bit) |   base    |  funct6  |
+fn encode_zcbmem_bits(op: ZcbMemOp, dest_src: Reg, base: Reg, imm: Uimm2) -> u16 {
+    let imm = imm.bits();
+
+    // For these ops, bit 6 is part of the opcode, and bit 5 encodes the imm offset.
+    let imm = match op {
+        ZcbMemOp::CLh | ZcbMemOp::CLhu | ZcbMemOp::CSh => {
+            debug_assert_eq!(imm & !1, 0);
+            // Only c.lh has this bit as 1
+            let opcode_bit = (op == ZcbMemOp::CLh) as u8;
+            imm | (opcode_bit << 1)
+        }
+        // In the rest of the ops the imm is reversed.
+        _ => ((imm & 1) << 1) | ((imm >> 1) & 1),
+    };
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= reg_to_compressed_gpr_num(dest_src) << 2;
+    bits |= unsigned_field_width(imm as u32, 2) << 5;
+    bits |= reg_to_compressed_gpr_num(base) << 7;
+    bits |= unsigned_field_width(op.funct6(), 6) << 10;
+    bits.try_into().unwrap()
+}
+
+pub fn encode_zcbmem_load(op: ZcbMemOp, rd: WritableReg, base: Reg, imm: Uimm2) -> u16 {
+    encode_zcbmem_bits(op, rd.to_reg(), base, imm)
+}
+
+pub fn encode_zcbmem_store(op: ZcbMemOp, src: Reg, base: Reg, imm: Uimm2) -> u16 {
+    encode_zcbmem_bits(op, src, base, imm)
 }

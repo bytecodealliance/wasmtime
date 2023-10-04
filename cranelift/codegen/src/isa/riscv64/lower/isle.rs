@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, ExtendOp, MInst};
+use generated_code::{Context, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{VecAluOpRR, VecLmul};
@@ -174,59 +174,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             _ => unreachable!(),
         }
     }
-    fn intcc_to_extend_op(&mut self, cc: &IntCC) -> ExtendOp {
-        use IntCC::*;
-        match *cc {
-            Equal
-            | NotEqual
-            | UnsignedLessThan
-            | UnsignedGreaterThanOrEqual
-            | UnsignedGreaterThan
-            | UnsignedLessThanOrEqual => ExtendOp::Zero,
 
-            SignedLessThan
-            | SignedGreaterThanOrEqual
-            | SignedGreaterThan
-            | SignedLessThanOrEqual => ExtendOp::Signed,
-        }
-    }
-    fn lower_cond_br(
-        &mut self,
-        cc: &IntCC,
-        a: ValueRegs,
-        targets: &VecMachLabel,
-        ty: Type,
-    ) -> Unit {
-        MInst::lower_br_icmp(
-            *cc,
-            a,
-            self.int_zero_reg(ty),
-            CondBrTarget::Label(targets[0]),
-            CondBrTarget::Label(targets[1]),
-            ty,
-        )
-        .iter()
-        .for_each(|i| self.emit(i));
-    }
-    fn lower_br_icmp(
-        &mut self,
-        cc: &IntCC,
-        a: ValueRegs,
-        b: ValueRegs,
-        targets: &VecMachLabel,
-        ty: Type,
-    ) -> Unit {
-        let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty);
-        self.emit(&MInst::CondBr {
-            taken: CondBrTarget::Label(targets[0]),
-            not_taken: CondBrTarget::Label(targets[1]),
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: test,
-                rs2: zero_reg(),
-            },
-        });
-    }
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
             let tmp = self.temp_writable_reg(I64);
@@ -248,10 +196,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         } else {
             ValueRegs::one(self.zero_reg())
         }
-    }
-
-    fn vec_label_get(&mut self, val: &VecMachLabel, x: u8) -> MachLabel {
-        val[x as usize]
     }
 
     fn label_to_br_target(&mut self, label: MachLabel) -> CondBrTarget {
@@ -426,6 +370,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_v()
     }
 
+    fn has_m(&mut self) -> bool {
+        self.backend.isa_flags.has_m()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
@@ -444,10 +392,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn has_zbs(&mut self) -> bool {
         self.backend.isa_flags.has_zbs()
-    }
-
-    fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
-        FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }
 
     fn gen_reg_offset_amode(&mut self, base: Reg, offset: i64, ty: Type) -> AMode {
@@ -520,14 +464,14 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         AMO::SeqCst
     }
 
-    fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> Unit {
+    fn lower_br_table(&mut self, index: Reg, targets: &[MachLabel]) -> Unit {
         let tmp1 = self.temp_writable_reg(I64);
         let tmp2 = self.temp_writable_reg(I64);
         self.emit(&MInst::BrTable {
             index,
             tmp1,
             tmp2,
-            targets: targets.clone(),
+            targets: targets.to_vec(),
         });
     }
 
@@ -537,22 +481,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn sp_reg(&mut self) -> PReg {
         px_reg(2)
-    }
-
-    fn shift_int_to_most_significant(&mut self, v: XReg, ty: Type) -> XReg {
-        assert!(ty.is_int() && ty.bits() <= 64);
-        if ty == I64 {
-            return v;
-        }
-        let tmp = self.temp_writable_reg(I64);
-        self.emit(&MInst::AluRRImm12 {
-            alu_op: AluOPRRI::Slli,
-            rd: tmp,
-            rs: v.to_reg(),
-            imm12: Imm12::from_i16((64 - ty.bits()) as i16),
-        });
-
-        self.xreg_new(tmp.to_reg())
     }
 
     #[inline]

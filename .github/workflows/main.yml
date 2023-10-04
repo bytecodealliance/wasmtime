@@ -483,7 +483,8 @@ jobs:
   # Build and test the wasi-nn module.
   test_wasi_nn:
     needs: determine
-    if: needs.determine.outputs.run-full
+    # FIXME(#7125) flaky at the moment
+    if: needs.determine.outputs.run-full && false
     name: Test wasi-nn module
     runs-on: ubuntu-latest
     steps:

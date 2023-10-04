@@ -728,6 +728,7 @@
   (CSub)
   (CAddw)
   (CSubw)
+  (CMul)
 ))
 
 ;; Opcodes for the CJ compressed instruction format
@@ -780,6 +781,29 @@
   (CLd)
   (CFld)
 ))
+
+;; Opcodes for the CSZN compressed instruction format
+(type CsznOp (enum
+  (CNot)
+  (CZextb)
+  (CZexth)
+  (CZextw)
+  (CSextb)
+  (CSexth)
+))
+
+;; This is a mix of all Zcb memory adressing instructions
+;;
+;; Technically they are split across 4 different formats.
+;; But they are all very similar, so we just group them all together.
+(type ZcbMemOp (enum
+  (CLbu)
+  (CLhu)
+  (CLh)
+  (CSb)
+  (CSh)
+))
+
 
 (type CsrRegOP (enum
   ;; Atomic Read/Write CSR
@@ -1066,6 +1090,9 @@
 
 ;; ISA Extension helpers
 
+(decl pure has_m () bool)
+(extern constructor has_m has_m)
+
 (decl pure has_v () bool)
 (extern constructor has_v has_v)
 
@@ -1344,8 +1371,6 @@
 (rule (rv_remu rs1 rs2)
   (alu_rrr (AluOPRRR.RemU) rs1 rs2))
 
-
-
 ;; RV64M Extension
 ;; TODO: Enable these instructions only when we have the M extension
 
@@ -1436,6 +1461,38 @@
 ;; Helper for emitting the `fcvt.s.d` ("Float Convert Single to Double") instruction.
 (decl rv_fcvtsd (FReg) FReg)
 (rule (rv_fcvtsd rs1) (fpu_rr (FpuOPRR.FcvtSD) $F64 rs1))
+
+;; Helper for emitting the `fcvt.s.w` instruction.
+(decl rv_fcvtsw (XReg) FReg)
+(rule (rv_fcvtsw rs1) (fpu_rr (FpuOPRR.FcvtSw) $F32 rs1))
+
+;; Helper for emitting the `fcvt.s.wu` instruction.
+(decl rv_fcvtswu (XReg) FReg)
+(rule (rv_fcvtswu rs1) (fpu_rr (FpuOPRR.FcvtSwU) $F32 rs1))
+
+;; Helper for emitting the `fcvt.d.w` instruction.
+(decl rv_fcvtdw (XReg) FReg)
+(rule (rv_fcvtdw rs1) (fpu_rr (FpuOPRR.FcvtDW) $F32 rs1))
+
+;; Helper for emitting the `fcvt.d.wu` instruction.
+(decl rv_fcvtdwu (XReg) FReg)
+(rule (rv_fcvtdwu rs1) (fpu_rr (FpuOPRR.FcvtDWU) $F32 rs1))
+
+;; Helper for emitting the `fcvt.s.l` instruction.
+(decl rv_fcvtsl (XReg) FReg)
+(rule (rv_fcvtsl rs1) (fpu_rr (FpuOPRR.FcvtSL) $F32 rs1))
+
+;; Helper for emitting the `fcvt.s.lu` instruction.
+(decl rv_fcvtslu (XReg) FReg)
+(rule (rv_fcvtslu rs1) (fpu_rr (FpuOPRR.FcvtSLU) $F32 rs1))
+
+;; Helper for emitting the `fcvt.d.l` instruction.
+(decl rv_fcvtdl (XReg) FReg)
+(rule (rv_fcvtdl rs1) (fpu_rr (FpuOPRR.FcvtDL) $F32 rs1))
+
+;; Helper for emitting the `fcvt.d.lu` instruction.
+(decl rv_fcvtdlu (XReg) FReg)
+(rule (rv_fcvtdlu rs1) (fpu_rr (FpuOPRR.FcvtDLu) $F32 rs1))
 
 ;; Helper for emitting the `fsgnj` ("Floating Point Sign Injection") instruction.
 ;; The output of this instruction is `rs1` with the sign bit from `rs2`
@@ -1554,6 +1611,11 @@
 (decl rv_cpop (XReg) XReg)
 (rule (rv_cpop rs1)
   (alu_rr_funct12 (AluOPRRI.Cpop) rs1))
+
+;; Helper for emitting the `cpopw` ("Count Population") instruction.
+(decl rv_cpopw (XReg) XReg)
+(rule (rv_cpopw rs1)
+  (alu_rr_funct12 (AluOPRRI.Cpopw) rs1))
 
 ;; Helper for emitting the `max` instruction.
 (decl rv_max (XReg XReg) XReg)
@@ -1694,8 +1756,21 @@
   (if-let (i64_generate_imm imm20 imm12) (i64_sextend_u64 ty c))
   (rv_addi (rv_lui imm20) imm12))
 
-;; Otherwise we fall back to loading the immediate from the constant pool.
+;; Combine one of the above rules with a shift-left if possible, This chops off
+;; all trailing zeros from the input constant and then attempts if the resulting
+;; constant can itself use one of the above rules via the `i64_generate_imm`
+;; matcher. This will then recurse on the above rules to materialize a smaller
+;; constant which is then shifted left to create the desired constant.
 (rule 0 (imm (ty_int ty) c)
+  (if-let c_extended (i64_sextend_u64 ty c))      ;; constant to make
+  (if-let shamt (i64_ctz c_extended))             ;; number of trailing zeros to chop
+  (if-let c_shifted (i64_shr c_extended shamt))   ;; smaller constant
+  (if-let (i64_generate_imm _ _) c_shifted)       ;; can the smaller constant be made?
+  (if-let (imm12_from_i64 shimm) shamt)           ;; create the shift immediate
+  (rv_slli (imm ty (i64_as_u64 c_shifted)) shimm))
+
+;; Otherwise we fall back to loading the immediate from the constant pool.
+(rule -1 (imm (ty_int ty) c)
   (gen_load
     (gen_const_amode (emit_u64_le_const c))
     (LoadOP.Ld)
@@ -1764,19 +1839,29 @@
 (decl pure partial i8_to_imm5 (i8) Imm5)
 (extern constructor i8_to_imm5 i8_to_imm5)
 
-;; Extractor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
-;; TODO(#6527): Try matching vconst here as well
-(decl replicated_imm5 (Imm5) Value)
-(extractor (replicated_imm5 n)
-  (def_inst (splat (i64_from_iconst (imm5_from_i64 n)))))
+;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
+(decl pure partial replicated_imm5 (Value) Imm5)
+(rule (replicated_imm5 (splat (i64_from_iconst (imm5_from_i64 n)))) n)
+(rule (replicated_imm5 (vconst (u128_from_constant n128)))
+  (if-let (u128_replicated_u64 n64) n128)
+  (if-let (u64_replicated_u32 n32) n64)
+  (if-let (u32_replicated_u16 n16) n32)
+  (if-let (u16_replicated_u8 n8) n16)
+  (if-let n (i8_to_imm5 (u8_as_i8 n8)))
+  n)
 
 ;; UImm5 Helpers
 
-;; Extractor that matches a `Value` equivalent to a replicated UImm5 on all lanes.
-;; TODO(#6527): Try matching vconst here as well
-(decl replicated_uimm5 (UImm5) Value)
-(extractor (replicated_uimm5 n)
-  (def_inst (splat (uimm5_from_value n))))
+;; Constructor that matches a `Value` equivalent to a replicated UImm5 on all lanes.
+(decl pure partial replicated_uimm5 (Value) UImm5)
+(rule (replicated_uimm5 (splat (uimm5_from_value n))) n)
+(rule 1 (replicated_uimm5 (vconst (u128_from_constant n128)))
+  (if-let (u128_replicated_u64 n64) n128)
+  (if-let (u64_replicated_u32 n32) n64)
+  (if-let (u32_replicated_u16 n16) n32)
+  (if-let (u16_replicated_u8 n8) n16)
+  (if-let (uimm5_from_u8 n) n8)
+  n)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `UImm5`.
 (decl uimm5_from_value (UImm5) Value)
@@ -1924,41 +2009,6 @@
 (rule 0 (gen_or (fits_in_64 _) x y)
   (rv_or (value_regs_get x 0) (value_regs_get y 0)))
 
-
-
-(decl gen_bswap (Type XReg) XReg)
-
-;; This is only here to make the rule below work. bswap.i8 isn't valid
-(rule 0 (gen_bswap $I8 x) x)
-
-(rule 1 (gen_bswap (ty_int_ref_16_to_64 ty) x)
-  (if-let half_ty (ty_half_width ty))
-  (if-let half_size (u64_to_imm12 (ty_bits half_ty)))
-  (let (;; This swaps the top bytes and zeroes the bottom bytes, so that
-        ;; we can or it with the bottom bytes later.
-        (swap_top XReg (gen_bswap half_ty x))
-        (top XReg (rv_slli swap_top half_size))
-
-        ;; Get the top half, swap it, and zero extend it so we can `or` it
-        ;; with the bottom half.
-        (shifted XReg (rv_srli x half_size))
-        (swap_bot XReg (gen_bswap half_ty shifted))
-        (bot XReg (zext swap_bot half_ty $I64)))
-    (rv_or top bot)))
-
-;; With `zbb` we can use `rev8` and shift the result
-(rule 2 (gen_bswap (int_fits_in_32 ty) x)
-  (if-let $true (has_zbb))
-  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
-  (rv_srli (rv_rev8 x) shift_amt))
-
-;; With `zbb` we can use `rev8` that does this
-(rule 3 (gen_bswap $I64 x)
-  (if-let $true (has_zbb))
-  (rv_rev8 x))
-
-
-
 (decl lower_bit_reverse (Reg Type) Reg)
 
 (rule
@@ -2005,77 +2055,8 @@
   (if-let $true (has_zbb))
   (rv_ctz x))
 
-;; Count trailing zeros from a i128 bit value.
-;; We count both halves separately and conditionally add them if it makes sense.
-(decl lower_ctz_128 (ValueRegs) ValueRegs)
-(rule (lower_ctz_128 x)
-  (let ((x_lo XReg (value_regs_get x 0))
-        (x_hi XReg (value_regs_get x 1))
-        ;; Count both halves
-        (high XReg (lower_ctz $I64 x_hi))
-        (low XReg (lower_ctz $I64 x_lo))
-        ;; Only add the top half if the bottom is zero
-        (high XReg (gen_select_reg (IntCC.Equal) x_lo (zero_reg) high (zero_reg)))
-        (result XReg (rv_add low high)))
-    (extend result (ExtendOp.Zero) $I64 $I128)))
-
-(decl lower_clz (Type XReg) XReg)
-(rule (lower_clz ty rs)
-  (gen_cltz $true rs ty))
-
-(rule 1 (lower_clz (fits_in_16 ty) r)
-  (if-let $true (has_zbb))
-  (let ((tmp XReg (zext r ty $I64))
-        (count XReg (rv_clz tmp))
-        ;; We always do the operation on the full 64-bit register, so subtract 64 from the result.
-        (result XReg (rv_addi count (imm12_const_add (ty_bits ty) -64))))
-    result))
-
-(rule 2 (lower_clz $I32 r)
-  (if-let $true (has_zbb))
-  (rv_clzw r))
-
-(rule 2 (lower_clz $I64 r)
-  (if-let $true (has_zbb))
-  (rv_clz r))
-
-
 ;; Count leading zeros from a i128 bit value.
 ;; We count both halves separately and conditionally add them if it makes sense.
-(decl lower_clz_i128 (ValueRegs) ValueRegs)
-(rule (lower_clz_i128 x)
-  (let ((x_lo XReg (value_regs_get x 0))
-        (x_hi XReg (value_regs_get x 1))
-        ;; Count both halves
-        (high XReg (lower_clz $I64 x_hi))
-        (low XReg (lower_clz $I64 x_lo))
-        ;; Only add the bottom zeros if the top half is zero
-        (low XReg (gen_select_reg (IntCC.Equal) x_hi (zero_reg) low (zero_reg)))
-        (result XReg (rv_add high low)))
-    (extend result (ExtendOp.Zero) $I64 $I128)))
-
-
-(decl lower_cls (Type XReg) XReg)
-(rule (lower_cls ty r)
-  (let ((tmp XReg (sext r ty $I64))
-        (tmp2 XReg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
-        (tmp3 XReg (lower_clz ty tmp2)))
-    (rv_addi tmp3 (imm12_const -1))))
-
-;; If the sign bit is set, we count the leading zeros of the inverted value.
-;; Otherwise we can just count the leading zeros of the original value.
-;; Subtract 1 since the sign bit does not count.
-(decl lower_cls_i128 (ValueRegs) ValueRegs)
-(rule (lower_cls_i128 x)
-  (let ((low XReg (value_regs_get x 0))
-        (high XReg (value_regs_get x 1))
-        (low XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not low) low))
-        (high XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not high) high))
-        (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
-        (count XReg (value_regs_get tmp 0))
-        (result XReg (rv_addi count (imm12_const -1))))
-    (extend result (ExtendOp.Zero) $I64 $I128)))
-
 
 (decl gen_cltz (bool XReg Type) XReg)
 (rule (gen_cltz leading rs ty)
@@ -2085,122 +2066,96 @@
         (_ Unit (emit (MInst.Cltz leading sum step tmp rs ty))))
     sum))
 
-
-;; Extends an integer if it is smaller than 64 bits.
-(decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
-;;; For values smaller than 64 bits, we need to extend them to 64 bits
-(rule 0 (ext_int_if_need $true val (fits_in_32 (ty_int ty)))
-  (extend val (ExtendOp.Signed) ty $I64))
-(rule 0 (ext_int_if_need $false val (fits_in_32 (ty_int ty)))
-  (extend val (ExtendOp.Zero) ty $I64))
-;; If the value is larger than one machine register, we don't need to do anything
-(rule 1 (ext_int_if_need _ r $I64) r)
-(rule 2 (ext_int_if_need _ r $I128) r)
-
-
 ;; Performs a zero extension of the given value
-(decl zext (XReg Type Type) XReg)
-(rule (zext val from_ty (fits_in_64 to_ty)) (value_regs_get (extend val (ExtendOp.Zero) from_ty to_ty) 0))
-
-;; Performs a signed extension of the given value
-(decl sext (XReg Type Type) XReg)
-(rule (sext val from_ty (fits_in_64 to_ty)) (value_regs_get (extend val (ExtendOp.Signed) from_ty to_ty) 0))
-
-(type ExtendOp
-  (enum
-    (Zero)
-    (Signed)))
-
-;; Performs either a sign or zero extension of the given value
-(decl extend (ValueRegs ExtendOp Type Type) ValueRegs)
-
-;;; Generic Rules Extending to I64
-(decl pure extend_shift_op (ExtendOp) AluOPRRI)
-(rule (extend_shift_op (ExtendOp.Zero)) (AluOPRRI.Srli))
-(rule (extend_shift_op (ExtendOp.Signed)) (AluOPRRI.Srai))
+(decl zext (Value) XReg)
 
 ;; In the most generic case, we shift left and then shift right.
-;; The type of right shift is determined by the extend op.
-(rule 0 (extend val extend_op (fits_in_32 from_ty) (fits_in_64 to_ty))
-  (let ((val XReg (value_regs_get val 0))
-        (shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
-        (left XReg (rv_slli val shift))
-        (shift_op AluOPRRI (extend_shift_op extend_op))
-        (right XReg (alu_rr_imm12 shift_op left shift)))
-    right))
+(rule 0 (zext val @ (value_type (fits_in_32 ty)))
+  (let ((shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits ty)))))
+    (rv_srli (rv_slli val shift) shift)))
 
 ;; If we are zero extending a U8 we can use a `andi` instruction.
-(rule 1 (extend val (ExtendOp.Zero) $I8 (fits_in_64 to_ty))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_andi val (imm12_const 255))))
-
-;; When signed extending from 32 to 64 bits we can use a
-;; `addiw val 0`. Also known as a `sext.w`
-(rule 1 (extend val (ExtendOp.Signed) $I32 $I64)
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_sextw val)))
-
+(rule 1 (zext val @ (value_type $I8))
+  (rv_andi val (imm12_const 0xff)))
 
 ;; No point in trying to use `packh` here to zero extend 8 bit values
 ;; since we can just use `andi` instead which is part of the base ISA.
 
 ;; If we have the `zbkb` extension `packw` can be used to zero extend 16 bit values
-(rule 1 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
+(rule 1 (zext val @ (value_type $I16))
   (if-let $true (has_zbkb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_packw val (zero_reg))))
+  (rv_packw val (zero_reg)))
 
 ;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
-(rule 1 (extend val (ExtendOp.Zero) $I32 $I64)
+(rule 1 (zext val @ (value_type $I32))
   (if-let $true (has_zbkb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_pack val (zero_reg))))
-
-
-;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
-(rule 1 (extend val (ExtendOp.Signed) $I8 (fits_in_64 _))
-  (if-let $true (has_zbb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_sextb val)))
-
-;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
-(rule 1 (extend val (ExtendOp.Signed) $I16 (fits_in_64 _))
-  (if-let $true (has_zbb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_sexth val)))
+  (rv_pack val (zero_reg)))
 
 ;; If we have the `zbb` extension we can use the dedicated `zext.h` instruction.
-(rule 2 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
+(rule 2 (zext val @ (value_type $I16))
   (if-let $true (has_zbb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_zexth val)))
+  (rv_zexth val))
 
 ;; With `zba` we have a `zext.w` instruction
-(rule 2 (extend val (ExtendOp.Zero) $I32 $I64)
+(rule 2 (zext val @ (value_type $I32))
   (if-let $true (has_zba))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_zextw val)))
+  (rv_zextw val))
 
-;;; Signed rules extending to I128
-;; Extend the bottom part, and extract the sign bit from the bottom as the top
-(rule 3 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
-  (let ((val XReg (value_regs_get val 0))
-        (low XReg (sext val from_ty $I64))
-        (high XReg (rv_srai low (imm12_const 63))))
-    (value_regs low high)))
+;; Ignore sign extensions for values whose representation is already the full
+;; register width.
+(rule 3 (zext val)
+  (if (val_already_extended val))
+  val)
 
-;;; Unsigned rules extending to I128
-;; Extend the bottom register to I64 and then just zero out the top half.
-(rule 3 (extend val (ExtendOp.Zero) (fits_in_64 from_ty) $I128)
-  (let ((val XReg (value_regs_get val 0))
-        (low XReg (zext val from_ty $I64))
-        (high XReg (imm $I64 0)))
-    (value_regs low high)))
+;; Performs a signed extension of the given value
+(decl sext (Value) XReg)
 
-;; Catch all rule for ignoring extensions of the same type.
-(rule 4 (extend val _ ty ty) val)
+;; Same base case as `zext`, shift left-then-right.
+(rule 0 (sext val @ (value_type (fits_in_32 ty)))
+  (let ((shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits ty)))))
+    (rv_srai (rv_slli val shift) shift)))
 
+;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
+(rule 1 (sext val @ (value_type $I8))
+  (if-let $true (has_zbb))
+  (rv_sextb val))
 
+;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
+(rule 1 (sext val @ (value_type $I16))
+  (if-let $true (has_zbb))
+  (rv_sexth val))
+
+;; When signed extending from 32 to 64 bits we can use a
+;; `addiw val 0`. Also known as a `sext.w`
+(rule 1 (sext val @ (value_type $I32))
+  (rv_sextw val))
+
+;; Ignore sign extensions for values whose representation is already the full
+;; register width.
+(rule 2 (sext val)
+  (if (val_already_extended val))
+  val)
+
+;; Helper matcher for when a value's representation is already sign or zero
+;; extended to the full 64-bit register representation. This is used by `zext`
+;; and `sext` above to skip the extension instruction entirely in some
+;; circumstances.
+(decl pure partial val_already_extended (Value) bool)
+(rule 0 (val_already_extended v @ (value_type $I64)) $true)
+
+;; When extending our backend always extends to the full register width, so
+;; there's no need to extend-an-extend.
+(rule 1 (val_already_extended (uextend _)) $true)
+(rule 1 (val_already_extended (sextend _)) $true)
+
+;; The result of `icmp` is zero or one, meaning that it's already sign extended
+;; to the full register width.
+(rule 1 (val_already_extended (icmp _ _ _)) $true)
+
+(type ExtendOp
+  (enum
+    (Zero)
+    (Signed)))
 
 (decl lower_b128_binary (AluOPRRR ValueRegs ValueRegs) ValueRegs)
 (rule
@@ -2211,15 +2166,6 @@
       ;; high part.
       (high XReg (alu_rrr op (value_regs_get a 1) (value_regs_get b 1))))
     (value_regs low high)))
-
-(decl lower_umlhi (Type XReg XReg) XReg)
-(rule 1 (lower_umlhi $I64 rs1 rs2)
-  (rv_mulhu rs1 rs2))
-
-(rule (lower_umlhi ty rs1 rs2)
-  (let
-    ((tmp XReg (rv_mul (zext rs1 ty $I64) (zext rs2 ty $I64))))
-    (rv_srli tmp (imm12_const (ty_bits ty)))))
 
 (decl lower_smlhi (Type XReg XReg) XReg)
 (rule 1
@@ -2345,36 +2291,15 @@
   (rv_bseti val (imm12_const (u64_as_i32 bit))))
 
 
-(decl gen_popcnt (Reg Type) Reg)
-(rule
-  (gen_popcnt rs ty)
+(decl gen_popcnt (XReg) Reg)
+(rule (gen_popcnt rs)
   (let
     ((tmp WritableXReg (temp_writable_xreg))
       (step WritableXReg (temp_writable_xreg))
       (sum WritableXReg (temp_writable_xreg))
-      (_ Unit (emit (MInst.Popcnt sum step tmp rs ty))))
+      (_ Unit (emit (MInst.Popcnt sum step tmp rs $I64))))
     (writable_reg_to_reg sum)))
 
-(decl lower_popcnt (XReg Type) XReg)
-(rule 1 (lower_popcnt rs ty)
-  (if-let $true (has_zbb))
-  (rv_cpop (zext rs ty $I64)))
-
-(rule (lower_popcnt rs ty)
-  (if-let $false (has_zbb))
-  (gen_popcnt rs ty))
-
-(decl lower_popcnt_i128 (ValueRegs) ValueRegs)
-(rule
-  (lower_popcnt_i128 a)
-  (let
-    ( ;; low part.
-      (low XReg (lower_popcnt (value_regs_get a 0) $I64))
-      ;; high part.
-      (high XReg (lower_popcnt (value_regs_get a 1) $I64))
-      ;; add toghter.
-      (result XReg (rv_add low high)))
-    (value_regs result (imm $I64 0))))
 
 (decl lower_i128_rotl (ValueRegs ValueRegs) ValueRegs)
 (rule
@@ -2685,9 +2610,6 @@
             (_ Unit (emit (MInst.ElfTlsGetAddr dst name))))
         dst))
 
-(decl int_convert_2_float_op (Type bool Type) FpuOPRR)
-(extern constructor int_convert_2_float_op int_convert_2_float_op)
-
 ;;;;
 (decl gen_fcvt_int (bool FReg bool Type Type) XReg)
 (rule
@@ -2711,15 +2633,6 @@
     (move_x_to_f tmp (float_int_of_same_size ty))))
 
 
-;;; lower icmp
-(decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
-(rule 1 (lower_icmp cc x y ty)
-  (if (signed_cond_code cc))
-  (gen_icmp cc (ext_int_if_need $true x ty) (ext_int_if_need $true y ty) ty))
-(rule (lower_icmp cc x y ty)
-  (gen_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
-
-
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
 (rule
   (i128_sub x y )
@@ -2734,112 +2647,64 @@
       (high XReg (rv_sub high_tmp borrow)))
     (value_regs low high)))
 
-
-;;; Returns the sum in the first register, and the overflow test in the second.
-(decl lower_uadd_overflow (XReg XReg Type) ValueRegs)
-
-(rule 1
-  (lower_uadd_overflow x y $I64)
-  (let ((tmp XReg (rv_add x y))
-        (test XReg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
-    (value_regs tmp test)))
-
-(rule
-  (lower_uadd_overflow x y (fits_in_32 ty))
-  (let ((tmp_x XReg (zext x ty $I64))
-        (tmp_y XReg (zext y ty $I64))
-        (sum XReg (rv_add tmp_x tmp_y))
-        (test XReg (rv_srli sum (imm12_const (ty_bits ty)))))
-    (value_regs sum test)))
-
-;;; cc a b targets Type
-(decl lower_br_icmp (IntCC ValueRegs ValueRegs VecMachLabel Type) Unit)
-(extern constructor lower_br_icmp lower_br_icmp)
-
 ;; int scalar zero regs.
 (decl int_zero_reg (Type) ValueRegs)
 (extern constructor int_zero_reg int_zero_reg)
 
-(decl lower_cond_br (IntCC ValueRegs VecMachLabel Type) Unit)
-(extern constructor lower_cond_br lower_cond_br)
-
-(decl intcc_to_extend_op (IntCC) ExtendOp)
-(extern constructor intcc_to_extend_op intcc_to_extend_op)
-
-;; Normalize a value for comparision.
+;; Convert a truthy value, possibly of more than one register (an I128), to
+;; one register.
 ;;
-;; This ensures that types smaller than a register don't accidentally
-;; pass undefined high bits when being compared as a full register.
-(decl normalize_cmp_value (Type ValueRegs ExtendOp) ValueRegs)
-
-(rule 1 (normalize_cmp_value (fits_in_32 ity) r op)
-      (extend r op ity $I64))
-
-(rule (normalize_cmp_value $I64  r _) r)
-(rule (normalize_cmp_value $I128 r _) r)
-
-(decl normalize_fcvt_from_int (XReg Type ExtendOp) XReg)
-(rule 2 (normalize_fcvt_from_int r (fits_in_16 ty) op)
-  (value_regs_get (extend r op ty $I64) 0))
-(rule 1 (normalize_fcvt_from_int r _ _)
-  r)
-
-;; Convert a truthy value, possibly of more than one register (an
-;; I128), to one register. If narrower than 64 bits, must have already
-;; been masked (e.g. by `normalize_cmp_value`).
-(decl truthy_to_reg (Type ValueRegs) XReg)
-(rule 1 (truthy_to_reg (fits_in_64 _) regs)
-      (value_regs_get regs 0))
-(rule 0 (truthy_to_reg $I128 regs)
-      (let ((lo XReg (value_regs_get regs 0))
+;; Zero-extends as necessary to ensure that the returned register only contains
+;; nonzero if the input value was logically nonzero.
+(decl truthy_to_reg (Value) XReg)
+(rule 1 (truthy_to_reg val @ (value_type (fits_in_64 _)))
+  (zext val))
+(rule 0 (truthy_to_reg val @ (value_type $I128))
+      (let ((regs ValueRegs val)
+            (lo XReg (value_regs_get regs 0))
             (hi XReg (value_regs_get regs 1)))
         (rv_or lo hi)))
 
+;; Consume a CmpResult, producing a branch on its result.
+(decl cond_br (IntegerCompare CondBrTarget CondBrTarget) SideEffectNoResult)
+(rule (cond_br cmp then else)
+      (SideEffectNoResult.Inst
+        (MInst.CondBr then else cmp)))
+
+;; Helper for emitting the `j` mnemonic, an unconditional jump to label.
+(decl rv_j (MachLabel) SideEffectNoResult)
+(rule (rv_j label)
+  (SideEffectNoResult.Inst (MInst.Jal label)))
+
+;; Construct an IntegerCompare value.
+(decl int_compare (IntCC XReg XReg) IntegerCompare)
+(extern constructor int_compare int_compare)
 
 (decl label_to_br_target (MachLabel) CondBrTarget)
 (extern constructor label_to_br_target label_to_br_target)
+(convert MachLabel CondBrTarget label_to_br_target)
 
-(decl vec_label_get (VecMachLabel u8) MachLabel)
-(extern constructor vec_label_get vec_label_get)
-
-(decl partial lower_branch (Inst VecMachLabel) Unit)
-(rule (lower_branch (jump _) targets )
-      (emit_side_effect (SideEffectNoResult.Inst (MInst.Jal (vec_label_get targets 0)))))
+(decl partial lower_branch (Inst MachLabelSlice) Unit)
+(rule (lower_branch (jump _) (single_target label))
+      (emit_side_effect (rv_j label)))
 
 ;; Default behavior for branching based on an input value.
-(rule
-  (lower_branch (brif v @ (value_type ty) _ _) targets)
-  (lower_cond_br (IntCC.NotEqual) (normalize_cmp_value ty v (ExtendOp.Zero)) targets ty))
+(rule (lower_branch (brif v @ (value_type (fits_in_64 ty)) _ _) (two_targets then else))
+  (emit_side_effect (cond_br (int_compare (IntCC.NotEqual) (zext v) (zero_reg)) then else)))
+(rule 2 (lower_branch (brif v @ (value_type $I128)_ _) (two_targets then else))
+  (emit_side_effect (cond_br (int_compare (IntCC.NotEqual) (truthy_to_reg v) (zero_reg)) then else)))
 
-;; Special case for SI128 to reify the comparison value and branch on it.
-(rule 2
-  (lower_branch (brif v @ (value_type $I128) _ _) targets)
-  (let ((zero ValueRegs (value_regs (zero_reg) (zero_reg)))
-        (cmp XReg (gen_icmp (IntCC.NotEqual) v zero $I128)))
-    (lower_cond_br (IntCC.NotEqual) cmp targets $I64)))
+;; Branching on the result of an fcmp.
+(rule 1 (lower_branch (brif (maybe_uextend (fcmp cc a @ (value_type ty) b)) _ _) (two_targets then else))
+  (emit_side_effect (cond_br (emit_fcmp cc ty a b) then else)))
 
-;; Branching on the result of an icmp
-(rule 1
-  (lower_branch (brif (maybe_uextend (icmp cc a @ (value_type ty) b)) _ _) targets)
-  (lower_br_icmp cc a b targets ty))
-
-;; Branching on the result of an fcmp
-(rule 1
-  (lower_branch (brif (maybe_uextend (fcmp cc a @ (value_type ty) b)) _ _) targets)
-  (if-let $true (floatcc_unordered cc))
-  (let ((then CondBrTarget (label_to_br_target (vec_label_get targets 0)))
-        (else CondBrTarget (label_to_br_target (vec_label_get targets 1))))
-    (emit_side_effect (cond_br (emit_fcmp (floatcc_complement cc) ty a b) else then))))
-
-(rule 1
-  (lower_branch (brif (maybe_uextend (fcmp cc a @ (value_type ty) b)) _ _) targets)
-  (if-let $false (floatcc_unordered cc))
-  (let ((then CondBrTarget (label_to_br_target (vec_label_get targets 0)))
-        (else CondBrTarget (label_to_br_target (vec_label_get targets 1))))
-    (emit_side_effect (cond_br (emit_fcmp cc ty a b) then else))))
+(decl fcmp_to_compare (FCmp) IntegerCompare)
+(rule (fcmp_to_compare (FCmp.One r)) (int_compare (IntCC.NotEqual) r (zero_reg)))
+(rule (fcmp_to_compare (FCmp.Zero r)) (int_compare (IntCC.Equal) r (zero_reg)))
+(convert FCmp IntegerCompare fcmp_to_compare)
 
 
-(decl lower_br_table (Reg VecMachLabel) Unit)
+(decl lower_br_table (Reg MachLabelSlice) Unit)
 (extern constructor lower_br_table lower_br_table)
 
 (rule (lower_branch (br_table index _) targets)
@@ -2941,25 +2806,6 @@
 (rule (gen_trapz test trap_code)
   (gen_trapif (IntCC.Equal) test (zero_reg) trap_code))
 
-
-(decl shift_int_to_most_significant (XReg Type) XReg)
-(extern constructor shift_int_to_most_significant shift_int_to_most_significant)
-
-;;; generate div overflow.
-(decl gen_div_overflow (XReg XReg Type) InstOutput)
-(rule (gen_div_overflow rs1 rs2 ty)
-  (let ((r_const_neg_1 XReg (imm $I64 (i64_as_u64 -1)))
-        (r_const_min XReg (rv_slli (imm $I64 1) (imm12_const 63)))
-        (tmp_rs1 XReg (shift_int_to_most_significant rs1 ty))
-        (t1 XReg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
-        (t2 XReg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
-        (test XReg (rv_and t1 t2)))
-    (gen_trapnz test (TrapCode.IntegerOverflow))))
-
-(decl gen_div_by_zero (XReg) InstOutput)
-(rule (gen_div_by_zero r)
-  (gen_trapz r (TrapCode.IntegerDivisionByZero)))
-
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl gen_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
@@ -2978,45 +2824,18 @@
 
 ;;;; Helpers for bmask ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl lower_bmask (Type Type ValueRegs) ValueRegs)
+;; Generates either 0 if `Value` is zero or -1 otherwise.
+(decl gen_bmask (Value) XReg)
+(rule (gen_bmask val)
+  (let ((non_zero XReg (rv_snez (truthy_to_reg val))))
+    (rv_neg non_zero)))
 
-;; Produces -1 if the 64-bit value is non-zero, and 0 otherwise.
-;; If the type is smaller than 64 bits, we need to mask off the
-;; high bits.
-(rule
-  0
-  (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
-  (let ((input XReg (truthy_to_reg in_ty (normalize_cmp_value in_ty val (ExtendOp.Zero))))
-        (non_zero XReg (rv_snez input)))
-    (value_reg (rv_neg non_zero))))
-
-;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
-;; though it was a 64-bit value.
-(rule
-  1
-  (lower_bmask (fits_in_64 ty) $I128 val)
-  (let ((lo XReg (value_regs_get val 0))
-        (hi XReg (value_regs_get val 1))
-        (combined XReg (rv_or lo hi)))
-    (lower_bmask ty $I64 (value_reg combined))))
-
-;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of the
-;; bmask of the 64-bit value into both result registers of the i128.
-(rule
-  2
-  (lower_bmask $I128 (fits_in_64 in_ty) val)
-  (let ((res ValueRegs (lower_bmask $I64 in_ty val)))
-    (value_regs (value_regs_get res 0) (value_regs_get res 0))))
-
-;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of
-;; bmasking the 128-bit value to a 64-bit value into both registers of the
-;; 128-bit result.
-(rule
-  3
-  (lower_bmask $I128 $I128 val)
-  (let ((res ValueRegs (lower_bmask $I64 $I128 val)))
-    (value_regs (value_regs_get res 0) (value_regs_get res 0))))
-
+(decl lower_bmask (Value Type) ValueRegs)
+(rule 0 (lower_bmask val (fits_in_64 _))
+  (value_reg (gen_bmask val)))
+(rule 1 (lower_bmask val $I128)
+  (let ((bits XReg (gen_bmask val)))
+    (value_regs bits bits)))
 
 ;;;; Helpers for physical registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3048,131 +2867,62 @@
 
 ;;;; Helpers for floating point comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl not (XReg) XReg)
-(rule (not x) (rv_xori x (imm_from_bits 1)))
-
 (decl is_not_nan (Type FReg) XReg)
 (rule (is_not_nan ty a) (rv_feq ty a a))
 
 (decl ordered (Type FReg FReg) XReg)
 (rule (ordered ty a b) (rv_and (is_not_nan ty a) (is_not_nan ty b)))
 
-(type CmpResult (enum
-                  (Result
-                    (result XReg)
-                    (invert bool))))
+(type FCmp (enum
+  ;; The comparison succeeded if `r` is one
+  (One (r XReg))
+  ;; The comparison succeeded if `r` is zero
+  (Zero (r XReg))
+))
 
-;; Wrapper for the common case when constructing comparison results. It assumes
-;; that the result isn't negated.
-(decl cmp_result (XReg) CmpResult)
-(rule (cmp_result result) (CmpResult.Result result $false))
-
-;; Wrapper for the case where it's more convenient to construct the negated
-;; version of the comparison.
-(decl cmp_result_invert (XReg) CmpResult)
-(rule (cmp_result_invert result) (CmpResult.Result result $true))
-
-;; Consume a CmpResult, producing a branch on its result.
-(decl cond_br (CmpResult CondBrTarget CondBrTarget) SideEffectNoResult)
-(rule (cond_br cmp then else)
-      (SideEffectNoResult.Inst
-        (MInst.CondBr then else (cmp_integer_compare cmp))))
-
-;; Construct an IntegerCompare value.
-(decl int_compare (IntCC XReg XReg) IntegerCompare)
-(extern constructor int_compare int_compare)
-
-;; Convert a comparison into a branch test.
-(decl cmp_integer_compare (CmpResult) IntegerCompare)
-
-(rule
-  (cmp_integer_compare (CmpResult.Result res $false))
-  (int_compare (IntCC.NotEqual) res (zero_reg)))
-
-(rule
-  (cmp_integer_compare (CmpResult.Result res $true))
-  (int_compare (IntCC.Equal) res (zero_reg)))
-
-;; Convert a comparison into a boolean value.
-(decl cmp_value (CmpResult) XReg)
-(rule (cmp_value (CmpResult.Result res $false)) res)
-(rule (cmp_value (CmpResult.Result res $true)) (not res))
+(decl fcmp_invert (FCmp) FCmp)
+(rule (fcmp_invert (FCmp.One r)) (FCmp.Zero r))
+(rule (fcmp_invert (FCmp.Zero r)) (FCmp.One r))
 
 ;; Compare two floating point numbers and return a zero/non-zero result.
-(decl emit_fcmp (FloatCC Type FReg FReg) CmpResult)
+(decl emit_fcmp (FloatCC Type FReg FReg) FCmp)
+
+;; Direct codegen for unordered comparisons is not that efficient, so invert
+;; the comparison to get an ordered comparison and generate that. Then invert
+;; the result to produce the final fcmp result.
+(rule 0 (emit_fcmp cc ty a b)
+  (if-let $true (floatcc_unordered cc))
+  (fcmp_invert (emit_fcmp (floatcc_complement cc) ty a b)))
 
 ;; a is not nan && b is not nan
-(rule
-  (emit_fcmp (FloatCC.Ordered) ty a b)
-  (cmp_result (ordered ty a b)))
-
-;; a is nan || b is nan
-;; == !(a is not nan && b is not nan)
-(rule
-  (emit_fcmp (FloatCC.Unordered) ty a b)
-  (cmp_result_invert (ordered ty a b)))
+(rule 1 (emit_fcmp (FloatCC.Ordered) ty a b)
+  (FCmp.One (ordered ty a b)))
 
 ;; a == b
-(rule
-  (emit_fcmp (FloatCC.Equal) ty a b)
-  (cmp_result (rv_feq ty a b)))
+(rule 1 (emit_fcmp (FloatCC.Equal) ty a b)
+  (FCmp.One (rv_feq ty a b)))
 
 ;; a != b
 ;; == !(a == b)
-(rule
-  (emit_fcmp (FloatCC.NotEqual) ty a b)
-  (cmp_result_invert (rv_feq ty a b)))
+(rule 1 (emit_fcmp (FloatCC.NotEqual) ty a b)
+  (FCmp.Zero (rv_feq ty a b)))
 
 ;; a < b || a > b
-(rule
-  (emit_fcmp (FloatCC.OrderedNotEqual) ty a b)
-  (cmp_result (rv_or (rv_flt ty a b) (rv_fgt ty a b))))
-
-;; !(ordered a b) || a == b
-(rule
-  (emit_fcmp (FloatCC.UnorderedOrEqual) ty a b)
-  (cmp_result (rv_or (not (ordered ty a b)) (rv_feq ty a b))))
+(rule 1 (emit_fcmp (FloatCC.OrderedNotEqual) ty a b)
+  (FCmp.One (rv_or (rv_flt ty a b) (rv_fgt ty a b))))
 
 ;; a < b
-(rule
-  (emit_fcmp (FloatCC.LessThan) ty a b)
-  (cmp_result (rv_flt ty a b)))
+(rule 1 (emit_fcmp (FloatCC.LessThan) ty a b)
+  (FCmp.One (rv_flt ty a b)))
 
 ;; a <= b
-(rule
-  (emit_fcmp (FloatCC.LessThanOrEqual) ty a b)
-  (cmp_result (rv_fle ty a b)))
+(rule 1 (emit_fcmp (FloatCC.LessThanOrEqual) ty a b)
+  (FCmp.One (rv_fle ty a b)))
 
 ;; a > b
-(rule
-  (emit_fcmp (FloatCC.GreaterThan) ty a b)
-  (cmp_result (rv_fgt ty a b)))
+(rule 1 (emit_fcmp (FloatCC.GreaterThan) ty a b)
+  (FCmp.One (rv_fgt ty a b)))
 
 ;; a >= b
-(rule
-  (emit_fcmp (FloatCC.GreaterThanOrEqual) ty a b)
-  (cmp_result (rv_fge ty a b)))
-
-;; !(ordered a b) || a < b
-;; == !(ordered a b && a >= b)
-(rule
-  (emit_fcmp (FloatCC.UnorderedOrLessThan) ty a b)
-  (cmp_result_invert (rv_and (ordered ty a b) (rv_fge ty a b))))
-
-;; !(ordered a b) || a <= b
-;; == !(ordered a b && a > b)
-(rule
-  (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) ty a b)
-  (cmp_result_invert (rv_and (ordered ty a b) (rv_fgt ty a b))))
-
-;; !(ordered a b) || a > b
-;; == !(ordered a b && a <= b)
-(rule
-  (emit_fcmp (FloatCC.UnorderedOrGreaterThan) ty a b)
-  (cmp_result_invert (rv_and (ordered ty a b) (rv_fle ty a b))))
-
-;; !(ordered a b) || a >= b
-;; == !(ordered a b && a < b)
-(rule
-  (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) ty a b)
-  (cmp_result_invert (rv_and (ordered ty a b) (rv_flt ty a b))))
+(rule 1 (emit_fcmp (FloatCC.GreaterThanOrEqual) ty a b)
+  (FCmp.One (rv_fge ty a b)))

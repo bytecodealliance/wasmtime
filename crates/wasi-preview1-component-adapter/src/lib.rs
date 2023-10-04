@@ -891,10 +891,17 @@ pub unsafe extern "C" fn fd_read(
 
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
-                let (data, stream_stat) = state
+                let data = match state
                     .import_alloc
                     .with_buffer(ptr, len, || blocking_mode.read(wasi_stream, read_len))
-                    .map_err(|_| ERRNO_IO)?;
+                {
+                    Ok(data) => data,
+                    Err(streams::StreamError::Closed) => {
+                        *nread = 0;
+                        return Ok(());
+                    }
+                    Err(_) => Err(ERRNO_IO)?,
+                };
 
                 assert_eq!(data.as_ptr(), ptr);
                 assert!(data.len() <= len);
@@ -903,16 +910,15 @@ pub unsafe extern "C" fn fd_read(
                 if let StreamType::File(file) = &streams.type_ {
                     file.position
                         .set(file.position.get() + data.len() as filesystem::Filesize);
+                    if len == 0 {
+                        return Err(ERRNO_INTR);
+                    }
                 }
 
                 let len = data.len();
+                *nread = len;
                 forget(data);
-                if stream_stat == crate::streams::StreamStatus::Open && len == 0 {
-                    Err(ERRNO_INTR)
-                } else {
-                    *nread = len;
-                    Ok(())
-                }
+                Ok(())
             }
             Descriptor::Closed(_) => Err(ERRNO_BADF),
         }
@@ -2134,7 +2140,7 @@ impl BlockingMode {
         self,
         input_stream: &streams::InputStream,
         read_len: u64,
-    ) -> Result<(Vec<u8>, streams::StreamStatus), ()> {
+    ) -> Result<Vec<u8>, streams::StreamError> {
         match self {
             BlockingMode::NonBlocking => input_stream.read(read_len),
             BlockingMode::Blocking => input_stream.blocking_read(read_len),
@@ -2163,8 +2169,8 @@ impl BlockingMode {
             BlockingMode::NonBlocking => {
                 let permit = match output_stream.check_write() {
                     Ok(n) => n,
-                    Err(streams::WriteError::Closed) => 0,
-                    Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::Closed) => 0,
+                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
                 };
 
                 let len = bytes.len().min(permit as usize);
@@ -2174,14 +2180,14 @@ impl BlockingMode {
 
                 match output_stream.write(&bytes[..len]) {
                     Ok(_) => {}
-                    Err(streams::WriteError::Closed) => return Ok(0),
-                    Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::Closed) => return Ok(0),
+                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
                 }
 
                 match output_stream.blocking_flush() {
                     Ok(_) => {}
-                    Err(streams::WriteError::Closed) => return Ok(0),
-                    Err(streams::WriteError::LastOperationFailed) => return Err(ERRNO_IO),
+                    Err(streams::StreamError::Closed) => return Ok(0),
+                    Err(streams::StreamError::LastOperationFailed) => return Err(ERRNO_IO),
                 }
 
                 Ok(len)

@@ -52,6 +52,7 @@ async fn run(name: &str) -> anyhow::Result<()> {
     let wasi = WasiCtxBuilder::new()
         .inherit_stdio()
         .inherit_network(ambient_authority())
+        .allow_ip_name_lookup(true)
         .arg(name)
         .build();
 
@@ -88,4 +89,9 @@ async fn tcp_states() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn tcp_sockopts() {
     run("tcp_sockopts").await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn ip_name_lookup() {
+    run("ip_name_lookup").await.unwrap();
 }

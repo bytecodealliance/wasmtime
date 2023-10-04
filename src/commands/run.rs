@@ -936,6 +936,9 @@ impl RunCommand {
         if self.common.wasi.inherit_network == Some(true) {
             builder.inherit_network(ambient_authority());
         }
+        if let Some(enable) = self.common.wasi.allow_ip_name_lookup {
+            builder.allow_ip_name_lookup(enable);
+        }
 
         store.data_mut().preview2_ctx = Some(Arc::new(builder.build()));
         Ok(())

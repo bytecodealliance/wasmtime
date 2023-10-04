@@ -27,6 +27,7 @@ pub struct WasiCtxBuilder {
     insecure_random_seed: u128,
     wall_clock: Box<dyn HostWallClock + Send + Sync>,
     monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
+    allow_ip_name_lookup: bool,
     built: bool,
 }
 
@@ -76,6 +77,7 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
+            allow_ip_name_lookup: false,
             built: false,
         }
     }
@@ -201,21 +203,27 @@ impl WasiCtxBuilder {
     }
 
     /// Add network addresses to the pool.
-    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(&mut self, addrs: A) -> std::io::Result<()> {
-        self.pool.insert(addrs, ambient_authority())
+    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(
+        &mut self,
+        addrs: A,
+    ) -> std::io::Result<&mut Self> {
+        self.pool.insert(addrs, ambient_authority())?;
+        Ok(self)
     }
 
     /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
-    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) {
+    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) -> &mut Self {
         self.pool.insert_socket_addr(addr, ambient_authority());
+        self
     }
 
     /// Add a range of network addresses, accepting any port, to the pool.
     ///
     /// Unlike `insert_ip_net`, this function grants access to any requested port.
-    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) {
+    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) -> &mut Self {
         self.pool
-            .insert_ip_net_port_any(ip_net, ambient_authority())
+            .insert_ip_net_port_any(ip_net, ambient_authority());
+        self
     }
 
     /// Add a range of network addresses, accepting a range of ports, to
@@ -228,14 +236,22 @@ impl WasiCtxBuilder {
         ip_net: ipnet::IpNet,
         ports_start: u16,
         ports_end: Option<u16>,
-    ) {
+    ) -> &mut Self {
         self.pool
-            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority())
+            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority());
+        self
     }
 
     /// Add a range of network addresses with a specific port to the pool.
-    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) {
-        self.pool.insert_ip_net(ip_net, port, ambient_authority())
+    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) -> &mut Self {
+        self.pool.insert_ip_net(ip_net, port, ambient_authority());
+        self
+    }
+
+    /// Allow usage of `wasi:sockets/ip-name-lookup`
+    pub fn allow_ip_name_lookup(&mut self, enable: bool) -> &mut Self {
+        self.allow_ip_name_lookup = enable;
+        self
     }
 
     /// Uses the configured context so far to construct the final `WasiCtx`.
@@ -264,6 +280,7 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
+            allow_ip_name_lookup,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -281,6 +298,7 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
+            allow_ip_name_lookup,
         }
     }
 }
@@ -305,4 +323,5 @@ pub struct WasiCtx {
     pub(crate) stdout: Box<dyn StdoutStream>,
     pub(crate) stderr: Box<dyn StdoutStream>,
     pub(crate) pool: Pool,
+    pub(crate) allow_ip_name_lookup: bool,
 }

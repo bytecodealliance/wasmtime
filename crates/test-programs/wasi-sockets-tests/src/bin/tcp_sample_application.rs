@@ -1,4 +1,3 @@
-use wasi::io::streams;
 use wasi::sockets::network::{
     IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress, Network,
 };
@@ -21,24 +20,17 @@ fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddres
         let client = TcpSocket::new(family).unwrap();
         let (_client_input, client_output) = client.blocking_connect(&net, addr).unwrap();
 
-        let (n, status) = client_output.blocking_write_util(&[]);
-        assert_eq!(n, 0);
-        assert_eq!(status, streams::StreamStatus::Open);
-
-        let (n, status) = client_output.blocking_write_util(first_message);
-        assert_eq!(n, first_message.len());
-        assert_eq!(status, streams::StreamStatus::Open);
+        client_output.blocking_write_util(&[]).unwrap();
+        client_output.blocking_write_util(first_message).unwrap();
     }
 
     {
         let (_accepted, input, _output) = listener.accept().unwrap();
 
-        let (empty_data, status) = input.read(0).unwrap();
+        let empty_data = input.read(0).unwrap();
         assert!(empty_data.is_empty());
-        assert_eq!(status, streams::StreamStatus::Open);
 
-        let (data, status) = input.blocking_read(first_message.len() as u64).unwrap();
-        assert_eq!(status, streams::StreamStatus::Open);
+        let data = input.blocking_read(first_message.len() as u64).unwrap();
 
         // Check that we sent and recieved our message!
         assert_eq!(data, first_message); // Not guaranteed to work but should work in practice.
@@ -49,15 +41,12 @@ fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddres
         let client = TcpSocket::new(family).unwrap();
         let (_client_input, client_output) = client.blocking_connect(&net, addr).unwrap();
 
-        let (n, status) = client_output.blocking_write_util(second_message);
-        assert_eq!(n, second_message.len());
-        assert_eq!(status, streams::StreamStatus::Open);
+        client_output.blocking_write_util(second_message).unwrap();
     }
 
     {
         let (_accepted, input, _output) = listener.accept().unwrap();
-        let (data, status) = input.blocking_read(second_message.len() as u64).unwrap();
-        assert_eq!(status, streams::StreamStatus::Open);
+        let data = input.blocking_read(second_message.len() as u64).unwrap();
 
         // Check that we sent and recieved our message!
         assert_eq!(data, second_message); // Not guaranteed to work but should work in practice.

@@ -195,6 +195,7 @@
 #include <wasmtime/table.h>
 #include <wasmtime/trap.h>
 #include <wasmtime/val.h>
+#include <wasmtime/async.h>
 
 /**
  * \brief Wasmtime version string.

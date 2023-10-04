@@ -196,6 +196,7 @@ interface tcp {
 		/// Hints the desired listen queue size. Implementations are free to ignore this.
 		/// 
 		/// # Typical errors
+		/// - `not-supported`:        (set) The platform does not support changing the backlog size after the initial listen.
 		/// - `invalid-state`:        (set) The socket is already in the Connection state.
 		set-listen-backlog-size: func(value: u64) -> result<_, error-code>
 

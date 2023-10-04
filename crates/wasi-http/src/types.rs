@@ -2,20 +2,12 @@
 //! implementation of the wasi-http API.
 
 use crate::{
-    bindings::http::types::{
-        self, FutureTrailers, IncomingBody, IncomingRequest, Method, OutgoingBody,
-        OutgoingResponse, ResponseOutparam, Scheme,
-    },
-    body::{
-        HostFutureTrailers, HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody,
-        HyperIncomingBody, HyperOutgoingBody,
-    },
+    bindings::http::types::{self, Method, Scheme},
+    body::{HostIncomingBodyBuilder, HyperIncomingBody, HyperOutgoingBody},
 };
 use std::any::Any;
-use std::pin::Pin;
-use std::task;
 use wasmtime::component::Resource;
-use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Table, TableError};
+use wasmtime_wasi::preview2::{AbortOnDropJoinHandle, Subscribe, Table};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 pub struct WasiHttpCtx;
@@ -27,21 +19,17 @@ pub trait WasiHttpView: Send {
     fn new_incoming_request(
         &mut self,
         req: hyper::Request<HyperIncomingBody>,
-    ) -> wasmtime::Result<IncomingRequest> {
+    ) -> wasmtime::Result<Resource<HostIncomingRequest>> {
         let (parts, body) = req.into_parts();
         let body = HostIncomingBodyBuilder {
             body,
             // TODO: this needs to be plumbed through
             between_bytes_timeout: std::time::Duration::from_millis(600 * 1000),
         };
-        Ok(IncomingRequestLens::push(
-            self.table(),
-            HostIncomingRequest {
-                parts,
-                body: Some(body),
-            },
-        )?
-        .id)
+        Ok(self.table().push_resource(HostIncomingRequest {
+            parts,
+            body: Some(body),
+        })?)
     }
 
     fn new_response_outparam(
@@ -49,26 +37,23 @@ pub trait WasiHttpView: Send {
         result: tokio::sync::oneshot::Sender<
             Result<hyper::Response<HyperOutgoingBody>, types::Error>,
         >,
-    ) -> wasmtime::Result<ResponseOutparam> {
-        Ok(ResponseOutparamLens::push(self.table(), HostResponseOutparam { result })?.id)
+    ) -> wasmtime::Result<Resource<HostResponseOutparam>> {
+        let id = self
+            .table()
+            .push_resource(HostResponseOutparam { result })?;
+        Ok(id)
     }
 }
-
-pub type IncomingRequestLens = TableLens<HostIncomingRequest>;
 
 pub struct HostIncomingRequest {
     pub parts: http::request::Parts,
     pub body: Option<HostIncomingBodyBuilder>,
 }
 
-pub type ResponseOutparamLens = TableLens<HostResponseOutparam>;
-
 pub struct HostResponseOutparam {
     pub result:
         tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::Error>>,
 }
-
-pub type OutgoingRequestLens = TableLens<HostOutgoingRequest>;
 
 pub struct HostOutgoingRequest {
     pub method: Method,
@@ -85,8 +70,6 @@ pub struct HostIncomingResponse {
     pub body: Option<HostIncomingBodyBuilder>,
     pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
 }
-
-pub type OutgoingResponseLens = TableLens<HostOutgoingResponse>;
 
 pub struct HostOutgoingResponse {
     pub status: u16,
@@ -167,277 +150,11 @@ impl HostFutureIncomingResponse {
     }
 }
 
-impl std::future::Future for HostFutureIncomingResponse {
-    type Output = anyhow::Result<()>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
-        let s = self.get_mut();
-        match s {
-            Self::Pending(ref mut handle) => match Pin::new(handle).poll(cx) {
-                task::Poll::Pending => task::Poll::Pending,
-                task::Poll::Ready(r) => {
-                    *s = Self::Ready(r);
-                    task::Poll::Ready(Ok(()))
-                }
-            },
-
-            Self::Consumed | Self::Ready(_) => task::Poll::Ready(Ok(())),
+#[async_trait::async_trait]
+impl Subscribe for HostFutureIncomingResponse {
+    async fn ready(&mut self) {
+        if let Self::Pending(handle) = self {
+            *self = Self::Ready(handle.await);
         }
-    }
-}
-
-pub struct TableLens<T> {
-    id: u32,
-    _unused: std::marker::PhantomData<T>,
-}
-
-impl<T: Send + Sync + 'static> TableLens<T> {
-    pub fn from(id: u32) -> Self {
-        Self {
-            id,
-            _unused: std::marker::PhantomData {},
-        }
-    }
-
-    pub fn into(self) -> u32 {
-        self.id
-    }
-
-    #[inline(always)]
-    pub fn push(table: &mut Table, val: T) -> Result<Self, TableError> {
-        let id = table.push(Box::new(val))?;
-        Ok(Self::from(id))
-    }
-
-    #[inline(always)]
-    pub fn get<'t>(&self, table: &'t Table) -> Result<&'t T, TableError> {
-        table.get(self.id)
-    }
-
-    #[inline(always)]
-    pub fn get_mut<'t>(&self, table: &'t mut Table) -> Result<&'t mut T, TableError> {
-        table.get_mut(self.id)
-    }
-
-    #[inline(always)]
-    pub fn delete(&self, table: &mut Table) -> Result<T, TableError> {
-        table.delete(self.id)
-    }
-}
-
-pub trait TableHttpExt {
-    fn push_outgoing_response(
-        &mut self,
-        resp: HostOutgoingResponse,
-    ) -> Result<OutgoingResponse, TableError>;
-    fn get_outgoing_response(&mut self, id: u32) -> Result<&mut HostOutgoingResponse, TableError>;
-    fn delete_outgoing_response(&mut self, id: u32) -> Result<HostOutgoingResponse, TableError>;
-
-    fn push_incoming_response(&mut self, response: HostIncomingResponse)
-        -> Result<u32, TableError>;
-    fn get_incoming_response(&self, id: u32) -> Result<&HostIncomingResponse, TableError>;
-    fn get_incoming_response_mut(
-        &mut self,
-        id: u32,
-    ) -> Result<&mut HostIncomingResponse, TableError>;
-    fn delete_incoming_response(&mut self, id: u32) -> Result<HostIncomingResponse, TableError>;
-
-    fn push_fields(&mut self, fields: HostFields) -> Result<u32, TableError>;
-    fn get_fields(&mut self, id: u32) -> Result<&mut FieldMap, TableError>;
-    fn delete_fields(&mut self, id: u32) -> Result<HostFields, TableError>;
-
-    fn push_future_incoming_response(
-        &mut self,
-        response: HostFutureIncomingResponse,
-    ) -> Result<u32, TableError>;
-    fn get_future_incoming_response(
-        &self,
-        id: u32,
-    ) -> Result<&HostFutureIncomingResponse, TableError>;
-    fn get_future_incoming_response_mut(
-        &mut self,
-        id: u32,
-    ) -> Result<&mut HostFutureIncomingResponse, TableError>;
-    fn delete_future_incoming_response(
-        &mut self,
-        id: u32,
-    ) -> Result<HostFutureIncomingResponse, TableError>;
-
-    fn push_incoming_body(
-        &mut self,
-        body: HostIncomingBody,
-    ) -> Result<Resource<IncomingBody>, TableError>;
-    fn get_incoming_body(
-        &mut self,
-        id: &Resource<IncomingBody>,
-    ) -> Result<&mut HostIncomingBody, TableError>;
-    fn delete_incoming_body(
-        &mut self,
-        id: Resource<IncomingBody>,
-    ) -> Result<HostIncomingBody, TableError>;
-
-    fn push_outgoing_body(&mut self, body: HostOutgoingBody) -> Result<u32, TableError>;
-    fn get_outgoing_body(&mut self, id: u32) -> Result<&mut HostOutgoingBody, TableError>;
-    fn delete_outgoing_body(&mut self, id: u32) -> Result<HostOutgoingBody, TableError>;
-
-    fn push_future_trailers(
-        &mut self,
-        trailers: HostFutureTrailers,
-    ) -> Result<FutureTrailers, TableError>;
-    fn get_future_trailers(
-        &mut self,
-        id: FutureTrailers,
-    ) -> Result<&mut HostFutureTrailers, TableError>;
-    fn delete_future_trailers(
-        &mut self,
-        id: FutureTrailers,
-    ) -> Result<HostFutureTrailers, TableError>;
-}
-
-impl TableHttpExt for Table {
-    fn push_outgoing_response(
-        &mut self,
-        response: HostOutgoingResponse,
-    ) -> Result<OutgoingResponse, TableError> {
-        self.push(Box::new(response))
-    }
-
-    fn get_outgoing_response(
-        &mut self,
-        id: OutgoingResponse,
-    ) -> Result<&mut HostOutgoingResponse, TableError> {
-        self.get_mut(id)
-    }
-
-    fn delete_outgoing_response(
-        &mut self,
-        id: OutgoingResponse,
-    ) -> Result<HostOutgoingResponse, TableError> {
-        self.delete(id)
-    }
-
-    fn push_incoming_response(
-        &mut self,
-        response: HostIncomingResponse,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(response))
-    }
-    fn get_incoming_response(&self, id: u32) -> Result<&HostIncomingResponse, TableError> {
-        self.get::<HostIncomingResponse>(id)
-    }
-    fn get_incoming_response_mut(
-        &mut self,
-        id: u32,
-    ) -> Result<&mut HostIncomingResponse, TableError> {
-        self.get_mut::<HostIncomingResponse>(id)
-    }
-    fn delete_incoming_response(&mut self, id: u32) -> Result<HostIncomingResponse, TableError> {
-        let resp = self.delete::<HostIncomingResponse>(id)?;
-        Ok(resp)
-    }
-
-    fn push_fields(&mut self, fields: HostFields) -> Result<u32, TableError> {
-        match fields {
-            HostFields::Ref { parent, .. } => self.push_child(Box::new(fields), parent),
-            HostFields::Owned { .. } => self.push(Box::new(fields)),
-        }
-    }
-    fn get_fields(&mut self, id: u32) -> Result<&mut FieldMap, TableError> {
-        let fields = self.get_mut::<HostFields>(id)?;
-        if let HostFields::Ref { parent, get_fields } = *fields {
-            let entry = self.get_any_mut(parent)?;
-            return Ok(get_fields(entry));
-        }
-
-        match self.get_mut::<HostFields>(id)? {
-            HostFields::Owned { fields } => Ok(fields),
-            // NB: ideally the `if let` above would go here instead. That makes
-            // the borrow-checker unhappy. Unclear why. If you, dear reader, can
-            // refactor this to remove the `unreachable!` please do.
-            HostFields::Ref { .. } => unreachable!(),
-        }
-    }
-    fn delete_fields(&mut self, id: u32) -> Result<HostFields, TableError> {
-        let fields = self.delete::<HostFields>(id)?;
-        Ok(fields)
-    }
-
-    fn push_future_incoming_response(
-        &mut self,
-        response: HostFutureIncomingResponse,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(response))
-    }
-    fn get_future_incoming_response(
-        &self,
-        id: u32,
-    ) -> Result<&HostFutureIncomingResponse, TableError> {
-        self.get::<HostFutureIncomingResponse>(id)
-    }
-    fn get_future_incoming_response_mut(
-        &mut self,
-        id: u32,
-    ) -> Result<&mut HostFutureIncomingResponse, TableError> {
-        self.get_mut::<HostFutureIncomingResponse>(id)
-    }
-    fn delete_future_incoming_response(
-        &mut self,
-        id: u32,
-    ) -> Result<HostFutureIncomingResponse, TableError> {
-        self.delete(id)
-    }
-
-    fn push_incoming_body(
-        &mut self,
-        body: HostIncomingBody,
-    ) -> Result<Resource<IncomingBody>, TableError> {
-        Ok(Resource::new_own(self.push(Box::new(body))?))
-    }
-
-    fn get_incoming_body(
-        &mut self,
-        id: &Resource<IncomingBody>,
-    ) -> Result<&mut HostIncomingBody, TableError> {
-        self.get_mut(id.rep())
-    }
-
-    fn delete_incoming_body(
-        &mut self,
-        id: Resource<IncomingBody>,
-    ) -> Result<HostIncomingBody, TableError> {
-        self.delete(id.rep())
-    }
-
-    fn push_outgoing_body(&mut self, body: HostOutgoingBody) -> Result<OutgoingBody, TableError> {
-        Ok(self.push(Box::new(body))?)
-    }
-
-    fn get_outgoing_body(&mut self, id: u32) -> Result<&mut HostOutgoingBody, TableError> {
-        self.get_mut(id)
-    }
-
-    fn delete_outgoing_body(&mut self, id: u32) -> Result<HostOutgoingBody, TableError> {
-        self.delete(id)
-    }
-
-    fn push_future_trailers(
-        &mut self,
-        trailers: HostFutureTrailers,
-    ) -> Result<FutureTrailers, TableError> {
-        self.push(Box::new(trailers))
-    }
-
-    fn get_future_trailers(
-        &mut self,
-        id: FutureTrailers,
-    ) -> Result<&mut HostFutureTrailers, TableError> {
-        self.get_mut(id)
-    }
-
-    fn delete_future_trailers(
-        &mut self,
-        id: FutureTrailers,
-    ) -> Result<HostFutureTrailers, TableError> {
-        self.delete(id)
     }
 }

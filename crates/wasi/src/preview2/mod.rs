@@ -15,12 +15,17 @@
 //! `pub mod legacy` with an off-by-default feature flag, and after 2
 //! releases, retire and remove that code from our tree.
 
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 mod clocks;
 pub mod command;
 mod ctx;
 mod error;
 mod filesystem;
 mod host;
+mod ip_name_lookup;
 mod network;
 pub mod pipe;
 mod poll;
@@ -37,13 +42,10 @@ pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
-pub use self::poll::{ClosureFuture, MakeFuture, Pollable, PollableFuture};
+pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
-pub use self::stream::{
-    HostInputStream, HostOutputStream, InputStream, OutputStream, OutputStreamError,
-    StreamRuntimeError, StreamState,
-};
+pub use self::stream::{HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError};
 pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
@@ -64,7 +66,7 @@ pub mod bindings {
                 ",
                 tracing: true,
                 trappable_error_type: {
-                    "wasi:io/streams"::"write-error": Error,
+                    "wasi:io/streams"::"stream-error": Error,
                     "wasi:filesystem/types"::"error-code": Error,
                 },
                 with: {
@@ -141,8 +143,11 @@ pub mod bindings {
                 "poll-one",
             ],
         },
+        with: {
+            "wasi:sockets/ip-name-lookup/resolve-address-stream": super::ip_name_lookup::ResolveAddressStream,
+        },
         trappable_error_type: {
-            "wasi:io/streams"::"write-error": Error,
+            "wasi:io/streams"::"stream-error": Error,
             "wasi:filesystem/types"::"error-code": Error,
             "wasi:sockets/network"::"error-code": Error,
         },
@@ -193,14 +198,9 @@ impl<T> From<tokio::task::JoinHandle<T>> for AbortOnDropJoinHandle<T> {
         AbortOnDropJoinHandle(jh)
     }
 }
-impl<T> std::future::Future for AbortOnDropJoinHandle<T> {
+impl<T> Future for AbortOnDropJoinHandle<T> {
     type Output = T;
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        use std::pin::Pin;
-        use std::task::Poll;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match Pin::new(&mut self.as_mut().0).poll(cx) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(r) => Poll::Ready(r.expect("child task panicked")),
@@ -208,22 +208,25 @@ impl<T> std::future::Future for AbortOnDropJoinHandle<T> {
     }
 }
 
-pub fn spawn<F, G>(f: F) -> AbortOnDropJoinHandle<G>
+pub fn spawn<F>(f: F) -> AbortOnDropJoinHandle<F::Output>
 where
-    F: std::future::Future<Output = G> + Send + 'static,
-    G: Send + 'static,
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
 {
-    let j = match tokio::runtime::Handle::try_current() {
-        Ok(_) => tokio::task::spawn(f),
-        Err(_) => {
-            let _enter = RUNTIME.enter();
-            tokio::task::spawn(f)
-        }
-    };
+    let j = with_ambient_tokio_runtime(|| tokio::task::spawn(f));
     AbortOnDropJoinHandle(j)
 }
 
-pub fn in_tokio<F: std::future::Future>(f: F) -> F::Output {
+pub fn spawn_blocking<F, R>(f: F) -> AbortOnDropJoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let j = with_ambient_tokio_runtime(|| tokio::task::spawn_blocking(f));
+    AbortOnDropJoinHandle(j)
+}
+
+pub fn in_tokio<F: Future>(f: F) -> F::Output {
     match tokio::runtime::Handle::try_current() {
         Ok(h) => {
             let _enter = h.enter();
@@ -243,5 +246,16 @@ fn with_ambient_tokio_runtime<R>(f: impl FnOnce() -> R) -> R {
             let _enter = RUNTIME.enter();
             f()
         }
+    }
+}
+
+fn poll_noop<F>(future: Pin<&mut F>) -> Option<F::Output>
+where
+    F: Future,
+{
+    let mut task = Context::from_waker(futures::task::noop_waker_ref());
+    match future.poll(&mut task) {
+        Poll::Ready(result) => Some(result),
+        Poll::Pending => None,
     }
 }

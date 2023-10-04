@@ -5,13 +5,12 @@ use crate::preview2::bindings::{
     sockets::tcp::{self, ShutdownType},
 };
 use crate::preview2::tcp::{TcpSocket, TcpState};
-use crate::preview2::{Pollable, PollableFuture, WasiView};
+use crate::preview2::{Pollable, WasiView};
 use cap_net_ext::{AddressFamily, Blocking, PoolExt, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
-use std::any::Any;
 use std::net::{IpAddr, SocketAddr};
 use tokio::io::Interest;
 use wasmtime::component::Resource;
@@ -39,7 +38,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         validate_unicast(&local_address)?;
         validate_address_family(&socket, &local_address)?;
 
-        let binder = network.0.tcp_binder(local_address)?;
+        let binder = network.pool.tcp_binder(local_address)?;
 
         // Perform the OS bind call.
         binder
@@ -99,7 +98,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             validate_remote_address(&remote_address)?;
             validate_address_family(&socket, &remote_address)?;
 
-            let connecter = network.0.tcp_connecter(remote_address)?;
+            let connecter = network.pool.tcp_connecter(remote_address)?;
 
             // Do an OS `connect`. Our socket is non-blocking, so it'll either...
             {
@@ -196,7 +195,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         socket
             .tcp_socket()
             .as_socketlike_view::<TcpListener>()
-            .listen(None)
+            .listen(socket.listen_backlog_size)
             .map_err(|error| match error.errno() {
                 #[cfg(windows)]
                 Some(Errno::MFILE) => ErrorCode::OutOfMemory.into(), // We're not trying to create a new socket. Rewrite it to less surprising error code.
@@ -368,16 +367,41 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         this: Resource<tcp::TcpSocket>,
         value: u64,
     ) -> Result<(), network::Error> {
-        let table = self.table();
-        let socket = table.get_resource(&this)?;
+        const MIN_BACKLOG: i32 = 1;
+        const MAX_BACKLOG: i32 = i32::MAX; // OS'es will most likely limit it down even further.
+
+        let table = self.table_mut();
+        let socket = table.get_resource_mut(&this)?;
+
+        // Silently clamp backlog size. This is OK for us to do, because operating systems do this too.
+        let value = value
+            .try_into()
+            .unwrap_or(i32::MAX)
+            .clamp(MIN_BACKLOG, MAX_BACKLOG);
 
         match socket.tcp_state {
-            TcpState::Listening => {}
-            _ => return Err(ErrorCode::InvalidState.into()),
-        }
+            TcpState::Default | TcpState::BindStarted | TcpState::Bound => {
+                // Socket not listening yet. Stash value for first invocation to `listen`.
+                socket.listen_backlog_size = Some(value);
 
-        let value = value.try_into().map_err(|_| ErrorCode::OutOfMemory)?;
-        Ok(rustix::net::listen(socket.tcp_socket(), value)?)
+                Ok(())
+            }
+            TcpState::Listening => {
+                // Try to update the backlog by calling `listen` again.
+                // Not all platforms support this. We'll only update our own value if the OS supports changing the backlog size after the fact.
+
+                rustix::net::listen(socket.tcp_socket(), value)
+                    .map_err(|_| ErrorCode::NotSupported)?;
+
+                socket.listen_backlog_size = Some(value);
+
+                Ok(())
+            }
+            TcpState::Connected | TcpState::ConnectFailed => Err(ErrorCode::InvalidState.into()),
+            TcpState::Connecting | TcpState::ConnectReady | TcpState::ListenStarted => {
+                Err(ErrorCode::ConcurrencyConflict.into())
+            }
+        }
     }
 
     fn keep_alive(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, network::Error> {
@@ -513,38 +537,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     }
 
     fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
-        fn make_tcp_socket_future<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-            let socket = stream
-                .downcast_mut::<TcpSocket>()
-                .expect("downcast to TcpSocket failed");
-
-            // Some states are ready immediately.
-            match socket.tcp_state {
-                TcpState::BindStarted | TcpState::ListenStarted | TcpState::ConnectReady => {
-                    return Box::pin(async { Ok(()) })
-                }
-                _ => {}
-            }
-
-            // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-            let join = Box::pin(async move {
-                socket
-                    .inner
-                    .ready(Interest::READABLE | Interest::WRITABLE)
-                    .await
-                    .unwrap();
-                Ok(())
-            });
-
-            join
-        }
-
-        let pollable = Pollable::TableEntry {
-            index: this.rep(),
-            make_future: make_tcp_socket_future,
-        };
-
-        Ok(self.table_mut().push_child_resource(pollable, &this)?)
+        crate::preview2::poll::subscribe(self.table_mut(), this)
     }
 
     fn shutdown(
@@ -595,7 +588,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                 | TcpState::ConnectReady => {}
 
                 TcpState::Listening | TcpState::Connecting | TcpState::Connected => {
-                    match rustix::net::shutdown(&dropped.inner, rustix::net::Shutdown::ReadWrite) {
+                    match rustix::net::shutdown(&*dropped.inner, rustix::net::Shutdown::ReadWrite) {
                         Ok(()) | Err(Errno::NOTCONN) => {}
                         Err(err) => Err(err).unwrap(),
                     }
