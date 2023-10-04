@@ -469,11 +469,22 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     ) -> Result<(), network::Error> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
+        let value = normalize_setsockopt_buffer_size(value);
 
-        Ok(sockopt::set_socket_recv_buffer_size(
-            socket.tcp_socket(),
-            normalize_setsockopt_buffer_size(value),
-        )?)
+        match sockopt::set_socket_recv_buffer_size(socket.tcp_socket(), value) {
+            // Most platforms (Linux, Windows, Fuchsia, Solaris, Illumos, Haiku, ESP-IDF, ..and more?) treat the value
+            // passed to SO_SNDBUF/SO_RCVBUF as a performance tuning hint and silently clamp the input if it exceeds
+            // their capability.
+            // As far as I can see, only the *BSD family views this option as a hard requirement and fails when the
+            // value is out of range. We normalize this behavior in favor of the more commonly understood
+            // "performance hint" semantics. In other words; even ENOBUFS is "Ok".
+            // A future improvement could be to query the corresponding sysctl on *BSD platforms and clamp the input
+            // `size` ourselves, to completely close the gap with other platforms.
+            Err(Errno::NOBUFS) => Ok(()),
+            r => r,
+        }?;
+
+        Ok(())
     }
 
     fn send_buffer_size(&mut self, this: Resource<tcp::TcpSocket>) -> Result<u64, network::Error> {
@@ -491,11 +502,14 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     ) -> Result<(), network::Error> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
+        let value = normalize_setsockopt_buffer_size(value);
 
-        Ok(sockopt::set_socket_send_buffer_size(
-            socket.tcp_socket(),
-            normalize_setsockopt_buffer_size(value),
-        )?)
+        match sockopt::set_socket_send_buffer_size(socket.tcp_socket(), value) {
+            Err(Errno::NOBUFS) => Ok(()), // See `set_receive_buffer_size`
+            r => r,
+        }?;
+
+        Ok(())
     }
 
     fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
