@@ -60,7 +60,8 @@ pub struct TcpSocket {
     /// The desired listen queue size. Set to None to use the system's default.
     pub(crate) listen_backlog_size: Option<i32>,
 
-    pub(crate) family: AddressFamily,}
+    pub(crate) family: AddressFamily,
+}
 
 pub(crate) struct TcpReadStream {
     stream: Arc<tokio::net::TcpStream>,
