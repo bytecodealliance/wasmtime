@@ -44,7 +44,9 @@ pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
-pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
+pub use self::stdio::{
+    stderr, stdin, stdout, IsATTY, Stderr, Stdin, StdinStream, Stdout, StdoutStream,
+};
 pub use self::stream::{HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError};
 pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
