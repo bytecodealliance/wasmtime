@@ -102,8 +102,16 @@ impl Drop for Server {
         tracing::debug!("shutting down http1 server");
         // Force a connection to happen in case one hasn't happened already.
         let _ = TcpStream::connect(&self.addr);
+
+        // If the worker fails with an error, report it here but don't panic.
+        // Some tests don't make a connection so the error will be that the tcp
+        // stream created above is closed immediately afterwards. Let the test
+        // independently decide if it failed or not, and this should be in the
+        // logs to assist with debugging if necessary.
         let worker = self.worker.take().unwrap();
-        worker.join().unwrap().unwrap();
+        if let Err(e) = worker.join().unwrap() {
+            eprintln!("worker failed with error {e:?}");
+        }
     }
 }
 
