@@ -2154,9 +2154,10 @@
 (rule 1 (val_already_extended (uextend _)) $true)
 (rule 1 (val_already_extended (sextend _)) $true)
 
-;; The result of `icmp` is zero or one, meaning that it's already sign extended
-;; to the full register width.
+;; The result of `icmp`/`fcmp` is zero or one, meaning that it's already sign
+;; extended to the full register width.
 (rule 1 (val_already_extended (icmp _ _ _)) $true)
+(rule 1 (val_already_extended (fcmp _ _ _)) $true)
 
 (type ExtendOp
   (enum
