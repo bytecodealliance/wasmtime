@@ -18,6 +18,7 @@ pub(crate) mod known_symbol;
 pub mod layout;
 pub(crate) mod libcall;
 mod memflags;
+pub mod pcc;
 mod progpoint;
 mod sourceloc;
 pub mod stackslot;

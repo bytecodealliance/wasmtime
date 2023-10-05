@@ -17,7 +17,7 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
-use crate::facts::*;
+use crate::ir::pcc::*;
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
 use crate::ir::RelSourceLoc;

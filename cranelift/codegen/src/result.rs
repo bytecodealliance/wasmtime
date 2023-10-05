@@ -2,7 +2,7 @@
 
 use regalloc2::checker::CheckerErrors;
 
-use crate::facts::FactError;
+use crate::ir::pcc::PccError;
 use crate::{ir::Function, verifier::VerifierErrors};
 use std::string::String;
 
@@ -44,7 +44,7 @@ pub enum CodegenError {
     Regalloc(CheckerErrors),
 
     /// Proof-carrying-code validation error.
-    Pcc(FactError),
+    Pcc(PccError),
 }
 
 /// A convenient alias for a `Result` that uses `CodegenError` as the error type.

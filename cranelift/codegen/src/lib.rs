@@ -44,7 +44,6 @@ pub mod cursor;
 pub mod data_value;
 pub mod dbg;
 pub mod dominator_tree;
-pub mod facts;
 pub mod flowgraph;
 pub mod ir;
 pub mod isa;

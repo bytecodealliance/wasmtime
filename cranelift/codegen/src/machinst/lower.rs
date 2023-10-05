@@ -6,9 +6,9 @@
 // top of it, e.g. the side-effect/coloring analysis and the scan support.
 
 use crate::entity::SecondaryMap;
-use crate::facts::{FactError, FactResult};
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
+use crate::ir::pcc::{PccError, PccResult};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
     GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, RelSourceLoc, Type,
@@ -19,7 +19,6 @@ use crate::machinst::{
     SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
     ValueRegs, Writable,
 };
-use crate::CodegenError;
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
@@ -150,10 +149,8 @@ pub trait LowerBackend {
 
     /// Check any facts about an instruction, given VCode with facts
     /// on VRegs.
-    fn check_fact(&self, inst: &Self::MInst, vcode: &VCode<Self::MInst>) -> FactResult<()> {
-        Err(FactError::new(
-            "Proof-carrying code support not implemented for this backend",
-        ))
+    fn check_fact(&self, _inst: &Self::MInst, _vcode: &VCode<Self::MInst>) -> PccResult<()> {
+        Err(PccError::Unimplemented)
     }
 }
 

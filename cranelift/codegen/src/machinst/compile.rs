@@ -1,7 +1,7 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
 use crate::dominator_tree::DominatorTree;
-use crate::facts;
+use crate::ir::pcc;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
@@ -49,7 +49,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
 
     // Perform validation of proof-carrying-code facts, if requested.
     if b.flags().enable_pcc() {
-        facts::check_facts(f, &vcode, b).map_err(CodegenError::Pcc)?;
+        pcc::check_facts(f, &vcode, b).map_err(CodegenError::Pcc)?;
     }
 
     // Perform register allocation.

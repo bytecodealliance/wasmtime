@@ -1,7 +1,7 @@
 //! Data flow graph tracking Instructions, Values, and blocks.
 
 use crate::entity::{self, PrimaryMap, SecondaryMap};
-use crate::facts::Fact;
+use crate::ir::pcc::Fact;
 use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};

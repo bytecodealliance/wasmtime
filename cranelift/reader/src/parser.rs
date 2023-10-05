@@ -9,10 +9,10 @@ use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
-use cranelift_codegen::facts::{Fact, MemoryRegion};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
+use cranelift_codegen::ir::pcc::{Fact, MemoryRegion};
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -2005,7 +2005,7 @@ impl<'a> Parser<'a> {
         let fact = if self.token() == Some(Token::Bang) {
             self.consume();
             // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
-            Some(self.parse_fact(ctx)?)
+            Some(self.parse_fact()?)
         } else {
             None
         };
@@ -2025,10 +2025,14 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    /// Parse a "fact" for proof-carrying code, attached to a value.
-    ///
-    /// TODO: grammar rule
-    fn parse_fact(&mut self, ctx: &mut Context) -> ParseResult<Fact> {
+    // Parse a "fact" for proof-carrying code, attached to a value.
+    //
+    // fact ::= "max" "(" bit-width "," max-value ")"
+    //        | "points_to" "(" valid-range ")"
+    // bit-width ::= uimm64
+    // max-value ::= uimm64
+    // valid-range ::= uimm64
+    fn parse_fact(&mut self) -> ParseResult<Fact> {
         match self.token() {
             Some(Token::Identifier("max")) => {
                 self.consume();
@@ -2046,7 +2050,7 @@ impl<'a> Parser<'a> {
                         return Err(self.error("bitwidth must be <= 64 bits on a `max` fact"));
                     }
                     64 => u64::MAX,
-                    x => (1u64 << bit_width) - 1,
+                    x => (1u64 << x) - 1,
                 };
                 if max > bit_width_max {
                     return Err(
@@ -2054,7 +2058,7 @@ impl<'a> Parser<'a> {
                     );
                 }
                 Ok(Fact::ValueMax {
-                    bit_width: u8::try_from(bit_width).unwrap(),
+                    bit_width: u16::try_from(bit_width).unwrap(),
                     max: max.into(),
                 })
             }
@@ -2089,7 +2093,7 @@ impl<'a> Parser<'a> {
             let fact = if self.token() == Some(Token::Bang) {
                 self.consume();
                 // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
-                Some(self.parse_fact(ctx)?)
+                Some(self.parse_fact()?)
             } else {
                 None
             };
@@ -2104,7 +2108,7 @@ impl<'a> Parser<'a> {
                 let fact = if self.token() == Some(Token::Bang) {
                     self.consume();
                     // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
-                    Some(self.parse_fact(ctx)?)
+                    Some(self.parse_fact()?)
                 } else {
                     None
                 };
