@@ -23,7 +23,7 @@ interface streams {
     /// Contextual error information about the last failure that happened on
     /// a read, write, or flush from an `input-stream` or `output-stream`.
     ///
-    /// This type is returned through the `stream-error` type whenever an
+    /// `stream-error` values are returned whenever an
     /// operation on a stream directly fails or an error is discovered
     /// after-the-fact, for example when a write's failure shows up through a
     /// later `flush` or `check-write`.
