@@ -560,11 +560,11 @@ block0(v0: i8):
 ;   ld t1,1160(nominal_sp)
 ;   ld t2,1168(nominal_sp)
 ;   add t1,t2,t1
-;   ld t4,1144(nominal_sp)
 ;   ld a7,1152(nominal_sp)
+;   ld t4,1144(nominal_sp)
 ;   add t2,a7,t4
-;   ld s5,1128(nominal_sp)
 ;   ld s3,1136(nominal_sp)
+;   ld s5,1128(nominal_sp)
 ;   add a6,s3,s5
 ;   ld a7,1112(nominal_sp)
 ;   ld t3,1120(nominal_sp)
@@ -584,8 +584,8 @@ block0(v0: i8):
 ;   ld s3,1032(nominal_sp)
 ;   ld s4,1040(nominal_sp)
 ;   add s3,s4,s3
-;   ld s5,1016(nominal_sp)
 ;   ld s4,1024(nominal_sp)
+;   ld s5,1016(nominal_sp)
 ;   add s4,s4,s5
 ;   ld s5,1008(nominal_sp)
 ;   add s5,s5,s6
@@ -766,11 +766,11 @@ block0(v0: i8):
 ;   ld t1, 0x488(sp)
 ;   ld t2, 0x490(sp)
 ;   add t1, t2, t1
-;   ld t4, 0x478(sp)
 ;   ld a7, 0x480(sp)
+;   ld t4, 0x478(sp)
 ;   add t2, a7, t4
-;   ld s5, 0x468(sp)
 ;   ld s3, 0x470(sp)
+;   ld s5, 0x468(sp)
 ;   add a6, s3, s5
 ;   ld a7, 0x458(sp)
 ;   ld t3, 0x460(sp)
@@ -790,8 +790,8 @@ block0(v0: i8):
 ;   ld s3, 0x408(sp)
 ;   ld s4, 0x410(sp)
 ;   add s3, s4, s3
-;   ld s5, 0x3f8(sp)
 ;   ld s4, 0x400(sp)
+;   ld s5, 0x3f8(sp)
 ;   add s4, s4, s5
 ;   ld s5, 0x3f0(sp)
 ;   add s5, s5, s6
