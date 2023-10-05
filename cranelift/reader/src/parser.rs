@@ -9,6 +9,7 @@ use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
+use cranelift_codegen::facts::{Fact, MemoryRegion};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
@@ -1943,7 +1944,7 @@ impl<'a> Parser<'a> {
             // between the parsing of value aliases and the parsing of instructions.
             //
             // inst-results ::= Value(v) { "," Value(v) }
-            let results = self.parse_inst_results()?;
+            let results = self.parse_inst_results(ctx)?;
 
             for result in &results {
                 while ctx.function.dfg.num_values() <= result.index() {
@@ -2024,36 +2025,24 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    /// Parse a "fact" for proof-carrying code, attached to a value.
+    ///
+    /// TODO: grammar rule
     fn parse_fact(&mut self, ctx: &mut Context) -> ParseResult<Fact> {
         match self.token() {
             Some(Token::Identifier("max")) => {
                 self.consume();
                 self.match_token(Token::LPar, "`max` fact needs an opening `(`")?;
-                let bit_width = self.match_uimm64("expected a bit width for `max` fact")?;
-                self.match_token(Token::Comma, "expected a comma")?;
                 let max = self.match_uimm64("expected a max value for `max` fact")?;
                 self.match_token(Token::RPar, "`max` fact needs a closing `)`")?;
-                Ok(Fact::ValueMax {
-                    bit_width: match u8::try_from(bit_width) {
-                        Ok(bw) => bw,
-                        Err(e) => return Err(self.error(format!("bit width is out of range: {e}"))),
-                    },
-                    max: max.into(),
-                })
+                Ok(Fact::ValueMax { max: max.into() })
             }
             Some(Token::Identifier("points_to")) => {
                 self.consume();
                 self.match_token(Token::LPar, "expected a `(`")?;
-                let pointer_bit_width =
-                    self.match_uimm64("expected a bit width for `points_to` fact")?;
-                self.match_token(Token::Comma, "expected a comma")?;
                 let bound = self.match_uimm64("expected a region for `points_to` fact")?;
                 self.match_token(Token::RPar, "expected a `)`")?;
                 Ok(Fact::PointsTo {
-                    pointer_bit_width: match u8::try_from(bit_width) {
-                        Ok(bw) => bw,
-                        Err(e) => return Err(self.error(&format!("bit width is out of range: {e}"))),
-                    },
                     region: MemoryRegion {
                         bound: bound.into(),
                     },
@@ -2067,7 +2056,7 @@ impl<'a> Parser<'a> {
     //
     // inst-results ::= Value(v) { "," Value(v) }
     //
-    fn parse_inst_results(&mut self) -> ParseResult<SmallVec<[Value; 1]>> {
+    fn parse_inst_results(&mut self, ctx: &mut Context) -> ParseResult<SmallVec<[Value; 1]>> {
         // Result value numbers.
         let mut results = SmallVec::new();
 
@@ -2078,10 +2067,29 @@ impl<'a> Parser<'a> {
 
             results.push(v);
 
+            let fact = if self.token() == Some(Token::Bang) {
+                self.consume();
+                // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
+                Some(self.parse_fact(ctx)?)
+            } else {
+                None
+            };
+            ctx.function.dfg.facts[v] = fact;
+
             // inst-results ::= Value(v) * { "," Value(v) }
             while self.optional(Token::Comma) {
                 // inst-results ::= Value(v) { "," * Value(v) }
-                results.push(self.match_value("expected result value")?);
+                let v = self.match_value("expected result value")?;
+                results.push(v);
+
+                let fact = if self.token() == Some(Token::Bang) {
+                    self.consume();
+                    // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
+                    Some(self.parse_fact(ctx)?)
+                } else {
+                    None
+                };
+                ctx.function.dfg.facts[v] = fact;
             }
         }
 

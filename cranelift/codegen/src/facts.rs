@@ -22,15 +22,11 @@ pub enum Fact {
     /// TODO FITZGEN
     ValueMax {
         /// TODO FITZGEN
-        bit_width: u8,
-        /// TODO FITZGEN
         max: u64,
     },
 
     /// TODO FITZGEN
     PointsTo {
-        /// TODO FITZGEN
-        pointer_bit_width: u8,
         /// TODO FITZGEN
         region: MemoryRegion,
     },
@@ -42,9 +38,9 @@ pub enum Fact {
 /// TODO FITZGEN
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MemoryRegion {
-    // Includes both the actual memory bound as well as any guard
-    // pages. Exclusive.
-    bound: u64,
+    /// Includes both the actual memory bound as well as any guard
+    /// pages. Exclusive.
+    pub bound: u64,
 }
 
 // enum MemoryType {
@@ -78,22 +74,15 @@ impl Fact {
     }
 
     /// TODO FITZGEN
+    //
+    // TODO: add bitwidth of actual operation
     pub fn check_add(lhs: Self, rhs: Self, result: Fact) -> FactResult<()> {
         match (lhs, rhs, result) {
             (
-                Fact::ValueMax {
-                    bit_width: bw_lhs,
-                    max: lhs,
-                },
-                Fact::ValueMax {
-                    bit_width: bw_rhs,
-                    max: rhs,
-                },
-                Fact::ValueMax {
-                    bit_width: bw_result,
-                    max: result,
-                },
-            ) if bw_lhs == bw_rhs && bw_rhs == bw_result => {
+                Fact::ValueMax { max: lhs },
+                Fact::ValueMax { max: rhs },
+                Fact::ValueMax { max: result },
+            ) => {
                 let computed_max = lhs
                     .checked_add(rhs)
                     .ok_or_else(|| FactError::new("value max overflow"))?;
@@ -104,33 +93,19 @@ impl Fact {
             }
 
             (
-                Fact::ValueMax {
-                    bit_width: bw_offset,
-                    max,
-                },
+                Fact::ValueMax { max },
+                Fact::PointsTo { region },
                 Fact::PointsTo {
-                    pointer_bit_width: bw_ptr,
-                    region,
-                },
-                Fact::PointsTo {
-                    pointer_bit_width: bw_ptr_result,
                     region: result_region,
                 },
             )
             | (
+                Fact::PointsTo { region },
+                Fact::ValueMax { max },
                 Fact::PointsTo {
-                    pointer_bit_width: bw_ptr,
-                    region,
-                },
-                Fact::ValueMax {
-                    bit_width: bw_offset,
-                    max,
-                },
-                Fact::PointsTo {
-                    pointer_bit_width: bw_ptr_result,
                     region: result_region,
                 },
-            ) if bw_ptr == bw_offset && bw_offset == bw_ptr_result => {
+            ) => {
                 let computed_region = MemoryRegion {
                     bound: region
                         .bound
@@ -157,7 +132,6 @@ impl Fact {
 
         match address {
             Fact::PointsTo {
-                pointer_bit_width: _,
                 region: MemoryRegion { bound },
             } => ensure!(
                 u64::from(offset_and_size) <= bound,
