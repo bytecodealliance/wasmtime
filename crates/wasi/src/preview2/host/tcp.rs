@@ -270,6 +270,22 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
                 _ => Into::<network::Error>::into(error),
             })?;
+
+        #[cfg(target_os = "macos")]
+        {
+            // Manually inherit buffer size from listener. We only have to
+            // do this on platforms that don't already do this automatically
+            // and only if a specific buffer size was explicitly set on the listener.
+
+            if let Some(size) = socket.receive_buffer_size {
+                _ = sockopt::set_socket_recv_buffer_size(&connection, size); // Ignore potential error.
+            }
+
+            if let Some(size) = socket.send_buffer_size {
+                _ = sockopt::set_socket_send_buffer_size(&connection, size); // Ignore potential error.
+            }
+        }
+
         let mut tcp_socket = TcpSocket::from_tcp_stream(connection, socket.family)?;
 
         // Mark the socket as connected so that we can exit early from methods like `start-bind`.
@@ -491,8 +507,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         this: Resource<tcp::TcpSocket>,
         value: u64,
     ) -> Result<(), network::Error> {
-        let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let table = self.table_mut();
+        let socket = table.get_resource_mut(&this)?;
         let value = normalize_setsockopt_buffer_size(value);
 
         match sockopt::set_socket_recv_buffer_size(socket.tcp_socket(), value) {
@@ -507,6 +523,11 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             Err(Errno::NOBUFS) => Ok(()),
             r => r,
         }?;
+
+        #[cfg(target_os = "macos")]
+        {
+            socket.receive_buffer_size = Some(value);
+        }
 
         Ok(())
     }
@@ -524,14 +545,19 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         this: Resource<tcp::TcpSocket>,
         value: u64,
     ) -> Result<(), network::Error> {
-        let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let table = self.table_mut();
+        let socket = table.get_resource_mut(&this)?;
         let value = normalize_setsockopt_buffer_size(value);
 
         match sockopt::set_socket_send_buffer_size(socket.tcp_socket(), value) {
             Err(Errno::NOBUFS) => Ok(()), // See `set_receive_buffer_size`
             r => r,
         }?;
+
+        #[cfg(target_os = "macos")]
+        {
+            socket.send_buffer_size = Some(value);
+        }
 
         Ok(())
     }

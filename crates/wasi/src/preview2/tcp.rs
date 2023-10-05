@@ -61,6 +61,13 @@ pub struct TcpSocket {
     pub(crate) listen_backlog_size: Option<i32>,
 
     pub(crate) family: AddressFamily,
+
+    /// The manually configured buffer size. `None` means: no preference, use system default.
+    #[cfg(target_os = "macos")]
+    pub(crate) receive_buffer_size: Option<usize>,
+    /// The manually configured buffer size. `None` means: no preference, use system default.
+    #[cfg(target_os = "macos")]
+    pub(crate) send_buffer_size: Option<usize>,
 }
 
 pub(crate) struct TcpReadStream {
@@ -275,6 +282,10 @@ impl TcpSocket {
             tcp_state: TcpState::Default,
             listen_backlog_size: None,
             family,
+            #[cfg(target_os = "macos")]
+            receive_buffer_size: None,
+            #[cfg(target_os = "macos")]
+            send_buffer_size: None,
         })
     }
 
