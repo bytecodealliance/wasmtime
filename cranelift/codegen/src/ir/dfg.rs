@@ -126,7 +126,7 @@ pub struct DataFlowGraph {
     /// Primary value table with entries for all values.
     values: PrimaryMap<Value, ValueDataPacked>,
 
-    /// TODO FITZGEN
+    /// Facts: proof-carrying-code assertions about values.
     pub facts: SecondaryMap<Value, Option<Fact>>,
 
     /// Function signature table. These signatures are referenced by indirect call instructions as

@@ -54,10 +54,7 @@ pub enum Fact {
         /// to access (size, etc).
         region: MemoryRegion,
     },
-    // Sym(SymId),
 }
-
-// struct SymId(u32);
 
 /// A memory region that can be accessed. This description is attached
 /// to a particular base pointer.
