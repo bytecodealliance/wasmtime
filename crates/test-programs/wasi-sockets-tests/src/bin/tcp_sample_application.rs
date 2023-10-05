@@ -12,6 +12,7 @@ fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddres
     let listener = TcpSocket::new(family).unwrap();
 
     listener.blocking_bind(&net, bind_address).unwrap();
+    listener.set_listen_backlog_size(32).unwrap();
     listener.blocking_listen().unwrap();
 
     let addr = listener.local_address().unwrap();
