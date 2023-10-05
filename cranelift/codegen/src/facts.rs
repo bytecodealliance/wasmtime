@@ -14,6 +14,7 @@ use crate::machinst::{InsnIndex, LowerBackend, MachInst, VCode};
 use crate::CodegenResult;
 use regalloc2::{Function, OperandKind};
 use std::borrow::Cow;
+use std::fmt;
 
 /// The result of fact-checking.
 pub type FactResult<T> = std::result::Result<T, FactError>;
@@ -68,15 +69,16 @@ pub struct MemoryRegion {
     pub max: u64,
 }
 
-// enum MemoryType {
-//     Struct(StructType),
-//     Array {
-//         element: Box<MemoryType>,
-//         stride: u64,
-//         bound: u64,
-//         guard: u64,
-//     },
-// }
+impl fmt::Display for Fact {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Fact::ValueMax { bit_width, max } => write!(f, "max({}, 0x{:x})", bit_width, max),
+            Fact::PointsTo {
+                region: MemoryRegion { max },
+            } => write!(f, "points_to(0x{:x})", max),
+        }
+    }
+}
 
 macro_rules! ensure {
     ( $condition:expr, $msg:expr $(,)? ) => {

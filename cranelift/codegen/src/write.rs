@@ -199,7 +199,12 @@ fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
 // Basic blocks
 
 fn write_arg(w: &mut dyn Write, func: &Function, arg: Value) -> fmt::Result {
-    write!(w, "{}: {}", arg, func.dfg.value_type(arg))
+    let ty = func.dfg.value_type(arg);
+    if let Some(f) = &func.dfg.facts[arg] {
+        write!(w, "{} ! {}: {}", arg, f, ty)
+    } else {
+        write!(w, "{}: {}", arg, ty)
+    }
 }
 
 /// Write out the basic block header, outdented:
@@ -345,6 +350,9 @@ fn write_instruction(
             write!(w, "{}", r)?;
         } else {
             write!(w, ", {}", r)?;
+        }
+        if let Some(f) = &func.dfg.facts[*r] {
+            write!(w, " ! {}", f)?;
         }
     }
     if has_results {
