@@ -2033,19 +2033,38 @@ impl<'a> Parser<'a> {
             Some(Token::Identifier("max")) => {
                 self.consume();
                 self.match_token(Token::LPar, "`max` fact needs an opening `(`")?;
-                let max = self.match_uimm64("expected a max value for `max` fact")?;
+                let bit_width: u64 = self
+                    .match_uimm64("expected a bit-width value for `max` fact")?
+                    .into();
+                self.match_token(Token::Comma, "expected a comma")?;
+                let max: u64 = self
+                    .match_uimm64("expected a max value for `max` fact")?
+                    .into();
                 self.match_token(Token::RPar, "`max` fact needs a closing `)`")?;
-                Ok(Fact::ValueMax { max: max.into() })
+                let bit_width_max = match bit_width {
+                    x if x > 64 => {
+                        return Err(self.error("bitwidth must be <= 64 bits on a `max` fact"));
+                    }
+                    64 => u64::MAX,
+                    x => (1u64 << bit_width) - 1,
+                };
+                if max > bit_width_max {
+                    return Err(
+                        self.error("max value is out of range for bitwidth on a `max` fact")
+                    );
+                }
+                Ok(Fact::ValueMax {
+                    bit_width: u8::try_from(bit_width).unwrap(),
+                    max: max.into(),
+                })
             }
             Some(Token::Identifier("points_to")) => {
                 self.consume();
                 self.match_token(Token::LPar, "expected a `(`")?;
-                let bound = self.match_uimm64("expected a region for `points_to` fact")?;
+                let max = self.match_uimm64("expected a max offset for `points_to` fact")?;
                 self.match_token(Token::RPar, "expected a `)`")?;
                 Ok(Fact::PointsTo {
-                    region: MemoryRegion {
-                        bound: bound.into(),
-                    },
+                    region: MemoryRegion { max: max.into() },
                 })
             }
             _ => Err(self.error("expected a `max` or `points_to` fact")),

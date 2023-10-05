@@ -18,6 +18,7 @@ use crate::machinst::{
     SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
     ValueRegs, Writable,
 };
+use crate::CodegenError;
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
@@ -144,6 +145,14 @@ pub trait LowerBackend {
     /// into the associated vreg, instead using the real reg directly.
     fn maybe_pinned_reg(&self) -> Option<Reg> {
         None
+    }
+
+    /// Check any facts about an instruction, given VCode with facts
+    /// on VRegs.
+    fn check_fact(&self, inst: &Self::MInst, vcode: &VCode<Self::MInst>) -> CodegenResult<()> {
+        Err(CodegenError::Unsupported(
+            "Proof-carrying code support not implemented for this backend".into(),
+        ))
     }
 }
 
@@ -349,7 +358,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for &param in f.dfg.block_params(bb) {
                 let ty = f.dfg.value_type(param);
                 if value_regs[param].is_invalid() {
-                    let regs = vregs.alloc(ty)?;
+                    let regs = vregs.alloc_with_maybe_fact(ty, f.dfg.facts[param].clone())?;
                     value_regs[param] = regs;
                     trace!("bb {} param {}: regs {:?}", bb, param, regs);
                 }
@@ -358,7 +367,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 for &result in f.dfg.inst_results(inst) {
                     let ty = f.dfg.value_type(result);
                     if value_regs[result].is_invalid() && !ty.is_invalid() {
-                        let regs = vregs.alloc(ty)?;
+                        let regs = vregs.alloc_with_maybe_fact(ty, f.dfg.facts[result].clone())?;
                         value_regs[result] = regs;
                         trace!(
                             "bb {} inst {} ({:?}): result {} regs {:?}",
