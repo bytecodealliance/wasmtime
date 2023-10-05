@@ -87,7 +87,7 @@ interface types {
     // Will return the input-stream child at most once. If called more than
     // once, subsequent calls will return error.
 
-    consume: func() -> result< /* own */ incoming-body>
+    consume: func() -> result<incoming-body>
   }
 
   resource outgoing-request {
@@ -96,7 +96,7 @@ interface types {
       path-with-query: option<string>,
       scheme: option<scheme>,
       authority: option<string>,
-      headers: /* borrow */ headers
+      headers: borrow<headers>
     )
 
     // Will return the outgoing-body child at most once. If called more than
@@ -127,7 +127,7 @@ interface types {
   // (the `wasi:http/handler` interface used for both incoming and outgoing can
   // simply return a `stream`).
   resource response-outparam {
-    set: static func(param: /* own */ response-outparam, response: result< /* own */ outgoing-response, error>)
+    set: static func(param: response-outparam, response: result<outgoing-response, error>)
   }
 
   // This type corresponds to the HTTP standard Status Code.
@@ -148,7 +148,7 @@ interface types {
     // May be called at most once. returns error if called additional times.
     // TODO: make incoming-request-consume work the same way, giving a child
     // incoming-body.
-    consume: func() -> result</* own */ incoming-body>
+    consume: func() -> result<incoming-body>
   }
 
   resource incoming-body {
@@ -160,7 +160,7 @@ interface types {
 
     // takes ownership of incoming-body. this will trap if the
     // incoming-body-stream child is still alive!
-    finish: static func(this: /* own */ incoming-body) ->
+    finish: static func(this: incoming-body) ->
     /* transitive child of the incoming-response of incoming-body */ future-trailers
   }
 
@@ -174,11 +174,11 @@ interface types {
   }
 
   resource outgoing-response {
-    constructor(status-code: status-code, headers: /* borrow */ headers)
+    constructor(status-code: status-code, headers: borrow<headers>)
 
     /// Will give the child outgoing-response at most once. subsequent calls will
     /// return an error.
-    write: func() -> result</* own */ outgoing-body>
+    write: func() -> result<outgoing-body>
   }
 
   resource outgoing-body {
@@ -190,7 +190,7 @@ interface types {
     /// called to signal that the response is complete. If the `outgoing-body` is
     /// dropped without calling `outgoing-body-finalize`, the implementation
     /// should treat the body as corrupted.
-    finish: static func(this: /* own */ outgoing-body, trailers: /* own */ option<trailers>)
+    finish: static func(this: outgoing-body, trailers: option<trailers>)
   }
 
   /// The following block defines a special resource type used by the
