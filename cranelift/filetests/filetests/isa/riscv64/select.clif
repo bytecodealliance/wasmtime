@@ -680,16 +680,15 @@ block0(v0: i128, v1: i8, v2: i8):
 ; VCode:
 ; block0:
 ;   li a4,42
-;   li a5,0
-;   eq a4,[a0,a1],[a4,a5]##ty=i128
+;   zero zero
+;   eq a4,[a0,a1],[a4,zero]##ty=i128
 ;   select a0,a2,a3##condition=(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a4, zero, 0x2a
-;   mv a5, zero
-;   bne a1, a5, 0x10
+;   bnez a1, 0x10
 ;   bne a0, a4, 0xc
 ;   addi a4, zero, 1
 ;   j 8
@@ -712,16 +711,15 @@ block0(v0: i128, v1: i16, v2: i16):
 ; VCode:
 ; block0:
 ;   li a4,42
-;   li a5,0
-;   eq a4,[a0,a1],[a4,a5]##ty=i128
+;   zero zero
+;   eq a4,[a0,a1],[a4,zero]##ty=i128
 ;   select a0,a2,a3##condition=(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a4, zero, 0x2a
-;   mv a5, zero
-;   bne a1, a5, 0x10
+;   bnez a1, 0x10
 ;   bne a0, a4, 0xc
 ;   addi a4, zero, 1
 ;   j 8
@@ -744,16 +742,15 @@ block0(v0: i128, v1: i32, v2: i32):
 ; VCode:
 ; block0:
 ;   li a4,42
-;   li a5,0
-;   eq a4,[a0,a1],[a4,a5]##ty=i128
+;   zero zero
+;   eq a4,[a0,a1],[a4,zero]##ty=i128
 ;   select a0,a2,a3##condition=(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a4, zero, 0x2a
-;   mv a5, zero
-;   bne a1, a5, 0x10
+;   bnez a1, 0x10
 ;   bne a0, a4, 0xc
 ;   addi a4, zero, 1
 ;   j 8
@@ -776,16 +773,15 @@ block0(v0: i128, v1: i64, v2: i64):
 ; VCode:
 ; block0:
 ;   li a4,42
-;   li a5,0
-;   eq a4,[a0,a1],[a4,a5]##ty=i128
+;   zero zero
+;   eq a4,[a0,a1],[a4,zero]##ty=i128
 ;   select a0,a2,a3##condition=(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a4, zero, 0x2a
-;   mv a5, zero
-;   bne a1, a5, 0x10
+;   bnez a1, 0x10
 ;   bne a0, a4, 0xc
 ;   addi a4, zero, 1
 ;   j 8
@@ -812,18 +808,16 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   mv fp,sp
 ;   sd s4,-8(sp)
 ;   sd s5,-16(sp)
-;   sd s6,-24(sp)
-;   add sp,-32
+;   add sp,-16
 ; block0:
 ;   li s5,42
-;   li s6,0
-;   eq a0,[a0,a1],[s5,s6]##ty=i128
+;   zero zero
+;   eq a0,[a0,a1],[s5,zero]##ty=i128
 ;   select [s4,a1],[a2,a3],[a4,a5]##condition=(a0 ne zero)
 ;   mv a0,s4
-;   add sp,+32
+;   add sp,+16
 ;   ld s4,-8(sp)
 ;   ld s5,-16(sp)
-;   ld s6,-24(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -837,12 +831,10 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   mv s0, sp
 ;   sd s4, -8(sp)
 ;   sd s5, -0x10(sp)
-;   sd s6, -0x18(sp)
-;   addi sp, sp, -0x20
-; block1: ; offset 0x20
+;   addi sp, sp, -0x10
+; block1: ; offset 0x1c
 ;   addi s5, zero, 0x2a
-;   mv s6, zero
-;   bne a1, s6, 0x10
+;   bnez a1, 0x10
 ;   bne a0, s5, 0xc
 ;   addi a0, zero, 1
 ;   j 8
@@ -854,10 +846,9 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   mv s4, a4
 ;   mv a1, a5
 ;   mv a0, s4
-;   addi sp, sp, 0x20
+;   addi sp, sp, 0x10
 ;   ld s4, -8(sp)
 ;   ld s5, -0x10(sp)
-;   ld s6, -0x18(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

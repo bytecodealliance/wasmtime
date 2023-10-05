@@ -57,7 +57,8 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ;
 ; Disassembled:

@@ -800,7 +800,8 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   li a1,1
 ;   ret
 ;
@@ -852,6 +853,50 @@ block0(v0: i16):
 ;   mv a0, s1
 ;   addi sp, sp, 0x10
 ;   ld s1, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %call_zero_argument() -> i16 {
+    sig0 = (i16) -> i16
+    fn0 = u0:0 sig0
+
+block0:
+    v0 = iconst.i16 0
+    v1 = call fn0(v0)
+    return v1
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   zero zero
+;   mv a0,zero
+;   load_sym a2,userextname0+0
+;   callind a2
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   mv a0, zero
+;   auipc a2, 0
+;   ld a2, 0xc(a2)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 u0:0 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a2
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

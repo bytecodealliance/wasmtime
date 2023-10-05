@@ -410,7 +410,8 @@ block0(v0: i128):
 ;   clz a3,a0##ty=i64 tmp=a4 step=a2
 ;   select a0,a3,zero##condition=(a1 eq zero)
 ;   add a0,a5,a0
-;   li a1,0
+;   zero zero
+;   mv a1,zero
 ;   ret
 ;
 ; Disassembled:
@@ -612,7 +613,8 @@ block0(v0: i128):
 ;   select a2,a0,zero##condition=(a3 eq zero)
 ;   add a3,a1,a2
 ;   addi a0,a3,-1
-;   li a1,0
+;   zero zero
+;   mv a1,zero
 ;   ret
 ;
 ; Disassembled:
@@ -778,7 +780,8 @@ block0(v0: i128):
 ;   ctz a3,a0##ty=i64 tmp=a1 step=a2
 ;   select a5,a5,zero##condition=(a0 eq zero)
 ;   add a0,a3,a5
-;   li a1,0
+;   zero zero
+;   mv a1,zero
 ;   ret
 ;
 ; Disassembled:
@@ -820,7 +823,8 @@ block0(v0: i128):
 ;   popcnt a5,a0##ty=i64 tmp=a3 step=a4
 ;   popcnt a3,a1##ty=i64 tmp=a4 step=a2
 ;   add a0,a5,a3
-;   li a1,0
+;   zero zero
+;   mv a1,zero
 ;   ret
 ;
 ; Disassembled:

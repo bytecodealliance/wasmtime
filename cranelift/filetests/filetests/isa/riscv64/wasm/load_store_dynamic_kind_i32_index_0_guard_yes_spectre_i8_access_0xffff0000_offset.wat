@@ -53,10 +53,10 @@
 ;;   lui a3,65535
 ;;   slli a0,a3,4
 ;;   add a4,a4,a0
-;;   li a0,0
+;;   zero zero
 ;;   sltu a5,zero,a5
 ;;   sub a2,zero,a5
-;;   and a3,a0,a2
+;;   and a3,zero,a2
 ;;   not a5,a2
 ;;   and a2,a4,a5
 ;;   or a3,a3,a2
@@ -79,10 +79,10 @@
 ;;   lui a3,65535
 ;;   slli a0,a3,4
 ;;   add a4,a4,a0
-;;   li a0,0
+;;   zero zero
 ;;   sltu a5,zero,a5
 ;;   sub a1,zero,a5
-;;   and a3,a0,a1
+;;   and a3,zero,a1
 ;;   not a5,a1
 ;;   and a1,a4,a5
 ;;   or a3,a3,a1

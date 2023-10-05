@@ -86,7 +86,8 @@ block0(v0: i128):
 ;   clz a5,a0
 ;   select a1,a5,zero##condition=(a1 eq zero)
 ;   add a0,a3,a1
-;   li a1,0
+;   zero zero
+;   mv a1,zero
 ;   ret
 ;
 ; Disassembled:

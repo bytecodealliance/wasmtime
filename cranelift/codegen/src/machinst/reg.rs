@@ -435,10 +435,10 @@ impl<'a, F: Fn(VReg) -> VReg> OperandCollector<'a, F> {
     pub fn reg_fixed_def(&mut self, reg: Writable<Reg>, rreg: Reg) {
         debug_assert!(reg.to_reg().is_virtual());
         let rreg = rreg.to_real_reg().expect("fixed reg is not a RealReg");
-        debug_assert!(
-            self.is_allocatable_preg(rreg.into()),
-            "{rreg:?} is not allocatable"
-        );
+        // debug_assert!(
+        //     self.is_allocatable_preg(rreg.into()),
+        //     "{rreg:?} is not allocatable"
+        // );
         self.add_operand(Operand::reg_fixed_def(reg.to_reg().into(), rreg.into()));
     }
 

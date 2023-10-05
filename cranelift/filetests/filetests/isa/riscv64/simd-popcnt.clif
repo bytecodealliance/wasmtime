@@ -30,8 +30,8 @@ block0(v0: i8x16):
 ;   vand.vx v12,v10,a4 #avl=16, #vtype=(e8, m1, ta, ma)
 ;   li a1,1
 ;   vmul.vx v8,v12,a1 #avl=16, #vtype=(e8, m1, ta, ma)
-;   li a4,0
-;   vsrl.vx v12,v8,a4 #avl=16, #vtype=(e8, m1, ta, ma)
+;   zero zero
+;   vsrl.vx v12,v8,zero #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -63,8 +63,7 @@ block0(v0: i8x16):
 ;   .byte 0x57, 0x46, 0xa7, 0x26
 ;   addi a1, zero, 1
 ;   .byte 0x57, 0xe4, 0xc5, 0x96
-;   mv a4, zero
-;   .byte 0x57, 0x46, 0x87, 0xa2
+;   .byte 0x57, 0x46, 0x80, 0xa2
 ;   .byte 0x27, 0x06, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)

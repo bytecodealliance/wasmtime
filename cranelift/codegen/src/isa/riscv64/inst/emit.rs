@@ -321,6 +321,7 @@ impl Inst {
         match self {
             Inst::Nop0
             | Inst::Nop4
+            | Inst::Zero { .. }
             | Inst::BrTable { .. }
             | Inst::Auipc { .. }
             | Inst::Lui { .. }
@@ -1025,6 +1026,7 @@ impl Inst {
                 };
                 x.emit(&[], sink, emit_info, state)
             }
+            &Inst::Zero { rd: _ } => {} // this is a pseudo-instruction.
             &Inst::RawData { ref data } => {
                 // Right now we only put a u32 or u64 in this instruction.
                 // It is not very long, no need to check if need `emit_island`.
@@ -3341,6 +3343,9 @@ impl Inst {
         match self {
             Inst::Nop0 => self,
             Inst::Nop4 => self,
+            Inst::Zero { rd } => Inst::Zero {
+                rd: allocs.next_writable(rd),
+            },
             Inst::RawData { .. } => self,
             Inst::Lui { rd, imm } => Inst::Lui {
                 rd: allocs.next_writable(rd),

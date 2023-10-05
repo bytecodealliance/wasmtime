@@ -5,6 +5,8 @@
     (Nop0)
     (Nop4)
 
+    (Zero (rd WritableReg))
+
     ;; load immediate
     (Lui
       (rd WritableReg)
@@ -1729,12 +1731,18 @@
 (decl imm (Type u64) Reg)
 
 ;; Refs get loaded as integers.
-(rule 5 (imm $R32 c) (imm $I32 c))
-(rule 5 (imm $R64 c) (imm $I64 c))
+(rule 6 (imm $R32 c) (imm $I32 c))
+(rule 6 (imm $R64 c) (imm $I64 c))
 
 ;; Floats get loaded as integers and then moved into an F register.
-(rule 5 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
-(rule 5 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
+(rule 6 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
+(rule 6 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
+
+;; Try to match just an imm12
+(rule 5 (imm (ty_int ty) 0)
+  (let ((dst WritableReg (temp_writable_xreg))
+        (_ Unit (emit (MInst.Zero dst))))
+    dst))
 
 ;; Try to match just an imm12
 (rule 4 (imm (ty_int ty) c)

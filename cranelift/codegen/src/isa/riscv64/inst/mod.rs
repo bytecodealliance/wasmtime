@@ -357,6 +357,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
     match inst {
         &Inst::Nop0 => {}
         &Inst::Nop4 => {}
+        &Inst::Zero { rd } => {
+            collector.reg_fixed_def(rd, zero_reg());
+        }
         &Inst::BrTable {
             index, tmp1, tmp2, ..
         } => {
@@ -1075,6 +1078,9 @@ impl Inst {
             }
             &Inst::Nop4 => {
                 format!("##fixed 4-size nop")
+            }
+            &Inst::Zero { rd } => {
+                format!("zero {}", format_reg(rd.to_reg(), allocs))
             }
             &Inst::StackProbeLoop {
                 guard_size,

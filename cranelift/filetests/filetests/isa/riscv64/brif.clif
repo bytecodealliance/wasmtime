@@ -21,7 +21,8 @@ block2:
 ;   andi a4,a0,255
 ;   bne a4,zero,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -57,7 +58,8 @@ block2:
 ;   srai a0,a4,48
 ;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -93,7 +95,8 @@ block2:
 ;   sext.w a4,a0
 ;   bne a4,zero,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -127,7 +130,8 @@ block2:
 ; block0:
 ;   bne a0,zero,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -161,7 +165,8 @@ block2:
 ;   or a5,a0,a1
 ;   bne a5,zero,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -198,7 +203,8 @@ block2:
 ;   andi a1,a1,255
 ;   beq a5,a1,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -240,7 +246,8 @@ block2:
 ;   srli a5,a3,48
 ;   bne a1,a5,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -282,7 +289,8 @@ block2:
 ;   sext.w a1,a1
 ;   blt a5,a1,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -318,7 +326,8 @@ block2:
 ; block0:
 ;   bgeu a0,a1,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -353,7 +362,8 @@ block2:
 ;   sgt a1,[a0,a1],[a2,a3]##ty=i128
 ;   bne a1,zero,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -394,7 +404,8 @@ block2:
 ;   flt.s a5,fa0,fa1
 ;   bne a5,zero,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1
@@ -430,7 +441,8 @@ block2:
 ;   flt.d a5,fa0,fa1
 ;   beq a5,zero,taken(label2),not_taken(label1)
 ; block1:
-;   li a0,0
+;   zero zero
+;   mv a0,zero
 ;   ret
 ; block2:
 ;   li a0,1

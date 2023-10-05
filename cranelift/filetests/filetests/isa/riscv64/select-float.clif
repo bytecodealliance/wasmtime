@@ -215,16 +215,15 @@ block0(v0: i128, v1: f32, v2: f32):
 ; VCode:
 ; block0:
 ;   li a2,42
-;   li a3,0
-;   eq a2,[a0,a1],[a2,a3]##ty=i128
+;   zero zero
+;   eq a2,[a0,a1],[a2,zero]##ty=i128
 ;   select fa0,fa0,fa1##condition=(a2 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
-;   mv a3, zero
-;   bne a1, a3, 0x10
+;   bnez a1, 0x10
 ;   bne a0, a2, 0xc
 ;   addi a2, zero, 1
 ;   j 8
@@ -245,16 +244,15 @@ block0(v0: i128, v1: f64, v2: f64):
 ; VCode:
 ; block0:
 ;   li a2,42
-;   li a3,0
-;   eq a2,[a0,a1],[a2,a3]##ty=i128
+;   zero zero
+;   eq a2,[a0,a1],[a2,zero]##ty=i128
 ;   select fa0,fa0,fa1##condition=(a2 ne zero)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
-;   mv a3, zero
-;   bne a1, a3, 0x10
+;   bnez a1, 0x10
 ;   bne a0, a2, 0xc
 ;   addi a2, zero, 1
 ;   j 8

@@ -546,7 +546,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   li a4,5
-;   li a5,0
+;   zero zero
 ;   andi a2,a4,63
 ;   li a3,64
 ;   sub a3,a3,a2
@@ -563,7 +563,6 @@ block0(v0: i128):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a4, zero, 5
-;   mv a5, zero
 ;   andi a2, a4, 0x3f
 ;   addi a3, zero, 0x40
 ;   sub a3, a3, a2

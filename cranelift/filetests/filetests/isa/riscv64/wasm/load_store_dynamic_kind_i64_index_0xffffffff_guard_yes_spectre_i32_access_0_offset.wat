@@ -45,10 +45,10 @@
 ;;   ugt a3,a0,a3##ty=i64
 ;;   ld a2,0(a2)
 ;;   add a2,a2,a0
-;;   li a4,0
+;;   zero zero
 ;;   sltu a3,zero,a3
 ;;   sub a5,zero,a3
-;;   and a3,a4,a5
+;;   and a3,zero,a5
 ;;   not a4,a5
 ;;   and a5,a2,a4
 ;;   or a2,a3,a5
@@ -63,10 +63,10 @@
 ;;   ugt a3,a0,a2##ty=i64
 ;;   ld a2,0(a1)
 ;;   add a2,a2,a0
-;;   li a4,0
+;;   zero zero
 ;;   sltu a3,zero,a3
 ;;   sub a5,zero,a3
-;;   and a1,a4,a5
+;;   and a1,zero,a5
 ;;   not a3,a5
 ;;   and a5,a2,a3
 ;;   or a1,a1,a5

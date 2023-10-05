@@ -81,7 +81,8 @@ block0(v0: i128):
 ;   cpop a3,a0
 ;   cpop a5,a1
 ;   add a0,a3,a5
-;   li a1,0
+;   zero zero
+;   mv a1,zero
 ;   ret
 ;
 ; Disassembled:

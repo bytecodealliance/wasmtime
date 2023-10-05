@@ -126,7 +126,8 @@ block0(v0: i128):
 ;   select a3,a1,zero##condition=(a3 eq zero)
 ;   add a5,a0,a3
 ;   addi a0,a5,-1
-;   li a1,0
+;   zero zero
+;   mv a1,zero
 ;   ret
 ;
 ; Disassembled:

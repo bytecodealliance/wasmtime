@@ -582,7 +582,7 @@ block0(v0: i128):
 ;   add sp,-16
 ; block0:
 ;   li a4,5
-;   li a5,0
+;   zero zero
 ;   andi a5,a4,63
 ;   li a2,64
 ;   sub a3,a2,a5
@@ -611,7 +611,6 @@ block0(v0: i128):
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x18
 ;   addi a4, zero, 5
-;   mv a5, zero
 ;   andi a5, a4, 0x3f
 ;   addi a2, zero, 0x40
 ;   sub a3, a2, a5
