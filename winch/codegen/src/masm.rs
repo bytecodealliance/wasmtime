@@ -32,7 +32,7 @@ pub struct StackSlot {
     pub size: u32,
 }
 
-/// Kinds of binary comparison in WebAssembly. The [`masm`] implementation for
+/// Kinds of binary comparison in WebAssembly. The [`MacroAssembler`] implementation for
 /// each ISA is responsible for emitting the correct sequence of instructions
 /// when lowering to machine code.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -305,15 +305,18 @@ pub(crate) trait MacroAssembler {
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
 
-    /// Loads the address of the table element at a given index.
-    /// Returns a register that contains address of the table element.
+    /// Loads the address of the table element at a given index. Returns the
+    /// address of the table element using the provided register as base.
     fn table_elem_address(
         &mut self,
         index: Reg,
-        size: OperandSize,
+        base: Reg,
         table_data: &TableData,
         context: &mut CodeGenContext,
-    ) -> Reg;
+    ) -> Self::Address;
+
+    /// Retrieves the size of the table, pushing the result to the value stack.
+    fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext);
 
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
@@ -348,6 +351,10 @@ pub(crate) trait MacroAssembler {
     /// Alias for `MacroAssembler::load` with the operand size corresponding
     /// to the pointer size of the target.
     fn load_ptr(&mut self, src: Self::Address, dst: Reg);
+
+    /// Alias for `MacroAssembler::store` with the operand size corresponding
+    /// to the pointer size of the target.
+    fn store_ptr(&mut self, src: Reg, dst: Self::Address);
 
     /// Pop a value from the machine stack into the given register.
     fn pop(&mut self, dst: Reg, size: OperandSize);
@@ -517,4 +524,7 @@ pub(crate) trait MacroAssembler {
 
     /// Traps if the condition code is met.
     fn trapif(&mut self, cc: CmpKind, code: TrapCode);
+
+    /// Trap if the source register is zero.
+    fn trapz(&mut self, src: Reg, code: TrapCode);
 }

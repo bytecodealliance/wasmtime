@@ -375,7 +375,15 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | F64Abs { .. }
                         | F32Neg { .. }
                         | F64Neg { .. }
-                        | CallIndirect { .. } => {}
+                        | CallIndirect { .. }
+                        | ElemDrop { .. }
+                        | TableCopy { .. }
+                        | TableSet { .. }
+                        | TableGet { .. }
+                        | TableFill { .. }
+                        | TableGrow { .. }
+                        | TableSize { .. }
+                        | TableInit { .. } => {}
                         _ => {
                             supported = false;
                             break 'main;

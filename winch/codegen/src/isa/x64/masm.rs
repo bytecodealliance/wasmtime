@@ -9,7 +9,7 @@ use crate::masm::{
     CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode,
     ShiftKind, TrapCode,
 };
-use crate::{abi::ABI, masm::StackSlot};
+use crate::{abi::ABI, masm::StackSlot, stack::TypedReg};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
     codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData},
@@ -112,14 +112,13 @@ impl Masm for MacroAssembler {
     fn table_elem_address(
         &mut self,
         index: Reg,
-        size: OperandSize,
+        ptr_base: Reg,
         table_data: &TableData,
         context: &mut CodeGenContext,
-    ) -> Reg {
+    ) -> Self::Address {
         let vmctx = <Self::ABI as ABI>::vmctx_reg();
         let scratch = regs::scratch();
         let bound = context.any_gpr(self);
-        let ptr_base = context.any_gpr(self);
         let tmp = context.any_gpr(self);
 
         if let Some(offset) = table_data.base {
@@ -127,47 +126,68 @@ impl Masm for MacroAssembler {
             // load the address into a register to further use it as
             // the table address.
             self.asm
-                .mov_mr(&Address::offset(vmctx, offset), ptr_base, OperandSize::S64);
+                .mov_mr(&self.address_at_vmctx(offset), ptr_base, self.ptr_size);
         } else {
             // Else, simply move the vmctx register into the addr register as
             // the base to calculate the table address.
-            self.asm.mov_rr(vmctx, ptr_base, OperandSize::S64);
+            self.asm.mov_rr(vmctx, ptr_base, self.ptr_size);
         };
 
         // OOB check.
-        let bound_addr = Address::offset(ptr_base, table_data.current_elems_offset);
-        self.asm.mov_mr(&bound_addr, bound, OperandSize::S64);
-        self.asm.cmp_rr(bound, index, size);
+        let bound_addr = self.address_at_reg(ptr_base, table_data.current_elems_offset);
+        let bound_size = table_data.current_elements_size;
+        self.asm.mov_mr(&bound_addr, bound, bound_size);
+        self.asm.cmp_rr(bound, index, bound_size);
         self.asm.trapif(CmpKind::GeU, TrapCode::TableOutOfBounds);
 
         // Move the index into the scratch register to calcualte the table
         // element address.
         // Moving the value of the index register to the scratch register
         // also avoids overwriting the context of the index register.
-        self.asm.mov_rr(index, scratch, OperandSize::S32);
-        self.asm
-            .mul_ir(table_data.element_size as i32, scratch, OperandSize::S64);
+        self.asm.mov_rr(index, scratch, bound_size);
+        self.asm.mul_ir(
+            table_data.element_size.bytes() as i32,
+            scratch,
+            table_data.element_size,
+        );
         self.asm.mov_mr(
-            &Address::offset(ptr_base, table_data.offset),
+            &self.address_at_reg(ptr_base, table_data.offset),
             ptr_base,
-            OperandSize::S64,
+            self.ptr_size,
         );
         // Copy the value of the table base into a temporary register
         // so that we can use it later in case of a misspeculation.
-        self.asm.mov_rr(ptr_base, tmp, OperandSize::S64);
+        self.asm.mov_rr(ptr_base, tmp, self.ptr_size);
         // Calculate the address of the table element.
-        self.asm.add_rr(scratch, ptr_base, OperandSize::S64);
+        self.asm.add_rr(scratch, ptr_base, self.ptr_size);
         if self.shared_flags.enable_table_access_spectre_mitigation() {
             // Perform a bounds check and override the value of the
             // table element address in case the index is out of bounds.
             self.asm.cmp_rr(bound, index, OperandSize::S32);
-            self.asm.cmov(tmp, ptr_base, CmpKind::GeU, OperandSize::S64);
+            self.asm.cmov(tmp, ptr_base, CmpKind::GeU, self.ptr_size);
         }
-        self.asm
-            .mov_mr(&Address::offset(ptr_base, 0), ptr_base, OperandSize::S64);
         context.free_reg(bound);
         context.free_reg(tmp);
-        ptr_base
+        self.address_at_reg(ptr_base, 0)
+    }
+
+    fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext) {
+        let vmctx = <Self::ABI as ABI>::vmctx_reg();
+        let scratch = regs::scratch();
+        let size = context.any_gpr(self);
+
+        if let Some(offset) = table_data.base {
+            self.asm
+                .mov_mr(&self.address_at_vmctx(offset), scratch, self.ptr_size);
+        } else {
+            self.asm.mov_rr(vmctx, scratch, self.ptr_size);
+        };
+
+        let size_addr = Address::offset(scratch, table_data.current_elems_offset);
+        self.asm
+            .mov_mr(&size_addr, size, table_data.current_elements_size);
+
+        context.stack.push(TypedReg::i32(size).into());
     }
 
     fn address_from_sp(&self, offset: u32) -> Self::Address {
@@ -180,6 +200,10 @@ impl Masm for MacroAssembler {
 
     fn address_at_vmctx(&self, offset: u32) -> Self::Address {
         Address::offset(<Self::ABI as ABI>::vmctx_reg(), offset)
+    }
+
+    fn store_ptr(&mut self, src: Reg, dst: Self::Address) {
+        self.store(src.into(), dst, self.ptr_size);
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
@@ -706,6 +730,11 @@ impl Masm for MacroAssembler {
 
     fn trapif(&mut self, cc: CmpKind, code: TrapCode) {
         self.asm.trapif(cc, code);
+    }
+
+    fn trapz(&mut self, src: Reg, code: TrapCode) {
+        self.asm.test_rr(src, src, self.ptr_size);
+        self.asm.trapif(CmpKind::Eq, code);
     }
 
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {

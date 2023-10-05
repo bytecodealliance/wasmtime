@@ -27,6 +27,14 @@ impl TypedReg {
             reg,
         }
     }
+
+    /// Create an i64 [`TypedReg`].
+    pub fn i32(reg: Reg) -> Self {
+        Self {
+            ty: WasmType::I32,
+            reg,
+        }
+    }
 }
 
 impl From<TypedReg> for Reg {
@@ -225,9 +233,22 @@ impl Stack {
         }
     }
 
-    /// Insert a new value at the specified index.
-    pub fn insert(&mut self, at: usize, val: Val) {
-        self.inner.insert(at, val);
+    /// Extend the stack with the given elements.
+    pub fn extend(&mut self, values: impl Iterator<Item = Val>) {
+        self.inner.extend(values);
+    }
+
+    /// Inserts many values at the given index.
+    pub fn insert_many(&mut self, at: usize, values: impl Iterator<Item = Val>) {
+        debug_assert!(at <= self.len());
+        // If last, simply extend.
+        if at == self.inner.len() {
+            self.inner.extend(values);
+        } else {
+            let mut tail = self.inner.split_off(at);
+            self.inner.extend(values);
+            self.inner.append(&mut tail);
+        }
     }
 
     /// Get the length of the stack.
