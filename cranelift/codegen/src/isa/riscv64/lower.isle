@@ -33,7 +33,10 @@
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Base case, simply adding things in registers.
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd x y)))
+(rule -1 (lower (has_type (fits_in_32 (ty_int ty)) (iadd x y)))
+  (rv_addw x y))
+
+(rule 0 (lower (has_type $I64 (iadd x y)))
   (rv_add x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
@@ -312,11 +315,11 @@
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
-(rule (lower (has_type (ty_int_ref_scalar_64 ty) (isub x y)))
-  (rv_sub x y))
-
-(rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
+(rule 0 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
   (rv_subw x y))
+
+(rule 1 (lower (has_type $I64 (isub x y)))
+  (rv_sub x y))
 
 (rule 2 (lower (has_type $I128 (isub x y)))
   (i128_sub x y))
@@ -961,39 +964,6 @@
 (rule 1 (lower (has_type $I128 (sextend val @ (value_type in_ty))))
   (let ((lo XReg (sext val)))
     (value_regs lo (rv_srai lo (imm12_const 63)))))
-
-;; The instructions below are present in RV64I and sign-extend the result to 64 bits.
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (iadd x y)))))
-  (rv_addw x y))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (isub x y)))))
-  (rv_subw x y))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ishl x y)))))
-  (rv_sllw x (value_regs_get y 0)))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ushr x y)))))
-  (rv_srlw x (value_regs_get y 0)))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (sshr x y)))))
-  (rv_sraw x (value_regs_get y 0)))
-
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (iadd x (imm12_from_value y))))))
-  (rv_addiw x y))
-
-(rule 3 (lower (has_type $I64 (sextend (has_type $I32 (iadd (imm12_from_value x) y)))))
-  (rv_addiw y x))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ishl x (imm12_from_value y))))))
-  (rv_slliw x y))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ushr x (imm12_from_value y))))))
-  (rv_srliw x y))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (sshr x (imm12_from_value y))))))
-  (rv_sraiw x y))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

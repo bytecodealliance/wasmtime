@@ -2110,7 +2110,7 @@
 ;; Ignore sign extensions for values whose representation is already the full
 ;; register width.
 (rule 3 (zext val)
-  (if (val_already_extended val))
+  (if (val_already_extended (ExtendOp.Zero) val))
   val)
 
 ;; Performs a signed extension of the given value
@@ -2139,25 +2139,36 @@
 ;; Ignore sign extensions for values whose representation is already the full
 ;; register width.
 (rule 2 (sext val)
-  (if (val_already_extended val))
+  (if (val_already_extended (ExtendOp.Signed) val))
   val)
 
 ;; Helper matcher for when a value's representation is already sign or zero
 ;; extended to the full 64-bit register representation. This is used by `zext`
 ;; and `sext` above to skip the extension instruction entirely in some
 ;; circumstances.
-(decl pure partial val_already_extended (Value) bool)
-(rule 0 (val_already_extended v @ (value_type $I64)) $true)
+(decl pure partial val_already_extended (ExtendOp Value) bool)
+(rule 0 (val_already_extended _ v @ (value_type $I64)) $true)
 
 ;; When extending our backend always extends to the full register width, so
 ;; there's no need to extend-an-extend.
-(rule 1 (val_already_extended (uextend _)) $true)
-(rule 1 (val_already_extended (sextend _)) $true)
+(rule 1 (val_already_extended (ExtendOp.Zero) (uextend _)) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (sextend _)) $true)
 
 ;; The result of `icmp`/`fcmp` is zero or one, meaning that it's already sign
 ;; extended to the full register width.
-(rule 1 (val_already_extended (icmp _ _ _)) $true)
-(rule 1 (val_already_extended (fcmp _ _ _)) $true)
+(rule 1 (val_already_extended _ (icmp _ _ _)) $true)
+(rule 1 (val_already_extended _ (fcmp _ _ _)) $true)
+
+;; The lowering for these operations always sign-extend their results due to the
+;; use of the `*w` instructions in RV64I. Note that this requires that the
+;; extension is from 32 to 64, 16/8-bit operations are explicitly excluded here.
+;; There are no native instructions for the 16/8 bit operations so they must
+;; fall through to actual sign extension above.
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ishl _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ushr _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (sshr _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (iadd _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (isub _ _))) $true)
 
 (type ExtendOp
   (enum

@@ -47,7 +47,7 @@ block5(v5: i32):
 ;   li a5,4
 ;   j label7
 ; block7:
-;   add a0,a0,a5
+;   addw a0,a0,a5
 ;   ret
 ;
 ; Disassembled:
@@ -84,6 +84,6 @@ block5(v5: i32):
 ; block5: ; offset 0x64
 ;   addi a5, zero, 4
 ; block6: ; offset 0x68
-;   add a0, a0, a5
+;   addw a0, a0, a5
 ;   ret
 
