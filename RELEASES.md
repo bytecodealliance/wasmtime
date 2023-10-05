@@ -152,8 +152,8 @@ More information about this change can be found on
   preview2.
   [#6993](https://github.com/bytecodealliance/wasmtime/pull/6993)
 
-* Cranelift will now return an error on register allocation failure instead of
-  panicking.
+* Cranelift will now return an error when running out of temporaries in a very
+  large function instead of panicking.
   [#7114](https://github.com/bytecodealliance/wasmtime/pull/7114)
 
 --------------------------------------------------------------------------------
