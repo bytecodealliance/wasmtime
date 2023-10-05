@@ -3,11 +3,14 @@
 //!
 //! TODO fill this out more
 //!
-//! TODO rename this to pcc.rs
+//! TODO rename this to pcc.rs; also maybe put in `ir` module?
+//!
+//! TODO: add another mode that checks facts at CLIF level, before
+//! lowering. Use this for fuzzing?
 
 use crate::ir;
 use crate::isa::TargetIsa;
-use crate::machinst::{InsnIndex, LowerBackend, VCode};
+use crate::machinst::{InsnIndex, LowerBackend, MachInst, VCode};
 use crate::CodegenResult;
 use regalloc2::{Function, OperandKind};
 use std::borrow::Cow;
@@ -16,6 +19,8 @@ use std::borrow::Cow;
 pub type FactResult<T> = std::result::Result<T, FactError>;
 
 /// A fact-checking error.
+/// TODO: make this an enum
+#[derive(Debug, Clone)]
 pub struct FactError(Cow<'static, str>);
 
 impl FactError {
@@ -93,15 +98,13 @@ impl Fact {
         todo!()
     }
 
-    /// TODO FITZGEN
-    pub fn check_add(
-        lhs: Self,
-        rhs: Self,
-        result: Fact,
-        add_width: u8,
-        pointer_width: u8,
-    ) -> FactResult<()> {
-        match (lhs, rhs, result) {
+    // TODO: "subsumes" method
+
+    // TODO: change sigs below to take &Self instead
+
+    /// TODO DOCS
+    pub fn add(lhs: Self, rhs: Self, add_width: u8, pointer_width: u8) -> Option<Self> {
+        match (lhs, rhs) {
             (
                 Fact::ValueMax {
                     bit_width: bw_lhs,
@@ -111,18 +114,12 @@ impl Fact {
                     bit_width: bw_rhs,
                     max: rhs,
                 },
-                Fact::ValueMax {
-                    bit_width: bw_result,
-                    max: result,
-                },
-            ) if bw_lhs == bw_rhs && bw_lhs == bw_result && add_width >= bw_lhs => {
-                let computed_max = lhs
-                    .checked_add(rhs)
-                    .ok_or_else(|| FactError::new("value max overflow"))?;
-                ensure!(
-                    result <= computed_max,
-                    "claimed max must fit within computed max"
-                );
+            ) if bw_lhs == bw_rhs && add_width >= bw_lhs => {
+                let computed_max = lhs.checked_add(rhs)?;
+                Some(Fact::ValueMax {
+                    bit_width: bw_lhs,
+                    max: computed_max,
+                })
             }
 
             (
@@ -131,9 +128,6 @@ impl Fact {
                     max,
                 },
                 Fact::PointsTo { region },
-                Fact::PointsTo {
-                    region: result_region,
-                },
             )
             | (
                 Fact::PointsTo { region },
@@ -141,23 +135,56 @@ impl Fact {
                     bit_width: bw_max,
                     max,
                 },
-                Fact::PointsTo {
-                    region: result_region,
-                },
             ) if bw_max >= pointer_width && add_width >= bw_max => {
                 let computed_region = MemoryRegion {
-                    max: region.max.checked_sub(max).ok_or_else(|| {
-                        FactError::new("pointer offset beyond memory-region max offset")
-                    })?,
+                    max: region.max.checked_sub(max)?,
                 };
-                ensure!(
-                    result_region.max <= computed_region.max,
-                    "claimed memory region must fit within computed memory region"
-                );
+                Some(Fact::PointsTo {
+                    region: computed_region,
+                })
             }
 
-            _ => bail!("invalid add"),
+            _ => None,
         }
+    }
+
+    /// TODO DOCS
+    pub fn uextend(lhs: Self, from_width: u8, to_width: u8) -> Option<Self> {
+        match lhs {
+            // If we have a defined value in bits 0..bit_width, and we
+            // are filling zeroes into from_bits..to_bits, and
+            // bit_width and from_bits are exactly contiguous, then we
+            // have defined values in 0..to_bits (and because this is
+            // a zero-extend, the max value is the same).
+            Fact::ValueMax { bit_width, max } if bit_width == from_width => Some(Fact::ValueMax {
+                bit_width: to_width,
+                max,
+            }),
+            _ => None,
+        }
+    }
+
+    /// TODO DOCS
+    pub fn sextend(lhs: Self, from_width: u8, to_width: u8) -> Option<Self> {
+        unimplemented!("HELP I AM NOT IMPLEMENTED")
+    }
+
+    /// TODO FITZGEN
+    pub fn check_add(
+        lhs: Self,
+        rhs: Self,
+        result: Fact,
+        add_width: u8,
+        pointer_width: u8,
+    ) -> FactResult<()> {
+        panic!("rewrite me in terms of Self::add");
+        Ok(())
+    }
+
+    // TODO: use `u16` or more for bits (consider e.g. AVX-512 and flexible SIMD)?
+    /// Check a `uextend`.
+    pub fn check_uextend(value: Fact, result: Fact, from_bits: u8, to_bits: u8) -> FactResult<()> {
+        // TODO
 
         Ok(())
     }
@@ -188,13 +215,17 @@ pub fn check_facts<B: LowerBackend + TargetIsa>(
     f: &ir::Function,
     vcode: &VCode<B::MInst>,
     backend: &B,
-) -> CodegenResult<()> {
+) -> FactResult<()> {
     for inst in 0..vcode.num_insts() {
         let inst = InsnIndex::new(inst);
-        if vcode.inst_defines_facts(inst) {
-            // This instruction defines a register with a new
-            // fact. We'll call into the backend to validate this fact
-            // with respect to the instruction and the input facts.
+        if vcode.inst_defines_facts(inst) || vcode[inst].is_mem_access() {
+            // This instruction defines a register with a new fact, or
+            // has some side-effect we want to be careful to
+            // verify. We'll call into the backend to validate this
+            // fact with respect to the instruction and the input
+            // facts.
+            //
+            // TODO: check insts that can trap as well?
             backend.check_fact(&vcode[inst], vcode)?;
         }
     }

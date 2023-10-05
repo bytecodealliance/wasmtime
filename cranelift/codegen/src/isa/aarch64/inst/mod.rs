@@ -1045,6 +1045,34 @@ impl MachInst for Inst {
         }
     }
 
+    fn is_mem_access(&self) -> bool {
+        match self {
+            &Inst::ULoad8 { .. }
+            | &Inst::SLoad8 { .. }
+            | &Inst::ULoad16 { .. }
+            | &Inst::SLoad16 { .. }
+            | &Inst::ULoad32 { .. }
+            | &Inst::SLoad32 { .. }
+            | &Inst::ULoad64 { .. }
+            | &Inst::LoadP64 { .. }
+            | &Inst::FpuLoad32 { .. }
+            | &Inst::FpuLoad64 { .. }
+            | &Inst::FpuLoad128 { .. }
+            | &Inst::FpuLoadP64 { .. }
+            | &Inst::FpuLoadP128 { .. }
+            | &Inst::Store8 { .. }
+            | &Inst::Store16 { .. }
+            | &Inst::Store32 { .. }
+            | &Inst::Store64 { .. }
+            | &Inst::StoreP64 { .. }
+            | &Inst::FpuStore32 { .. }
+            | &Inst::FpuStore64 { .. }
+            | &Inst::FpuStore128 { .. } => true,
+            // TODO: verify this carefully
+            _ => false,
+        }
+    }
+
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
         let bits = ty.bits();
 

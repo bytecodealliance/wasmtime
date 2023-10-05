@@ -7,14 +7,20 @@
 //!
 //! - Floating-point immediates (FIMM instruction).
 
+use crate::facts::FactResult;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::Inst as IRInst;
 use crate::ir::{Opcode, Value};
 use crate::isa::aarch64::inst::*;
+use crate::isa::aarch64::pcc;
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::lower::*;
 use crate::machinst::Reg;
 use crate::machinst::*;
+use crate::machinst::{Reg, Writable};
+use crate::CodegenResult;
+use crate::{machinst::*, trace};
+use smallvec::{smallvec, SmallVec};
 
 pub mod isle;
 
@@ -128,5 +134,9 @@ impl LowerBackend for AArch64Backend {
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {
         Some(regs::pinned_reg())
+    }
+
+    fn check_fact(&self, inst: &Self::MInst, vcode: &VCode<Self::MInst>) -> FactResult<()> {
+        pcc::check(inst, vcode)
     }
 }
