@@ -5,7 +5,6 @@ use crate::preview2::bindings::sockets::network::{
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
 use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, WasiView};
 use anyhow::Result;
-use std::io;
 use std::mem;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::pin::Pin;
@@ -13,8 +12,8 @@ use std::vec;
 use wasmtime::component::Resource;
 
 pub enum ResolveAddressStream {
-    Waiting(AbortOnDropJoinHandle<io::Result<Vec<IpAddress>>>),
-    Done(io::Result<vec::IntoIter<IpAddress>>),
+    Waiting(AbortOnDropJoinHandle<Result<Vec<IpAddress>, Error>>),
+    Done(Result<vec::IntoIter<IpAddress>, Error>),
 }
 
 #[async_trait::async_trait]
@@ -50,7 +49,7 @@ impl<T: WasiView> Host for T {
         // the usage of the `ToSocketAddrs` trait. This blocks the current
         // thread, so use `spawn_blocking`. Finally note that this is only
         // resolving names, not ports, so force the port to be 0.
-        let task = spawn_blocking(move || -> io::Result<Vec<_>> {
+        let task = spawn_blocking(move || -> Result<Vec<_>, Error> {
             let result = (name.as_str(), 0)
                 .to_socket_addrs()
                 .map_err(|_| ErrorCode::NameUnresolvable)?; // If/when we use `getaddrinfo` directly, map the error properly.
@@ -102,12 +101,6 @@ impl<T: WasiView> HostResolveAddressStream for T {
                     }
                 }
                 ResolveAddressStream::Done(slot @ Err(_)) => {
-                    // TODO: this `?` is what converts `io::Error` into `Error`
-                    // and the conversion is not great right now. The standard
-                    // library doesn't expose a ton of information through the
-                    // return value of `getaddrinfo` right now so supporting a
-                    // richer conversion here will probably require calling
-                    // `getaddrinfo` directly.
                     mem::replace(slot, Ok(Vec::new().into_iter()))?;
                     unreachable!();
                 }
