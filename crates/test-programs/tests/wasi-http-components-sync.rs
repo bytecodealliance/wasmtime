@@ -87,11 +87,7 @@ fn run(name: &str, server: &Server) -> Result<()> {
         let http = WasiHttpCtx {};
 
         let (mut store, command) = instantiate_component(component, Ctx { table, wasi, http })?;
-        command
-            .wasi_cli_run()
-            .call_run(&mut store)?
-            .map_err(|()| anyhow::anyhow!("run returned a failure"))?;
-        Ok(())
+        command.wasi_cli_run().call_run(&mut store)
     };
     r.map_err(move |trap: anyhow::Error| {
         let stdout = stdout.try_into_inner().expect("single ref to stdout");
@@ -106,7 +102,8 @@ fn run(name: &str, server: &Server) -> Result<()> {
             "error while testing wasi-tests {} with http-components-sync",
             name
         ))
-    })?;
+    })?
+    .map_err(|()| anyhow::anyhow!("run returned an error"))?;
     Ok(())
 }
 
