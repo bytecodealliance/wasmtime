@@ -26,9 +26,8 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
         assert!(matches!(sock.set_ipv6_only(false), Ok(_)));
     }
 
-    // FIXME: #7034
-    // assert!(matches!(sock.set_listen_backlog_size(0), Ok(_))); // Unsupported sizes should be silently capped.
-    // assert!(matches!(sock.set_listen_backlog_size(u64::MAX), Ok(_))); // Unsupported sizes should be silently capped.
+    assert!(matches!(sock.set_listen_backlog_size(0), Ok(_))); // Unsupported sizes should be silently capped.
+    assert!(matches!(sock.set_listen_backlog_size(u64::MAX), Ok(_))); // Unsupported sizes should be silently capped.
 
     assert!(matches!(sock.set_keep_alive(true), Ok(_)));
     assert!(matches!(sock.set_keep_alive(false), Ok(_)));
