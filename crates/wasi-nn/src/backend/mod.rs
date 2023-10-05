@@ -52,9 +52,9 @@ pub trait BackendExecutionContext: Send + Sync {
 /// for failures interacting with the ML library.
 #[derive(Debug, Error)]
 pub enum BackendError {
-    #[error("Failed while accessing backend")]
+    #[error("Failed while accessing backend: {0}")]
     BackendAccess(#[from] anyhow::Error),
-    #[error("Failed while accessing guest module")]
+    #[error("Failed while accessing guest module: {0}")]
     GuestAccess(#[from] GuestError),
     #[error("The backend expects {0} buffers, passed {1}")]
     InvalidNumberOfBuilders(usize, usize),
