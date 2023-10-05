@@ -1,5 +1,6 @@
 use crate::preview2::filesystem::FileInputStream;
 use crate::preview2::poll::Subscribe;
+use crate::preview2::TableError;
 use anyhow::Result;
 use bytes::Bytes;
 
@@ -19,17 +20,26 @@ pub trait HostInputStream: Subscribe {
     ///
     /// The [`StreamError`] return value communicates when this stream is
     /// closed, when a read fails, or when a trap should be generated.
-    fn read(&mut self, size: usize) -> Result<Bytes, StreamError>;
+    fn read(&mut self, size: usize) -> StreamResult<Bytes>;
 
     /// Same as the `read` method except that bytes are skipped.
     ///
     /// Note that this method is non-blocking like `read` and returns the same
     /// errors.
-    fn skip(&mut self, nelem: usize) -> Result<usize, StreamError> {
+    fn skip(&mut self, nelem: usize) -> StreamResult<usize> {
         let bs = self.read(nelem)?;
         Ok(bs.len())
     }
 }
+
+/// Representation of the `error` resource type in the `wasi:io/streams`
+/// interface.
+///
+/// This is currently `anyhow::Error` to retain full type information for
+/// errors.
+pub type Error = anyhow::Error;
+
+pub type StreamResult<T> = Result<T, StreamError>;
 
 #[derive(Debug)]
 pub enum StreamError {
@@ -37,6 +47,13 @@ pub enum StreamError {
     LastOperationFailed(anyhow::Error),
     Trap(anyhow::Error),
 }
+
+impl StreamError {
+    pub fn trap(msg: &str) -> StreamError {
+        StreamError::Trap(anyhow::anyhow!("{msg}"))
+    }
+}
+
 impl std::fmt::Display for StreamError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -46,12 +63,19 @@ impl std::fmt::Display for StreamError {
         }
     }
 }
+
 impl std::error::Error for StreamError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             StreamError::Closed => None,
             StreamError::LastOperationFailed(e) | StreamError::Trap(e) => e.source(),
         }
+    }
+}
+
+impl From<TableError> for StreamError {
+    fn from(error: TableError) -> Self {
+        Self::Trap(error.into())
     }
 }
 
@@ -75,7 +99,7 @@ pub trait HostOutputStream: Subscribe {
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
-    fn write(&mut self, bytes: Bytes) -> Result<(), StreamError>;
+    fn write(&mut self, bytes: Bytes) -> StreamResult<()>;
 
     /// Trigger a flush of any bytes buffered in this stream implementation.
     ///
@@ -96,7 +120,7 @@ pub trait HostOutputStream: Subscribe {
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
-    fn flush(&mut self) -> Result<(), StreamError>;
+    fn flush(&mut self) -> StreamResult<()>;
 
     /// Returns the number of bytes that are ready to be written to this stream.
     ///
@@ -110,13 +134,13 @@ pub trait HostOutputStream: Subscribe {
     /// Returns an [`StreamError`] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
-    fn check_write(&mut self) -> Result<usize, StreamError>;
+    fn check_write(&mut self) -> StreamResult<usize>;
 
     /// Repeatedly write a byte to a stream.
     /// Important: this write must be non-blocking!
     /// Returning an Err which downcasts to a [`StreamError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn write_zeroes(&mut self, nelem: usize) -> Result<(), StreamError> {
+    fn write_zeroes(&mut self, nelem: usize) -> StreamResult<()> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
@@ -126,7 +150,7 @@ pub trait HostOutputStream: Subscribe {
 
     /// Simultaneously waits for this stream to be writable and then returns how
     /// much may be written or the last error that happened.
-    async fn write_ready(&mut self) -> Result<usize, StreamError> {
+    async fn write_ready(&mut self) -> StreamResult<usize> {
         self.ready().await;
         self.check_write()
     }

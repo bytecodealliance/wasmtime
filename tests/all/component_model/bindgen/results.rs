@@ -241,6 +241,39 @@ mod enum_error {
         trappable_error_type: { "inline:inline/imports"::e1: TrappableE1 }
     });
 
+    // You can create concrete trap types which make it all the way out to the
+    // host caller, via downcast_ref below.
+    #[derive(Debug)]
+    pub struct MyTrap;
+
+    impl std::fmt::Display for MyTrap {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:?}", self)
+        }
+    }
+    impl std::error::Error for MyTrap {}
+
+    pub enum TrappableE1 {
+        Normal(imports::E1),
+        MyTrap(MyTrap),
+    }
+
+    // It is possible to define From impls that target these generated trappable
+    // types. This allows you to integrate libraries with other error types, or
+    // use your own more descriptive error types, and use ? to convert them at
+    // their throw site.
+    impl From<MyTrap> for TrappableE1 {
+        fn from(t: MyTrap) -> TrappableE1 {
+            TrappableE1::MyTrap(t)
+        }
+    }
+
+    impl From<imports::E1> for TrappableE1 {
+        fn from(t: imports::E1) -> TrappableE1 {
+            TrappableE1::Normal(t)
+        }
+    }
+
     #[test]
     fn run() -> Result<(), Error> {
         let engine = engine();
@@ -305,33 +338,18 @@ mod enum_error {
             ),
         )?;
 
-        // You can create concrete trap types which make it all the way out to the
-        // host caller, via downcast_ref below.
-        #[derive(Debug)]
-        struct MyTrap;
-
-        impl std::fmt::Display for MyTrap {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{:?}", self)
-            }
-        }
-        impl std::error::Error for MyTrap {}
-
-        // It is possible to define From impls that target these generated trappable
-        // types. This allows you to integrate libraries with other error types, or
-        // use your own more descriptive error types, and use ? to convert them at
-        // their throw site.
-        impl From<MyTrap> for imports::TrappableE1 {
-            fn from(t: MyTrap) -> imports::TrappableE1 {
-                imports::TrappableE1::trap(anyhow!(t))
-            }
-        }
-
         #[derive(Default)]
         struct MyImports {}
 
         impl imports::Host for MyImports {
-            fn enum_error(&mut self, a: f64) -> Result<f64, imports::TrappableE1> {
+            fn convert_e1(&mut self, err: TrappableE1) -> anyhow::Result<imports::E1> {
+                match err {
+                    TrappableE1::Normal(e) => Ok(e),
+                    TrappableE1::MyTrap(e) => Err(e.into()),
+                }
+            }
+
+            fn enum_error(&mut self, a: f64) -> Result<f64, TrappableE1> {
                 if a == 0.0 {
                     Ok(a)
                 } else if a == 1.0 {
@@ -405,6 +423,17 @@ mod record_error {
         trappable_error_type: { "inline:inline/imports"::"e2": TrappableE2 }
     });
 
+    pub enum TrappableE2 {
+        Normal(imports::E2),
+        Trap(anyhow::Error),
+    }
+
+    impl From<imports::E2> for TrappableE2 {
+        fn from(t: imports::E2) -> TrappableE2 {
+            TrappableE2::Normal(t)
+        }
+    }
+
     #[test]
     fn run() -> Result<(), Error> {
         let engine = engine();
@@ -476,7 +505,13 @@ mod record_error {
         struct MyImports {}
 
         impl imports::Host for MyImports {
-            fn record_error(&mut self, a: f64) -> Result<f64, imports::TrappableE2> {
+            fn convert_e2(&mut self, err: TrappableE2) -> anyhow::Result<imports::E2> {
+                match err {
+                    TrappableE2::Normal(e) => Ok(e),
+                    TrappableE2::Trap(e) => Err(e.into()),
+                }
+            }
+            fn record_error(&mut self, a: f64) -> Result<f64, TrappableE2> {
                 if a == 0.0 {
                     Ok(a)
                 } else if a == 1.0 {
@@ -485,7 +520,7 @@ mod record_error {
                         col: 1312,
                     })?
                 } else {
-                    Err(imports::TrappableE2::trap(anyhow!("record_error: trap")))
+                    Err(TrappableE2::Trap(anyhow!("record_error: trap")))
                 }
             }
         }
@@ -558,6 +593,17 @@ mod variant_error {
         }",
         trappable_error_type: { "inline:inline/imports"::e3: TrappableE3 }
     });
+
+    pub enum TrappableE3 {
+        Normal(imports::E3),
+        Trap(anyhow::Error),
+    }
+
+    impl From<imports::E3> for TrappableE3 {
+        fn from(t: imports::E3) -> TrappableE3 {
+            TrappableE3::Normal(t)
+        }
+    }
 
     #[test]
     fn run() -> Result<(), Error> {
@@ -653,7 +699,13 @@ mod variant_error {
         struct MyImports {}
 
         impl imports::Host for MyImports {
-            fn variant_error(&mut self, a: f64) -> Result<f64, imports::TrappableE3> {
+            fn convert_e3(&mut self, err: TrappableE3) -> anyhow::Result<imports::E3> {
+                match err {
+                    TrappableE3::Normal(e) => Ok(e),
+                    TrappableE3::Trap(e) => Err(e.into()),
+                }
+            }
+            fn variant_error(&mut self, a: f64) -> Result<f64, TrappableE3> {
                 if a == 0.0 {
                     Ok(a)
                 } else if a == 1.0 {
@@ -662,7 +714,7 @@ mod variant_error {
                         col: 1312,
                     }))?
                 } else {
-                    Err(imports::TrappableE3::trap(anyhow!("variant_error: trap")))
+                    Err(TrappableE3::Trap(anyhow!("variant_error: trap")))
                 }
             }
         }
@@ -736,6 +788,17 @@ mod multiple_interfaces_error {
         }",
         trappable_error_type: { "inline:inline/types"::e1: TrappableE1 }
     });
+
+    pub enum TrappableE1 {
+        Normal(types::E1),
+        Trap(anyhow::Error),
+    }
+
+    impl From<types::E1> for TrappableE1 {
+        fn from(t: imports::E1) -> TrappableE1 {
+            TrappableE1::Normal(t)
+        }
+    }
 
     #[test]
     fn run() -> Result<(), Error> {
@@ -819,9 +882,9 @@ mod multiple_interfaces_error {
         // types. This allows you to integrate libraries with other error types, or
         // use your own more descriptive error types, and use ? to convert them at
         // their throw site.
-        impl From<MyTrap> for types::TrappableE1 {
-            fn from(t: MyTrap) -> types::TrappableE1 {
-                types::TrappableE1::trap(anyhow!(t))
+        impl From<MyTrap> for TrappableE1 {
+            fn from(t: MyTrap) -> TrappableE1 {
+                TrappableE1::Trap(anyhow!(t))
             }
         }
 
@@ -829,7 +892,13 @@ mod multiple_interfaces_error {
         struct MyImports {}
 
         impl types::Host for MyImports {
-            fn enum_error(&mut self, a: f64) -> Result<f64, types::TrappableE1> {
+            fn convert_e1(&mut self, err: TrappableE1) -> anyhow::Result<imports::E1> {
+                match err {
+                    TrappableE1::Normal(e) => Ok(e),
+                    TrappableE1::Trap(e) => Err(e.into()),
+                }
+            }
+            fn enum_error(&mut self, a: f64) -> Result<f64, TrappableE1> {
                 if a == 0.0 {
                     Ok(a)
                 } else if a == 1.0 {
@@ -841,7 +910,7 @@ mod multiple_interfaces_error {
         }
 
         impl imports::Host for MyImports {
-            fn enum_error(&mut self, a: f64) -> Result<f64, types::TrappableE1> {
+            fn enum_error(&mut self, a: f64) -> Result<f64, TrappableE1> {
                 if a == 0.0 {
                     Ok(a)
                 } else if a == 1.0 {

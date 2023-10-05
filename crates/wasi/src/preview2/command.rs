@@ -4,10 +4,6 @@ wasmtime::component::bindgen!({
     world: "wasi:cli/command",
     tracing: true,
     async: true,
-    trappable_error_type: {
-        "wasi:filesystem/types"::"error-code": Error,
-        "wasi:sockets/tcp"::"error-code": Error,
-    },
     with: {
        "wasi:filesystem/types": crate::preview2::bindings::filesystem::types,
        "wasi:filesystem/preopens": crate::preview2::bindings::filesystem::preopens,
@@ -65,10 +61,6 @@ pub mod sync {
         world: "wasi:cli/command",
         tracing: true,
         async: false,
-        trappable_error_type: {
-            "wasi:filesystem/types"::"error-code": Error,
-            "wasi:sockets/tcp"::"error-code": Error,
-        },
         with: {
            "wasi:filesystem/types": crate::preview2::bindings::sync_io::filesystem::types,
            "wasi:filesystem/preopens": crate::preview2::bindings::filesystem::preopens,
