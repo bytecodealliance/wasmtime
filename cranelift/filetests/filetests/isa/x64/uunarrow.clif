@@ -15,10 +15,9 @@ block0(v0: f64x2):
 ; block0:
 ;   uninit  %xmm3
 ;   xorpd   %xmm3, %xmm3, %xmm3
-;   movdqa  %xmm0, %xmm7
-;   maxpd   %xmm7, %xmm3, %xmm7
-;   minpd   %xmm7, const(0), %xmm7
-;   roundpd $3, %xmm7, %xmm0
+;   maxpd   %xmm0, %xmm3, %xmm0
+;   minpd   %xmm0, const(0), %xmm0
+;   roundpd $3, %xmm0, %xmm0
 ;   addpd   %xmm0, const(1), %xmm0
 ;   shufps  $136, %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
@@ -31,15 +30,16 @@ block0(v0: f64x2):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   xorpd %xmm3, %xmm3
-;   movdqa %xmm0, %xmm7
-;   maxpd %xmm3, %xmm7
-;   minpd 0x18(%rip), %xmm7
-;   roundpd $3, %xmm7, %xmm0
-;   addpd 0x1a(%rip), %xmm0
+;   maxpd %xmm3, %xmm0
+;   minpd 0x1c(%rip), %xmm0
+;   roundpd $3, %xmm0, %xmm0
+;   addpd 0x1e(%rip), %xmm0
 ;   shufps $0x88, %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %ah, %al
 

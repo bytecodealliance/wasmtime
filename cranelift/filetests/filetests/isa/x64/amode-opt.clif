@@ -210,9 +210,8 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rsi, %rdx
-;   shll    $3, %edx, %edx
-;   movq    -1(%rdi,%rdx,1), %rax
+;   shll    $3, %esi, %esi
+;   movq    -1(%rdi,%rsi,1), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -222,9 +221,8 @@ block0(v0: i64, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rsi, %rdx
-;   shll $3, %edx
-;   movq -1(%rdi, %rdx), %rax ; trap: heap_oob
+;   shll $3, %esi
+;   movq -1(%rdi, %rsi), %rax ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
