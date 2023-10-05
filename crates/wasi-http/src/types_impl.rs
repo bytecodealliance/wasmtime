@@ -470,7 +470,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
         headers: Resource<Headers>,
     ) -> wasmtime::Result<Resource<HostOutgoingResponse>> {
         let fields = get_fields_mut(self.table(), &headers)?.clone();
-        self.table().delete_resource(headers)?;
 
         let id = self.table().push_resource(HostOutgoingResponse {
             status,

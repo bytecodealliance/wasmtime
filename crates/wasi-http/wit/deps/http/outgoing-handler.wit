@@ -14,7 +14,7 @@ interface outgoing-handler {
   // Consumes the outgoing-request. Gives an error if the outgoing-request
   // is invalid or cannot be satisfied by this handler.
   handle: func(
-    request: /* own */ outgoing-request,
+    request: outgoing-request,
     options: option<request-options>
   ) -> result<future-incoming-response, error>
 }
