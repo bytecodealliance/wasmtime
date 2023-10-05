@@ -43,7 +43,7 @@ impl<T: WasiView> types::Host for T {
         // Currently `err` always comes from the stream implementation which
         // uses standard reads/writes so only check for `std::io::Error` here.
         if let Some(err) = err.downcast_ref::<std::io::Error>() {
-            return Ok(Some(ErrorCode::from(err.clone())));
+            return Ok(Some(ErrorCode::from(err)));
         }
 
         Ok(None)
