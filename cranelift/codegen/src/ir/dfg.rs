@@ -1,11 +1,11 @@
 //! Data flow graph tracking Instructions, Values, and blocks.
 
 use crate::entity::{self, PrimaryMap, SecondaryMap};
-use crate::ir::pcc::Fact;
 use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
+use crate::ir::pcc::Fact;
 use crate::ir::{
     types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
     Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,

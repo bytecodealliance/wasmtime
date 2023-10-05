@@ -9,18 +9,13 @@
 
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::pcc::PccResult;
-use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
 use crate::ir::{Opcode, Value};
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::pcc;
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::lower::*;
-use crate::machinst::Reg;
 use crate::machinst::*;
-use crate::machinst::{Reg, Writable};
-use crate::{machinst::*, trace};
-use smallvec::{smallvec, SmallVec};
 
 pub mod isle;
 
