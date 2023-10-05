@@ -2,8 +2,8 @@
 // define the HTTP resource types and operations used by the component's
 // imported and exported interfaces.
 interface types {
-  use wasi:io/streams.{input-stream, output-stream}
-  use wasi:io/poll.{pollable}
+  use wasi:io/streams.{input-stream, output-stream};
+  use wasi:io/poll.{pollable};
 
   // This type corresponds to HTTP standard Methods.
   variant method {
@@ -43,28 +43,28 @@ interface types {
   resource fields {
     // Multiple values for a header are multiple entries in the list with the
     // same key.
-    constructor(entries: list<tuple<string,list<u8>>>)
+    constructor(entries: list<tuple<string,list<u8>>>);
 
     // Values off wire are not necessarily well formed, so they are given by
     // list<u8> instead of string.
-    get: func(name: string) -> list<list<u8>>
+    get: func(name: string) -> list<list<u8>>;
 
     // Values off wire are not necessarily well formed, so they are given by
     // list<u8> instead of string.
-    set: func(name: string, value: list<list<u8>>)
-    delete: func(name: string)
-    append: func(name: string, value: list<u8>)
+    set: func(name: string, value: list<list<u8>>);
+    delete: func(name: string);
+    append: func(name: string, value: list<u8>);
 
     // Values off wire are not necessarily well formed, so they are given by
     // list<u8> instead of string.
-    entries: func() -> list<tuple<string,list<u8>>>
+    entries: func() -> list<tuple<string,list<u8>>>;
 
     // Deep copy of all contents in a fields.
-    clone: func() -> fields
+    clone: func() -> fields;
   }
 
-  type headers = fields
-  type trailers = fields
+  type headers = fields;
+  type trailers = fields;
 
   // The following block defines the `incoming-request` and `outgoing-request`
   // resource types that correspond to HTTP standard Requests. Soon, when
@@ -75,19 +75,19 @@ interface types {
   // above). The `consume` and `write` methods may only be called once (and
   // return failure thereafter).
   resource incoming-request {
-    method: func() -> method
+    method: func() -> method;
 
-    path-with-query: func() -> option<string>
+    path-with-query: func() -> option<string>;
 
-    scheme: func() -> option<scheme>
+    scheme: func() -> option<scheme>;
 
-    authority: func() -> option<string>
+    authority: func() -> option<string>;
 
-    headers: func() -> /* child */ headers
+    headers: func() -> /* child */ headers;
     // Will return the input-stream child at most once. If called more than
     // once, subsequent calls will return error.
 
-    consume: func() -> result<incoming-body>
+    consume: func() -> result<incoming-body>;
   }
 
   resource outgoing-request {
@@ -97,11 +97,11 @@ interface types {
       scheme: option<scheme>,
       authority: option<string>,
       headers: borrow<headers>
-    )
+    );
 
     // Will return the outgoing-body child at most once. If called more than
     // once, subsequent calls will return error.
-    write: func() -> result< /* child */ outgoing-body>
+    write: func() -> result< /* child */ outgoing-body>;
   }
 
   // Additional optional parameters that can be set when making a request.
@@ -127,11 +127,11 @@ interface types {
   // (the `wasi:http/handler` interface used for both incoming and outgoing can
   // simply return a `stream`).
   resource response-outparam {
-    set: static func(param: response-outparam, response: result<outgoing-response, error>)
+    set: static func(param: response-outparam, response: result<outgoing-response, error>);
   }
 
   // This type corresponds to the HTTP standard Status Code.
-  type status-code = u16
+  type status-code = u16;
 
   // The following block defines the `incoming-response` and `outgoing-response`
   // resource types that correspond to HTTP standard Responses. Soon, when
@@ -141,14 +141,14 @@ interface types {
   // type (that uses the single `stream` type mentioned above). The `consume` and
   // `write` methods may only be called once (and return failure thereafter).
   resource incoming-response {
-    status: func() -> status-code
+    status: func() -> status-code;
 
-    headers: func() -> /* child */ headers
+    headers: func() -> /* child */ headers;
 
     // May be called at most once. returns error if called additional times.
     // TODO: make incoming-request-consume work the same way, giving a child
     // incoming-body.
-    consume: func() -> result<incoming-body>
+    consume: func() -> result<incoming-body>;
   }
 
   resource incoming-body {
@@ -156,41 +156,41 @@ interface types {
     // incoming-body is dropped (or consumed by call to
     // incoming-body-finish) before the input-stream is dropped.
     // May be called at most once. returns error if called additional times.
-    %stream: func() -> result</* child */ input-stream>
+    %stream: func() -> result</* child */ input-stream>;
 
     // takes ownership of incoming-body. this will trap if the
     // incoming-body-stream child is still alive!
     finish: static func(this: incoming-body) ->
-    /* transitive child of the incoming-response of incoming-body */ future-trailers
+    /* transitive child of the incoming-response of incoming-body */ future-trailers;
   }
 
   resource future-trailers {
     /// Pollable that resolves when the body has been fully read, and the trailers
     /// are ready to be consumed.
-    subscribe: func() -> /* child */ pollable
+    subscribe: func() -> /* child */ pollable;
 
     /// Retrieve reference to trailers, if they are ready.
-    get: func() -> option<result</* child */ trailers, error>>
+    get: func() -> option<result</* child */ trailers, error>>;
   }
 
   resource outgoing-response {
-    constructor(status-code: status-code, headers: borrow<headers>)
+    constructor(status-code: status-code, headers: borrow<headers>);
 
     /// Will give the child outgoing-response at most once. subsequent calls will
     /// return an error.
-    write: func() -> result<outgoing-body>
+    write: func() -> result<outgoing-body>;
   }
 
   resource outgoing-body {
     /// Will give the child output-stream at most once. subsequent calls will
     /// return an error.
-    write: func() -> result</* child */ output-stream>
+    write: func() -> result</* child */ output-stream>;
 
     /// Finalize an outgoing body, optionally providing trailers. This must be
     /// called to signal that the response is complete. If the `outgoing-body` is
     /// dropped without calling `outgoing-body-finalize`, the implementation
     /// should treat the body as corrupted.
-    finish: static func(this: outgoing-body, trailers: option<trailers>)
+    finish: static func(this: outgoing-body, trailers: option<trailers>);
   }
 
   /// The following block defines a special resource type used by the
@@ -207,8 +207,8 @@ interface types {
     /// will return an error here.
     /// inner result indicates whether the incoming-response was available, or an
     /// error occured.
-    get: func() -> option<result<result</* NOT a child*/ incoming-response, error>>>
+    get: func() -> option<result<result</* NOT a child*/ incoming-response, error>>>;
 
-    subscribe: func() -> /* child */ pollable
+    subscribe: func() -> /* child */ pollable;
   }
 }
