@@ -423,7 +423,7 @@ jobs:
       if: matrix.target != ''
 
     # Install OpenVINO for testing wasmtime-wasi-nn.
-    - uses: abrown/install-openvino-action@v6
+    - uses: abrown/install-openvino-action@v7
       with:
         version: 2022.3.0
     - run: echo OPENVINO_BUILD_DIR="${{ env.OPENVINO_INSTALL_DIR }}" >> $GITHUB_ENV
