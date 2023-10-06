@@ -1,9 +1,7 @@
 use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
-use crate::preview2::bindings::sockets::network::{
-    Error, ErrorCode, IpAddress, IpAddressFamily, Network,
-};
+use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, Network};
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
-use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, WasiView};
+use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
 use anyhow::Result;
 use std::io;
 use std::mem;
@@ -25,7 +23,7 @@ impl<T: WasiView> Host for T {
         name: String,
         family: Option<IpAddressFamily>,
         include_unavailable: bool,
-    ) -> Result<Resource<ResolveAddressStream>, Error> {
+    ) -> Result<Resource<ResolveAddressStream>, SocketError> {
         let network = self.table().get_resource(&network)?;
 
         // `Host::parse` serves us two functions:
@@ -87,7 +85,7 @@ impl<T: WasiView> HostResolveAddressStream for T {
     fn resolve_next_address(
         &mut self,
         resource: Resource<ResolveAddressStream>,
-    ) -> Result<Option<IpAddress>, Error> {
+    ) -> Result<Option<IpAddress>, SocketError> {
         let stream = self.table_mut().get_resource_mut(&resource)?;
         loop {
             match stream {
