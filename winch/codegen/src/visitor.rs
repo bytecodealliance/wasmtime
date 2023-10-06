@@ -828,7 +828,6 @@ where
                 let at = cx.stack.len() - 3;
                 cx.stack
                     .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
-                dbg!(&cx.stack);
 
                 call.calculate_call_stack_space(cx).reg(masm, cx, callee);
             },
