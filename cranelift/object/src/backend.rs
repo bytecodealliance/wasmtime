@@ -795,14 +795,14 @@ impl ObjectModule {
                     0,
                 )
             }
-            Reloc::RiscvCall => {
+            Reloc::RiscvCallPlt => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "RiscvCall is not supported for this file format"
+                    "RiscvCallPlt is not supported for this file format"
                 );
                 (
-                    RelocationKind::Elf(object::elf::R_RISCV_CALL),
+                    RelocationKind::Elf(object::elf::R_RISCV_CALL_PLT),
                     RelocationEncoding::Generic,
                     0,
                 )

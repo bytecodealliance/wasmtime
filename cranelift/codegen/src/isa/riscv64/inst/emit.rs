@@ -1329,7 +1329,7 @@ impl Inst {
                         if info.opcode.is_call() {
                             sink.add_call_site(info.opcode);
                         }
-                        sink.add_reloc(Reloc::RiscvCall, &info.dest, 0);
+                        sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
                         if let Some(s) = state.take_stack_map() {
                             sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
                         }
@@ -1419,7 +1419,7 @@ impl Inst {
                 );
 
                 sink.add_call_site(ir::Opcode::ReturnCall);
-                sink.add_reloc(Reloc::RiscvCall, &**callee, 0);
+                sink.add_reloc(Reloc::RiscvCallPlt, &**callee, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));

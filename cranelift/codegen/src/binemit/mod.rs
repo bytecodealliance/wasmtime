@@ -85,12 +85,14 @@ pub enum Reloc {
     /// This is equivalent to `R_AARCH64_LD64_GOT_LO12_NC` (312) in the  [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#static-aarch64-relocations)
     Aarch64Ld64GotLo12Nc,
 
-    /// procedure call.
-    /// call symbol
-    /// expands to the following assembly and relocation:
-    /// auipc ra, 0
-    /// jalr ra, ra, 0
-    RiscvCall,
+    /// RISC-V Call PLT: 32-bit PC-relative function call, macros call, tail (PIC)
+    ///
+    /// Despite having PLT in the name, this relocation is also used for normal calls.
+    /// The non-PLT version of this relocation has been deprecated.
+    ///
+    /// This is the `R_RISCV_CALL_PLT` relocation from the RISC-V ELF psABI document.
+    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#procedure-calls
+    RiscvCallPlt,
 
     /// RISC-V TLS GD: High 20 bits of 32-bit PC-relative TLS GD GOT reference,
     ///
@@ -125,7 +127,7 @@ impl fmt::Display for Reloc {
             Self::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
             Self::X86SecRel => write!(f, "SecRel"),
             Self::Arm32Call | Self::Arm64Call => write!(f, "Call"),
-            Self::RiscvCall => write!(f, "RiscvCall"),
+            Self::RiscvCallPlt => write!(f, "RiscvCallPlt"),
             Self::RiscvTlsGdHi20 => write!(f, "RiscvTlsGdHi20"),
             Self::RiscvPCRelLo12I => write!(f, "RiscvPCRelLo12I"),
             Self::ElfX86_64TlsGd => write!(f, "ElfX86_64TlsGd"),

@@ -82,7 +82,7 @@ block0(v0: i64):
 ;   ld t6, 0(s0)
 ;   addi sp, s0, 0x10
 ;   mv s0, t6
-;   auipc t6, 0 ; reloc_external RiscvCall %callee_i64 0
+;   auipc t6, 0 ; reloc_external RiscvCallPlt %callee_i64 0
 ;   jr t6
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

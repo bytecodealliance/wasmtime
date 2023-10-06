@@ -93,8 +93,8 @@ impl CompiledBlob {
                     let imm26 = (diff as u32) << chop >> chop;
                     unsafe { modify_inst32(iptr, |inst| inst | imm26) };
                 }
-                Reloc::RiscvCall => {
-                    // A R_RISCV_CALL relocation expects auipc+jalr instruction pair.
+                Reloc::RiscvCallPlt => {
+                    // A R_RISCV_CALL_PLT relocation expects auipc+jalr instruction pair.
                     // It is the equivalent of two relocations:
                     // 1. R_RISCV_PCREL_HI20 on the `auipc`
                     // 2. R_RISCV_PCREL_LO12_I on the `jalr`
