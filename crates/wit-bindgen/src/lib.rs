@@ -770,24 +770,16 @@ impl Wasmtime {
 fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<TypeId> {
     // foo:bar/baz
 
-    let (_, package) = resolve
+    let (_, interface) = resolve
         .packages
         .iter()
-        .find(|(_, p)| wit_path.starts_with(&p.name.to_string()))
-        .ok_or_else(|| anyhow!("no package found to match `{wit_path}`"))?;
+        .flat_map(|(_, p)| p.interfaces.iter())
+        .find(|(_, id)| wit_path.starts_with(&resolve.id_of(**id).unwrap()))
+        .ok_or_else(|| anyhow!("no package/interface found to match `{wit_path}`"))?;
 
-    let wit_path = wit_path.strip_prefix(&package.name.to_string()).unwrap();
     let wit_path = wit_path
-        .strip_prefix('/')
-        .ok_or_else(|| anyhow!("expected `/` after package name"))?;
-
-    let (iface_name, interface) = package
-        .interfaces
-        .iter()
-        .find(|(name, _)| wit_path.starts_with(name.as_str()))
-        .ok_or_else(|| anyhow!("no interface found to match `{wit_path}` in package"))?;
-
-    let wit_path = wit_path.strip_prefix(iface_name.as_str()).unwrap();
+        .strip_prefix(&resolve.id_of(*interface).unwrap())
+        .unwrap();
     let wit_path = wit_path
         .strip_prefix('/')
         .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
