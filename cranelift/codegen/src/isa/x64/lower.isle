@@ -1265,6 +1265,27 @@
             (cmove ConsumesFlags (cmove ty (CC.S) src neg_result)))
         (with_flags_reg (produces_flags_ignore neg) cmove)))
 
+;; `i128`. Negate the low bits, `adc` to the higher bits, then negate high bits.
+(rule (lower (has_type $I128 (iabs x)))
+      ;; Get the high/low registers for `x`.
+      (let ((x_regs ValueRegs x)
+            (x_lo Gpr (value_regs_get_gpr x_regs 0))
+            (x_hi Gpr (value_regs_get_gpr x_regs 1))
+            ; negate low bits, then add 0 with carry to high bits.
+            (neg_lo ProducesFlags (x64_neg_paired $I64 x_lo))
+            (adc_hi ConsumesFlags (x64_adc_paired $I64 x_hi (imm $I64 0)))
+            (neg_adc_vals ValueRegs (with_flags neg_lo adc_hi))
+            ; negate high bits.
+            (neg_hi ProducesFlags (x64_neg_paired $I64 (value_regs_get neg_adc_vals 1)))
+            (neg_hi_flag_only ProducesFlags (produces_flags_ignore neg_hi))
+            ; cmove based on sign flag from hi negation.
+            (cmove_lo ConsumesFlags (cmove $I64 (CC.S) x_lo
+                                     (value_regs_get neg_adc_vals 0)))
+            (cmove_hi ConsumesFlags (cmove $I64 (CC.S) x_hi
+                                     (produces_flags_get_reg neg_hi)))
+            (cmoves ConsumesFlags (consumes_flags_concat cmove_lo cmove_hi)))
+        (with_flags neg_hi_flag_only cmoves)))
+
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fabs x)))
