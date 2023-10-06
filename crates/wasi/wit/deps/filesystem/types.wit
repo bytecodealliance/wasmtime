@@ -806,5 +806,5 @@ interface types {
     ///
     /// Note that this function is fallible because not all stream-related
     /// errors are filesystem-related errors.
-    filesystem-error-code: func(err: borrow<error>) -> option<error-code>
+    filesystem-error-code: func(err: borrow<error>) -> option<error-code>;
 }

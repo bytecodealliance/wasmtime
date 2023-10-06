@@ -37,7 +37,7 @@ interface streams {
         /// The returned string will change across platforms and hosts which
         /// means that parsing it, for example, would be a
         /// platform-compatibility hazard.
-        to-debug-string: func() -> string
+        to-debug-string: func() -> string;
     }
 
     /// An input bytestream.
