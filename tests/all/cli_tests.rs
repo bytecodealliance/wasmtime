@@ -791,7 +791,8 @@ fn run_basic_component() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(not(feature = "wasi-http"), ignore)]
+// #[cfg_attr(not(feature = "wasi-http"), ignore)]
+#[ignore = "re-enable when we can reference tests from test-programs"]
 fn run_wasi_http_component() -> Result<()> {
     let output = run_wasmtime_for_output(
         &[
