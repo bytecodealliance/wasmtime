@@ -61,6 +61,10 @@ runs:
         CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
         EOF
 
+    - name: Require semicolons in WIT
+      shell: bash
+      run: echo WIT_REQUIRE_SEMICOLONS=1 >> "$GITHUB_ENV"
+
     - name: Choose registry cache key
       shell: bash
       # Update the registry index cache at most once per day. actions/cache
