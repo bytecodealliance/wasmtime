@@ -298,7 +298,7 @@ impl<'a> FnCall<'a> {
         // allocatable throughout the lifetime of the `with_lib` callback, since
         // such registers will be used to assign arguments and hold results.
         // After executing the callback, it's only safe to free the param
-        // registers, since the depending on the signature, the caller
+        // registers, since depending on the signature, the caller
         // will push any result registers to the stack, keeping those registers allocated.
         // Here we ensure that any allocated result registers are correctly
         // freed before finalizing the function call and pushing any results to
