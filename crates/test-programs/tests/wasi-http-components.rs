@@ -161,3 +161,9 @@ async fn outbound_request_invalid_dnsname() -> Result<()> {
     let server = Server::http1()?;
     run("outbound_request_invalid_dnsname", &server).await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn outbound_request_response_build() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_response_build", &server).await
+}
