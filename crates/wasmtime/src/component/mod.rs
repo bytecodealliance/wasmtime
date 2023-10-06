@@ -299,14 +299,15 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 ///     // This can be used to translate WIT return values of the form
 ///     // `result<T, error-type>` into `Result<T, RustErrorType>` in Rust.
-///     // The `RustErrorType` structure will have an automatically generated
-///     // implementation of `From<ErrorType> for RustErrorType`. The
-///     // `RustErrorType` additionally can also represent a trap to
-///     // conveniently flatten all errors into one container.
+///     // Users must define `RustErrorType` and the `Host` trait for the
+///     // interface which defines `error-type` will have a method
+///     // called `convert_error_type` which converts `RustErrorType`
+///     // into `wasmtime::Result<ErrorType>`. This conversion can either
+///     // return the raw WIT error (`ErrorType` here) or a trap.
 ///     //
 ///     // By default this option is not specified.
 ///     trappable_error_type: {
-///         interface::ErrorType: RustErrorType,
+///         "wasi:io/streams/stream-error" => RustErrorType,
 ///     },
 ///
 ///     // All generated bindgen types are "owned" meaning types like `String`

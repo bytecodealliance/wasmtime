@@ -1,6 +1,6 @@
 use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, Context};
 use heck::*;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -114,11 +114,8 @@ pub struct Opts {
 
 #[derive(Debug, Clone)]
 pub struct TrappableError {
-    /// The package and interface that define the error type being mapped.
-    pub wit_package_path: String,
-
-    /// The name of the error type in WIT that is being mapped.
-    pub wit_type_name: String,
+    /// Full path to the error, such as `wasi:io/streams/error`.
+    pub wit_path: String,
 
     /// The name, in Rust, of the error type to generate.
     pub rust_type_name: String,
@@ -220,7 +217,7 @@ impl Wasmtime {
     fn generate(&mut self, resolve: &Resolve, id: WorldId) -> String {
         self.types.analyze(resolve, id);
         for (i, te) in self.opts.trappable_error_type.iter().enumerate() {
-            let id = resolve_type_in_package(resolve, &te.wit_package_path, &te.wit_type_name)
+            let id = resolve_type_in_package(resolve, &te.wit_path)
                 .context(format!("resolving {:?}", te))
                 .unwrap();
             let name = format!("_TrappableError{i}");
@@ -770,77 +767,37 @@ impl Wasmtime {
     }
 }
 
-fn resolve_type_in_package(
-    resolve: &Resolve,
-    package_path: &str,
-    type_name: &str,
-) -> anyhow::Result<TypeId> {
+fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<TypeId> {
     // foo:bar/baz
 
-    let (namespace, rest) = package_path
-        .split_once(':')
-        .ok_or_else(|| anyhow!("Invalid package path: missing package identifier"))?;
+    let (_, package) = resolve
+        .packages
+        .iter()
+        .find(|(_, p)| wit_path.starts_with(&p.name.to_string()))
+        .ok_or_else(|| anyhow!("no package found to match `{wit_path}`"))?;
 
-    let (package_name, iface_name) = rest
-        .split_once('/')
-        .ok_or_else(|| anyhow!("Invalid package path: missing namespace separator"))?;
+    let wit_path = wit_path.strip_prefix(&package.name.to_string()).unwrap();
+    let wit_path = wit_path
+        .strip_prefix('/')
+        .ok_or_else(|| anyhow!("expected `/` after package name"))?;
 
-    // TODO: we should handle version annotations
-    if package_name.contains('@') {
-        bail!("Invalid package path: version parsing is not currently handled");
-    }
-
-    let packages = Vec::from_iter(
-        resolve
-            .package_names
-            .iter()
-            .filter(|(pname, _)| pname.namespace == namespace && pname.name == package_name),
-    );
-
-    if packages.len() != 1 {
-        if packages.is_empty() {
-            bail!("No package named `{}`", namespace);
-        } else {
-            // Getting here is a bug, parsing version identifiers would disambiguate the intended
-            // package.
-            bail!(
-                "Multiple packages named `{}` found ({:?})",
-                namespace,
-                packages
-            );
-        }
-    }
-
-    let (_, &package_id) = packages[0];
-    let package = &resolve.packages[package_id];
-
-    let (_, &iface_id) = package
+    let (iface_name, interface) = package
         .interfaces
         .iter()
-        .find(|(name, _)| name.as_str() == iface_name)
-        .ok_or_else(|| {
-            anyhow!(
-                "Unknown interface `{}` in package `{}`",
-                iface_name,
-                package_path
-            )
-        })?;
+        .find(|(name, _)| wit_path.starts_with(name.as_str()))
+        .ok_or_else(|| anyhow!("no interface found to match `{wit_path}` in package"))?;
 
-    let iface = &resolve.interfaces[iface_id];
+    let wit_path = wit_path.strip_prefix(iface_name.as_str()).unwrap();
+    let wit_path = wit_path
+        .strip_prefix('/')
+        .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
 
-    let (_, &type_id) = iface
+    let (_, id) = resolve.interfaces[*interface]
         .types
         .iter()
-        .find(|(n, _)| n.as_str() == type_name)
-        .ok_or_else(|| {
-            anyhow!(
-                "No type named `{}` in package `{}`",
-                package_name,
-                package_path
-            )
-        })?;
-
-    Ok(type_id)
+        .find(|(name, _)| wit_path == name.as_str())
+        .ok_or_else(|| anyhow!("no types found to match `{wit_path}` in interface"))?;
+    Ok(*id)
 }
 
 struct InterfaceGenerator<'a> {
