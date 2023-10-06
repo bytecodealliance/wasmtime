@@ -889,6 +889,10 @@ impl MachInst for Inst {
         }
     }
 
+    fn is_mem_access(&self) -> bool {
+        panic!("TODO FILL ME OUT")
+    }
+
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
         let x = Inst::Mov {
             rd: to_reg,

@@ -416,6 +416,7 @@ impl Engine {
             | "enable_jump_tables"
             | "enable_float"
             | "enable_verifier"
+            | "enable_pcc"
             | "regalloc_checker"
             | "regalloc_verbose_logs"
             | "is_pic"

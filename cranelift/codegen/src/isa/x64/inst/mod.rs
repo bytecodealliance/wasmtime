@@ -2584,6 +2584,10 @@ impl MachInst for Inst {
         }
     }
 
+    fn is_mem_access(&self) -> bool {
+        panic!("TODO FILL ME OUT")
+    }
+
     fn gen_move(dst_reg: Writable<Reg>, src_reg: Reg, ty: Type) -> Inst {
         trace!(
             "Inst::gen_move {:?} -> {:?} (type: {:?})",

@@ -8,6 +8,7 @@
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
+use crate::ir::pcc::{PccError, PccResult};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
     GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, RelSourceLoc, Type,
@@ -144,6 +145,12 @@ pub trait LowerBackend {
     /// into the associated vreg, instead using the real reg directly.
     fn maybe_pinned_reg(&self) -> Option<Reg> {
         None
+    }
+
+    /// Check any facts about an instruction, given VCode with facts
+    /// on VRegs.
+    fn check_fact(&self, _inst: &Self::MInst, _vcode: &VCode<Self::MInst>) -> PccResult<()> {
+        Err(PccError::UnimplementedBackend)
     }
 }
 
@@ -349,7 +356,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for &param in f.dfg.block_params(bb) {
                 let ty = f.dfg.value_type(param);
                 if value_regs[param].is_invalid() {
-                    let regs = vregs.alloc(ty)?;
+                    let regs = vregs.alloc_with_maybe_fact(ty, f.dfg.facts[param].clone())?;
                     value_regs[param] = regs;
                     trace!("bb {} param {}: regs {:?}", bb, param, regs);
                 }
@@ -358,7 +365,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 for &result in f.dfg.inst_results(inst) {
                     let ty = f.dfg.value_type(result);
                     if value_regs[result].is_invalid() && !ty.is_invalid() {
-                        let regs = vregs.alloc(ty)?;
+                        let regs = vregs.alloc_with_maybe_fact(ty, f.dfg.facts[result].clone())?;
                         value_regs[result] = regs;
                         trace!(
                             "bb {} inst {} ({:?}): result {} regs {:?}",

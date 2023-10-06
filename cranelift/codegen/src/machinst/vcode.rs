@@ -19,6 +19,7 @@
 
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
+use crate::ir::pcc::*;
 use crate::ir::RelSourceLoc;
 use crate::ir::{self, types, Constant, ConstantData, DynamicStackSlot, ValueLabel};
 use crate::machinst::*;
@@ -172,6 +173,9 @@ pub struct VCode<I: VCodeInst> {
     debug_value_labels: Vec<(VReg, InsnIndex, InsnIndex, u32)>,
 
     pub(crate) sigs: SigSet,
+
+    /// Facts on VRegs, for proof-carrying code verification.
+    facts: Vec<Option<Fact>>,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -586,6 +590,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     /// Build the final VCode.
     pub fn build(mut self, vregs: VRegAllocator<I>) -> VCode<I> {
         self.vcode.vreg_types = vregs.vreg_types;
+        self.vcode.facts = vregs.facts;
         self.vcode.reftyped_vregs = vregs.reftyped_vregs;
 
         if self.direction == VCodeBuildDirection::Backward {
@@ -654,6 +659,7 @@ impl<I: VCodeInst> VCode<I> {
             constants,
             debug_value_labels: vec![],
             vreg_aliases: FxHashMap::with_capacity_and_hasher(10 * n_blocks, Default::default()),
+            facts: vec![],
         }
     }
 
@@ -1277,6 +1283,27 @@ impl<I: VCodeInst> VCode<I> {
         self.assert_not_vreg_alias(op.vreg());
         op
     }
+
+    /// Get the fact, if any, for a given VReg.
+    pub fn vreg_fact(&self, vreg: VReg) -> Option<&Fact> {
+        self.facts[vreg.vreg()].as_ref()
+    }
+
+    /// Does a given instruction define any facts?
+    pub fn inst_defines_facts(&self, inst: InsnIndex) -> bool {
+        self.inst_operands(inst)
+            .iter()
+            .filter(|o| o.kind() == OperandKind::Def)
+            .map(|o| o.vreg())
+            .any(|vreg| self.vreg_fact(vreg).is_some())
+    }
+}
+
+impl<I: VCodeInst> std::ops::Index<InsnIndex> for VCode<I> {
+    type Output = I;
+    fn index(&self, idx: InsnIndex) -> &Self::Output {
+        &self.insts[idx.index()]
+    }
 }
 
 impl<I: VCodeInst> RegallocFunction for VCode<I> {
@@ -1431,6 +1458,13 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
                     inst,
                     self.insts[inst].pretty_print_inst(&[], &mut state)
                 )?;
+                for operand in self.inst_operands(InsnIndex::new(inst)) {
+                    if operand.kind() == OperandKind::Def {
+                        if let Some(fact) = &self.facts[operand.vreg().vreg()] {
+                            writeln!(f, "    v{} ! {:?}", operand.vreg().vreg(), fact)?;
+                        }
+                    }
+                }
             }
         }
 
@@ -1462,6 +1496,9 @@ pub struct VRegAllocator<I> {
     /// lowering rules) or some ABI code.
     deferred_error: Option<CodegenError>,
 
+    /// Facts on VRegs, for proof-carrying code.
+    facts: Vec<Option<Fact>>,
+
     /// The type of instruction that this allocator makes registers for.
     _inst: core::marker::PhantomData<I>,
 }
@@ -1472,6 +1509,7 @@ impl<I: VCodeInst> VRegAllocator<I> {
         Self {
             next_vreg: first_user_vreg_index(),
             vreg_types: vec![],
+            facts: vec![],
             reftyped_vregs_set: FxHashSet::default(),
             reftyped_vregs: vec![],
             deferred_error: None,
@@ -1502,6 +1540,11 @@ impl<I: VCodeInst> VRegAllocator<I> {
         for (&reg_ty, &reg) in tys.iter().zip(regs.regs().iter()) {
             self.set_vreg_type(reg.to_virtual_reg().unwrap(), reg_ty);
         }
+
+        // Create empty facts for each allocated vreg.
+        self.facts
+            .resize(usize::try_from(self.next_vreg).unwrap(), None);
+
         Ok(regs)
     }
 
@@ -1549,6 +1592,32 @@ impl<I: VCodeInst> VRegAllocator<I> {
                 self.reftyped_vregs.push(vreg);
             }
         }
+    }
+
+    /// Set the proof-carrying code fact on a given virtual register.
+    ///
+    /// Returns the old fact, if any (only one fact can be stored).
+    pub fn set_fact(&mut self, vreg: VirtualReg, fact: Fact) -> Option<Fact> {
+        self.facts[vreg.index()].replace(fact)
+    }
+
+    /// Allocate a fresh ValueRegs, with a given fact to apply if
+    /// the value fits in one VReg.
+    pub fn alloc_with_maybe_fact(
+        &mut self,
+        ty: Type,
+        fact: Option<Fact>,
+    ) -> CodegenResult<ValueRegs<Reg>> {
+        let result = self.alloc(ty)?;
+
+        // Ensure that we don't lose a fact on a value that splits
+        // into multiple VRegs.
+        assert!(result.len() == 1 || fact.is_none());
+        if let Some(fact) = fact {
+            self.set_fact(result.regs()[0].to_virtual_reg().unwrap(), fact);
+        }
+
+        Ok(result)
     }
 }
 
