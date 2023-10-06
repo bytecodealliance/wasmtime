@@ -64,7 +64,6 @@ env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = { workspace = true }
 tempfile = { workspace = true }
-test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { workspace = true }
 tokio = { workspace = true, features = ["rt", "time", "macros", "rt-multi-thread"] }
 wast = { workspace = true }
@@ -83,6 +82,7 @@ libc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 walkdir = { workspace = true }
+test-programs-artifacts = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
@@ -102,16 +102,8 @@ members = [
   "cranelift/serde",
   "crates/bench-api",
   "crates/c-api",
-  "crates/cli-flags",
   "crates/environ/fuzz",
-  "crates/jit-icache-coherence",
-  "crates/test-programs/wasi-tests",
-  "crates/test-programs/wasi-http-tests",
-  "crates/test-programs/wasi-http-proxy-tests",
-  "crates/test-programs/wasi-sockets-tests",
-  "crates/test-programs/command-tests",
-  "crates/test-programs/reactor-tests",
-  "crates/wmemcheck",
+  "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/winch",
@@ -170,6 +162,7 @@ wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "=15.0
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=15.0.0" }
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=15.0.0" }
+test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.102.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.102.0" }

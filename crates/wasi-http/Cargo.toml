@@ -33,6 +33,13 @@ tokio-rustls = { version = "0.24.0" }
 rustls = { version = "0.21.6" }
 webpki-roots = { version = "0.25.2" }
 
+[dev-dependencies]
+test-programs-artifacts = { workspace = true }
+test-log = { workspace = true }
+tracing-subscriber = { workspace = true }
+wasmtime = { workspace = true, features = ['cranelift'] }
+tokio = { workspace = true, features = ['macros'] }
+
 [features]
 default = ["sync"]
 sync = ["wasmtime-wasi/sync"]
