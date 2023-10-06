@@ -47,7 +47,7 @@ use crate::isa::{reg::Reg, CallingConvention};
 use crate::masm::OperandSize;
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
-use wasmtime_environ::{WasmFuncType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
 
 pub(crate) mod local;
 pub(crate) use local::*;
@@ -267,7 +267,15 @@ pub(crate) fn ty_size(ty: &WasmType) -> u32 {
     match *ty {
         WasmType::I32 | WasmType::F32 => 4,
         WasmType::I64 | WasmType::F64 => 8,
-        _ => panic!(),
+        WasmType::Ref(rt) => match rt.heap_type {
+            // TODO: Similar to the comment in visitor.rs at impl From<WasmType> for
+            // OperandSize, Once Wasmtime supports 32-bit architectures, this will
+            // need to be updated to derive operand size from the target's pointer
+            // size.
+            WasmHeapType::Func => 8,
+            ht => unimplemented!("Support for WasmHeapType: {ht}"),
+        },
+        t => unimplemented!("Support for WasmType: {t}"),
     }
 }
 

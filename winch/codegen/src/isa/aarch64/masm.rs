@@ -100,10 +100,14 @@ impl Masm for MacroAssembler {
     fn table_elem_address(
         &mut self,
         _index: Reg,
-        _size: OperandSize,
+        _base: Reg,
         _table_data: &TableData,
         _context: &mut CodeGenContext,
-    ) -> Reg {
+    ) -> Self::Address {
+        todo!()
+    }
+
+    fn table_size(&mut self, _table_data: &TableData, _context: &mut CodeGenContext) {
         todo!()
     }
 
@@ -116,6 +120,10 @@ impl Masm for MacroAssembler {
     }
 
     fn address_at_vmctx(&self, _offset: u32) -> Self::Address {
+        todo!()
+    }
+
+    fn store_ptr(&mut self, _src: Reg, _dst: Self::Address) {
         todo!()
     }
 
@@ -347,6 +355,10 @@ impl Masm for MacroAssembler {
     }
 
     fn jmp_table(&mut self, _targets: &[MachLabel], _index: Reg, _tmp: Reg) {
+        todo!()
+    }
+
+    fn trapz(&mut self, _src: Reg, _code: TrapCode) {
         todo!()
     }
 

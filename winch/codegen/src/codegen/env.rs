@@ -1,12 +1,20 @@
-use crate::{codegen::BuiltinFunctions, CallingConvention};
+use crate::{
+    codegen::{BuiltinFunctions, OperandSize},
+    CallingConvention,
+};
 use smallvec::{smallvec, SmallVec};
+use std::collections::{
+    hash_map::Entry::{Occupied, Vacant},
+    HashMap,
+};
 use wasmparser::BlockType;
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, ModuleTranslation, ModuleTypes, PtrSize, TableIndex, TypeConvert,
-    TypeIndex, VMOffsets, WasmFuncType, WasmType,
+    FuncIndex, GlobalIndex, ModuleTranslation, ModuleTypes, PtrSize, TableIndex, TablePlan,
+    TypeConvert, TypeIndex, VMOffsets, WasmFuncType, WasmType,
 };
 
 /// Table metadata.
+#[derive(Debug, Copy, Clone)]
 pub struct TableData {
     /// The offset to the base of the table.
     pub offset: u32,
@@ -15,8 +23,10 @@ pub struct TableData {
     /// If the table is imported, return the base
     /// offset of the `from` field in `VMTableImport`.
     pub base: Option<u32>,
-    /// The size of the table elements, in bytes.
-    pub element_size: u8,
+    /// The size of the table elements.
+    pub(crate) element_size: OperandSize,
+    /// The size of the current elements field.
+    pub(crate) current_elements_size: OperandSize,
 }
 
 /// A function callee.
@@ -53,6 +63,8 @@ pub struct FuncEnv<'a, P: PtrSize> {
     pub builtins: BuiltinFunctions,
     /// The module's function types.
     pub types: &'a ModuleTypes,
+    /// Track resolved table information.
+    resolved_tables: HashMap<TableIndex, TableData>,
 }
 
 pub fn ptr_type_from_ptr_size(size: u8) -> WasmType {
@@ -77,6 +89,7 @@ impl<'a, P: PtrSize> FuncEnv<'a, P> {
             translation,
             builtins: BuiltinFunctions::new(size, call_conv, builtins_base),
             types,
+            resolved_tables: HashMap::new(),
         }
     }
 
@@ -141,27 +154,40 @@ impl<'a, P: PtrSize> FuncEnv<'a, P> {
     }
 
     /// Returns the table information for the given table index.
-    pub fn resolve_table_data(&self, index: TableIndex) -> TableData {
-        let (from_offset, base_offset, current_elems_offset) =
-            match self.translation.module.defined_table_index(index) {
-                Some(defined) => (
-                    None,
-                    self.vmoffsets.vmctx_vmtable_definition_base(defined),
-                    self.vmoffsets
-                        .vmctx_vmtable_definition_current_elements(defined),
-                ),
-                None => (
-                    Some(self.vmoffsets.vmctx_vmtable_import_from(index)),
-                    self.vmoffsets.vmtable_definition_base().into(),
-                    self.vmoffsets.vmtable_definition_current_elements().into(),
-                ),
-            };
+    pub fn resolve_table_data(&mut self, index: TableIndex) -> TableData {
+        match self.resolved_tables.entry(index) {
+            Occupied(entry) => *entry.get(),
+            Vacant(entry) => {
+                let (from_offset, base_offset, current_elems_offset) =
+                    match self.translation.module.defined_table_index(index) {
+                        Some(defined) => (
+                            None,
+                            self.vmoffsets.vmctx_vmtable_definition_base(defined),
+                            self.vmoffsets
+                                .vmctx_vmtable_definition_current_elements(defined),
+                        ),
+                        None => (
+                            Some(self.vmoffsets.vmctx_vmtable_import_from(index)),
+                            self.vmoffsets.vmtable_definition_base().into(),
+                            self.vmoffsets.vmtable_definition_current_elements().into(),
+                        ),
+                    };
 
-        TableData {
-            base: from_offset,
-            offset: base_offset,
-            current_elems_offset,
-            element_size: self.vmoffsets.ptr.size(),
+                *entry.insert(TableData {
+                    base: from_offset,
+                    offset: base_offset,
+                    current_elems_offset,
+                    element_size: OperandSize::from_bytes(self.vmoffsets.ptr.size()),
+                    current_elements_size: OperandSize::from_bytes(
+                        self.vmoffsets.size_of_vmtable_definition_current_elements(),
+                    ),
+                })
+            }
         }
+    }
+
+    /// Get a [`TablePlan`] from a [`TableIndex`].
+    pub fn table_plan(&mut self, index: TableIndex) -> &TablePlan {
+        &self.translation.module.table_plans[index]
     }
 }

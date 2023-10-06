@@ -10,11 +10,13 @@ use crate::masm::{
     CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, RoundingMode, ShiftKind,
 };
 use crate::stack::{TypedReg, Val};
+use cranelift_codegen::ir::TrapCode;
 use smallvec::SmallVec;
 use wasmparser::BrTable;
 use wasmparser::{BlockType, Ieee32, Ieee64, VisitOperator};
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, TableIndex, TableStyle, TypeIndex, WasmType, FUNCREF_MASK,
+    FuncIndex, GlobalIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType, WasmType,
+    FUNCREF_INIT_BIT,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -132,7 +134,14 @@ macro_rules! def_unsupported {
     (emit Drop $($rest:tt)*) => {};
     (emit BrTable $($rest:tt)*) => {};
     (emit CallIndirect $($rest:tt)*) => {};
-
+    (emit TableInit $($rest:tt)*) => {};
+    (emit TableCopy $($rest:tt)*) => {};
+    (emit TableGet $($rest:tt)*) => {};
+    (emit TableSet $($rest:tt)*) => {};
+    (emit TableGrow $($rest:tt)*) => {};
+    (emit TableSize $($rest:tt)*) => {};
+    (emit TableFill $($rest:tt)*) => {};
+    (emit ElemDrop $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -608,7 +617,11 @@ where
             .unwrap_or_else(|| panic!("valid local at slot = {}", index));
         match slot.ty {
             I32 | I64 | F32 | F64 => context.stack.push(Val::local(index, slot.ty)),
-            _ => panic!("Unsupported type {:?} for local", slot.ty),
+            Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => context.stack.push(Val::local(index, slot.ty)),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
+            t => unimplemented!("Support local type: {t}"),
         }
     }
 
@@ -639,55 +652,15 @@ where
             &mut self.context,
             &builtin,
             |cx, masm, call, callee| {
-                // Calculate the table element address.
-                let index = cx.pop_to_reg(masm, None);
-                let elem_addr =
-                    masm.table_elem_address(index.into(), index.ty.into(), &table_data, cx);
-
-                let defined = masm.get_label();
-                let cont = masm.get_label();
-
-                // Preemptively move the table element address to the
-                // result register, to avoid conflicts at the control flow merge.
-                let result = call.abi_sig.result.result_reg().unwrap();
-                masm.mov(elem_addr.into(), result, ptr_type.into());
-                cx.free_reg(result);
-
-                // Push the builtin function arguments to the stack.
-                cx.stack
-                    .push(TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into());
-                cx.stack.push(table_index.as_u32().try_into().unwrap());
-                cx.stack.push(index.into());
-
-                masm.branch(
-                    CmpKind::Ne,
-                    elem_addr.into(),
-                    elem_addr,
-                    defined,
-                    ptr_type.into(),
+                CodeGen::emit_lazy_init_funcref(
+                    &table_data,
+                    table_index,
+                    ptr_type,
+                    cx,
+                    masm,
+                    call,
+                    callee,
                 );
-
-                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
-                // We know the signature of the libcall in this case, so we assert that there's
-                // one element in the stack and that it's  the ABI signature's result register.
-                let top = cx.stack.peek().unwrap();
-                let top = top.get_reg();
-                debug_assert!(top.reg == result);
-                masm.jmp(cont);
-
-                // In the defined case, mask the funcref address in place, by peeking into the
-                // last element of the value stack, which was pushed by the `indirect` function
-                // call above.
-                masm.bind(defined);
-                let imm = RegImm::i64(FUNCREF_MASK as i64);
-                let dst = top.into();
-                masm.and(dst, dst, imm, top.ty.into());
-
-                masm.bind(cont);
-                // The indirect call above, will take care of freeing the registers used as
-                // params.
-                // So we only free the params used to lazily initialize the func ref.
-                cx.free_reg(elem_addr);
             },
         );
 
@@ -695,6 +668,8 @@ where
         match self.env.translation.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
                 let funcref_ptr = self.context.stack.peek().map(|v| v.get_reg()).unwrap();
+                self.masm
+                    .trapz(funcref_ptr.into(), TrapCode::IndirectCallToNull);
                 self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
             }
         }
@@ -703,6 +678,213 @@ where
         // `emit_call` expects the callee to be on the stack. Delaying the
         // computation of the callee address reduces register pressure.
         self.emit_call(self.env.funcref(type_index));
+    }
+
+    fn visit_table_init(&mut self, elem: u32, table: u32) {
+        let ptr_type = self.env.ptr_type();
+        let table_init = self.env.builtins.table_init::<M::ABI, M::Ptr>();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+
+        FnCall::new(&table_init.sig).with_lib(
+            self.masm,
+            &mut self.context,
+            &table_init,
+            |cx, masm, call, callee| {
+                // table.init requires at least 3 elements on the value stack.
+                debug_assert!(cx.stack.len() >= 3);
+                let extra_args = [
+                    vmctx.into(),
+                    table.try_into().unwrap(),
+                    elem.try_into().unwrap(),
+                ];
+                let at = cx.stack.len() - 3;
+                cx.stack.insert_many(at, extra_args);
+                // Finalize the call.
+                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
+            },
+        );
+    }
+
+    fn visit_table_copy(&mut self, dst: u32, src: u32) {
+        let ptr_type = self.env.ptr_type();
+        let table_copy = self.env.builtins.table_copy::<M::ABI, M::Ptr>();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+
+        FnCall::new(&table_copy.sig).with_lib(
+            self.masm,
+            &mut self.context,
+            &table_copy,
+            |cx, masm, call, callee| {
+                // table.copy requires at least 3 elemenents in the value stack.
+                debug_assert!(cx.stack.len() >= 3);
+                let at = cx.stack.len() - 3;
+                cx.stack.insert_many(
+                    at,
+                    [
+                        vmctx.into(),
+                        dst.try_into().unwrap(),
+                        src.try_into().unwrap(),
+                    ],
+                );
+                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
+            },
+        )
+    }
+
+    fn visit_table_get(&mut self, table: u32) {
+        let ptr_type = self.env.ptr_type();
+        let table_index = TableIndex::from_u32(table);
+        let table_data = self.env.resolve_table_data(table_index);
+        let plan = self.env.table_plan(table_index);
+        let heap_type = plan.table.wasm_ty.heap_type;
+        let style = plan.style.clone();
+        let table_get = self
+            .env
+            .builtins
+            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
+
+        FnCall::new(&table_get.sig).with_lib(
+            self.masm,
+            &mut self.context,
+            &table_get,
+            |cx, masm, call, callee| {
+                match heap_type {
+                    WasmHeapType::Func => match style {
+                        TableStyle::CallerChecksSignature => {
+                            CodeGen::emit_lazy_init_funcref(
+                                &table_data,
+                                table_index,
+                                ptr_type,
+                                cx,
+                                masm,
+                                call,
+                                callee,
+                            );
+                        }
+                    },
+                    t => unimplemented!("Support for WasmHeapType: {t}"),
+                };
+            },
+        );
+    }
+
+    fn visit_table_grow(&mut self, table: u32) {
+        let ptr_type = self.env.ptr_type();
+        let table_index = TableIndex::from_u32(table);
+        let table_plan = self.env.table_plan(table_index);
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let builtin = match table_plan.table.wasm_ty.heap_type {
+            WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI, M::Ptr>(),
+            ty => unimplemented!("Support for HeapType: {ty}"),
+        };
+
+        FnCall::new(&builtin.sig).with_lib(
+            self.masm,
+            &mut self.context,
+            &builtin,
+            |cx, masm, call, callee| {
+                let len = cx.stack.len();
+                // table.grow requires at least 2 elements on the value stack.
+                debug_assert!(len >= 2);
+                // The table_grow builtin expects the parameters in a different
+                // order.
+                // The value stack at this point should contain:
+                // [ init_value | delta ] (stack top)
+                // but the builtin function expects the init value as the last
+                // argument.
+                cx.stack.inner_mut().swap(len - 1, len - 2);
+                let at = len - 2;
+                cx.stack
+                    .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
+
+                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
+            },
+        );
+    }
+
+    fn visit_table_size(&mut self, table: u32) {
+        let table_index = TableIndex::from_u32(table);
+        let table_data = self.env.resolve_table_data(table_index);
+        self.masm.table_size(&table_data, &mut self.context);
+    }
+
+    fn visit_table_fill(&mut self, table: u32) {
+        let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        let table_index = TableIndex::from_u32(table);
+        let table_plan = self.env.table_plan(table_index);
+        let builtin = match table_plan.table.wasm_ty.heap_type {
+            WasmHeapType::Func => self.env.builtins.table_fill_func_ref::<M::ABI, M::Ptr>(),
+            ty => unimplemented!("Support for heap type: {ty}"),
+        };
+
+        FnCall::new(&builtin.sig).with_lib(
+            self.masm,
+            &mut self.context,
+            &builtin,
+            |cx, masm, call, callee| {
+                // table.fill requires at least 3 values on the value stack.
+                debug_assert!(cx.stack.len() >= 3);
+                let at = cx.stack.len() - 3;
+                cx.stack
+                    .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
+
+                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
+            },
+        );
+    }
+
+    fn visit_table_set(&mut self, table: u32) {
+        let ptr_type = self.env.ptr_type();
+        let table_index = TableIndex::from_u32(table);
+        let table_data = self.env.resolve_table_data(table_index);
+        let plan = self.env.table_plan(table_index);
+        match plan.table.wasm_ty.heap_type {
+            WasmHeapType::Func => match plan.style {
+                TableStyle::CallerChecksSignature => {
+                    let value = self.context.pop_to_reg(self.masm, None);
+                    let index = self.context.pop_to_reg(self.masm, None);
+                    let base = self.context.any_gpr(self.masm);
+                    let elem_addr = self.masm.table_elem_address(
+                        index.into(),
+                        base,
+                        &table_data,
+                        &mut self.context,
+                    );
+
+                    // Set the initialized bit.
+                    self.masm.or(
+                        value.into(),
+                        value.into(),
+                        RegImm::i64(FUNCREF_INIT_BIT as i64),
+                        ptr_type.into(),
+                    );
+
+                    self.masm.store_ptr(value.into(), elem_addr);
+
+                    self.context.free_reg(value);
+                    self.context.free_reg(index);
+                    self.context.free_reg(base);
+                }
+            },
+            ty => unimplemented!("Support for WasmHeapType: {ty}"),
+        };
+    }
+
+    fn visit_elem_drop(&mut self, index: u32) {
+        let ptr_type = self.env.ptr_type();
+        let elem_drop = self.env.builtins.elem_drop::<M::ABI, M::Ptr>();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+
+        FnCall::new(&elem_drop.sig).with_lib(
+            self.masm,
+            &mut self.context,
+            &elem_drop,
+            |cx, masm, call, callee| {
+                cx.stack.extend([vmctx.into(), index.try_into().unwrap()]);
+                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
+            },
+        );
     }
 
     fn visit_nop(&mut self) {}
@@ -916,7 +1098,17 @@ impl From<WasmType> for OperandSize {
         match ty {
             WasmType::I32 | WasmType::F32 => OperandSize::S32,
             WasmType::I64 | WasmType::F64 => OperandSize::S64,
-            ty => todo!("unsupported type {:?}", ty),
+            WasmType::Ref(rt) => {
+                match rt.heap_type {
+                    // TODO: Harcoded size, assuming 64-bit support only. Once
+                    // Wasmtime supports 32-bit architectures, this will need
+                    // to be updated in such a way that the calculation of the
+                    // OperandSize will depend on the target's  pointer size.
+                    WasmHeapType::Func => OperandSize::S64,
+                    t => unimplemented!("Support for WasmHeapType: {t}"),
+                }
+            }
+            ty => unimplemented!("Support for WasmType {ty}"),
         }
     }
 }

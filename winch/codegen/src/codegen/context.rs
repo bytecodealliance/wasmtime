@@ -1,4 +1,4 @@
-use wasmtime_environ::WasmType;
+use wasmtime_environ::{WasmHeapType, WasmType};
 
 use super::ControlStackFrame;
 use crate::{
@@ -63,7 +63,11 @@ impl<'a> CodeGenContext<'a> {
         match ty {
             I32 | I64 => self.reg_for_class(RegClass::Int, masm),
             F32 | F64 => self.reg_for_class(RegClass::Float, masm),
-            t => panic!("unsupported type {:?}", t),
+            Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => self.reg_for_class(RegClass::Int, masm),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
+            t => unimplemented!("Support for WasmType: {t}"),
         }
     }
 

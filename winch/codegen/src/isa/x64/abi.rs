@@ -5,7 +5,7 @@ use crate::{
     masm::OperandSize,
 };
 use smallvec::SmallVec;
-use wasmtime_environ::{WasmFuncType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
 
 /// Helper environment to track argument-register
 /// assignment in x64.
@@ -142,6 +142,10 @@ impl ABI for X64ABI {
                 // NOTE This should be updated when supporting multi-value.
                 WasmType::I32 | WasmType::I64 => regs::rax(),
                 WasmType::F32 | WasmType::F64 => regs::xmm0(),
+                WasmType::Ref(rt) => {
+                    assert!(rt.heap_type == WasmHeapType::Func);
+                    regs::rax()
+                }
                 t => panic!("Unsupported return type {:?}", t),
             };
             ABIResult::reg(ty, reg)
@@ -171,9 +175,13 @@ impl ABI for X64ABI {
 
     fn stack_arg_slot_size_for_type(ty: WasmType) -> u32 {
         match ty {
+            WasmType::Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => Self::word_bytes(),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
             WasmType::F64 | WasmType::I32 | WasmType::I64 => Self::word_bytes(),
             WasmType::F32 => Self::word_bytes() / 2,
-            _ => unreachable!(),
+            ty => unimplemented!("Support for WasmType: {ty}"),
         }
     }
 }
@@ -186,6 +194,11 @@ impl X64ABI {
         fastcall: bool,
     ) -> ABIArg {
         let (reg, ty) = match wasm_arg {
+            ty @ WasmType::Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => (Self::int_reg_for(index_env.next_gpr(), fastcall), ty),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
+
             ty @ (WasmType::I32 | WasmType::I64) => {
                 (Self::int_reg_for(index_env.next_gpr(), fastcall), ty)
             }
@@ -194,7 +207,7 @@ impl X64ABI {
                 (Self::float_reg_for(index_env.next_fpr(), fastcall), ty)
             }
 
-            ty => unreachable!("Unsupported argument type {:?}", ty),
+            ty => unimplemented!("Support for argument of WasmType: {ty}"),
         };
 
         let default = || {

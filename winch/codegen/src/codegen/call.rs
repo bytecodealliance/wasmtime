@@ -1,7 +1,7 @@
 //! Function call emission.  For more details around the ABI and
 //! calling convention, see [ABI].
 use crate::{
-    abi::{ABIArg, ABISig, ABI},
+    abi::{ABIArg, ABIResult, ABISig, ABI},
     codegen::{BuiltinFunction, CodeGenContext},
     masm::{CalleeKind, MacroAssembler, OperandSize},
     reg::Reg,
@@ -65,6 +65,8 @@ pub(crate) struct FnCall<'a> {
     arg_stack_space: u32,
     /// The ABI-specific signature of the callee.
     pub abi_sig: &'a ABISig,
+    /// Whether this a built-in function call.
+    lib: bool,
 }
 
 impl<'a> FnCall<'a> {
@@ -74,6 +76,7 @@ impl<'a> FnCall<'a> {
             abi_sig: &callee_sig,
             arg_stack_space: callee_sig.stack_bytes,
             call_stack_space: None,
+            lib: false,
         }
     }
 
@@ -238,6 +241,7 @@ impl<'a> FnCall<'a> {
     ) where
         F: FnMut(&mut CodeGenContext, &mut M, &mut Self, Reg),
     {
+        self.lib = true;
         // When dealing with libcalls, we don't have all the information
         // upfront (all necessary arguments in the stack) in order to optimize
         // saving the live registers, so we save all the values available in
@@ -288,6 +292,26 @@ impl<'a> FnCall<'a> {
                 regalloc.free(v.get_reg().into());
             }
         });
+
+        // When emitting built-calls we ensure that none of the registers
+        // (params and results) used as part of the ABI signature are
+        // allocatable throughout the lifetime of the `with_lib` callback, since
+        // such registers will be used to assign arguments and hold results.
+        // After executing the callback, it's only safe to free the param
+        // registers, since depending on the signature, the caller
+        // will push any result registers to the stack, keeping those registers allocated.
+        // Here we ensure that any allocated result registers are correctly
+        // freed before finalizing the function call and pushing any results to
+        // the value stack.
+        if self.lib {
+            match self.abi_sig.result {
+                ABIResult::Reg { reg, .. } => {
+                    assert!(!context.regalloc.reg_available(reg));
+                    context.free_reg(reg);
+                }
+                _ => {}
+            }
+        }
         context.push_abi_results(&self.abi_sig.result, masm);
     }
 
