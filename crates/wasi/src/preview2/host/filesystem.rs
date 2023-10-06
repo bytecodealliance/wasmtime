@@ -1,22 +1,16 @@
 use crate::preview2::bindings::clocks::wall_clock;
-use crate::preview2::bindings::filesystem::types::{HostDescriptor, HostDirectoryEntryStream};
-use crate::preview2::bindings::filesystem::{preopens, types};
+use crate::preview2::bindings::filesystem::preopens;
+use crate::preview2::bindings::filesystem::types::{
+    self, ErrorCode, HostDescriptor, HostDirectoryEntryStream,
+};
 use crate::preview2::bindings::io::streams::{InputStream, OutputStream};
 use crate::preview2::filesystem::{Descriptor, Dir, File, ReaddirIterator};
 use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
-use crate::preview2::{DirPerms, FilePerms, Table, TableError, WasiView};
+use crate::preview2::{DirPerms, FilePerms, FsError, FsResult, Table, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
 
-use types::ErrorCode;
-
 mod sync;
-
-impl From<TableError> for types::Error {
-    fn from(error: TableError) -> Self {
-        Self::trap(error.into())
-    }
-}
 
 impl<T: WasiView> preopens::Host for T {
     fn get_directories(
@@ -35,7 +29,26 @@ impl<T: WasiView> preopens::Host for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> types::Host for T {}
+impl<T: WasiView> types::Host for T {
+    fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<ErrorCode> {
+        err.downcast()
+    }
+
+    fn filesystem_error_code(
+        &mut self,
+        err: Resource<anyhow::Error>,
+    ) -> anyhow::Result<Option<ErrorCode>> {
+        let err = self.table_mut().get_resource(&err)?;
+
+        // Currently `err` always comes from the stream implementation which
+        // uses standard reads/writes so only check for `std::io::Error` here.
+        if let Some(err) = err.downcast_ref::<std::io::Error>() {
+            return Ok(Some(ErrorCode::from(err)));
+        }
+
+        Ok(None)
+    }
+}
 
 #[async_trait::async_trait]
 impl<T: WasiView> HostDescriptor for T {
@@ -45,7 +58,7 @@ impl<T: WasiView> HostDescriptor for T {
         offset: types::Filesize,
         len: types::Filesize,
         advice: types::Advice,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         use system_interface::fs::{Advice as A, FileIoExt};
         use types::Advice;
 
@@ -64,7 +77,7 @@ impl<T: WasiView> HostDescriptor for T {
         Ok(())
     }
 
-    async fn sync_data(&mut self, fd: Resource<types::Descriptor>) -> Result<(), types::Error> {
+    async fn sync_data(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
         let table = self.table();
 
         match table.get_resource(&fd)? {
@@ -94,7 +107,7 @@ impl<T: WasiView> HostDescriptor for T {
     async fn get_flags(
         &mut self,
         fd: Resource<types::Descriptor>,
-    ) -> Result<types::DescriptorFlags, types::Error> {
+    ) -> FsResult<types::DescriptorFlags> {
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::DescriptorFlags;
 
@@ -142,7 +155,7 @@ impl<T: WasiView> HostDescriptor for T {
     async fn get_type(
         &mut self,
         fd: Resource<types::Descriptor>,
-    ) -> Result<types::DescriptorType, types::Error> {
+    ) -> FsResult<types::DescriptorType> {
         let table = self.table();
 
         match table.get_resource(&fd)? {
@@ -158,7 +171,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         size: types::Filesize,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         let f = self.table().get_resource(&fd)?.file()?;
         if !f.perms.contains(FilePerms::WRITE) {
             Err(ErrorCode::NotPermitted)?;
@@ -172,7 +185,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
         atim: types::NewTimestamp,
         mtim: types::NewTimestamp,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         use fs_set_times::SetTimes;
 
         let table = self.table();
@@ -203,7 +216,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
         len: types::Filesize,
         offset: types::Filesize,
-    ) -> Result<(Vec<u8>, bool), types::Error> {
+    ) -> FsResult<(Vec<u8>, bool)> {
         use std::io::IoSliceMut;
         use system_interface::fs::FileIoExt;
 
@@ -241,7 +254,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
         buf: Vec<u8>,
         offset: types::Filesize,
-    ) -> Result<types::Filesize, types::Error> {
+    ) -> FsResult<types::Filesize> {
         use std::io::IoSlice;
         use system_interface::fs::FileIoExt;
 
@@ -261,7 +274,7 @@ impl<T: WasiView> HostDescriptor for T {
     async fn read_directory(
         &mut self,
         fd: Resource<types::Descriptor>,
-    ) -> Result<Resource<types::DirectoryEntryStream>, types::Error> {
+    ) -> FsResult<Resource<types::DirectoryEntryStream>> {
         let table = self.table_mut();
         let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
@@ -317,13 +330,13 @@ impl<T: WasiView> HostDescriptor for T {
         });
         let entries = entries.map(|r| match r {
             Ok(r) => Ok(r),
-            Err(ReaddirError::Io(e)) => Err(types::Error::from(e)),
+            Err(ReaddirError::Io(e)) => Err(e.into()),
             Err(ReaddirError::IllegalSequence) => Err(ErrorCode::IllegalByteSequence.into()),
         });
         Ok(table.push_resource(ReaddirIterator::new(entries))?)
     }
 
-    async fn sync(&mut self, fd: Resource<types::Descriptor>) -> Result<(), types::Error> {
+    async fn sync(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
         let table = self.table();
 
         match table.get_resource(&fd)? {
@@ -354,7 +367,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         path: String,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         let table = self.table();
         let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
@@ -364,10 +377,7 @@ impl<T: WasiView> HostDescriptor for T {
         Ok(())
     }
 
-    async fn stat(
-        &mut self,
-        fd: Resource<types::Descriptor>,
-    ) -> Result<types::DescriptorStat, types::Error> {
+    async fn stat(&mut self, fd: Resource<types::Descriptor>) -> FsResult<types::DescriptorStat> {
         let table = self.table();
         match table.get_resource(&fd)? {
             Descriptor::File(f) => {
@@ -388,7 +398,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
         path_flags: types::PathFlags,
         path: String,
-    ) -> Result<types::DescriptorStat, types::Error> {
+    ) -> FsResult<types::DescriptorStat> {
         let table = self.table();
         let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
@@ -410,7 +420,7 @@ impl<T: WasiView> HostDescriptor for T {
         path: String,
         atim: types::NewTimestamp,
         mtim: types::NewTimestamp,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         use cap_fs_ext::DirExt;
 
         let table = self.table();
@@ -450,7 +460,7 @@ impl<T: WasiView> HostDescriptor for T {
         old_path: String,
         new_descriptor: Resource<types::Descriptor>,
         new_path: String,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         let table = self.table();
         let old_dir = table.get_resource(&fd)?.dir()?;
         if !old_dir.perms.contains(DirPerms::MUTATE) {
@@ -480,7 +490,7 @@ impl<T: WasiView> HostDescriptor for T {
         // TODO: These are the permissions to use when creating a new file.
         // Not implemented yet.
         _mode: types::Modes,
-    ) -> Result<Resource<types::Descriptor>, types::Error> {
+    ) -> FsResult<Resource<types::Descriptor>> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt, OpenOptionsMaybeDirExt};
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::{DescriptorFlags, OpenFlags};
@@ -605,7 +615,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         path: String,
-    ) -> Result<String, types::Error> {
+    ) -> FsResult<String> {
         let table = self.table();
         let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
@@ -622,7 +632,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         path: String,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         let table = self.table();
         let d = table.get_resource(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::MUTATE) {
@@ -637,7 +647,7 @@ impl<T: WasiView> HostDescriptor for T {
         old_path: String,
         new_fd: Resource<types::Descriptor>,
         new_path: String,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         let table = self.table();
         let old_dir = table.get_resource(&fd)?.dir()?;
         if !old_dir.perms.contains(DirPerms::MUTATE) {
@@ -658,7 +668,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
         src_path: String,
         dest_path: String,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         // On windows, Dir.symlink is provided by DirExt
         #[cfg(windows)]
         use cap_fs_ext::DirExt;
@@ -676,7 +686,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         path: String,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         use cap_fs_ext::DirExt;
 
         let table = self.table();
@@ -694,7 +704,7 @@ impl<T: WasiView> HostDescriptor for T {
         _path_flags: types::PathFlags,
         _path: String,
         _access: types::AccessType,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         todo!("filesystem access_at is not implemented")
     }
 
@@ -704,7 +714,7 @@ impl<T: WasiView> HostDescriptor for T {
         _path_flags: types::PathFlags,
         _path: String,
         _mode: types::Modes,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         todo!("filesystem change_file_permissions_at is not implemented")
     }
 
@@ -714,36 +724,27 @@ impl<T: WasiView> HostDescriptor for T {
         _path_flags: types::PathFlags,
         _path: String,
         _mode: types::Modes,
-    ) -> Result<(), types::Error> {
+    ) -> FsResult<()> {
         todo!("filesystem change_directory_permissions_at is not implemented")
     }
 
-    async fn lock_shared(&mut self, _fd: Resource<types::Descriptor>) -> Result<(), types::Error> {
+    async fn lock_shared(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
         todo!("filesystem lock_shared is not implemented")
     }
 
-    async fn lock_exclusive(
-        &mut self,
-        _fd: Resource<types::Descriptor>,
-    ) -> Result<(), types::Error> {
+    async fn lock_exclusive(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
         todo!("filesystem lock_exclusive is not implemented")
     }
 
-    async fn try_lock_shared(
-        &mut self,
-        _fd: Resource<types::Descriptor>,
-    ) -> Result<(), types::Error> {
+    async fn try_lock_shared(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
         todo!("filesystem try_lock_shared is not implemented")
     }
 
-    async fn try_lock_exclusive(
-        &mut self,
-        _fd: Resource<types::Descriptor>,
-    ) -> Result<(), types::Error> {
+    async fn try_lock_exclusive(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
         todo!("filesystem try_lock_exclusive is not implemented")
     }
 
-    async fn unlock(&mut self, _fd: Resource<types::Descriptor>) -> Result<(), types::Error> {
+    async fn unlock(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
         todo!("filesystem unlock is not implemented")
     }
 
@@ -751,7 +752,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
-    ) -> Result<Resource<InputStream>, types::Error> {
+    ) -> FsResult<Resource<InputStream>> {
         // Trap if fd lookup fails:
         let f = self.table().get_resource(&fd)?.file()?;
 
@@ -774,7 +775,7 @@ impl<T: WasiView> HostDescriptor for T {
         &mut self,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
-    ) -> Result<Resource<OutputStream>, types::Error> {
+    ) -> FsResult<Resource<OutputStream>> {
         // Trap if fd lookup fails:
         let f = self.table().get_resource(&fd)?.file()?;
 
@@ -798,7 +799,7 @@ impl<T: WasiView> HostDescriptor for T {
     fn append_via_stream(
         &mut self,
         fd: Resource<types::Descriptor>,
-    ) -> Result<Resource<OutputStream>, types::Error> {
+    ) -> FsResult<Resource<OutputStream>> {
         // Trap if fd lookup fails:
         let f = self.table().get_resource(&fd)?.file()?;
 
@@ -847,7 +848,7 @@ impl<T: WasiView> HostDescriptor for T {
     async fn metadata_hash(
         &mut self,
         fd: Resource<types::Descriptor>,
-    ) -> Result<types::MetadataHashValue, types::Error> {
+    ) -> FsResult<types::MetadataHashValue> {
         let table = self.table();
         let meta = get_descriptor_metadata(table, fd).await?;
         Ok(calculate_metadata_hash(&meta))
@@ -857,7 +858,7 @@ impl<T: WasiView> HostDescriptor for T {
         fd: Resource<types::Descriptor>,
         path_flags: types::PathFlags,
         path: String,
-    ) -> Result<types::MetadataHashValue, types::Error> {
+    ) -> FsResult<types::MetadataHashValue> {
         let table = self.table();
         let d = table.get_resource(&fd)?.dir()?;
         // No permissions check on metadata: if dir opened, allowed to stat it
@@ -879,7 +880,7 @@ impl<T: WasiView> HostDirectoryEntryStream for T {
     async fn read_directory_entry(
         &mut self,
         stream: Resource<types::DirectoryEntryStream>,
-    ) -> Result<Option<types::DirectoryEntry>, types::Error> {
+    ) -> FsResult<Option<types::DirectoryEntry>> {
         let table = self.table();
         let readdir = table.get_resource(&stream)?;
         readdir.next()
@@ -894,7 +895,7 @@ impl<T: WasiView> HostDirectoryEntryStream for T {
 async fn get_descriptor_metadata(
     table: &Table,
     fd: Resource<types::Descriptor>,
-) -> Result<cap_std::fs::Metadata, types::Error> {
+) -> FsResult<cap_std::fs::Metadata> {
     match table.get_resource(&fd)? {
         Descriptor::File(f) => {
             // No permissions check on metadata: if opened, allowed to stat it
@@ -932,100 +933,109 @@ fn calculate_metadata_hash(meta: &cap_std::fs::Metadata) -> types::MetadataHashV
 }
 
 #[cfg(unix)]
-fn from_raw_os_error(err: Option<i32>) -> Option<types::Error> {
+fn from_raw_os_error(err: Option<i32>) -> Option<ErrorCode> {
     use rustix::io::Errno as RustixErrno;
     if err.is_none() {
         return None;
     }
     Some(match RustixErrno::from_raw_os_error(err.unwrap()) {
-        RustixErrno::PIPE => ErrorCode::Pipe.into(),
-        RustixErrno::PERM => ErrorCode::NotPermitted.into(),
-        RustixErrno::NOENT => ErrorCode::NoEntry.into(),
-        RustixErrno::NOMEM => ErrorCode::InsufficientMemory.into(),
-        RustixErrno::IO => ErrorCode::Io.into(),
-        RustixErrno::BADF => ErrorCode::BadDescriptor.into(),
-        RustixErrno::BUSY => ErrorCode::Busy.into(),
-        RustixErrno::ACCESS => ErrorCode::Access.into(),
-        RustixErrno::NOTDIR => ErrorCode::NotDirectory.into(),
-        RustixErrno::ISDIR => ErrorCode::IsDirectory.into(),
-        RustixErrno::INVAL => ErrorCode::Invalid.into(),
-        RustixErrno::EXIST => ErrorCode::Exist.into(),
-        RustixErrno::FBIG => ErrorCode::FileTooLarge.into(),
-        RustixErrno::NOSPC => ErrorCode::InsufficientSpace.into(),
-        RustixErrno::SPIPE => ErrorCode::InvalidSeek.into(),
-        RustixErrno::MLINK => ErrorCode::TooManyLinks.into(),
-        RustixErrno::NAMETOOLONG => ErrorCode::NameTooLong.into(),
-        RustixErrno::NOTEMPTY => ErrorCode::NotEmpty.into(),
-        RustixErrno::LOOP => ErrorCode::Loop.into(),
-        RustixErrno::OVERFLOW => ErrorCode::Overflow.into(),
-        RustixErrno::ILSEQ => ErrorCode::IllegalByteSequence.into(),
-        RustixErrno::NOTSUP => ErrorCode::Unsupported.into(),
-        RustixErrno::ALREADY => ErrorCode::Already.into(),
-        RustixErrno::INPROGRESS => ErrorCode::InProgress.into(),
-        RustixErrno::INTR => ErrorCode::Interrupted.into(),
+        RustixErrno::PIPE => ErrorCode::Pipe,
+        RustixErrno::PERM => ErrorCode::NotPermitted,
+        RustixErrno::NOENT => ErrorCode::NoEntry,
+        RustixErrno::NOMEM => ErrorCode::InsufficientMemory,
+        RustixErrno::IO => ErrorCode::Io,
+        RustixErrno::BADF => ErrorCode::BadDescriptor,
+        RustixErrno::BUSY => ErrorCode::Busy,
+        RustixErrno::ACCESS => ErrorCode::Access,
+        RustixErrno::NOTDIR => ErrorCode::NotDirectory,
+        RustixErrno::ISDIR => ErrorCode::IsDirectory,
+        RustixErrno::INVAL => ErrorCode::Invalid,
+        RustixErrno::EXIST => ErrorCode::Exist,
+        RustixErrno::FBIG => ErrorCode::FileTooLarge,
+        RustixErrno::NOSPC => ErrorCode::InsufficientSpace,
+        RustixErrno::SPIPE => ErrorCode::InvalidSeek,
+        RustixErrno::MLINK => ErrorCode::TooManyLinks,
+        RustixErrno::NAMETOOLONG => ErrorCode::NameTooLong,
+        RustixErrno::NOTEMPTY => ErrorCode::NotEmpty,
+        RustixErrno::LOOP => ErrorCode::Loop,
+        RustixErrno::OVERFLOW => ErrorCode::Overflow,
+        RustixErrno::ILSEQ => ErrorCode::IllegalByteSequence,
+        RustixErrno::NOTSUP => ErrorCode::Unsupported,
+        RustixErrno::ALREADY => ErrorCode::Already,
+        RustixErrno::INPROGRESS => ErrorCode::InProgress,
+        RustixErrno::INTR => ErrorCode::Interrupted,
 
-        // On some platforms.into(), these have the same value as other errno values.
+        // On some platforms, these have the same value as other errno values.
         #[allow(unreachable_patterns)]
-        RustixErrno::OPNOTSUPP => ErrorCode::Unsupported.into(),
+        RustixErrno::OPNOTSUPP => ErrorCode::Unsupported,
 
         _ => return None,
     })
 }
 #[cfg(windows)]
-fn from_raw_os_error(raw_os_error: Option<i32>) -> Option<types::Error> {
+fn from_raw_os_error(raw_os_error: Option<i32>) -> Option<ErrorCode> {
     use windows_sys::Win32::Foundation;
     Some(match raw_os_error.map(|code| code as u32) {
-        Some(Foundation::ERROR_FILE_NOT_FOUND) => ErrorCode::NoEntry.into(),
-        Some(Foundation::ERROR_PATH_NOT_FOUND) => ErrorCode::NoEntry.into(),
-        Some(Foundation::ERROR_ACCESS_DENIED) => ErrorCode::Access.into(),
-        Some(Foundation::ERROR_SHARING_VIOLATION) => ErrorCode::Access.into(),
-        Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => ErrorCode::NotPermitted.into(),
-        Some(Foundation::ERROR_INVALID_HANDLE) => ErrorCode::BadDescriptor.into(),
-        Some(Foundation::ERROR_INVALID_NAME) => ErrorCode::NoEntry.into(),
-        Some(Foundation::ERROR_NOT_ENOUGH_MEMORY) => ErrorCode::InsufficientMemory.into(),
-        Some(Foundation::ERROR_OUTOFMEMORY) => ErrorCode::InsufficientMemory.into(),
-        Some(Foundation::ERROR_DIR_NOT_EMPTY) => ErrorCode::NotEmpty.into(),
-        Some(Foundation::ERROR_NOT_READY) => ErrorCode::Busy.into(),
-        Some(Foundation::ERROR_BUSY) => ErrorCode::Busy.into(),
-        Some(Foundation::ERROR_NOT_SUPPORTED) => ErrorCode::Unsupported.into(),
-        Some(Foundation::ERROR_FILE_EXISTS) => ErrorCode::Exist.into(),
-        Some(Foundation::ERROR_BROKEN_PIPE) => ErrorCode::Pipe.into(),
-        Some(Foundation::ERROR_BUFFER_OVERFLOW) => ErrorCode::NameTooLong.into(),
-        Some(Foundation::ERROR_NOT_A_REPARSE_POINT) => ErrorCode::Invalid.into(),
-        Some(Foundation::ERROR_NEGATIVE_SEEK) => ErrorCode::Invalid.into(),
-        Some(Foundation::ERROR_DIRECTORY) => ErrorCode::NotDirectory.into(),
-        Some(Foundation::ERROR_ALREADY_EXISTS) => ErrorCode::Exist.into(),
-        Some(Foundation::ERROR_STOPPED_ON_SYMLINK) => ErrorCode::Loop.into(),
-        Some(Foundation::ERROR_DIRECTORY_NOT_SUPPORTED) => ErrorCode::IsDirectory.into(),
+        Some(Foundation::ERROR_FILE_NOT_FOUND) => ErrorCode::NoEntry,
+        Some(Foundation::ERROR_PATH_NOT_FOUND) => ErrorCode::NoEntry,
+        Some(Foundation::ERROR_ACCESS_DENIED) => ErrorCode::Access,
+        Some(Foundation::ERROR_SHARING_VIOLATION) => ErrorCode::Access,
+        Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => ErrorCode::NotPermitted,
+        Some(Foundation::ERROR_INVALID_HANDLE) => ErrorCode::BadDescriptor,
+        Some(Foundation::ERROR_INVALID_NAME) => ErrorCode::NoEntry,
+        Some(Foundation::ERROR_NOT_ENOUGH_MEMORY) => ErrorCode::InsufficientMemory,
+        Some(Foundation::ERROR_OUTOFMEMORY) => ErrorCode::InsufficientMemory,
+        Some(Foundation::ERROR_DIR_NOT_EMPTY) => ErrorCode::NotEmpty,
+        Some(Foundation::ERROR_NOT_READY) => ErrorCode::Busy,
+        Some(Foundation::ERROR_BUSY) => ErrorCode::Busy,
+        Some(Foundation::ERROR_NOT_SUPPORTED) => ErrorCode::Unsupported,
+        Some(Foundation::ERROR_FILE_EXISTS) => ErrorCode::Exist,
+        Some(Foundation::ERROR_BROKEN_PIPE) => ErrorCode::Pipe,
+        Some(Foundation::ERROR_BUFFER_OVERFLOW) => ErrorCode::NameTooLong,
+        Some(Foundation::ERROR_NOT_A_REPARSE_POINT) => ErrorCode::Invalid,
+        Some(Foundation::ERROR_NEGATIVE_SEEK) => ErrorCode::Invalid,
+        Some(Foundation::ERROR_DIRECTORY) => ErrorCode::NotDirectory,
+        Some(Foundation::ERROR_ALREADY_EXISTS) => ErrorCode::Exist,
+        Some(Foundation::ERROR_STOPPED_ON_SYMLINK) => ErrorCode::Loop,
+        Some(Foundation::ERROR_DIRECTORY_NOT_SUPPORTED) => ErrorCode::IsDirectory,
         _ => return None,
     })
 }
 
-impl From<std::io::Error> for types::Error {
-    fn from(err: std::io::Error) -> types::Error {
+impl From<std::io::Error> for ErrorCode {
+    fn from(err: std::io::Error) -> ErrorCode {
+        ErrorCode::from(&err)
+    }
+}
+
+impl<'a> From<&'a std::io::Error> for ErrorCode {
+    fn from(err: &'a std::io::Error) -> ErrorCode {
         match from_raw_os_error(err.raw_os_error()) {
             Some(errno) => errno,
-            None => match err.kind() {
-                std::io::ErrorKind::NotFound => ErrorCode::NoEntry.into(),
-                std::io::ErrorKind::PermissionDenied => ErrorCode::NotPermitted.into(),
-                std::io::ErrorKind::AlreadyExists => ErrorCode::Exist.into(),
-                std::io::ErrorKind::InvalidInput => ErrorCode::Invalid.into(),
-                _ => types::Error::trap(anyhow::anyhow!(err).context("Unknown OS error")),
-            },
+            None => {
+                log::debug!("unknown raw os error: {err}");
+                match err.kind() {
+                    std::io::ErrorKind::NotFound => ErrorCode::NoEntry,
+                    std::io::ErrorKind::PermissionDenied => ErrorCode::NotPermitted,
+                    std::io::ErrorKind::AlreadyExists => ErrorCode::Exist,
+                    std::io::ErrorKind::InvalidInput => ErrorCode::Invalid,
+                    _ => ErrorCode::Io,
+                }
+            }
         }
     }
 }
 
-impl From<cap_rand::Error> for types::Error {
-    fn from(err: cap_rand::Error) -> types::Error {
+impl From<cap_rand::Error> for ErrorCode {
+    fn from(err: cap_rand::Error) -> ErrorCode {
         // I picked Error::Io as a 'reasonable default', FIXME dan is this ok?
-        from_raw_os_error(err.raw_os_error()).unwrap_or_else(|| types::Error::from(ErrorCode::Io))
+        from_raw_os_error(err.raw_os_error()).unwrap_or(ErrorCode::Io)
     }
 }
 
-impl From<std::num::TryFromIntError> for types::Error {
-    fn from(_err: std::num::TryFromIntError) -> types::Error {
-        ErrorCode::Overflow.into()
+impl From<std::num::TryFromIntError> for ErrorCode {
+    fn from(_err: std::num::TryFromIntError) -> ErrorCode {
+        ErrorCode::Overflow
     }
 }
 
@@ -1047,9 +1057,7 @@ fn descriptortype_from(ft: cap_std::fs::FileType) -> types::DescriptorType {
     }
 }
 
-fn systemtimespec_from(
-    t: types::NewTimestamp,
-) -> Result<Option<fs_set_times::SystemTimeSpec>, types::Error> {
+fn systemtimespec_from(t: types::NewTimestamp) -> FsResult<Option<fs_set_times::SystemTimeSpec>> {
     use fs_set_times::SystemTimeSpec;
     use types::NewTimestamp;
     match t {
@@ -1059,7 +1067,7 @@ fn systemtimespec_from(
     }
 }
 
-fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, types::Error> {
+fn systemtime_from(t: wall_clock::Datetime) -> FsResult<std::time::SystemTime> {
     use std::time::{Duration, SystemTime};
     SystemTime::UNIX_EPOCH
         .checked_add(Duration::new(t.seconds, t.nanoseconds))

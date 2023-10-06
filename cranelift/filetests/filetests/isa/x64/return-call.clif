@@ -363,16 +363,16 @@ block0:
 ;   movq    %rbp, %r15
 ;   movq    8(%r15), %r13
 ;   load_ext_name %tail_callee_stack_args+0, %r12
-;   movq    rsp(24 + virtual offset), %r11
-;   movq    rsp(32 + virtual offset), %r10
-;   movq    rsp(40 + virtual offset), %r9
-;   movq    rsp(48 + virtual offset), %r8
-;   movq    rsp(56 + virtual offset), %rdi
-;   movq    rsp(64 + virtual offset), %rsi
-;   movq    rsp(72 + virtual offset), %rbx
-;   movq    rsp(80 + virtual offset), %rdx
-;   movq    rsp(88 + virtual offset), %rcx
 ;   movq    rsp(96 + virtual offset), %rax
+;   movq    rsp(88 + virtual offset), %rcx
+;   movq    rsp(80 + virtual offset), %rdx
+;   movq    rsp(72 + virtual offset), %rbx
+;   movq    rsp(64 + virtual offset), %rsi
+;   movq    rsp(56 + virtual offset), %rdi
+;   movq    rsp(48 + virtual offset), %r8
+;   movq    rsp(40 + virtual offset), %r9
+;   movq    rsp(32 + virtual offset), %r10
+;   movq    rsp(24 + virtual offset), %r11
 ;   return_call_unknown %r12 new_stack_arg_size:128 old_stack_arg_size:0 ret_addr:Some("%v219") fp:%v218 tmp:%v220 %rax=%rax %rcx=%rcx %rdx=%rdx %rbx=%rbx %rsi=%rsi %rdi=%rdi %r8=%r8 %r9=%r9 %r10=%r10 %r11=%r11
 ;
 ; Disassembled:
@@ -443,16 +443,16 @@ block0:
 ;   movq %rbp, %r15
 ;   movq 8(%r15), %r13
 ;   movabsq $0, %r12 ; reloc_external Abs8 %tail_callee_stack_args 0
-;   movq 0x98(%rsp), %r11
-;   movq 0xa0(%rsp), %r10
-;   movq 0xa8(%rsp), %r9
-;   movq 0xb0(%rsp), %r8
-;   movq 0xb8(%rsp), %rdi
-;   movq 0xc0(%rsp), %rsi
-;   movq 0xc8(%rsp), %rbx
-;   movq 0xd0(%rsp), %rdx
-;   movq 0xd8(%rsp), %rcx
 ;   movq 0xe0(%rsp), %rax
+;   movq 0xd8(%rsp), %rcx
+;   movq 0xd0(%rsp), %rdx
+;   movq 0xc8(%rsp), %rbx
+;   movq 0xc0(%rsp), %rsi
+;   movq 0xb8(%rsp), %rdi
+;   movq 0xb0(%rsp), %r8
+;   movq 0xa8(%rsp), %r9
+;   movq 0xa0(%rsp), %r10
+;   movq 0x98(%rsp), %r11
 ;   movq (%r15), %rbp
 ;   movq 0x78(%rsp), %r14
 ;   movq %r14, 8(%r15)

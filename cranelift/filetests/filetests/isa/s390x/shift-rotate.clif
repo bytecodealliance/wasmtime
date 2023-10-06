@@ -915,16 +915,14 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   lgr %r5, %r3
-;   nill %r5, 31
-;   srlk %r2, %r2, 0(%r5)
+;   nill %r3, 31
+;   srlk %r2, %r2, 0(%r3)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgr %r5, %r3
-;   nill %r5, 0x1f
-;   srlk %r2, %r2, 0(%r5)
+;   nill %r3, 0x1f
+;   srlk %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %ushr_i32_imm(i32) -> i32 {
@@ -1230,16 +1228,14 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   lgr %r5, %r3
-;   nill %r5, 31
-;   sllk %r2, %r2, 0(%r5)
+;   nill %r3, 31
+;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgr %r5, %r3
-;   nill %r5, 0x1f
-;   sllk %r2, %r2, 0(%r5)
+;   nill %r3, 0x1f
+;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %ishl_i32_imm(i32) -> i32 {
@@ -1289,16 +1285,14 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   lgr %r5, %r3
-;   nill %r5, 15
-;   sllk %r2, %r2, 0(%r5)
+;   nill %r3, 15
+;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgr %r5, %r3
-;   nill %r5, 0xf
-;   sllk %r2, %r2, 0(%r5)
+;   nill %r3, 0xf
+;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %ishl_i16_imm(i16) -> i16 {
@@ -1348,16 +1342,14 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   lgr %r5, %r3
-;   nill %r5, 7
-;   sllk %r2, %r2, 0(%r5)
+;   nill %r3, 7
+;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgr %r5, %r3
-;   nill %r5, 7
-;   sllk %r2, %r2, 0(%r5)
+;   nill %r3, 7
+;   sllk %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %ishl_i8_imm(i8) -> i8 {
@@ -1537,16 +1529,14 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   lgr %r5, %r3
-;   nill %r5, 31
-;   srak %r2, %r2, 0(%r5)
+;   nill %r3, 31
+;   srak %r2, %r2, 0(%r3)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgr %r5, %r3
-;   nill %r5, 0x1f
-;   srak %r2, %r2, 0(%r5)
+;   nill %r3, 0x1f
+;   srak %r2, %r2, 0(%r3)
 ;   br %r14
 
 function %sshr_i32_imm(i32) -> i32 {

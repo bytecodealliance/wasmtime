@@ -1,12 +1,29 @@
 use crate::preview2::bindings::filesystem::types;
 use crate::preview2::{
-    spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe,
+    spawn_blocking, AbortOnDropJoinHandle, HostOutputStream, StreamError, Subscribe, TableError,
+    TrappableError,
 };
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
 use std::mem;
 use std::sync::Arc;
+
+pub type FsResult<T> = Result<T, FsError>;
+
+pub type FsError = TrappableError<types::ErrorCode>;
+
+impl From<TableError> for FsError {
+    fn from(error: TableError) -> Self {
+        Self::trap(error)
+    }
+}
+
+impl From<io::Error> for FsError {
+    fn from(error: io::Error) -> Self {
+        types::ErrorCode::from(error).into()
+    }
+}
 
 pub enum Descriptor {
     File(File),
@@ -276,24 +293,22 @@ impl Subscribe for FileOutputStream {
 }
 
 pub struct ReaddirIterator(
-    std::sync::Mutex<
-        Box<dyn Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static>,
-    >,
+    std::sync::Mutex<Box<dyn Iterator<Item = FsResult<types::DirectoryEntry>> + Send + 'static>>,
 );
 
 impl ReaddirIterator {
     pub(crate) fn new(
-        i: impl Iterator<Item = Result<types::DirectoryEntry, types::Error>> + Send + 'static,
+        i: impl Iterator<Item = FsResult<types::DirectoryEntry>> + Send + 'static,
     ) -> Self {
         ReaddirIterator(std::sync::Mutex::new(Box::new(i)))
     }
-    pub(crate) fn next(&self) -> Result<Option<types::DirectoryEntry>, types::Error> {
+    pub(crate) fn next(&self) -> FsResult<Option<types::DirectoryEntry>> {
         self.0.lock().unwrap().next().transpose()
     }
 }
 
 impl IntoIterator for ReaddirIterator {
-    type Item = Result<types::DirectoryEntry, types::Error>;
+    type Item = FsResult<types::DirectoryEntry>;
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + Send>;
 
     fn into_iter(self) -> Self::IntoIter {

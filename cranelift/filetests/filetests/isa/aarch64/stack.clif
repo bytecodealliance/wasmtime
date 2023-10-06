@@ -479,8 +479,8 @@ block0(v0: i8):
 ;   add x14, x14, #37
 ;   ldr x15, [sp, #1144]
 ;   add x15, x15, #39
-;   ldr x3, [sp, #1128]
 ;   ldr x1, [sp, #1136]
+;   ldr x3, [sp, #1128]
 ;   add x1, x1, x3
 ;   ldr x2, [sp, #1112]
 ;   ldr x6, [sp, #1120]
@@ -500,8 +500,8 @@ block0(v0: i8):
 ;   ldr x23, [sp, #1032]
 ;   ldr x24, [sp, #1040]
 ;   add x23, x24, x23
-;   ldr x25, [sp, #1016]
 ;   ldr x24, [sp, #1024]
+;   ldr x25, [sp, #1016]
 ;   add x24, x24, x25
 ;   ldr x25, [sp, #1008]
 ;   add x25, x25, x26
@@ -657,8 +657,8 @@ block0(v0: i8):
 ;   add x14, x14, #0x25
 ;   ldr x15, [sp, #0x478]
 ;   add x15, x15, #0x27
-;   ldr x3, [sp, #0x468]
 ;   ldr x1, [sp, #0x470]
+;   ldr x3, [sp, #0x468]
 ;   add x1, x1, x3
 ;   ldr x2, [sp, #0x458]
 ;   ldr x6, [sp, #0x460]
@@ -678,8 +678,8 @@ block0(v0: i8):
 ;   ldr x23, [sp, #0x408]
 ;   ldr x24, [sp, #0x410]
 ;   add x23, x24, x23
-;   ldr x25, [sp, #0x3f8]
 ;   ldr x24, [sp, #0x400]
+;   ldr x25, [sp, #0x3f8]
 ;   add x24, x24, x25
 ;   ldr x25, [sp, #0x3f0]
 ;   add x25, x25, x26

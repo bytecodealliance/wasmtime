@@ -2,7 +2,7 @@ use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMo
 use crate::types::{TypeInfo, Types};
 use anyhow::{anyhow, bail, Context};
 use heck::*;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::io::{Read, Write};
@@ -48,6 +48,7 @@ struct Wasmtime {
     interface_names: HashMap<InterfaceId, InterfaceName>,
     with_name_counter: usize,
     interface_last_seen_as_import: HashMap<InterfaceId, bool>,
+    trappable_errors: IndexMap<TypeId, String>,
 }
 
 struct ImportInterface {
@@ -218,6 +219,16 @@ impl Wasmtime {
 
     fn generate(&mut self, resolve: &Resolve, id: WorldId) -> String {
         self.types.analyze(resolve, id);
+        for (i, te) in self.opts.trappable_error_type.iter().enumerate() {
+            let id = resolve_type_in_package(resolve, &te.wit_package_path, &te.wit_type_name)
+                .context(format!("resolving {:?}", te))
+                .unwrap();
+            let name = format!("_TrappableError{i}");
+            uwriteln!(self.src, "type {name} = {};", te.rust_type_name);
+            let prev = self.trappable_errors.insert(id, name);
+            assert!(prev.is_none());
+        }
+
         let world = &resolve.worlds[id];
         for (name, import) in world.imports.iter() {
             if !self.opts.only_interfaces || matches!(import, WorldItem::Interface(_)) {
@@ -837,32 +848,15 @@ struct InterfaceGenerator<'a> {
     gen: &'a mut Wasmtime,
     resolve: &'a Resolve,
     current_interface: Option<(InterfaceId, &'a WorldKey, bool)>,
-
-    /// A mapping of wit types to their rust type name equivalent. This is the pre-processed
-    /// version of `gen.opts.trappable_error_types`, where the types have been eagerly resolved.
-    trappable_errors: IndexMap<TypeId, String>,
 }
 
 impl<'a> InterfaceGenerator<'a> {
     fn new(gen: &'a mut Wasmtime, resolve: &'a Resolve) -> InterfaceGenerator<'a> {
-        let trappable_errors = gen
-            .opts
-            .trappable_error_type
-            .iter()
-            .map(|te| {
-                let id = resolve_type_in_package(resolve, &te.wit_package_path, &te.wit_type_name)
-                    .context(format!("resolving {:?}", te))?;
-                Ok((id, te.rust_type_name.clone()))
-            })
-            .collect::<anyhow::Result<IndexMap<_, _>>>()
-            .unwrap();
-
         InterfaceGenerator {
             src: Source::default(),
             gen,
             resolve,
             current_interface: None,
-            trappable_errors,
         }
     }
 
@@ -876,10 +870,6 @@ impl<'a> InterfaceGenerator<'a> {
     fn types(&mut self, id: InterfaceId) {
         for (name, id) in self.resolve.interfaces[id].types.iter() {
             self.define_type(name, *id);
-
-            if let Some(rust_name) = self.trappable_errors.get(id) {
-                self.define_trappable_error_type(*id, rust_name.clone())
-            }
         }
     }
 
@@ -1467,9 +1457,11 @@ impl<'a> InterfaceGenerator<'a> {
             _ => return None,
         };
 
-        let rust_type = self.trappable_errors.get(&error_typeid)?;
+        let name = self.gen.trappable_errors.get(&error_typeid)?;
 
-        Some((result, error_typeid, rust_type.clone()))
+        let mut path = self.path_to_root();
+        uwrite!(path, "{name}");
+        Some((result, error_typeid, path))
     }
 
     fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
@@ -1499,13 +1491,58 @@ impl<'a> InterfaceGenerator<'a> {
             }
             self.generate_function_trait_sig(func);
         }
+
+        // Generate `convert_*` functions to convert custom trappable errors
+        // into the representation required by Wasmtime's component API.
+        let mut required_conversion_traits = IndexSet::new();
+        let mut errors_converted = IndexSet::new();
+        let my_error_types = iface
+            .types
+            .iter()
+            .filter(|(_, id)| self.gen.trappable_errors.contains_key(*id))
+            .map(|(_, id)| *id);
+        let used_error_types = iface
+            .functions
+            .iter()
+            .filter_map(|(_, func)| self.special_case_trappable_error(&func.results))
+            .map(|(_, id, _)| id);
+        for err in my_error_types.chain(used_error_types).collect::<Vec<_>>() {
+            let custom_name = &self.gen.trappable_errors[&err];
+            let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
+            let err_name = err.name.as_ref().unwrap();
+            let err_snake = err_name.to_snake_case();
+            let err_camel = err_name.to_upper_camel_case();
+            let owner = match err.owner {
+                TypeOwner::Interface(i) => i,
+                _ => unimplemented!(),
+            };
+            match self.path_to_interface(owner) {
+                Some(path) => {
+                    required_conversion_traits.insert(format!("{path}::Host"));
+                }
+                None => {
+                    if errors_converted.insert(err_name) {
+                        let root = self.path_to_root();
+                        uwriteln!(
+                            self.src,
+                            "fn convert_{err_snake}(&mut self, err: {root}{custom_name}) -> wasmtime::Result<{err_camel}>;"
+                        );
+                    }
+                }
+            }
+        }
         uwriteln!(self.src, "}}");
 
-        let where_clause = if self.gen.opts.async_.maybe_async() {
+        let mut where_clause = if self.gen.opts.async_.maybe_async() {
             "T: Send, U: Host + Send".to_string()
         } else {
             "U: Host".to_string()
         };
+
+        for t in required_conversion_traits {
+            where_clause.push_str(" + ");
+            where_clause.push_str(&t);
+        }
 
         uwriteln!(
             self.src,
@@ -1655,16 +1692,24 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        if self.special_case_trappable_error(&func.results).is_some() {
+        if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
+            let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
+            let err_name = err.name.as_ref().unwrap();
+            let owner = match err.owner {
+                TypeOwner::Interface(i) => i,
+                _ => unimplemented!(),
+            };
+            let convert_trait = match self.path_to_interface(owner) {
+                Some(path) => format!("{path}::Host"),
+                None => format!("Host"),
+            };
+            let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
             uwrite!(
                 self.src,
-                "match r {{
-                    Ok(a) => Ok((Ok(a),)),
-                    Err(e) => match e.downcast() {{
-                        Ok(api_error) => Ok((Err(api_error),)),
-                        Err(anyhow_error) => Err(anyhow_error),
-                    }}
-                }}"
+                "Ok((match r {{
+                    Ok(a) => Ok(a),
+                    Err(e) => Err({convert}(host, e)?),
+                }},))"
             );
         } else if func.results.iter_types().len() == 1 {
             uwrite!(self.src, "Ok((r?,))\n");
@@ -1699,9 +1744,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(")");
         self.push_str(" -> ");
 
-        if let Some((r, error_id, error_typename)) =
-            self.special_case_trappable_error(&func.results)
-        {
+        if let Some((r, _id, error_typename)) = self.special_case_trappable_error(&func.results) {
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
             // for them to trap or use `?` to propogate their errors
@@ -1712,12 +1755,6 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("()");
             }
             self.push_str(",");
-            if let TypeOwner::Interface(id) = self.resolve.types[error_id].owner {
-                if let Some(path) = self.path_to_interface(id) {
-                    self.push_str(&path);
-                    self.push_str("::");
-                }
-            }
             self.push_str(&error_typename);
             self.push_str(">");
         } else {
@@ -1865,53 +1902,6 @@ impl<'a> InterfaceGenerator<'a> {
 
         // End function body
         self.src.push_str("}\n");
-    }
-
-    fn define_trappable_error_type(&mut self, id: TypeId, rust_name: String) {
-        let info = self.info(id);
-        if self.lifetime_for(&info, TypeMode::Owned).is_some() {
-            panic!("wit error for {rust_name} is not 'static")
-        }
-        let abi_type = self.param_name(id);
-
-        uwriteln!(
-            self.src,
-            "
-                #[derive(Debug)]
-                pub struct {rust_name} {{
-                    inner: anyhow::Error,
-                }}
-                impl std::fmt::Display for {rust_name} {{
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{
-                        write!(f, \"{{}}\", self.inner)
-                    }}
-                }}
-                impl std::error::Error for {rust_name} {{
-                    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {{
-                        self.inner.source()
-                    }}
-                }}
-                impl {rust_name} {{
-                    pub fn trap(inner: anyhow::Error) -> Self {{
-                        Self {{ inner }}
-                    }}
-                    pub fn downcast(self) -> Result<{abi_type}, anyhow::Error> {{
-                        self.inner.downcast()
-                    }}
-                    pub fn downcast_ref(&self) -> Option<&{abi_type}> {{
-                        self.inner.downcast_ref()
-                    }}
-                    pub fn context(self, s: impl Into<String>) -> Self {{
-                        Self {{ inner: self.inner.context(s.into()) }}
-                    }}
-                }}
-                impl From<{abi_type}> for {rust_name} {{
-                    fn from(abi: {abi_type}) -> {rust_name} {{
-                        {rust_name} {{ inner: anyhow::Error::from(abi) }}
-                    }}
-                }}
-           "
-        );
     }
 
     fn rustdoc(&mut self, docs: &Docs) {

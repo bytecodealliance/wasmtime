@@ -50,9 +50,8 @@
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   movq    %rsi, %r8
-;;   andl    %r8d, $31, %r8d
-;;   bzhi    %edi, %r8d, %eax
+;;   andl    %esi, $31, %esi
+;;   bzhi    %edi, %esi, %eax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret
@@ -65,9 +64,8 @@
 ;; block0:
 ;;   jmp     label1
 ;; block1:
-;;   movq    %rsi, %r8
-;;   andq    %r8, $63, %r8
-;;   bzhi    %rdi, %r8, %rax
+;;   andq    %rsi, $63, %rsi
+;;   bzhi    %rdi, %rsi, %rax
 ;;   movq    %rbp, %rsp
 ;;   popq    %rbp
 ;;   ret

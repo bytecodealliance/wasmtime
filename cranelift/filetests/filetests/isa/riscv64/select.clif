@@ -629,8 +629,8 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   sd s6,-16(sp)
 ;   add sp,-16
 ; block0:
-;   mv s6,a0
 ;   mv s4,a1
+;   mv s6,a0
 ;   li a5,42
 ;   select [a0,a1],[s4,a2],[a3,a4]##condition=(s6 eq a5)
 ;   add sp,+16
@@ -651,8 +651,8 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   sd s6, -0x10(sp)
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x1c
-;   mv s6, a0
 ;   mv s4, a1
+;   mv s6, a0
 ;   addi a5, zero, 0x2a
 ;   bne s6, a5, 0x10
 ;   mv a0, s4
