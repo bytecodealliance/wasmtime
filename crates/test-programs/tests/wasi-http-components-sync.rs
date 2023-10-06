@@ -163,3 +163,9 @@ fn outbound_request_invalid_dnsname() -> Result<()> {
     let server = Server::http1()?;
     run("outbound_request_invalid_dnsname", &server)
 }
+
+#[test_log::test]
+fn outbound_request_response_build() -> Result<()> {
+    let server = Server::http1()?;
+    run("outbound_request_response_build", &server)
+}
