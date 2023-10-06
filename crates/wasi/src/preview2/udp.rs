@@ -1,3 +1,4 @@
+use crate::preview2::bindings::sockets::network::IpSocketAddress;
 use crate::preview2::poll::Subscribe;
 use crate::preview2::with_ambient_tokio_runtime;
 use async_trait::async_trait;
@@ -23,13 +24,13 @@ pub(crate) enum UdpState {
     Bound,
 
     /// An outgoing connection is started via `start_connect`.
-    Connecting,
+    Connecting(IpSocketAddress),
 
     /// An outgoing connection is ready to be established.
-    ConnectReady,
+    ConnectReady(IpSocketAddress),
 
     /// An outgoing connection has been established.
-    Connected,
+    Connected(IpSocketAddress),
 }
 
 /// A host UDP socket, plus associated bookkeeping.

@@ -29,10 +29,10 @@ fn start_bind(
     let socket = table.get_resource(&this)?;
     match socket.udp_state {
         UdpState::Default => {}
-        UdpState::BindStarted | UdpState::Connecting | UdpState::ConnectReady => {
+        UdpState::BindStarted | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
             return Err(ErrorCode::ConcurrencyConflict.into())
         }
-        UdpState::Bound | UdpState::Connected => return Err(ErrorCode::AlreadyBound.into()),
+        UdpState::Bound | UdpState::Connected(..) => return Err(ErrorCode::AlreadyBound.into()),
     }
 
     let network = table.get_resource(&network)?;
@@ -101,10 +101,10 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
                 finish_bind(table, Resource::new_borrow(this.rep()))?;
             }
             UdpState::Bound => {}
-            UdpState::BindStarted | UdpState::Connecting | UdpState::ConnectReady => {
+            UdpState::BindStarted | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
                 return Err(ErrorCode::ConcurrencyConflict.into())
             }
-            UdpState::Connected => return Err(ErrorCode::AlreadyConnected.into()),
+            UdpState::Connected(..) => return Err(ErrorCode::AlreadyConnected.into()),
         }
 
         let socket = table.get_resource(&this)?;
@@ -121,13 +121,13 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
             // succeed immediately,
             Ok(()) => {
                 let socket = table.get_resource_mut(&this)?;
-                socket.udp_state = UdpState::ConnectReady;
+                socket.udp_state = UdpState::ConnectReady(remote_address);
                 Ok(())
             }
             // continue in progress,
             Err(err) if err.raw_os_error() == Some(INPROGRESS.raw_os_error()) => {
                 let socket = table.get_resource_mut(&this)?;
-                socket.udp_state = UdpState::Connecting;
+                socket.udp_state = UdpState::Connecting(remote_address);
                 Ok(())
             }
             // or fail immediately.
@@ -139,11 +139,11 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
         match socket.udp_state {
-            UdpState::ConnectReady => {
-                socket.udp_state = UdpState::Connected;
+            UdpState::ConnectReady(addr) => {
+                socket.udp_state = UdpState::Connected(addr);
                 Ok(())
             }
-            UdpState::Connecting => {
+            UdpState::Connecting(addr) => {
                 // Do a `poll` to test for completion, using a timeout of zero
                 // to avoid blocking.
                 match rustix::event::poll(
@@ -161,7 +161,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
                 // Check whether the connect succeeded.
                 match sockopt::get_socket_error(socket.udp_socket()) {
                     Ok(Ok(())) => {
-                        socket.udp_state = UdpState::Connected;
+                        socket.udp_state = UdpState::Connected(addr);
                         Ok(())
                     }
                     Err(err) | Ok(Err(err)) => Err(err.into()),
@@ -188,7 +188,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         let mut buf = [0; MAX_UDP_DATAGRAM_SIZE];
         match socket.udp_state {
             UdpState::Default | UdpState::BindStarted => return Err(ErrorCode::InvalidState.into()),
-            UdpState::Bound | UdpState::Connecting | UdpState::ConnectReady => {
+            UdpState::Bound | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
                 for i in 0..max_results {
                     match udp_socket.try_recv_from(&mut buf) {
                         Ok((size, remote_address)) => datagrams.push(udp::Datagram {
@@ -202,8 +202,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
                     }
                 }
             }
-            UdpState::Connected => {
-                let remote_address = udp_socket.peer_addr().map(Into::into)?;
+            UdpState::Connected(remote_address) => {
                 for i in 0..max_results {
                     match udp_socket.try_recv(&mut buf) {
                         Ok(size) => datagrams.push(udp::Datagram {
@@ -236,7 +235,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         let mut count = 0;
         match socket.udp_state {
             UdpState::Default | UdpState::BindStarted => return Err(ErrorCode::InvalidState.into()),
-            UdpState::Bound | UdpState::Connecting | UdpState::ConnectReady => {
+            UdpState::Bound | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
                 for udp::Datagram {
                     data,
                     remote_address,
@@ -251,14 +250,14 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
                     }
                 }
             }
-            UdpState::Connected => {
-                let peer_addr = udp_socket.peer_addr()?;
+            UdpState::Connected(addr) => {
+                let addr = SocketAddr::from(addr);
                 for udp::Datagram {
                     data,
                     remote_address,
                 } in datagrams
                 {
-                    if SocketAddr::from(remote_address) != peer_addr {
+                    if SocketAddr::from(remote_address) != addr {
                         // From WIT documentation:
                         // If at least one datagram has been sent successfully, this function never returns an error.
                         if count == 0 {
