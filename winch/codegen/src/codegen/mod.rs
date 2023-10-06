@@ -448,6 +448,8 @@ where
         context.stack.push(table_index.as_u32().try_into().unwrap());
         context.stack.push(index.into());
 
+        // `branch` in this case will perform a test of the given register,
+        // and jump to the defined branch if it's not zero.
         masm.branch(
             CmpKind::Ne,
             elem_value.into(),
