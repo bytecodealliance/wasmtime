@@ -1,13 +1,15 @@
 (component
   (import (interface "wasi:io/streams") (instance $wasi_io_streams
     (export (;0;) "output-stream" (type (sub resource)))
-    (type (;1;) (enum "last-operation-failed" "closed"))
-    (export (;2;) "stream-error" (type (eq 1)))
-    (type (;3;) (borrow 0))
-    (type (;4;) (list u8))
-    (type (;5;) (result (error 2)))
-    (type (;6;) (func (param "self" 3) (param "contents" 4) (result 5)))
-    (export (;0;) "[method]output-stream.blocking-write-and-flush" (func (type 6)))
+    (export (;1;) "error" (type (sub resource)))
+    (type (;2;) (own 1))
+    (type (;3;) (variant (case "last-operation-failed" 2) (case "closed")))
+    (export (;4;) "stream-error" (type (eq 3)))
+    (type (;5;) (borrow 0))
+    (type (;6;) (list u8))
+    (type (;7;) (result (error 4)))
+    (type (;8;) (func (param "self" 5) (param "contents" 6) (result 7)))
+    (export (;0;) "[method]output-stream.blocking-write-and-flush" (func (type 8)))
   ))
   (alias export $wasi_io_streams "output-stream" (type $resource_output_stream))
 
