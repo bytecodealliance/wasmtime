@@ -80,7 +80,7 @@ fn amode_extend(value: &Fact, mode: ExtendOp) -> Option<Fact> {
 }
 
 fn check_addr(flags: MemFlags, addr: &AMode, vcode: &VCode<Inst>, size: u8) -> PccResult<()> {
-    if !flags.safe() {
+    if !flags.checked() {
         return Ok(());
     }
 
@@ -165,7 +165,7 @@ fn check_addr_pair(
 }
 
 fn check_scalar_addr(flags: MemFlags, reg: Reg, vcode: &VCode<Inst>, size: u8) -> PccResult<()> {
-    if !flags.safe() {
+    if !flags.checked() {
         return Ok(());
     }
     let fact = vcode.vreg_fact(reg.into()).ok_or(PccError::MissingFact)?;

@@ -33,11 +33,11 @@ enum FlagBit {
     /// proof-carrying-code framework. The address must have a
     /// `PointsTo` fact attached with a sufficiently large valid range
     /// for the accessed size.
-    Safe,
+    Checked,
 }
 
 const NAMES: [&str; 9] = [
-    "notrap", "aligned", "readonly", "little", "big", "heap", "table", "vmctx", "safe",
+    "notrap", "aligned", "readonly", "little", "big", "heap", "table", "vmctx", "checked",
 ];
 
 /// Endianness of a memory access.
@@ -280,7 +280,7 @@ impl MemFlags {
         self
     }
 
-    /// Test if the `safe` bit is set.
+    /// Test if the `checked` bit is set.
     ///
     /// Loads and stores with this flag are verified to access
     /// pointers only with a validated `PointsTo` fact attached, and
@@ -288,21 +288,21 @@ impl MemFlags {
     /// framework. If initial facts on program inputs are correct
     /// (i.e., correctly denote the shape and types of data structures
     /// in memory), and if PCC validates the compiled output, then all
-    /// `safe`-marked memory accesses are guaranteed (up to the
+    /// `checked`-marked memory accesses are guaranteed (up to the
     /// checker's correctness) to access valid memory. This can be
     /// used to ensure memory safety and sandboxing.
-    pub fn safe(self) -> bool {
-        self.read(FlagBit::Safe)
+    pub fn checked(self) -> bool {
+        self.read(FlagBit::Checked)
     }
 
-    /// Set the `safe` bit.
-    pub fn set_safe(&mut self) {
-        self.set(FlagBit::Safe);
+    /// Set the `checked` bit.
+    pub fn set_checked(&mut self) {
+        self.set(FlagBit::Checked);
     }
 
-    /// Set the `safe` bit, returning new flags.
-    pub fn with_safe(mut self) -> Self {
-        self.set_safe();
+    /// Set the `checked` bit, returning new flags.
+    pub fn with_checked(mut self) -> Self {
+        self.set_checked();
         self
     }
 }
