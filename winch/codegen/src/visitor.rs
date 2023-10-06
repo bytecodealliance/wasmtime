@@ -696,8 +696,7 @@ where
                     vmctx.into(),
                     table.try_into().unwrap(),
                     elem.try_into().unwrap(),
-                ]
-                .into_iter();
+                ];
                 let at = cx.stack.len() - 3;
                 cx.stack.insert_many(at, extra_args);
                 // Finalize the call.
@@ -725,8 +724,7 @@ where
                         vmctx.into(),
                         dst.try_into().unwrap(),
                         src.try_into().unwrap(),
-                    ]
-                    .into_iter(),
+                    ],
                 );
                 call.calculate_call_stack_space(cx).reg(masm, cx, callee);
             },
@@ -797,7 +795,7 @@ where
                 cx.stack.inner_mut().swap(len - 1, len - 2);
                 let at = len - 2;
                 cx.stack
-                    .insert_many(at, [vmctx.into(), table.try_into().unwrap()].into_iter());
+                    .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
 
                 call.calculate_call_stack_space(cx).reg(masm, cx, callee);
             },
@@ -829,7 +827,7 @@ where
                 debug_assert!(cx.stack.len() >= 3);
                 let at = cx.stack.len() - 3;
                 cx.stack
-                    .insert_many(at, [vmctx.into(), table.try_into().unwrap()].into_iter());
+                    .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
                 dbg!(&cx.stack);
 
                 call.calculate_call_stack_space(cx).reg(masm, cx, callee);
@@ -884,8 +882,7 @@ where
             &mut self.context,
             &elem_drop,
             |cx, masm, call, callee| {
-                cx.stack
-                    .extend([vmctx.into(), index.try_into().unwrap()].into_iter());
+                cx.stack.extend([vmctx.into(), index.try_into().unwrap()]);
                 call.calculate_call_stack_space(cx).reg(masm, cx, callee);
             },
         );

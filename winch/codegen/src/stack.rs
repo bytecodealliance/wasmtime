@@ -234,12 +234,12 @@ impl Stack {
     }
 
     /// Extend the stack with the given elements.
-    pub fn extend(&mut self, values: impl Iterator<Item = Val>) {
+    pub fn extend(&mut self, values: impl IntoIterator<Item = Val>) {
         self.inner.extend(values);
     }
 
     /// Inserts many values at the given index.
-    pub fn insert_many(&mut self, at: usize, values: impl Iterator<Item = Val>) {
+    pub fn insert_many(&mut self, at: usize, values: impl IntoIterator<Item = Val>) {
         debug_assert!(at <= self.len());
         // If last, simply extend.
         if at == self.inner.len() {
