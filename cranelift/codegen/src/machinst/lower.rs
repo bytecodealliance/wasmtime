@@ -771,6 +771,19 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     debug_assert_eq!(regs.len(), dsts.len());
                     for (dst, temp) in dsts.regs().iter().zip(regs.regs().iter()) {
                         self.set_vreg_alias(*dst, *temp);
+
+                        // If there was any PCC fact about the
+                        // original VReg, move it to the aliased reg
+                        // instead. Lookup goes through the alias, but
+                        // we want to preserve whatever was stated
+                        // about the vreg before its producer was
+                        // lowered.
+                        if let Some(fact) =
+                            self.vregs.take_fact(dst.to_virtual_reg().unwrap().into())
+                        {
+                            self.vregs
+                                .set_fact(temp.to_virtual_reg().unwrap().into(), fact);
+                        }
                     }
                 }
             }
@@ -963,7 +976,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let arg = self.f.dfg.resolve_aliases(arg);
                 let regs = self.put_value_in_regs(arg);
                 for &vreg in regs.regs() {
-                    let vreg = self.vcode.resolve_vreg_alias(vreg.into());
+                    let vreg = self.vcode.vcode.resolve_vreg_alias(vreg.into());
                     branch_arg_vregs.push(vreg.into());
                 }
             }

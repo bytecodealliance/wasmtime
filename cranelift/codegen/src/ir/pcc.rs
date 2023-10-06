@@ -76,6 +76,9 @@ pub enum PccError {
     /// An input to an operator that produces a fact-annotated value
     /// does not have a fact describing it, and one is needed.
     MissingFact,
+    /// A derivation of an output fact is unsupported (incorrect or
+    /// not derivable).
+    UnsupportedFact,
     /// A memory access is out of bounds.
     OutOfBounds,
     /// Proof-carrying-code checking is not implemented for a
@@ -310,7 +313,10 @@ impl FactContext {
                 if *bit_width < 64 && max > max_value_for_width(width) {
                     return Some(minimal_fact);
                 }
-                Some(minimal_fact)
+                Some(Fact::ValueMax {
+                    bit_width: *bit_width,
+                    max,
+                })
             }
             _ => None,
         }
