@@ -274,15 +274,6 @@
       (f_tmp WritableReg)
       (rs Reg)
       (ty Type))
-    ;;;; FMax
-    (FloatSelect
-      (op FloatSelectOP)
-      (rd WritableReg)
-      ;; a integer register
-      (tmp WritableReg)
-      (rs1 Reg)
-      (rs2 Reg)
-      (ty Type))
 
     ;; popcnt  if target doesn't support extension B
     ;; use iteration to implement.
@@ -390,11 +381,6 @@
       (vstate VState))
 ))
 
-
-(type FloatSelectOP (enum
-  (Max)
-  (Min)
-))
 
 (type FloatRoundOP (enum
   (Nearest)
@@ -1098,15 +1084,6 @@
       (_ Unit (emit (MInst.FloatRound op rd tmp tmp2 rs ty))))
     (writable_reg_to_reg rd)))
 
-(decl gen_float_select (FloatSelectOP Reg Reg Type) Reg)
-(rule
-  (gen_float_select op x y ty)
-  (let
-    ((rd WritableReg (temp_writable_reg ty))
-      (tmp WritableXReg (temp_writable_xreg))
-      (_ Unit (emit (MInst.FloatSelect op rd tmp x y ty))))
-    (writable_reg_to_reg rd)))
-
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1526,6 +1503,16 @@
 ;; Note: The arguments are reversed
 (decl rv_fge (Type FReg FReg) XReg)
 (rule (rv_fge ty rs1 rs2) (rv_fle ty rs2 rs1))
+
+;; Helper for emitting the `fmin` instruction.
+(decl rv_fmin (Type FReg FReg) FReg)
+(rule (rv_fmin $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FminS) $F32 rs1 rs2))
+(rule (rv_fmin $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FminD) $F64 rs1 rs2))
+
+;; Helper for emitting the `fmax` instruction.
+(decl rv_fmax (Type FReg FReg) FReg)
+(rule (rv_fmax $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxS) $F32 rs1 rs2))
+(rule (rv_fmax $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FmaxD) $F64 rs1 rs2))
 
 
 ;; `Zba` Extension Instructions
