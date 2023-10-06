@@ -10,6 +10,9 @@ use crate::machinst::VCode;
 use crate::trace;
 
 pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
+    // Create a new fact context with the machine's pointer width.
+    let ctx = FactContext::new(64);
+
     trace!("Checking facts on inst: {:?}", inst);
 
     match inst {
@@ -20,45 +23,45 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             Ok(())
         }
         Inst::ULoad8 { mem, flags, .. } | Inst::SLoad8 { mem, flags, .. } => {
-            check_addr(*flags, mem, vcode, 1)
+            check_addr(&ctx, *flags, mem, vcode, 1)
         }
         Inst::ULoad16 { mem, flags, .. } | Inst::SLoad16 { mem, flags, .. } => {
-            check_addr(*flags, mem, vcode, 2)
+            check_addr(&ctx, *flags, mem, vcode, 2)
         }
         Inst::ULoad32 { mem, flags, .. } | Inst::SLoad32 { mem, flags, .. } => {
-            check_addr(*flags, mem, vcode, 4)
+            check_addr(&ctx, *flags, mem, vcode, 4)
         }
-        Inst::ULoad64 { mem, flags, .. } => check_addr(*flags, mem, vcode, 8),
-        Inst::FpuLoad32 { mem, flags, .. } => check_addr(*flags, mem, vcode, 4),
-        Inst::FpuLoad64 { mem, flags, .. } => check_addr(*flags, mem, vcode, 8),
-        Inst::FpuLoad128 { mem, flags, .. } => check_addr(*flags, mem, vcode, 16),
-        Inst::LoadP64 { mem, flags, .. } => check_addr_pair(*flags, mem, vcode, 16),
-        Inst::FpuLoadP64 { mem, flags, .. } => check_addr_pair(*flags, mem, vcode, 16),
-        Inst::FpuLoadP128 { mem, flags, .. } => check_addr_pair(*flags, mem, vcode, 32),
-        Inst::VecLoadReplicate { rn, flags, .. } => check_scalar_addr(*flags, *rn, vcode, 16),
+        Inst::ULoad64 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 8),
+        Inst::FpuLoad32 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 4),
+        Inst::FpuLoad64 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 8),
+        Inst::FpuLoad128 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 16),
+        Inst::LoadP64 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 16),
+        Inst::FpuLoadP64 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 16),
+        Inst::FpuLoadP128 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 32),
+        Inst::VecLoadReplicate { rn, flags, .. } => check_scalar_addr(&ctx, *flags, *rn, vcode, 16),
         Inst::LoadAcquire {
             access_ty,
             rn,
             flags,
             ..
-        } => check_scalar_addr(*flags, *rn, vcode, access_ty.bytes() as u8),
+        } => check_scalar_addr(&ctx, *flags, *rn, vcode, access_ty.bytes() as u8),
 
-        Inst::Store8 { mem, flags, .. } => check_addr(*flags, mem, vcode, 1),
-        Inst::Store16 { mem, flags, .. } => check_addr(*flags, mem, vcode, 2),
-        Inst::Store32 { mem, flags, .. } => check_addr(*flags, mem, vcode, 4),
-        Inst::Store64 { mem, flags, .. } => check_addr(*flags, mem, vcode, 8),
-        Inst::FpuStore32 { mem, flags, .. } => check_addr(*flags, mem, vcode, 4),
-        Inst::FpuStore64 { mem, flags, .. } => check_addr(*flags, mem, vcode, 8),
-        Inst::FpuStore128 { mem, flags, .. } => check_addr(*flags, mem, vcode, 16),
-        Inst::StoreP64 { mem, flags, .. } => check_addr_pair(*flags, mem, vcode, 16),
-        Inst::FpuStoreP64 { mem, flags, .. } => check_addr_pair(*flags, mem, vcode, 16),
-        Inst::FpuStoreP128 { mem, flags, .. } => check_addr_pair(*flags, mem, vcode, 32),
+        Inst::Store8 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 1),
+        Inst::Store16 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 2),
+        Inst::Store32 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 4),
+        Inst::Store64 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 8),
+        Inst::FpuStore32 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 4),
+        Inst::FpuStore64 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 8),
+        Inst::FpuStore128 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 16),
+        Inst::StoreP64 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 16),
+        Inst::FpuStoreP64 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 16),
+        Inst::FpuStoreP128 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 32),
         Inst::StoreRelease {
             access_ty,
             rn,
             flags,
             ..
-        } => check_scalar_addr(*flags, *rn, vcode, access_ty.bytes() as u8),
+        } => check_scalar_addr(&ctx, *flags, *rn, vcode, access_ty.bytes() as u8),
 
         i => {
             panic!("Fact on unknown inst: {:?}", i);
@@ -66,20 +69,26 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
     }
 }
 
-fn amode_extend(value: &Fact, mode: ExtendOp) -> Option<Fact> {
+fn amode_extend(ctx: &FactContext, value: &Fact, mode: ExtendOp) -> Option<Fact> {
     match mode {
-        ExtendOp::UXTB => value.uextend(8, 64),
-        ExtendOp::UXTH => value.uextend(16, 64),
-        ExtendOp::UXTW => value.uextend(32, 64),
+        ExtendOp::UXTB => ctx.uextend(value, 8, 64),
+        ExtendOp::UXTH => ctx.uextend(value, 16, 64),
+        ExtendOp::UXTW => ctx.uextend(value, 32, 64),
         ExtendOp::UXTX => Some(value.clone()),
-        ExtendOp::SXTB => value.sextend(8, 64),
-        ExtendOp::SXTH => value.uextend(16, 64),
-        ExtendOp::SXTW => value.uextend(32, 64),
+        ExtendOp::SXTB => ctx.sextend(value, 8, 64),
+        ExtendOp::SXTH => ctx.uextend(value, 16, 64),
+        ExtendOp::SXTW => ctx.uextend(value, 32, 64),
         ExtendOp::SXTX => None,
     }
 }
 
-fn check_addr(flags: MemFlags, addr: &AMode, vcode: &VCode<Inst>, size: u8) -> PccResult<()> {
+fn check_addr(
+    ctx: &FactContext,
+    flags: MemFlags,
+    addr: &AMode,
+    vcode: &VCode<Inst>,
+    size: u8,
+) -> PccResult<()> {
     if !flags.checked() {
         return Ok(());
     }
@@ -88,15 +97,15 @@ fn check_addr(flags: MemFlags, addr: &AMode, vcode: &VCode<Inst>, size: u8) -> P
         &AMode::RegReg { rn, rm } => {
             let rn = vcode.vreg_fact(rn.into()).ok_or(PccError::MissingFact)?;
             let rm = vcode.vreg_fact(rm.into()).ok_or(PccError::MissingFact)?;
-            let sum = rn.add(&rm, 64, 64).ok_or(PccError::MissingFact)?;
-            sum.check_address(size as u32)
+            let sum = ctx.add(&rn, &rm, 64).ok_or(PccError::MissingFact)?;
+            ctx.check_address(&sum, size as u32)
         }
         &AMode::RegScaled { rn, rm, ty } => {
             let rn = vcode.vreg_fact(rn.into()).ok_or(PccError::MissingFact)?;
             let rm = vcode.vreg_fact(rm.into()).ok_or(PccError::MissingFact)?;
-            let rm_scaled = rm.scale(64, ty.bytes()).ok_or(PccError::Overflow)?;
-            let sum = rn.add(&rm_scaled, 64, 64).ok_or(PccError::MissingFact)?;
-            sum.check_address(size as u32)
+            let rm_scaled = ctx.scale(&rm, 64, ty.bytes()).ok_or(PccError::Overflow)?;
+            let sum = ctx.add(&rn, &rm_scaled, 64).ok_or(PccError::MissingFact)?;
+            ctx.check_address(&sum, size as u32)
         }
         &AMode::RegScaledExtended {
             rn,
@@ -106,32 +115,36 @@ fn check_addr(flags: MemFlags, addr: &AMode, vcode: &VCode<Inst>, size: u8) -> P
         } => {
             let rn = vcode.vreg_fact(rn.into()).ok_or(PccError::MissingFact)?;
             let rm = vcode.vreg_fact(rm.into()).ok_or(PccError::MissingFact)?;
-            let rm_extended = amode_extend(rm, extendop).ok_or(PccError::MissingFact)?;
-            let rm_scaled = rm_extended
-                .scale(64, ty.bytes())
+            let rm_extended = amode_extend(ctx, rm, extendop).ok_or(PccError::MissingFact)?;
+            let rm_scaled = ctx
+                .scale(&rm_extended, 64, ty.bytes())
                 .ok_or(PccError::Overflow)?;
-            let sum = rn.add(&rm_scaled, 64, 64).ok_or(PccError::MissingFact)?;
-            sum.check_address(size as u32)
+            let sum = ctx.add(&rn, &rm_scaled, 64).ok_or(PccError::MissingFact)?;
+            ctx.check_address(&sum, size as u32)
         }
         &AMode::RegExtended { rn, rm, extendop } => {
             let rn = vcode.vreg_fact(rn.into()).ok_or(PccError::MissingFact)?;
             let rm = vcode.vreg_fact(rm.into()).ok_or(PccError::MissingFact)?;
-            let rm_extended = amode_extend(rm, extendop).ok_or(PccError::MissingFact)?;
-            let sum = rn.add(&rm_extended, 64, 64).ok_or(PccError::MissingFact)?;
-            sum.check_address(size as u32)
+            let rm_extended = amode_extend(ctx, rm, extendop).ok_or(PccError::MissingFact)?;
+            let sum = ctx
+                .add(&rn, &rm_extended, 64)
+                .ok_or(PccError::MissingFact)?;
+            ctx.check_address(&sum, size as u32)
         }
         &AMode::Unscaled { rn, simm9 } => {
             let rn = vcode.vreg_fact(rn.into()).ok_or(PccError::MissingFact)?;
-            let sum = rn
-                .offset(64, simm9.value as i64)
+            let sum = ctx
+                .offset(&rn, 64, simm9.value as i64)
                 .ok_or(PccError::MissingFact)?;
-            sum.check_address(size as u32)
+            ctx.check_address(&sum, size as u32)
         }
         &AMode::UnsignedOffset { rn, uimm12 } => {
             let rn = vcode.vreg_fact(rn.into()).ok_or(PccError::MissingFact)?;
             let offset = (uimm12.value as u64) * (size as u64);
-            let sum = rn.offset(64, offset as i64).ok_or(PccError::MissingFact)?;
-            sum.check_address(size as u32)
+            let sum = ctx
+                .offset(&rn, 64, offset as i64)
+                .ok_or(PccError::MissingFact)?;
+            ctx.check_address(&sum, size as u32)
         }
         &AMode::Label { .. } | &AMode::Const { .. } => {
             // Always accept: labels and constants must be within the
@@ -140,8 +153,8 @@ fn check_addr(flags: MemFlags, addr: &AMode, vcode: &VCode<Inst>, size: u8) -> P
         }
         &AMode::RegOffset { rn, off, .. } => {
             let rn = vcode.vreg_fact(rn.into()).ok_or(PccError::MissingFact)?;
-            let sum = rn.offset(64, off).ok_or(PccError::MissingFact)?;
-            sum.check_address(size as u32)
+            let sum = ctx.offset(&rn, 64, off).ok_or(PccError::MissingFact)?;
+            ctx.check_address(&sum, size as u32)
         }
         &AMode::SPOffset { .. }
         | &AMode::FPOffset { .. }
@@ -156,18 +169,25 @@ fn check_addr(flags: MemFlags, addr: &AMode, vcode: &VCode<Inst>, size: u8) -> P
 }
 
 fn check_addr_pair(
+    _ctx: &FactContext,
     _flags: MemFlags,
     _addr: &PairAMode,
     _vcode: &VCode<Inst>,
     _size: u8,
 ) -> PccResult<()> {
-    Err(PccError::Unimplemented)
+    Err(PccError::UnimplementedInst)
 }
 
-fn check_scalar_addr(flags: MemFlags, reg: Reg, vcode: &VCode<Inst>, size: u8) -> PccResult<()> {
+fn check_scalar_addr(
+    ctx: &FactContext,
+    flags: MemFlags,
+    reg: Reg,
+    vcode: &VCode<Inst>,
+    size: u8,
+) -> PccResult<()> {
     if !flags.checked() {
         return Ok(());
     }
     let fact = vcode.vreg_fact(reg.into()).ok_or(PccError::MissingFact)?;
-    fact.check_address(size as u32)
+    ctx.check_address(&fact, size as u32)
 }

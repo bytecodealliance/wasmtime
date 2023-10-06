@@ -49,7 +49,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
 
     // Perform validation of proof-carrying-code facts, if requested.
     if b.flags().enable_pcc() {
-        pcc::check_facts(f, &vcode, b).map_err(CodegenError::Pcc)?;
+        pcc::check_vcode_facts(f, &vcode, b).map_err(CodegenError::Pcc)?;
     }
 
     // Perform register allocation.

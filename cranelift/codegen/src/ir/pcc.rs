@@ -5,10 +5,10 @@
 //!
 //! - The producer of the IR provides the axioms. All "ground truth",
 //!   such as what memory is accessible -- is meant to come by way of
-//!   facts on the function arguments. In some sense, all we are doing
-//!   here is validating the "internal consistency" of the facts that
-//!   are provided on values, and the actions performed on those
-//!   values.
+//!   facts on the function arguments and global values. In some
+//!   sense, all we are doing here is validating the "internal
+//!   consistency" of the facts that are provided on values, and the
+//!   actions performed on those values.
 //!
 //! - We do not derive and forward-propagate facts eagerly. Rather,
 //!   the producer needs to provide breadcrumbs -- a "proof witness"
@@ -23,7 +23,7 @@
 //!   specifically the memory-access sequences. In practice, each such
 //!   sequence is likely to be a carefully-controlled sequence of IR
 //!   operations from, e.g., a sandboxing compiler (such as
-//!   `cranelift-wasm`) so adding annotations here so communicate
+//!   `cranelift-wasm`) so adding annotations here to communicate
 //!   intent (ranges, bounds-checks, and the like) is no problem.
 //!
 //! Facts are attached to SSA values in CLIF, and are maintained
@@ -43,7 +43,7 @@
 //! include an addition, multiplication/shift, or extend operation,
 //! and there is no way to attach facts to the intermediate values
 //! "inside" the instruction, so instead the backend can use
-//! `Fact::add()` and friends to forward-propagate facts.
+//! `FactContext::add()` and friends to forward-propagate facts.
 //!
 //! TODO:
 //! - Propagate facts through optimization (egraph layer).
@@ -78,8 +78,13 @@ pub enum PccError {
     MissingFact,
     /// A memory access is out of bounds.
     OutOfBounds,
-    /// Proof-carry-code checking is not implemented for a certain case.
-    Unimplemented,
+    /// Proof-carrying-code checking is not implemented for a
+    /// particular compiler backend.
+    UnimplementedBackend,
+    /// Proof-carrying-code checking is not implemented for a
+    /// particular instruction that instruction-selection chose. This
+    /// is an internal compiler error.
+    UnimplementedInst,
 }
 
 /// A fact on a value.
@@ -96,7 +101,9 @@ pub enum Fact {
     ValueMax {
         /// The bitwidth of bits we care about, from the LSB upward.
         bit_width: u16,
-        /// The maximum value that the bitslice can take (inclusive).
+        /// The maximum value that the bitslice can take
+        /// (inclusive). The range is unsigned: the bits of the value
+        /// will be within the range `0..=max`.
         max: u64,
     },
 
@@ -115,7 +122,7 @@ pub enum Fact {
 pub struct MemoryRegion {
     /// Includes both the actual memory bound as well as any guard
     /// pages. Inclusive, so we can represent the full range of a
-    /// `u64`.
+    /// `u64`. The range is unsigned.
     pub max: u64,
 }
 
@@ -144,10 +151,23 @@ macro_rules! bail {
     }};
 }
 
-impl Fact {
-    /// Computes whether a fact "subsumes" (implies) another.
-    pub fn subsumes(&self, other: &Self) -> bool {
-        match (self, other) {
+/// A "context" in which we can evaluate and derive facts. This
+/// context carries environment/global properties, such as the machine
+/// pointer width.
+#[derive(Debug)]
+pub struct FactContext {
+    pointer_width: u16,
+}
+
+impl FactContext {
+    /// Create a new "fact context" in which to evaluate facts.
+    pub fn new(pointer_width: u16) -> Self {
+        FactContext { pointer_width }
+    }
+
+    /// Computes whether `lhs` "subsumes" (implies) `rhs`.
+    pub fn subsumes(&self, lhs: &Fact, rhs: &Fact) -> bool {
+        match (lhs, rhs) {
             (
                 Fact::ValueMax {
                     bit_width: bw_lhs,
@@ -188,11 +208,13 @@ impl Fact {
         }
     }
 
-    /// Computes whatever fact can be known about the sum of two other
+    /// Computes whatever fact can be known about the sum of two
     /// values with attached facts. The add is performed to the given
-    /// bit-width, and the target machine has the given pointer-width.
-    pub fn add(&self, other: &Self, add_width: u16, pointer_width: u16) -> Option<Self> {
-        match (self, other) {
+    /// bit-width. Note that this is distinct from the machine or
+    /// pointer width: e.g., many 64-bit machines can still do 32-bit
+    /// adds that wrap at 2^32.
+    pub fn add(&self, lhs: &Fact, rhs: &Fact, add_width: u16) -> Option<Fact> {
+        match (lhs, rhs) {
             (
                 Fact::ValueMax {
                     bit_width: bw_lhs,
@@ -223,13 +245,11 @@ impl Fact {
                     bit_width: bw_max,
                     max,
                 },
-            ) if *bw_max >= pointer_width && add_width >= *bw_max => {
-                let computed_region = MemoryRegion {
+            ) if *bw_max >= self.pointer_width && add_width >= *bw_max => {
+                let region = MemoryRegion {
                     max: region.max.checked_sub(*max)?,
                 };
-                Some(Fact::PointsTo {
-                    region: computed_region,
-                })
+                Some(Fact::PointsTo { region })
             }
 
             _ => None,
@@ -237,8 +257,8 @@ impl Fact {
     }
 
     /// Computes the `uextend` of a value with the given facts.
-    pub fn uextend(&self, from_width: u16, to_width: u16) -> Option<Self> {
-        match self {
+    pub fn uextend(&self, fact: &Fact, from_width: u16, to_width: u16) -> Option<Fact> {
+        match fact {
             // If we have a defined value in bits 0..bit_width, and we
             // are filling zeroes into from_bits..to_bits, and
             // bit_width and from_bits are exactly contiguous, then we
@@ -248,57 +268,75 @@ impl Fact {
                 bit_width: to_width,
                 max: *max,
             }),
+            // Otherwise, we can at least claim that the value is
+            // within the range of `to_width`.
+            Fact::ValueMax { .. } => Some(Fact::ValueMax {
+                bit_width: to_width,
+                max: max_value_for_width(to_width),
+            }),
             _ => None,
         }
     }
 
     /// Computes the `sextend` of a value with the given facts.
-    pub fn sextend(&self, from_width: u16, to_width: u16) -> Option<Self> {
-        match self {
+    pub fn sextend(&self, fact: &Fact, from_width: u16, to_width: u16) -> Option<Fact> {
+        match fact {
             // If we have a defined value in bits 0..bit_width, and
             // the MSB w.r.t. `from_width` is *not* set, then we can
             // do the same as `uextend`.
             Fact::ValueMax { bit_width, max }
                 if *bit_width == from_width && (*max & (1 << (*bit_width - 1)) == 0) =>
             {
-                self.uextend(from_width, to_width)
+                self.uextend(fact, from_width, to_width)
             }
             _ => None,
         }
     }
 
     /// Scales a value with a fact by a known constant.
-    pub fn scale(&self, width: u16, factor: u32) -> Option<Self> {
-        match self {
+    pub fn scale(&self, fact: &Fact, width: u16, factor: u32) -> Option<Fact> {
+        // The minimal (loosest) fact we can claim: the value will be
+        // within the range implied by its bitwidth.
+        let minimal_fact = Fact::ValueMax {
+            bit_width: width,
+            max: max_value_for_width(width),
+        };
+        match fact {
             Fact::ValueMax { bit_width, max } if *bit_width == width => {
-                let max = max.checked_mul(factor as u64)?;
-                if *bit_width < 64 && max > ((1 << width) - 1) {
-                    return None;
+                let max = match max.checked_mul(u64::from(factor)) {
+                    Some(max) => max,
+                    None => return Some(minimal_fact),
+                };
+                if *bit_width < 64 && max > max_value_for_width(width) {
+                    return Some(minimal_fact);
                 }
-                Some(Fact::ValueMax {
-                    bit_width: *bit_width,
-                    max,
-                })
+                Some(minimal_fact)
             }
             _ => None,
         }
     }
 
     /// Offsets a value with a fact by a known amount.
-    pub fn offset(&self, width: u16, offset: i64) -> Option<Self> {
+    pub fn offset(&self, fact: &Fact, width: u16, offset: i64) -> Option<Fact> {
         // If we eventually support two-sided ranges, we can
         // represent (0..n) + m -> ((0+m)..(n+m)). However,
         // right now, all ranges start with zero, so any
         // negative offset could underflow, and removes all
         // claims of constrained range.
-        if offset < 0 {
-            return None;
-        }
-        let offset = u64::try_from(offset).unwrap();
+        let offset = u64::try_from(offset).ok()?;
 
-        match self {
+        match fact {
             Fact::ValueMax { bit_width, max } if *bit_width == width => {
-                let max = max.checked_add(offset).unwrap();
+                let max = match max.checked_add(offset) {
+                    Some(max) => max,
+                    None => {
+                        return Some(Fact::ValueMax {
+                            bit_width: width,
+                            max: max_value_for_width(width),
+                        })
+                    }
+                };
+
                 Some(Fact::ValueMax {
                     bit_width: *bit_width,
                     max,
@@ -307,7 +345,7 @@ impl Fact {
             Fact::PointsTo {
                 region: MemoryRegion { max },
             } => {
-                let max = max.checked_sub(offset).unwrap();
+                let max = max.checked_sub(offset)?;
                 Some(Fact::PointsTo {
                     region: MemoryRegion { max },
                 })
@@ -318,8 +356,8 @@ impl Fact {
 
     /// Check that accessing memory via a pointer with this fact, with
     /// a memory access of the given size, is valid.
-    pub fn check_address(&self, size: u32) -> PccResult<()> {
-        match self {
+    pub fn check_address(&self, fact: &Fact, size: u32) -> PccResult<()> {
+        match fact {
             Fact::PointsTo {
                 region: MemoryRegion { max },
             } => ensure!(u64::from(size) <= *max, OutOfBounds),
@@ -330,9 +368,18 @@ impl Fact {
     }
 }
 
+fn max_value_for_width(bits: u16) -> u64 {
+    assert!(bits <= 64);
+    if bits == 64 {
+        u64::MAX
+    } else {
+        (1u64 << bits) - 1
+    }
+}
+
 /// Top-level entry point after compilation: this checks the facts in
 /// VCode.
-pub fn check_facts<B: LowerBackend + TargetIsa>(
+pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
     _f: &ir::Function,
     vcode: &VCode<B::MInst>,
     backend: &B,
