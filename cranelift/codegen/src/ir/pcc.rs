@@ -60,6 +60,9 @@ use crate::isa::TargetIsa;
 use crate::machinst::{InsnIndex, LowerBackend, MachInst, VCode};
 use std::fmt;
 
+#[cfg(feature = "enable-serde")]
+use serde_derive::{Deserialize, Serialize};
+
 /// The result of checking proof-carrying-code facts.
 pub type PccResult<T> = std::result::Result<T, PccError>;
 
@@ -81,6 +84,7 @@ pub enum PccError {
 
 /// A fact on a value.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum Fact {
     /// A bitslice of a value (up to a bitwidth) is less than or equal
     /// to a given maximum value.
@@ -107,6 +111,7 @@ pub enum Fact {
 /// A memory region that can be accessed. This description is attached
 /// to a particular base pointer.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct MemoryRegion {
     /// Includes both the actual memory bound as well as any guard
     /// pages. Inclusive, so we can represent the full range of a
