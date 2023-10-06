@@ -43,6 +43,9 @@ pub struct UdpSocket {
 
     /// The current state in the bind/connect progression.
     pub(crate) udp_state: UdpState,
+
+    /// Socket address family.
+    pub(crate) family: AddressFamily,
 }
 
 #[async_trait]
@@ -50,7 +53,7 @@ impl Subscribe for UdpSocket {
     async fn ready(&mut self) {
         // Some states are ready immediately.
         match self.udp_state {
-            UdpState::BindStarted | UdpState::ConnectReady => return,
+            UdpState::BindStarted => return,
             _ => {}
         }
 
@@ -68,16 +71,20 @@ impl UdpSocket {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
         let udp_socket = cap_std::net::UdpSocket::new(family, Blocking::No)?;
-        Self::from_udp_socket(udp_socket)
+        Self::from_udp_socket(udp_socket, family)
     }
 
-    pub fn from_udp_socket(udp_socket: cap_std::net::UdpSocket) -> io::Result<Self> {
+    pub fn from_udp_socket(
+        udp_socket: cap_std::net::UdpSocket,
+        family: AddressFamily,
+    ) -> io::Result<Self> {
         let fd = udp_socket.into_raw_socketlike();
         let std_socket = unsafe { std::net::UdpSocket::from_raw_socketlike(fd) };
         let socket = with_ambient_tokio_runtime(|| tokio::net::UdpSocket::try_from(std_socket))?;
         Ok(Self {
             inner: Arc::new(socket),
             udp_state: UdpState::Default,
+            family,
         })
     }
 
