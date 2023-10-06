@@ -238,7 +238,7 @@ mod enum_error {
                 enum-error: func(a: float64) -> result<float64, e1>;
             }
         }",
-        trappable_error_type: { "inline:inline/imports"::e1: TrappableE1 }
+        trappable_error_type: { "inline:inline/imports/e1" => TrappableE1 }
     });
 
     // You can create concrete trap types which make it all the way out to the
@@ -418,9 +418,7 @@ mod record_error {
                 record-error: func(a: float64) -> result<float64, e2>;
             }
         }",
-        // Literal strings can be used for the interface and typename fields instead of
-        // identifiers, because wit identifiers arent always Rust identifiers.
-        trappable_error_type: { "inline:inline/imports"::"e2": TrappableE2 }
+        trappable_error_type: { "inline:inline/imports/e2" => TrappableE2 }
     });
 
     pub enum TrappableE2 {
@@ -591,7 +589,7 @@ mod variant_error {
                 variant-error: func(a: float64) -> result<float64, e3>;
             }
         }",
-        trappable_error_type: { "inline:inline/imports"::e3: TrappableE3 }
+        trappable_error_type: { "inline:inline/imports/e3" => TrappableE3 }
     });
 
     pub enum TrappableE3 {
@@ -786,7 +784,7 @@ mod multiple_interfaces_error {
                 enum-error: func(a: float64) -> result<float64, e1>;
             }
         }",
-        trappable_error_type: { "inline:inline/types"::e1: TrappableE1 }
+        trappable_error_type: { "inline:inline/types/e1" => TrappableE1 }
     });
 
     pub enum TrappableE1 {

@@ -140,8 +140,8 @@ mod trappable_errors {
             }
         ",
         trappable_error_type: {
-            "demo:pkg/a"::"b": MyX,
-            "demo:pkg/c"::"b": MyX,
+            "demo:pkg/a/b" => MyX,
+            "demo:pkg/c/b" => MyX,
         },
     });
 
