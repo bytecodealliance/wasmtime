@@ -1973,3 +1973,41 @@ block0(v0: i128, v1: i128):
 ;   popq %rbp
 ;   retq
 
+function %iabs_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = iabs.i128 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   xorq    %r8, %r8, %r8
+;   movq    %rdi, %rax
+;   negq    %rax, %rax
+;   movq    %rsi, %rdx
+;   adcq    %rdx, %r8, %rdx
+;   negq    %rdx, %rdx
+;   cmovsq  %rdi, %rax, %rax
+;   cmovsq  %rsi, %rdx, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   xorq %r8, %r8
+;   movq %rdi, %rax
+;   negq %rax
+;   movq %rsi, %rdx
+;   adcq %r8, %rdx
+;   negq %rdx
+;   cmovsq %rdi, %rax
+;   cmovsq %rsi, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
