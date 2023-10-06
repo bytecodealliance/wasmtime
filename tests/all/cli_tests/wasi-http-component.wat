@@ -96,7 +96,7 @@
     (import "wasi:http/types" "[resource-drop]outgoing-response"
       (func $__wasi_http_types_resourcedrop_outgoingresponse (param i32)))
 
-    (func $_start (result i32)
+    (func $run (result i32)
       (local i32 i32)
       (local $headers_handle i32)
       (local $request_handle i32)
@@ -200,7 +200,7 @@
 
     (memory 1)
     (export "memory" (memory 0))
-    (export "run" (func $_start))
+    (export "run" (func $run))
     (export "cabi_realloc" (func $cabi_realloc))
     (data (i32.const 32) "Called _start\0a")
     (data (i32.const 64) "Done\0a")
