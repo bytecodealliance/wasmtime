@@ -407,25 +407,6 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
         let dropped = table.delete_resource(this)?;
-
-        // If we might have an `event::poll` waiting on the socket, wake it up.
-        #[cfg(not(unix))]
-        {
-            match dropped.udp_state {
-                UdpState::Default
-                | UdpState::BindStarted
-                | UdpState::Bound
-                | UdpState::ConnectReady => {}
-
-                UdpState::Connecting | UdpState::Connected => {
-                    match rustix::net::shutdown(&*dropped.inner, rustix::net::Shutdown::ReadWrite) {
-                        Ok(()) | Err(Errno::NOTCONN) => {}
-                        Err(err) => Err(err).unwrap(),
-                    }
-                }
-            }
-        }
-
         drop(dropped);
 
         Ok(())

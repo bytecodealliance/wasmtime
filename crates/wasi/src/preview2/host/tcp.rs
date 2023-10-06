@@ -603,27 +603,6 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
         let dropped = table.delete_resource(this)?;
-
-        // If we might have an `event::poll` waiting on the socket, wake it up.
-        #[cfg(not(unix))]
-        {
-            match dropped.tcp_state {
-                TcpState::Default
-                | TcpState::BindStarted
-                | TcpState::Bound
-                | TcpState::ListenStarted
-                | TcpState::ConnectFailed
-                | TcpState::ConnectReady => {}
-
-                TcpState::Listening | TcpState::Connecting | TcpState::Connected => {
-                    match rustix::net::shutdown(&*dropped.inner, rustix::net::Shutdown::ReadWrite) {
-                        Ok(()) | Err(Errno::NOTCONN) => {}
-                        Err(err) => Err(err).unwrap(),
-                    }
-                }
-            }
-        }
-
         drop(dropped);
 
         Ok(())
