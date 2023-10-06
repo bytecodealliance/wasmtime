@@ -7,7 +7,7 @@
 //   that takes a `request` parameter and returns a `response` result.
 //
 interface incoming-handler {
-  use types.{incoming-request, response-outparam}
+  use types.{incoming-request, response-outparam};
 
   // The `handle` function takes an outparam instead of returning its response
   // so that the component may stream its response while streaming any other
@@ -20,5 +20,5 @@ interface incoming-handler {
   handle: func(
     request: incoming-request,
     response-out: response-outparam
-  )
+  );
 }

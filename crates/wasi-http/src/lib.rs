@@ -10,10 +10,10 @@ pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
         interfaces: "
-                import wasi:http/incoming-handler
-                import wasi:http/outgoing-handler
-                import wasi:http/types
-            ",
+            import wasi:http/incoming-handler;
+            import wasi:http/outgoing-handler;
+            import wasi:http/types;
+        ",
         tracing: true,
         async: false,
         with: {

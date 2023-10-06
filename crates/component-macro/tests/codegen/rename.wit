@@ -1,16 +1,16 @@
-package foo:foo
+package foo:foo;
 
 interface red {
-  use green.{thing}
+  use green.{thing};
 
-  foo: func() -> thing
+  foo: func() -> thing;
 }
 
 interface green {
-  type thing = s32
+  type thing = s32;
 }
 
 world neptune {
-  import red
-  import green
+  import red;
+  import green;
 }

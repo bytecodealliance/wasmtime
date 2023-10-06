@@ -31,23 +31,23 @@ mod with_key_and_resources {
 
     wasmtime::component::bindgen!({
         inline: "
-            package demo:pkg
+            package demo:pkg;
 
             interface bar {
-                resource a
-                resource b
+                resource a;
+                resource b;
             }
 
             world foo {
-                resource a
-                resource b
+                resource a;
+                resource b;
 
                 import foo: interface {
-                    resource a
-                    resource b
+                    resource a;
+                    resource b;
                 }
 
-                import bar
+                import bar;
             }
         ",
         with: {

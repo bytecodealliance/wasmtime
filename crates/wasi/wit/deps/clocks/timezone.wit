@@ -1,5 +1,5 @@
 interface timezone {
-    use wall-clock.{datetime}
+    use wall-clock.{datetime};
 
     /// Return information needed to display the given `datetime`. This includes
     /// the UTC offset, the time zone name, and a flag indicating whether
@@ -8,10 +8,10 @@ interface timezone {
     /// If the timezone cannot be determined for the given `datetime`, return a
     /// `timezone-display` for `UTC` with a `utc-offset` of 0 and no daylight
     /// saving time.
-    display: func(when: datetime) -> timezone-display
+    display: func(when: datetime) -> timezone-display;
 
     /// The same as `display`, but only return the UTC offset.
-    utc-offset: func(when: datetime) -> s32
+    utc-offset: func(when: datetime) -> s32;
 
     /// Information useful for displaying the timezone of a specific `datetime`.
     ///

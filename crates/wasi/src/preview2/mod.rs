@@ -65,9 +65,9 @@ pub mod bindings {
             wasmtime::component::bindgen!({
                 path: "wit",
                 interfaces: "
-                    import wasi:io/poll
-                    import wasi:io/streams
-                    import wasi:filesystem/types
+                    import wasi:io/poll;
+                    import wasi:io/streams;
+                    import wasi:filesystem/types;
                 ",
                 tracing: true,
                 trappable_error_type: {
@@ -90,7 +90,7 @@ pub mod bindings {
 
     wasmtime::component::bindgen!({
         path: "wit",
-        interfaces: "include wasi:cli/reactor",
+        interfaces: "include wasi:cli/reactor;",
         tracing: true,
         async: {
             // Only these functions are `async` and everything else is sync
