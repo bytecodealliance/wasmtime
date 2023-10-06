@@ -1,16 +1,16 @@
-package foo:foo
+package foo:foo;
 
 interface i {
-  type t = u16
+  type t = u16;
 }
 
 world foo {
-  use i.{t as u}
+  use i.{t as u};
 
-  type t = u32
+  type t = u32;
 
   record r {
   }
 
-  export f: func() -> tuple<t, u, r>
+  export f: func() -> tuple<t, u, r>;
 }

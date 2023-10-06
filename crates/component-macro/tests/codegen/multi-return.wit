@@ -1,14 +1,14 @@
-package foo:foo
+package foo:foo;
 
 interface multi-return {
-  mra: func()
-  mrb: func() -> ()
-  mrc: func() -> u32
-  mrd: func() -> (a: u32)
-  mre: func() -> (a: u32, b: float32)
+  mra: func();
+  mrb: func() -> ();
+  mrc: func() -> u32;
+  mrd: func() -> (a: u32);
+  mre: func() -> (a: u32, b: float32);
 }
 
 world the-world {
-  import multi-return
-  export multi-return
+  import multi-return;
+  export multi-return;
 }

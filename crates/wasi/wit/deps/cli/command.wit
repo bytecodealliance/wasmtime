@@ -1,7 +1,7 @@
-package wasi:cli
+package wasi:cli;
 
 world command {
-  include reactor
+  include reactor;
 
-  export run
+  export run;
 }

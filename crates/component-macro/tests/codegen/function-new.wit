@@ -1,4 +1,4 @@
-package foo:foo
+package foo:foo;
 world foo {
-  export new: func()
+  export new: func();
 }

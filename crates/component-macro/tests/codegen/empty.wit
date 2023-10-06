@@ -1,2 +1,2 @@
-package foo:foo
+package foo:foo;
 world empty {}

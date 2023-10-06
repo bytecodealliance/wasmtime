@@ -74,11 +74,11 @@ pub(crate) use self::store::ComponentStoreData;
 /// ```text,ignore
 /// // wit/my-component.wit
 ///
-/// package my:project
+/// package my:project;
 ///
 /// world hello-world {
-///     import name: func() -> string
-///     export greet: func()
+///     import name: func() -> string;
+///     export greet: func();
 /// }
 /// ```
 ///
@@ -153,18 +153,18 @@ pub(crate) use self::store::ComponentStoreData;
 /// ```text,ignore
 /// // wit/my-component.wit
 ///
-/// package my:project
+/// package my:project;
 ///
 /// interface host {
-///     gen-random-integer: func() -> u32
-///     sha256: func(bytes: list<u8>) -> string
+///     gen-random-integer: func() -> u32;
+///     sha256: func(bytes: list<u8>) -> string;
 /// }
 ///
 /// default world hello-world {
-///     import host
+///     import host;
 ///
 ///     export demo: interface {
-///         run: func()
+///         run: func();
 ///     }
 /// }
 /// ```
@@ -258,7 +258,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // Instead of `path` the WIT document can be provided inline if
 ///     // desired.
 ///     inline: "
-///         package my:inline
+///         package my:inline;
 ///
 ///         world foo {
 ///             // ...
@@ -326,7 +326,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // Restrict the code generated to what's needed for the interface
 ///     // imports in the inlined WIT document fragment.
 ///     interfaces: "
-///         import wasi:cli/command
+///         import wasi:cli/command;
 ///     ",
 ///
 ///     // Remap imported interfaces or resources to types defined in Rust
