@@ -643,8 +643,7 @@ impl RunCommand {
                         bail!("Cannot enable wasi-http for core wasm modules");
                     }
                     CliLinker::Component(linker) => {
-                        linker.allow_shadowing(true);
-                        wasmtime_wasi_http::proxy::sync::add_to_linker(linker)?;
+                        wasmtime_wasi_http::proxy::sync::add_only_http_to_linker(linker)?;
                     }
                 }
 
