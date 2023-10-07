@@ -1,12 +1,15 @@
 use super::network::SystemError;
-use crate::preview2::bindings::{
-    io::streams::{InputStream, OutputStream},
-    sockets::network::{self, ErrorCode, IpAddressFamily, IpSocketAddress, Network},
-    sockets::tcp::{self, ShutdownType},
-};
 use crate::preview2::tcp::{TcpSocket, TcpState};
+use crate::preview2::{
+    bindings::{
+        io::streams::{InputStream, OutputStream},
+        sockets::network::{self, ErrorCode, IpAddressFamily, IpSocketAddress, Network},
+        sockets::tcp::{self, ShutdownType},
+    },
+    tcp::SocketAddressFamily,
+};
 use crate::preview2::{Pollable, WasiView};
-use cap_net_ext::{AddressFamily, Blocking, PoolExt, TcpListenerExt};
+use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
@@ -347,16 +350,22 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
-        Ok(socket.family.into())
+        match socket.family {
+            SocketAddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
+            SocketAddressFamily::Ipv6 { .. } => Ok(IpAddressFamily::Ipv6),
+        }
     }
 
     fn ipv6_only(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, network::Error> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
+        // Instead of just calling the OS we return our own internal state, because
+        // MacOS doesn't propogate the V6ONLY state on to accepted client sockets.
+
         match socket.family {
-            AddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            AddressFamily::Ipv6 => Ok(sockopt::get_ipv6_v6only(socket.tcp_socket())?),
+            SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
+            SocketAddressFamily::Ipv6 { v6only } => Ok(v6only),
         }
     }
 
@@ -365,13 +374,17 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         this: Resource<tcp::TcpSocket>,
         value: bool,
     ) -> Result<(), network::Error> {
-        let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let table = self.table_mut();
+        let socket = table.get_resource_mut(&this)?;
 
         match socket.family {
-            AddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
-            AddressFamily::Ipv6 => match socket.tcp_state {
-                TcpState::Default => Ok(sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?),
+            SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
+            SocketAddressFamily::Ipv6 { .. } => match socket.tcp_state {
+                TcpState::Default => {
+                    sockopt::set_ipv6_v6only(socket.tcp_socket(), value)?;
+                    socket.family = SocketAddressFamily::Ipv6 { v6only: value };
+                    Ok(())
+                }
                 TcpState::BindStarted => Err(ErrorCode::ConcurrencyConflict.into()),
                 _ => Err(ErrorCode::InvalidState.into()),
             },
@@ -457,10 +470,12 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let socket = table.get_resource(&this)?;
 
         let ttl = match socket.family {
-            AddressFamily::Ipv4 => sockopt::get_ip_ttl(socket.tcp_socket())?
+            SocketAddressFamily::Ipv4 => sockopt::get_ip_ttl(socket.tcp_socket())?
                 .try_into()
                 .unwrap(),
-            AddressFamily::Ipv6 => sockopt::get_ipv6_unicast_hops(socket.tcp_socket())?,
+            SocketAddressFamily::Ipv6 { .. } => {
+                sockopt::get_ipv6_unicast_hops(socket.tcp_socket())?
+            }
         };
 
         Ok(ttl)
@@ -482,8 +497,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         }
 
         match socket.family {
-            AddressFamily::Ipv4 => sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?,
-            AddressFamily::Ipv6 => {
+            SocketAddressFamily::Ipv4 => sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?,
+            SocketAddressFamily::Ipv6 { .. } => {
                 sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value))?
             }
         }
@@ -671,19 +686,16 @@ fn validate_remote_address(addr: &SocketAddr) -> Result<(), network::Error> {
 
 fn validate_address_family(socket: &TcpSocket, addr: &SocketAddr) -> Result<(), network::Error> {
     match (socket.family, addr.ip()) {
-        (AddressFamily::Ipv4, IpAddr::V4(_)) => {}
-        (AddressFamily::Ipv6, IpAddr::V6(ipv6)) => {
-            if let Some(_) = ipv6.to_ipv4_mapped() {
-                if sockopt::get_ipv6_v6only(socket.tcp_socket())? {
-                    // Address is IPv4-mapped IPv6 address, but socket is IPv6-only.
-                    return Err(ErrorCode::InvalidArgument.into());
-                }
+        (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
+        (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
+            if v6only && ipv6.to_ipv4_mapped().is_some() {
+                Err(ErrorCode::InvalidArgument.into())
+            } else {
+                Ok(())
             }
         }
-        _ => return Err(ErrorCode::InvalidArgument.into()),
+        _ => Err(ErrorCode::InvalidArgument.into()),
     }
-
-    Ok(())
 }
 
 fn to_canonical_compat(addr: &IpAddr) -> IpAddr {

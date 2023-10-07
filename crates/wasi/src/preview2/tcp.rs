@@ -6,6 +6,7 @@ use anyhow::{Error, Result};
 use cap_net_ext::{AddressFamily, Blocking, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
+use rustix::net::sockopt;
 use std::io;
 use std::mem;
 use std::sync::Arc;
@@ -60,7 +61,7 @@ pub struct TcpSocket {
     /// The desired listen queue size. Set to None to use the system's default.
     pub(crate) listen_backlog_size: Option<i32>,
 
-    pub(crate) family: AddressFamily,
+    pub(crate) family: SocketAddressFamily,
 
     /// The manually configured buffer size. `None` means: no preference, use system default.
     #[cfg(target_os = "macos")]
@@ -68,6 +69,12 @@ pub struct TcpSocket {
     /// The manually configured buffer size. `None` means: no preference, use system default.
     #[cfg(target_os = "macos")]
     pub(crate) send_buffer_size: Option<usize>,
+}
+
+#[derive(Copy, Clone)]
+pub(crate) enum SocketAddressFamily {
+    Ipv4,
+    Ipv6 { v6only: bool },
 }
 
 pub(crate) struct TcpReadStream {
@@ -255,23 +262,31 @@ impl TcpSocket {
         // Create a new host socket and set it to non-blocking, which is needed
         // by our async implementation.
         let tcp_listener = TcpListener::new(family, Blocking::No)?;
-        Self::from_tcp_listener(tcp_listener, family)
+
+        let socket_address_family = match family {
+            AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
+            AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
+                v6only: sockopt::get_ipv6_v6only(&tcp_listener)?,
+            },
+        };
+
+        Self::from_tcp_listener(tcp_listener, socket_address_family)
     }
 
     /// Create a `TcpSocket` from an existing socket.
     ///
     /// The socket must be in non-blocking mode.
-    pub fn from_tcp_stream(
+    pub(crate) fn from_tcp_stream(
         tcp_socket: cap_std::net::TcpStream,
-        family: AddressFamily,
+        family: SocketAddressFamily,
     ) -> io::Result<Self> {
         let tcp_listener = TcpListener::from(rustix::fd::OwnedFd::from(tcp_socket));
         Self::from_tcp_listener(tcp_listener, family)
     }
 
-    pub fn from_tcp_listener(
+    pub(crate) fn from_tcp_listener(
         tcp_listener: cap_std::net::TcpListener,
-        family: AddressFamily,
+        family: SocketAddressFamily,
     ) -> io::Result<Self> {
         let fd = tcp_listener.into_raw_socketlike();
         let std_stream = unsafe { std::net::TcpStream::from_raw_socketlike(fd) };
