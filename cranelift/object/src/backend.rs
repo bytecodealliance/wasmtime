@@ -844,6 +844,18 @@ impl ObjectModule {
                     0,
                 )
             }
+            Reloc::RiscvGotHi20 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvGotHi20 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_GOT_HI20),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };

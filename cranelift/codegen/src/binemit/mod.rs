@@ -106,6 +106,12 @@ pub enum Reloc {
     /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
     RiscvPCRelLo12I,
 
+    /// High 20 bits of a 32-bit PC-relative GOT offset relocation
+    ///
+    /// This is the `R_RISCV_GOT_HI20` relocation from the RISC-V ELF psABI document.
+    /// https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+    RiscvGotHi20,
+
     /// s390x TLS GD64 - 64-bit offset of tls_index for GD symbol in GOT
     S390xTlsGd64,
     /// s390x TLS GDCall - marker to enable optimization of TLS calls
@@ -129,6 +135,7 @@ impl fmt::Display for Reloc {
             Self::Arm32Call | Self::Arm64Call => write!(f, "Call"),
             Self::RiscvCallPlt => write!(f, "RiscvCallPlt"),
             Self::RiscvTlsGdHi20 => write!(f, "RiscvTlsGdHi20"),
+            Self::RiscvGotHi20 => write!(f, "RiscvGotHi20"),
             Self::RiscvPCRelLo12I => write!(f, "RiscvPCRelLo12I"),
             Self::ElfX86_64TlsGd => write!(f, "ElfX86_64TlsGd"),
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
