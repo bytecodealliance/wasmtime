@@ -11,7 +11,7 @@ use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::function::{Function, VersionMarker};
-use cranelift_codegen::ir::{ExternalName, UserFuncName};
+use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::settings::SetError;
 use cranelift_codegen::{
     ir, isa, CodegenError, CompileError, Context, FinalizedMachReloc, FinalizedRelocTarget,
@@ -36,7 +36,11 @@ pub struct ModuleReloc {
 
 impl ModuleReloc {
     /// Converts a `FinalizedMachReloc` produced from a `Function` into a `ModuleReloc`.
-    pub fn from_mach_reloc(mach_reloc: &FinalizedMachReloc, func: &Function) -> Self {
+    pub fn from_mach_reloc(
+        mach_reloc: &FinalizedMachReloc,
+        func: &Function,
+        func_id: FuncId,
+    ) -> Self {
         let name = match mach_reloc.target {
             FinalizedRelocTarget::ExternalName(ExternalName::User(reff)) => {
                 let name = &func.params.user_named_funcs()[reff];
@@ -50,7 +54,7 @@ impl ModuleReloc {
                 ModuleRelocTarget::KnownSymbol(ks)
             }
             FinalizedRelocTarget::Func(offset) => {
-                ModuleRelocTarget::FunctionOffset(func.name.clone(), offset)
+                ModuleRelocTarget::FunctionOffset(func_id, offset)
             }
         };
         Self {
@@ -430,7 +434,7 @@ pub enum ModuleRelocTarget {
     /// Symbols known to the linker.
     KnownSymbol(ir::KnownSymbol),
     /// A offset inside a function
-    FunctionOffset(UserFuncName, CodeOffset),
+    FunctionOffset(FuncId, CodeOffset),
 }
 
 impl ModuleRelocTarget {
