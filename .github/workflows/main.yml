@@ -396,8 +396,6 @@ jobs:
       if: matrix.target == 'x86_64-pc-windows-gnu'
 
     - run: cargo fetch --locked
-    - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
-    - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-http-tests/Cargo.toml
 
     - uses: actions/cache@v3
       with:
