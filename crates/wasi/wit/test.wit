@@ -1,6 +1,6 @@
 // only used as part of `test-programs`
 world test-reactor {
-  include wasi:cli/reactor
+  include wasi:cli/reactor;
 
   export add-strings: func(s: list<string>) -> u32;
   export get-strings: func() -> list<string>;
@@ -14,7 +14,7 @@ world test-reactor {
 }
 
 world test-command {
-  include wasi:cli/reactor
-  import wasi:http/types
-  import wasi:http/outgoing-handler
+  include wasi:cli/reactor;
+  import wasi:http/types;
+  import wasi:http/outgoing-handler;
 }
