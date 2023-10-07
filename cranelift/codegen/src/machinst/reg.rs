@@ -219,6 +219,11 @@ impl std::convert::From<Reg> for regalloc2::VReg {
         reg.0
     }
 }
+impl std::convert::From<&Reg> for regalloc2::VReg {
+    fn from(reg: &Reg) -> regalloc2::VReg {
+        reg.0
+    }
+}
 
 impl std::convert::From<VirtualReg> for regalloc2::VReg {
     fn from(reg: VirtualReg) -> regalloc2::VReg {

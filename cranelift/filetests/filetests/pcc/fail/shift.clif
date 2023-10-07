@@ -1,0 +1,10 @@
+test compile expect-fail
+set enable_pcc=true
+target aarch64
+
+function %f0(i32) -> i32 {
+block0(v0 ! max(32, 0x100): i32):
+  v1 = iconst.i32 2
+  v2 ! max(32, 0x3ff) = ishl.i32 v0, v1
+  return v2
+}
