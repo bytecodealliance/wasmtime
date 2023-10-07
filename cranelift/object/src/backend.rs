@@ -80,11 +80,24 @@ impl ObjectBuilder {
                         binary_format,
                     )));
                 }
-                // FIXME(#4994) get the right variant from the TargetIsa
+
+                // FIXME(#4994): Get the right float ABI variant from the TargetIsa
+                let mut eflags = object::elf::EF_RISCV_FLOAT_ABI_DOUBLE;
+
+                // Set the RVC eflag if we have the C extension enabled.
+                let has_c = isa
+                    .isa_flags()
+                    .iter()
+                    .filter(|f| f.name == "has_zca" || f.name == "has_zcd")
+                    .all(|f| f.as_bool().unwrap_or_default());
+                if has_c {
+                    eflags |= object::elf::EF_RISCV_RVC;
+                }
+
                 file_flags = object::FileFlags::Elf {
                     os_abi: object::elf::ELFOSABI_NONE,
                     abi_version: 0,
-                    e_flags: object::elf::EF_RISCV_RVC | object::elf::EF_RISCV_FLOAT_ABI_DOUBLE,
+                    e_flags: eflags,
                 };
                 object::Architecture::Riscv64
             }
