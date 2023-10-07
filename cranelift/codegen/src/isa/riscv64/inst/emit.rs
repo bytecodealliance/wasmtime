@@ -1323,55 +1323,16 @@ impl Inst {
                 }
             }
             &Inst::Call { ref info } => {
-                // call
-                match info.dest {
-                    ExternalName::User { .. } => {
-                        if info.opcode.is_call() {
-                            sink.add_call_site(info.opcode);
-                        }
-                        sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
-                        if let Some(s) = state.take_stack_map() {
-                            sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
-                        }
-                        Inst::construct_auipc_and_jalr(
-                            Some(writable_link_reg()),
-                            writable_link_reg(),
-                            0,
-                        )
-                        .into_iter()
-                        .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
-                    }
-                    ExternalName::LibCall(..)
-                    | ExternalName::TestCase { .. }
-                    | ExternalName::KnownSymbol(..) => {
-                        // use indirect call. it is more simple.
-                        // load ext name.
-                        Inst::LoadExtName {
-                            rd: writable_spilltmp_reg2(),
-                            name: Box::new(info.dest.clone()),
-                            offset: 0,
-                        }
-                        .emit(&[], sink, emit_info, state);
-
-                        // call
-                        Inst::CallInd {
-                            info: Box::new(CallIndInfo {
-                                rn: spilltmp_reg2(),
-                                // This doesen't really matter but we might as well send
-                                // the correct info.
-                                uses: info.uses.clone(),
-                                defs: info.defs.clone(),
-                                clobbers: info.clobbers,
-                                opcode: Opcode::CallIndirect,
-                                caller_callconv: info.caller_callconv,
-                                callee_callconv: info.callee_callconv,
-                                // Send this as 0 to avoid updating the pop size twice.
-                                callee_pop_size: 0,
-                            }),
-                        }
-                        .emit(&[], sink, emit_info, state);
-                    }
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.opcode);
                 }
+                sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
+                }
+                Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
+                    .into_iter()
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 let callee_pop_size = i64::from(info.callee_pop_size);
                 state.virtual_sp_offset -= callee_pop_size;
