@@ -322,6 +322,15 @@ impl FactContext {
         }
     }
 
+    /// Left-shifts a value with a fact by a known constant.
+    pub fn shl(&self, fact: &Fact, width: u16, amount: u16) -> Option<Fact> {
+        if amount >= 32 {
+            return None;
+        }
+        let factor: u32 = 1 << amount;
+        self.scale(fact, width, factor)
+    }
+
     /// Offsets a value with a fact by a known amount.
     pub fn offset(&self, fact: &Fact, width: u16, offset: i64) -> Option<Fact> {
         // If we eventually support two-sided ranges, we can

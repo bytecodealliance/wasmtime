@@ -10,7 +10,7 @@ use crate::machinst::Reg;
 use crate::machinst::VCode;
 use crate::trace;
 
-fn get_fact_or_fail(vcode: &VCode<Inst>, reg: Reg) -> PccResult<&Fact> {
+fn get_fact(vcode: &VCode<Inst>, reg: Reg) -> PccResult<&Fact> {
     vcode.vreg_fact(reg.into()).ok_or(PccError::MissingFact)
 }
 
@@ -97,7 +97,13 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             rn,
             flags,
             ..
-        } => check_scalar_addr(&ctx, *flags, *rn, vcode, access_ty.bytes() as u8),
+        } => check_scalar_addr(
+            &ctx,
+            *flags,
+            *rn,
+            vcode,
+            u8::try_from(access_ty.bytes()).unwrap(),
+        ),
 
         // TODO: stores: once we have memcaps, check that we aren't
         // overwriting a field that has a pointee type.
@@ -116,7 +122,13 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             rn,
             flags,
             ..
-        } => check_scalar_addr(&ctx, *flags, *rn, vcode, access_ty.bytes() as u8),
+        } => check_scalar_addr(
+            &ctx,
+            *flags,
+            *rn,
+            vcode,
+            u8::try_from(access_ty.bytes()).unwrap(),
+        ),
 
         Inst::AluRRR {
             alu_op: ALUOp::Add,
@@ -126,9 +138,9 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             rm,
         } if has_fact(vcode, *rn) && has_fact(vcode, *rm) => {
             check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact_or_fail(vcode, *rn)?;
-                let rm = get_fact_or_fail(vcode, *rm)?;
-                fail_if_missing(ctx.add(rn, rm, size.bits() as u16))
+                let rn = get_fact(vcode, *rn)?;
+                let rm = get_fact(vcode, *rm)?;
+                fail_if_missing(ctx.add(rn, rm, size.bits().into()))
             })
         }
         Inst::AluRRImm12 {
@@ -138,12 +150,12 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             rn,
             imm12,
         } if has_fact(vcode, *rn) => check_output(&ctx, vcode, rd.to_reg(), || {
-            let rn = get_fact_or_fail(vcode, *rn)?;
+            let rn = get_fact(vcode, *rn)?;
             let imm_fact = Fact::ValueMax {
-                bit_width: size.bits() as u16,
+                bit_width: size.bits().into(),
                 max: imm12.value(),
             };
-            fail_if_missing(ctx.add(&rn, &imm_fact, size.bits() as u16))
+            fail_if_missing(ctx.add(&rn, &imm_fact, size.bits().into()))
         }),
         Inst::AluRRRShift {
             alu_op: ALUOp::Add,
@@ -154,20 +166,14 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             shiftop,
         } if shiftop.op() == ShiftOp::LSL && has_fact(vcode, *rn) && has_fact(vcode, *rm) => {
             check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact_or_fail(vcode, *rn)?;
-                let rm = get_fact_or_fail(vcode, *rm)?;
-                let factor = 1 << (shiftop.amt().value() as u32);
-                let rm_shifted = fail_if_missing(ctx.scale(&rm, size.bits() as u16, factor))?;
-                let sum = ctx.add(&rn, &rm_shifted, size.bits() as u16);
-                trace!(
-                    "rn = {:?} rm = {:?} factor = {} rm_shifted = {:?} sum = {:?}",
-                    rn,
-                    rm,
-                    factor,
-                    rm_shifted,
-                    sum
-                );
-                fail_if_missing(ctx.add(&rn, &rm_shifted, size.bits() as u16))
+                let rn = get_fact(vcode, *rn)?;
+                let rm = get_fact(vcode, *rm)?;
+                let rm_shifted = fail_if_missing(ctx.shl(
+                    &rm,
+                    size.bits().into(),
+                    shiftop.amt().value().into(),
+                ))?;
+                fail_if_missing(ctx.add(&rn, &rm_shifted, size.bits().into()))
             })
         }
         Inst::AluRRRExtend {
@@ -179,10 +185,10 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             extendop,
         } if has_fact(vcode, *rn) && has_fact(vcode, *rm) => {
             check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact_or_fail(vcode, *rn)?;
-                let rm = get_fact_or_fail(vcode, *rm)?;
+                let rn = get_fact(vcode, *rn)?;
+                let rm = get_fact(vcode, *rm)?;
                 let rm_extended = fail_if_missing(extend_fact(&ctx, rm, *extendop))?;
-                fail_if_missing(ctx.add(&rn, &rm_extended, size.bits() as u16))
+                fail_if_missing(ctx.add(&rn, &rm_extended, size.bits().into()))
             })
         }
         Inst::AluRRImmShift {
@@ -193,9 +199,8 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             immshift,
         } if has_fact(vcode, *rn) && has_fact(vcode, *rn) => {
             check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact_or_fail(vcode, *rn)?;
-                let factor = 1 << (immshift.value() as u32);
-                fail_if_missing(ctx.scale(&rn, size.bits() as u16, factor))
+                let rn = get_fact(vcode, *rn)?;
+                fail_if_missing(ctx.shl(&rn, size.bits().into(), immshift.value().into()))
             })
         }
         Inst::Extend {
@@ -205,8 +210,8 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             from_bits,
             to_bits,
         } if has_fact(vcode, *rn) => check_output(&ctx, vcode, rd.to_reg(), || {
-            let rn = get_fact_or_fail(vcode, *rn)?;
-            fail_if_missing(ctx.uextend(&rn, *from_bits as u16, *to_bits as u16))
+            let rn = get_fact(vcode, *rn)?;
+            fail_if_missing(ctx.uextend(&rn, (*from_bits).into(), (*to_bits).into()))
         }),
         Inst::AluRRR { size, rd, .. }
         | Inst::AluRRImm12 { rd, size, .. }
@@ -218,7 +223,7 @@ pub(crate) fn check(inst: &Inst, vcode: &VCode<Inst>) -> PccResult<()> {
             // value is the maximum for its bit-width.
             check_output(&ctx, vcode, rd.to_reg(), || {
                 Ok(Fact::ValueMax {
-                    bit_width: size.bits() as u16,
+                    bit_width: size.bits().into(),
                     max: size.max_value(),
                 })
             })
@@ -245,17 +250,17 @@ fn check_addr(
 
     match addr {
         &AMode::RegReg { rn, rm } => {
-            let rn = get_fact_or_fail(vcode, rn)?;
-            let rm = get_fact_or_fail(vcode, rm)?;
+            let rn = get_fact(vcode, rn)?;
+            let rm = get_fact(vcode, rm)?;
             let sum = fail_if_missing(ctx.add(&rn, &rm, 64))?;
-            ctx.check_address(&sum, size as u32)
+            ctx.check_address(&sum, size.into())
         }
         &AMode::RegScaled { rn, rm, ty } => {
-            let rn = get_fact_or_fail(vcode, rn)?;
-            let rm = get_fact_or_fail(vcode, rm)?;
+            let rn = get_fact(vcode, rn)?;
+            let rm = get_fact(vcode, rm)?;
             let rm_scaled = fail_if_missing(ctx.scale(&rm, 64, ty.bytes()))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_scaled, 64))?;
-            ctx.check_address(&sum, size as u32)
+            ctx.check_address(&sum, size.into())
         }
         &AMode::RegScaledExtended {
             rn,
@@ -263,33 +268,37 @@ fn check_addr(
             ty,
             extendop,
         } => {
-            let rn = get_fact_or_fail(vcode, rn)?;
-            let rm = get_fact_or_fail(vcode, rm)?;
+            let rn = get_fact(vcode, rn)?;
+            let rm = get_fact(vcode, rm)?;
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
             let rm_scaled = fail_if_missing(ctx.scale(&rm_extended, 64, ty.bytes()))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_scaled, 64))?;
-            ctx.check_address(&sum, size as u32)
+            ctx.check_address(&sum, size.into())
         }
         &AMode::RegExtended { rn, rm, extendop } => {
-            let rn = get_fact_or_fail(vcode, rn)?;
-            let rm = get_fact_or_fail(vcode, rm)?;
+            let rn = get_fact(vcode, rn)?;
+            let rm = get_fact(vcode, rm)?;
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_extended, 64))?;
-            ctx.check_address(&sum, size as u32)
+            ctx.check_address(&sum, size.into())
         }
         &AMode::Unscaled { rn, simm9 } => {
-            let rn = get_fact_or_fail(vcode, rn)?;
-            let sum = fail_if_missing(ctx.offset(&rn, 64, simm9.value as i64))?;
-            ctx.check_address(&sum, size as u32)
+            let rn = get_fact(vcode, rn)?;
+            let sum = fail_if_missing(ctx.offset(&rn, 64, simm9.value.into()))?;
+            ctx.check_address(&sum, size.into())
         }
         &AMode::UnsignedOffset { rn, uimm12 } => {
-            let rn = get_fact_or_fail(vcode, rn)?;
+            let rn = get_fact(vcode, rn)?;
             // Safety: this will not overflow: `size` should be at
             // most 32 or 64 for large vector ops, and the `uimm12`'s
             // value is at most 4095.
-            let offset = (uimm12.value as u64) * (size as u64);
-            let sum = fail_if_missing(ctx.offset(&rn, 64, offset as i64))?;
-            ctx.check_address(&sum, size as u32)
+            let uimm12: u64 = uimm12.value.into();
+            let offset: u64 = uimm12.checked_mul(size.into()).unwrap();
+            // This `unwrap()` will always succeed because the value
+            // will always be positive and much smaller than
+            // `i64::MAX` (see above).
+            let sum = fail_if_missing(ctx.offset(&rn, 64, i64::try_from(offset).unwrap()))?;
+            ctx.check_address(&sum, size.into())
         }
         &AMode::Label { .. } | &AMode::Const { .. } => {
             // Always accept: labels and constants must be within the
@@ -297,9 +306,9 @@ fn check_addr(
             Ok(())
         }
         &AMode::RegOffset { rn, off, .. } => {
-            let rn = get_fact_or_fail(vcode, rn)?;
+            let rn = get_fact(vcode, rn)?;
             let sum = fail_if_missing(ctx.offset(&rn, 64, off))?;
-            ctx.check_address(&sum, size as u32)
+            ctx.check_address(&sum, size.into())
         }
         &AMode::SPOffset { .. }
         | &AMode::FPOffset { .. }
@@ -333,6 +342,6 @@ fn check_scalar_addr(
     if !flags.checked() {
         return Ok(());
     }
-    let fact = get_fact_or_fail(vcode, reg)?;
-    ctx.check_address(fact, size as u32)
+    let fact = get_fact(vcode, reg)?;
+    ctx.check_address(fact, size.into())
 }
