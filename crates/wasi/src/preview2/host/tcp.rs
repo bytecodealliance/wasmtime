@@ -14,7 +14,7 @@ use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use tokio::io::Interest;
 use wasmtime::component::Resource;
 
@@ -654,7 +654,7 @@ const INPROGRESS: Errno = Errno::INPROGRESS;
 const INPROGRESS: Errno = Errno::WOULDBLOCK;
 
 fn validate_unicast(addr: &SocketAddr) -> Result<(), network::Error> {
-    match to_canonical_compat(&addr.ip()) {
+    match to_canonical(&addr.ip()) {
         IpAddr::V4(ipv4) => {
             if ipv4.is_multicast() || ipv4.is_broadcast() {
                 Err(ErrorCode::InvalidArgument.into())
@@ -673,7 +673,7 @@ fn validate_unicast(addr: &SocketAddr) -> Result<(), network::Error> {
 }
 
 fn validate_remote_address(addr: &SocketAddr) -> Result<(), network::Error> {
-    if to_canonical_compat(&addr.ip()).is_unspecified() {
+    if to_canonical(&addr.ip()).is_unspecified() {
         return Err(ErrorCode::InvalidArgument.into());
     }
 
@@ -688,7 +688,13 @@ fn validate_address_family(socket: &TcpSocket, addr: &SocketAddr) -> Result<(), 
     match (socket.family, addr.ip()) {
         (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
         (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
-            if v6only && ipv6.to_ipv4_mapped().is_some() {
+            if is_deprecated_ipv4_compatible(&ipv6) {
+                // Reject IPv4-*compatible* IPv6 addresses. They have been deprecated
+                // since 2006, OS handling of them is inconsistent and our own
+                // validations don't take them into account either.
+                // Note that these are not the same as IPv4-*mapped* IPv6 addresses.
+                Err(ErrorCode::InvalidArgument.into())
+            } else if v6only && ipv6.to_ipv4_mapped().is_some() {
                 Err(ErrorCode::InvalidArgument.into())
             } else {
                 Ok(())
@@ -698,19 +704,24 @@ fn validate_address_family(socket: &TcpSocket, addr: &SocketAddr) -> Result<(), 
     }
 }
 
-fn to_canonical_compat(addr: &IpAddr) -> IpAddr {
+// Can be removed once `IpAddr::to_canonical` becomes stable.
+fn to_canonical(addr: &IpAddr) -> IpAddr {
     match addr {
         IpAddr::V4(ipv4) => IpAddr::V4(*ipv4),
         IpAddr::V6(ipv6) => {
             if let Some(ipv4) = ipv6.to_ipv4_mapped() {
-                IpAddr::V4(ipv4)
-            } else if let Some(ipv4) = ipv6.to_ipv4() {
                 IpAddr::V4(ipv4)
             } else {
                 IpAddr::V6(*ipv6)
             }
         }
     }
+}
+
+fn is_deprecated_ipv4_compatible(addr: &Ipv6Addr) -> bool {
+    matches!(addr.segments(), [0, 0, 0, 0, 0, 0, _, _])
+        && *addr != Ipv6Addr::UNSPECIFIED
+        && *addr != Ipv6Addr::LOCALHOST
 }
 
 fn normalize_setsockopt_buffer_size(value: u64) -> usize {
