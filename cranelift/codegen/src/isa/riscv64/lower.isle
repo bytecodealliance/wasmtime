@@ -1478,8 +1478,16 @@
 
 ;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V's `fmin` instruction returns the number input if one of inputs is a
+;; NaN. We handle this by manually checking if one of the inputs is a NaN
+;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmin x y)))
-  (gen_float_select (FloatSelectOP.Min) x y ty))
+  (let (;; Check if both inputs are not nan.
+        (is_ordered FCmp (emit_fcmp (FloatCC.Ordered) ty x y))
+        ;; `fadd` returns a nan if any of the inputs is a NaN.
+        (nan FReg (rv_fadd ty x y))
+        (min FReg (rv_fmin ty x y)))
+    (gen_select_freg is_ordered min nan)))
 
 ;; vfmin does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmin returns the
@@ -1496,8 +1504,17 @@
 
 ;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V's `fmax` instruction returns the number input if one of inputs is a
+;; NaN. We handle this by manually checking if one of the inputs is a NaN
+;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmax x y)))
-  (gen_float_select (FloatSelectOP.Max) x y ty))
+  (let (;; Check if both inputs are not nan.
+        (is_ordered FCmp (emit_fcmp (FloatCC.Ordered) ty x y))
+        ;; `fadd` returns a NaN if any of the inputs is a NaN.
+        (nan FReg (rv_fadd ty x y))
+        (max FReg (rv_fmax ty x y)))
+    (gen_select_freg is_ordered max nan)))
+
 
 ;; vfmax does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmax returns the

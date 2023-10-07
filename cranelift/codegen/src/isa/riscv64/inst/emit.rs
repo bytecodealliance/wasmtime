@@ -368,7 +368,6 @@ impl Inst {
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
             | Inst::FloatRound { .. }
-            | Inst::FloatSelect { .. }
             | Inst::Popcnt { .. }
             | Inst::Rev8 { .. }
             | Inst::Cltz { .. }
@@ -2587,126 +2586,6 @@ impl Inst {
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
 
-            &Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => {
-                let label_nan = sink.get_label();
-                let label_jump_over = sink.get_label();
-                // check if rs1 is nan.
-                Inst::emit_not_nan(tmp, rs1, ty).emit(&[], sink, emit_info, state);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_nan),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // check if rs2 is nan.
-                Inst::emit_not_nan(tmp, rs2, ty).emit(&[], sink, emit_info, state);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_nan),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // here rs1 and rs2 is not nan.
-                Inst::FpuRRR {
-                    alu_op: op.to_fpuoprrr(ty),
-                    frm: None,
-                    rd: rd,
-                    rs1: rs1,
-                    rs2: rs2,
-                }
-                .emit(&[], sink, emit_info, state);
-                // special handle for +0 or -0.
-                {
-                    // check is rs1 and rs2 all equal to zero.
-                    let label_done = sink.get_label();
-                    {
-                        // if rs1 == 0
-                        let mut insts = Inst::emit_if_float_not_zero(
-                            tmp,
-                            rs1,
-                            ty,
-                            CondBrTarget::Label(label_done),
-                            CondBrTarget::Fallthrough,
-                        );
-                        insts.extend(Inst::emit_if_float_not_zero(
-                            tmp,
-                            rs2,
-                            ty,
-                            CondBrTarget::Label(label_done),
-                            CondBrTarget::Fallthrough,
-                        ));
-                        insts
-                            .iter()
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    }
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_f_to_x_op(ty),
-                        frm: None,
-                        rd: tmp,
-                        rs: rs1,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_f_to_x_op(ty),
-                        frm: None,
-                        rd: writable_spilltmp_reg(),
-                        rs: rs2,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::AluRRR {
-                        alu_op: if op == FloatSelectOP::Max {
-                            AluOPRRR::And
-                        } else {
-                            AluOPRRR::Or
-                        },
-                        rd: tmp,
-                        rs1: tmp.to_reg(),
-                        rs2: spilltmp_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    // move back to rd.
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_x_to_f_op(ty),
-                        frm: None,
-                        rd,
-                        rs: tmp.to_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    //
-                    sink.bind_label(label_done, &mut state.ctrl_plane);
-                }
-                // we have the reuslt,jump over.
-                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
-                // here is nan.
-                sink.bind_label(label_nan, &mut state.ctrl_plane);
-                op.snan_bits(tmp, ty)
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // move to rd.
-                Inst::FpuRR {
-                    alu_op: FpuOPRR::move_x_to_f_op(ty),
-                    frm: None,
-                    rd,
-                    rs: tmp.to_reg(),
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
             &Inst::Popcnt {
                 sum,
                 tmp,
@@ -3705,22 +3584,6 @@ impl Inst {
                 rs: allocs.next(rs),
                 int_tmp: allocs.next_writable(int_tmp),
                 f_tmp: allocs.next_writable(f_tmp),
-                rd: allocs.next_writable(rd),
-            },
-
-            Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => Inst::FloatSelect {
-                op,
-                ty,
-                rs1: allocs.next(rs1),
-                rs2: allocs.next(rs2),
-                tmp: allocs.next_writable(tmp),
                 rd: allocs.next_writable(rd),
             },
 
