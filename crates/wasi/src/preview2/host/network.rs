@@ -23,59 +23,39 @@ impl<T: WasiView> crate::preview2::bindings::sockets::network::HostNetwork for T
     }
 }
 
-/// Unfortunately, Rust's io::ErrorKind is missing more than half of the relevant error codes.
-/// This trait provides access to a unified error code.
-pub(crate) trait SystemError: std::error::Error {
-    fn errno(&self) -> Option<Errno>;
-}
-
-impl SystemError for Errno {
-    fn errno(&self) -> Option<Errno> {
-        Some(*self)
-    }
-}
-
-impl SystemError for std::io::Error {
-    fn errno(&self) -> Option<Errno> {
-        if let Some(errno) = Errno::from_io_error(self) {
-            return Some(errno);
+impl From<io::Error> for ErrorCode {
+    fn from(value: io::Error) -> Self {
+        // Attempt the more detailed native error code first:
+        if let Some(errno) = Errno::from_io_error(&value) {
+            return errno.into();
         }
 
-        // Error is probably synthesized in Rust code. Luckily, the errors kinds map pretty straightforward back to native error codes.
-        match self.kind() {
-            std::io::ErrorKind::AddrInUse => Some(Errno::ADDRINUSE),
-            std::io::ErrorKind::AddrNotAvailable => Some(Errno::ADDRNOTAVAIL),
-            std::io::ErrorKind::ConnectionAborted => Some(Errno::CONNABORTED),
-            std::io::ErrorKind::ConnectionRefused => Some(Errno::CONNREFUSED),
-            std::io::ErrorKind::ConnectionReset => Some(Errno::CONNRESET),
-            std::io::ErrorKind::Interrupted => Some(Errno::INTR),
-            std::io::ErrorKind::InvalidInput => Some(Errno::INVAL),
-            std::io::ErrorKind::NotConnected => Some(Errno::NOTCONN),
-            #[cfg(windows)]
-            std::io::ErrorKind::OutOfMemory => Some(Errno::NOBUFS),
-            #[cfg(not(windows))]
-            std::io::ErrorKind::OutOfMemory => Some(Errno::NOMEM),
-            std::io::ErrorKind::PermissionDenied => Some(Errno::ACCESS), // Alternative: EPERM
-            std::io::ErrorKind::TimedOut => Some(Errno::TIMEDOUT),
-            std::io::ErrorKind::Unsupported => Some(Errno::OPNOTSUPP),
-            std::io::ErrorKind::WouldBlock => Some(Errno::WOULDBLOCK), // Alternative: EAGAIN
+        match value.kind() {
+            std::io::ErrorKind::AddrInUse => ErrorCode::AddressInUse,
+            std::io::ErrorKind::AddrNotAvailable => ErrorCode::AddressNotBindable,
+            std::io::ErrorKind::ConnectionAborted => ErrorCode::ConnectionAborted,
+            std::io::ErrorKind::ConnectionRefused => ErrorCode::ConnectionRefused,
+            std::io::ErrorKind::ConnectionReset => ErrorCode::ConnectionReset,
+            std::io::ErrorKind::Interrupted => ErrorCode::WouldBlock,
+            std::io::ErrorKind::InvalidInput => ErrorCode::InvalidArgument,
+            std::io::ErrorKind::NotConnected => ErrorCode::InvalidState,
+            std::io::ErrorKind::OutOfMemory => ErrorCode::OutOfMemory,
+            std::io::ErrorKind::PermissionDenied => ErrorCode::AccessDenied,
+            std::io::ErrorKind::TimedOut => ErrorCode::Timeout,
+            std::io::ErrorKind::Unsupported => ErrorCode::NotSupported,
+            std::io::ErrorKind::WouldBlock => ErrorCode::WouldBlock,
 
-            _ => None,
-        }
-    }
-}
-
-impl<T: SystemError> From<T> for ErrorCode {
-    fn from(error: T) -> Self {
-        let errno = match error.errno() {
-            Some(errno) => errno,
-            None => {
-                log::debug!("unknown I/O error: {error}");
-                return ErrorCode::Unknown;
+            _ => {
+                log::debug!("unknown I/O error: {value}");
+                ErrorCode::Unknown
             }
-        };
+        }
+    }
+}
 
-        match errno {
+impl From<Errno> for ErrorCode {
+    fn from(value: Errno) -> Self {
+        match value {
             Errno::WOULDBLOCK => ErrorCode::WouldBlock,
             #[allow(unreachable_patterns)] // EWOULDBLOCK and EAGAIN can have the same value.
             Errno::AGAIN => ErrorCode::WouldBlock,
@@ -117,7 +97,7 @@ impl<T: SystemError> From<T> for ErrorCode {
 
             // FYI, EINPROGRESS should have already been handled by connect.
             _ => {
-                log::debug!("unknown I/O error: {error}");
+                log::debug!("unknown I/O error: {value}");
                 ErrorCode::Unknown
             }
         }

@@ -1,4 +1,3 @@
-use super::network::SystemError;
 use crate::preview2::tcp::{TcpSocket, TcpState};
 use crate::preview2::{
     bindings::{
@@ -46,7 +45,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         // Perform the OS bind call.
         binder
             .bind_existing_tcp_listener(&*socket.tcp_socket().as_socketlike_view::<TcpListener>())
-            .map_err(|error| match error.errno() {
+            .map_err(|error| match Errno::from_io_error(&error) {
                 Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
                 #[cfg(windows)]
                 Some(Errno::NOBUFS) => ErrorCode::AddressInUse, // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
@@ -119,10 +118,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                 return Ok(());
             }
             // continue in progress,
-            Err(err) if err.errno() == Some(INPROGRESS) => {}
+            Err(err) if Errno::from_io_error(&err) == Some(INPROGRESS) => {}
             // or fail immediately.
             Err(err) => {
-                return Err(match err.errno() {
+                return Err(match Errno::from_io_error(&err) {
                     Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(), // Just in case our own validations weren't sufficient.
                     _ => err.into(),
                 });
@@ -199,7 +198,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             .tcp_socket()
             .as_socketlike_view::<TcpListener>()
             .listen(socket.listen_backlog_size)
-            .map_err(|error| match error.errno() {
+            .map_err(|error| match Errno::from_io_error(&error) {
                 #[cfg(windows)]
                 Some(Errno::MFILE) => ErrorCode::OutOfMemory, // We're not trying to create a new socket. Rewrite it to less surprising error code.
                 _ => error.into(),
@@ -248,7 +247,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                     .as_socketlike_view::<TcpListener>()
                     .accept_with(Blocking::No)
             })
-            .map_err(|error| match error.errno() {
+            .map_err(|error| match Errno::from_io_error(&error) {
                 #[cfg(windows)]
                 Some(Errno::INPROGRESS) => ErrorCode::WouldBlock, // "A blocking Windows Sockets 1.1 call is in progress, or the service provider is still processing a callback function."
 
