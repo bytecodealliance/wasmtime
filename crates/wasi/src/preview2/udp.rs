@@ -23,13 +23,10 @@ pub(crate) enum UdpState {
     /// is not yet listening for connections.
     Bound,
 
-    /// An outgoing connection is started via `start_connect`.
+    /// A connect call is in progress.
     Connecting(IpSocketAddress),
 
-    /// An outgoing connection is ready to be established.
-    ConnectReady(IpSocketAddress),
-
-    /// An outgoing connection has been established.
+    /// The socket is "connected" to a peer address.
     Connected(IpSocketAddress),
 }
 

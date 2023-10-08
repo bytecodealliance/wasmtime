@@ -1,4 +1,4 @@
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 
 use crate::preview2::{
     bindings::{
@@ -6,7 +6,6 @@ use crate::preview2::{
         sockets::udp,
     },
     udp::UdpState,
-    Table,
 };
 use crate::preview2::{Pollable, SocketResult, WasiView};
 use cap_net_ext::{AddressFamily, PoolExt};
@@ -37,7 +36,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
             UdpState::BindStarted | UdpState::Connecting(..) => {
                 return Err(ErrorCode::ConcurrencyConflict.into())
             }
-            UdpState::Bound | UdpState::Connected(..) => return Err(ErrorCode::AlreadyBound.into()),
+            UdpState::Bound | UdpState::Connected(..) => return Err(ErrorCode::InvalidState.into()),
         }
 
         let network = table.get_resource(&network)?;
@@ -77,73 +76,38 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
     ) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource(&this)?;
+        let network = table.get_resource(&network)?;
+
         match socket.udp_state {
             UdpState::Default | UdpState::Bound => {}
-            UdpState::BindStarted | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
+            UdpState::BindStarted | UdpState::Connecting(..) => {
                 return Err(ErrorCode::ConcurrencyConflict.into())
             }
-            UdpState::Connected(..) => return Err(ErrorCode::AlreadyConnected.into()),
+            UdpState::Connected(..) => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let socket = table.get_resource(&this)?;
-        let network = table.get_resource(&network)?;
         let connecter = network.pool.udp_connecter(remote_address)?;
 
-        // Do an OS `connect`. Our socket is non-blocking, so it'll either...
-        let res = connecter.connect_existing_udp_socket(
+        // Do an OS `connect`.
+        connecter.connect_existing_udp_socket(
             &*socket
                 .udp_socket()
                 .as_socketlike_view::<cap_std::net::UdpSocket>(),
-        );
-        match res {
-            // succeed immediately,
-            Ok(()) => {
-                let socket = table.get_resource_mut(&this)?;
-                socket.udp_state = UdpState::ConnectReady(remote_address);
-                Ok(())
-            }
-            // continue in progress,
-            Err(err) if err.raw_os_error() == Some(INPROGRESS.raw_os_error()) => {
-                let socket = table.get_resource_mut(&this)?;
-                socket.udp_state = UdpState::Connecting(remote_address);
-                Ok(())
-            }
-            // or fail immediately.
-            Err(err) => Err(err.into()),
-        }
+        )?;
+
+        let socket = table.get_resource_mut(&this)?;
+        socket.udp_state = UdpState::Connecting(remote_address);
+        Ok(())
     }
 
     fn finish_connect(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
+
         match socket.udp_state {
-            UdpState::ConnectReady(addr) => {
+            UdpState::Connecting(addr) => {
                 socket.udp_state = UdpState::Connected(addr);
                 Ok(())
-            }
-            UdpState::Connecting(addr) => {
-                // Do a `poll` to test for completion, using a timeout of zero
-                // to avoid blocking.
-                match rustix::event::poll(
-                    &mut [rustix::event::PollFd::new(
-                        socket.udp_socket(),
-                        rustix::event::PollFlags::OUT,
-                    )],
-                    0,
-                ) {
-                    Ok(0) => return Err(ErrorCode::WouldBlock.into()),
-                    Ok(_) => {}
-                    Err(err) => return Err(err.into()),
-                }
-
-                // Check whether the connect succeeded.
-                match sockopt::get_socket_error(socket.udp_socket()) {
-                    Ok(Ok(())) => {
-                        socket.udp_state = UdpState::Connected(addr);
-                        Ok(())
-                    }
-                    Err(err) | Ok(Err(err)) => Err(err.into()),
-                }
             }
             _ => Err(ErrorCode::NotInProgress.into()),
         }
@@ -166,7 +130,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         let mut buf = [0; MAX_UDP_DATAGRAM_SIZE];
         match socket.udp_state {
             UdpState::Default | UdpState::BindStarted => return Err(ErrorCode::InvalidState.into()),
-            UdpState::Bound | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
+            UdpState::Bound | UdpState::Connecting(..) => {
                 for i in 0..max_results {
                     match udp_socket.try_recv_from(&mut buf) {
                         Ok((size, remote_address)) => datagrams.push(udp::Datagram {
@@ -213,7 +177,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         let mut count = 0;
         match socket.udp_state {
             UdpState::Default | UdpState::BindStarted => return Err(ErrorCode::InvalidState.into()),
-            UdpState::Bound | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
+            UdpState::Bound | UdpState::Connecting(..) => {
                 for udp::Datagram {
                     data,
                     remote_address,
@@ -390,13 +354,3 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         Ok(())
     }
 }
-
-const INPROGRESS: Errno = if cfg!(windows) {
-    // On Windows, non-blocking UDP socket `connect` uses `WSAEWOULDBLOCK`.
-    // <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
-    Errno::WOULDBLOCK
-} else {
-    // On POSIX, non-blocking UDP socket `connect` uses `EINPROGRESS`.
-    // <https://pubs.opengroup.org/onlinepubs/9699919799/functions/connect.html>
-    Errno::INPROGRESS
-};
