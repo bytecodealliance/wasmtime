@@ -49,7 +49,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                 Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
                 #[cfg(windows)]
                 Some(Errno::NOBUFS) => ErrorCode::AddressInUse, // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-                _ => error.into(),
+                _ => ErrorCode::from(error),
             })?;
 
         let socket = table.get_resource_mut(&this)?;
@@ -201,7 +201,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             .map_err(|error| match Errno::from_io_error(&error) {
                 #[cfg(windows)]
                 Some(Errno::MFILE) => ErrorCode::OutOfMemory, // We're not trying to create a new socket. Rewrite it to less surprising error code.
-                _ => error.into(),
+                _ => ErrorCode::from(error),
             })?;
 
         socket.tcp_state = TcpState::ListenStarted;
@@ -267,7 +267,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                     | Errno::OPNOTSUPP,
                 ) => ErrorCode::ConnectionAborted,
 
-                _ => error.into(),
+                _ => ErrorCode::from(error),
             })?;
 
         #[cfg(target_os = "macos")]
