@@ -20,48 +20,6 @@ use wasmtime::component::Resource;
 /// In practice, datagrams are typically less than 1500 bytes.
 const MAX_UDP_DATAGRAM_SIZE: usize = 65535;
 
-fn start_bind(
-    table: &mut Table,
-    this: Resource<udp::UdpSocket>,
-    network: Resource<Network>,
-    local_address: IpSocketAddress,
-) -> SocketResult<()> {
-    let socket = table.get_resource(&this)?;
-    match socket.udp_state {
-        UdpState::Default => {}
-        UdpState::BindStarted | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
-            return Err(ErrorCode::ConcurrencyConflict.into())
-        }
-        UdpState::Bound | UdpState::Connected(..) => return Err(ErrorCode::AlreadyBound.into()),
-    }
-
-    let network = table.get_resource(&network)?;
-    let binder = network.pool.udp_binder(local_address)?;
-
-    // Perform the OS bind call.
-    binder.bind_existing_udp_socket(
-        &*socket
-            .udp_socket()
-            .as_socketlike_view::<cap_std::net::UdpSocket>(),
-    )?;
-
-    let socket = table.get_resource_mut(&this)?;
-    socket.udp_state = UdpState::BindStarted;
-
-    Ok(())
-}
-
-fn finish_bind(table: &mut Table, this: Resource<udp::UdpSocket>) -> SocketResult<()> {
-    let socket = table.get_resource_mut(&this)?;
-    match socket.udp_state {
-        UdpState::BindStarted => {
-            socket.udp_state = UdpState::Bound;
-            Ok(())
-        }
-        _ => Err(ErrorCode::NotInProgress.into()),
-    }
-}
-
 impl<T: WasiView> udp::Host for T {}
 
 impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
@@ -71,11 +29,44 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        start_bind(self.table_mut(), this, network, local_address)
+        let table = self.table_mut();
+        let socket = table.get_resource(&this)?;
+
+        match socket.udp_state {
+            UdpState::Default => {}
+            UdpState::BindStarted | UdpState::Connecting(..) => {
+                return Err(ErrorCode::ConcurrencyConflict.into())
+            }
+            UdpState::Bound | UdpState::Connected(..) => return Err(ErrorCode::AlreadyBound.into()),
+        }
+
+        let network = table.get_resource(&network)?;
+        let binder = network.pool.udp_binder(local_address)?;
+
+        // Perform the OS bind call.
+        binder.bind_existing_udp_socket(
+            &*socket
+                .udp_socket()
+                .as_socketlike_view::<cap_std::net::UdpSocket>(),
+        )?;
+
+        let socket = table.get_resource_mut(&this)?;
+        socket.udp_state = UdpState::BindStarted;
+
+        Ok(())
     }
 
     fn finish_bind(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<()> {
-        finish_bind(self.table_mut(), this)
+        let table = self.table_mut();
+        let socket = table.get_resource_mut(&this)?;
+
+        match socket.udp_state {
+            UdpState::BindStarted => {
+                socket.udp_state = UdpState::Bound;
+                Ok(())
+            }
+            _ => Err(ErrorCode::NotInProgress.into()),
+        }
     }
 
     fn start_connect(
@@ -87,20 +78,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         let table = self.table_mut();
         let socket = table.get_resource(&this)?;
         match socket.udp_state {
-            UdpState::Default => {
-                let addr = match socket.family {
-                    AddressFamily::Ipv4 => Ipv4Addr::UNSPECIFIED.into(),
-                    AddressFamily::Ipv6 => Ipv6Addr::UNSPECIFIED.into(),
-                };
-                start_bind(
-                    table,
-                    Resource::new_borrow(this.rep()),
-                    Resource::new_borrow(network.rep()),
-                    SocketAddr::new(addr, 0).into(),
-                )?;
-                finish_bind(table, Resource::new_borrow(this.rep()))?;
-            }
-            UdpState::Bound => {}
+            UdpState::Default | UdpState::Bound => {}
             UdpState::BindStarted | UdpState::Connecting(..) | UdpState::ConnectReady(..) => {
                 return Err(ErrorCode::ConcurrencyConflict.into())
             }
