@@ -339,7 +339,7 @@
 
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty @ (multi_lane _ _) (iabs x)))
+(rule -1 (lower (has_type ty @ (multi_lane _ _) (iabs x)))
       (vec_abs x (vector_size ty)))
 
 (rule 2 (lower (has_type $I64 (iabs x)))
@@ -347,6 +347,24 @@
 
 (rule 1 (lower (has_type (fits_in_32 ty) (iabs x)))
       (abs (OperandSize.Size32) (put_in_reg_sext32 x)))
+
+; `rustc` implementation.
+; - create a bitmask of all 1s if negative, or 0s if positive.
+; - xor all bits by bitmask. then subtract bitmask from xor'd values.
+; - if `x` is positive, the xor'd bits = x and the mask = 0, so we end up with
+;   `x - 0`.
+; - if `x` is negative, the xor'd bits = ~x and the mask = -1, so we end up with
+;   `~x - (-1) = ~x + 1`, which is exactly `abs(x)`.
+(rule (lower (has_type $I128 (iabs x)))
+      (let ((x_regs ValueRegs x)
+            (x_lo Reg (value_regs_get x_regs 0))
+            (x_hi Reg (value_regs_get x_regs 1))
+            (asr_reg Reg (asr_imm $I64 x_hi (imm_shift_from_u8 63)))
+            (eor_hi Reg (eor $I64 x_hi asr_reg))
+            (eor_lo Reg (eor $I64 x_lo asr_reg))
+            (subs_lo ProducesFlags (sub_with_flags_paired $I64 eor_lo asr_reg))
+            (sbc_hi ConsumesFlags (sbc_paired $I64 eor_hi asr_reg)))
+       (with_flags subs_lo sbc_hi)))
 
 ;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
