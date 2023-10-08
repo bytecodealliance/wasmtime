@@ -11,7 +11,7 @@ use std::string::String;
 // Instruction sub-components: shift and extend descriptors
 
 /// A shift operator for a register or immediate.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ShiftOp {
     /// Logical shift left.
@@ -578,6 +578,14 @@ impl OperandSize {
         match self {
             OperandSize::Size32 => 0,
             OperandSize::Size64 => 1,
+        }
+    }
+
+    /// The maximum unsigned value representable in a value of this size.
+    pub fn max_value(&self) -> u64 {
+        match self {
+            OperandSize::Size32 => u32::MAX as u64,
+            OperandSize::Size64 => u64::MAX,
         }
     }
 }

@@ -67,6 +67,17 @@ pub mod sync {
         // dependencies.
         preview2::command::sync::add_to_linker(l)?;
 
+        add_only_http_to_linker(l)?;
+
+        Ok(())
+    }
+
+    #[doc(hidden)]
+    // TODO: This is temporary solution until the preview2 command functions can be removed
+    pub fn add_only_http_to_linker<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
+    where
+        T: WasiHttpView + preview2::WasiView + bindings::http::types::Host,
+    {
         bindings::http::outgoing_handler::add_to_linker(l, |t| t)?;
         bindings::http::types::add_to_linker(l, |t| t)?;
 

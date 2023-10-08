@@ -1,0 +1,60 @@
+test compile
+set enable_pcc=true
+target aarch64
+
+function %f0(i64, i32) -> i64 {
+block0(v0 ! points_to(0x1_0000_0000): i64, v1 ! max(32, 0x100): i32):
+    v2 ! max(64, 0x100) = uextend.i64 v1
+    ;; 8 bytes of valid range is all we actually need, so let's only claim that.
+    v3 ! points_to(0x8) = iadd.i64 v0, v2
+    v4 = load.i64 checked v3
+    return v4
+}
+
+;; Note the guard region of 8 bytes -- just enough for the below!
+function %f1(i64, i32) -> i64 {
+block0(v0 ! points_to(0x1_0000_0008): i64, v1 ! max(32, 0xffff_ffff): i32):
+    v2 ! max(64, 0xffff_ffff) = uextend.i64 v1
+    ;; 8 bytes of valid range is all we actually need, so let's only claim that.
+    v3 ! points_to(0x8) = iadd.i64 v0, v2
+    v4 = load.i64 checked v3
+    return v4
+}
+
+;; RegRegExtend mode on aarch64.
+function %f2(i64, i32) -> i8 {
+block0(v0 ! points_to(0x1000): i64, v1 ! max(32, 0xfff): i32):
+    v2 ! max(64, 0x100) = uextend.i64 v1
+    v3 ! points_to(0x1) = iadd.i64 v0, v2
+    v4 = load.i8 checked v3
+    return v4
+}
+
+;; RegReg mode on aarch64.
+function %f3(i64, i64) -> i8 {
+block0(v0 ! points_to(0x1000): i64, v1 ! max(64, 0xfff): i64):
+    v2 ! points_to(0x1) = iadd.i64 v0, v1
+    v3 = load.i8 checked v2
+    return v3
+}
+
+;; RegScaledExtended mode on aarch64.
+function %f4(i64, i32) -> i64 {
+block0(v0 ! points_to(0x8000): i64, v1 ! max(32, 0xfff): i32):
+    v2 ! max(64, 0xfff) = uextend.i64 v1
+    v3 = iconst.i32 3
+    v4 ! max(64, 0x7ff8) = ishl.i64 v2, v3
+    v5 ! points_to(0x8) = iadd.i64 v0, v4
+    v6 = load.i64 checked v5
+    return v6
+}
+
+;; RegScaled mode on aarch64.
+function %f5(i64, i64) -> i64 {
+block0(v0 ! points_to(0x8000): i64, v1 ! max(64, 0xfff): i64):
+    v2 = iconst.i32 3
+    v3 ! max(64, 0x7ff8) = ishl.i64 v1, v2
+    v4 ! points_to(0x8) = iadd.i64 v0, v3
+    v5 = load.i64 checked v4
+    return v5
+}

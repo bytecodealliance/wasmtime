@@ -66,9 +66,8 @@ block0(v0: f64x2):
 ;   movdqa  %xmm0, %xmm3
 ;   cmppd   $0, %xmm3, %xmm0, %xmm3
 ;   andps   %xmm3, const(0), %xmm3
-;   movdqa  %xmm0, %xmm6
-;   minpd   %xmm6, %xmm3, %xmm6
-;   cvttpd2dq %xmm6, %xmm0
+;   minpd   %xmm0, %xmm3, %xmm0
+;   cvttpd2dq %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -81,12 +80,13 @@ block0(v0: f64x2):
 ;   movdqa %xmm0, %xmm3
 ;   cmpeqpd %xmm0, %xmm3
 ;   andps 0x1c(%rip), %xmm3
-;   movdqa %xmm0, %xmm6
-;   minpd %xmm3, %xmm6
-;   cvttpd2dq %xmm6, %xmm0
+;   minpd %xmm3, %xmm0
+;   cvttpd2dq %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)

@@ -3,10 +3,10 @@ interface network {
 	/// An opaque resource that represents access to (a subset of) the network.
 	/// This enables context-based security for networking.
 	/// There is no need for this to map 1:1 to a physical network interface.
-	resource network
+	resource network;
 
 	/// Error codes.
-	/// 
+	///
 	/// In theory, every API can return any error code.
 	/// In practice, API's typically only return the errors documented per API
 	/// combined with a couple of errors that are always possible:
@@ -15,7 +15,7 @@ interface network {
 	/// - `not-supported`
 	/// - `out-of-memory`
 	/// - `concurrency-conflict`
-	/// 
+	///
 	/// See each individual API for what the POSIX equivalents are. They sometimes differ per API.
 	enum error-code {
 		// ### GENERAL ERRORS ###
@@ -24,12 +24,12 @@ interface network {
 		unknown,
 
 		/// Access denied.
-		/// 
+		///
 		/// POSIX equivalent: EACCES, EPERM
 		access-denied,
 
 		/// The operation is not supported.
-		/// 
+		///
 		/// POSIX equivalent: EOPNOTSUPP
 		not-supported,
 
@@ -39,7 +39,7 @@ interface network {
 		invalid-argument,
 
 		/// Not enough memory to complete the operation.
-		/// 
+		///
 		/// POSIX equivalent: ENOMEM, ENOBUFS, EAI_MEMORY
 		out-of-memory,
 
@@ -54,12 +54,12 @@ interface network {
 		/// Trying to finish an asynchronous operation that:
 		/// - has not been started yet, or:
 		/// - was already finished by a previous `finish-*` call.
-		/// 
+		///
 		/// Note: this is scheduled to be removed when `future`s are natively supported.
 		not-in-progress,
 
 		/// The operation has been aborted because it could not be completed immediately.
-		/// 
+		///
 		/// Note: this is scheduled to be removed when `future`s are natively supported.
 		would-block,
 
@@ -81,7 +81,7 @@ interface network {
 
 		/// The remote address is not reachable
 		remote-unreachable,
-		
+
 
 		// ### TCP SOCKET ERRORS ###
 
@@ -93,7 +93,7 @@ interface network {
 
 		/// A connection was aborted.
 		connection-aborted,
-		
+
 
 		// ### UDP SOCKET ERRORS ###
 		datagram-too-large,
@@ -113,14 +113,14 @@ interface network {
 
 	enum ip-address-family {
 		/// Similar to `AF_INET` in POSIX.
-		ipv4, 
+		ipv4,
 
 		/// Similar to `AF_INET6` in POSIX.
 		ipv6,
 	}
 
-	type ipv4-address = tuple<u8, u8, u8, u8>
-	type ipv6-address = tuple<u16, u16, u16, u16, u16, u16, u16, u16>
+	type ipv4-address = tuple<u8, u8, u8, u8>;
+	type ipv6-address = tuple<u16, u16, u16, u16, u16, u16, u16, u16>;
 
 	variant ip-address {
 		ipv4(ipv4-address),

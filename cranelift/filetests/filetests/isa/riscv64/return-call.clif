@@ -96,16 +96,16 @@ block0(v0: f64):
 
 ; VCode:
 ; block0:
-;   li a3,1027
-;   slli a5,a3,52
+;   lui a3,1027
+;   slli a5,a3,40
 ;   fmv.d.x fa1,a5
 ;   fadd.d ft0,ft0,fa1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x403
-;   slli a5, a3, 0x34
+;   lui a3, 0x403
+;   slli a5, a3, 0x28
 ;   fmv.d.x fa1, a5
 ;   fadd.d ft0, ft0, fa1
 ;   ret
@@ -324,8 +324,8 @@ block0:
 ;   sd s1,24(sp)
 ;   sd a0,32(sp)
 ;   load_sym t0,%tail_callee_stack_args+0
-;   ld a0,0(nominal_sp)
 ;   ld s1,8(nominal_sp)
+;   ld a0,0(nominal_sp)
 ;   return_call_ind t0 old_stack_arg_size:0 new_stack_arg_size:48 s1=s1 a0=a0 a1=a1 a2=a2 a3=a3 a4=a4 a5=a5 a6=a6 a7=a7 s2=s2 s3=s3 s4=s4 s5=s5 s6=s6 s7=s7 s8=s8 s9=s9 s10=s10 s11=s11 t3=t3 t4=t4
 ;
 ; Disassembled:
@@ -375,8 +375,8 @@ block0:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ld a0, 0x30(sp)
 ;   ld s1, 0x38(sp)
+;   ld a0, 0x30(sp)
 ;   ld ra, 8(s0)
 ;   ld t6, 0(s0)
 ;   ld t5, 0x28(sp)
@@ -568,9 +568,9 @@ block2:
 ;   sd t0,32(sp)
 ;   sd s1,40(sp)
 ;   load_sym t0,%different_callee2+0
-;   ld a1,0(nominal_sp)
-;   ld a0,8(nominal_sp)
 ;   ld s1,16(nominal_sp)
+;   ld a0,8(nominal_sp)
+;   ld a1,0(nominal_sp)
 ;   return_call_ind t0 old_stack_arg_size:0 new_stack_arg_size:48 s1=s1 a0=a0 a1=a1 a2=a2 a3=a3 a4=a4 a5=a5 a6=a6 a7=a7 s2=s2 s3=s3 s4=s4 s5=s5 s6=s6 s7=s7 s8=s8 s9=s9 s10=s10 s11=s11 t3=t3 t4=t4
 ; block2:
 ;   ld s1,16(nominal_sp)
@@ -582,8 +582,8 @@ block2:
 ;   sd t1,24(sp)
 ;   sd t0,32(sp)
 ;   load_sym t0,%different_callee1+0
-;   ld a1,0(nominal_sp)
 ;   ld a0,8(nominal_sp)
+;   ld a1,0(nominal_sp)
 ;   return_call_ind t0 old_stack_arg_size:0 new_stack_arg_size:48 s1=s1 a0=a0 a1=a1 a2=a2 a3=a3 a4=a4 a5=a5 a6=a6 a7=a7 s2=s2 s3=s3 s4=s4 s5=s5 s6=s6 s7=s7 s8=s8 s9=s9 s10=s10 s11=s11 t3=t3 t4=t4
 ;
 ; Disassembled:
@@ -638,9 +638,9 @@ block2:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %different_callee2 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ld a1, 0x30(sp)
-;   ld a0, 0x38(sp)
 ;   ld s1, 0x40(sp)
+;   ld a0, 0x38(sp)
+;   ld a1, 0x30(sp)
 ;   ld ra, 8(s0)
 ;   ld t6, 0(s0)
 ;   ld t5, 0x28(sp)
@@ -671,8 +671,8 @@ block2:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %different_callee1 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ld a1, 0x30(sp)
 ;   ld a0, 0x38(sp)
+;   ld a1, 0x30(sp)
 ;   ld ra, 8(s0)
 ;   ld t6, 0(s0)
 ;   ld t5, 0x28(sp)

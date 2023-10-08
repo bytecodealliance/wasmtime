@@ -200,11 +200,11 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "14.0.0"
+#define WASMTIME_VERSION "15.0.0"
 /**
  * \brief Wasmtime major version number.
  */
-#define WASMTIME_VERSION_MAJOR 14
+#define WASMTIME_VERSION_MAJOR 15
 /**
  * \brief Wasmtime minor version number.
  */

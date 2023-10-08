@@ -68,9 +68,8 @@ block0(v0: i64x2):
 ; block0:
 ;   uninit  %xmm3
 ;   pxor    %xmm3, %xmm3, %xmm3
-;   movdqa  %xmm0, %xmm6
-;   pcmpeqq %xmm6, %xmm3, %xmm6
-;   ptest   %xmm6, %xmm6
+;   pcmpeqq %xmm0, %xmm3, %xmm0
+;   ptest   %xmm0, %xmm0
 ;   setz    %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -82,9 +81,8 @@ block0(v0: i64x2):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   pxor %xmm3, %xmm3
-;   movdqa %xmm0, %xmm6
-;   pcmpeqq %xmm3, %xmm6
-;   ptest %xmm6, %xmm6
+;   pcmpeqq %xmm3, %xmm0
+;   ptest %xmm0, %xmm0
 ;   sete %al
 ;   movq %rbp, %rsp
 ;   popq %rbp

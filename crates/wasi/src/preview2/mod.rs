@@ -40,12 +40,15 @@ mod write_stream;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
-pub use self::error::I32Exit;
-pub use self::filesystem::{DirPerms, FilePerms};
+pub use self::error::{I32Exit, TrappableError};
+pub use self::filesystem::{DirPerms, FilePerms, FsError, FsResult};
+pub use self::network::{Network, SocketError, SocketResult};
 pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{stderr, stdin, stdout, IsATTY, Stderr, Stdin, Stdout};
-pub use self::stream::{HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError};
+pub use self::stream::{
+    HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
+};
 pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
@@ -57,17 +60,19 @@ pub mod bindings {
     // have some functions in `only_imports` below for being async.
     pub mod sync_io {
         pub(crate) mod _internal {
+            use crate::preview2::{FsError, StreamError};
+
             wasmtime::component::bindgen!({
                 path: "wit",
                 interfaces: "
-                    import wasi:io/poll
-                    import wasi:io/streams
-                    import wasi:filesystem/types
+                    import wasi:io/poll;
+                    import wasi:io/streams;
+                    import wasi:filesystem/types;
                 ",
                 tracing: true,
                 trappable_error_type: {
-                    "wasi:io/streams"::"stream-error": Error,
-                    "wasi:filesystem/types"::"error-code": Error,
+                    "wasi:io/streams/stream-error" => StreamError,
+                    "wasi:filesystem/types/error-code" => FsError,
                 },
                 with: {
                     "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
@@ -76,6 +81,7 @@ pub mod bindings {
                     "wasi:io/poll/pollable": super::super::io::poll::Pollable,
                     "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
                     "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
+                    "wasi:io/streams/error": super::super::io::streams::Error,
                 }
             });
         }
@@ -84,7 +90,7 @@ pub mod bindings {
 
     wasmtime::component::bindgen!({
         path: "wit",
-        interfaces: "include wasi:cli/reactor",
+        interfaces: "include wasi:cli/reactor;",
         tracing: true,
         async: {
             // Only these functions are `async` and everything else is sync
@@ -143,21 +149,20 @@ pub mod bindings {
                 "poll-one",
             ],
         },
-        with: {
-            "wasi:sockets/ip-name-lookup/resolve-address-stream": super::ip_name_lookup::ResolveAddressStream,
-        },
         trappable_error_type: {
-            "wasi:io/streams"::"stream-error": Error,
-            "wasi:filesystem/types"::"error-code": Error,
-            "wasi:sockets/network"::"error-code": Error,
+            "wasi:io/streams/stream-error" => crate::preview2::StreamError,
+            "wasi:filesystem/types/error-code" => crate::preview2::FsError,
+            "wasi:sockets/network/error-code" => crate::preview2::SocketError,
         },
         with: {
             "wasi:sockets/network/network": super::network::Network,
             "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
+            "wasi:sockets/ip-name-lookup/resolve-address-stream": super::ip_name_lookup::ResolveAddressStream,
             "wasi:filesystem/types/directory-entry-stream": super::filesystem::ReaddirIterator,
             "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,
             "wasi:io/streams/input-stream": super::stream::InputStream,
             "wasi:io/streams/output-stream": super::stream::OutputStream,
+            "wasi:io/streams/error": super::stream::Error,
             "wasi:io/poll/pollable": super::poll::Pollable,
             "wasi:cli/terminal-input/terminal-input": super::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": super::stdio::TerminalOutput,

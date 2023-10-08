@@ -1628,37 +1628,6 @@ impl AtomicOP {
     }
 }
 
-impl IntSelectOP {
-    #[inline]
-    pub(crate) fn from_ir_op(op: crate::ir::Opcode) -> Self {
-        match op {
-            crate::ir::Opcode::Smax => Self::Smax,
-            crate::ir::Opcode::Umax => Self::Umax,
-            crate::ir::Opcode::Smin => Self::Smin,
-            crate::ir::Opcode::Umin => Self::Umin,
-            _ => unreachable!(),
-        }
-    }
-    #[inline]
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            IntSelectOP::Smax => "smax",
-            IntSelectOP::Umax => "umax",
-            IntSelectOP::Smin => "smin",
-            IntSelectOP::Umin => "umin",
-        }
-    }
-    #[inline]
-    pub(crate) fn to_int_cc(self) -> IntCC {
-        match self {
-            IntSelectOP::Smax => IntCC::SignedGreaterThan,
-            IntSelectOP::Umax => IntCC::UnsignedGreaterThan,
-            IntSelectOP::Smin => IntCC::SignedLessThan,
-            IntSelectOP::Umin => IntCC::UnsignedLessThan,
-        }
-    }
-}
-
 ///Atomic Memory ordering.
 #[derive(Copy, Clone, Debug)]
 pub enum AMO {
@@ -1723,53 +1692,6 @@ impl FloatRoundOP {
             FloatRoundOP::Floor => FRM::RDN,
             FloatRoundOP::Trunc => FRM::RTZ,
         }
-    }
-}
-
-impl FloatSelectOP {
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            FloatSelectOP::Max => "max",
-            FloatSelectOP::Min => "min",
-        }
-    }
-
-    pub(crate) fn to_fpuoprrr(self, ty: Type) -> FpuOPRRR {
-        match self {
-            FloatSelectOP::Max => {
-                if ty == F32 {
-                    FpuOPRRR::FmaxS
-                } else {
-                    FpuOPRRR::FmaxD
-                }
-            }
-            FloatSelectOP::Min => {
-                if ty == F32 {
-                    FpuOPRRR::FminS
-                } else {
-                    FpuOPRRR::FminD
-                }
-            }
-        }
-    }
-    // move qnan bits into int register.
-    pub(crate) fn snan_bits(self, rd: Writable<Reg>, ty: Type) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        insts.push(Inst::load_imm12(rd, Imm12::from_i16(-1)));
-        let x = if ty == F32 { 22 } else { 51 };
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Srli,
-            rd: rd,
-            rs: rd.to_reg(),
-            imm12: Imm12::from_i16(x),
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Slli,
-            rd: rd,
-            rs: rd.to_reg(),
-            imm12: Imm12::from_i16(x),
-        });
-        insts
     }
 }
 

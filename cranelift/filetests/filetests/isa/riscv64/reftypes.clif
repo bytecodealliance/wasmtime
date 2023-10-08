@@ -95,8 +95,8 @@ block3(v7: r64, v8: r64):
 ;   add sp,-48
 ; block0:
 ;   mv a3,a0
-;   sd a1,16(nominal_sp)
 ;   mv s5,a2
+;   sd a1,16(nominal_sp)
 ;   mv a3,a0
 ;   mv s9,a3
 ;   load_sym a5,%f+0
@@ -107,8 +107,8 @@ block3(v7: r64, v8: r64):
 ;   andi a5,a0,255
 ;   bne a5,zero,taken(label2),not_taken(label1)
 ; block1:
-;   mv a1,s9
 ;   ld a0,16(nominal_sp)
+;   mv a1,s9
 ;   j label3
 ; block2:
 ;   mv a0,s9
@@ -137,8 +137,8 @@ block3(v7: r64, v8: r64):
 ;   addi sp, sp, -0x30
 ; block1: ; offset 0x1c
 ;   mv a3, a0
-;   sd a1, 0x10(sp)
 ;   mv s5, a2
+;   sd a1, 0x10(sp)
 ;   mv a0, a3
 ;   mv s9, a3
 ;   auipc a5, 0
@@ -153,8 +153,8 @@ block3(v7: r64, v8: r64):
 ;   andi a5, a0, 0xff
 ;   bnez a5, 0x10
 ; block2: ; offset 0x5c
-;   mv a1, s9
 ;   ld a0, 0x10(sp)
+;   mv a1, s9
 ;   j 0xc
 ; block3: ; offset 0x68
 ;   mv a0, s9

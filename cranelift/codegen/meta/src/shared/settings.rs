@@ -63,6 +63,15 @@ pub(crate) fn define() -> SettingGroup {
         true,
     );
 
+    settings.add_bool(
+        "enable_pcc",
+        "Enable proof-carrying code translation validation.",
+        r#"
+            This adds a proof-carrying code mode. TODO ADD MORE
+        "#,
+        false,
+    );
+
     // Note that Cranelift doesn't currently need an is_pie flag, because PIE is
     // just PIC where symbols can't be pre-empted, which can be expressed with the
     // `colocated` flag on external functions and global values.

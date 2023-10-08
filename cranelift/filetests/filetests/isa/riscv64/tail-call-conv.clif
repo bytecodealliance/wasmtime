@@ -120,8 +120,8 @@ block0:
 ;   sd s1,24(sp)
 ;   sd a0,32(sp)
 ;   load_sym t0,%tail_callee_stack_args+0
-;   ld a0,0(nominal_sp)
 ;   ld s1,8(nominal_sp)
+;   ld a0,0(nominal_sp)
 ;   callind t0
 ;   add sp,+16
 ;   ld ra,8(sp)
@@ -176,8 +176,8 @@ block0:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ld a0, 0x30(sp)
 ;   ld s1, 0x38(sp)
+;   ld a0, 0x30(sp)
 ;   jalr t0
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
@@ -259,9 +259,9 @@ block0:
 ;   sd t2,16(s1)
 ;   sd a0,24(s1)
 ;   sd a1,32(s1)
-;   ld a1,0(nominal_sp)
-;   ld a0,8(nominal_sp)
 ;   ld s1,16(nominal_sp)
+;   ld a0,8(nominal_sp)
+;   ld a1,0(nominal_sp)
 ;   add sp,+32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -310,9 +310,9 @@ block0:
 ;   sd t2, 0x10(s1)
 ;   sd a0, 0x18(s1)
 ;   sd a1, 0x20(s1)
-;   ld a1, 0(sp)
-;   ld a0, 8(sp)
 ;   ld s1, 0x10(sp)
+;   ld a0, 8(sp)
+;   ld a1, 0(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -526,8 +526,8 @@ block0:
 ;   load_addr a0,48(sp)
 ;   sd a0,40(sp)
 ;   load_sym t0,%tail_callee_stack_args_and_rets+0
-;   ld a0,0(nominal_sp)
 ;   ld s1,8(nominal_sp)
+;   ld a0,0(nominal_sp)
 ;   callind t0
 ;   ld a4,0(sp)
 ;   ld a0,8(sp)
@@ -591,8 +591,8 @@ block0:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ld a0, 0x60(sp)
 ;   ld s1, 0x68(sp)
+;   ld a0, 0x60(sp)
 ;   jalr t0
 ;   ld a4, 0(sp)
 ;   ld a0, 8(sp)

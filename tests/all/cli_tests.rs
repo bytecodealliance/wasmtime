@@ -790,23 +790,25 @@ fn run_basic_component() -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "wasi-http")]
-#[ignore = "needs to be ported to components"]
 #[test]
-fn run_wasi_http_module() -> Result<()> {
+// #[cfg_attr(not(feature = "wasi-http"), ignore)]
+#[ignore = "re-enable when we can reference tests from test-programs"]
+fn run_wasi_http_component() -> Result<()> {
     let output = run_wasmtime_for_output(
         &[
-            "-Shttp,preview2",
             "-Ccache=no",
-            "tests/all/cli_tests/wasi-http.wat",
+            "-Wcomponent-model",
+            "-Scommon,http,preview2",
+            "tests/all/cli_tests/wasi-http-component.wat",
         ],
         None,
     )?;
     println!("{}", String::from_utf8_lossy(&output.stderr));
-    assert!(String::from_utf8(output.stdout)
-        .unwrap()
-        .starts_with("Called _start\n"));
-    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    println!("{}", stdout);
+    assert!(stdout.starts_with("Called _start\n"));
+    assert!(stdout.ends_with("Done\n"));
+    assert!(output.status.success());
     Ok(())
 }
 

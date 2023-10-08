@@ -308,7 +308,7 @@ WASM_API_EXTERN bool wasmtime_linker_get(
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_instantiate_pre(
     const wasmtime_linker_t *linker,
     const wasmtime_module_t *module,
-    wasmtime_instance_t **instance_pre);
+    wasmtime_instance_pre_t **instance_pre);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -15,7 +15,7 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   li a3,42
 ;   andi a5,a0,255
 ;   andi a3,a3,255
-;   select_reg a0,a1,a2##condition=(a5 eq a3)
+;   select a0,a1,a2##condition=(a5 eq a3)
 ;   ret
 ;
 ; Disassembled:
@@ -23,10 +23,10 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   addi a3, zero, 0x2a
 ;   andi a5, a0, 0xff
 ;   andi a3, a3, 0xff
-;   beq a5, a3, 0xc
-;   mv a0, a2
-;   j 8
+;   bne a5, a3, 0xc
 ;   mv a0, a1
+;   j 8
+;   mv a0, a2
 ;   ret
 
 function %g(i8) -> i8 {
@@ -86,7 +86,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ; VCode:
 ; block0:
 ;   andi a4,a0,255
-;   select_i8 a0,a1,a2##condition=a4
+;   select a0,a1,a2##condition=(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -109,24 +109,20 @@ block0(v0: i32, v1: i8, v2: i8):
 ; VCode:
 ; block0:
 ;   li a3,42
-;   slli a5,a0,32
-;   srli a4,a5,32
-;   slli a3,a3,32
-;   srli a5,a3,32
-;   select_reg a0,a1,a2##condition=(a4 eq a5)
+;   sext.w a5,a0
+;   sext.w a3,a3
+;   select a0,a1,a2##condition=(a5 eq a3)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
-;   slli a5, a0, 0x20
-;   srli a4, a5, 0x20
-;   slli a3, a3, 0x20
-;   srli a5, a3, 0x20
-;   beq a4, a5, 0xc
-;   mv a0, a2
-;   j 8
+;   sext.w a5, a0
+;   sext.w a3, a3
+;   bne a5, a3, 0xc
 ;   mv a0, a1
+;   j 8
+;   mv a0, a2
 ;   ret
 
 function %i128_select(i8, i128, i128) -> i128 {
@@ -145,7 +141,7 @@ block0(v0: i8, v1: i128, v2: i128):
 ; block0:
 ;   mv s4,a1
 ;   andi a5,a0,255
-;   select_i128 [a0,a1],[s4,a2],[a3,a4]##condition=a5
+;   select [a0,a1],[s4,a2],[a3,a4]##condition=(a5 ne zero)
 ;   add sp,+16
 ;   ld s4,-8(sp)
 ;   ld ra,8(sp)

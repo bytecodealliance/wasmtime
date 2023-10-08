@@ -5,6 +5,7 @@ use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
 use crate::ir::instructions::{CallInfo, InstructionData};
+use crate::ir::pcc::Fact;
 use crate::ir::{
     types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
     Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
@@ -125,6 +126,9 @@ pub struct DataFlowGraph {
     /// Primary value table with entries for all values.
     values: PrimaryMap<Value, ValueDataPacked>,
 
+    /// Facts: proof-carrying-code assertions about values.
+    pub facts: SecondaryMap<Value, Option<Fact>>,
+
     /// Function signature table. These signatures are referenced by indirect call instructions as
     /// well as the external function references.
     pub signatures: PrimaryMap<SigRef, Signature>,
@@ -158,6 +162,7 @@ impl DataFlowGraph {
             dynamic_types: DynamicTypes::new(),
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
+            facts: SecondaryMap::new(),
             signatures: PrimaryMap::new(),
             old_signatures: SecondaryMap::new(),
             ext_funcs: PrimaryMap::new(),

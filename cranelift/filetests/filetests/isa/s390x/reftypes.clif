@@ -111,8 +111,8 @@ block3(v7: r64, v8: r64):
 ;   chi %r2, 0
 ;   jglh label2 ; jg label1
 ; block1:
-;   lgr %r3, %r11
 ;   lg %r2, 176(%r15)
+;   lgr %r3, %r11
 ;   jg label3
 ; block2:
 ;   lgr %r2, %r11
@@ -148,8 +148,8 @@ block3(v7: r64, v8: r64):
 ;   chi %r2, 0
 ;   jglh 0x62
 ; block2: ; offset 0x52
-;   lgr %r3, %r11
 ;   lg %r2, 0xb0(%r15)
+;   lgr %r3, %r11
 ;   jg 0x6c
 ; block3: ; offset 0x62
 ;   lgr %r2, %r11

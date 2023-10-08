@@ -167,14 +167,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         *arg0
     }
 
-    fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
-        match val.len() {
-            1 => ValueRegs::one(val[0].to_reg()),
-            2 => ValueRegs::two(val[0].to_reg(), val[1].to_reg()),
-            _ => unreachable!(),
-        }
-    }
-
     fn load_ra(&mut self) -> Reg {
         if self.backend.flags.preserve_frame_pointers() {
             let tmp = self.temp_writable_reg(I64);
@@ -202,30 +194,35 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         CondBrTarget::Label(label)
     }
 
-    fn vec_writable_clone(&mut self, v: &VecWritableReg) -> VecWritableReg {
-        v.clone()
-    }
-
     fn imm12_and(&mut self, imm: Imm12, x: u64) -> Imm12 {
         Imm12::from_i16(imm.as_i16() & (x as i16))
     }
 
-    fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
-        if ty.is_int() || ty == R32 || ty == R64 {
-            if ty.bits() <= 64 {
-                vec![self.temp_writable_reg(I64)]
-            } else {
-                vec![self.temp_writable_reg(I64), self.temp_writable_reg(I64)]
-            }
-        } else if ty.is_float() || ty.is_vector() {
-            vec![self.temp_writable_reg(ty)]
-        } else {
-            unimplemented!("ty:{:?}", ty)
-        }
-    }
-
     fn i64_generate_imm(&mut self, imm: i64) -> Option<(Imm20, Imm12)> {
         MInst::generate_imm(imm as u64)
+    }
+
+    fn i64_shift_for_lui(&mut self, imm: i64) -> Option<(u64, Imm12)> {
+        let trailing = imm.trailing_zeros();
+        if trailing < 12 {
+            return None;
+        }
+
+        let shift = Imm12::from_i16(trailing as i16 - 12);
+        let base = (imm as u64) >> trailing;
+        Some((base, shift))
+    }
+
+    fn i64_shift(&mut self, imm: i64) -> Option<(i64, Imm12)> {
+        let trailing = imm.trailing_zeros();
+        // We can do without this condition but in this case there is no need to go further
+        if trailing == 0 {
+            return None;
+        }
+
+        let shift = Imm12::from_i16(trailing as i16);
+        let base = imm >> trailing;
+        Some((base, shift))
     }
 
     #[inline]
@@ -249,6 +246,14 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
+    #[inline]
+    fn imm20_from_u64(&mut self, arg0: u64) -> Option<Imm20> {
+        Imm20::maybe_from_u64(arg0)
+    }
+    #[inline]
+    fn imm20_from_i64(&mut self, arg0: i64) -> Option<Imm20> {
+        Imm20::maybe_from_i64(arg0)
+    }
     #[inline]
     fn imm20_is_zero(&mut self, imm: Imm20) -> Option<()> {
         if imm.as_i32() == 0 {
@@ -305,21 +310,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn frm_bits(&mut self, frm: &FRM) -> UImm5 {
         UImm5::maybe_from_u8(frm.bits()).unwrap()
-    }
-
-    fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
-        let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
-        self.emit(&MInst::SelectReg {
-            rd,
-            rs1,
-            rs2,
-            condition: IntegerCompare {
-                kind: *cc,
-                rs1: a.to_reg(),
-                rs2: b.to_reg(),
-            },
-        });
-        rd.to_reg()
     }
 
     fn u8_as_i32(&mut self, x: u8) -> i32 {
@@ -490,6 +480,11 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             rs1: rs1.to_reg(),
             rs2: rs2.to_reg(),
         }
+    }
+
+    #[inline]
+    fn int_compare_decompose(&mut self, cmp: IntegerCompare) -> (IntCC, XReg, XReg) {
+        (cmp.kind, self.xreg_new(cmp.rs1), self.xreg_new(cmp.rs2))
     }
 
     #[inline]

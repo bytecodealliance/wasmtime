@@ -23,11 +23,11 @@
 ///
 /// [WASI filesystem path resolution]: https://github.com/WebAssembly/wasi-filesystem/blob/main/path-resolution.md
 interface types {
-    use wasi:io/streams.{input-stream, output-stream}
-    use wasi:clocks/wall-clock.{datetime}
+    use wasi:io/streams.{input-stream, output-stream, error};
+    use wasi:clocks/wall-clock.{datetime};
 
     /// File size or length of a region within a file.
-    type filesize = u64
+    type filesize = u64;
 
     /// The type of a filesystem object referenced by a descriptor.
     ///
@@ -166,7 +166,7 @@ interface types {
     }
 
     /// Number of hard links to an inode.
-    type link-count = u64
+    type link-count = u64;
 
     /// When setting a timestamp, this gives the value to set it to.
     variant new-timestamp {
@@ -315,7 +315,7 @@ interface types {
         read-via-stream: func(
             /// The offset within the file at which to start reading.
             offset: filesize,
-        ) -> result<input-stream, error-code>
+        ) -> result<input-stream, error-code>;
 
         /// Return a stream for writing to a file, if available.
         ///
@@ -326,7 +326,7 @@ interface types {
         write-via-stream: func(
             /// The offset within the file at which to start writing.
             offset: filesize,
-        ) -> result<output-stream, error-code>
+        ) -> result<output-stream, error-code>;
 
         /// Return a stream for appending to a file, if available.
         ///
@@ -334,7 +334,7 @@ interface types {
         ///
         /// Note: This allows using `write-stream`, which is similar to `write` with
         /// `O_APPEND` in in POSIX.
-        append-via-stream: func() -> result<output-stream, error-code>
+        append-via-stream: func() -> result<output-stream, error-code>;
 
         /// Provide file advisory information on a descriptor.
         ///
@@ -346,7 +346,7 @@ interface types {
             length: filesize,
             /// The advice.
             advice: advice
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Synchronize the data of a file to disk.
         ///
@@ -354,7 +354,7 @@ interface types {
         /// opened for writing.
         ///
         /// Note: This is similar to `fdatasync` in POSIX.
-        sync-data: func() -> result<_, error-code>
+        sync-data: func() -> result<_, error-code>;
 
         /// Get flags associated with a descriptor.
         ///
@@ -362,7 +362,7 @@ interface types {
         ///
         /// Note: This returns the value that was the `fs_flags` value returned
         /// from `fdstat_get` in earlier versions of WASI.
-        get-flags: func() -> result<descriptor-flags, error-code>
+        get-flags: func() -> result<descriptor-flags, error-code>;
 
         /// Get the dynamic type of a descriptor.
         ///
@@ -374,13 +374,13 @@ interface types {
         ///
         /// Note: This returns the value that was the `fs_filetype` value returned
         /// from `fdstat_get` in earlier versions of WASI.
-        get-type: func() -> result<descriptor-type, error-code>
+        get-type: func() -> result<descriptor-type, error-code>;
 
         /// Adjust the size of an open file. If this increases the file's size, the
         /// extra bytes are filled with zeros.
         ///
         /// Note: This was called `fd_filestat_set_size` in earlier versions of WASI.
-        set-size: func(size: filesize) -> result<_, error-code>
+        set-size: func(size: filesize) -> result<_, error-code>;
 
         /// Adjust the timestamps of an open file or directory.
         ///
@@ -392,7 +392,7 @@ interface types {
             data-access-timestamp: new-timestamp,
             /// The desired values of the data modification timestamp.
             data-modification-timestamp: new-timestamp,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Read from a descriptor, without using and updating the descriptor's offset.
         ///
@@ -410,7 +410,7 @@ interface types {
             length: filesize,
             /// The offset within the file at which to read.
             offset: filesize,
-        ) -> result<tuple<list<u8>, bool>, error-code>
+        ) -> result<tuple<list<u8>, bool>, error-code>;
 
         /// Write to a descriptor, without using and updating the descriptor's offset.
         ///
@@ -426,7 +426,7 @@ interface types {
             buffer: list<u8>,
             /// The offset within the file at which to write.
             offset: filesize,
-        ) -> result<filesize, error-code>
+        ) -> result<filesize, error-code>;
 
         /// Read directory entries from a directory.
         ///
@@ -437,7 +437,7 @@ interface types {
         /// This always returns a new stream which starts at the beginning of the
         /// directory. Multiple streams may be active on the same directory, and they
         /// do not interfere with each other.
-        read-directory: func() -> result<directory-entry-stream, error-code>
+        read-directory: func() -> result<directory-entry-stream, error-code>;
 
         /// Synchronize the data and metadata of a file to disk.
         ///
@@ -445,7 +445,7 @@ interface types {
         /// opened for writing.
         ///
         /// Note: This is similar to `fsync` in POSIX.
-        sync: func() -> result<_, error-code>
+        sync: func() -> result<_, error-code>;
 
         /// Create a directory.
         ///
@@ -453,7 +453,7 @@ interface types {
         create-directory-at: func(
             /// The relative path at which to create the directory.
             path: string,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Return the attributes of an open file or directory.
         ///
@@ -464,7 +464,7 @@ interface types {
         /// modified, use `metadata-hash`.
         ///
         /// Note: This was called `fd_filestat_get` in earlier versions of WASI.
-        stat: func() -> result<descriptor-stat, error-code>
+        stat: func() -> result<descriptor-stat, error-code>;
 
         /// Return the attributes of a file or directory.
         ///
@@ -478,7 +478,7 @@ interface types {
             path-flags: path-flags,
             /// The relative path of the file or directory to inspect.
             path: string,
-        ) -> result<descriptor-stat, error-code>
+        ) -> result<descriptor-stat, error-code>;
 
         /// Adjust the timestamps of a file or directory.
         ///
@@ -495,7 +495,7 @@ interface types {
             data-access-timestamp: new-timestamp,
             /// The desired values of the data modification timestamp.
             data-modification-timestamp: new-timestamp,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Create a hard link.
         ///
@@ -509,7 +509,7 @@ interface types {
             new-descriptor: borrow<descriptor>,
             /// The relative destination path at which to create the hard link.
             new-path: string,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Open a file or directory.
         ///
@@ -540,7 +540,7 @@ interface types {
             %flags: descriptor-flags,
             /// Permissions to use when creating a new file.
             modes: modes
-        ) -> result<descriptor, error-code>
+        ) -> result<descriptor, error-code>;
 
         /// Read the contents of a symbolic link.
         ///
@@ -551,7 +551,7 @@ interface types {
         readlink-at: func(
             /// The relative path of the symbolic link from which to read.
             path: string,
-        ) -> result<string, error-code>
+        ) -> result<string, error-code>;
 
         /// Remove a directory.
         ///
@@ -561,7 +561,7 @@ interface types {
         remove-directory-at: func(
             /// The relative path to a directory to remove.
             path: string,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Rename a filesystem object.
         ///
@@ -573,7 +573,7 @@ interface types {
             new-descriptor: borrow<descriptor>,
             /// The relative destination path to which to rename the file or directory.
             new-path: string,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Create a symbolic link (also known as a "symlink").
         ///
@@ -586,7 +586,7 @@ interface types {
             old-path: string,
             /// The relative destination path at which to create the symbolic link.
             new-path: string,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Check accessibility of a filesystem path.
         ///
@@ -605,7 +605,7 @@ interface types {
             path: string,
             /// The type of check to perform.
             %type: access-type
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Unlink a filesystem object that is not a directory.
         ///
@@ -614,7 +614,7 @@ interface types {
         unlink-file-at: func(
             /// The relative path to a file to unlink.
             path: string,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Change the permissions of a filesystem object that is not a directory.
         ///
@@ -629,7 +629,7 @@ interface types {
             path: string,
             /// The new permissions for the filesystem object.
             modes: modes,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Change the permissions of a directory.
         ///
@@ -648,7 +648,7 @@ interface types {
             path: string,
             /// The new permissions for the directory.
             modes: modes,
-        ) -> result<_, error-code>
+        ) -> result<_, error-code>;
 
         /// Request a shared advisory lock for an open file.
         ///
@@ -670,7 +670,7 @@ interface types {
         /// locking, this function returns `error-code::unsupported`.
         ///
         /// Note: This is similar to `flock(fd, LOCK_SH)` in Unix.
-        lock-shared: func() -> result<_, error-code>
+        lock-shared: func() -> result<_, error-code>;
 
         /// Request an exclusive advisory lock for an open file.
         ///
@@ -694,7 +694,7 @@ interface types {
         /// locking, this function returns `error-code::unsupported`.
         ///
         /// Note: This is similar to `flock(fd, LOCK_EX)` in Unix.
-        lock-exclusive: func() -> result<_, error-code>
+        lock-exclusive: func() -> result<_, error-code>;
 
         /// Request a shared advisory lock for an open file.
         ///
@@ -717,7 +717,7 @@ interface types {
         /// locking, this function returns `error-code::unsupported`.
         ///
         /// Note: This is similar to `flock(fd, LOCK_SH | LOCK_NB)` in Unix.
-        try-lock-shared: func() -> result<_, error-code>
+        try-lock-shared: func() -> result<_, error-code>;
 
         /// Request an exclusive advisory lock for an open file.
         ///
@@ -742,12 +742,12 @@ interface types {
         /// locking, this function returns `error-code::unsupported`.
         ///
         /// Note: This is similar to `flock(fd, LOCK_EX | LOCK_NB)` in Unix.
-        try-lock-exclusive: func() -> result<_, error-code>
+        try-lock-exclusive: func() -> result<_, error-code>;
 
         /// Release a shared or exclusive lock on an open file.
         ///
         /// Note: This is similar to `flock(fd, LOCK_UN)` in Unix.
-        unlock: func() -> result<_, error-code>
+        unlock: func() -> result<_, error-code>;
 
         /// Test whether two descriptors refer to the same filesystem object.
         ///
@@ -755,7 +755,7 @@ interface types {
         /// same device (`st_dev`) and inode (`st_ino` or `d_ino`) numbers.
         /// wasi-filesystem does not expose device and inode numbers, so this function
         /// may be used instead.
-        is-same-object: func(other: borrow<descriptor>) -> bool
+        is-same-object: func(other: borrow<descriptor>) -> bool;
 
         /// Return a hash of the metadata associated with a filesystem object referred
         /// to by a descriptor.
@@ -776,7 +776,7 @@ interface types {
         ///    computed hash.
         ///
         /// However, none of these is required.
-        metadata-hash: func() -> result<metadata-hash-value, error-code>
+        metadata-hash: func() -> result<metadata-hash-value, error-code>;
 
         /// Return a hash of the metadata associated with a filesystem object referred
         /// to by a directory descriptor and a relative path.
@@ -787,12 +787,24 @@ interface types {
             path-flags: path-flags,
             /// The relative path of the file or directory to inspect.
             path: string,
-        ) -> result<metadata-hash-value, error-code>
+        ) -> result<metadata-hash-value, error-code>;
     }
 
     /// A stream of directory entries.
     resource directory-entry-stream {
         /// Read a single directory entry from a `directory-entry-stream`.
-        read-directory-entry: func() -> result<option<directory-entry>, error-code>
+        read-directory-entry: func() -> result<option<directory-entry>, error-code>;
     }
+
+    /// Attempts to extract a filesystem-related `error-code` from the stream
+    /// `error` provided.
+    ///
+    /// Stream operations which return `stream-error::last-operation-failed`
+    /// have a payload with more information about the operation that failed.
+    /// This payload can be passed through to this function to see if there's
+    /// filesystem-related information about the error to return.
+    ///
+    /// Note that this function is fallible because not all stream-related
+    /// errors are filesystem-related errors.
+    filesystem-error-code: func(err: borrow<error>) -> option<error-code>;
 }

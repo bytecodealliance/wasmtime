@@ -31,23 +31,23 @@ mod with_key_and_resources {
 
     wasmtime::component::bindgen!({
         inline: "
-            package demo:pkg
+            package demo:pkg;
 
             interface bar {
-                resource a
-                resource b
+                resource a;
+                resource b;
             }
 
             world foo {
-                resource a
-                resource b
+                resource a;
+                resource b;
 
                 import foo: interface {
-                    resource a
-                    resource b
+                    resource a;
+                    resource b;
                 }
 
-                import bar
+                import bar;
             }
         ",
         with: {
@@ -105,4 +105,46 @@ mod with_key_and_resources {
             loop {}
         }
     }
+}
+
+mod trappable_errors {
+    wasmtime::component::bindgen!({
+        inline: "
+            package demo:pkg;
+
+            interface a {
+                type b = u64;
+
+                z1: func() -> result<_, b>;
+                z2: func() -> result<_, b>;
+            }
+
+            interface b {
+                use a.{b};
+                z: func() -> result<_, b>;
+            }
+
+            interface c {
+                type b = u64;
+            }
+
+            interface d {
+                use c.{b};
+                z: func() -> result<_, b>;
+            }
+
+            world foo {
+                import a;
+                import b;
+                import d;
+            }
+        ",
+        trappable_error_type: {
+            "demo:pkg/a/b" => MyX,
+            "demo:pkg/c/b" => MyX,
+        },
+    });
+
+    #[allow(dead_code)]
+    type MyX = u32;
 }

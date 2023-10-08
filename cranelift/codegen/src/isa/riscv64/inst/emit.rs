@@ -358,9 +358,7 @@ impl Inst {
             | Inst::Atomic { .. }
             | Inst::Select { .. }
             | Inst::AtomicCas { .. }
-            | Inst::IntSelect { .. }
             | Inst::Icmp { .. }
-            | Inst::SelectReg { .. }
             | Inst::FcvtToInt { .. }
             | Inst::RawData { .. }
             | Inst::AtomicStore { .. }
@@ -370,7 +368,6 @@ impl Inst {
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
             | Inst::FloatRound { .. }
-            | Inst::FloatSelect { .. }
             | Inst::Popcnt { .. }
             | Inst::Rev8 { .. }
             | Inst::Cltz { .. }
@@ -1787,35 +1784,30 @@ impl Inst {
                 condition,
                 ref x,
                 ref y,
-                ty: _ty,
             } => {
-                let mut insts = SmallInstVec::new();
+                let label_true = sink.get_label();
                 let label_false = sink.get_label();
-                insts.push(Inst::CondBr {
-                    taken: CondBrTarget::Label(label_false),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: condition,
-                        rs2: zero_reg(),
-                    },
-                });
+                let label_end = sink.get_label();
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(label_true),
+                    not_taken: CondBrTarget::Label(label_false),
+                    kind: condition,
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_true, &mut state.ctrl_plane);
                 // here is the true
                 // select the first value
-                insts.extend(gen_moves(&dst[..], x.regs()));
-                let label_jump_over = sink.get_label();
-                insts.push(Inst::gen_jump(label_jump_over));
-                // here is false
-                insts
-                    .drain(..)
-                    .for_each(|i: Inst| i.emit(&[], sink, emit_info, state));
+                for i in gen_moves(dst.regs(), x.regs()) {
+                    i.emit(&[], sink, emit_info, state);
+                }
+                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
+
                 sink.bind_label(label_false, &mut state.ctrl_plane);
-                // select second value1
-                insts.extend(gen_moves(&dst[..], y.regs()));
-                insts
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
+                for i in gen_moves(dst.regs(), y.regs()) {
+                    i.emit(&[], sink, emit_info, state);
+                }
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::Jalr { rd, base, offset } => {
                 sink.put4(enc_jalr(rd, base, offset));
@@ -2143,80 +2135,6 @@ impl Inst {
                 .emit(&[], sink, emit_info, state);
             }
 
-            &Inst::IntSelect {
-                op,
-                ref dst,
-                x,
-                y,
-                ty,
-            } => {
-                let label_true = sink.get_label();
-                let label_false = sink.get_label();
-                let label_done = sink.get_label();
-                Inst::lower_br_icmp(
-                    op.to_int_cc(),
-                    x,
-                    y,
-                    CondBrTarget::Label(label_true),
-                    CondBrTarget::Label(label_false),
-                    ty,
-                )
-                .into_iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                let gen_move = |dst: &Vec<Writable<Reg>>,
-                                val: &ValueRegs<Reg>,
-                                sink: &mut MachBuffer<Inst>,
-                                state: &mut EmitState| {
-                    let mut insts = SmallInstVec::new();
-                    insts.push(Inst::Mov {
-                        rd: dst[0],
-                        rm: val.regs()[0],
-                        ty: I64,
-                    });
-                    if ty.bits() == 128 {
-                        insts.push(Inst::Mov {
-                            rd: dst[1],
-                            rm: val.regs()[1],
-                            ty,
-                        });
-                    }
-                    insts
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
-                };
-                //here is true , use x.
-                sink.bind_label(label_true, &mut state.ctrl_plane);
-                gen_move(dst, &x, sink, state);
-                Inst::gen_jump(label_done).emit(&[], sink, emit_info, state);
-                // here is false use y
-                sink.bind_label(label_false, &mut state.ctrl_plane);
-                gen_move(dst, &y, sink, state);
-                sink.bind_label(label_done, &mut state.ctrl_plane);
-            }
-
-            &Inst::SelectReg {
-                condition,
-                rd,
-                rs1,
-                rs2,
-            } => {
-                let label_true = sink.get_label();
-                let label_jump_over = sink.get_label();
-                let ty = Inst::canonical_type_for_rc(rs1.class());
-
-                sink.use_label_at_offset(sink.cur_offset(), label_true, LabelUse::B12);
-                let x = condition.emit();
-                sink.put4(x);
-                // here is false , use rs2
-                Inst::gen_move(rd, rs2, ty).emit(&[], sink, emit_info, state);
-                // and jump over
-                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
-                // here condition is true , use rs1
-                sink.bind_label(label_true, &mut state.ctrl_plane);
-                Inst::gen_move(rd, rs1, ty).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
             &Inst::FcvtToInt {
                 is_sat,
                 rd,
@@ -2668,126 +2586,6 @@ impl Inst {
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
 
-            &Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => {
-                let label_nan = sink.get_label();
-                let label_jump_over = sink.get_label();
-                // check if rs1 is nan.
-                Inst::emit_not_nan(tmp, rs1, ty).emit(&[], sink, emit_info, state);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_nan),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // check if rs2 is nan.
-                Inst::emit_not_nan(tmp, rs2, ty).emit(&[], sink, emit_info, state);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_nan),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // here rs1 and rs2 is not nan.
-                Inst::FpuRRR {
-                    alu_op: op.to_fpuoprrr(ty),
-                    frm: None,
-                    rd: rd,
-                    rs1: rs1,
-                    rs2: rs2,
-                }
-                .emit(&[], sink, emit_info, state);
-                // special handle for +0 or -0.
-                {
-                    // check is rs1 and rs2 all equal to zero.
-                    let label_done = sink.get_label();
-                    {
-                        // if rs1 == 0
-                        let mut insts = Inst::emit_if_float_not_zero(
-                            tmp,
-                            rs1,
-                            ty,
-                            CondBrTarget::Label(label_done),
-                            CondBrTarget::Fallthrough,
-                        );
-                        insts.extend(Inst::emit_if_float_not_zero(
-                            tmp,
-                            rs2,
-                            ty,
-                            CondBrTarget::Label(label_done),
-                            CondBrTarget::Fallthrough,
-                        ));
-                        insts
-                            .iter()
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    }
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_f_to_x_op(ty),
-                        frm: None,
-                        rd: tmp,
-                        rs: rs1,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_f_to_x_op(ty),
-                        frm: None,
-                        rd: writable_spilltmp_reg(),
-                        rs: rs2,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::AluRRR {
-                        alu_op: if op == FloatSelectOP::Max {
-                            AluOPRRR::And
-                        } else {
-                            AluOPRRR::Or
-                        },
-                        rd: tmp,
-                        rs1: tmp.to_reg(),
-                        rs2: spilltmp_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    // move back to rd.
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_x_to_f_op(ty),
-                        frm: None,
-                        rd,
-                        rs: tmp.to_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    //
-                    sink.bind_label(label_done, &mut state.ctrl_plane);
-                }
-                // we have the reuslt,jump over.
-                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
-                // here is nan.
-                sink.bind_label(label_nan, &mut state.ctrl_plane);
-                op.snan_bits(tmp, ty)
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // move to rd.
-                Inst::FpuRR {
-                    alu_op: FpuOPRR::move_x_to_f_op(ty),
-                    frm: None,
-                    rd,
-                    rs: tmp.to_reg(),
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
             &Inst::Popcnt {
                 sum,
                 tmp,
@@ -3412,6 +3210,13 @@ impl Inst {
             }
         }
 
+        fn alloc_writable_value_regs(
+            origin: &ValueRegs<Writable<Reg>>,
+            alloc: &mut AllocationConsumer,
+        ) -> ValueRegs<Writable<Reg>> {
+            alloc_value_regs(&origin.map(|r| r.to_reg()), alloc).map(Writable::from_reg)
+        }
+
         match self {
             Inst::Nop0 => self,
             Inst::Nop4 => self,
@@ -3633,23 +3438,19 @@ impl Inst {
                 condition,
                 ref x,
                 ref y,
-                ty,
             } => {
-                let condition = allocs.next(condition);
+                let mut condition: IntegerCompare = condition.clone();
+                condition.rs1 = allocs.next(condition.rs1);
+                condition.rs2 = allocs.next(condition.rs2);
                 let x = alloc_value_regs(x, allocs);
                 let y = alloc_value_regs(y, allocs);
-                let dst: Vec<_> = dst
-                    .clone()
-                    .into_iter()
-                    .map(|r| allocs.next_writable(r))
-                    .collect();
+                let dst = alloc_writable_value_regs(dst, allocs);
 
                 Inst::Select {
                     dst,
                     condition,
                     x,
                     y,
-                    ty,
                 }
             }
             Inst::Jalr { rd, base, offset } => {
@@ -3713,36 +3514,6 @@ impl Inst {
                 t0: allocs.next_writable(t0),
                 dst: allocs.next_writable(dst),
             },
-
-            Inst::IntSelect {
-                op,
-                dst,
-                ref x,
-                ref y,
-                ty,
-            } => {
-                let x = alloc_value_regs(x, allocs);
-                let y = alloc_value_regs(y, allocs);
-                let dst: Vec<_> = dst.iter().map(|r| allocs.next_writable(*r)).collect();
-                Inst::IntSelect { op, ty, dst, x, y }
-            }
-
-            Inst::SelectReg {
-                condition,
-                rd,
-                rs1,
-                rs2,
-            } => {
-                let mut condition: IntegerCompare = condition.clone();
-                condition.rs1 = allocs.next(condition.rs1);
-                condition.rs2 = allocs.next(condition.rs2);
-                Inst::SelectReg {
-                    condition,
-                    rs1: allocs.next(rs1),
-                    rs2: allocs.next(rs2),
-                    rd: allocs.next_writable(rd),
-                }
-            }
 
             Inst::FcvtToInt {
                 is_sat,
@@ -3813,22 +3584,6 @@ impl Inst {
                 rs: allocs.next(rs),
                 int_tmp: allocs.next_writable(int_tmp),
                 f_tmp: allocs.next_writable(f_tmp),
-                rd: allocs.next_writable(rd),
-            },
-
-            Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => Inst::FloatSelect {
-                op,
-                ty,
-                rs1: allocs.next(rs1),
-                rs2: allocs.next(rs2),
-                tmp: allocs.next_writable(tmp),
                 rd: allocs.next_writable(rd),
             },
 

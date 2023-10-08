@@ -2223,14 +2223,6 @@ fn riscv64_worst_case_instruction_size() {
     //there are all candidates potential generate a lot of bytes.
     let mut candidates: Vec<MInst> = vec![];
 
-    candidates.push(Inst::IntSelect {
-        dst: vec![writable_a0(), writable_a0()],
-        ty: I128,
-        op: IntSelectOP::Smax,
-        x: ValueRegs::two(x_reg(1), x_reg(2)),
-        y: ValueRegs::two(x_reg(3), x_reg(4)),
-    });
-
     candidates.push(Inst::FcvtToInt {
         rd: writable_a0(),
         rs: fa0(),
@@ -2292,15 +2284,6 @@ fn riscv64_worst_case_instruction_size() {
         f_tmp: writable_a0(),
         rd: writable_fa0(),
         rs: fa0(),
-        ty: F64,
-    });
-
-    candidates.push(Inst::FloatSelect {
-        op: FloatSelectOP::Max,
-        rd: writable_fa0(),
-        tmp: writable_a0(),
-        rs1: fa0(),
-        rs2: fa0(),
         ty: F64,
     });
 

@@ -1,15 +1,17 @@
-use rustix::io::Errno;
-
 use crate::preview2::bindings::sockets::network::{
     self, ErrorCode, IpAddressFamily, IpSocketAddress, Ipv4Address, Ipv4SocketAddress, Ipv6Address,
     Ipv6SocketAddress,
 };
-use crate::preview2::{TableError, WasiView};
-use anyhow::anyhow;
+use crate::preview2::{SocketError, WasiView};
+use rustix::io::Errno;
 use std::io;
 use wasmtime::component::Resource;
 
-impl<T: WasiView> network::Host for T {}
+impl<T: WasiView> network::Host for T {
+    fn convert_error_code(&mut self, error: SocketError) -> anyhow::Result<ErrorCode> {
+        error.downcast()
+    }
+}
 
 impl<T: WasiView> crate::preview2::bindings::sockets::network::HostNetwork for T {
     fn drop(&mut self, this: Resource<network::Network>) -> Result<(), anyhow::Error> {
@@ -63,17 +65,14 @@ impl SystemError for std::io::Error {
     }
 }
 
-impl From<TableError> for network::Error {
-    fn from(error: TableError) -> Self {
-        Self::trap(error.into())
-    }
-}
-
-impl<T: SystemError> From<T> for network::Error {
+impl<T: SystemError> From<T> for ErrorCode {
     fn from(error: T) -> Self {
         let errno = match error.errno() {
             Some(errno) => errno,
-            None => return Self::trap(anyhow!("Unknown network error: {:?}", error)),
+            None => {
+                log::debug!("unknown I/O error: {error}");
+                return ErrorCode::Unknown;
+            }
         };
 
         match errno {
@@ -116,12 +115,12 @@ impl<T: SystemError> From<T> for network::Error {
             Errno::SOCKTNOSUPPORT => ErrorCode::NotSupported,
             Errno::AFNOSUPPORT => ErrorCode::NotSupported,
 
-            // Trap on unexpected errors. These include:
-            // - EINPROGRESS: Should have been handled by connect.
-            // - ENOTSOCK, EFAULT, EBADF, EBADFD, ENOSYS: Implementation error on our side.
-            _ => return network::Error::trap(anyhow!("Unexpected error: {:?}", error)),
+            // FYI, EINPROGRESS should have already been handled by connect.
+            _ => {
+                log::debug!("unknown I/O error: {error}");
+                ErrorCode::Unknown
+            }
         }
-        .into()
     }
 }
 

@@ -847,6 +847,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
+            x.without_equal()
+        }
+
+        #[inline]
         fn floatcc_swap_args(&mut self, cc: &FloatCC) -> FloatCC {
             cc.swap_args()
         }

@@ -7,7 +7,7 @@
 //   that takes a `request` parameter and returns a `response` result.
 //
 interface incoming-handler {
-  use types.{incoming-request, response-outparam}
+  use types.{incoming-request, response-outparam};
 
   // The `handle` function takes an outparam instead of returning its response
   // so that the component may stream its response while streaming any other
@@ -18,7 +18,7 @@ interface incoming-handler {
   // critical path, since there is no return value, there is no way to report
   // its success or failure.
   handle: func(
-    request: /* own */ incoming-request,
-    response-out: /* own */ response-outparam
-  )
+    request: incoming-request,
+    response-out: response-outparam
+  );
 }

@@ -33,7 +33,10 @@
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Base case, simply adding things in registers.
-(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd x y)))
+(rule -1 (lower (has_type (fits_in_32 (ty_int ty)) (iadd x y)))
+  (rv_addw x y))
+
+(rule 0 (lower (has_type $I64 (iadd x y)))
   (rv_add x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
@@ -312,11 +315,11 @@
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
-(rule (lower (has_type (ty_int_ref_scalar_64 ty) (isub x y)))
-  (rv_sub x y))
-
-(rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
+(rule 0 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
   (rv_subw x y))
+
+(rule 1 (lower (has_type $I64 (isub x y)))
+  (rv_sub x y))
 
 (rule 2 (lower (has_type $I128 (isub x y)))
   (i128_sub x y))
@@ -880,7 +883,7 @@
         (high XReg (lower_ctz $I64 x_hi))
         (low XReg (lower_ctz $I64 x_lo))
         ;; Only add the top half if the bottom is zero
-        (high XReg (gen_select_reg (IntCC.Equal) x_lo (zero_reg) high (zero_reg)))
+        (high XReg (gen_select_xreg (cmp_eqz x_lo) high (zero_reg)))
         (result XReg (rv_add low high)))
     (value_regs result (imm $I64 0))))
 
@@ -895,7 +898,7 @@
         (high XReg (gen_clz x_hi))
         (low XReg (gen_clz x_lo))
         ;; Only add the bottom zeros if the top half is zero
-        (low XReg (gen_select_reg (IntCC.Equal) x_hi (zero_reg) low (zero_reg))))
+        (low XReg (gen_select_xreg (cmp_eqz x_hi) low (zero_reg))))
     (value_regs (rv_add high low) (imm $I64 0))))
 
 (rule 2 (lower (has_type (fits_in_16 ty) (clz x)))
@@ -924,7 +927,7 @@
 
 (rule (lower (has_type (fits_in_64 ty) (cls x)))
   (let ((tmp XReg (sext x))
-        (tmp2 XReg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
+        (tmp2 XReg (gen_select_xreg (cmp_ltz tmp) (rv_not tmp) tmp))
         (tmp3 XReg (gen_clz tmp2)))
     ;; clz counted the full register width, so subtract (64-$width), and then
     ;; additionally subtract one more, meaning here -65+width is added.
@@ -936,14 +939,14 @@
 (rule 1 (lower (has_type $I128 (cls x)))
   (let ((low XReg (value_regs_get x 0))
         (high XReg (value_regs_get x 1))
-        (low XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not low) low))
-        (high XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not high) high))
+        (low XReg (gen_select_xreg (cmp_ltz high) (rv_not low) low))
+        (high XReg (gen_select_xreg (cmp_ltz high) (rv_not high) high))
 
         ;; Count both halves
         (high_cnt XReg (gen_clz high))
         (low_cnt XReg (gen_clz low))
         ;; Only add the bottom zeros if the top half is zero
-        (low_cnt XReg (gen_select_reg (IntCC.Equal) high (zero_reg) low_cnt (zero_reg)))
+        (low_cnt XReg (gen_select_xreg (cmp_eqz high) low_cnt (zero_reg)))
         (count XReg (rv_add high_cnt low_cnt))
         (result XReg (rv_addi count (imm12_const -1))))
     (value_regs result (imm $I64 0))))
@@ -961,39 +964,6 @@
 (rule 1 (lower (has_type $I128 (sextend val @ (value_type in_ty))))
   (let ((lo XReg (sext val)))
     (value_regs lo (rv_srai lo (imm12_const 63)))))
-
-;; The instructions below are present in RV64I and sign-extend the result to 64 bits.
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (iadd x y)))))
-  (rv_addw x y))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (isub x y)))))
-  (rv_subw x y))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ishl x y)))))
-  (rv_sllw x (value_regs_get y 0)))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ushr x y)))))
-  (rv_srlw x (value_regs_get y 0)))
-
-(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (sshr x y)))))
-  (rv_sraw x (value_regs_get y 0)))
-
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (iadd x (imm12_from_value y))))))
-  (rv_addiw x y))
-
-(rule 3 (lower (has_type $I64 (sextend (has_type $I32 (iadd (imm12_from_value x) y)))))
-  (rv_addiw y x))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ishl x (imm12_from_value y))))))
-  (rv_slliw x y))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ushr x (imm12_from_value y))))))
-  (rv_srliw x y))
-
-(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (sshr x (imm12_from_value y))))))
-  (rv_sraiw x y))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1106,16 +1076,17 @@
         (low XReg (rv_sll (value_regs_get x 0) shamt))
         ;; high part.
         (high_part1 XReg (rv_srl (value_regs_get x 0) len_sub_shamt))
-        (high_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part1))
+        (high_part2 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) high_part1))
         ;;
         (high_part3 XReg (rv_sll (value_regs_get x 1) shamt))
         (high XReg (rv_or high_part2 high_part3))
         ;;
         (const64 XReg (imm $I64 64))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-    (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
+    (gen_select_regs
+      (cmp_geu shamt_128 const64)
+      (value_regs (zero_reg) low)
+      (value_regs low high))))
 
 ;; SIMD Cases
 ;; We don't need to mask anything since it is done by the instruction according to SEW.
@@ -1158,7 +1129,7 @@
         (len_sub_shamt XReg (value_regs_get tmp 1))
         ;; low part.
         (low_part1 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
-        (low_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
+        (low_part2 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) low_part1))
         ;;
         (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
         (low XReg (rv_or low_part2 low_part3))
@@ -1167,9 +1138,10 @@
         ;;
         (high XReg (rv_srl (value_regs_get x 1) shamt))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-    (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
+    (gen_select_regs
+      (cmp_geu shamt_128 const64)
+      (value_regs high (zero_reg))
+      (value_regs low high))))
 
 ;; SIMD Cases
 ;; We don't need to mask or extend anything since it is done by the instruction according to SEW.
@@ -1212,7 +1184,7 @@
         (len_sub_shamt XReg (value_regs_get tmp 1))
         ;; low part.
         (low_part1 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
-        (low_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
+        (low_part2 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) low_part1))
         ;;
         (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
         (low XReg (rv_or low_part2 low_part3))
@@ -1223,12 +1195,13 @@
         ;;
         (const_neg_1 XReg (imm $I64 (i64_as_u64 -1)))
         ;;
-        (high_replacement XReg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
+        (high_replacement XReg (gen_select_xreg (cmp_ltz (value_regs_get x 1)) const_neg_1 (zero_reg)))
         (const64 XReg (imm $I64 64))
         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-    (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
+    (gen_select_regs
+      (cmp_geu shamt_128 const64)
+      (value_regs high high_replacement)
+      (value_regs low high))))
 
 ;; SIMD Cases
 ;; We don't need to mask or extend anything since it is done by the instruction according to SEW.
@@ -1505,8 +1478,16 @@
 
 ;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V's `fmin` instruction returns the number input if one of inputs is a
+;; NaN. We handle this by manually checking if one of the inputs is a NaN
+;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmin x y)))
-  (gen_float_select (FloatSelectOP.Min) x y ty))
+  (let (;; Check if both inputs are not nan.
+        (is_ordered FCmp (emit_fcmp (FloatCC.Ordered) ty x y))
+        ;; `fadd` returns a nan if any of the inputs is a NaN.
+        (nan FReg (rv_fadd ty x y))
+        (min FReg (rv_fmin ty x y)))
+    (gen_select_freg is_ordered min nan)))
 
 ;; vfmin does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmin returns the
@@ -1523,8 +1504,17 @@
 
 ;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; RISC-V's `fmax` instruction returns the number input if one of inputs is a
+;; NaN. We handle this by manually checking if one of the inputs is a NaN
+;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmax x y)))
-  (gen_float_select (FloatSelectOP.Max) x y ty))
+  (let (;; Check if both inputs are not nan.
+        (is_ordered FCmp (emit_fcmp (FloatCC.Ordered) ty x y))
+        ;; `fadd` returns a NaN if any of the inputs is a NaN.
+        (nan FReg (rv_fadd ty x y))
+        (max FReg (rv_fmax ty x y)))
+    (gen_select_freg is_ordered max nan)))
+
 
 ;; vfmax does almost the right thing, but it does not handle NaN's correctly.
 ;; We should return a NaN if any of the inputs is a NaN, but vfmax returns the
@@ -1557,19 +1547,17 @@
   (rv_seqz (rv_addi v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
-(rule 0 (lower (has_type ty (select c x y)))
-  (gen_select ty (truthy_to_reg c) x y))
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
+  (gen_select_xreg (lower_int_compare c) x y))
 
-(rule 1 (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type (fits_in_64 in_ty))) x y)))
-  (let ((a XReg (zext a))
-        (b XReg (zext b)))
-    (gen_select_reg cc a b x y)))
+(rule 1 (lower (has_type $I128 (select c x y)))
+  (gen_select_regs (lower_int_compare c) x y))
 
-(rule 2 (lower (has_type (fits_in_64 ty) (select (icmp cc a b @ (value_type (fits_in_64 in_ty))) x y)))
-  (if (signed_cond_code cc))
-  (let ((a XReg (sext a))
-        (b XReg (sext b)))
-    (gen_select_reg cc a b x y)))
+(rule 2 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
+  (gen_select_vreg (lower_int_compare c) x y))
+
+(rule 3 (lower (has_type (ty_scalar_float _) (select c x y)))
+  (gen_select_freg (lower_int_compare c) x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
@@ -1632,10 +1620,12 @@
 ;;;;;  Rules for `smax`;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (smax x y)))
-  (gen_int_select ty (IntSelectOP.Smax) (sext x) (sext y)))
+  (let ((x XReg (sext x))
+        (y XReg (sext y)))
+    (gen_select_xreg (cmp_gt x y) x y)))
 
 (rule 1 (lower (has_type $I128 (smax x y)))
-  (gen_int_select $I128 (IntSelectOP.Smax) x y))
+  (gen_select_regs (cmp_nez (gen_icmp (IntCC.SignedGreaterThan) x y $I128)) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smax x y)))
   (rv_vmax_vv x y (unmasked) ty))
@@ -1649,10 +1639,12 @@
 ;;;;;  Rules for `smin`;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (smin x y)))
-  (gen_int_select ty (IntSelectOP.Smin) (sext x) (sext y)))
+  (let ((x XReg (sext x))
+        (y XReg (sext y)))
+    (gen_select_xreg (cmp_lt x y) x y)))
 
 (rule 1 (lower (has_type $I128 (smin x y)))
-  (gen_int_select $I128 (IntSelectOP.Smin) x y))
+  (gen_select_regs (cmp_nez (gen_icmp (IntCC.SignedLessThan) x y $I128)) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smin x y)))
   (rv_vmin_vv x y (unmasked) ty))
@@ -1666,10 +1658,12 @@
 ;;;;;  Rules for `umax`;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (umax x y)))
-  (gen_int_select ty (IntSelectOP.Umax) (zext x) (zext y)))
+  (let ((x XReg (zext x))
+        (y XReg (zext y)))
+    (gen_select_xreg (cmp_gtu x y) x y)))
 
 (rule 1 (lower (has_type $I128 (umax x y)))
-  (gen_int_select $I128 (IntSelectOP.Umax) x y))
+  (gen_select_regs (cmp_nez (gen_icmp (IntCC.UnsignedGreaterThan) x y $I128)) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umax x y)))
   (rv_vmaxu_vv x y (unmasked) ty))
@@ -1683,10 +1677,12 @@
 ;;;;;  Rules for `umin`;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_64 ty) (umin x y)))
-  (gen_int_select ty (IntSelectOP.Umin) (zext x) (zext y)))
+  (let ((x XReg (zext x))
+        (y XReg (zext y)))
+    (gen_select_xreg (cmp_ltu x y) x y)))
 
 (rule 1 (lower (has_type $I128 (umin x y)))
-  (gen_int_select $I128 (IntSelectOP.Umin) x y))
+  (gen_select_regs (cmp_nez (gen_icmp (IntCC.UnsignedLessThan) x y $I128)) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umin x y)))
   (rv_vminu_vv x y (unmasked) ty))
@@ -2035,7 +2031,7 @@
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iabs x)))
   (let ((extended XReg (sext x))
         (negated XReg (rv_neg extended)))
-    (max $I64 extended negated)))
+    (gen_select_xreg (cmp_gt extended negated) extended negated)))
 
 ;; For vectors we generate the same code, but with vector instructions
 ;; we can skip the sign extension, since the vector unit will only process

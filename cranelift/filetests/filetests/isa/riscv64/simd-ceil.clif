@@ -78,8 +78,8 @@ block0(v0: f64x2):
 ; block0:
 ;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vfabs.v v12,v9 #avl=2, #vtype=(e64, m1, ta, ma)
-;   li a1,1075
-;   slli a2,a1,52
+;   lui a1,1075
+;   slli a2,a1,40
 ;   fmv.d.x fa4,a2
 ;   vmflt.vf v0,v12,fa4 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   fsrmi a2,3
@@ -108,8 +108,8 @@ block0(v0: f64x2):
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x96, 0x94, 0x2a
-;   addi a1, zero, 0x433
-;   slli a2, a1, 0x34
+;   lui a1, 0x433
+;   slli a2, a1, 0x28
 ;   fmv.d.x fa4, a2
 ;   .byte 0x57, 0x50, 0xc7, 0x6e
 ;   fsrmi a2, 3

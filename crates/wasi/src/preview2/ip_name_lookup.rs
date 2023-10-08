@@ -1,9 +1,7 @@
 use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
-use crate::preview2::bindings::sockets::network::{
-    Error, ErrorCode, IpAddress, IpAddressFamily, Network,
-};
+use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, Network};
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
-use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, WasiView};
+use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
 use anyhow::Result;
 use std::mem;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -12,8 +10,8 @@ use std::vec;
 use wasmtime::component::Resource;
 
 pub enum ResolveAddressStream {
-    Waiting(AbortOnDropJoinHandle<Result<Vec<IpAddress>, Error>>),
-    Done(Result<vec::IntoIter<IpAddress>, Error>),
+    Waiting(AbortOnDropJoinHandle<Result<Vec<IpAddress>, SocketError>>),
+    Done(Result<vec::IntoIter<IpAddress>, SocketError>),
 }
 
 #[async_trait::async_trait]
@@ -24,7 +22,7 @@ impl<T: WasiView> Host for T {
         name: String,
         family: Option<IpAddressFamily>,
         include_unavailable: bool,
-    ) -> Result<Resource<ResolveAddressStream>, Error> {
+    ) -> Result<Resource<ResolveAddressStream>, SocketError> {
         let network = self.table().get_resource(&network)?;
 
         // `Host::parse` serves us two functions:
@@ -49,7 +47,7 @@ impl<T: WasiView> Host for T {
         // the usage of the `ToSocketAddrs` trait. This blocks the current
         // thread, so use `spawn_blocking`. Finally note that this is only
         // resolving names, not ports, so force the port to be 0.
-        let task = spawn_blocking(move || -> Result<Vec<_>, Error> {
+        let task = spawn_blocking(move || -> Result<Vec<_>, SocketError> {
             let result = (name.as_str(), 0)
                 .to_socket_addrs()
                 .map_err(|_| ErrorCode::NameUnresolvable)?; // If/when we use `getaddrinfo` directly, map the error properly.
@@ -88,7 +86,7 @@ impl<T: WasiView> HostResolveAddressStream for T {
     fn resolve_next_address(
         &mut self,
         resource: Resource<ResolveAddressStream>,
-    ) -> Result<Option<IpAddress>, Error> {
+    ) -> Result<Option<IpAddress>, SocketError> {
         let stream = self.table_mut().get_resource_mut(&resource)?;
         loop {
             match stream {

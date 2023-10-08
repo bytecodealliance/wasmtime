@@ -1,6 +1,7 @@
 use crate::{
     abi::{ABISig, ABI},
     isa::reg::Reg,
+    masm::RegImm,
     masm::{CmpKind, MacroAssembler, OperandSize, TrapCode},
     stack::{TypedReg, Val},
     CallingConvention,
@@ -8,7 +9,9 @@ use crate::{
 use anyhow::Result;
 use smallvec::SmallVec;
 use wasmparser::{BinaryReader, FuncValidator, Operator, ValidatorResources, VisitOperator};
-use wasmtime_environ::{PtrSize, TypeIndex, WasmFuncType, WasmType};
+use wasmtime_environ::{
+    PtrSize, TableIndex, TypeIndex, WasmFuncType, WasmHeapType, WasmType, FUNCREF_MASK,
+};
 
 mod context;
 pub(crate) use context::*;
@@ -254,6 +257,7 @@ where
     /// * A function import.
     /// * A funcref.
     pub fn emit_call(&mut self, callee: Callee) {
+        let ptr_type = self.env.ptr_type();
         match callee {
             Callee::Import(callee) => {
                 let mut params = Vec::with_capacity(callee.ty.params().len() + 2);
@@ -268,10 +272,7 @@ where
                     .vmoffsets
                     .vmctx_vmfunction_import_vmctx(callee.index);
                 let callee_vmctx_addr = self.masm.address_at_vmctx(callee_vmctx_offset);
-                // FIXME Remove harcoded operand size, this will be needed
-                // once 32-bit architectures are supported.
-                self.masm
-                    .load(callee_vmctx_addr, callee_vmctx, OperandSize::S64);
+                self.masm.load_ptr(callee_vmctx_addr, callee_vmctx);
 
                 let callee_body_offset = self
                     .env
@@ -284,8 +285,12 @@ where
                 // and second arguments.
                 let stack = &mut self.context.stack;
                 let location = stack.len() - (sig.params().len() - 2);
-                stack.insert(location as usize, TypedReg::i64(caller_vmctx).into());
-                stack.insert(location as usize, TypedReg::i64(callee_vmctx).into());
+                let values = [
+                    TypedReg::new(ptr_type, callee_vmctx).into(),
+                    TypedReg::new(ptr_type, caller_vmctx).into(),
+                ]
+                .into_iter();
+                self.context.stack.insert_many(location, values);
 
                 let abi_sig = <M::ABI as ABI>::sig(&sig, &CallingConvention::Default);
                 FnCall::new(&abi_sig)
@@ -302,7 +307,6 @@ where
 
             Callee::FuncRef(ty) => {
                 // Get type for the caller and callee VMContext.
-                let ptr_type = self.env.ptr_type();
                 let abi_sig = <M::ABI as ABI>::sig(&ty, &CallingConvention::Default);
                 // Pop the funcref pointer to a register and allocate a register to hold the
                 // address of the funcref. Since the callee is not addressed from a global non
@@ -404,9 +408,79 @@ where
 
                 match &ty {
                     I32 | I64 | F32 | F64 => self.masm.store(src.into(), addr, ty.into()),
-                    _ => panic!("Unsupported type {:?}", ty),
+                    Ref(rt) => match rt.heap_type {
+                        WasmHeapType::Func => self.masm.store_ptr(src.into(), addr),
+                        ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                    },
+                    _ => unimplemented!("Support for WasmType {ty}"),
                 }
             });
+    }
+
+    /// Emits a series of instructions to lazily initialize a function reference.
+    pub fn emit_lazy_init_funcref(
+        table_data: &TableData,
+        table_index: TableIndex,
+        ptr_type: WasmType,
+        context: &mut CodeGenContext,
+        masm: &mut M,
+        call: &mut FnCall,
+        callee: Reg,
+    ) {
+        let index = context.pop_to_reg(masm, None);
+        let elem_value: Reg = context.any_gpr(masm).into();
+        let base = context.any_gpr(masm);
+        let elem_addr = masm.table_elem_address(index.into(), base, &table_data, context);
+        masm.load_ptr(elem_addr, elem_value);
+
+        let defined = masm.get_label();
+        let cont = masm.get_label();
+
+        // Preemptively move the table element address to the
+        // result register, to avoid conflicts at the control flow merge.
+        let result = call.abi_sig.result.result_reg().unwrap();
+        masm.mov(elem_value.into(), result, ptr_type.into());
+
+        // Push the builtin function arguments to the stack.
+        context
+            .stack
+            .push(TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into());
+        context.stack.push(table_index.as_u32().try_into().unwrap());
+        context.stack.push(index.into());
+
+        // `branch` in this case will perform a test of the given register,
+        // and jump to the defined branch if it's not zero.
+        masm.branch(
+            CmpKind::Ne,
+            elem_value.into(),
+            elem_value,
+            defined,
+            ptr_type.into(),
+        );
+
+        call.calculate_call_stack_space(context)
+            .reg(masm, context, callee);
+        // We know the signature of the libcall in this case, so we assert that there's
+        // one element in the stack and that it's  the ABI signature's result register.
+        let top = context.stack.peek().unwrap();
+        let top = top.get_reg();
+        debug_assert!(top.reg == result);
+        masm.jmp(cont);
+
+        // In the defined case, mask the funcref address in place, by peeking into the
+        // last element of the value stack, which was pushed by the `indirect` function
+        // call above.
+        masm.bind(defined);
+        let imm = RegImm::i64(FUNCREF_MASK as i64);
+        let dst = top.into();
+        masm.and(dst, dst, imm, top.ty.into());
+
+        masm.bind(cont);
+        // The indirect call above, will take care of freeing the registers used as
+        // params.
+        // So we only free the params used to lazily initialize the func ref.
+        context.free_reg(base);
+        context.free_reg(elem_value);
     }
 }
 

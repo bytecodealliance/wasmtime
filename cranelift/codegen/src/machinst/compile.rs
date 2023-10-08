@@ -1,11 +1,13 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
 use crate::dominator_tree::DominatorTree;
+use crate::ir::pcc;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::timing;
 use crate::trace;
+use crate::CodegenError;
 
 use regalloc2::RegallocOptions;
 
@@ -45,6 +47,11 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     log::debug!("Number of lowered vcode blocks: {}", vcode.num_blocks());
     trace!("vcode from lowering: \n{:?}", vcode);
 
+    // Perform validation of proof-carrying-code facts, if requested.
+    if b.flags().enable_pcc() {
+        pcc::check_vcode_facts(f, &vcode, b).map_err(CodegenError::Pcc)?;
+    }
+
     // Perform register allocation.
     let regalloc_result = {
         let _tt = timing::regalloc();
@@ -68,8 +75,11 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             .expect("register allocation")
     };
 
-    // Run the regalloc checker, if requested.
-    if b.flags().regalloc_checker() {
+    // Run the regalloc checker, if requested. Also run the checker if
+    // PCC is enabled (PCC only validates up to pre-regalloc VCode, so
+    // for a full guarantee we need to ensure that regalloc did a
+    // faithful translation to allocated machine code.)
+    if b.flags().regalloc_checker() || b.flags().enable_pcc() {
         let _tt = timing::regalloc_checker();
         let mut checker = regalloc2::checker::Checker::new(&vcode, vcode.machine_env());
         checker.prepare(&regalloc_result);

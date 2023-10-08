@@ -3,12 +3,12 @@ use crate::preview2::tcp::{TcpSocket, TcpState};
 use crate::preview2::{
     bindings::{
         io::streams::{InputStream, OutputStream},
-        sockets::network::{self, ErrorCode, IpAddressFamily, IpSocketAddress, Network},
+        sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
         sockets::tcp::{self, ShutdownType},
     },
     tcp::SocketAddressFamily,
 };
-use crate::preview2::{Pollable, WasiView};
+use crate::preview2::{Pollable, SocketResult, WasiView};
 use cap_net_ext::{Blocking, PoolExt, TcpListenerExt};
 use cap_std::net::TcpListener;
 use io_lifetimes::AsSocketlike;
@@ -26,7 +26,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         this: Resource<tcp::TcpSocket>,
         network: Resource<Network>,
         local_address: IpSocketAddress,
-    ) -> Result<(), network::Error> {
+    ) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource(&this)?;
         let network = table.get_resource(&network)?;
@@ -47,10 +47,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         binder
             .bind_existing_tcp_listener(&*socket.tcp_socket().as_socketlike_view::<TcpListener>())
             .map_err(|error| match error.errno() {
-                Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(),
+                Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
                 #[cfg(windows)]
-                Some(Errno::NOBUFS) => ErrorCode::AddressInUse.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-                _ => Into::<network::Error>::into(error),
+                Some(Errno::NOBUFS) => ErrorCode::AddressInUse, // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                _ => error.into(),
             })?;
 
         let socket = table.get_resource_mut(&this)?;
@@ -59,7 +59,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(())
     }
 
-    fn finish_bind(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), network::Error> {
+    fn finish_bind(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
 
@@ -78,7 +78,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         this: Resource<tcp::TcpSocket>,
         network: Resource<Network>,
         remote_address: IpSocketAddress,
-    ) -> Result<(), network::Error> {
+    ) -> SocketResult<()> {
         let table = self.table_mut();
         let r = {
             let socket = table.get_resource(&this)?;
@@ -123,9 +123,9 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             // or fail immediately.
             Err(err) => {
                 return Err(match err.errno() {
-                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(),
-                    _ => Into::<network::Error>::into(err),
-                })
+                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument.into(), // Just in case our own validations weren't sufficient.
+                    _ => err.into(),
+                });
             }
         }
 
@@ -138,7 +138,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     fn finish_connect(
         &mut self,
         this: Resource<tcp::TcpSocket>,
-    ) -> Result<(Resource<InputStream>, Resource<OutputStream>), network::Error> {
+    ) -> SocketResult<(Resource<InputStream>, Resource<OutputStream>)> {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
 
@@ -179,7 +179,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok((input_stream, output_stream))
     }
 
-    fn start_listen(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), network::Error> {
+    fn start_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
 
@@ -201,8 +201,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             .listen(socket.listen_backlog_size)
             .map_err(|error| match error.errno() {
                 #[cfg(windows)]
-                Some(Errno::MFILE) => ErrorCode::OutOfMemory.into(), // We're not trying to create a new socket. Rewrite it to less surprising error code.
-                _ => Into::<network::Error>::into(error),
+                Some(Errno::MFILE) => ErrorCode::OutOfMemory, // We're not trying to create a new socket. Rewrite it to less surprising error code.
+                _ => error.into(),
             })?;
 
         socket.tcp_state = TcpState::ListenStarted;
@@ -210,7 +210,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(())
     }
 
-    fn finish_listen(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), network::Error> {
+    fn finish_listen(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
 
@@ -227,14 +227,11 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     fn accept(
         &mut self,
         this: Resource<tcp::TcpSocket>,
-    ) -> Result<
-        (
-            Resource<tcp::TcpSocket>,
-            Resource<InputStream>,
-            Resource<OutputStream>,
-        ),
-        network::Error,
-    > {
+    ) -> SocketResult<(
+        Resource<tcp::TcpSocket>,
+        Resource<InputStream>,
+        Resource<OutputStream>,
+    )> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -253,7 +250,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             })
             .map_err(|error| match error.errno() {
                 #[cfg(windows)]
-                Some(Errno::INPROGRESS) => ErrorCode::WouldBlock.into(), // "A blocking Windows Sockets 1.1 call is in progress, or the service provider is still processing a callback function."
+                Some(Errno::INPROGRESS) => ErrorCode::WouldBlock, // "A blocking Windows Sockets 1.1 call is in progress, or the service provider is still processing a callback function."
 
                 // Normalize Linux' non-standard behavior.
                 // "Linux accept() passes already-pending network errors on the new socket as an error code from accept(). This behavior differs from other BSD socket implementations."
@@ -269,9 +266,9 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                     | Errno::NOPROTOOPT
                     | Errno::NONET
                     | Errno::OPNOTSUPP,
-                ) => ErrorCode::ConnectionAborted.into(),
+                ) => ErrorCode::ConnectionAborted,
 
-                _ => Into::<network::Error>::into(error),
+                _ => error.into(),
             })?;
 
         #[cfg(target_os = "macos")]
@@ -304,10 +301,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok((tcp_socket, input_stream, output_stream))
     }
 
-    fn local_address(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-    ) -> Result<IpSocketAddress, network::Error> {
+    fn local_address(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<IpSocketAddress> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -324,10 +318,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(addr.into())
     }
 
-    fn remote_address(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-    ) -> Result<IpSocketAddress, network::Error> {
+    fn remote_address(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<IpSocketAddress> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -356,7 +347,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         }
     }
 
-    fn ipv6_only(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, network::Error> {
+    fn ipv6_only(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -369,11 +360,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         }
     }
 
-    fn set_ipv6_only(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-        value: bool,
-    ) -> Result<(), network::Error> {
+    fn set_ipv6_only(&mut self, this: Resource<tcp::TcpSocket>, value: bool) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
 
@@ -395,7 +382,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         &mut self,
         this: Resource<tcp::TcpSocket>,
         value: u64,
-    ) -> Result<(), network::Error> {
+    ) -> SocketResult<()> {
         const MIN_BACKLOG: i32 = 1;
         const MAX_BACKLOG: i32 = i32::MAX; // OS'es will most likely limit it down even further.
 
@@ -433,39 +420,31 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         }
     }
 
-    fn keep_alive(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, network::Error> {
+    fn keep_alive(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
         Ok(sockopt::get_socket_keepalive(socket.tcp_socket())?)
     }
 
-    fn set_keep_alive(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-        value: bool,
-    ) -> Result<(), network::Error> {
+    fn set_keep_alive(&mut self, this: Resource<tcp::TcpSocket>, value: bool) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
         Ok(sockopt::set_socket_keepalive(socket.tcp_socket(), value)?)
     }
 
-    fn no_delay(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, network::Error> {
+    fn no_delay(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
         Ok(sockopt::get_tcp_nodelay(socket.tcp_socket())?)
     }
 
-    fn set_no_delay(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-        value: bool,
-    ) -> Result<(), network::Error> {
+    fn set_no_delay(&mut self, this: Resource<tcp::TcpSocket>, value: bool) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
         Ok(sockopt::set_tcp_nodelay(socket.tcp_socket(), value)?)
     }
 
-    fn unicast_hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> Result<u8, network::Error> {
+    fn unicast_hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u8> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -485,7 +464,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         &mut self,
         this: Resource<tcp::TcpSocket>,
         value: u8,
-    ) -> Result<(), network::Error> {
+    ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -506,10 +485,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(())
     }
 
-    fn receive_buffer_size(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-    ) -> Result<u64, network::Error> {
+    fn receive_buffer_size(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -521,7 +497,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         &mut self,
         this: Resource<tcp::TcpSocket>,
         value: u64,
-    ) -> Result<(), network::Error> {
+    ) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
         let value = normalize_setsockopt_buffer_size(value);
@@ -547,7 +523,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(())
     }
 
-    fn send_buffer_size(&mut self, this: Resource<tcp::TcpSocket>) -> Result<u64, network::Error> {
+    fn send_buffer_size(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -559,7 +535,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         &mut self,
         this: Resource<tcp::TcpSocket>,
         value: u64,
-    ) -> Result<(), network::Error> {
+    ) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_resource_mut(&this)?;
         let value = normalize_setsockopt_buffer_size(value);
@@ -585,7 +561,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         &mut self,
         this: Resource<tcp::TcpSocket>,
         shutdown_type: ShutdownType,
-    ) -> Result<(), network::Error> {
+    ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get_resource(&this)?;
 
@@ -653,7 +629,7 @@ const INPROGRESS: Errno = Errno::INPROGRESS;
 #[cfg(windows)]
 const INPROGRESS: Errno = Errno::WOULDBLOCK;
 
-fn validate_unicast(addr: &SocketAddr) -> Result<(), network::Error> {
+fn validate_unicast(addr: &SocketAddr) -> SocketResult<()> {
     match to_canonical(&addr.ip()) {
         IpAddr::V4(ipv4) => {
             if ipv4.is_multicast() || ipv4.is_broadcast() {
@@ -672,7 +648,7 @@ fn validate_unicast(addr: &SocketAddr) -> Result<(), network::Error> {
     }
 }
 
-fn validate_remote_address(addr: &SocketAddr) -> Result<(), network::Error> {
+fn validate_remote_address(addr: &SocketAddr) -> SocketResult<()> {
     if to_canonical(&addr.ip()).is_unspecified() {
         return Err(ErrorCode::InvalidArgument.into());
     }
@@ -684,7 +660,7 @@ fn validate_remote_address(addr: &SocketAddr) -> Result<(), network::Error> {
     Ok(())
 }
 
-fn validate_address_family(socket: &TcpSocket, addr: &SocketAddr) -> Result<(), network::Error> {
+fn validate_address_family(socket: &TcpSocket, addr: &SocketAddr) -> SocketResult<()> {
     match (socket.family, addr.ip()) {
         (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
         (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {

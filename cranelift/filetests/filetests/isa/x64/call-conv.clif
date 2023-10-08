@@ -425,8 +425,8 @@ block0(v0: i32, v1: i32, v2: i8x16, v3: i64, v4: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdx, %r8
 ;   movq    %rsi, %rcx
+;   movq    %rdx, %r8
 ;   subq    %rsp, $64, %rsp
 ;   virtual_sp_offset_adjust 64
 ;   lea     32(%rsp), %rdx
@@ -446,8 +446,8 @@ block0(v0: i32, v1: i32, v2: i8x16, v3: i64, v4: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdx, %r8
 ;   movq %rsi, %rcx
+;   movq %rdx, %r8
 ;   subq $0x40, %rsp
 ;   leaq 0x20(%rsp), %rdx
 ;   movdqu %xmm0, (%rdx)

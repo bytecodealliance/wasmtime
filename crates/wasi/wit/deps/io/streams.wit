@@ -1,4 +1,4 @@
-package wasi:io
+package wasi:io;
 
 /// WASI I/O is an I/O abstraction API which is currently focused on providing
 /// stream types.
@@ -6,16 +6,38 @@ package wasi:io
 /// In the future, the component model is expected to add built-in stream types;
 /// when it does, they are expected to subsume this API.
 interface streams {
-    use poll.{pollable}
+    use poll.{pollable};
 
     /// An error for input-stream and output-stream operations.
-    enum stream-error {
+    variant stream-error {
         /// The last operation (a write or flush) failed before completion.
-        last-operation-failed,
+        ///
+        /// More information is available in the `error` payload.
+        last-operation-failed(error),
         /// The stream is closed: no more input will be accepted by the
         /// stream. A closed output-stream will return this error on all
         /// future operations.
         closed
+    }
+
+    /// Contextual error information about the last failure that happened on
+    /// a read, write, or flush from an `input-stream` or `output-stream`.
+    ///
+    /// This type is returned through the `stream-error` type whenever an
+    /// operation on a stream directly fails or an error is discovered
+    /// after-the-fact, for example when a write's failure shows up through a
+    /// later `flush` or `check-write`.
+    ///
+    /// Interfaces such as `wasi:filesystem/types` provide functionality to
+    /// further "downcast" this error into interface-specific error information.
+    resource error {
+        /// Returns a string that's suitable to assist humans in debugging this
+        /// error.
+        ///
+        /// The returned string will change across platforms and hosts which
+        /// means that parsing it, for example, would be a
+        /// platform-compatibility hazard.
+        to-debug-string: func() -> string;
     }
 
     /// An input bytestream.
@@ -52,14 +74,14 @@ interface streams {
         read: func(
             /// The maximum number of bytes to read
             len: u64
-        ) -> result<list<u8>, stream-error>
+        ) -> result<list<u8>, stream-error>;
 
         /// Read bytes from a stream, after blocking until at least one byte can
         /// be read. Except for blocking, identical to `read`.
         blocking-read: func(
             /// The maximum number of bytes to read
             len: u64
-        ) -> result<list<u8>, stream-error>
+        ) -> result<list<u8>, stream-error>;
 
         /// Skip bytes from a stream.
         ///
@@ -76,14 +98,14 @@ interface streams {
         skip: func(
             /// The maximum number of bytes to skip.
             len: u64,
-        ) -> result<u64, stream-error>
+        ) -> result<u64, stream-error>;
 
         /// Skip bytes from a stream, after blocking until at least one byte
         /// can be skipped. Except for blocking behavior, identical to `skip`.
         blocking-skip: func(
             /// The maximum number of bytes to skip.
             len: u64,
-        ) -> result<u64, stream-error>
+        ) -> result<u64, stream-error>;
 
         /// Create a `pollable` which will resolve once either the specified stream
         /// has bytes available to read or the other end of the stream has been
@@ -91,7 +113,7 @@ interface streams {
         /// The created `pollable` is a child resource of the `input-stream`.
         /// Implementations may trap if the `input-stream` is dropped before
         /// all derived `pollable`s created with this function are dropped.
-        subscribe: func() -> pollable
+        subscribe: func() -> pollable;
     }
 
 
@@ -113,7 +135,7 @@ interface streams {
         /// When this function returns 0 bytes, the `subscribe` pollable will
         /// become ready when this function will report at least 1 byte, or an
         /// error.
-        check-write: func() -> result<u64, stream-error>
+        check-write: func() -> result<u64, stream-error>;
 
         /// Perform a write. This function never blocks.
         ///
@@ -124,7 +146,7 @@ interface streams {
         /// the last call to check-write provided a permit.
         write: func(
             contents: list<u8>
-        ) -> result<_, stream-error>
+        ) -> result<_, stream-error>;
 
         /// Perform a write of up to 4096 bytes, and then flush the stream. Block
         /// until all of these operations are complete, or an error occurs.
@@ -152,7 +174,7 @@ interface streams {
         /// ```
         blocking-write-and-flush: func(
             contents: list<u8>
-        ) -> result<_, stream-error>
+        ) -> result<_, stream-error>;
 
         /// Request to flush buffered output. This function never blocks.
         ///
@@ -164,11 +186,11 @@ interface streams {
         /// writes (`check-write` will return `ok(0)`) until the flush has
         /// completed. The `subscribe` pollable will become ready when the
         /// flush has completed and the stream can accept more writes.
-        flush: func() -> result<_, stream-error>
+        flush: func() -> result<_, stream-error>;
 
         /// Request to flush buffered output, and block until flush completes
         /// and stream is ready for writing again.
-        blocking-flush: func() -> result<_, stream-error>
+        blocking-flush: func() -> result<_, stream-error>;
 
         /// Create a `pollable` which will resolve once the output-stream
         /// is ready for more writing, or an error has occured. When this
@@ -180,7 +202,7 @@ interface streams {
         /// The created `pollable` is a child resource of the `output-stream`.
         /// Implementations may trap if the `output-stream` is dropped before
         /// all derived `pollable`s created with this function are dropped.
-        subscribe: func() -> pollable
+        subscribe: func() -> pollable;
 
         /// Write zeroes to a stream.
         ///
@@ -191,7 +213,7 @@ interface streams {
         write-zeroes: func(
             /// The number of zero-bytes to write
             len: u64
-        ) -> result<_, stream-error>
+        ) -> result<_, stream-error>;
 
         /// Perform a write of up to 4096 zeroes, and then flush the stream.
         /// Block until all of these operations are complete, or an error
@@ -220,7 +242,7 @@ interface streams {
         blocking-write-zeroes-and-flush: func(
             /// The number of zero-bytes to write
             len: u64
-        ) -> result<_, stream-error>
+        ) -> result<_, stream-error>;
 
         /// Read from one stream and write to another.
         ///
@@ -234,7 +256,7 @@ interface streams {
             src: input-stream,
             /// The number of bytes to splice
             len: u64,
-        ) -> result<u64, stream-error>
+        ) -> result<u64, stream-error>;
 
         /// Read from one stream and write to another, with blocking.
         ///
@@ -245,7 +267,7 @@ interface streams {
             src: input-stream,
             /// The number of bytes to splice
             len: u64,
-        ) -> result<u64, stream-error>
+        ) -> result<u64, stream-error>;
 
         /// Forward the entire contents of an input stream to an output stream.
         ///
@@ -262,6 +284,6 @@ interface streams {
         forward: func(
             /// The stream to read from
             src: input-stream
-        ) -> result<u64, stream-error>
+        ) -> result<u64, stream-error>;
     }
 }

@@ -1669,15 +1669,6 @@
 (decl xmi_imm (u32) XmmMemImm)
 (extern constructor xmi_imm xmi_imm)
 
-;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-
-;; This is a direct import of `IntCC::without_equal`.
-;; Get the corresponding IntCC with the equal component removed.
-;; For conditions without a zero component, this is a no-op.
-(decl intcc_without_eq (IntCC) IntCC)
-(extern constructor intcc_without_eq intcc_without_eq)
-
 ;;;; Helpers for determining the register class of a value type ;;;;;;;;;;;;;;;;
 
 (type RegisterClass
