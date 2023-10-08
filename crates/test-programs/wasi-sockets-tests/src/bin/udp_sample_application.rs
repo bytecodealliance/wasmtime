@@ -1,108 +1,72 @@
-use wasi::io::poll;
 use wasi::sockets::network::{
-    IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
+    IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress, Network,
 };
-use wasi::sockets::{instance_network, udp, udp_create_socket};
+use wasi::sockets::udp::{Datagram, UdpSocket};
 use wasi_sockets_tests::*;
 
 fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddress) {
-    let first_message = b"Hello, world!";
-    let second_message = b"Greetings, planet!";
+    let first_message = &[];
+    let second_message = b"Hello, world!";
+    let third_message = b"Greetings, planet!";
 
-    let net = instance_network::instance_network();
+    let net = Network::default();
 
-    let sock = udp_create_socket::create_udp_socket(family).unwrap();
+    let server = UdpSocket::new(family).unwrap();
 
-    let sub = sock.subscribe();
+    server.blocking_bind(&net, bind_address).unwrap();
+    let addr = server.local_address().unwrap();
 
-    sock.start_bind(&net, bind_address).unwrap();
+    let client_addr = {
+        let client = UdpSocket::new(family).unwrap();
+        client.blocking_connect(&net, addr).unwrap();
 
-    poll::poll_one(&sub);
-    drop(sub);
-
-    sock.finish_bind().unwrap();
-
-    let sub = sock.subscribe();
-
-    let addr = sock.local_address().unwrap();
-
-    let client = udp_create_socket::create_udp_socket(family).unwrap();
-    let client_sub = client.subscribe();
-
-    client.start_connect(&net, addr).unwrap();
-    poll::poll_one(&client_sub);
-    client.finish_connect().unwrap();
-
-    let _client_addr = client.local_address().unwrap();
-
-    let n = client
-        .send(&[
-            udp::Datagram {
-                data: vec![],
-                remote_address: addr,
-            },
-            udp::Datagram {
+        let datagrams = [
+            Datagram {
                 data: first_message.to_vec(),
                 remote_address: addr,
             },
-        ])
-        .unwrap();
-    assert_eq!(n, 2);
+            Datagram {
+                data: second_message.to_vec(),
+                remote_address: addr,
+            },
+        ];
+        client.blocking_send(&datagrams).unwrap();
 
-    drop(client_sub);
-    drop(client);
-
-    poll::poll_one(&sub);
-    let datagrams = sock.receive(2).unwrap();
-    let mut datagrams = datagrams.into_iter();
-    let (first, second) = match (datagrams.next(), datagrams.next(), datagrams.next()) {
-        (Some(first), Some(second), None) => (first, second),
-        (Some(_first), None, None) => panic!("only one datagram received"),
-        (None, None, None) => panic!("no datagrams received"),
-        _ => panic!("invalid datagram sequence received"),
+        client.local_address().unwrap()
     };
 
-    assert!(first.data.is_empty());
+    {
+        // Check that we've received our sent messages.
+        // Not guaranteed to work but should work in practice.
+        let datagrams = server.blocking_receive(2..100).unwrap();
+        assert_eq!(datagrams.len(), 2);
 
-    // TODO: Verify the `remote_address`
-    //assert_eq!(first.remote_address, client_addr);
+        assert_eq!(datagrams[0].data, first_message);
+        assert_eq!(datagrams[0].remote_address, client_addr);
 
-    // Check that we sent and recieved our message!
-    assert_eq!(second.data, first_message); // Not guaranteed to work but should work in practice.
-
-    // TODO: Verify the `remote_address`
-    //assert_eq!(second.remote_address, client_addr);
+        assert_eq!(datagrams[1].data, second_message);
+        assert_eq!(datagrams[1].remote_address, client_addr);
+    }
 
     // Another client
-    let client = udp_create_socket::create_udp_socket(family).unwrap();
-    let client_sub = client.subscribe();
+    {
+        let client = UdpSocket::new(family).unwrap();
+        client.blocking_connect(&net, addr).unwrap();
 
-    client.start_connect(&net, addr).unwrap();
-    poll::poll_one(&client_sub);
-    client.finish_connect().unwrap();
-
-    let n = client
-        .send(&[udp::Datagram {
-            data: second_message.to_vec(),
+        let datagrams = [Datagram {
+            data: third_message.to_vec(),
             remote_address: addr,
-        }])
-        .unwrap();
-    assert_eq!(n, 1);
+        }];
+        client.blocking_send(&datagrams).unwrap();
+    }
 
-    drop(client_sub);
-    drop(client);
+    {
+        // Check that we sent and received our message!
+        let datagrams = server.blocking_receive(1..100).unwrap();
+        assert_eq!(datagrams.len(), 1);
 
-    poll::poll_one(&sub);
-    let datagrams = sock.receive(2).unwrap();
-    let mut datagrams = datagrams.into_iter();
-    let first = match (datagrams.next(), datagrams.next()) {
-        (Some(first), None) => first,
-        (None, None) => panic!("no datagrams received"),
-        _ => panic!("invalid datagram sequence received"),
-    };
-
-    // Check that we sent and recieved our message!
-    assert_eq!(first.data, second_message); // Not guaranteed to work but should work in practice.
+        assert_eq!(datagrams[0].data, third_message); // Not guaranteed to work but should work in practice.
+    }
 }
 
 fn main() {

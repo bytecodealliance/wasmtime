@@ -1,5 +1,7 @@
 wit_bindgen::generate!("test-command-with-sockets" in "../../wasi/wit");
 
+use std::ops::Range;
+use wasi::clocks::monotonic_clock;
 use wasi::io::poll::{self, Pollable};
 use wasi::io::streams::{InputStream, OutputStream, StreamError};
 use wasi::sockets::instance_network;
@@ -8,11 +10,24 @@ use wasi::sockets::network::{
     Network,
 };
 use wasi::sockets::tcp::TcpSocket;
-use wasi::sockets::{network, tcp_create_socket, udp, udp_create_socket};
+use wasi::sockets::udp::{Datagram, UdpSocket};
+use wasi::sockets::{tcp_create_socket, udp_create_socket};
+
+const TIMEOUT_NS: u64 = 1_000_000_000;
 
 impl Pollable {
     pub fn wait(&self) {
         poll::poll_one(self);
+    }
+
+    pub fn wait_until(&self, timeout: &Pollable) -> Result<(), ErrorCode> {
+        let ready = poll::poll_list(&[self, timeout]);
+        assert!(ready.len() > 0);
+        match ready[0] {
+            0 => Ok(()),
+            1 => Err(ErrorCode::Timeout),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -108,6 +123,89 @@ impl TcpSocket {
     }
 }
 
+impl UdpSocket {
+    pub fn new(address_family: IpAddressFamily) -> Result<UdpSocket, ErrorCode> {
+        udp_create_socket::create_udp_socket(address_family)
+    }
+
+    pub fn blocking_bind(
+        &self,
+        network: &Network,
+        local_address: IpSocketAddress,
+    ) -> Result<(), ErrorCode> {
+        let sub = self.subscribe();
+
+        self.start_bind(&network, local_address)?;
+
+        loop {
+            match self.finish_bind() {
+                Err(ErrorCode::WouldBlock) => sub.wait(),
+                result => return result,
+            }
+        }
+    }
+
+    pub fn blocking_connect(
+        &self,
+        network: &Network,
+        remote_address: IpSocketAddress,
+    ) -> Result<(), ErrorCode> {
+        let sub = self.subscribe();
+
+        self.start_connect(&network, remote_address)?;
+
+        loop {
+            match self.finish_connect() {
+                Err(ErrorCode::WouldBlock) => sub.wait(),
+                result => return result,
+            }
+        }
+    }
+
+    pub fn blocking_send(&self, mut datagrams: &[Datagram]) -> Result<(), ErrorCode> {
+        let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
+        let pollable = self.subscribe();
+
+        while !datagrams.is_empty() {
+            match self.send(datagrams) {
+                Ok(packets_sent) => {
+                    datagrams = &datagrams[(packets_sent as usize)..];
+                }
+                Err(ErrorCode::WouldBlock) => pollable.wait_until(&timeout)?,
+                Err(err) => return Err(err),
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn blocking_receive(&self, count: Range<u64>) -> Result<Vec<Datagram>, ErrorCode> {
+        let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
+        let pollable = self.subscribe();
+        let mut datagrams = vec![];
+
+        loop {
+            match self.receive(count.end - datagrams.len() as u64) {
+                Ok(mut chunk) => {
+                    datagrams.append(&mut chunk);
+
+                    if datagrams.len() >= count.start as usize {
+                        return Ok(datagrams);
+                    }
+                }
+                Err(ErrorCode::WouldBlock) => {
+                    if datagrams.len() >= count.start as usize {
+                        return Ok(datagrams);
+                    } else {
+                        pollable.wait_until(&timeout)?;
+                    }
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
+}
+
 impl IpAddress {
     pub const IPV4_BROADCAST: IpAddress = IpAddress::Ipv4((255, 255, 255, 255));
 
@@ -186,6 +284,31 @@ impl IpSocketAddress {
         match self {
             IpSocketAddress::Ipv4(_) => IpAddressFamily::Ipv4,
             IpSocketAddress::Ipv6(_) => IpAddressFamily::Ipv6,
+        }
+    }
+}
+
+impl PartialEq for Ipv4SocketAddress {
+    fn eq(&self, other: &Self) -> bool {
+        self.port == other.port && self.address == other.address
+    }
+}
+
+impl PartialEq for Ipv6SocketAddress {
+    fn eq(&self, other: &Self) -> bool {
+        self.port == other.port
+            && self.flow_info == other.flow_info
+            && self.address == other.address
+            && self.scope_id == other.scope_id
+    }
+}
+
+impl PartialEq for IpSocketAddress {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Ipv4(l0), Self::Ipv4(r0)) => l0 == r0,
+            (Self::Ipv6(l0), Self::Ipv6(r0)) => l0 == r0,
+            _ => false,
         }
     }
 }
