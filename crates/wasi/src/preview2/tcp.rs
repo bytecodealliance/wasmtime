@@ -69,6 +69,9 @@ pub struct TcpSocket {
     /// The manually configured buffer size. `None` means: no preference, use system default.
     #[cfg(target_os = "macos")]
     pub(crate) send_buffer_size: Option<usize>,
+    /// The manually configured TTL. `None` means: no preference, use system default.
+    #[cfg(target_os = "macos")]
+    pub(crate) hop_limit: Option<u8>,
 }
 
 #[derive(Copy, Clone)]
@@ -301,6 +304,8 @@ impl TcpSocket {
             receive_buffer_size: None,
             #[cfg(target_os = "macos")]
             send_buffer_size: None,
+            #[cfg(target_os = "macos")]
+            hop_limit: None,
         })
     }
 

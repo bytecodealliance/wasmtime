@@ -272,9 +272,9 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         #[cfg(target_os = "macos")]
         {
-            // Manually inherit buffer size from listener. We only have to
+            // Manually inherit socket options from listener. We only have to
             // do this on platforms that don't already do this automatically
-            // and only if a specific buffer size was explicitly set on the listener.
+            // and only if a specific value was explicitly set on the listener.
 
             if let Some(size) = socket.receive_buffer_size {
                 _ = sockopt::set_socket_recv_buffer_size(&connection, size); // Ignore potential error.
@@ -282,6 +282,13 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
             if let Some(size) = socket.send_buffer_size {
                 _ = sockopt::set_socket_send_buffer_size(&connection, size); // Ignore potential error.
+            }
+
+            // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
+            if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) = (socket.family, socket.hop_limit)
+            {
+                _ = sockopt::set_ipv6_unicast_hops(&connection, Some(ttl));
+                // Ignore potential error.
             }
         }
 
@@ -464,8 +471,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         this: Resource<tcp::TcpSocket>,
         value: u8,
     ) -> SocketResult<()> {
-        let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let table = self.table_mut();
+        let socket = table.get_resource_mut(&this)?;
 
         if value == 0 {
             // A well-behaved IP application should never send out new packets with TTL 0.
@@ -479,6 +486,11 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             SocketAddressFamily::Ipv6 { .. } => {
                 sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value))?
             }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            socket.hop_limit = Some(value);
         }
 
         Ok(())
