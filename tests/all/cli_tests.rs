@@ -791,28 +791,6 @@ fn run_basic_component() -> Result<()> {
 }
 
 #[test]
-// #[cfg_attr(not(feature = "wasi-http"), ignore)]
-#[ignore = "re-enable when we can reference tests from test-programs"]
-fn run_wasi_http_component() -> Result<()> {
-    let output = run_wasmtime_for_output(
-        &[
-            "-Ccache=no",
-            "-Wcomponent-model",
-            "-Scommon,http,preview2",
-            "tests/all/cli_tests/wasi-http-component.wat",
-        ],
-        None,
-    )?;
-    println!("{}", String::from_utf8_lossy(&output.stderr));
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("{}", stdout);
-    assert!(stdout.starts_with("Called _start\n"));
-    assert!(stdout.ends_with("Done\n"));
-    assert!(output.status.success());
-    Ok(())
-}
-
-#[test]
 #[cfg_attr(not(feature = "component-model"), ignore)]
 fn run_precompiled_component() -> Result<()> {
     let td = TempDir::new()?;
@@ -1018,4 +996,274 @@ fn preview2_stdin() -> Result<()> {
         assert!(written < slop + amt, "wrote too much {written}");
     }
     Ok(())
+}
+
+mod test_programs {
+    use super::{get_wasmtime_command, run_wasmtime};
+    use anyhow::Result;
+    use std::io::Write;
+    use std::process::Stdio;
+    use test_programs_artifacts::*;
+
+    macro_rules! assert_test_exists {
+        ($name:ident) => {
+            #[allow(unused_imports)]
+            use self::$name as _;
+        };
+    }
+    foreach_cli!(assert_test_exists);
+
+    #[test]
+    fn cli_hello_stdout() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_HELLO_STDOUT_COMPONENT,
+            "gussie",
+            "sparky",
+            "willa",
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_panic() -> Result<()> {
+        let output = get_wasmtime_command()?
+            .args(&[
+                "run",
+                "-Wcomponent-model",
+                CLI_PANIC_COMPONENT,
+                "diesel",
+                "the",
+                "cat",
+                "scratched",
+                "me",
+                "real",
+                "good",
+                "yesterday",
+            ])
+            .output()?;
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("idk!!!"));
+        Ok(())
+    }
+
+    #[test]
+    fn cli_args() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_ARGS_COMPONENT,
+            "hello",
+            "this",
+            "",
+            "is an argument",
+            "with 🚩 emoji",
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_stdin() -> Result<()> {
+        let mut child = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_STDIN_COMPONENT])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()?;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"So rested he by the Tumtum tree")
+            .unwrap();
+        let output = child.wait_with_output()?;
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_env() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            "--env=frabjous=day",
+            "--env=callooh=callay",
+            CLI_ENV_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_file_read() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        std::fs::write(dir.path().join("bar.txt"), b"And stood awhile in thought")?;
+
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            &format!("--dir=/::{}", dir.path().to_str().unwrap()),
+            CLI_FILE_READ_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_file_append() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        std::fs::File::create(dir.path().join("bar.txt"))?
+            .write_all(b"'Twas brillig, and the slithy toves.\n")?;
+
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            &format!("--dir=/::{}", dir.path().to_str().unwrap()),
+            CLI_FILE_APPEND_COMPONENT,
+        ])?;
+
+        let contents = std::fs::read(dir.path().join("bar.txt"))?;
+        assert_eq!(
+            std::str::from_utf8(&contents).unwrap(),
+            "'Twas brillig, and the slithy toves.\n\
+                   Did gyre and gimble in the wabe;\n\
+                   All mimsy were the borogoves,\n\
+                   And the mome raths outgrabe.\n"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cli_file_dir_sync() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        std::fs::File::create(dir.path().join("bar.txt"))?
+            .write_all(b"'Twas brillig, and the slithy toves.\n")?;
+
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            &format!("--dir=/::{}", dir.path().to_str().unwrap()),
+            CLI_FILE_DIR_SYNC_COMPONENT,
+        ])?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_success() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", CLI_EXIT_SUCCESS_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_default() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", CLI_EXIT_DEFAULT_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_failure() -> Result<()> {
+        let output = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_EXIT_FAILURE_COMPONENT])
+            .output()?;
+        assert!(!output.status.success());
+        assert_eq!(output.status.code(), Some(1));
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_panic() -> Result<()> {
+        let output = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_EXIT_PANIC_COMPONENT])
+            .output()?;
+        assert!(!output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_directory_list() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        std::fs::File::create(dir.path().join("foo.txt"))?;
+        std::fs::File::create(dir.path().join("bar.txt"))?;
+        std::fs::File::create(dir.path().join("baz.txt"))?;
+        std::fs::create_dir(dir.path().join("sub"))?;
+        std::fs::File::create(dir.path().join("sub").join("wow.txt"))?;
+        std::fs::File::create(dir.path().join("sub").join("yay.txt"))?;
+
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            &format!("--dir=/::{}", dir.path().to_str().unwrap()),
+            CLI_DIRECTORY_LIST_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_default_clocks() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", CLI_DEFAULT_CLOCKS_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_export_cabi_realloc() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_EXPORT_CABI_REALLOC_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_stream_pollable_lifetimes() -> Result<()> {
+        // Test program has two modes, dispatching based on argument.
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_STREAM_POLLABLE_LIFETIMES_COMPONENT,
+            "correct",
+        ])?;
+        let output = get_wasmtime_command()?
+            .args(&[
+                "run",
+                "-Wcomponent-model",
+                CLI_STREAM_POLLABLE_LIFETIMES_COMPONENT,
+                "trap",
+            ])
+            .output()?;
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("entry still has children"),
+            "bad stderr: {stderr}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn run_wasi_http_component() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Ccache=no",
+                "-Wcomponent-model",
+                "-Scommon,http,preview2",
+                HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        println!("{}", stdout);
+        assert!(stdout.starts_with("Called _start\n"));
+        assert!(stdout.ends_with("Done\n"));
+        assert!(output.status.success());
+        Ok(())
+    }
 }

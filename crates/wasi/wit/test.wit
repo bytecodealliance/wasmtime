@@ -1,12 +1,6 @@
 // only used as part of `test-programs`
 world test-reactor {
-
-  import wasi:cli/environment;
-  import wasi:io/poll;
-  import wasi:io/streams;
-  import wasi:filesystem/types;
-  import wasi:filesystem/preopens;
-  import wasi:cli/exit;
+  include wasi:cli/reactor;
 
   export add-strings: func(s: list<string>) -> u32;
   export get-strings: func() -> list<string>;
@@ -20,27 +14,7 @@ world test-reactor {
 }
 
 world test-command {
-  import wasi:io/poll;
-  import wasi:io/streams;
-  import wasi:cli/environment;
-  import wasi:cli/stdin;
-  import wasi:cli/stdout;
-  import wasi:cli/stderr;
-}
-
-world test-command-with-sockets {
-  import wasi:io/poll;
-  import wasi:io/streams;
-  import wasi:cli/environment;
-  import wasi:cli/stdin;
-  import wasi:cli/stdout;
-  import wasi:cli/stderr;
-  import wasi:sockets/tcp;
-  import wasi:sockets/tcp-create-socket;
-  import wasi:sockets/udp;
-  import wasi:sockets/udp-create-socket;
-  import wasi:sockets/network;
-  import wasi:sockets/instance-network;
-  import wasi:sockets/ip-name-lookup;
-  import wasi:clocks/monotonic-clock;
+  include wasi:cli/reactor;
+  import wasi:http/types;
+  import wasi:http/outgoing-handler;
 }

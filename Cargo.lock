@@ -485,15 +485,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
-name = "command-tests"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "getrandom",
- "wit-bindgen",
-]
-
-[[package]]
 name = "component-fuzz-util"
 version = "0.0.0"
 dependencies = [
@@ -2159,13 +2150,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reactor-tests"
-version = "0.1.0"
-dependencies = [
- "wit-bindgen",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2668,27 +2652,18 @@ name = "test-programs"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "bytes",
- "cap-rand",
- "cap-std",
+ "getrandom",
+ "libc",
+ "wasi",
+ "wit-bindgen",
+]
+
+[[package]]
+name = "test-programs-artifacts"
+version = "0.0.0"
+dependencies = [
  "cargo_metadata",
- "cfg-if",
  "heck",
- "http",
- "http-body",
- "http-body-util",
- "hyper",
- "lazy_static",
- "tempfile",
- "test-log",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "wasi-cap-std-sync",
- "wasi-common",
- "wasmtime",
- "wasmtime-wasi",
- "wasmtime-wasi-http",
  "wit-component",
 ]
 
@@ -3044,26 +3019,17 @@ dependencies = [
  "io-extras",
  "log",
  "rustix 0.38.8",
+ "tempfile",
+ "test-log",
+ "test-programs-artifacts",
  "thiserror",
+ "tokio",
  "tracing",
+ "tracing-subscriber",
  "wasmtime",
+ "wasmtime-wasi",
  "wiggle",
  "windows-sys",
-]
-
-[[package]]
-name = "wasi-http-proxy-tests"
-version = "0.0.0"
-dependencies = [
- "wit-bindgen",
-]
-
-[[package]]
-name = "wasi-http-tests"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "wit-bindgen",
 ]
 
 [[package]]
@@ -3074,24 +3040,6 @@ dependencies = [
  "object",
  "wasi",
  "wasm-encoder",
- "wit-bindgen",
-]
-
-[[package]]
-name = "wasi-sockets-tests"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "wit-bindgen",
-]
-
-[[package]]
-name = "wasi-tests"
-version = "0.0.0"
-dependencies = [
- "libc",
- "once_cell",
- "wasi",
  "wit-bindgen",
 ]
 
@@ -3426,7 +3374,7 @@ dependencies = [
  "serde_json",
  "target-lexicon",
  "tempfile",
- "test-programs",
+ "test-programs-artifacts",
  "tokio",
  "walkdir",
  "wasm-encoder",
@@ -3755,7 +3703,9 @@ dependencies = [
  "once_cell",
  "rustix 0.38.8",
  "system-interface",
+ "tempfile",
  "test-log",
+ "test-programs-artifacts",
  "thiserror",
  "tokio",
  "tracing",
@@ -3782,9 +3732,12 @@ dependencies = [
  "http-body-util",
  "hyper",
  "rustls",
+ "test-log",
+ "test-programs-artifacts",
  "tokio",
  "tokio-rustls",
  "tracing",
+ "tracing-subscriber",
  "wasmtime",
  "wasmtime-wasi",
  "webpki-roots",

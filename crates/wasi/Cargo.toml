@@ -44,6 +44,9 @@ futures = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros"] }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
+test-programs-artifacts = { workspace = true }
+tempfile = { workspace = true }
+wasmtime = { workspace = true, features = ['cranelift'] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["event", "fs", "net"], optional = true }
