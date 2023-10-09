@@ -92,6 +92,11 @@ async fn tcp_sockopts() {
 }
 
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn udp_sample_application() {
+    run("udp_sample_application").await.unwrap();
+}
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn ip_name_lookup() {
     run("ip_name_lookup").await.unwrap();
 }

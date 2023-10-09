@@ -37,6 +37,8 @@ world test-command-with-sockets {
   import wasi:cli/stderr;
   import wasi:sockets/tcp;
   import wasi:sockets/tcp-create-socket;
+  import wasi:sockets/udp;
+  import wasi:sockets/udp-create-socket;
   import wasi:sockets/network;
   import wasi:sockets/instance-network;
   import wasi:sockets/ip-name-lookup;
