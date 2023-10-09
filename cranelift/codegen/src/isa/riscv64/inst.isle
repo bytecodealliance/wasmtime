@@ -2675,10 +2675,6 @@
       (high XReg (rv_sub high_tmp borrow)))
     (value_regs low high)))
 
-;; int scalar zero regs.
-(decl int_zero_reg (Type) ValueRegs)
-(extern constructor int_zero_reg int_zero_reg)
-
 ;; Consume a CmpResult, producing a branch on its result.
 (decl cond_br (IntegerCompare CondBrTarget CondBrTarget) SideEffectNoResult)
 (rule (cond_br cmp then else)

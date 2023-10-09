@@ -181,14 +181,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             link_reg()
         }
     }
-    fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
-        assert!(ty.is_int(), "{:?}", ty);
-        if ty.bits() == 128 {
-            ValueRegs::two(self.zero_reg(), self.zero_reg())
-        } else {
-            ValueRegs::one(self.zero_reg())
-        }
-    }
 
     fn label_to_br_target(&mut self, label: MachLabel) -> CondBrTarget {
         CondBrTarget::Label(label)
