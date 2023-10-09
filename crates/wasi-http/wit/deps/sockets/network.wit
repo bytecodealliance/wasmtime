@@ -14,7 +14,8 @@ interface network {
 	/// - `access-denied`
 	/// - `not-supported`
 	/// - `out-of-memory`
-	/// 
+	/// - `concurrency-conflict`
+	///
 	/// See each individual API for what the POSIX equivalents are. They sometimes differ per API.
 	enum error-code {
 		// ### GENERAL ERRORS ###
@@ -32,6 +33,11 @@ interface network {
 		/// POSIX equivalent: EOPNOTSUPP
 		not-supported,
 
+		/// One of the arguments is invalid.
+		/// 
+		/// POSIX equivalent: EINVAL
+		invalid-argument,
+
 		/// Not enough memory to complete the operation.
 		/// 
 		/// POSIX equivalent: ENOMEM, ENOBUFS, EAI_MEMORY
@@ -41,6 +47,8 @@ interface network {
 		timeout,
 
 		/// This operation is incompatible with another asynchronous operation that is already in progress.
+		///
+		/// POSIX equivalent: EALREADY
 		concurrency-conflict,
 
 		/// Trying to finish an asynchronous operation that:
@@ -56,81 +64,42 @@ interface network {
 		would-block,
 
 
-		// ### IP ERRORS ###
-
-		/// The specified address-family is not supported.
-		address-family-not-supported,
-
-		/// An IPv4 address was passed to an IPv6 resource, or vice versa.
-		address-family-mismatch,
-
-		/// The socket address is not a valid remote address. E.g. the IP address is set to INADDR_ANY, or the port is set to 0.
-		invalid-remote-address,
-
-		/// The operation is only supported on IPv4 resources.
-		ipv4-only-operation,
-
-		/// The operation is only supported on IPv6 resources.
-		ipv6-only-operation,
-
-
 
 		// ### TCP & UDP SOCKET ERRORS ###
 
+		/// The operation is not valid in the socket's current state.
+		invalid-state,
+
 		/// A new socket resource could not be created because of a system limit.
 		new-socket-limit,
-		
-		/// The socket is already attached to another network.
-		already-attached,
-
-		/// The socket is already bound.
-		already-bound,
-
-		/// The socket is already in the Connection state.
-		already-connected,
-
-		/// The socket is not bound to any local address.
-		not-bound,
-
-		/// The socket is not in the Connection state.
-		not-connected,
 
 		/// A bind operation failed because the provided address is not an address that the `network` can bind to.
 		address-not-bindable,
 
-		/// A bind operation failed because the provided address is already in use.
+		/// A bind operation failed because the provided address is already in use or because there are no ephemeral ports available.
 		address-in-use,
-
-		/// A bind operation failed because there are no ephemeral ports available.
-		ephemeral-ports-exhausted,
 
 		/// The remote address is not reachable
 		remote-unreachable,
 		
 
 		// ### TCP SOCKET ERRORS ###
-		
-		/// The socket is already in the Listener state.
-		already-listening,
-
-		/// The socket is already in the Listener state.
-		not-listening,
 
 		/// The connection was forcefully rejected
 		connection-refused,
 
 		/// The connection was reset.
 		connection-reset,
-		
+
+		/// A connection was aborted.
+		connection-aborted,
+
 
 		// ### UDP SOCKET ERRORS ###
 		datagram-too-large,
 
 
 		// ### NAME LOOKUP ERRORS ###
-		
-		/// The provided name is a syntactically invalid domain name.
-		invalid-name,
 
 		/// Name does not exist or has no suitable associated IP addresses.
 		name-unresolvable,
