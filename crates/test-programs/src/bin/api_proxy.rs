@@ -31,4 +31,6 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
     }
 }
 
+// Technically this should not be here for a proxy, but given the current
+// framework for tests it's required since this file is built as a `bin`
 fn main() {}
