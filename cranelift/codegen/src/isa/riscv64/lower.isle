@@ -1483,7 +1483,7 @@
 ;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmin x y)))
   (let (;; Check if both inputs are not nan.
-        (is_ordered FCmp (emit_fcmp (FloatCC.Ordered) ty x y))
+        (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a nan if any of the inputs is a NaN.
         (nan FReg (rv_fadd ty x y))
         (min FReg (rv_fmin ty x y)))
@@ -1509,7 +1509,7 @@
 ;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmax x y)))
   (let (;; Check if both inputs are not nan.
-        (is_ordered FCmp (emit_fcmp (FloatCC.Ordered) ty x y))
+        (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a NaN if any of the inputs is a NaN.
         (nan FReg (rv_fadd ty x y))
         (max FReg (rv_fmax ty x y)))
@@ -1851,11 +1851,11 @@
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule 0 (lower (fcmp cc x @ (value_type (ty_scalar_float ty)) y))
-  (lower_fcmp (emit_fcmp cc ty x y)))
+  (lower_float_compare (fcmp_to_float_compare cc ty x y)))
 
-(decl lower_fcmp (FCmp) XReg)
-(rule (lower_fcmp (FCmp.One r)) r)
-(rule (lower_fcmp (FCmp.Zero r)) (rv_seqz r))
+(decl lower_float_compare (FloatCompare) XReg)
+(rule (lower_float_compare (FloatCompare.One r)) r)
+(rule (lower_float_compare (FloatCompare.Zero r)) (rv_seqz r))
 
 (rule 1 (lower (fcmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
   (gen_expand_mask ty (gen_fcmp_mask ty cc x y)))

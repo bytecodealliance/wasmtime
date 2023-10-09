@@ -2781,11 +2781,11 @@
 (rule 4 (is_nonzero_cmp (maybe_uextend (icmp cc @ (IntCC.NotEqual) a b @ (value_type $I32))))
   (int_compare cc (sext a) (sext b)))
 
-;; If the input is an `fcmp` then the `FCmp` return value is directly
+;; If the input is an `fcmp` then the `FloatCompare` return value is directly
 ;; convertible to `IntegerCompare` which can shave off an instruction from the
 ;; fallback lowering above.
 (rule 2 (is_nonzero_cmp (maybe_uextend (fcmp cc a @ (value_type ty) b)))
-  (emit_fcmp cc ty a b))
+  (fcmp_to_float_compare cc ty a b))
 
 (decl partial lower_branch (Inst MachLabelSlice) Unit)
 (rule (lower_branch (jump _) (single_target label))
@@ -2965,61 +2965,61 @@
 (decl ordered (Type FReg FReg) XReg)
 (rule (ordered ty a b) (rv_and (is_not_nan ty a) (is_not_nan ty b)))
 
-(type FCmp (enum
+(type FloatCompare (enum
   ;; The comparison succeeded if `r` is one
   (One (r XReg))
   ;; The comparison succeeded if `r` is zero
   (Zero (r XReg))
 ))
 
-(decl fcmp_invert (FCmp) FCmp)
-(rule (fcmp_invert (FCmp.One r)) (FCmp.Zero r))
-(rule (fcmp_invert (FCmp.Zero r)) (FCmp.One r))
+(decl float_compare_invert (FloatCompare) FloatCompare)
+(rule (float_compare_invert (FloatCompare.One r)) (FloatCompare.Zero r))
+(rule (float_compare_invert (FloatCompare.Zero r)) (FloatCompare.One r))
 
-(decl fcmp_to_compare (FCmp) IntegerCompare)
-(rule (fcmp_to_compare (FCmp.One r)) (cmp_nez r))
-(rule (fcmp_to_compare (FCmp.Zero r)) (cmp_eqz r))
-(convert FCmp IntegerCompare fcmp_to_compare)
+(decl float_to_int_compare (FloatCompare) IntegerCompare)
+(rule (float_to_int_compare (FloatCompare.One r)) (cmp_nez r))
+(rule (float_to_int_compare (FloatCompare.Zero r)) (cmp_eqz r))
+(convert FloatCompare IntegerCompare float_to_int_compare)
 
 ;; Compare two floating point numbers and return a zero/non-zero result.
-(decl emit_fcmp (FloatCC Type FReg FReg) FCmp)
+(decl fcmp_to_float_compare (FloatCC Type FReg FReg) FloatCompare)
 
 ;; Direct codegen for unordered comparisons is not that efficient, so invert
 ;; the comparison to get an ordered comparison and generate that. Then invert
 ;; the result to produce the final fcmp result.
-(rule 0 (emit_fcmp cc ty a b)
+(rule 0 (fcmp_to_float_compare cc ty a b)
   (if-let $true (floatcc_unordered cc))
-  (fcmp_invert (emit_fcmp (floatcc_complement cc) ty a b)))
+  (float_compare_invert (fcmp_to_float_compare (floatcc_complement cc) ty a b)))
 
 ;; a is not nan && b is not nan
-(rule 1 (emit_fcmp (FloatCC.Ordered) ty a b)
-  (FCmp.One (ordered ty a b)))
+(rule 1 (fcmp_to_float_compare (FloatCC.Ordered) ty a b)
+  (FloatCompare.One (ordered ty a b)))
 
 ;; a == b
-(rule 1 (emit_fcmp (FloatCC.Equal) ty a b)
-  (FCmp.One (rv_feq ty a b)))
+(rule 1 (fcmp_to_float_compare (FloatCC.Equal) ty a b)
+  (FloatCompare.One (rv_feq ty a b)))
 
 ;; a != b
 ;; == !(a == b)
-(rule 1 (emit_fcmp (FloatCC.NotEqual) ty a b)
-  (FCmp.Zero (rv_feq ty a b)))
+(rule 1 (fcmp_to_float_compare (FloatCC.NotEqual) ty a b)
+  (FloatCompare.Zero (rv_feq ty a b)))
 
 ;; a < b || a > b
-(rule 1 (emit_fcmp (FloatCC.OrderedNotEqual) ty a b)
-  (FCmp.One (rv_or (rv_flt ty a b) (rv_fgt ty a b))))
+(rule 1 (fcmp_to_float_compare (FloatCC.OrderedNotEqual) ty a b)
+  (FloatCompare.One (rv_or (rv_flt ty a b) (rv_fgt ty a b))))
 
 ;; a < b
-(rule 1 (emit_fcmp (FloatCC.LessThan) ty a b)
-  (FCmp.One (rv_flt ty a b)))
+(rule 1 (fcmp_to_float_compare (FloatCC.LessThan) ty a b)
+  (FloatCompare.One (rv_flt ty a b)))
 
 ;; a <= b
-(rule 1 (emit_fcmp (FloatCC.LessThanOrEqual) ty a b)
-  (FCmp.One (rv_fle ty a b)))
+(rule 1 (fcmp_to_float_compare (FloatCC.LessThanOrEqual) ty a b)
+  (FloatCompare.One (rv_fle ty a b)))
 
 ;; a > b
-(rule 1 (emit_fcmp (FloatCC.GreaterThan) ty a b)
-  (FCmp.One (rv_fgt ty a b)))
+(rule 1 (fcmp_to_float_compare (FloatCC.GreaterThan) ty a b)
+  (FloatCompare.One (rv_fgt ty a b)))
 
 ;; a >= b
-(rule 1 (emit_fcmp (FloatCC.GreaterThanOrEqual) ty a b)
-  (FCmp.One (rv_fge ty a b)))
+(rule 1 (fcmp_to_float_compare (FloatCC.GreaterThanOrEqual) ty a b)
+  (FloatCompare.One (rv_fge ty a b)))
