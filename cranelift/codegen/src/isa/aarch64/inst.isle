@@ -948,7 +948,8 @@
        ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol in x0.
        (ElfTlsGetAddr
         (symbol ExternalName)
-        (rd WritableReg))
+        (rd WritableReg)
+        (tmp WritableReg))
 
        (MachOTlsGetAddr
         (symbol ExternalName)
@@ -3761,7 +3762,8 @@
 (decl elf_tls_get_addr (ExternalName) Reg)
 (rule (elf_tls_get_addr name)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+            (tmp WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ElfTlsGetAddr name dst tmp))))
         dst))
 
 (decl macho_tls_get_addr (ExternalName) Reg)

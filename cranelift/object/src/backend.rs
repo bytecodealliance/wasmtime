@@ -718,30 +718,55 @@ impl ObjectModule {
                     12,
                 )
             }
-            Reloc::Aarch64TlsGdAdrPage21 => {
+            Reloc::Aarch64TlsDescAdrPage21 => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "Aarch64TlsGdAdrPrel21 is not supported for this file format"
+                    "Aarch64TlsDescAdrPage21 is not supported for this file format"
                 );
                 (
-                    RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADR_PAGE21),
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSDESC_ADR_PAGE21),
                     RelocationEncoding::Generic,
                     21,
                 )
             }
-            Reloc::Aarch64TlsGdAddLo12Nc => {
+            Reloc::Aarch64TlsDescLd64Lo12 => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "Aarch64TlsGdAddLo12Nc is not supported for this file format"
+                    "Aarch64TlsDescLd64Lo12 is not supported for this file format"
                 );
                 (
-                    RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADD_LO12_NC),
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSDESC_LD64_LO12),
                     RelocationEncoding::Generic,
                     12,
                 )
             }
+            Reloc::Aarch64TlsDescAddLo12 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64TlsDescAddLo12 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSDESC_ADD_LO12),
+                    RelocationEncoding::Generic,
+                    12,
+                )
+            }
+            Reloc::Aarch64TlsDescCall => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64TlsDescCall is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSDESC_CALL),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
+
             Reloc::Aarch64AdrGotPage21 => match self.object.format() {
                 object::BinaryFormat::Elf => (
                     RelocationKind::Elf(object::elf::R_AARCH64_ADR_GOT_PAGE),

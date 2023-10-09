@@ -939,11 +939,15 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Bti { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
-        &Inst::ElfTlsGetAddr { rd, .. } => {
+        &Inst::ElfTlsGetAddr { rd, tmp, .. } => {
+            // TLSDESC has a very neat calling convention. It is required to preserve
+            // all registers except x0 and x30. X30 is non allocatable in cranelift since
+            // its the link register.
+            //
+            // Additionally we need a second register as a temporary register for the
+            // TLSDESC sequence. This register can be any register other than x0 (and x30).
             collector.reg_fixed_def(rd, regs::xreg(0));
-            let mut clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
-            clobbers.remove(regs::xreg_preg(0));
-            collector.reg_clobbers(clobbers);
+            collector.reg_early_def(tmp);
         }
         &Inst::MachOTlsGetAddr { rd, .. } => {
             collector.reg_fixed_def(rd, regs::xreg(0));
@@ -2842,9 +2846,14 @@ impl Inst {
             }
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
 
-            &Inst::ElfTlsGetAddr { ref symbol, rd } => {
+            &Inst::ElfTlsGetAddr {
+                ref symbol,
+                rd,
+                tmp,
+            } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                format!("elf_tls_get_addr {}, {}", rd, symbol.display(None))
+                let tmp = pretty_print_reg(tmp.to_reg(), allocs);
+                format!("elf_tls_get_addr {}, {}, {}", rd, tmp, symbol.display(None))
             }
             &Inst::MachOTlsGetAddr { ref symbol, rd } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
