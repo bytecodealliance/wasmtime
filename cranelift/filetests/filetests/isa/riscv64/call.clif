@@ -847,7 +847,7 @@ block0(v0: i16):
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x18
 ;   mv s1, a0
-;   auipc ra, 0 ; reloc_external RiscvCall u0:0 0
+;   auipc ra, 0 ; reloc_external RiscvCallPlt u0:0 0
 ;   jalr ra
 ;   mv a0, s1
 ;   addi sp, sp, 0x10

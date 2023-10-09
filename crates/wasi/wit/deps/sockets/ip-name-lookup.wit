@@ -25,9 +25,9 @@ interface ip-name-lookup {
 	/// to `resolve-next-address` never returns `ok(none)`. This may change in the future.
 	///
 	/// # Typical errors
-	/// - `invalid-name`:                 `name` is a syntactically invalid domain name.
-	/// - `invalid-name`:                 `name` is an IP address.
-	/// - `address-family-not-supported`: The specified `address-family` is not supported. (EAI_FAMILY)
+	/// - `invalid-argument`:     `name` is a syntactically invalid domain name.
+	/// - `invalid-argument`:     `name` is an IP address.
+	/// - `not-supported`:        The specified `address-family` is not supported. (EAI_FAMILY)
 	///
 	/// # References:
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/getaddrinfo.html>

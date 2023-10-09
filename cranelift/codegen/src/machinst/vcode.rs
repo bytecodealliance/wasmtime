@@ -408,35 +408,10 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     pub fn set_vreg_alias(&mut self, from: Reg, to: Reg) {
         let from = from.into();
-        let resolved_to = self.resolve_vreg_alias(to.into());
+        let resolved_to = self.vcode.resolve_vreg_alias(to.into());
         // Disallow cycles (see below).
         assert_ne!(resolved_to, from);
         self.vcode.vreg_aliases.insert(from, resolved_to);
-    }
-
-    pub fn resolve_vreg_alias(&self, from: regalloc2::VReg) -> regalloc2::VReg {
-        Self::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, from)
-    }
-
-    fn resolve_vreg_alias_impl(
-        aliases: &FxHashMap<regalloc2::VReg, regalloc2::VReg>,
-        from: regalloc2::VReg,
-    ) -> regalloc2::VReg {
-        // We prevent cycles from existing by resolving targets of
-        // aliases eagerly before setting them. If the target resolves
-        // to the origin of the alias, then a cycle would be created
-        // and the alias is disallowed. Because of the structure of
-        // SSA code (one instruction can refer to another's defs but
-        // not vice-versa, except indirectly through
-        // phis/blockparams), cycles should not occur as we use
-        // aliases to redirect vregs to the temps that actually define
-        // them.
-
-        let mut vreg = from;
-        while let Some(to) = aliases.get(&vreg) {
-            vreg = *to;
-        }
-        vreg
     }
 
     /// Access the constants.
@@ -520,7 +495,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // Generate debug-value labels based on per-label maps.
         for (label, tuples) in &self.debug_info {
             for &(start, end, vreg) in tuples {
-                let vreg = self.resolve_vreg_alias(vreg);
+                let vreg = self.vcode.resolve_vreg_alias(vreg);
                 let fwd_start = translate(end);
                 let fwd_end = translate(start);
                 self.vcode
@@ -553,7 +528,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
             let allocatable = PRegSet::from(self.vcode.machine_env());
             let mut op_collector =
                 OperandCollector::new(&mut self.vcode.operands, allocatable, |vreg| {
-                    Self::resolve_vreg_alias_impl(vreg_aliases, vreg)
+                    VCode::<I>::resolve_vreg_alias_impl(vreg_aliases, vreg)
                 });
             insn.get_operands(&mut op_collector);
             let (ops, clobbers) = op_collector.finish();
@@ -581,7 +556,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
         // Translate blockparam args via the vreg aliases table as well.
         for arg in &mut self.vcode.branch_block_args {
-            let new_arg = Self::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *arg);
+            let new_arg = VCode::<I>::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *arg);
             trace!("operandcollector: block arg {:?} -> {:?}", arg, new_arg);
             *arg = new_arg;
         }
@@ -606,7 +581,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         // Also note that `reftyped_vregs` can't have duplicates, so after the
         // aliases are applied duplicates are removed.
         for reg in self.vcode.reftyped_vregs.iter_mut() {
-            *reg = Self::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *reg);
+            *reg = VCode::<I>::resolve_vreg_alias_impl(&self.vcode.vreg_aliases, *reg);
         }
         self.vcode.reftyped_vregs.sort();
         self.vcode.reftyped_vregs.dedup();
@@ -1261,6 +1236,34 @@ impl<I: VCodeInst> VCode<I> {
         self.block_order.lowered_order()[block.index()].orig_block()
     }
 
+    pub fn resolve_vreg_alias(&self, from: regalloc2::VReg) -> regalloc2::VReg {
+        Self::resolve_vreg_alias_impl(&self.vreg_aliases, from)
+    }
+
+    /// Implementation of alias resolution. Separate helper that does
+    /// not borrow `self` in order to allow working around borrowing
+    /// restrictions.
+    fn resolve_vreg_alias_impl(
+        aliases: &FxHashMap<regalloc2::VReg, regalloc2::VReg>,
+        from: regalloc2::VReg,
+    ) -> regalloc2::VReg {
+        // We prevent cycles from existing by resolving targets of
+        // aliases eagerly before setting them. If the target resolves
+        // to the origin of the alias, then a cycle would be created
+        // and the alias is disallowed. Because of the structure of
+        // SSA code (one instruction can refer to another's defs but
+        // not vice-versa, except indirectly through
+        // phis/blockparams), cycles should not occur as we use
+        // aliases to redirect vregs to the temps that actually define
+        // them.
+
+        let mut vreg = from;
+        while let Some(to) = aliases.get(&vreg) {
+            vreg = *to;
+        }
+        vreg
+    }
+
     #[inline]
     fn assert_no_vreg_aliases<'a>(&self, list: &'a [VReg]) -> &'a [VReg] {
         for vreg in list {
@@ -1271,7 +1274,7 @@ impl<I: VCodeInst> VCode<I> {
 
     #[inline]
     fn assert_not_vreg_alias(&self, vreg: VReg) -> VReg {
-        debug_assert!(VCodeBuilder::<I>::resolve_vreg_alias_impl(&self.vreg_aliases, vreg) == vreg);
+        debug_assert!(self.resolve_vreg_alias(vreg) == vreg);
         vreg
     }
 
@@ -1286,6 +1289,7 @@ impl<I: VCodeInst> VCode<I> {
 
     /// Get the fact, if any, for a given VReg.
     pub fn vreg_fact(&self, vreg: VReg) -> Option<&Fact> {
+        let vreg = self.resolve_vreg_alias(vreg);
         self.facts[vreg.vreg()].as_ref()
     }
 
@@ -1461,7 +1465,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
                 for operand in self.inst_operands(InsnIndex::new(inst)) {
                     if operand.kind() == OperandKind::Def {
                         if let Some(fact) = &self.facts[operand.vreg().vreg()] {
-                            writeln!(f, "    v{} ! {:?}", operand.vreg().vreg(), fact)?;
+                            writeln!(f, "    v{} ! {}", operand.vreg().vreg(), fact)?;
                         }
                     }
                 }
@@ -1598,7 +1602,16 @@ impl<I: VCodeInst> VRegAllocator<I> {
     ///
     /// Returns the old fact, if any (only one fact can be stored).
     pub fn set_fact(&mut self, vreg: VirtualReg, fact: Fact) -> Option<Fact> {
+        trace!("vreg {:?} has fact: {:?}", vreg, fact);
         self.facts[vreg.index()].replace(fact)
+    }
+
+    /// Take (and remove) a fact about a VReg. Used when setting up
+    /// aliases: we want to move a fact from the alias vreg to the
+    /// aliased vreg, to preserve facts about a value that were stated
+    /// before we lowered its producer.
+    pub fn take_fact(&mut self, vreg: VirtualReg) -> Option<Fact> {
+        self.facts[vreg.index()].take()
     }
 
     /// Allocate a fresh ValueRegs, with a given fact to apply if

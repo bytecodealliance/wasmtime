@@ -2287,15 +2287,6 @@ fn riscv64_worst_case_instruction_size() {
         ty: F64,
     });
 
-    candidates.push(Inst::FloatSelect {
-        op: FloatSelectOP::Max,
-        rd: writable_fa0(),
-        tmp: writable_a0(),
-        rs1: fa0(),
-        rs2: fa0(),
-        ty: F64,
-    });
-
     let mut max: (u32, MInst) = (0, Inst::Nop0);
     for i in candidates {
         let mut buffer = MachBuffer::new();

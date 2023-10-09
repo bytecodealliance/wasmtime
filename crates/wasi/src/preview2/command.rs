@@ -48,6 +48,8 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::bindings::cli::terminal_stderr::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::sockets::tcp::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::sockets::tcp_create_socket::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::sockets::udp::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::sockets::udp_create_socket::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::sockets::instance_network::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::sockets::network::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::sockets::ip_name_lookup::add_to_linker(l, |t| t)?;
@@ -65,6 +67,7 @@ pub mod sync {
            "wasi:filesystem/types": crate::preview2::bindings::sync_io::filesystem::types,
            "wasi:filesystem/preopens": crate::preview2::bindings::filesystem::preopens,
            "wasi:sockets/tcp": crate::preview2::bindings::sockets::tcp,
+           "wasi:sockets/udp": crate::preview2::bindings::sockets::udp,
            "wasi:clocks/monotonic_clock": crate::preview2::bindings::clocks::monotonic_clock,
            "wasi:io/poll": crate::preview2::bindings::sync_io::io::poll,
            "wasi:io/streams": crate::preview2::bindings::sync_io::io::streams,
@@ -107,6 +110,8 @@ pub mod sync {
         crate::preview2::bindings::cli::terminal_stderr::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sockets::tcp::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sockets::tcp_create_socket::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::sockets::udp::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::sockets::udp_create_socket::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sockets::instance_network::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sockets::network::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sockets::ip_name_lookup::add_to_linker(l, |t| t)?;

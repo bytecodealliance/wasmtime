@@ -12,7 +12,7 @@ fn main() {
     assert!(addresses.resolve_next_address().is_ok());
 
     let result = ip_name_lookup::resolve_addresses(&network, "a.b<&>", None, false);
-    assert!(matches!(result, Err(network::ErrorCode::InvalidName)));
+    assert!(matches!(result, Err(network::ErrorCode::InvalidArgument)));
 
     // Try resolving a valid address and ensure that it eventually terminates.
     // To help prevent this test from being flaky this additionally times out

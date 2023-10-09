@@ -76,6 +76,9 @@ pub enum PccError {
     /// An input to an operator that produces a fact-annotated value
     /// does not have a fact describing it, and one is needed.
     MissingFact,
+    /// A derivation of an output fact is unsupported (incorrect or
+    /// not derivable).
+    UnsupportedFact,
     /// A memory access is out of bounds.
     OutOfBounds,
     /// Proof-carrying-code checking is not implemented for a
@@ -310,10 +313,22 @@ impl FactContext {
                 if *bit_width < 64 && max > max_value_for_width(width) {
                     return Some(minimal_fact);
                 }
-                Some(minimal_fact)
+                Some(Fact::ValueMax {
+                    bit_width: *bit_width,
+                    max,
+                })
             }
             _ => None,
         }
+    }
+
+    /// Left-shifts a value with a fact by a known constant.
+    pub fn shl(&self, fact: &Fact, width: u16, amount: u16) -> Option<Fact> {
+        if amount >= 32 {
+            return None;
+        }
+        let factor: u32 = 1 << amount;
+        self.scale(fact, width, factor)
     }
 
     /// Offsets a value with a fact by a known amount.

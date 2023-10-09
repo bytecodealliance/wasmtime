@@ -368,7 +368,6 @@ impl Inst {
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
             | Inst::FloatRound { .. }
-            | Inst::FloatSelect { .. }
             | Inst::Popcnt { .. }
             | Inst::Rev8 { .. }
             | Inst::Cltz { .. }
@@ -1324,55 +1323,16 @@ impl Inst {
                 }
             }
             &Inst::Call { ref info } => {
-                // call
-                match info.dest {
-                    ExternalName::User { .. } => {
-                        if info.opcode.is_call() {
-                            sink.add_call_site(info.opcode);
-                        }
-                        sink.add_reloc(Reloc::RiscvCall, &info.dest, 0);
-                        if let Some(s) = state.take_stack_map() {
-                            sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
-                        }
-                        Inst::construct_auipc_and_jalr(
-                            Some(writable_link_reg()),
-                            writable_link_reg(),
-                            0,
-                        )
-                        .into_iter()
-                        .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
-                    }
-                    ExternalName::LibCall(..)
-                    | ExternalName::TestCase { .. }
-                    | ExternalName::KnownSymbol(..) => {
-                        // use indirect call. it is more simple.
-                        // load ext name.
-                        Inst::LoadExtName {
-                            rd: writable_spilltmp_reg2(),
-                            name: Box::new(info.dest.clone()),
-                            offset: 0,
-                        }
-                        .emit(&[], sink, emit_info, state);
-
-                        // call
-                        Inst::CallInd {
-                            info: Box::new(CallIndInfo {
-                                rn: spilltmp_reg2(),
-                                // This doesen't really matter but we might as well send
-                                // the correct info.
-                                uses: info.uses.clone(),
-                                defs: info.defs.clone(),
-                                clobbers: info.clobbers,
-                                opcode: Opcode::CallIndirect,
-                                caller_callconv: info.caller_callconv,
-                                callee_callconv: info.callee_callconv,
-                                // Send this as 0 to avoid updating the pop size twice.
-                                callee_pop_size: 0,
-                            }),
-                        }
-                        .emit(&[], sink, emit_info, state);
-                    }
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.opcode);
                 }
+                sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
+                }
+                Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
+                    .into_iter()
+                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 let callee_pop_size = i64::from(info.callee_pop_size);
                 state.virtual_sp_offset -= callee_pop_size;
@@ -1420,7 +1380,7 @@ impl Inst {
                 );
 
                 sink.add_call_site(ir::Opcode::ReturnCall);
-                sink.add_reloc(Reloc::RiscvCall, &**callee, 0);
+                sink.add_reloc(Reloc::RiscvCallPlt, &**callee, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
@@ -2310,26 +2270,71 @@ impl Inst {
                 ref name,
                 offset,
             } => {
-                let label_data = sink.get_label();
-                let label_end = sink.get_label();
+                if emit_info.shared_flag.is_pic() {
+                    // Load a PC-relative address into a register.
+                    // RISC-V does this slightly differently from other arches. We emit a relocation
+                    // with a label, instead of the symbol itself.
+                    //
+                    // See: https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+                    //
+                    // Emit the following code:
+                    // label:
+                    //   auipc rd, 0              # R_RISCV_GOT_HI20 (symbol_name)
+                    //   ld    rd, rd, 0          # R_RISCV_PCREL_LO12_I (label)
 
-                // Load the value from a label
-                Inst::Load {
-                    rd,
-                    op: LoadOP::Ld,
-                    flags: MemFlags::trusted(),
-                    from: AMode::Label(label_data),
+                    // Create the lable that is going to be published to the final binary object.
+                    let auipc_label = sink.get_label();
+                    sink.bind_label(auipc_label, &mut state.ctrl_plane);
+
+                    // Get the current PC.
+                    sink.add_reloc(Reloc::RiscvGotHi20, &**name, 0);
+                    Inst::Auipc {
+                        rd: rd,
+                        imm: Imm20::from_i32(0),
+                    }
+                    .emit_uncompressed(sink, emit_info, state, start_off);
+
+                    // The `ld` here, points to the `auipc` label instead of directly to the symbol.
+                    sink.add_reloc(Reloc::RiscvPCRelLo12I, &auipc_label, 0);
+                    Inst::Load {
+                        rd,
+                        op: LoadOP::Ld,
+                        flags: MemFlags::trusted(),
+                        from: AMode::RegOffset(rd.to_reg(), 0, I64),
+                    }
+                    .emit_uncompressed(sink, emit_info, state, start_off);
+                } else {
+                    // In the non PIC sequence we relocate the absolute address into
+                    // a prealocatted space, load it into a register and jump over it.
+                    //
+                    // Emit the following code:
+                    //   ld rd, label_data
+                    //   j label_end
+                    // label_data:
+                    //   <8 byte space>           # ABS8
+                    // label_end:
+
+                    let label_data = sink.get_label();
+                    let label_end = sink.get_label();
+
+                    // Load the value from a label
+                    Inst::Load {
+                        rd,
+                        op: LoadOP::Ld,
+                        flags: MemFlags::trusted(),
+                        from: AMode::Label(label_data),
+                    }
+                    .emit(&[], sink, emit_info, state);
+
+                    // Jump over the data
+                    Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
+
+                    sink.bind_label(label_data, &mut state.ctrl_plane);
+                    sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
+                    sink.put8(0);
+
+                    sink.bind_label(label_end, &mut state.ctrl_plane);
                 }
-                .emit(&[], sink, emit_info, state);
-
-                // Jump over the data
-                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
-
-                sink.bind_label(label_data, &mut state.ctrl_plane);
-                sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
-                sink.put8(0);
-
-                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
 
             &Inst::ElfTlsGetAddr { rd, ref name } => {
@@ -2587,126 +2592,6 @@ impl Inst {
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
 
-            &Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => {
-                let label_nan = sink.get_label();
-                let label_jump_over = sink.get_label();
-                // check if rs1 is nan.
-                Inst::emit_not_nan(tmp, rs1, ty).emit(&[], sink, emit_info, state);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_nan),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // check if rs2 is nan.
-                Inst::emit_not_nan(tmp, rs2, ty).emit(&[], sink, emit_info, state);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_nan),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs1: tmp.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                // here rs1 and rs2 is not nan.
-                Inst::FpuRRR {
-                    alu_op: op.to_fpuoprrr(ty),
-                    frm: None,
-                    rd: rd,
-                    rs1: rs1,
-                    rs2: rs2,
-                }
-                .emit(&[], sink, emit_info, state);
-                // special handle for +0 or -0.
-                {
-                    // check is rs1 and rs2 all equal to zero.
-                    let label_done = sink.get_label();
-                    {
-                        // if rs1 == 0
-                        let mut insts = Inst::emit_if_float_not_zero(
-                            tmp,
-                            rs1,
-                            ty,
-                            CondBrTarget::Label(label_done),
-                            CondBrTarget::Fallthrough,
-                        );
-                        insts.extend(Inst::emit_if_float_not_zero(
-                            tmp,
-                            rs2,
-                            ty,
-                            CondBrTarget::Label(label_done),
-                            CondBrTarget::Fallthrough,
-                        ));
-                        insts
-                            .iter()
-                            .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    }
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_f_to_x_op(ty),
-                        frm: None,
-                        rd: tmp,
-                        rs: rs1,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_f_to_x_op(ty),
-                        frm: None,
-                        rd: writable_spilltmp_reg(),
-                        rs: rs2,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::AluRRR {
-                        alu_op: if op == FloatSelectOP::Max {
-                            AluOPRRR::And
-                        } else {
-                            AluOPRRR::Or
-                        },
-                        rd: tmp,
-                        rs1: tmp.to_reg(),
-                        rs2: spilltmp_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    // move back to rd.
-                    Inst::FpuRR {
-                        alu_op: FpuOPRR::move_x_to_f_op(ty),
-                        frm: None,
-                        rd,
-                        rs: tmp.to_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    //
-                    sink.bind_label(label_done, &mut state.ctrl_plane);
-                }
-                // we have the reuslt,jump over.
-                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
-                // here is nan.
-                sink.bind_label(label_nan, &mut state.ctrl_plane);
-                op.snan_bits(tmp, ty)
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // move to rd.
-                Inst::FpuRR {
-                    alu_op: FpuOPRR::move_x_to_f_op(ty),
-                    frm: None,
-                    rd,
-                    rs: tmp.to_reg(),
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
             &Inst::Popcnt {
                 sum,
                 tmp,
@@ -3705,22 +3590,6 @@ impl Inst {
                 rs: allocs.next(rs),
                 int_tmp: allocs.next_writable(int_tmp),
                 f_tmp: allocs.next_writable(f_tmp),
-                rd: allocs.next_writable(rd),
-            },
-
-            Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => Inst::FloatSelect {
-                op,
-                ty,
-                rs1: allocs.next(rs1),
-                rs2: allocs.next(rs2),
-                tmp: allocs.next_writable(tmp),
                 rd: allocs.next_writable(rd),
             },
 

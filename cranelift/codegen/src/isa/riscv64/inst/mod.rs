@@ -55,7 +55,7 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 
 pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRRI, AluOPRRR, AtomicOP, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FloatRoundOP,
-    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
+    FpuOPRR, FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
 
@@ -609,13 +609,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(f_tmp);
             collector.reg_early_def(rd);
         }
-        &Inst::FloatSelect {
-            rd, tmp, rs1, rs2, ..
-        } => {
-            collector.reg_uses(&[rs1, rs2]);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(rd);
-        }
         &Inst::Popcnt {
             sum, step, rs, tmp, ..
         } => {
@@ -1110,29 +1103,6 @@ impl Inst {
                     rs,
                     int_tmp,
                     f_tmp,
-                    ty
-                )
-            }
-            &Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "f{}.{} {},{},{}##tmp={} ty={}",
-                    op.op_name(),
-                    if ty == F32 { "s" } else { "d" },
-                    rd,
-                    rs1,
-                    rs2,
-                    tmp,
                     ty
                 )
             }
@@ -2021,7 +1991,7 @@ impl MachInstLabelUse for LabelUse {
 
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
         match (reloc, addend) {
-            (Reloc::RiscvCall, _) => Some(Self::PCRel32),
+            (Reloc::RiscvCallPlt, _) => Some(Self::PCRel32),
             _ => None,
         }
     }

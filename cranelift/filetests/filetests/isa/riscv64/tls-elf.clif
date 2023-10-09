@@ -41,12 +41,8 @@ block0(v0: i32):
 ;   mv s1, a0
 ;   auipc a0, 0 ; reloc_external RiscvTlsGdHi20 u1:0 0
 ;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+28 0
-;   auipc t5, 0
-;   ld t5, 0xc(t5)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %ElfTlsGetAddr 0
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr t5
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %ElfTlsGetAddr 0
+;   jalr ra
 ;   mv a1, a0
 ;   mv a0, s1
 ;   addi sp, sp, 0x10
@@ -55,8 +51,6 @@ block0(v0: i32):
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-
-
 
 function u0:1(i64) -> i64 system_v {
 gv0 = symbol colocated tls u1:0
@@ -93,12 +87,8 @@ block0(v0: i64):
 ; block1: ; offset 0x10
 ;   auipc a0, 0 ; reloc_external RiscvTlsGdHi20 u1:0 0
 ;   mv a0, a0 ; reloc_external RiscvPCRelLo12I func+16 0
-;   auipc t5, 0
-;   ld t5, 0xc(t5)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %ElfTlsGetAddr 0
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr t5
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %ElfTlsGetAddr 0
+;   jalr ra
 ;   mv a4, zero
 ;   sb a4, 0(a0)
 ;   mv a0, zero
