@@ -241,13 +241,6 @@
       (addr Reg)
       (v Reg)
       (ty Type))
-    ;; an integer compare.
-    (Icmp
-      (cc IntCC)
-      (rd WritableReg)
-      (a ValueRegs)
-      (b ValueRegs)
-      (ty Type))
     (FcvtToInt
       (is_sat bool)
       (rd WritableReg)
@@ -1191,6 +1184,12 @@
 (rule (rv_andi rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Andi) rs1 imm))
 
+;; Helper for emitting the `slt` ("Set Less Than") instruction.
+;; rd ← rs1 < rs2
+(decl rv_slt (XReg XReg) XReg)
+(rule (rv_slt rs1 rs2)
+  (alu_rrr (AluOPRRR.Slt) rs1 rs2))
+
 ;; Helper for emitting the `sltu` ("Set Less Than Unsigned") instruction.
 ;; rd ← rs1 < rs2
 (decl rv_sltu (XReg XReg) XReg)
@@ -1202,6 +1201,12 @@
 (decl rv_snez (XReg) XReg)
 (rule (rv_snez rs1)
   (rv_sltu (zero_reg) rs1))
+
+;; Helper for emiting the `slti` ("Set Less Than Immediate") instruction.
+;; rd ← rs1 < imm
+(decl rv_slti (XReg Imm12) XReg)
+(rule (rv_slti rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Slti) rs1 imm))
 
 ;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
 ;; rd ← rs1 < imm
@@ -2760,32 +2765,36 @@
 (rule 1 (is_nonzero_cmp val @ (value_type $I128))
   (cmp_nez (rv_or (value_regs_get val 0) (value_regs_get val 1))))
 
-;; If the input value is itself an `icmp` we can avoid generating the result of
-;; the `icmp` and instead move the comparison directly into the `IntegerCompare`
-;; that's returned. Note that comparisons compare full registers so
-;; sign-extension according to the integer comparison performed here is
-;; required.
+;; If the input value is itself an `icmp` or `fcmp` we can avoid generating the
+;; result of the comparison and instead move the comparison directly into the
+;; `IntegerCompare` that's returned.
+(rule 2 (is_nonzero_cmp (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 _)))))
+  (icmp_to_int_compare cc a b))
+(rule 2 (is_nonzero_cmp (maybe_uextend (fcmp cc a @ (value_type ty) b)))
+  (fcmp_to_float_compare cc ty a b))
+
+;; Creates an `IntegerCompare` from an `icmp` node's parts. This will extend
+;; values as necessary to their full register width to perform the
+;; comparison. The returned `IntegerCompare` is suitable to use in conditional
+;; branches for example.
 ;;
 ;; Also note that as a small optimization `Equal` and `NotEqual` use
 ;; sign-extension for 32-bit values since the same result is produced with
 ;; either zero-or-sign extension and many values are already sign-extended given
 ;; the RV64 instruction set (e.g. `addw` adds 32-bit values and sign extends),
 ;; theoretically resulting in more efficient codegen.
-(rule 2 (is_nonzero_cmp (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 in_ty)))))
+(decl icmp_to_int_compare (IntCC Value Value) IntegerCompare)
+(rule 0 (icmp_to_int_compare cc a b @ (value_type (fits_in_64 in_ty)))
   (int_compare cc (zext a) (zext b)))
-(rule 3 (is_nonzero_cmp (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 in_ty)))))
+(rule 1 (icmp_to_int_compare cc a b @ (value_type (fits_in_64 in_ty)))
   (if (signed_cond_code cc))
   (int_compare cc (sext a) (sext b)))
-(rule 4 (is_nonzero_cmp (maybe_uextend (icmp cc @ (IntCC.Equal) a b @ (value_type $I32))))
+(rule 2 (icmp_to_int_compare cc @ (IntCC.Equal) a b @ (value_type (ty_int_ref_16_to_64 in_ty)))
   (int_compare cc (sext a) (sext b)))
-(rule 4 (is_nonzero_cmp (maybe_uextend (icmp cc @ (IntCC.NotEqual) a b @ (value_type $I32))))
+(rule 2 (icmp_to_int_compare cc @ (IntCC.NotEqual) a b @ (value_type (ty_int_ref_16_to_64 in_ty)))
   (int_compare cc (sext a) (sext b)))
-
-;; If the input is an `fcmp` then the `FloatCompare` return value is directly
-;; convertible to `IntegerCompare` which can shave off an instruction from the
-;; fallback lowering above.
-(rule 2 (is_nonzero_cmp (maybe_uextend (fcmp cc a @ (value_type ty) b)))
-  (fcmp_to_float_compare cc ty a b))
+(rule 3 (icmp_to_int_compare cc a b @ (value_type $I128))
+  (cmp_nez (lower_icmp_i128 cc a b)))
 
 (decl partial lower_branch (Inst MachLabelSlice) Unit)
 (rule (lower_branch (jump _) (single_target label))

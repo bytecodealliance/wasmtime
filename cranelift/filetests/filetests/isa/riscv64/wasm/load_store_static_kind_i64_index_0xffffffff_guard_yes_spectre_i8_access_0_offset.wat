@@ -41,7 +41,7 @@
 ;; block0:
 ;;   lui a3,65536
 ;;   addi a3,a3,-1
-;;   ugt a3,a0,a3##ty=i64
+;;   sltu a3,a3,a0
 ;;   ld a2,0(a2)
 ;;   add a2,a2,a0
 ;;   li a4,0
@@ -59,7 +59,7 @@
 ;; block0:
 ;;   lui a2,65536
 ;;   addi a3,a2,-1
-;;   ugt a3,a0,a3##ty=i64
+;;   sltu a3,a3,a0
 ;;   ld a2,0(a1)
 ;;   add a2,a2,a0
 ;;   li a4,0

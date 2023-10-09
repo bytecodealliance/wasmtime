@@ -217,104 +217,6 @@ impl Inst {
         insts
     }
 
-    pub(crate) fn lower_br_icmp(
-        cc: IntCC,
-        a: ValueRegs<Reg>,
-        b: ValueRegs<Reg>,
-        taken: CondBrTarget,
-        not_taken: CondBrTarget,
-        ty: Type,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        if ty.bits() <= 64 {
-            let rs1 = a.only_reg().unwrap();
-            let rs2 = b.only_reg().unwrap();
-            let inst = Inst::CondBr {
-                taken,
-                not_taken,
-                kind: IntegerCompare { kind: cc, rs1, rs2 },
-            };
-            insts.push(inst);
-            return insts;
-        }
-        // compare i128
-        let low = |cc: IntCC| -> IntegerCompare {
-            IntegerCompare {
-                rs1: a.regs()[0],
-                rs2: b.regs()[0],
-                kind: cc,
-            }
-        };
-        let high = |cc: IntCC| -> IntegerCompare {
-            IntegerCompare {
-                rs1: a.regs()[1],
-                rs2: b.regs()[1],
-                kind: cc,
-            }
-        };
-        match cc {
-            IntCC::Equal => {
-                // if high part not equal,
-                // then we can go to not_taken otherwise fallthrough.
-                insts.push(Inst::CondBr {
-                    taken: not_taken,
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: high(IntCC::NotEqual),
-                });
-                // the rest part.
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken,
-                    kind: low(IntCC::Equal),
-                });
-            }
-
-            IntCC::NotEqual => {
-                // if the high part not equal ,
-                // we know the whole must be not equal,
-                // we can goto the taken part , otherwise fallthrought.
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken: CondBrTarget::Fallthrough, //  no branch
-                    kind: high(IntCC::NotEqual),
-                });
-
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken,
-                    kind: low(IntCC::NotEqual),
-                });
-            }
-            IntCC::SignedGreaterThanOrEqual
-            | IntCC::SignedLessThanOrEqual
-            | IntCC::UnsignedGreaterThanOrEqual
-            | IntCC::UnsignedLessThanOrEqual
-            | IntCC::SignedGreaterThan
-            | IntCC::SignedLessThan
-            | IntCC::UnsignedLessThan
-            | IntCC::UnsignedGreaterThan => {
-                //
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: high(cc.without_equal()),
-                });
-                //
-                insts.push(Inst::CondBr {
-                    taken: not_taken,
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: high(IntCC::NotEqual),
-                });
-                insts.push(Inst::CondBr {
-                    taken,
-                    not_taken,
-                    kind: low(cc.unsigned()),
-                });
-            }
-        }
-        insts
-    }
-
     /// Returns Some(VState) if this insturction is expecting a specific vector state
     /// before emission.
     fn expected_vstate(&self) -> Option<&VState> {
@@ -358,7 +260,6 @@ impl Inst {
             | Inst::Atomic { .. }
             | Inst::Select { .. }
             | Inst::AtomicCas { .. }
-            | Inst::Icmp { .. }
             | Inst::FcvtToInt { .. }
             | Inst::RawData { .. }
             | Inst::AtomicStore { .. }
@@ -1776,29 +1677,6 @@ impl Inst {
             &Inst::EBreak => {
                 sink.put4(0x00100073);
             }
-            &Inst::Icmp { cc, rd, a, b, ty } => {
-                let label_true = sink.get_label();
-                let label_false = sink.get_label();
-                let label_end = sink.get_label();
-
-                Inst::lower_br_icmp(
-                    cc,
-                    a,
-                    b,
-                    CondBrTarget::Label(label_true),
-                    CondBrTarget::Label(label_false),
-                    ty,
-                )
-                .into_iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                sink.bind_label(label_true, &mut state.ctrl_plane);
-                Inst::load_imm12(rd, Imm12::ONE).emit(&[], sink, emit_info, state);
-                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_false, &mut state.ctrl_plane);
-                Inst::load_imm12(rd, Imm12::ZERO).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_end, &mut state.ctrl_plane);
-            }
             &Inst::AtomicCas {
                 offset,
                 t0,
@@ -2008,22 +1886,23 @@ impl Inst {
                         }
                         .iter()
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
-                        Inst::lower_br_icmp(
-                            match op {
-                                crate::ir::AtomicRmwOp::Umin => IntCC::UnsignedLessThan,
-                                crate::ir::AtomicRmwOp::Umax => IntCC::UnsignedGreaterThan,
-                                crate::ir::AtomicRmwOp::Smin => IntCC::SignedLessThan,
-                                crate::ir::AtomicRmwOp::Smax => IntCC::SignedGreaterThan,
-                                _ => unreachable!(),
+
+                        Inst::CondBr {
+                            taken: CondBrTarget::Label(label_select_dst),
+                            not_taken: CondBrTarget::Fallthrough,
+                            kind: IntegerCompare {
+                                kind: match op {
+                                    crate::ir::AtomicRmwOp::Umin => IntCC::UnsignedLessThan,
+                                    crate::ir::AtomicRmwOp::Umax => IntCC::UnsignedGreaterThan,
+                                    crate::ir::AtomicRmwOp::Smin => IntCC::SignedLessThan,
+                                    crate::ir::AtomicRmwOp::Smax => IntCC::SignedGreaterThan,
+                                    _ => unreachable!(),
+                                },
+                                rs1: dst.to_reg(),
+                                rs2: x,
                             },
-                            ValueRegs::one(dst.to_reg()),
-                            ValueRegs::one(x),
-                            CondBrTarget::Label(label_select_dst),
-                            CondBrTarget::Fallthrough,
-                            ty,
-                        )
-                        .iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        }
+                        .emit(&[], sink, emit_info, state);
                         // here we select x.
                         Inst::gen_move(t0, x, I64).emit(&[], sink, emit_info, state);
                         Inst::gen_jump(label_select_done).emit(&[], sink, emit_info, state);
@@ -3470,20 +3349,6 @@ impl Inst {
             }
 
             Inst::EBreak => self,
-
-            Inst::Icmp {
-                cc,
-                rd,
-                ref a,
-                ref b,
-                ty,
-            } => Inst::Icmp {
-                cc,
-                a: alloc_value_regs(a, allocs),
-                b: alloc_value_regs(b, allocs),
-                rd: allocs.next_writable(rd),
-                ty,
-            },
 
             Inst::AtomicCas {
                 offset,

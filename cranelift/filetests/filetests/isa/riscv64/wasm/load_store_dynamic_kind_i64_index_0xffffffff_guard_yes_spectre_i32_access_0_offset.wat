@@ -42,7 +42,7 @@
 ;; function u0:0:
 ;; block0:
 ;;   ld a3,8(a2)
-;;   ugt a3,a0,a3##ty=i64
+;;   sltu a3,a3,a0
 ;;   ld a2,0(a2)
 ;;   add a2,a2,a0
 ;;   li a4,0
@@ -59,7 +59,7 @@
 ;; function u0:1:
 ;; block0:
 ;;   ld a2,8(a1)
-;;   ugt a2,a0,a2##ty=i64
+;;   sltu a2,a2,a0
 ;;   ld a1,0(a1)
 ;;   add a1,a1,a0
 ;;   li a3,0

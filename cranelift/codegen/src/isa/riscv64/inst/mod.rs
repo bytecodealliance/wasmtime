@@ -557,12 +557,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(dst);
         }
 
-        &Inst::Icmp { rd, a, b, .. } => {
-            collector.reg_uses(a.regs());
-            collector.reg_uses(b.regs());
-            collector.reg_def(rd);
-        }
-
         &Inst::FcvtToInt { rd, rs, tmp, .. } => {
             collector.reg_use(rs);
             collector.reg_early_def(tmp);
@@ -1265,12 +1259,6 @@ impl Inst {
                     "atomic_cas.{} {},{},{},({})##t0={} offset={}",
                     ty, dst, e, v, addr, t0, offset,
                 )
-            }
-            &Inst::Icmp { cc, rd, a, b, ty } => {
-                let a = format_regs(a.regs(), allocs);
-                let b = format_regs(b.regs(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{},{}##ty={}", cc.to_static_str(), rd, a, b, ty)
             }
             &Inst::BrTable {
                 index,
