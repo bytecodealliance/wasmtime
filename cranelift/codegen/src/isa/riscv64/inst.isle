@@ -2902,12 +2902,22 @@
 
 ;; Generates either 0 if `Value` is zero or -1 otherwise.
 (decl gen_bmask (Value) XReg)
+
+;; Base cases: use `snez` after a sign extension to ensure that the entire
+;; register is defined. For i128 we test both the upper and lower half.
 (rule 0 (gen_bmask val @ (value_type (fits_in_64 _)))
   (let ((non_zero XReg (rv_snez (sext val))))
     (rv_neg non_zero)))
 (rule 1 (gen_bmask val @ (value_type $I128))
   (let ((non_zero XReg (rv_snez (rv_or (value_regs_get val 0) (value_regs_get val 1)))))
     (rv_neg non_zero)))
+
+;; If the input value is an `icmp` or an `fcmp` directly then the `snez` can
+;; be omitted because the result of the icmp or fcmp is a 0 or 1 directly. This
+;; means we can go straight to the `neg` instruction to produce the final
+;; result.
+(rule 2 (gen_bmask val @ (maybe_uextend (icmp _ _ _))) (rv_neg val))
+(rule 2 (gen_bmask val @ (maybe_uextend (fcmp _ _ _))) (rv_neg val))
 
 (decl lower_bmask (Value Type) ValueRegs)
 (rule 0 (lower_bmask val (fits_in_64 _))

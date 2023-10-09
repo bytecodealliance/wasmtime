@@ -46,13 +46,12 @@
 ;;   ld a2,0(a2)
 ;;   add a2,a2,a0
 ;;   li a4,0
-;;   sltu a3,zero,a3
-;;   sub a5,zero,a3
-;;   and a3,a4,a5
-;;   not a4,a5
-;;   and a5,a2,a4
-;;   or a2,a3,a5
-;;   sw a1,0(a2)
+;;   sub a3,zero,a3
+;;   and a5,a4,a3
+;;   not a3,a3
+;;   and a3,a2,a3
+;;   or a5,a5,a3
+;;   sw a1,0(a5)
 ;;   j label1
 ;; block1:
 ;;   ret
@@ -60,17 +59,16 @@
 ;; function u0:1:
 ;; block0:
 ;;   ld a2,8(a1)
-;;   ugt a3,a0,a2##ty=i64
-;;   ld a2,0(a1)
-;;   add a2,a2,a0
-;;   li a4,0
-;;   sltu a3,zero,a3
-;;   sub a5,zero,a3
-;;   and a1,a4,a5
-;;   not a3,a5
-;;   and a5,a2,a3
-;;   or a1,a1,a5
-;;   lw a0,0(a1)
+;;   ugt a2,a0,a2##ty=i64
+;;   ld a1,0(a1)
+;;   add a1,a1,a0
+;;   li a3,0
+;;   sub a4,zero,a2
+;;   and a5,a3,a4
+;;   not a2,a4
+;;   and a3,a1,a2
+;;   or a5,a5,a3
+;;   lw a0,0(a5)
 ;;   j label1
 ;; block1:
 ;;   ret
