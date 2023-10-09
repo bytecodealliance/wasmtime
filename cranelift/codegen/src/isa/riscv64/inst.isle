@@ -2774,23 +2774,45 @@
 ;; comparison. The returned `IntegerCompare` is suitable to use in conditional
 ;; branches for example.
 ;;
-;; Also note that as a small optimization `Equal` and `NotEqual` use
-;; sign-extension for 32-bit values since the same result is produced with
-;; either zero-or-sign extension and many values are already sign-extended given
-;; the RV64 instruction set (e.g. `addw` adds 32-bit values and sign extends),
-;; theoretically resulting in more efficient codegen.
+;; Note that this should ideally only be used when the `IntegerCompare` returned
+;; is fed into a branch. If `IntegerCompare` is materialized this will miss out
+;; on optimizations to compare against constants using some native instructions.
 (decl icmp_to_int_compare (IntCC Value Value) IntegerCompare)
 (rule 0 (icmp_to_int_compare cc a b @ (value_type (fits_in_64 in_ty)))
-  (int_compare cc (zext a) (zext b)))
-(rule 1 (icmp_to_int_compare cc a b @ (value_type (fits_in_64 in_ty)))
-  (if (signed_cond_code cc))
-  (int_compare cc (sext a) (sext b)))
-(rule 2 (icmp_to_int_compare cc @ (IntCC.Equal) a b @ (value_type (ty_int_ref_16_to_64 in_ty)))
-  (int_compare cc (sext a) (sext b)))
-(rule 2 (icmp_to_int_compare cc @ (IntCC.NotEqual) a b @ (value_type (ty_int_ref_16_to_64 in_ty)))
-  (int_compare cc (sext a) (sext b)))
-(rule 3 (icmp_to_int_compare cc a b @ (value_type $I128))
+  (int_compare cc (put_value_in_reg_for_icmp cc a) (put_value_in_reg_for_icmp cc b)))
+(rule 1 (icmp_to_int_compare cc a b @ (value_type $I128))
   (cmp_nez (lower_icmp_i128 cc a b)))
+
+;; Places a `Value` into a full register width to prepare for a comparison
+;; using `IntCC`.
+;;
+;; This is largely a glorified means of choosing sign-extension or
+;; zero-extension for the `Value` input.
+(decl put_value_in_reg_for_icmp (IntCC Value) XReg)
+
+;; Base cases, use the `cc` to determine whether to zero or sign extend.
+(rule 0 (put_value_in_reg_for_icmp cc val)
+  (zext val))
+(rule 1 (put_value_in_reg_for_icmp cc val)
+  (if (signed_cond_code cc))
+  (sext val))
+
+;; For equality and inequality favor sign extension since it's generally
+;; easier to perform sign extension on RV64 via native instructions. For 8-bit
+;; types though use zero-extension since that's a single instruction `and`.
+(rule 2 (put_value_in_reg_for_icmp (IntCC.Equal) val @ (value_type (fits_in_64 _)))
+  (sext val))
+(rule 2 (put_value_in_reg_for_icmp (IntCC.NotEqual) val @ (value_type (fits_in_64 _)))
+  (sext val))
+(rule 3 (put_value_in_reg_for_icmp (IntCC.Equal) val @ (value_type $I8))
+  (zext val))
+(rule 3 (put_value_in_reg_for_icmp (IntCC.NotEqual) val @ (value_type $I8))
+  (zext val))
+
+;; As a special case use `x0` directly if a constant is 0.
+(rule 4 (put_value_in_reg_for_icmp _ (i64_from_iconst 0))
+  (zero_reg))
+
 
 (decl partial lower_branch (Inst MachLabelSlice) Unit)
 (rule (lower_branch (jump _) (single_target label))
@@ -2951,8 +2973,9 @@
 (extern constructor sp_reg sp_reg)
 
 ;; Helper for creating the zero register.
-(decl zero_reg () Reg)
+(decl zero_reg () XReg)
 (extern constructor zero_reg zero_reg)
+(extern extractor zero_reg is_zero_reg)
 
 (decl value_regs_zero () ValueRegs)
 (rule (value_regs_zero)

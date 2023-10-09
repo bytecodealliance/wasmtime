@@ -1835,11 +1835,19 @@
 (decl lower_int_compare (IntegerCompare) XReg)
 
 ;; x == y => x ^ y == 0
-(rule (lower_int_compare (int_compare_decompose (IntCC.Equal) x y))
+(rule 0 (lower_int_compare (int_compare_decompose (IntCC.Equal) x y))
   (rv_seqz (rv_xor x y)))
+(rule 1 (lower_int_compare (int_compare_decompose (IntCC.Equal) x (zero_reg)))
+  (rv_seqz x))
+(rule 2 (lower_int_compare (int_compare_decompose (IntCC.Equal) (zero_reg) y))
+  (rv_seqz y))
 ;; x != y => x ^ y != 0
-(rule (lower_int_compare (int_compare_decompose (IntCC.NotEqual) x y))
+(rule 0 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) x y))
   (rv_snez (rv_xor x y)))
+(rule 1 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) x (zero_reg)))
+  (rv_snez x))
+(rule 2 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) (zero_reg) x))
+  (rv_snez x))
 ;; x < y => x < y
 (rule (lower_int_compare (int_compare_decompose (IntCC.SignedLessThan) x y))
   (rv_slt x y))

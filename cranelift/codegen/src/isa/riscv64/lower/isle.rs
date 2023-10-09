@@ -284,8 +284,15 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         writable_zero_reg()
     }
     #[inline]
-    fn zero_reg(&mut self) -> Reg {
-        zero_reg()
+    fn zero_reg(&mut self) -> XReg {
+        XReg::new(zero_reg()).unwrap()
+    }
+    fn is_zero_reg(&mut self, reg: XReg) -> Option<()> {
+        if reg == self.zero_reg() {
+            Some(())
+        } else {
+            None
+        }
     }
     #[inline]
     fn imm_from_bits(&mut self, val: u64) -> Imm12 {
