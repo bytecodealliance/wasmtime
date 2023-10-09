@@ -2704,6 +2704,9 @@
 (rule (and_vec x y size) (vec_rrr (VecALUOp.And) x y size))
 
 ;; Helpers for generating `eor` instructions.
+(decl eor (Type Reg Reg) Reg)
+(rule (eor ty x y) (alu_rrr (ALUOp.Eor) ty x y))
+
 (decl eor_vec (Reg Reg VectorSize) Reg)
 (rule (eor_vec x y size) (vec_rrr (VecALUOp.Eor) x y size))
 
