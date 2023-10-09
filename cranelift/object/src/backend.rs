@@ -3,7 +3,6 @@
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
-use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::{self, ir, FinalizedMachReloc};
 use cranelift_control::ControlPlane;
@@ -132,7 +131,7 @@ pub struct ObjectModule {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
-    known_labels: HashMap<(UserFuncName, CodeOffset), SymbolId>,
+    known_labels: HashMap<(FuncId, CodeOffset), SymbolId>,
     per_function_section: bool,
 }
 
@@ -372,7 +371,9 @@ impl Module for ObjectModule {
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func)))
+                .map(|record| {
+                    self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func, func_id))
+                })
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
@@ -594,15 +595,10 @@ impl ObjectModule {
                 }
             }
 
-            ModuleRelocTarget::FunctionOffset(ref fname, offset) => {
-                match self.known_labels.entry((fname.clone(), offset)) {
+            ModuleRelocTarget::FunctionOffset(func_id, offset) => {
+                match self.known_labels.entry((func_id, offset)) {
                     Entry::Occupied(o) => *o.get(),
                     Entry::Vacant(v) => {
-                        let func_user_name = fname.get_user().unwrap();
-                        let func_id = FuncId::from_name(&ModuleRelocTarget::user(
-                            func_user_name.namespace,
-                            func_user_name.index,
-                        ));
                         let func_symbol_id = self.functions[func_id].unwrap().0;
                         let func_symbol = self.object.symbol(func_symbol_id);
 
