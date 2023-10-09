@@ -1991,7 +1991,7 @@ impl MachInstLabelUse for LabelUse {
 
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
         match (reloc, addend) {
-            (Reloc::RiscvCall, _) => Some(Self::PCRel32),
+            (Reloc::RiscvCallPlt, _) => Some(Self::PCRel32),
             _ => None,
         }
     }
