@@ -473,7 +473,7 @@ impl Wasmtime {
                         format!(
                             "exports::{}::{}::{snake}::{camel}",
                             pkgname.namespace.to_snake_case(),
-                            pkgname.name.to_snake_case(),
+                            self.name_package_module(resolve, iface.package.unwrap()),
                         ),
                         format!(
                             "{}_{}_{snake}",
