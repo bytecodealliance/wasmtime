@@ -23,7 +23,7 @@ fn build_and_generate_tests() {
     println!("cargo:rerun-if-changed=../src");
 
     // Build the test programs:
-    let mut cmd = Command::new("cargo");
+    let mut cmd = cargo();
     cmd.arg("build")
         .arg("--target=wasm32-wasi")
         .arg("--package=test-programs")
@@ -31,6 +31,7 @@ fn build_and_generate_tests() {
         .env("CARGO_PROFILE_DEV_DEBUG", "1")
         .env("RUSTFLAGS", rustflags())
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
+    eprintln!("running: {cmd:?}");
     let status = cmd.status().unwrap();
     assert!(status.success());
 
@@ -105,7 +106,7 @@ fn build_and_generate_tests() {
 // Build the WASI Preview 1 adapter, and get the binary:
 fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
     println!("cargo:rerun-if-changed=../../wasi-preview1-component-adapter");
-    let mut cmd = Command::new("cargo");
+    let mut cmd = cargo();
     cmd.arg("build")
         .arg("--release")
         .arg("--package=wasi-preview1-component-adapter")
@@ -116,6 +117,7 @@ fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
     for f in features {
         cmd.arg(f);
     }
+    eprintln!("running: {cmd:?}");
     let status = cmd.status().unwrap();
     assert!(status.success());
 
@@ -158,4 +160,15 @@ fn compile_component(wasm: &Path, adapter: &[u8]) -> PathBuf {
     let component_path = out_dir.join(format!("{stem}.component.wasm"));
     fs::write(&component_path, component).expect("write component to disk");
     component_path
+}
+
+fn cargo() -> Command {
+    // Miri configures its own sysroot which we don't want to use, so remove
+    // miri's own wrappers around rustc to ensure that we're using the real
+    // rustc to build these programs.
+    let mut cargo = Command::new("cargo");
+    if std::env::var("CARGO_CFG_MIRI").is_ok() {
+        cargo.env_remove("RUSTC").env_remove("RUSTC_WRAPPER");
+    }
+    cargo
 }
