@@ -2959,12 +2959,6 @@
 
 ;;;; Helpers for floating point comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl is_not_nan (Type FReg) XReg)
-(rule (is_not_nan ty a) (rv_feq ty a a))
-
-(decl ordered (Type FReg FReg) XReg)
-(rule (ordered ty a b) (rv_and (is_not_nan ty a) (is_not_nan ty b)))
-
 (type FloatCompare (enum
   ;; The comparison succeeded if `r` is one
   (One (r XReg))
@@ -2993,7 +2987,10 @@
 
 ;; a is not nan && b is not nan
 (rule 1 (fcmp_to_float_compare (FloatCC.Ordered) ty a b)
-  (FloatCompare.One (ordered ty a b)))
+  (FloatCompare.One (rv_and (is_not_nan ty a) (is_not_nan ty b))))
+
+(decl is_not_nan (Type FReg) XReg)
+(rule (is_not_nan ty a) (rv_feq ty a a))
 
 ;; a == b
 (rule 1 (fcmp_to_float_compare (FloatCC.Equal) ty a b)
