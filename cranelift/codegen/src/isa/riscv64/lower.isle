@@ -1548,16 +1548,16 @@
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
-  (gen_select_xreg (lower_int_compare c) x y))
+  (gen_select_xreg (is_nonzero_cmp c) x y))
 
 (rule 1 (lower (has_type $I128 (select c x y)))
-  (gen_select_regs (lower_int_compare c) x y))
+  (gen_select_regs (is_nonzero_cmp c) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
-  (gen_select_vreg (lower_int_compare c) x y))
+  (gen_select_vreg (is_nonzero_cmp c) x y))
 
 (rule 3 (lower (has_type (ty_scalar_float _) (select c x y)))
-  (gen_select_freg (lower_int_compare c) x y))
+  (gen_select_freg (is_nonzero_cmp c) x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 

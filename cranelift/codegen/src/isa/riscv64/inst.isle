@@ -2742,7 +2742,7 @@
 ;; This is used in `Select` and `brif` for example to generate conditional
 ;; branches. The returned comparison, when taken, represents that `Value` is
 ;; nonzero. When not taken the input `Value` is zero.
-(decl lower_int_compare (Value) IntegerCompare)
+(decl is_nonzero_cmp (Value) IntegerCompare)
 
 ;; Base case - convert to a "truthy" value and compare it against zero.
 ;;
@@ -2753,11 +2753,11 @@
 ;; Additionally the base 64-bit ISA has a single instruction for sign-extending
 ;; from 32 to 64-bits which makes that a bit cheaper if used.
 ;; of registers sign-extend the results.
-(rule 0 (lower_int_compare val @ (value_type (fits_in_64 _)))
+(rule 0 (is_nonzero_cmp val @ (value_type (fits_in_64 _)))
   (cmp_nez (sext val)))
-(rule 1 (lower_int_compare val @ (value_type $I8))
+(rule 1 (is_nonzero_cmp val @ (value_type $I8))
   (cmp_nez (zext val)))
-(rule 1 (lower_int_compare val @ (value_type $I128))
+(rule 1 (is_nonzero_cmp val @ (value_type $I128))
   (cmp_nez (rv_or (value_regs_get val 0) (value_regs_get val 1))))
 
 ;; If the input value is itself an `icmp` we can avoid generating the result of
@@ -2771,20 +2771,20 @@
 ;; either zero-or-sign extension and many values are already sign-extended given
 ;; the RV64 instruction set (e.g. `addw` adds 32-bit values and sign extends),
 ;; theoretically resulting in more efficient codegen.
-(rule 2 (lower_int_compare (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 in_ty)))))
+(rule 2 (is_nonzero_cmp (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 in_ty)))))
   (int_compare cc (zext a) (zext b)))
-(rule 3 (lower_int_compare (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 in_ty)))))
+(rule 3 (is_nonzero_cmp (maybe_uextend (icmp cc a b @ (value_type (fits_in_64 in_ty)))))
   (if (signed_cond_code cc))
   (int_compare cc (sext a) (sext b)))
-(rule 4 (lower_int_compare (maybe_uextend (icmp cc @ (IntCC.Equal) a b @ (value_type $I32))))
+(rule 4 (is_nonzero_cmp (maybe_uextend (icmp cc @ (IntCC.Equal) a b @ (value_type $I32))))
   (int_compare cc (sext a) (sext b)))
-(rule 4 (lower_int_compare (maybe_uextend (icmp cc @ (IntCC.NotEqual) a b @ (value_type $I32))))
+(rule 4 (is_nonzero_cmp (maybe_uextend (icmp cc @ (IntCC.NotEqual) a b @ (value_type $I32))))
   (int_compare cc (sext a) (sext b)))
 
 ;; If the input is an `fcmp` then the `FCmp` return value is directly
 ;; convertible to `IntegerCompare` which can shave off an instruction from the
 ;; fallback lowering above.
-(rule 2 (lower_int_compare (maybe_uextend (fcmp cc a @ (value_type ty) b)))
+(rule 2 (is_nonzero_cmp (maybe_uextend (fcmp cc a @ (value_type ty) b)))
   (emit_fcmp cc ty a b))
 
 (decl partial lower_branch (Inst MachLabelSlice) Unit)
@@ -2792,7 +2792,7 @@
       (emit_side_effect (rv_j label)))
 
 (rule (lower_branch (brif v _ _) (two_targets then else))
-  (emit_side_effect (cond_br (lower_int_compare v) then else)))
+  (emit_side_effect (cond_br (is_nonzero_cmp v) then else)))
 
 (decl lower_br_table (Reg MachLabelSlice) Unit)
 (extern constructor lower_br_table lower_br_table)
