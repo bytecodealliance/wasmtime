@@ -297,14 +297,34 @@ async fn preview2_random() {
     run(PREVIEW2_RANDOM_COMPONENT, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn preview2_tcp_v4() {
-    run(PREVIEW2_TCP_V4_COMPONENT, false).await.unwrap()
-}
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn preview2_tcp_v6() {
-    run(PREVIEW2_TCP_V6_COMPONENT, false).await.unwrap()
-}
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview2_ip_name_lookup() {
     run(PREVIEW2_IP_NAME_LOOKUP_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_tcp_sockopts() {
+    run(PREVIEW2_TCP_SOCKOPTS_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_tcp_sample_application() {
+    run(PREVIEW2_TCP_SAMPLE_APPLICATION_COMPONENT, false)
+        .await
+        .unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_tcp_states() {
+    run(PREVIEW2_TCP_STATES_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_tcp_bind() {
+    run(PREVIEW2_TCP_BIND_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_udp_sample_application() {
+    run(PREVIEW2_UDP_SAMPLE_APPLICATION_COMPONENT, false)
+        .await
+        .unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_tcp_connect() {
+    run(PREVIEW2_TCP_CONNECT_COMPONENT, false).await.unwrap()
 }
