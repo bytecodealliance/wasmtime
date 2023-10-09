@@ -364,18 +364,18 @@ block0(v0: i32, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   sext.w a5,a0
-;   sext.w a3,a3
-;   select a0,a1,a2##condition=(a5 eq a3)
+;   mv a3,a0
+;   li a0,42
+;   sext.w a5,a3
+;   select a0,a1,a2##condition=(a5 eq a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   sext.w a5, a0
-;   sext.w a3, a3
-;   bne a5, a3, 0xc
+;   mv a3, a0
+;   addi a0, zero, 0x2a
+;   sext.w a5, a3
+;   bne a5, a0, 0xc
 ;   mv a0, a1
 ;   j 8
 ;   mv a0, a2
@@ -391,18 +391,18 @@ block0(v0: i32, v1: i16, v2: i16):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   sext.w a5,a0
-;   sext.w a3,a3
-;   select a0,a1,a2##condition=(a5 eq a3)
+;   mv a3,a0
+;   li a0,42
+;   sext.w a5,a3
+;   select a0,a1,a2##condition=(a5 eq a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   sext.w a5, a0
-;   sext.w a3, a3
-;   bne a5, a3, 0xc
+;   mv a3, a0
+;   addi a0, zero, 0x2a
+;   sext.w a5, a3
+;   bne a5, a0, 0xc
 ;   mv a0, a1
 ;   j 8
 ;   mv a0, a2
@@ -418,18 +418,18 @@ block0(v0: i32, v1: i32, v2: i32):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   sext.w a5,a0
-;   sext.w a3,a3
-;   select a0,a1,a2##condition=(a5 eq a3)
+;   mv a3,a0
+;   li a0,42
+;   sext.w a5,a3
+;   select a0,a1,a2##condition=(a5 eq a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   sext.w a5, a0
-;   sext.w a3, a3
-;   bne a5, a3, 0xc
+;   mv a3, a0
+;   addi a0, zero, 0x2a
+;   sext.w a5, a3
+;   bne a5, a0, 0xc
 ;   mv a0, a1
 ;   j 8
 ;   mv a0, a2
@@ -445,18 +445,18 @@ block0(v0: i32, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   sext.w a5,a0
-;   sext.w a3,a3
-;   select a0,a1,a2##condition=(a5 eq a3)
+;   mv a3,a0
+;   li a0,42
+;   sext.w a5,a3
+;   select a0,a1,a2##condition=(a5 eq a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   sext.w a5, a0
-;   sext.w a3, a3
-;   bne a5, a3, 0xc
+;   mv a3, a0
+;   addi a0, zero, 0x2a
+;   sext.w a5, a3
+;   bne a5, a0, 0xc
 ;   mv a0, a1
 ;   j 8
 ;   mv a0, a2
@@ -476,17 +476,16 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   sd s1,-8(sp)
-;   sd s8,-16(sp)
+;   sd s6,-16(sp)
 ;   add sp,-16
 ; block0:
-;   mv s8,a1
+;   mv s6,a1
 ;   li a5,42
 ;   sext.w s1,a0
-;   sext.w a5,a5
-;   select [a0,a1],[s8,a2],[a3,a4]##condition=(s1 eq a5)
+;   select [a0,a1],[s6,a2],[a3,a4]##condition=(s1 eq a5)
 ;   add sp,+16
 ;   ld s1,-8(sp)
-;   ld s8,-16(sp)
+;   ld s6,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -499,22 +498,21 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   sd s0, 0(sp)
 ;   mv s0, sp
 ;   sd s1, -8(sp)
-;   sd s8, -0x10(sp)
+;   sd s6, -0x10(sp)
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x1c
-;   mv s8, a1
+;   mv s6, a1
 ;   addi a5, zero, 0x2a
 ;   sext.w s1, a0
-;   sext.w a5, a5
 ;   bne s1, a5, 0x10
-;   mv a0, s8
+;   mv a0, s6
 ;   mv a1, a2
 ;   j 0xc
 ;   mv a0, a3
 ;   mv a1, a4
 ;   addi sp, sp, 0x10
 ;   ld s1, -8(sp)
-;   ld s8, -0x10(sp)
+;   ld s6, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
