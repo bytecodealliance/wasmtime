@@ -67,7 +67,7 @@ runs:
 
     - name: Install the WASI target
       shell: bash
-      run: rustup target add wasm32-wasi
+      run: rustup target add wasm32-wasi wasm32-unknown-unknown
 
     - name: Choose registry cache key
       shell: bash
