@@ -1,6 +1,7 @@
-use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network};
-use wasi::sockets::tcp::TcpSocket;
-use wasi_sockets_tests::*;
+use test_programs::wasi::sockets::network::{
+    ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
+};
+use test_programs::wasi::sockets::tcp::TcpSocket;
 
 const SOME_PORT: u16 = 47; // If the tests pass, this will never actually be connected to.
 

@@ -1,6 +1,7 @@
-use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network};
-use wasi::sockets::tcp::TcpSocket;
-use wasi_sockets_tests::*;
+use test_programs::wasi::sockets::network::{
+    ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
+};
+use test_programs::wasi::sockets::tcp::TcpSocket;
 
 fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
     let sock = TcpSocket::new(family).unwrap();

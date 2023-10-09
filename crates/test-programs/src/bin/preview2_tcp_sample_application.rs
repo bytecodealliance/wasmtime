@@ -1,8 +1,7 @@
-use wasi::sockets::network::{
+use test_programs::wasi::sockets::network::{
     IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress, Network,
 };
-use wasi::sockets::tcp::TcpSocket;
-use wasi_sockets_tests::*;
+use test_programs::wasi::sockets::tcp::TcpSocket;
 
 fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddress) {
     let first_message = b"Hello, world!";

@@ -1,6 +1,7 @@
-use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network};
-use wasi::sockets::tcp::TcpSocket;
-use wasi_sockets_tests::*;
+use test_programs::wasi::sockets::network::{
+    ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
+};
+use test_programs::wasi::sockets::tcp::TcpSocket;
 
 /// Bind a socket and let the system determine a port.
 fn test_tcp_bind_ephemeral_port(net: &Network, ip: IpAddress) {

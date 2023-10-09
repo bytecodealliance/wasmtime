@@ -1,6 +1,7 @@
-use wasi::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network};
-use wasi::sockets::tcp::{ShutdownType, TcpSocket};
-use wasi_sockets_tests::*;
+use test_programs::wasi::sockets::network::{
+    ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Network,
+};
+use test_programs::wasi::sockets::tcp::{ShutdownType, TcpSocket};
 
 fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
     let sock = TcpSocket::new(family).unwrap();

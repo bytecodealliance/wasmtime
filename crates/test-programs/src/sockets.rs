@@ -1,12 +1,12 @@
 use crate::wasi::clocks::monotonic_clock;
 use crate::wasi::io::poll::{self, Pollable};
-use crate::wasi::io::streams::{self, InputStream, OutputStream, StreamError};
+use crate::wasi::io::streams::{InputStream, OutputStream, StreamError};
 use crate::wasi::sockets::instance_network;
 use crate::wasi::sockets::network::{
-    self, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress,
-    Ipv6SocketAddress, Network,
+    ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
+    Network,
 };
-use crate::wasi::sockets::tcp::{self, TcpSocket};
+use crate::wasi::sockets::tcp::TcpSocket;
 use crate::wasi::sockets::udp::{Datagram, UdpSocket};
 use crate::wasi::sockets::{tcp_create_socket, udp_create_socket};
 use std::ops::Range;
