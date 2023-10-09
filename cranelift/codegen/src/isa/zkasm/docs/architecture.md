@@ -51,6 +51,7 @@ We’ve built a [prototype](https://github.com/akashin/zkwasm/) for this approac
 
 Pros:
 - Easy to work with, simple and small codebase
+
 Cons:
 - Hard to generate efficient code, need to implement all standard compiler optimizations
 - Larger instruction set to support: WASM is around 400 instructions today, while Cranelift IR is only 100
