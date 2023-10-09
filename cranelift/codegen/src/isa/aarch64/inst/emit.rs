@@ -3561,11 +3561,11 @@ impl MachInstEmit for Inst {
                 // See: https://gcc.godbolt.org/z/e4j7MdErh
 
                 // adrp x0, :tlsdesc:tlsvar
-                sink.add_reloc(Reloc::Aarch64TlsDescAdrPage21, symbol, 0);
+                sink.add_reloc(Reloc::Aarch64TlsDescAdrPage21, &**symbol, 0);
                 Inst::Adrp { rd, off: 0 }.emit(&[], sink, emit_info, state);
 
                 // ldr  tmp, [x0, :tlsdesc_lo12:tlsvar]
-                sink.add_reloc(Reloc::Aarch64TlsDescLd64Lo12, symbol, 0);
+                sink.add_reloc(Reloc::Aarch64TlsDescLd64Lo12, &**symbol, 0);
                 Inst::ULoad64 {
                     rd: tmp,
                     mem: AMode::reg(rd.to_reg()),
@@ -3574,7 +3574,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
 
                 // add x0, x0, :tlsdesc_lo12:tlsvar
-                sink.add_reloc(Reloc::Aarch64TlsDescAddLo12, symbol, 0);
+                sink.add_reloc(Reloc::Aarch64TlsDescAddLo12, &**symbol, 0);
                 Inst::AluRRImm12 {
                     alu_op: ALUOp::Add,
                     size: OperandSize::Size64,
@@ -3585,7 +3585,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
 
                 // blr tmp
-                sink.add_reloc(Reloc::Aarch64TlsDescCall, symbol, 0);
+                sink.add_reloc(Reloc::Aarch64TlsDescCall, &**symbol, 0);
                 Inst::CallInd {
                     info: crate::isa::Box::new(CallIndInfo {
                         rn: tmp.to_reg(),
