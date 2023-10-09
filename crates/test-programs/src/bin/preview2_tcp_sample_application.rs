@@ -25,7 +25,7 @@ fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddres
     }
 
     {
-        let (_accepted, input, _output) = listener.accept().unwrap();
+        let (_accepted, input, _output) = listener.blocking_accept().unwrap();
 
         let empty_data = input.read(0).unwrap();
         assert!(empty_data.is_empty());

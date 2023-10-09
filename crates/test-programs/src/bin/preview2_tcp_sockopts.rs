@@ -104,7 +104,7 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
     let bound_addr = listener.local_address().unwrap();
     let client = TcpSocket::new(family).unwrap();
     client.blocking_connect(&net, bound_addr).unwrap();
-    let (accepted_client, _, _) = listener.accept().unwrap();
+    let (accepted_client, _, _) = listener.blocking_accept().unwrap();
 
     // Verify options on accepted socket:
     {
@@ -158,7 +158,7 @@ fn test_tcp_sockopt_after_listen(net: &Network, family: IpAddressFamily) {
 
     let client = TcpSocket::new(family).unwrap();
     client.blocking_connect(&net, bound_addr).unwrap();
-    let (accepted_client, _, _) = listener.accept().unwrap();
+    let (accepted_client, _, _) = listener.blocking_accept().unwrap();
 
     // Verify options on accepted socket:
     {
