@@ -14,9 +14,8 @@ interface udp-create-socket {
 	/// All sockets are non-blocking. Use the wasi-poll interface to block on asynchronous operations.
 	///
 	/// # Typical errors
-	/// - `not-supported`:                The host does not support UDP sockets. (EOPNOTSUPP)
-	/// - `address-family-not-supported`: The specified `address-family` is not supported. (EAFNOSUPPORT)
-	/// - `new-socket-limit`:             The new socket resource could not be created because of a system limit. (EMFILE, ENFILE)
+	/// - `not-supported`:     The specified `address-family` is not supported. (EAFNOSUPPORT)
+	/// - `new-socket-limit`:  The new socket resource could not be created because of a system limit. (EMFILE, ENFILE)
 	///
 	/// # References:
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/socket.html>
