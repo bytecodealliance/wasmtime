@@ -9,9 +9,10 @@ use crate::common::{Profile, RunCommon, RunTarget};
 
 use anyhow::{anyhow, bail, Context as _, Error, Result};
 use clap::Parser;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use wasmtime::{
@@ -102,7 +103,7 @@ pub struct RunCommand {
     /// arguments unless the `--invoke` CLI argument is passed in which case
     /// arguments will be interpreted as arguments to the function specified.
     #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
-    module_and_args: Vec<PathBuf>,
+    module_and_args: Vec<OsString>,
 }
 
 enum CliLinker {
@@ -135,7 +136,9 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        let main = self.run.load_module(&engine, &self.module_and_args[0])?;
+        let main = self
+            .run
+            .load_module(&engine, self.module_and_args[0].as_ref())?;
 
         // Validate coredump-on-trap argument
         if let Some(path) = &self.run.common.debug.coredump {
@@ -212,7 +215,7 @@ impl RunCommand {
             .with_context(|| {
                 format!(
                     "failed to run main module `{}`",
-                    self.module_and_args[0].display()
+                    self.module_and_args[0].to_string_lossy()
                 )
             }) {
             Ok(()) => (),
@@ -262,7 +265,7 @@ impl RunCommand {
             // For argv[0], which is the program name. Only include the base
             // name of the main wasm module, to avoid leaking path information.
             let arg = if i == 0 {
-                arg.components().next_back().unwrap().as_os_str()
+                Path::new(arg).components().next_back().unwrap().as_os_str()
             } else {
                 arg.as_ref()
             };

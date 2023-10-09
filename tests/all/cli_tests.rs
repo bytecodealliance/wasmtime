@@ -1057,7 +1057,7 @@ mod test_programs {
             CLI_ARGS_COMPONENT,
             "hello",
             "this",
-            // "", // TODO: this should work
+            "",
             "is an argument",
             "with 🚩 emoji",
         ])?;
