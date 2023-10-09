@@ -45,7 +45,7 @@ fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddres
     }
 
     {
-        let (_accepted, input, _output) = listener.accept().unwrap();
+        let (_accepted, input, _output) = listener.blocking_accept().unwrap();
         let data = input.blocking_read(second_message.len() as u64).unwrap();
 
         // Check that we sent and recieved our message!
