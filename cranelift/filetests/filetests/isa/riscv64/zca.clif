@@ -469,6 +469,43 @@ block0:
 ;   c.addi16sp sp, 0x10
 ;   c.jr ra
 
+function %c_addi4spn_512() -> i64 {
+  ss0 = explicit_slot 1024
+
+block0:
+  v0 = stack_addr.i64 ss0+512
+  return v0
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   add sp,-1024
+; block0:
+;   load_addr a0,512(nominal_sp)
+;   add sp,+1024
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   addi sp, sp, -0x400
+; block1: ; offset 0xc
+;   c.addi4spn a0, sp, 0x200
+;   addi sp, sp, 0x400
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
 function %c_li() -> i64 {
 block0:
   v0 = iconst.i64 1
