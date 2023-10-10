@@ -3,7 +3,7 @@ start:
   :JMP(function_1)
   :JMP(finalizeExecution)
 function_1:
-  SP + 2 => SP
+  SP + 1 => SP
   RR :MSTORE(SP)
   2 => A
   3 => B
@@ -12,7 +12,7 @@ function_1:
   5 => B
   B :ASSERT
   $ => RR :MLOAD(SP)
-  SP - 2 => SP
+  SP - 1 => SP
   :JMP(RR)
 function_2:
   $ => A :ADD

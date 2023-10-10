@@ -32,7 +32,7 @@ fn test_zkasm_binemit() {
             rets: vec![],
             stack_bytes_to_pop: 16,
         },
-        "SP - 2 => SP\n  :JMP(RR)",
+        "SP - 16 => SP\n  :JMP(RR)",
     ));
     // TODO: a test with `rets`.
     insns.push(TestUnit::new(

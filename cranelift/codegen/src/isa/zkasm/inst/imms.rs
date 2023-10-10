@@ -1,10 +1,11 @@
-//! Riscv64 ISA definitions: immediate constants.
+//! zkASM ISA definitions: immediate constants.
 
 // Some variants are never constructed, but we still want them as options in the future.
 use super::Inst;
 #[allow(dead_code)]
 use std::fmt::{Debug, Display, Formatter, Result};
 
+// TODO: remove
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Imm12 {
     pub bits: i16,
@@ -98,6 +99,7 @@ impl std::ops::Neg for Imm12 {
 }
 
 // singed
+// TODO: remove
 #[derive(Clone, Copy, Default)]
 pub struct Imm20 {
     /// The immediate bits.
@@ -130,6 +132,7 @@ impl Display for Imm20 {
 }
 
 /// An unsigned 5-bit immediate.
+// TODO: remove
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UImm5 {
     value: u8,
@@ -158,6 +161,7 @@ impl Display for UImm5 {
 }
 
 /// A Signed 5-bit immediate.
+// TODO: remove
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Imm5 {
     value: i8,

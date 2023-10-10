@@ -1,4 +1,4 @@
-//! Riscv64 ISA: binary code emission.
+//! zkASM ISA: binary code emission.
 
 use crate::binemit::StackMap;
 use crate::ir::{self, RelSourceLoc, TrapCode};
@@ -139,7 +139,7 @@ impl EmitState {
 
 impl MachInstEmitState<Inst> for EmitState {
     fn new(
-        abi: &Callee<crate::isa::zkasm::abi::Riscv64MachineDeps>,
+        abi: &Callee<crate::isa::zkasm::abi::ZkAsmMachineDeps>,
         ctrl_plane: ControlPlane,
     ) -> Self {
         EmitState {
@@ -569,8 +569,8 @@ impl MachInstEmit for Inst {
                 stack_bytes_to_pop, ..
             } => {
                 if stack_bytes_to_pop != 0 {
-                    Inst::ReleaseSp {
-                        amount: stack_bytes_to_pop,
+                    Inst::AdjustSp {
+                        amount: i64::from(stack_bytes_to_pop),
                     }
                     .emit(&[], sink, emit_info, state);
                 }
@@ -621,21 +621,16 @@ impl MachInstEmit for Inst {
                             .into_iter()
                             .for_each(|i| i.emit(&[], sink, emit_info, state)); */
             }
-            &Inst::ReleaseSp { amount } => {
-                // Stack is growing "up" in zkASM contrary to traditional architectures.
-                // Furthermore, addressing is done in slots rather than bytes.
-                //
-                // FIXME: add helper functions to implement these conversions.
-                let amount = amount.checked_div(8).unwrap();
-                put_string(&format!("SP - {amount} => SP\n"), sink);
-            }
-            &Inst::ReserveSp { amount } => {
-                // Stack is growing "up" in zkASM contrary to traditional architectures.
-                // Furthermore, addressing is done in slots rather than bytes.
-                //
-                // FIXME: add helper functions to implement these conversions.
-                let amount = amount.checked_div(8).unwrap();
-                put_string(&format!("SP + {amount} => SP\n"), sink);
+            &Inst::AdjustSp { amount } => {
+                // Stack is growing "up" in zkASM contrary to traditional architectures, so
+                // we flip it here.
+                let amount = -amount;
+                let amount = if amount > 0 {
+                    format!("+ {}", amount)
+                } else {
+                    format!("- {}", -amount)
+                };
+                put_string(&format!("SP {amount} => SP\n"), sink);
             }
             &Inst::Call { ref info } => {
                 // call

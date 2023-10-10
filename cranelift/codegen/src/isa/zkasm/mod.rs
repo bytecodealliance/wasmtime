@@ -1,4 +1,4 @@
-//! risc-v 64-bit Instruction Set Architecture.
+//! ZkASM Instruction Set Architecture.
 
 use crate::dominator_tree::DominatorTree;
 use crate::ir;
@@ -6,7 +6,7 @@ use crate::ir::{Function, Type};
 use crate::isa::zkasm::settings as zkasm_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
@@ -19,26 +19,24 @@ mod abi;
 pub(crate) mod inst;
 mod lower;
 mod settings;
-#[cfg(feature = "unwind")]
-use crate::isa::unwind::systemv;
 
 use self::inst::EmitInfo;
 
-/// An zkasm backend.
-pub struct Riscv64Backend {
+/// The zkasm backend.
+pub struct ZkAsmBackend {
     triple: Triple,
     flags: shared_settings::Flags,
     isa_flags: zkasm_settings::Flags,
 }
 
-impl Riscv64Backend {
+impl ZkAsmBackend {
     /// Create a new zkasm backend with the given (shared) flags.
     pub fn new_with_flags(
         triple: Triple,
         flags: shared_settings::Flags,
         isa_flags: zkasm_settings::Flags,
-    ) -> Riscv64Backend {
-        Riscv64Backend {
+    ) -> ZkAsmBackend {
+        ZkAsmBackend {
             triple,
             flags,
             isa_flags,
@@ -54,13 +52,13 @@ impl Riscv64Backend {
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(self.flags.clone(), self.isa_flags.clone());
-        let sigs = SigSet::new::<abi::Riscv64MachineDeps>(func, &self.flags)?;
-        let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<Riscv64Backend>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
+        let sigs = SigSet::new::<abi::ZkAsmMachineDeps>(func, &self.flags)?;
+        let abi = abi::ZkAsmCallee::new(func, self, &self.isa_flags, &sigs)?;
+        compile::compile::<ZkAsmBackend>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
     }
 }
 
-impl TargetIsa for Riscv64Backend {
+impl TargetIsa for ZkAsmBackend {
     fn compile_function(
         &self,
         func: &Function,
@@ -116,39 +114,14 @@ impl TargetIsa for Riscv64Backend {
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
-        result: &CompiledCode,
-        kind: crate::isa::UnwindInfoKind,
+        _result: &CompiledCode,
+        _kind: crate::isa::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        use crate::isa::unwind::UnwindInfo;
-        use crate::isa::UnwindInfoKind;
-        Ok(match kind {
-            UnwindInfoKind::SystemV => {
-                let mapper = self::inst::unwind::systemv::RegisterMapper;
-                Some(UnwindInfo::SystemV(
-                    crate::isa::unwind::systemv::create_unwind_info_from_insts(
-                        &result.buffer.unwind_info[..],
-                        result.buffer.data().len(),
-                        &mapper,
-                    )?,
-                ))
-            }
-            UnwindInfoKind::Windows => None,
-            _ => None,
-        })
-    }
-
-    #[cfg(feature = "unwind")]
-    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
-        Some(inst::unwind::systemv::create_cie())
+        Ok(None)
     }
 
     fn text_section_builder(&self, num_funcs: usize) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
-    }
-
-    #[cfg(feature = "unwind")]
-    fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
-        inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
     fn function_alignment(&self) -> FunctionAlignment {
@@ -181,7 +154,7 @@ impl TargetIsa for Riscv64Backend {
     }
 }
 
-impl fmt::Display for Riscv64Backend {
+impl fmt::Display for ZkAsmBackend {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("MachBackend")
             .field("name", &self.name())
@@ -202,7 +175,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         setup: zkasm_settings::builder(),
         constructor: |triple, shared_flags, builder| {
             let isa_flags = zkasm_settings::Flags::new(&shared_flags, builder);
-            let backend = Riscv64Backend::new_with_flags(triple, shared_flags, isa_flags);
+            let backend = ZkAsmBackend::new_with_flags(triple, shared_flags, isa_flags);
             Ok(backend.wrapped())
         },
     }

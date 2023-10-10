@@ -1,7 +1,7 @@
-//! Lowering rules for Riscv64.
+//! Lowering rules for ZkASM.
 use crate::ir::Inst as IRInst;
 use crate::isa::zkasm::inst::*;
-use crate::isa::zkasm::Riscv64Backend;
+use crate::isa::zkasm::ZkAsmBackend;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 pub mod isle;
@@ -9,7 +9,7 @@ pub mod isle;
 //=============================================================================
 // Lowering-backend trait implementation.
 
-impl LowerBackend for Riscv64Backend {
+impl LowerBackend for ZkAsmBackend {
     type MInst = Inst;
 
     fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> Option<InstOutput> {

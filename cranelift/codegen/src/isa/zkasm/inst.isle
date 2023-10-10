@@ -52,7 +52,7 @@
       (args VecArgPair))
 
     (Ret (rets VecRetPair)
-         (stack_bytes_to_pop u64))
+         (stack_bytes_to_pop u32))
 
     (Extend
       (rd WritableReg)
@@ -61,11 +61,8 @@
       (from_bits u8)
       (to_bits u8))
 
-    ;; Adjust the stack pointer as necessary.
-    (ReserveSp
-      (amount u64))
-    (ReleaseSp
-      (amount u64))
+    (AdjustSp
+      (amount i64))
 
     (Call
       (info BoxCallInfo))

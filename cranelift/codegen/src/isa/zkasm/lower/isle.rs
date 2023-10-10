@@ -7,9 +7,9 @@ use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg};
-use crate::isa::zkasm::abi::Riscv64ABICallSite;
+use crate::isa::zkasm::abi::ZkAsmABICallSite;
 use crate::isa::zkasm::lower::args::{FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg};
-use crate::isa::zkasm::Riscv64Backend;
+use crate::isa::zkasm::ZkAsmBackend;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
@@ -35,7 +35,7 @@ type VecMachLabel = Vec<MachLabel>;
 type VecArgPair = Vec<ArgPair>;
 use crate::machinst::valueregs;
 
-pub(crate) struct RV64IsleContext<'a, 'b, I, B>
+pub(crate) struct ZkAsmIsleContext<'a, 'b, I, B>
 where
     I: VCodeInst,
     B: LowerBackend,
@@ -44,10 +44,10 @@ where
     pub backend: &'a B,
 }
 
-impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
-    isle_prelude_method_helpers!(Riscv64ABICallSite);
+impl<'a, 'b> ZkAsmIsleContext<'a, 'b, MInst, ZkAsmBackend> {
+    isle_prelude_method_helpers!(ZkAsmABICallSite);
 
-    fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a Riscv64Backend) -> Self {
+    fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a ZkAsmBackend) -> Self {
         Self { lower_ctx, backend }
     }
 
@@ -59,9 +59,9 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
     }
 }
 
-impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
+impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICallSite);
+    isle_prelude_caller_methods!(zkAsmMachineDeps, ZkAsmABICallSite);
 
     fn gen_return_call(
         &mut self,
@@ -77,7 +77,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             "Can only do `return_call`s from within a `tail` calling convention function"
         );
 
-        let call_site = Riscv64ABICallSite::from_func(
+        let call_site = ZkAsmABICallSite::from_func(
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
@@ -105,7 +105,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
         let callee = self.put_in_reg(callee);
 
-        let call_site = Riscv64ABICallSite::from_ptr(
+        let call_site = ZkAsmABICallSite::from_ptr(
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
@@ -511,24 +511,24 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower(
     lower_ctx: &mut Lower<MInst>,
-    backend: &Riscv64Backend,
+    backend: &ZkAsmBackend,
     inst: Inst,
 ) -> Option<InstOutput> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
-    let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
+    let mut isle_ctx = ZkAsmIsleContext::new(lower_ctx, backend);
     generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
 /// The main entry point for branch lowering with ISLE.
 pub(crate) fn lower_branch(
     lower_ctx: &mut Lower<MInst>,
-    backend: &Riscv64Backend,
+    backend: &ZkAsmBackend,
     branch: Inst,
     targets: &[MachLabel],
 ) -> Option<()> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
-    let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
+    let mut isle_ctx = ZkAsmIsleContext::new(lower_ctx, backend);
     generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
 }

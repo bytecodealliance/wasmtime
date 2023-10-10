@@ -1,5 +1,4 @@
-//! Riscv64 ISA definitions: registers.
-//!
+//! zkASM ISA definitions: registers.
 
 use crate::settings;
 

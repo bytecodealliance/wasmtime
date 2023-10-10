@@ -1,4 +1,4 @@
-//! Riscv64 ISA definitions: instruction arguments.
+//! zkASM ISA definitions: instruction arguments.
 
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
