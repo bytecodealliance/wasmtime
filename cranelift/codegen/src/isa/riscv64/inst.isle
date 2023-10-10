@@ -1654,11 +1654,6 @@
 (rule (rv_brev8 rs1)
   (alu_rr_funct12 (AluOPRRI.Brev8) rs1))
 
-;; Helper for emitting the `bseti` ("Single-Bit Set Immediate") instruction.
-(decl rv_bseti (XReg Imm12) XReg)
-(rule (rv_bseti rs1 imm)
-  (alu_rr_imm12 (AluOPRRI.Bseti) rs1 imm))
-
 ;; `Zbs` Extension Instructions
 
 (decl rv_bclr (XReg XReg) XReg)
@@ -1684,6 +1679,15 @@
 (decl rv_binvi (XReg Imm12) XReg)
 (rule (rv_binvi rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Binvi) rs1 imm))
+
+(decl rv_bset (XReg XReg) XReg)
+(rule (rv_bset rs1 rs2)
+  (alu_rrr (AluOPRRR.Bset) rs1 rs2))
+
+;; Helper for emitting the `bseti` ("Single-Bit Set Immediate") instruction.
+(decl rv_bseti (XReg Imm12) XReg)
+(rule (rv_bseti rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Bseti) rs1 imm))
 
 ;; `Zbkb` Extension Instructions
 

@@ -96,6 +96,31 @@
   (func (export "binvi64_2") (param i64) (result i64)
     (i64.xor (i64.shl (i64.const 1) (i64.const 40)) (local.get 0))
   )
+
+  (func (export "bset32_1") (param i32 i32) (result i32)
+    (i32.or (local.get 0) (i32.shl (i32.const 1) (local.get 1)))
+  )
+  (func (export "bset32_2") (param i32 i32) (result i32)
+    (i32.or (i32.shl (i32.const 1) (local.get 1)) (local.get 0))
+  )
+  (func (export "bset64_1") (param i64 i64) (result i64)
+    (i64.or (local.get 0) (i64.shl (i64.const 1) (local.get 1)))
+  )
+  (func (export "bset64_2") (param i64 i64) (result i64)
+    (i64.or (i64.shl (i64.const 1) (local.get 1)) (local.get 0))
+  )
+  (func (export "bseti32_1") (param i32) (result i32)
+    (i32.or (local.get 0) (i32.shl (i32.const 1) (i32.const 10)))
+  )
+  (func (export "bseti32_2") (param i32) (result i32)
+    (i32.or (i32.shl (i32.const 1) (i32.const 20)) (local.get 0))
+  )
+  (func (export "bseti64_1") (param i64) (result i64)
+    (i64.or (local.get 0) (i64.shl (i64.const 1) (i64.const 30)))
+  )
+  (func (export "bseti64_2") (param i64) (result i64)
+    (i64.or (i64.shl (i64.const 1) (i64.const 40)) (local.get 0))
+  )
 )
 ;; function u0:0:
 ;; block0:
@@ -312,4 +337,62 @@
 ;;   j label1
 ;; block1:
 ;;   binvi a0,a0,40
+;;   ret
+;;
+;; function u0:30:
+;; block0:
+;;   j label1
+;; block1:
+;;   andi a5,a1,31
+;;   bset a0,a0,a5
+;;   ret
+;;
+;; function u0:31:
+;; block0:
+;;   j label1
+;; block1:
+;;   andi a5,a1,31
+;;   bset a0,a0,a5
+;;   ret
+;;
+;; function u0:32:
+;; block0:
+;;   j label1
+;; block1:
+;;   bset a0,a0,a1
+;;   ret
+;;
+;; function u0:33:
+;; block0:
+;;   j label1
+;; block1:
+;;   bset a0,a0,a1
+;;   ret
+;;
+;; function u0:34:
+;; block0:
+;;   j label1
+;; block1:
+;;   bseti a0,a0,10
+;;   ret
+;;
+;; function u0:35:
+;; block0:
+;;   j label1
+;; block1:
+;;   bseti a0,a0,20
+;;   ret
+;;
+;; function u0:36:
+;; block0:
+;;   j label1
+;; block1:
+;;   bseti a0,a0,30
+;;   ret
+;;
+;; function u0:37:
+;; block0:
+;;   j label1
+;; block1:
+;;   bseti a0,a0,40
 ;;   ret
