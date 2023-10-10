@@ -1548,7 +1548,11 @@
 ;; rd ← rs1 ∧ ~(rs2)
 (decl rv_andn (XReg XReg) XReg)
 (rule (rv_andn rs1 rs2)
+  (if-let $true (has_zbb))
   (alu_rrr (AluOPRRR.Andn) rs1 rs2))
+(rule (rv_andn rs1 rs2)
+  (if-let $false (has_zbb))
+  (rv_and rs1 (rv_not rs2)))
 
 ;; Helper for emitting the `orn` ("Or Negated") instruction.
 ;; rd ← rs1 ∨ ~(rs2)
@@ -1982,16 +1986,6 @@
 
 (rule 0 (gen_bnot (ty_int_ref_scalar_64 _) x)
   (rv_not (value_regs_get x 0)))
-
-
-(decl gen_and (Type ValueRegs ValueRegs) ValueRegs)
-(rule 1 (gen_and $I128 x y)
-  (value_regs
-    (rv_and (value_regs_get x 0) (value_regs_get y 0))
-    (rv_and (value_regs_get x 1) (value_regs_get y 1))))
-
-(rule 0 (gen_and (fits_in_64 _) x y)
-  (rv_and (value_regs_get x 0) (value_regs_get y 0)))
 
 
 (decl gen_andi (XReg u64) XReg)

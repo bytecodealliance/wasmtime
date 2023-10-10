@@ -41,48 +41,42 @@
 
 ;; function u0:0:
 ;; block0:
-;;   slli a3,a0,32
-;;   srli a3,a3,32
-;;   ld a4,8(a2)
-;;   lui a5,-1
-;;   addi a5,a5,-4
-;;   add a4,a4,a5
-;;   sltu a4,a4,a3
+;;   slli a4,a0,32
+;;   srli a0,a4,32
+;;   ld a5,8(a2)
+;;   lui a4,-1
+;;   addi a3,a4,-4
+;;   add a5,a5,a3
+;;   sltu a5,a5,a0
 ;;   ld a2,0(a2)
-;;   add a2,a2,a3
-;;   lui a3,1
-;;   add a2,a2,a3
-;;   li a3,0
-;;   sub a4,zero,a4
-;;   and a0,a3,a4
-;;   not a3,a4
-;;   and a4,a2,a3
-;;   or a0,a0,a4
-;;   sw a1,0(a0)
+;;   add a0,a2,a0
+;;   lui a2,1
+;;   add a0,a0,a2
+;;   sub a3,zero,a5
+;;   not a5,a3
+;;   and a2,a0,a5
+;;   sw a1,0(a2)
 ;;   j label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   slli a2,a0,32
-;;   srli a3,a2,32
-;;   ld a2,8(a1)
+;;   slli a4,a0,32
+;;   srli a0,a4,32
+;;   ld a5,8(a1)
 ;;   lui a4,-1
-;;   addi a4,a4,-4
-;;   add a2,a2,a4
-;;   sltu a2,a2,a3
-;;   ld a4,0(a1)
-;;   add a3,a4,a3
-;;   lui a4,1
-;;   add a3,a3,a4
-;;   li a4,0
-;;   sub a5,zero,a2
-;;   and a0,a4,a5
-;;   not a2,a5
-;;   and a4,a3,a2
-;;   or a0,a0,a4
-;;   lw a0,0(a0)
+;;   addi a2,a4,-4
+;;   add a5,a5,a2
+;;   sltu a5,a5,a0
+;;   ld a1,0(a1)
+;;   add a0,a1,a0
+;;   lui a1,1
+;;   add a0,a0,a1
+;;   sub a3,zero,a5
+;;   not a5,a3
+;;   and a1,a0,a5
+;;   lw a0,0(a1)
 ;;   j label1
 ;; block1:
 ;;   ret

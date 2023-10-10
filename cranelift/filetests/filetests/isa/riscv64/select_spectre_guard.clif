@@ -17,7 +17,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   xori a3,a5,42
 ;   seqz a3,a3
 ;   sub a3,zero,a3
-;   and a4,a1,a3
+;   and a4,a3,a1
 ;   not a0,a3
 ;   and a2,a2,a0
 ;   or a0,a4,a2
@@ -30,7 +30,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   xori a3, a5, 0x2a
 ;   seqz a3, a3
 ;   neg a3, a3
-;   and a4, a1, a3
+;   and a4, a3, a1
 ;   not a0, a3
 ;   and a2, a2, a0
 ;   or a0, a4, a2
@@ -51,7 +51,7 @@ block0(v0: i8, v1: i16, v2: i16):
 ;   xori a3,a5,42
 ;   seqz a3,a3
 ;   sub a3,zero,a3
-;   and a4,a1,a3
+;   and a4,a3,a1
 ;   not a0,a3
 ;   and a2,a2,a0
 ;   or a0,a4,a2
@@ -64,7 +64,7 @@ block0(v0: i8, v1: i16, v2: i16):
 ;   xori a3, a5, 0x2a
 ;   seqz a3, a3
 ;   neg a3, a3
-;   and a4, a1, a3
+;   and a4, a3, a1
 ;   not a0, a3
 ;   and a2, a2, a0
 ;   or a0, a4, a2
@@ -85,7 +85,7 @@ block0(v0: i8, v1: i32, v2: i32):
 ;   xori a3,a5,42
 ;   seqz a3,a3
 ;   sub a3,zero,a3
-;   and a4,a1,a3
+;   and a4,a3,a1
 ;   not a0,a3
 ;   and a2,a2,a0
 ;   or a0,a4,a2
@@ -98,7 +98,7 @@ block0(v0: i8, v1: i32, v2: i32):
 ;   xori a3, a5, 0x2a
 ;   seqz a3, a3
 ;   neg a3, a3
-;   and a4, a1, a3
+;   and a4, a3, a1
 ;   not a0, a3
 ;   and a2, a2, a0
 ;   or a0, a4, a2
@@ -119,7 +119,7 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   xori a3,a5,42
 ;   seqz a3,a3
 ;   sub a3,zero,a3
-;   and a4,a1,a3
+;   and a4,a3,a1
 ;   not a0,a3
 ;   and a2,a2,a0
 ;   or a0,a4,a2
@@ -132,7 +132,7 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   xori a3, a5, 0x2a
 ;   seqz a3, a3
 ;   neg a3, a3
-;   and a4, a1, a3
+;   and a4, a3, a1
 ;   not a0, a3
 ;   and a2, a2, a0
 ;   or a0, a4, a2
@@ -147,60 +147,37 @@ block0(v0: i8, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   add sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
-;   sd s10,-8(sp)
-;   add sp,-16
 ; block0:
 ;   slli a5,a0,56
 ;   srai a5,a5,56
 ;   xori a5,a5,42
 ;   seqz a5,a5
 ;   sub a5,zero,a5
-;   and a0,a1,a5
-;   and a2,a2,a5
-;   not s10,a5
+;   and a0,a5,a1
 ;   not a1,a5
-;   and a3,a3,s10
-;   and a4,a4,a1
-;   or a0,a0,a3
-;   or a1,a2,a4
-;   add sp,+16
-;   ld s10,-8(sp)
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   add sp,+16
+;   and a1,a3,a1
+;   or a0,a0,a1
+;   and a2,a5,a2
+;   not a5,a5
+;   and a1,a4,a5
+;   or a1,a2,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-;   sd s10, -8(sp)
-;   addi sp, sp, -0x10
-; block1: ; offset 0x18
 ;   slli a5, a0, 0x38
 ;   srai a5, a5, 0x38
 ;   xori a5, a5, 0x2a
 ;   seqz a5, a5
 ;   neg a5, a5
-;   and a0, a1, a5
-;   and a2, a2, a5
-;   not s10, a5
+;   and a0, a5, a1
 ;   not a1, a5
-;   and a3, a3, s10
-;   and a4, a4, a1
-;   or a0, a0, a3
-;   or a1, a2, a4
-;   addi sp, sp, 0x10
-;   ld s10, -8(sp)
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
+;   and a1, a3, a1
+;   or a0, a0, a1
+;   and a2, a5, a2
+;   not a5, a5
+;   and a1, a4, a5
+;   or a1, a2, a1
 ;   ret
 
 function %f(i16, i8, i8) -> i8 {
@@ -218,7 +195,7 @@ block0(v0: i16, v1: i8, v2: i8):
 ;   xori a3,a5,42
 ;   seqz a3,a3
 ;   sub a3,zero,a3
-;   and a4,a1,a3
+;   and a4,a3,a1
 ;   not a0,a3
 ;   and a2,a2,a0
 ;   or a0,a4,a2
@@ -231,7 +208,7 @@ block0(v0: i16, v1: i8, v2: i8):
 ;   xori a3, a5, 0x2a
 ;   seqz a3, a3
 ;   neg a3, a3
-;   and a4, a1, a3
+;   and a4, a3, a1
 ;   not a0, a3
 ;   and a2, a2, a0
 ;   or a0, a4, a2
@@ -252,7 +229,7 @@ block0(v0: i16, v1: i16, v2: i16):
 ;   xori a3,a5,42
 ;   seqz a3,a3
 ;   sub a3,zero,a3
-;   and a4,a1,a3
+;   and a4,a3,a1
 ;   not a0,a3
 ;   and a2,a2,a0
 ;   or a0,a4,a2
@@ -265,7 +242,7 @@ block0(v0: i16, v1: i16, v2: i16):
 ;   xori a3, a5, 0x2a
 ;   seqz a3, a3
 ;   neg a3, a3
-;   and a4, a1, a3
+;   and a4, a3, a1
 ;   not a0, a3
 ;   and a2, a2, a0
 ;   or a0, a4, a2
@@ -286,7 +263,7 @@ block0(v0: i16, v1: i32, v2: i32):
 ;   xori a3,a5,42
 ;   seqz a3,a3
 ;   sub a3,zero,a3
-;   and a4,a1,a3
+;   and a4,a3,a1
 ;   not a0,a3
 ;   and a2,a2,a0
 ;   or a0,a4,a2
@@ -299,7 +276,7 @@ block0(v0: i16, v1: i32, v2: i32):
 ;   xori a3, a5, 0x2a
 ;   seqz a3, a3
 ;   neg a3, a3
-;   and a4, a1, a3
+;   and a4, a3, a1
 ;   not a0, a3
 ;   and a2, a2, a0
 ;   or a0, a4, a2
@@ -320,7 +297,7 @@ block0(v0: i16, v1: i64, v2: i64):
 ;   xori a3,a5,42
 ;   seqz a3,a3
 ;   sub a3,zero,a3
-;   and a4,a1,a3
+;   and a4,a3,a1
 ;   not a0,a3
 ;   and a2,a2,a0
 ;   or a0,a4,a2
@@ -333,7 +310,7 @@ block0(v0: i16, v1: i64, v2: i64):
 ;   xori a3, a5, 0x2a
 ;   seqz a3, a3
 ;   neg a3, a3
-;   and a4, a1, a3
+;   and a4, a3, a1
 ;   not a0, a3
 ;   and a2, a2, a0
 ;   or a0, a4, a2
@@ -348,60 +325,37 @@ block0(v0: i16, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   add sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
-;   sd s10,-8(sp)
-;   add sp,-16
 ; block0:
 ;   slli a5,a0,48
 ;   srai a5,a5,48
 ;   xori a5,a5,42
 ;   seqz a5,a5
 ;   sub a5,zero,a5
-;   and a0,a1,a5
-;   and a2,a2,a5
-;   not s10,a5
+;   and a0,a5,a1
 ;   not a1,a5
-;   and a3,a3,s10
-;   and a4,a4,a1
-;   or a0,a0,a3
-;   or a1,a2,a4
-;   add sp,+16
-;   ld s10,-8(sp)
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   add sp,+16
+;   and a1,a3,a1
+;   or a0,a0,a1
+;   and a2,a5,a2
+;   not a5,a5
+;   and a1,a4,a5
+;   or a1,a2,a1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-;   sd s10, -8(sp)
-;   addi sp, sp, -0x10
-; block1: ; offset 0x18
 ;   slli a5, a0, 0x30
 ;   srai a5, a5, 0x30
 ;   xori a5, a5, 0x2a
 ;   seqz a5, a5
 ;   neg a5, a5
-;   and a0, a1, a5
-;   and a2, a2, a5
-;   not s10, a5
+;   and a0, a5, a1
 ;   not a1, a5
-;   and a3, a3, s10
-;   and a4, a4, a1
-;   or a0, a0, a3
-;   or a1, a2, a4
-;   addi sp, sp, 0x10
-;   ld s10, -8(sp)
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
+;   and a1, a3, a1
+;   or a0, a0, a1
+;   and a2, a5, a2
+;   not a5, a5
+;   and a1, a4, a5
+;   or a1, a2, a1
 ;   ret
 
 function %f(i32, i8, i8) -> i8 {
@@ -418,7 +372,7 @@ block0(v0: i32, v1: i8, v2: i8):
 ;   xori a5,a3,42
 ;   seqz a3,a5
 ;   sub a4,zero,a3
-;   and a3,a1,a4
+;   and a3,a4,a1
 ;   not a5,a4
 ;   and a1,a2,a5
 ;   or a0,a3,a1
@@ -430,7 +384,7 @@ block0(v0: i32, v1: i8, v2: i8):
 ;   xori a5, a3, 0x2a
 ;   seqz a3, a5
 ;   neg a4, a3
-;   and a3, a1, a4
+;   and a3, a4, a1
 ;   not a5, a4
 ;   and a1, a2, a5
 ;   or a0, a3, a1
@@ -450,7 +404,7 @@ block0(v0: i32, v1: i16, v2: i16):
 ;   xori a5,a3,42
 ;   seqz a3,a5
 ;   sub a4,zero,a3
-;   and a3,a1,a4
+;   and a3,a4,a1
 ;   not a5,a4
 ;   and a1,a2,a5
 ;   or a0,a3,a1
@@ -462,7 +416,7 @@ block0(v0: i32, v1: i16, v2: i16):
 ;   xori a5, a3, 0x2a
 ;   seqz a3, a5
 ;   neg a4, a3
-;   and a3, a1, a4
+;   and a3, a4, a1
 ;   not a5, a4
 ;   and a1, a2, a5
 ;   or a0, a3, a1
@@ -482,7 +436,7 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   xori a5,a3,42
 ;   seqz a3,a5
 ;   sub a4,zero,a3
-;   and a3,a1,a4
+;   and a3,a4,a1
 ;   not a5,a4
 ;   and a1,a2,a5
 ;   or a0,a3,a1
@@ -494,7 +448,7 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   xori a5, a3, 0x2a
 ;   seqz a3, a5
 ;   neg a4, a3
-;   and a3, a1, a4
+;   and a3, a4, a1
 ;   not a5, a4
 ;   and a1, a2, a5
 ;   or a0, a3, a1
@@ -514,7 +468,7 @@ block0(v0: i32, v1: i64, v2: i64):
 ;   xori a5,a3,42
 ;   seqz a3,a5
 ;   sub a4,zero,a3
-;   and a3,a1,a4
+;   and a3,a4,a1
 ;   not a5,a4
 ;   and a1,a2,a5
 ;   or a0,a3,a1
@@ -526,7 +480,7 @@ block0(v0: i32, v1: i64, v2: i64):
 ;   xori a5, a3, 0x2a
 ;   seqz a3, a5
 ;   neg a4, a3
-;   and a3, a1, a4
+;   and a3, a4, a1
 ;   not a5, a4
 ;   and a1, a2, a5
 ;   or a0, a3, a1
@@ -545,15 +499,15 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   sext.w a5,a0
 ;   xori a5,a5,42
 ;   seqz a5,a5
-;   sub a0,zero,a5
-;   and a5,a1,a0
-;   and a1,a2,a0
-;   not a2,a0
-;   not a0,a0
-;   and a2,a3,a2
-;   and a3,a4,a0
-;   or a0,a5,a2
-;   or a1,a1,a3
+;   sub a5,zero,a5
+;   and a0,a5,a1
+;   not a1,a5
+;   and a3,a3,a1
+;   or a0,a0,a3
+;   and a1,a5,a2
+;   not a3,a5
+;   and a5,a4,a3
+;   or a1,a1,a5
 ;   ret
 ;
 ; Disassembled:
@@ -561,15 +515,15 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   sext.w a5, a0
 ;   xori a5, a5, 0x2a
 ;   seqz a5, a5
-;   neg a0, a5
-;   and a5, a1, a0
-;   and a1, a2, a0
-;   not a2, a0
-;   not a0, a0
-;   and a2, a3, a2
-;   and a3, a4, a0
-;   or a0, a5, a2
-;   or a1, a1, a3
+;   neg a5, a5
+;   and a0, a5, a1
+;   not a1, a5
+;   and a3, a3, a1
+;   or a0, a0, a3
+;   and a1, a5, a2
+;   not a3, a5
+;   and a5, a4, a3
+;   or a1, a1, a5
 ;   ret
 
 function %f(i64, i8, i8) -> i8 {
@@ -585,7 +539,7 @@ block0(v0: i64, v1: i8, v2: i8):
 ;   xori a3,a0,42
 ;   seqz a5,a3
 ;   sub a0,zero,a5
-;   and a3,a1,a0
+;   and a3,a0,a1
 ;   not a4,a0
 ;   and a0,a2,a4
 ;   or a0,a3,a0
@@ -596,7 +550,7 @@ block0(v0: i64, v1: i8, v2: i8):
 ;   xori a3, a0, 0x2a
 ;   seqz a5, a3
 ;   neg a0, a5
-;   and a3, a1, a0
+;   and a3, a0, a1
 ;   not a4, a0
 ;   and a0, a2, a4
 ;   or a0, a3, a0
@@ -615,7 +569,7 @@ block0(v0: i64, v1: i16, v2: i16):
 ;   xori a3,a0,42
 ;   seqz a5,a3
 ;   sub a0,zero,a5
-;   and a3,a1,a0
+;   and a3,a0,a1
 ;   not a4,a0
 ;   and a0,a2,a4
 ;   or a0,a3,a0
@@ -626,7 +580,7 @@ block0(v0: i64, v1: i16, v2: i16):
 ;   xori a3, a0, 0x2a
 ;   seqz a5, a3
 ;   neg a0, a5
-;   and a3, a1, a0
+;   and a3, a0, a1
 ;   not a4, a0
 ;   and a0, a2, a4
 ;   or a0, a3, a0
@@ -645,7 +599,7 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   xori a3,a0,42
 ;   seqz a5,a3
 ;   sub a0,zero,a5
-;   and a3,a1,a0
+;   and a3,a0,a1
 ;   not a4,a0
 ;   and a0,a2,a4
 ;   or a0,a3,a0
@@ -656,7 +610,7 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   xori a3, a0, 0x2a
 ;   seqz a5, a3
 ;   neg a0, a5
-;   and a3, a1, a0
+;   and a3, a0, a1
 ;   not a4, a0
 ;   and a0, a2, a4
 ;   or a0, a3, a0
@@ -675,7 +629,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   xori a3,a0,42
 ;   seqz a5,a3
 ;   sub a0,zero,a5
-;   and a3,a1,a0
+;   and a3,a0,a1
 ;   not a4,a0
 ;   and a0,a2,a4
 ;   or a0,a3,a0
@@ -686,7 +640,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   xori a3, a0, 0x2a
 ;   seqz a5, a3
 ;   neg a0, a5
-;   and a3, a1, a0
+;   and a3, a0, a1
 ;   not a4, a0
 ;   and a0, a2, a4
 ;   or a0, a3, a0
@@ -708,19 +662,19 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   sd s11,-8(sp)
 ;   add sp,-16
 ; block0:
-;   mv s11,a1
-;   xori a5,a0,42
-;   seqz a5,a5
-;   sub a1,zero,a5
-;   mv a5,s11
-;   and a5,a5,a1
-;   and a2,a2,a1
-;   not a0,a1
-;   not a1,a1
-;   and a0,a3,a0
-;   and a3,a4,a1
+;   mv s11,a3
+;   xori a3,a0,42
+;   seqz a5,a3
+;   sub a3,zero,a5
+;   and a5,a3,a1
+;   not a0,a3
+;   mv a1,s11
+;   and a0,a1,a0
 ;   or a0,a5,a0
-;   or a1,a2,a3
+;   and a1,a3,a2
+;   not a2,a3
+;   and a4,a4,a2
+;   or a1,a1,a4
 ;   add sp,+16
 ;   ld s11,-8(sp)
 ;   ld ra,8(sp)
@@ -737,19 +691,19 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   sd s11, -8(sp)
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x18
-;   mv s11, a1
-;   xori a5, a0, 0x2a
-;   seqz a5, a5
-;   neg a1, a5
-;   mv a5, s11
-;   and a5, a5, a1
-;   and a2, a2, a1
-;   not a0, a1
-;   not a1, a1
-;   and a0, a3, a0
-;   and a3, a4, a1
+;   mv s11, a3
+;   xori a3, a0, 0x2a
+;   seqz a5, a3
+;   neg a3, a5
+;   and a5, a3, a1
+;   not a0, a3
+;   mv a1, s11
+;   and a0, a1, a0
 ;   or a0, a5, a0
-;   or a1, a2, a3
+;   and a1, a3, a2
+;   not a2, a3
+;   and a4, a4, a2
+;   or a1, a1, a4
 ;   addi sp, sp, 0x10
 ;   ld s11, -8(sp)
 ;   ld ra, 8(sp)
@@ -775,7 +729,7 @@ block0(v0: i128, v1: i8, v2: i8):
 ;   or a4,a0,a4
 ;   seqz a0,a4
 ;   sub a5,zero,a0
-;   and a1,a2,a5
+;   and a1,a5,a2
 ;   not a4,a5
 ;   and a5,a3,a4
 ;   or a0,a1,a5
@@ -790,7 +744,7 @@ block0(v0: i128, v1: i8, v2: i8):
 ;   or a4, a0, a4
 ;   seqz a0, a4
 ;   neg a5, a0
-;   and a1, a2, a5
+;   and a1, a5, a2
 ;   not a4, a5
 ;   and a5, a3, a4
 ;   or a0, a1, a5
@@ -814,7 +768,7 @@ block0(v0: i128, v1: i16, v2: i16):
 ;   or a4,a0,a4
 ;   seqz a0,a4
 ;   sub a5,zero,a0
-;   and a1,a2,a5
+;   and a1,a5,a2
 ;   not a4,a5
 ;   and a5,a3,a4
 ;   or a0,a1,a5
@@ -829,7 +783,7 @@ block0(v0: i128, v1: i16, v2: i16):
 ;   or a4, a0, a4
 ;   seqz a0, a4
 ;   neg a5, a0
-;   and a1, a2, a5
+;   and a1, a5, a2
 ;   not a4, a5
 ;   and a5, a3, a4
 ;   or a0, a1, a5
@@ -853,7 +807,7 @@ block0(v0: i128, v1: i32, v2: i32):
 ;   or a4,a0,a4
 ;   seqz a0,a4
 ;   sub a5,zero,a0
-;   and a1,a2,a5
+;   and a1,a5,a2
 ;   not a4,a5
 ;   and a5,a3,a4
 ;   or a0,a1,a5
@@ -868,7 +822,7 @@ block0(v0: i128, v1: i32, v2: i32):
 ;   or a4, a0, a4
 ;   seqz a0, a4
 ;   neg a5, a0
-;   and a1, a2, a5
+;   and a1, a5, a2
 ;   not a4, a5
 ;   and a5, a3, a4
 ;   or a0, a1, a5
@@ -892,7 +846,7 @@ block0(v0: i128, v1: i64, v2: i64):
 ;   or a4,a0,a4
 ;   seqz a0,a4
 ;   sub a5,zero,a0
-;   and a1,a2,a5
+;   and a1,a5,a2
 ;   not a4,a5
 ;   and a5,a3,a4
 ;   or a0,a1,a5
@@ -907,7 +861,7 @@ block0(v0: i128, v1: i64, v2: i64):
 ;   or a4, a0, a4
 ;   seqz a0, a4
 ;   neg a5, a0
-;   and a1, a2, a5
+;   and a1, a5, a2
 ;   not a4, a5
 ;   and a5, a3, a4
 ;   or a0, a1, a5
@@ -923,12 +877,6 @@ block0(v0: i128, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   add sp,-16
-;   sd ra,8(sp)
-;   sd fp,0(sp)
-;   mv fp,sp
-;   sd s7,-8(sp)
-;   add sp,-16
 ; block0:
 ;   li a6,42
 ;   li a7,0
@@ -936,50 +884,33 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   xor a1,a1,a7
 ;   or a0,a0,a1
 ;   seqz a0,a0
-;   sub s7,zero,a0
-;   and a1,a2,s7
-;   and a2,a3,s7
-;   not a0,s7
-;   not a3,s7
-;   and a0,a4,a0
-;   and a3,a5,a3
-;   or a0,a1,a0
+;   sub a1,zero,a0
+;   and a0,a1,a2
+;   not a2,a1
+;   and a2,a4,a2
+;   or a0,a0,a2
+;   and a2,a1,a3
+;   not a1,a1
+;   and a3,a5,a1
 ;   or a1,a2,a3
-;   add sp,+16
-;   ld s7,-8(sp)
-;   ld ra,8(sp)
-;   ld fp,0(sp)
-;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi sp, sp, -0x10
-;   sd ra, 8(sp)
-;   sd s0, 0(sp)
-;   mv s0, sp
-;   sd s7, -8(sp)
-;   addi sp, sp, -0x10
-; block1: ; offset 0x18
 ;   addi a6, zero, 0x2a
 ;   mv a7, zero
 ;   xor a0, a0, a6
 ;   xor a1, a1, a7
 ;   or a0, a0, a1
 ;   seqz a0, a0
-;   neg s7, a0
-;   and a1, a2, s7
-;   and a2, a3, s7
-;   not a0, s7
-;   not a3, s7
-;   and a0, a4, a0
-;   and a3, a5, a3
-;   or a0, a1, a0
+;   neg a1, a0
+;   and a0, a1, a2
+;   not a2, a1
+;   and a2, a4, a2
+;   or a0, a0, a2
+;   and a2, a1, a3
+;   not a1, a1
+;   and a3, a5, a1
 ;   or a1, a2, a3
-;   addi sp, sp, 0x10
-;   ld s7, -8(sp)
-;   ld ra, 8(sp)
-;   ld s0, 0(sp)
-;   addi sp, sp, 0x10
 ;   ret
 
