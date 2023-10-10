@@ -65,7 +65,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
         // NB: this resource created here is not actually exposed to wasm, it's
         // only an internal implementation detail used to match the signature
         // expected by `subscribe`.
-        let sleep = self.table_mut().push_resource(Sleep(deadline))?;
+        let sleep = self.table_mut().push(Sleep(deadline))?;
         subscribe(self.table_mut(), sleep)
     }
 }

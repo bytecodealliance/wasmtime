@@ -26,7 +26,7 @@ pub trait WasiHttpView: Send {
             // TODO: this needs to be plumbed through
             between_bytes_timeout: std::time::Duration::from_millis(600 * 1000),
         };
-        Ok(self.table().push_resource(HostIncomingRequest {
+        Ok(self.table().push(HostIncomingRequest {
             parts,
             body: Some(body),
         })?)
@@ -38,9 +38,7 @@ pub trait WasiHttpView: Send {
             Result<hyper::Response<HyperOutgoingBody>, types::Error>,
         >,
     ) -> wasmtime::Result<Resource<HostResponseOutparam>> {
-        let id = self
-            .table()
-            .push_resource(HostResponseOutparam { result })?;
+        let id = self.table().push(HostResponseOutparam { result })?;
         Ok(id)
     }
 }

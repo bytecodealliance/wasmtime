@@ -180,7 +180,7 @@ async fn api_reactor() -> Result<()> {
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let writepipe = preview2::pipe::MemoryOutputPipe::new(4096);
     let stream: preview2::OutputStream = Box::new(writepipe.clone());
-    let table_ix = store.data_mut().table_mut().push_resource(stream)?;
+    let table_ix = store.data_mut().table_mut().push(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 

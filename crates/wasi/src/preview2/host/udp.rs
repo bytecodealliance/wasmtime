@@ -29,7 +29,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
         let table = self.table_mut();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
 
         match socket.udp_state {
             UdpState::Default => {}
@@ -39,7 +39,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
             UdpState::Bound | UdpState::Connected(..) => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let network = table.get_resource(&network)?;
+        let network = table.get(&network)?;
         let binder = network.pool.udp_binder(local_address)?;
 
         // Perform the OS bind call.
@@ -49,7 +49,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
                 .as_socketlike_view::<cap_std::net::UdpSocket>(),
         )?;
 
-        let socket = table.get_resource_mut(&this)?;
+        let socket = table.get_mut(&this)?;
         socket.udp_state = UdpState::BindStarted;
 
         Ok(())
@@ -57,7 +57,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn finish_bind(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<()> {
         let table = self.table_mut();
-        let socket = table.get_resource_mut(&this)?;
+        let socket = table.get_mut(&this)?;
 
         match socket.udp_state {
             UdpState::BindStarted => {
@@ -75,8 +75,8 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
         let table = self.table_mut();
-        let socket = table.get_resource(&this)?;
-        let network = table.get_resource(&network)?;
+        let socket = table.get(&this)?;
+        let network = table.get(&network)?;
 
         match socket.udp_state {
             UdpState::Default | UdpState::Bound => {}
@@ -95,14 +95,14 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
                 .as_socketlike_view::<cap_std::net::UdpSocket>(),
         )?;
 
-        let socket = table.get_resource_mut(&this)?;
+        let socket = table.get_mut(&this)?;
         socket.udp_state = UdpState::Connecting(remote_address);
         Ok(())
     }
 
     fn finish_connect(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<()> {
         let table = self.table_mut();
-        let socket = table.get_resource_mut(&this)?;
+        let socket = table.get_mut(&this)?;
 
         match socket.udp_state {
             UdpState::Connecting(addr) => {
@@ -123,7 +123,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         }
 
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
 
         let udp_socket = socket.udp_socket();
         let mut datagrams = vec![];
@@ -171,7 +171,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
             return Ok(0);
         };
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
 
         let udp_socket = socket.udp_socket();
         let mut count = 0;
@@ -223,7 +223,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn local_address(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<IpSocketAddress> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         let addr = socket
             .udp_socket()
             .as_socketlike_view::<std::net::UdpSocket>()
@@ -233,7 +233,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn remote_address(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<IpSocketAddress> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         let addr = socket
             .udp_socket()
             .as_socketlike_view::<std::net::UdpSocket>()
@@ -246,7 +246,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         this: Resource<udp::UdpSocket>,
     ) -> Result<IpAddressFamily, anyhow::Error> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         match socket.family {
             AddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
             AddressFamily::Ipv6 => Ok(IpAddressFamily::Ipv6),
@@ -255,19 +255,19 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn ipv6_only(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<bool> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         Ok(sockopt::get_ipv6_v6only(socket.udp_socket())?)
     }
 
     fn set_ipv6_only(&mut self, this: Resource<udp::UdpSocket>, value: bool) -> SocketResult<()> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         Ok(sockopt::set_ipv6_v6only(socket.udp_socket(), value)?)
     }
 
     fn unicast_hop_limit(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u8> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
 
         // We don't track whether the socket is IPv4 or IPv6 so try one and
         // fall back to the other.
@@ -288,7 +288,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         value: u8,
     ) -> SocketResult<()> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
 
         // We don't track whether the socket is IPv4 or IPv6 so try one and
         // fall back to the other.
@@ -301,7 +301,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn receive_buffer_size(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u64> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         Ok(sockopt::get_socket_recv_buffer_size(socket.udp_socket())? as u64)
     }
 
@@ -311,7 +311,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         value: u64,
     ) -> SocketResult<()> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         let value = value.try_into().map_err(|_| ErrorCode::OutOfMemory)?;
         Ok(sockopt::set_socket_recv_buffer_size(
             socket.udp_socket(),
@@ -321,7 +321,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn send_buffer_size(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u64> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         Ok(sockopt::get_socket_send_buffer_size(socket.udp_socket())? as u64)
     }
 
@@ -331,7 +331,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         value: u64,
     ) -> SocketResult<()> {
         let table = self.table();
-        let socket = table.get_resource(&this)?;
+        let socket = table.get(&this)?;
         let value = value.try_into().map_err(|_| ErrorCode::OutOfMemory)?;
         Ok(sockopt::set_socket_send_buffer_size(
             socket.udp_socket(),
@@ -348,7 +348,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
         // As in the filesystem implementation, we assume closing a socket
         // doesn't block.
-        let dropped = table.delete_resource(this)?;
+        let dropped = table.delete(this)?;
         drop(dropped);
 
         Ok(())

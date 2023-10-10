@@ -357,7 +357,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
             Some(Descriptor::File(file @ File { fd, .. })) => {
-                self.view.table().get_resource(fd)?.file()?;
+                self.view.table().get(fd)?.file()?;
                 Ok(file)
             }
             _ => Err(types::Errno::Badf.into()),
@@ -370,7 +370,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
         let fd = fd.into();
         match self.descriptors.get_mut(&fd) {
             Some(Descriptor::File(file)) => {
-                self.view.table().get_resource(&file.fd)?.file()?;
+                self.view.table().get(&file.fd)?.file()?;
                 Ok(file)
             }
             _ => Err(types::Errno::Badf.into()),
@@ -387,7 +387,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
             Some(Descriptor::File(file @ File { fd, .. }))
-                if self.view.table().get_resource(fd)?.is_file() =>
+                if self.view.table().get(fd)?.is_file() =>
             {
                 Ok(file)
             }
@@ -424,9 +424,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     fn get_dir_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
-            Some(Descriptor::File(File { fd, .. }))
-                if self.view.table().get_resource(fd)?.is_dir() =>
-            {
+            Some(Descriptor::File(File { fd, .. })) if self.view.table().get(fd)?.is_dir() => {
                 Ok(fd.borrowed())
             }
             Some(Descriptor::PreopenDirectory((fd, _))) => Ok(fd.borrowed()),
@@ -1322,7 +1320,7 @@ impl<
                 blocking_mode,
                 position,
                 ..
-            }) if t.view.table().get_resource(fd)?.is_file() => {
+            }) if t.view.table().get(fd)?.is_file() => {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 let position = position.clone();
@@ -1378,7 +1376,7 @@ impl<
         let (mut buf, read) = match desc {
             Descriptor::File(File {
                 fd, blocking_mode, ..
-            }) if t.view.table().get_resource(fd)?.is_file() => {
+            }) if t.view.table().get(fd)?.is_file() => {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 drop(t);
@@ -1425,7 +1423,7 @@ impl<
                 blocking_mode,
                 append,
                 position,
-            }) if t.view.table().get_resource(fd)?.is_file() => {
+            }) if t.view.table().get(fd)?.is_file() => {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 let position = position.clone();
@@ -1488,7 +1486,7 @@ impl<
         let n = match desc {
             Descriptor::File(File {
                 fd, blocking_mode, ..
-            }) if t.view.table().get_resource(fd)?.is_file() => {
+            }) if t.view.table().get(fd)?.is_file() => {
                 let fd = fd.borrowed();
                 let blocking_mode = *blocking_mode;
                 drop(t);
@@ -1652,7 +1650,7 @@ impl<
         for (entry, d_next) in self
             .table_mut()
             // remove iterator from table and use it directly:
-            .delete_resource(stream)?
+            .delete(stream)?
             .into_iter()
             .zip(3u64..)
         {
@@ -1885,7 +1883,7 @@ impl<
         let dirfd = match t.get_descriptor(dirfd)? {
             Descriptor::PreopenDirectory((fd, _)) => fd.borrowed(),
             Descriptor::File(File { fd, .. }) => {
-                t.view.table().get_resource(fd)?.dir()?;
+                t.view.table().get(fd)?.dir()?;
                 fd.borrowed()
             }
             _ => return Err(types::Errno::Badf.into()),
@@ -2084,7 +2082,7 @@ impl<
                         match desc {
                             Descriptor::Stdin { stream, .. } => stream.borrowed(),
                             Descriptor::File(File { fd, position, .. })
-                                if t.view.table().get_resource(fd)?.is_file() =>
+                                if t.view.table().get(fd)?.is_file() =>
                             {
                                 let pos = position.load(Ordering::Relaxed);
                                 let fd = fd.borrowed();
@@ -2117,7 +2115,7 @@ impl<
                                 position,
                                 append,
                                 ..
-                            }) if t.view.table().get_resource(fd)?.is_file() => {
+                            }) if t.view.table().get(fd)?.is_file() => {
                                 let fd = fd.borrowed();
                                 let position = position.clone();
                                 let append = *append;
@@ -2190,7 +2188,7 @@ impl<
                             },
                         },
                         Descriptor::File(File { fd, position, .. })
-                            if t.view.table().get_resource(fd)?.is_file() =>
+                            if t.view.table().get(fd)?.is_file() =>
                         {
                             let fd = fd.borrowed();
                             let position = position.clone();
@@ -2234,9 +2232,7 @@ impl<
                                 nbytes: 1,
                             },
                         },
-                        Descriptor::File(File { fd, .. })
-                            if t.view.table().get_resource(fd)?.is_file() =>
-                        {
+                        Descriptor::File(File { fd, .. }) if t.view.table().get(fd)?.is_file() => {
                             types::Event {
                                 userdata: sub.userdata,
                                 error: types::Errno::Success,

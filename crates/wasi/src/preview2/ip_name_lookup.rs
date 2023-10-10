@@ -23,7 +23,7 @@ impl<T: WasiView> Host for T {
         family: Option<IpAddressFamily>,
         include_unavailable: bool,
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
-        let network = self.table().get_resource(&network)?;
+        let network = self.table().get(&network)?;
 
         // `Host::parse` serves us two functions:
         // 1. validate the input is not an IP address,
@@ -74,9 +74,7 @@ impl<T: WasiView> Host for T {
                 })
                 .collect())
         });
-        let resource = self
-            .table_mut()
-            .push_resource(ResolveAddressStream::Waiting(task))?;
+        let resource = self.table_mut().push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }
 }
@@ -87,7 +85,7 @@ impl<T: WasiView> HostResolveAddressStream for T {
         &mut self,
         resource: Resource<ResolveAddressStream>,
     ) -> Result<Option<IpAddress>, SocketError> {
-        let stream = self.table_mut().get_resource_mut(&resource)?;
+        let stream = self.table_mut().get_mut(&resource)?;
         loop {
             match stream {
                 ResolveAddressStream::Waiting(future) => {
@@ -115,7 +113,7 @@ impl<T: WasiView> HostResolveAddressStream for T {
     }
 
     fn drop(&mut self, resource: Resource<ResolveAddressStream>) -> Result<()> {
-        self.table_mut().delete_resource(resource)?;
+        self.table_mut().delete(resource)?;
         Ok(())
     }
 }
