@@ -531,6 +531,13 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
         Imm12::maybe_from_u64(neg.trailing_zeros().into())
     }
+
+    fn binv_imm(&mut self, i: u64) -> Option<Imm12> {
+        if i.count_ones() != 1 {
+            return None;
+        }
+        Imm12::maybe_from_u64(i.trailing_zeros().into())
+    }
 }
 
 /// The main entry point for lowering with ISLE.

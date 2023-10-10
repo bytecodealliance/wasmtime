@@ -863,6 +863,33 @@
   (if-let x_imm (replicated_imm5 x))
   (rv_vxor_vi y x_imm (unmasked) ty))
 
+;; `binv{,i}` specializations from `zbs`
+
+(rule 13 (lower (has_type $I32 (bxor x (ishl (i64_from_iconst 1) y))))
+  (if-let $true (has_zbs))
+  (rv_binv x (rv_andi y (imm12_const 31))))
+(rule 14 (lower (has_type $I32 (bxor (ishl (i64_from_iconst 1) y) x)))
+  (if-let $true (has_zbs))
+  (rv_binv x (rv_andi y (imm12_const 31))))
+
+(rule 13 (lower (has_type $I64 (bxor x (ishl (i64_from_iconst 1) y))))
+  (if-let $true (has_zbs))
+  (rv_binv x y))
+(rule 14 (lower (has_type $I64 (bxor (ishl (i64_from_iconst 1) y) x)))
+  (if-let $true (has_zbs))
+  (rv_binv x y))
+
+(rule 15 (lower (has_type (fits_in_64 _) (bxor x (u64_from_iconst n))))
+  (if-let $true (has_zbs))
+  (if-let imm (binv_imm n))
+  (rv_binvi x imm))
+(rule 16 (lower (has_type (fits_in_64 _) (bxor (u64_from_iconst n) x)))
+  (if-let $true (has_zbs))
+  (if-let imm (binv_imm n))
+  (rv_binvi x imm))
+
+(decl pure partial binv_imm (u64) Imm12)
+(extern constructor binv_imm binv_imm)
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar ty) (bnot x)))
