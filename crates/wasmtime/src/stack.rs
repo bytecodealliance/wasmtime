@@ -8,7 +8,7 @@ use wasmtime_fiber::{RuntimeFiberStack, RuntimeFiberStackCreator};
 ///
 /// # Safety
 ///
-/// This trait is unsafe, as memory safety depends on a proper implemenation
+/// This trait is unsafe, as memory safety depends on a proper implementation
 /// of memory management. Stacks created by the StackCreator should always be
 /// treated as owned by an wasmtime instance, and any modification of them
 /// outside of wasmtime invoked routines is unsafe and may lead to corruption.

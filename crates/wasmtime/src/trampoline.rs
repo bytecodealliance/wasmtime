@@ -41,10 +41,7 @@ fn create_handle(
         let module = Arc::new(module);
         let runtime_info =
             &BareModuleInfo::maybe_imported_func(module, one_signature).into_traitobj();
-        #[cfg(feature = "async")]
-        let allocator = OnDemandInstanceAllocator::new(config.mem_creator.clone(), None, 0);
-        #[cfg(not(feature = "async"))]
-        let allocator = OnDemandInstanceAllocator::new(config.mem_creator.clone());
+        let allocator = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0);
         let handle = allocator.allocate_module(InstanceAllocationRequest {
             imports,
             host_state,

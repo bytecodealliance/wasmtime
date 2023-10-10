@@ -38,19 +38,13 @@ use std::ops::Range;
 use std::ptr;
 
 pub enum FiberStack {
-    Mmap {
+    Default {
         // The top of the stack; for stacks allocated by the fiber implementation itself,
         // the base address of the allocation will be `top.sub(len.unwrap())`
         top: *mut u8,
         // The length of the stack
         len: usize,
-    },
-    Manual {
-        // The top of the stack; for stacks allocated by the fiber implementation itself,
-        // the base address of the allocation will be `top.sub(len.unwrap())`
-        top: *mut u8,
-        // The length of the stack
-        len: usize,
+        mmap: bool,
     },
     Custom(Box<dyn RuntimeFiberStack>),
 }
@@ -82,17 +76,19 @@ impl FiberStack {
                 rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE,
             )?;
 
-            Ok(Self::Mmap {
+            Ok(Self::Default {
                 top: mmap.cast::<u8>().add(mmap_len),
                 len: mmap_len,
+                mmap: true,
             })
         }
     }
 
     pub unsafe fn from_raw_parts(base: *mut u8, len: usize) -> io::Result<Self> {
-        Ok(Self::Manual {
+        Ok(Self::Default {
             top: base.add(len),
             len,
+            mmap: false,
         })
     }
 
@@ -102,23 +98,50 @@ impl FiberStack {
 
     pub fn top(&self) -> Option<*mut u8> {
         Some(match self {
-            FiberStack::Mmap { top, len: _ } => *top,
-            FiberStack::Manual { top, len: _ } => *top,
-            FiberStack::Custom(r) => r.top(),
+            FiberStack::Default {
+                top,
+                len: _,
+                mmap: _,
+            } => *top,
+            FiberStack::Custom(r) => {
+                let top = r.top();
+                let page_size = rustix::param::page_size();
+                assert!(
+                    top.align_offset(page_size) == 0,
+                    "expected fiber stack top ({}) to be page aligned ({})",
+                    top as usize,
+                    page_size
+                );
+                top
+            }
         })
     }
 
     pub fn range(&self) -> Option<Range<usize>> {
         Some(match self {
-            FiberStack::Mmap { top, len } => {
+            FiberStack::Default { top, len, mmap: _ } => {
                 let base = unsafe { top.sub(*len) as usize };
                 base..base + len
             }
-            FiberStack::Manual { top, len } => {
-                let base = unsafe { top.sub(*len) as usize };
-                base..base + len
+            FiberStack::Custom(s) => {
+                let range = s.range();
+                let page_size = rustix::param::page_size();
+                let start_ptr = range.start as *const u8;
+                assert!(
+                    start_ptr.align_offset(page_size) == 0,
+                    "expected fiber stack end ({}) to be page aligned ({})",
+                    range.start as usize,
+                    page_size
+                );
+                let end_ptr = range.end as *const u8;
+                assert!(
+                    end_ptr.align_offset(page_size) == 0,
+                    "expected fiber stack start ({}) to be page aligned ({})",
+                    range.end as usize,
+                    page_size
+                );
+                range
             }
-            FiberStack::Custom(r) => r.range(),
         })
     }
 }
@@ -126,7 +149,12 @@ impl FiberStack {
 impl Drop for FiberStack {
     fn drop(&mut self) {
         unsafe {
-            if let FiberStack::Mmap { top, len } = self {
+            if let FiberStack::Default {
+                top,
+                len,
+                mmap: true,
+            } = self
+            {
                 let ret = rustix::mm::munmap(top.sub(*len) as _, *len);
                 debug_assert!(ret.is_ok());
             }

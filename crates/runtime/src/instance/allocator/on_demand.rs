@@ -33,22 +33,20 @@ pub struct OnDemandInstanceAllocator {
 
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
-    #[cfg(feature = "async")]
-    pub fn new(
-        mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
-        stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
-        stack_size: usize,
-    ) -> Self {
+    pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
         Self {
             mem_creator,
-            stack_creator,
+            #[cfg(feature = "async")]
+            stack_creator: None,
             #[cfg(feature = "async")]
             stack_size,
         }
     }
-    #[cfg(not(feature = "async"))]
-    pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>) -> Self {
-        Self { mem_creator }
+
+    /// Set the stack creator.
+    #[cfg(feature = "async")]
+    pub fn set_stack_creator(&mut self, stack_creator: Arc<dyn RuntimeFiberStackCreator>) {
+        self.stack_creator = Some(stack_creator);
     }
 }
 
