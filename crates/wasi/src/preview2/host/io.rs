@@ -305,9 +305,9 @@ pub mod sync {
             stream: Resource<OutputStream>,
             bytes: Vec<u8>,
         ) -> StreamResult<()> {
-            Ok(in_tokio(async {
+            in_tokio(async {
                 AsyncHostOutputStream::blocking_write_and_flush(self, stream, bytes).await
-            })?)
+            })
         }
 
         fn blocking_write_zeroes_and_flush(
@@ -315,9 +315,9 @@ pub mod sync {
             stream: Resource<OutputStream>,
             len: u64,
         ) -> StreamResult<()> {
-            Ok(in_tokio(async {
+            in_tokio(async {
                 AsyncHostOutputStream::blocking_write_zeroes_and_flush(self, stream, len).await
-            })?)
+            })
         }
 
         fn subscribe(
@@ -339,10 +339,10 @@ pub mod sync {
         }
 
         fn blocking_flush(&mut self, stream: Resource<OutputStream>) -> StreamResult<()> {
-            Ok(in_tokio(async {
+            in_tokio(async {
                 AsyncHostOutputStream::blocking_flush(self, Resource::new_borrow(stream.rep()))
                     .await
-            })?)
+            })
         }
 
         fn splice(
@@ -351,9 +351,7 @@ pub mod sync {
             src: Resource<InputStream>,
             len: u64,
         ) -> StreamResult<u64> {
-            Ok(in_tokio(async {
-                AsyncHostOutputStream::splice(self, dst, src, len).await
-            })?)
+            in_tokio(async { AsyncHostOutputStream::splice(self, dst, src, len).await })
         }
 
         fn blocking_splice(
@@ -362,9 +360,7 @@ pub mod sync {
             src: Resource<InputStream>,
             len: u64,
         ) -> StreamResult<u64> {
-            Ok(in_tokio(async {
-                AsyncHostOutputStream::blocking_splice(self, dst, src, len).await
-            })?)
+            in_tokio(async { AsyncHostOutputStream::blocking_splice(self, dst, src, len).await })
         }
 
         fn forward(
@@ -372,9 +368,7 @@ pub mod sync {
             dst: Resource<OutputStream>,
             src: Resource<InputStream>,
         ) -> StreamResult<u64> {
-            Ok(in_tokio(async {
-                AsyncHostOutputStream::forward(self, dst, src).await
-            })?)
+            in_tokio(async { AsyncHostOutputStream::forward(self, dst, src).await })
         }
     }
 
@@ -384,9 +378,7 @@ pub mod sync {
         }
 
         fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
-            Ok(in_tokio(async {
-                AsyncHostInputStream::read(self, stream, len).await
-            })?)
+            in_tokio(async { AsyncHostInputStream::read(self, stream, len).await })
         }
 
         fn blocking_read(
@@ -394,21 +386,15 @@ pub mod sync {
             stream: Resource<InputStream>,
             len: u64,
         ) -> StreamResult<Vec<u8>> {
-            Ok(in_tokio(async {
-                AsyncHostInputStream::blocking_read(self, stream, len).await
-            })?)
+            in_tokio(async { AsyncHostInputStream::blocking_read(self, stream, len).await })
         }
 
         fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
-            Ok(in_tokio(async {
-                AsyncHostInputStream::skip(self, stream, len).await
-            })?)
+            in_tokio(async { AsyncHostInputStream::skip(self, stream, len).await })
         }
 
         fn blocking_skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
-            Ok(in_tokio(async {
-                AsyncHostInputStream::blocking_skip(self, stream, len).await
-            })?)
+            in_tokio(async { AsyncHostInputStream::blocking_skip(self, stream, len).await })
         }
 
         fn subscribe(
