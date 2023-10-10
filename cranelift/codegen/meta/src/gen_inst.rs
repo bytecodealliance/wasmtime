@@ -1,18 +1,16 @@
 //! Generate instruction data (including opcodes, formats, builders, etc.).
-use std::fmt;
-use std::rc::Rc;
-
-use cranelift_codegen_shared::constant_hash;
 
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::{AllInstructions, Instruction};
 use crate::cdsl::operands::Operand;
 use crate::cdsl::typevar::{TypeSet, TypeVar};
-
 use crate::error;
 use crate::srcgen::{Formatter, Match};
 use crate::unique_table::{UniqueSeqTable, UniqueTable};
+use cranelift_codegen_shared::constant_hash;
+use std::fmt::{self, Write};
+use std::rc::Rc;
 
 // TypeSet indexes are encoded in 8 bits, with `0xff` reserved.
 const TYPESET_LIMIT: usize = 0xff;
@@ -1218,6 +1216,24 @@ enum IsleTarget {
     Lower,
     /// Generating code for CLIF to CLIF optimizations.
     Opt,
+    /// Code for CLIF-to-CLIF legalization.
+    Legalize,
+}
+
+impl IsleTarget {
+    fn ret_ty(&self) -> &'static str {
+        match self {
+            IsleTarget::Lower => "Inst",
+            IsleTarget::Opt => "Value",
+            IsleTarget::Legalize => "Inst",
+        }
+    }
+    fn ignore_value_lists(&self) -> bool {
+        matches!(self, IsleTarget::Opt | IsleTarget::Legalize)
+    }
+    fn match_type(&self) -> bool {
+        matches!(self, IsleTarget::Opt)
+    }
 }
 
 fn gen_common_isle(
@@ -1227,7 +1243,6 @@ fn gen_common_isle(
     isle_target: IsleTarget,
 ) {
     use std::collections::{BTreeMap, BTreeSet};
-    use std::fmt::Write;
 
     use crate::cdsl::formats::FormatField;
 
@@ -1415,12 +1430,9 @@ fn gen_common_isle(
         ";;;; Extracting Opcode, Operands, and Immediates from `InstructionData` ;;;;;;;;",
     );
     fmt.empty_line();
-    let ret_ty = match isle_target {
-        IsleTarget::Lower => "Inst",
-        IsleTarget::Opt => "Value",
-    };
+    let ret_ty = isle_target.ret_ty();
     for inst in instructions {
-        if isle_target == IsleTarget::Opt
+        if isle_target.ignore_value_lists()
             && (inst.format.has_value_list || inst.value_results.len() != 1)
         {
             continue;
@@ -1430,9 +1442,10 @@ fn gen_common_isle(
             fmt,
             "(decl {} ({}{}) {})",
             inst.name,
-            match isle_target {
-                IsleTarget::Lower => "",
-                IsleTarget::Opt => "Type ",
+            if isle_target.match_type() {
+                "Type "
+            } else {
+                ""
             },
             inst.operands_in
                 .iter()
@@ -1454,10 +1467,7 @@ fn gen_common_isle(
                 fmt,
                 "({} {}{})",
                 inst.name,
-                match isle_target {
-                    IsleTarget::Lower => "",
-                    IsleTarget::Opt => "ty ",
-                },
+                if isle_target.match_type() { "ty " } else { "" },
                 inst.operands_in
                     .iter()
                     .map(|o| { o.name })
@@ -1467,10 +1477,7 @@ fn gen_common_isle(
 
             let mut s = format!(
                 "(inst_data{} (InstructionData.{} (Opcode.{})",
-                match isle_target {
-                    IsleTarget::Lower => "",
-                    IsleTarget::Opt => " ty",
-                },
+                if isle_target.match_type() { " ty" } else { "" },
                 inst.format.name,
                 inst.camel_name
             );
@@ -1570,118 +1577,27 @@ fn gen_common_isle(
         });
         fmt.line(")");
 
-        // Generate a constructor if this is the mid-end prelude.
-        if isle_target == IsleTarget::Opt {
-            fmtln!(
-                fmt,
-                "(rule ({} ty {})",
-                inst.name,
-                inst.operands_in
-                    .iter()
-                    .map(|o| o.name)
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            );
-            fmt.indent(|fmt| {
-                let mut s = format!(
-                    "(make_inst ty (InstructionData.{} (Opcode.{})",
-                    inst.format.name, inst.camel_name
-                );
+        match isle_target {
+            // Lowering doens't generate new CLIF nodes.
+            IsleTarget::Lower => {}
 
-                // Handle values. Note that we skip generating
-                // constructors for any instructions with variadic
-                // value lists. This is fine for the mid-end because
-                // in practice only calls and branches (for branch
-                // args) use this functionality, and neither can
-                // really be optimized or rewritten in the mid-end
-                // (currently).
-                //
-                // As a consequence, we only have to handle the
-                // one-`Value` case, in which the `Value` is directly
-                // in the `InstructionData`, and the multiple-`Value`
-                // case, in which the `Value`s are in a
-                // statically-sized array (e.g. `[Value; 2]` for a
-                // binary op).
-                assert!(!inst.format.has_value_list);
-                if inst.format.num_value_operands == 1 {
-                    write!(
-                        &mut s,
-                        " {}",
-                        inst.operands_in.iter().find(|o| o.is_value()).unwrap().name
-                    )
-                    .unwrap();
-                } else if inst.format.num_value_operands > 1 {
-                    // As above, get all bindings together, and pass
-                    // to a sub-term; here we use a constructor to
-                    // build the value array.
-                    let values = inst
-                        .operands_in
-                        .iter()
-                        .filter(|o| o.is_value())
-                        .map(|o| o.name)
-                        .collect::<Vec<_>>();
-                    assert_eq!(values.len(), inst.format.num_value_operands);
-                    let values = values.join(" ");
-                    write!(
-                        &mut s,
-                        " (value_array_{}_ctor {})",
-                        inst.format.num_value_operands, values
-                    )
-                    .unwrap();
-                }
+            // Optimizations generate new CLIF nodes so make a new constructor
+            // which delegates to a `make_inst` helper. Note that this
+            // constructor has the same signature as the extractor above, so
+            // don't give it a prefix.
+            IsleTarget::Opt => gen_insn_constructor(fmt, inst, "", "make_inst", "Value"),
 
-                if inst.format.num_block_operands > 0 {
-                    let blocks: Vec<_> = inst
-                        .operands_in
-                        .iter()
-                        .filter(|o| o.kind.is_block())
-                        .map(|o| o.name)
-                        .collect();
-                    if inst.format.num_block_operands == 1 {
-                        write!(&mut s, " {}", blocks.first().unwrap(),).unwrap();
-                    } else {
-                        write!(
-                            &mut s,
-                            " (block_array_{} {})",
-                            inst.format.num_block_operands,
-                            blocks.join(" ")
-                        )
-                        .unwrap();
-                    }
-                }
-
-                // Immediates (non-value args).
-                for o in inst
-                    .operands_in
-                    .iter()
-                    .filter(|o| !o.is_value() && !o.is_varargs() && !o.kind.is_block())
-                {
-                    write!(&mut s, " {}", o.name).unwrap();
-                }
-                s.push_str("))");
-                fmt.line(&s);
-            });
-            fmt.line(")");
+            // During legalization new instructions are either inserted just
+            // before the current instruction with `ins_*` or they're replacing
+            // the current instruction with `replace_*`.
+            IsleTarget::Legalize => {
+                gen_insn_constructor(fmt, inst, "ins_", "ins", "Inst");
+                gen_insn_constructor(fmt, inst, "replace_", "replace", "Inst");
+            }
         }
 
         fmt.empty_line();
     }
-}
-
-fn gen_opt_isle(
-    formats: &[Rc<InstructionFormat>],
-    instructions: &AllInstructions,
-    fmt: &mut Formatter,
-) {
-    gen_common_isle(formats, instructions, fmt, IsleTarget::Opt);
-}
-
-fn gen_lower_isle(
-    formats: &[Rc<InstructionFormat>],
-    instructions: &AllInstructions,
-    fmt: &mut Formatter,
-) {
-    gen_common_isle(formats, instructions, fmt, IsleTarget::Lower);
 }
 
 /// Generate an `enum` immediate in ISLE.
@@ -1702,6 +1618,123 @@ fn gen_isle_enum(name: &str, mut variants: Vec<&str>, fmt: &mut Formatter) {
     });
     fmt.line(")");
     fmt.empty_line();
+}
+
+fn gen_insn_constructor(
+    fmt: &mut Formatter,
+    inst: &Instruction,
+    prefix: &str,
+    common_ctor: &str,
+    ret_ty: &str,
+) {
+    // Generate a constructor if this is the mid-end prelude.
+    let input_tys = inst
+        .operands_in
+        .iter()
+        .map(|o| {
+            let ty = o.kind.rust_type;
+            if ty == "&[Value]" {
+                "ValueSlice"
+            } else {
+                ty.rsplit("::").next().unwrap()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    if prefix != "" {
+        fmtln!(
+            fmt,
+            "(decl {prefix}{} (Type {input_tys}) {ret_ty})",
+            inst.name
+        );
+    }
+    let input_args = inst
+        .operands_in
+        .iter()
+        .map(|o| o.name)
+        .collect::<Vec<_>>()
+        .join(" ");
+    fmtln!(fmt, "(rule ({prefix}{} ty {input_args})", inst.name);
+    fmt.indent(|fmt| {
+        let mut s = format!(
+            "({common_ctor} ty (InstructionData.{} (Opcode.{})",
+            inst.format.name, inst.camel_name
+        );
+
+        // Handle values. Note that we skip generating
+        // constructors for any instructions with variadic
+        // value lists. This is fine for the mid-end because
+        // in practice only calls and branches (for branch
+        // args) use this functionality, and neither can
+        // really be optimized or rewritten in the mid-end
+        // (currently).
+        //
+        // As a consequence, we only have to handle the
+        // one-`Value` case, in which the `Value` is directly
+        // in the `InstructionData`, and the multiple-`Value`
+        // case, in which the `Value`s are in a
+        // statically-sized array (e.g. `[Value; 2]` for a
+        // binary op).
+        assert!(!inst.format.has_value_list);
+        if inst.format.num_value_operands == 1 {
+            write!(
+                &mut s,
+                " {}",
+                inst.operands_in.iter().find(|o| o.is_value()).unwrap().name
+            )
+            .unwrap();
+        } else if inst.format.num_value_operands > 1 {
+            // As above, get all bindings together, and pass
+            // to a sub-term; here we use a constructor to
+            // build the value array.
+            let values = inst
+                .operands_in
+                .iter()
+                .filter(|o| o.is_value())
+                .map(|o| o.name)
+                .collect::<Vec<_>>();
+            assert_eq!(values.len(), inst.format.num_value_operands);
+            let values = values.join(" ");
+            write!(
+                &mut s,
+                " (value_array_{}_ctor {})",
+                inst.format.num_value_operands, values
+            )
+            .unwrap();
+        }
+
+        if inst.format.num_block_operands > 0 {
+            let blocks: Vec<_> = inst
+                .operands_in
+                .iter()
+                .filter(|o| o.kind.is_block())
+                .map(|o| o.name)
+                .collect();
+            if inst.format.num_block_operands == 1 {
+                write!(&mut s, " {}", blocks.first().unwrap(),).unwrap();
+            } else {
+                write!(
+                    &mut s,
+                    " (block_array_{} {})",
+                    inst.format.num_block_operands,
+                    blocks.join(" ")
+                )
+                .unwrap();
+            }
+        }
+
+        // Immediates (non-value args).
+        for o in inst
+            .operands_in
+            .iter()
+            .filter(|o| !o.is_value() && !o.is_varargs() && !o.kind.is_block())
+        {
+            write!(&mut s, " {}", o.name).unwrap();
+        }
+        s.push_str("))");
+        fmt.line(&s);
+    });
+    fmt.line(")");
 }
 
 /// Generate a Builder trait with methods for all instructions.
@@ -1746,10 +1779,6 @@ fn gen_builder(
 pub(crate) fn generate(
     formats: &[Rc<InstructionFormat>],
     all_inst: &AllInstructions,
-    opcode_filename: &str,
-    inst_builder_filename: &str,
-    isle_opt_filename: &str,
-    isle_lower_filename: &str,
     out_dir: &str,
     isle_dir: &str,
 ) -> Result<(), error::Error> {
@@ -1763,22 +1792,27 @@ pub(crate) fn generate(
     gen_opcodes(all_inst, &mut fmt);
     fmt.empty_line();
     gen_type_constraints(all_inst, &mut fmt);
-    fmt.update_file(opcode_filename, out_dir)?;
+    fmt.update_file("opcodes.rs", out_dir)?;
 
     // ISLE DSL: mid-end ("opt") generated bindings.
     let mut fmt = Formatter::new();
-    gen_opt_isle(&formats, all_inst, &mut fmt);
-    fmt.update_file(isle_opt_filename, isle_dir)?;
+    gen_common_isle(&formats, all_inst, &mut fmt, IsleTarget::Opt);
+    fmt.update_file("clif_opt.isle", isle_dir)?;
 
     // ISLE DSL: lowering generated bindings.
     let mut fmt = Formatter::new();
-    gen_lower_isle(&formats, all_inst, &mut fmt);
-    fmt.update_file(isle_lower_filename, isle_dir)?;
+    gen_common_isle(&formats, all_inst, &mut fmt, IsleTarget::Lower);
+    fmt.update_file("clif_lower.isle", isle_dir)?;
+
+    // ISLE DSL: legalizing CLIF to something backends can handle.
+    let mut fmt = Formatter::new();
+    gen_common_isle(&formats, all_inst, &mut fmt, IsleTarget::Legalize);
+    fmt.update_file("clif_legalize.isle", isle_dir)?;
 
     // Instruction builder.
     let mut fmt = Formatter::new();
     gen_builder(all_inst, &formats, &mut fmt);
-    fmt.update_file(inst_builder_filename, out_dir)?;
+    fmt.update_file("inst_builder.rs", out_dir)?;
 
     Ok(())
 }

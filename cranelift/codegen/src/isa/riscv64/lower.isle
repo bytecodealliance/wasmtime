@@ -1109,17 +1109,14 @@
 
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule 0 (lower (has_type (fits_in_64 _) (uextend val)))
   (zext val))
-(rule 1 (lower (has_type $I128 (uextend val)))
-  (value_regs (zext val) (imm $I64 0)))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule 0 (lower (has_type (fits_in_64 _) (sextend val @ (value_type in_ty))))
   (sext val))
-(rule 1 (lower (has_type $I128 (sextend val @ (value_type in_ty))))
-  (let ((lo XReg (sext val)))
-    (value_regs lo (rv_srai lo (imm12_const 63)))))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

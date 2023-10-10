@@ -181,6 +181,7 @@ fn get_isle_compilations(
     // Preludes.
     let clif_lower_isle = out_dir.join("clif_lower.isle");
     let clif_opt_isle = out_dir.join("clif_opt.isle");
+    let clif_legalize_isle = out_dir.join("clif_legalize.isle");
     let prelude_isle =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude.isle"));
     let prelude_opt_isle =
@@ -279,6 +280,16 @@ fn get_isle_compilations(
                     src_isa_risc_v.join("lower.isle"),
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],
+            },
+            // The risc-v legalizer.
+            IsleCompilation {
+                output: out_dir.join("legalize_riscv64.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    //..
+                    src_isa_risc_v.join("legalize.isle"),
+                ],
+                untracked_inputs: vec![clif_legalize_isle.clone()],
             },
         ],
     })

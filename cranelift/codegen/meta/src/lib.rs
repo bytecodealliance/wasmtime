@@ -37,10 +37,6 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str, isle_dir: &str) -> Result<(), 
     gen_inst::generate(
         &shared_defs.all_formats,
         &shared_defs.all_instructions,
-        "opcodes.rs",
-        "inst_builder.rs",
-        "clif_opt.isle",
-        "clif_lower.isle",
         out_dir,
         isle_dir,
     )?;

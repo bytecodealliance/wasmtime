@@ -291,6 +291,7 @@ impl Context {
 
         // Run some specific legalizations only.
         simple_legalize(&mut self.func, &mut self.cfg, isa);
+        isa.legalize_function(&mut self.func, &mut self.cfg);
         self.verify_if(isa)
     }
 
