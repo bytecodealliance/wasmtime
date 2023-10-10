@@ -16,6 +16,11 @@ use wasmtime_environ::Tunables;
 use wasmtime_jit::profiling::{self, ProfilingAgent};
 use wasmtime_runtime::{mpk, InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
+#[cfg(feature = "async")]
+use crate::stack::{StackCreator, StackCreatorProxy};
+#[cfg(feature = "async")]
+use wasmtime_fiber::RuntimeFiberStackCreator;
+
 pub use wasmtime_environ::CacheStore;
 pub use wasmtime_runtime::MpkEnabled;
 
@@ -105,6 +110,8 @@ pub struct Config {
     pub(crate) native_unwind_info: Option<bool>,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
+    #[cfg(feature = "async")]
+    pub(crate) stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
     pub(crate) async_support: bool,
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
@@ -199,6 +206,8 @@ impl Config {
             features: WasmFeatures::default(),
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
+            #[cfg(feature = "async")]
+            stack_creator: None,
             async_support: false,
             module_version: ModuleVersionStrategy::default(),
             parallel_compilation: !cfg!(miri),
@@ -1084,6 +1093,17 @@ impl Config {
         self
     }
 
+    /// Sets a custom stack creator.
+    ///
+    /// Custom memory creators are used when creating creating async instance stacks for
+    /// the on-demand instance allocation strategy.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn with_host_stack(&mut self, stack_creator: Arc<dyn StackCreator>) -> &mut Self {
+        self.stack_creator = Some(Arc::new(StackCreatorProxy(stack_creator)));
+        self
+    }
+
     /// Sets the instance allocation strategy to use.
     ///
     /// When using the pooling instance allocation strategy, all linear memories
@@ -1566,19 +1586,25 @@ impl Config {
     }
 
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator + Send + Sync>> {
-        #[cfg(feature = "async")]
-        let stack_size = self.async_stack_size;
-
-        #[cfg(not(feature = "async"))]
-        let stack_size = 0;
-
         match &self.allocation_strategy {
+            #[cfg(feature = "async")]
             InstanceAllocationStrategy::OnDemand => Ok(Box::new(OnDemandInstanceAllocator::new(
                 self.mem_creator.clone(),
-                stack_size,
+                self.stack_creator.clone(),
+                self.async_stack_size,
+            ))),
+            #[cfg(not(feature = "async"))]
+            InstanceAllocationStrategy::OnDemand => Ok(Box::new(OnDemandInstanceAllocator::new(
+                self.mem_creator.clone(),
             ))),
             #[cfg(feature = "pooling-allocator")]
             InstanceAllocationStrategy::Pooling(config) => {
+                #[cfg(feature = "async")]
+                let stack_size = self.async_stack_size;
+
+                #[cfg(not(feature = "async"))]
+                let stack_size = 0;
+
                 let mut config = config.config;
                 config.stack_size = stack_size;
                 Ok(Box::new(wasmtime_runtime::PoolingInstanceAllocator::new(

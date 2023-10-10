@@ -414,6 +414,9 @@ mod types;
 mod v128;
 mod values;
 
+#[cfg(feature = "async")]
+mod stack;
+
 pub use crate::config::*;
 pub use crate::coredump::*;
 pub use crate::engine::*;
@@ -436,6 +439,9 @@ pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::v128::V128;
 pub use crate::values::*;
+
+#[cfg(feature = "async")]
+pub use crate::stack::*;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.
 ///

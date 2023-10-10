@@ -3523,6 +3523,7 @@ dependencies = [
 name = "wasmtime-fiber"
 version = "15.0.0"
 dependencies = [
+ "anyhow",
  "backtrace",
  "cc",
  "cfg-if",

@@ -1,11 +1,15 @@
 use std::ffi::c_void;
 use std::future::Future;
 use std::mem::{self, MaybeUninit};
+use std::ops::Range;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::{ptr, str};
 
-use wasmtime::{AsContextMut, Caller, Func, Instance, Result, Trap, Val};
+use wasmtime::{
+    AsContextMut, Caller, Func, Instance, Result, StackCreator, StackMemory, Trap, Val,
+};
 
 use crate::{
     bad_utf8, handle_result, to_str, translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t,
@@ -334,4 +338,93 @@ pub extern "C" fn wasmtime_instance_pre_instantiate_async<'a>(
         err_ret,
     ));
     Box::new(crate::wasmtime_call_future_t { underlying: fut })
+}
+
+pub type wasmtime_stack_memory_get_callback_t =
+    extern "C" fn(env: *mut std::ffi::c_void, out_len: &mut usize) -> *mut u8;
+
+#[repr(C)]
+pub struct wasmtime_stack_memory_t {
+    env: *mut std::ffi::c_void,
+    get_stack_memory: wasmtime_stack_memory_get_callback_t,
+    finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
+}
+
+struct CHostStackMemory {
+    foreign: crate::ForeignData,
+    get_memory: wasmtime_stack_memory_get_callback_t,
+}
+unsafe impl Send for CHostStackMemory {}
+unsafe impl Sync for CHostStackMemory {}
+unsafe impl StackMemory for CHostStackMemory {
+    fn top(&self) -> *mut u8 {
+        let mut len = 0;
+        let cb = self.get_memory;
+        cb(self.foreign.data, &mut len)
+    }
+    fn range(&self) -> Range<usize> {
+        let mut len = 0;
+        let cb = self.get_memory;
+        let top = cb(self.foreign.data, &mut len);
+        let base = unsafe { top.sub(len) as usize };
+        base..base + len
+    }
+}
+
+pub type wasmtime_new_stack_memory_callback_t = extern "C" fn(
+    env: *mut std::ffi::c_void,
+    size: usize,
+    stack_ret: &mut wasmtime_stack_memory_t,
+) -> Option<Box<wasmtime_error_t>>;
+
+#[repr(C)]
+pub struct wasmtime_stack_creator_t {
+    env: *mut std::ffi::c_void,
+    new_stack: wasmtime_new_stack_memory_callback_t,
+    finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
+}
+
+struct CHostStackCreator {
+    foreign: crate::ForeignData,
+    new_stack: wasmtime_new_stack_memory_callback_t,
+}
+unsafe impl Send for CHostStackCreator {}
+unsafe impl Sync for CHostStackCreator {}
+unsafe impl StackCreator for CHostStackCreator {
+    fn new_stack(&self, size: usize) -> Result<Box<dyn wasmtime::StackMemory>> {
+        extern "C" fn panic_callback(_env: *mut std::ffi::c_void, _out_len: &mut usize) -> *mut u8 {
+            panic!("a callback must be set");
+        }
+        let mut out = wasmtime_stack_memory_t {
+            env: ptr::null_mut(),
+            get_stack_memory: panic_callback,
+            finalizer: None,
+        };
+        let cb = self.new_stack;
+        let result = cb(self.foreign.data, size, &mut out);
+        match result {
+            Some(error) => Err((*error).into()),
+            None => Ok(Box::new(CHostStackMemory {
+                foreign: crate::ForeignData {
+                    data: out.env,
+                    finalizer: out.finalizer,
+                },
+                get_memory: out.get_stack_memory,
+            })),
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_config_host_stack_creator_set(
+    c: &mut wasm_config_t,
+    creator: &wasmtime_stack_creator_t,
+) {
+    c.config.with_host_stack(Arc::new(CHostStackCreator {
+        foreign: crate::ForeignData {
+            data: creator.env,
+            finalizer: creator.finalizer,
+        },
+        new_stack: creator.new_stack,
+    }));
 }

@@ -12,6 +12,9 @@ use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, VMOffsets,
 };
 
+#[cfg(feature = "async")]
+use wasmtime_fiber::RuntimeFiberStackCreator;
+
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
     component::{Component, VMComponentOffsets},
@@ -23,18 +26,29 @@ use wasmtime_environ::{
 pub struct OnDemandInstanceAllocator {
     mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
     #[cfg(feature = "async")]
+    stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
+    #[cfg(feature = "async")]
     stack_size: usize,
 }
 
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
-    pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
-        let _ = stack_size; // suppress unused warnings w/o async feature
+    #[cfg(feature = "async")]
+    pub fn new(
+        mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+        stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
+        stack_size: usize,
+    ) -> Self {
         Self {
             mem_creator,
+            stack_creator,
             #[cfg(feature = "async")]
             stack_size,
         }
+    }
+    #[cfg(not(feature = "async"))]
+    pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>) -> Self {
+        Self { mem_creator }
     }
 }
 
@@ -42,6 +56,8 @@ impl Default for OnDemandInstanceAllocator {
     fn default() -> Self {
         Self {
             mem_creator: None,
+            #[cfg(feature = "async")]
+            stack_creator: None,
             #[cfg(feature = "async")]
             stack_size: 0,
         }
@@ -141,8 +157,13 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         if self.stack_size == 0 {
             anyhow::bail!("fiber stacks are not supported by the allocator")
         }
-
-        let stack = wasmtime_fiber::FiberStack::new(self.stack_size)?;
+        let stack = match &self.stack_creator {
+            Some(stack_creator) => {
+                let stack = stack_creator.new_stack(self.stack_size)?;
+                wasmtime_fiber::FiberStack::from_custom(stack)
+            }
+            None => wasmtime_fiber::FiberStack::new(self.stack_size),
+        }?;
         Ok(stack)
     }
 

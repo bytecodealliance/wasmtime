@@ -3,9 +3,9 @@
 #![cfg_attr(not(feature = "cache"), allow(unused_imports))]
 
 use crate::{handle_result, wasm_memorytype_t, wasmtime_error_t};
-use std::mem::MaybeUninit;
 use std::ops::Range;
 use std::os::raw::c_char;
+use std::ptr;
 use std::{ffi::CStr, sync::Arc};
 use wasmtime::{
     Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, Result, Strategy,
@@ -362,7 +362,25 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
         reserved_size_in_bytes: Option<usize>,
         guard_size_in_bytes: usize,
     ) -> Result<Box<dyn wasmtime::LinearMemory>, String> {
-        let mut memory = MaybeUninit::uninit();
+        extern "C" fn panic_get_callback(
+            _env: *mut std::ffi::c_void,
+            _byte_size: &mut usize,
+            _maximum_byte_size: &mut usize,
+        ) -> *mut u8 {
+            panic!("a callback must be set");
+        }
+        extern "C" fn panic_grow_callback(
+            _env: *mut std::ffi::c_void,
+            _size: usize,
+        ) -> Option<Box<wasmtime_error_t>> {
+            panic!("a callback must be set");
+        }
+        let mut memory = wasmtime_linear_memory_t {
+            env: ptr::null_mut(),
+            get_memory: panic_get_callback,
+            grow_memory: panic_grow_callback,
+            finalizer: None,
+        };
         let cb = self.new_memory;
         let error = cb(
             self.foreign.data,
@@ -371,11 +389,10 @@ unsafe impl MemoryCreator for CHostMemoryCreator {
             maximum.unwrap_or(usize::MAX),
             reserved_size_in_bytes.unwrap_or(0),
             guard_size_in_bytes,
-            memory.as_mut_ptr(),
+            &mut memory,
         );
         match error {
             None => {
-                let memory = unsafe { memory.assume_init() };
                 let foreign = crate::ForeignData {
                     data: memory.env,
                     finalizer: memory.finalizer,

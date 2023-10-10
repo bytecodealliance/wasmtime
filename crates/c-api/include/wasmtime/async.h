@@ -282,6 +282,80 @@ WASM_API_EXTERN wasmtime_call_future_t *wasmtime_instance_pre_instantiate_async(
     wasm_trap_t** trap_ret,
     wasmtime_error_t** error_ret);
 
+/**
+ * A callback to get the top of the stack address and the length of the stack,
+ * excluding guard pages.
+ *
+ * For more information about the parameters see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.StackMemory.html
+ */
+typedef uint8_t *(*wasmtime_stack_memory_get_callback_t)(
+    void *env,
+    size_t *out_len);
+
+/**
+ * A Stack instance created from a #wasmtime_new_stack_memory_callback_t.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.StackMemory.html
+ */
+typedef struct {
+  /// User provided value to be passed to get_memory and grow_memory
+  void *env;
+  /// Callback to get the memory and size of this LinearMemory
+  wasmtime_stack_memory_get_callback_t get_stack_memory;
+  /// An optional finalizer for env
+  void (*finalizer)(void*);
+} wasmtime_stack_memory_t;
+
+/**
+ * A callback to create a new StackMemory from the specified parameters.
+ *
+ * The result should be written to `stack_ret` and wasmtime will own the values written 
+ * into that struct.
+ *
+ * This callback must be thread-safe.
+ *
+ * For more information about the parameters see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.StackCreator.html#tymethod.new_stack
+ */
+typedef wasmtime_error_t *(*wasmtime_new_stack_memory_callback_t)(
+    void *env,
+    size_t size,
+    wasmtime_stack_memory_t *stack_ret);
+
+/**
+ * A representation of custom stack creator.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.StackCreator.html
+ */
+typedef struct {
+  /// User provided value to be passed to new_stack
+  void* env;
+  /// The callback to create a new stack, must be thread safe
+  wasmtime_new_stack_memory_callback_t new_stack;
+  /// An optional finalizer for env.
+  void (*finalizer)(void*);
+} wasmtime_stack_creator_t;
+
+/**
+ * Sets a custom stack creator.
+ *
+ * Custom memory creators are used when creating creating async instance stacks for
+ * the on-demand instance allocation strategy.
+ *
+ * The config does **not** take ownership of the #wasmtime_stack_creator_t passed in, but 
+ * instead copies all the values in the struct.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.with_host_stack
+ */
+WASM_API_EXTERN void wasmtime_config_host_stack_creator_set(
+    wasm_config_t*,
+    wasmtime_memory_creator_t*);
+
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
