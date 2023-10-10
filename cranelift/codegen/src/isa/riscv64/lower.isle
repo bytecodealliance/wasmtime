@@ -1827,8 +1827,16 @@
 
 ;;;;;  Rules for `icmp`;;;;;;;;;
 
+;; 8-64 bit comparisons. Mostly fall back onto `IntegerCompare` and then
+;; materializing that, but before that happens try to match some
+;; constant-related patterns
+
 (rule 0 (lower (icmp cc x @ (value_type (fits_in_64 ty)) y))
   (lower_int_compare (icmp_to_int_compare cc x y)))
+
+(rule 1 (lower (icmp (IntCC.SignedLessThan) x @ (value_type (fits_in_64 ty)) y))
+  (if-let (u64_from_iconst (u64_nonzero (imm12_from_u64 imm))) y)
+  (rv_slti (sext x) imm))
 
 ;; Materializes an `IntegerCompare` bundle directly into an `XReg` with a 0
 ;; or 1 value.
