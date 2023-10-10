@@ -226,7 +226,6 @@ block0(v0: i64):
 ;   sltu a0, a3, a0
 ;   ret
 
-
 function %seq_const2(i64) -> i8 system_v {
 block0(v0: i64):
     v2 = icmp_imm eq v0, 2
@@ -391,16 +390,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a4,2
-;   slt a3,a0,a4
-;   xori a0,a3,1
+;   slti a2,a0,2
+;   xori a0,a2,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 2
-;   slt a3, a0, a4
-;   xori a0, a3, 1
+;   slti a2, a0, 2
+;   xori a0, a2, 1
 ;   ret
 
 function %ule_const2(i64) -> i8 system_v {
@@ -427,15 +424,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a4,2
-;   sltu a3,a0,a4
-;   xori a0,a3,1
+;   sltiu a2,a0,2
+;   xori a0,a2,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 2
-;   sltu a3, a0, a4
-;   xori a0, a3, 1
+;   sltiu a2, a0, 2
+;   xori a0, a2, 1
 ;   ret
 
