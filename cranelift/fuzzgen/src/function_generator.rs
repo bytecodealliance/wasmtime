@@ -612,8 +612,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5472
                 (Opcode::Urem | Opcode::Srem, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5467
-                (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4313
                 (
                     Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
