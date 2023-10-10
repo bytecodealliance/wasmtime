@@ -172,6 +172,9 @@ pub struct FunctionStencil {
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
+    /// Memory types for proof-carrying code.
+    pub mem_types: PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
+
     /// Tables referenced.
     pub tables: PrimaryMap<ir::Table, ir::TableData>,
 
@@ -201,6 +204,7 @@ impl FunctionStencil {
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
+        self.mem_types.clear();
         self.tables.clear();
         self.dfg.clear();
         self.layout.clear();
@@ -408,6 +412,7 @@ impl Function {
                 sized_stack_slots: StackSlots::new(),
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
+                mem_types: PrimaryMap::new(),
                 tables: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),
                 layout: Layout::new(),

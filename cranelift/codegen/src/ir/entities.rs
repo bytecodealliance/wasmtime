@@ -209,6 +209,29 @@ impl GlobalValue {
     }
 }
 
+/// An opaque reference to a memory type.
+///
+/// A `MemoryType` is a descriptor of a struct layout in memory, with
+/// types and proof-carrying-code facts optionally attached to the
+/// fields.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct MemoryType(u32);
+entity_impl!(MemoryType, "mt");
+
+impl MemoryType {
+    /// Create a new memory type reference from its number.
+    ///
+    /// This method is for use by the parser.
+    pub fn with_number(n: u32) -> Option<Self> {
+        if n < u32::MAX {
+            Some(Self(n))
+        } else {
+            None
+        }
+    }
+}
+
 /// An opaque reference to a constant.
 ///
 /// You can store [`ConstantData`](super::ConstantData) in a

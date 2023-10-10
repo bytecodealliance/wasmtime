@@ -188,6 +188,7 @@ impl DataFlowGraph {
         self.constants.clear();
         self.immediates.clear();
         self.jump_tables.clear();
+        self.facts.clear();
     }
 
     /// Get the total number of instructions created in this function, whether they are currently
