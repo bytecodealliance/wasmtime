@@ -468,7 +468,7 @@ pub fn encode_ciw_type(op: CiwOp, rd: WritableReg, imm: u8) -> u16 {
     let mut imm_field = 0;
     imm_field |= ((imm >> 1) & 1) << 0;
     imm_field |= ((imm >> 0) & 1) << 1;
-    imm_field |= ((imm >> 4) & 7) << 2;
+    imm_field |= ((imm >> 4) & 15) << 2;
     imm_field |= ((imm >> 2) & 3) << 6;
 
     let mut bits = 0;
