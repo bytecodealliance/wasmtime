@@ -46,6 +46,7 @@
 //! `FactContext::add()` and friends to forward-propagate facts.
 //!
 //! TODO:
+//! - Check blockparams' preds against blockparams' facts.
 //! - Propagate facts through optimization (egraph layer).
 //! - Generate facts in cranelift-wasm frontend when lowering memory ops.
 //! - Implement richer "points-to" facts that describe the pointed-to
@@ -116,6 +117,14 @@ pub enum Fact {
         /// to access (size, etc).
         region: MemoryRegion,
     },
+
+    /// A pointer to a memory type.
+    Mem {
+        /// The memory type.
+        ty: ir::MemoryType,
+        /// The offset into the memory type.
+        offset: i64,
+    },
 }
 
 /// A memory region that can be accessed. This description is attached
@@ -132,10 +141,11 @@ pub struct MemoryRegion {
 impl fmt::Display for Fact {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Fact::ValueMax { bit_width, max } => write!(f, "max({}, 0x{:x})", bit_width, max),
+            Fact::ValueMax { bit_width, max } => write!(f, "max({}, {:#x})", bit_width, max),
             Fact::PointsTo {
                 region: MemoryRegion { max },
             } => write!(f, "points_to(0x{:x})", max),
+            Fact::Mem { ty, offset } => write!(f, "mem({}, {:#x})", ty, offset),
         }
     }
 }

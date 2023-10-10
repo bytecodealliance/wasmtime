@@ -7,8 +7,8 @@ use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
     self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
     DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
-    JumpTableData, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot, StackSlotData,
-    StackSlots, Table, TableData, Type,
+    JumpTableData, Layout, MemoryType, MemoryTypeData, Opcode, SigRef, Signature, SourceLocs,
+    StackSlot, StackSlotData, StackSlots, Table, TableData, Type,
 };
 use crate::isa::CallConv;
 use crate::write::write_function;
@@ -173,7 +173,7 @@ pub struct FunctionStencil {
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
     /// Memory types for proof-carrying code.
-    pub mem_types: PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
+    pub memory_types: PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
 
     /// Tables referenced.
     pub tables: PrimaryMap<ir::Table, ir::TableData>,
@@ -204,7 +204,7 @@ impl FunctionStencil {
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
-        self.mem_types.clear();
+        self.memory_types.clear();
         self.tables.clear();
         self.dfg.clear();
         self.layout.clear();
@@ -237,6 +237,11 @@ impl FunctionStencil {
     /// Declares a global value accessible to the function.
     pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
         self.global_values.push(data)
+    }
+
+    /// Declares a memory type for use by the function.
+    pub fn create_memory_type(&mut self, data: MemoryTypeData) -> MemoryType {
+        self.memory_types.push(data)
     }
 
     /// Find the global dyn_scale value associated with given DynamicType.
@@ -412,7 +417,7 @@ impl Function {
                 sized_stack_slots: StackSlots::new(),
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
-                mem_types: PrimaryMap::new(),
+                memory_types: PrimaryMap::new(),
                 tables: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),
                 layout: Layout::new(),

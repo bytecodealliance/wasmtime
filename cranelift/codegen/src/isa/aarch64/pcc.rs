@@ -28,6 +28,12 @@ fn check_subsumes(ctx: &FactContext, subsumer: &Fact, subsumee: &Fact) -> PccRes
         subsumer,
         subsumee
     );
+
+    // For now, allow all `mem` facts to validate.
+    if matches!(subsumee, Fact::Mem { .. }) {
+        return Ok(());
+    }
+
     if ctx.subsumes(subsumer, subsumee) {
         Ok(())
     } else {

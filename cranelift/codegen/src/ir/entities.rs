@@ -435,6 +435,8 @@ pub enum AnyEntity {
     DynamicType(DynamicType),
     /// A Global value.
     GlobalValue(GlobalValue),
+    /// A memory type.
+    MemoryType(MemoryType),
     /// A jump table.
     JumpTable(JumpTable),
     /// A constant.
@@ -460,6 +462,7 @@ impl fmt::Display for AnyEntity {
             Self::DynamicStackSlot(r) => r.fmt(f),
             Self::DynamicType(r) => r.fmt(f),
             Self::GlobalValue(r) => r.fmt(f),
+            Self::MemoryType(r) => r.fmt(f),
             Self::JumpTable(r) => r.fmt(f),
             Self::Constant(r) => r.fmt(f),
             Self::FuncRef(r) => r.fmt(f),
@@ -515,6 +518,12 @@ impl From<DynamicType> for AnyEntity {
 impl From<GlobalValue> for AnyEntity {
     fn from(r: GlobalValue) -> Self {
         Self::GlobalValue(r)
+    }
+}
+
+impl From<MemoryType> for AnyEntity {
+    fn from(r: MemoryType) -> Self {
+        Self::MemoryType(r)
     }
 }
 
