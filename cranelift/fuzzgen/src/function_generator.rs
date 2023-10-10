@@ -636,7 +636,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                         | Opcode::FcvtToUintSat
                         | Opcode::FcvtToSint
                         | Opcode::FcvtToSintSat,
-                    &[F32 | F64]
+                    &[F32 | F64],
+                    &[I128]
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4933
                 (
