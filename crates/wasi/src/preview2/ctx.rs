@@ -256,8 +256,6 @@ impl WasiCtxBuilder {
 
     /// Uses the configured context so far to construct the final `WasiCtx`.
     ///
-    /// This will insert resources into the provided `table`.
-    ///
     /// Note that each `WasiCtxBuilder` can only be used to "build" once, and
     /// calling this method twice will panic.
     ///
