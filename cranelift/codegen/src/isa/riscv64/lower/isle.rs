@@ -325,6 +325,9 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
         Imm12::maybe_from_i64((val + add) as i64).unwrap()
     }
+    fn imm12_add(&mut self, val: Imm12, add: i32) -> Option<Imm12> {
+        Imm12::maybe_from_i64((i32::from(val.as_i16()) + add).into())
+    }
 
     //
     fn gen_shamt(&mut self, ty: Type, shamt: XReg) -> ValueRegs {

@@ -1791,6 +1791,9 @@
 (decl imm12_const_add (i32 i32) Imm12)
 (extern constructor imm12_const_add imm12_const_add)
 
+(decl pure partial imm12_add (Imm12 i32) Imm12)
+(extern constructor imm12_add imm12_add)
+
 (decl imm12_and (Imm12 u64) Imm12)
 (extern constructor imm12_and imm12_and)
 
