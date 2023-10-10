@@ -1214,11 +1214,64 @@
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (rotl x y)))
-  (lower_rotl ty (zext x) (value_regs_get y 0)))
+
+(rule 0 (lower (has_type (fits_in_64 ty) (rotl rs amount)))
+  (let
+    ((rs XReg (zext rs))
+      (x ValueRegs (gen_shamt ty amount))
+      (shamt XReg (value_regs_get x 0))
+      (len_sub_shamt Reg (value_regs_get x 1))
+      ;;
+      (part1 Reg (rv_sll rs shamt))
+      ;;
+      (part2 Reg (rv_srl rs len_sub_shamt))
+      (part3 Reg (gen_select_xreg (cmp_eqz shamt) (zero_reg) part2)))
+    (rv_or part1 part3)))
+
+(rule 1 (lower (has_type $I32 (rotl rs amount)))
+  (if-let $true (has_zbb))
+  (rv_rolw rs amount))
+
+(rule 2 (lower (has_type $I32 (rotl rs (u64_from_iconst n))))
+  (if-let $true (has_zbb))
+  (if-let (imm12_from_u64 imm) (u64_sub 32 (u64_and n 31)))
+  (rv_roriw rs imm))
+
+(rule 1 (lower (has_type $I64 (rotl rs amount)))
+  (if-let $true (has_zbb))
+  (rv_rol rs amount))
+
+(rule 2 (lower (has_type $I64 (rotl rs (u64_from_iconst n))))
+  (if-let $true (has_zbb))
+  (if-let (imm12_from_u64 imm) (u64_sub 64 (u64_and n 63)))
+  (rv_rori rs imm))
 
 (rule 1 (lower (has_type $I128 (rotl x y)))
-  (lower_i128_rotl x y))
+  (let
+    ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
+      (shamt XReg (value_regs_get tmp 0))
+      (len_sub_shamt XReg (value_regs_get tmp 1))
+      ;;
+      (low_part1 XReg (rv_sll (value_regs_get x 0) shamt))
+      (low_part2 XReg (rv_srl (value_regs_get x 1) len_sub_shamt))
+      ;;; if shamt == 0 low_part2 will overflow we should zero instead.
+      (low_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) low_part2))
+      (low XReg (rv_or low_part1 low_part3))
+      ;;
+      (high_part1 XReg (rv_sll (value_regs_get x 1) shamt))
+      (high_part2 XReg (rv_srl (value_regs_get x 0) len_sub_shamt))
+      (high_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) high_part2))
+      (high XReg (rv_or high_part1 high_part3))
+      ;;
+      (const64 XReg (imm $I64 64))
+      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+    ;; right now we only rotate less than 64 bits.
+    ;; if shamt is greater than or equal 64 , we should switch low and high.
+    (gen_select_regs
+      (cmp_geu shamt_128 const64)
+      (value_regs high low)
+      (value_regs low high)
+    )))
 
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (rotr x y)))
