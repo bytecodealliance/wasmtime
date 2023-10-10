@@ -710,6 +710,22 @@
   (if-let x_imm (replicated_imm5 x))
   (rv_vand_vi y x_imm (unmasked) ty))
 
+(rule 13 (lower (has_type $I32 (band x (bnot (ishl (i64_from_iconst 1) y)))))
+  (if-let $true (has_zbs))
+  (rv_bclr x (rv_andi y (imm12_const 31))))
+
+(rule 13 (lower (has_type $I64 (band x (bnot (ishl (i64_from_iconst 1) y)))))
+  (if-let $true (has_zbs))
+  (rv_bclr x y))
+
+(rule 14 (lower (has_type (fits_in_64 ty) (band x (u64_from_iconst n))))
+  (if-let $true (has_zbs))
+  (if-let imm (bclr_imm ty n))
+  (rv_bclri x imm))
+
+(decl pure partial bclr_imm (Type u64) Imm12)
+(extern constructor bclr_imm bclr_imm)
+
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int ty) (bor x y)))

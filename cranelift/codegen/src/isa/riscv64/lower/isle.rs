@@ -521,6 +521,16 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn vec_alu_rr_dst_type(&mut self, op: &VecAluOpRR) -> Type {
         MInst::canonical_type_for_rc(op.dst_regclass())
     }
+
+    fn bclr_imm(&mut self, ty: Type, i: u64) -> Option<Imm12> {
+        // Only consider those bits in the immediate which are up to the width
+        // of `ty`.
+        let neg = !i & (u64::MAX >> (64 - ty.bits()));
+        if neg.count_ones() != 1 {
+            return None;
+        }
+        Imm12::maybe_from_u64(neg.trailing_zeros().into())
+    }
 }
 
 /// The main entry point for lowering with ISLE.

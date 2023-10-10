@@ -1659,6 +1659,15 @@
 (rule (rv_bseti rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Bseti) rs1 imm))
 
+;; `Zbs` Extension Instructions
+
+(decl rv_bclr (XReg XReg) XReg)
+(rule (rv_bclr rs1 rs2)
+  (alu_rrr (AluOPRRR.Bclr) rs1 rs2))
+
+(decl rv_bclri (XReg Imm12) XReg)
+(rule (rv_bclri rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Bclri) rs1 imm))
 
 ;; `Zbkb` Extension Instructions
 
