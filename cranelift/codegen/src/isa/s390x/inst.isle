@@ -1539,11 +1539,6 @@
 (decl pure partial i64_nonequal (i64 i64) i64)
 (extern constructor i64_nonequal i64_nonequal)
 
-(decl pure partial i64_nonzero (i64) i64)
-(rule (i64_nonzero x)
-      (if (i64_nonequal x 0))
-      x)
-
 (decl pure partial i64_not_neg1 (i64) i64)
 (rule (i64_not_neg1 x)
       (if (i64_nonequal x -1))

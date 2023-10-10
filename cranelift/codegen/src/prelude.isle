@@ -213,11 +213,17 @@
 (decl u64_is_zero (bool) u64)
 (extern extractor infallible u64_is_zero u64_is_zero)
 
+(decl i64_is_zero (bool) i64)
+(extern extractor infallible i64_is_zero i64_is_zero)
+
 (decl u64_zero () u64)
 (extractor (u64_zero) (u64_is_zero $true))
 
 (decl u64_nonzero (u64) u64)
 (extractor (u64_nonzero x) (and (u64_is_zero $false) x))
+
+(decl i64_nonzero (i64) i64)
+(extractor (i64_nonzero x) (and (i64_is_zero $false) x))
 
 (decl pure u64_is_odd (u64) bool)
 (extern constructor u64_is_odd u64_is_odd)

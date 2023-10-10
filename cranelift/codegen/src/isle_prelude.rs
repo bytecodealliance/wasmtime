@@ -164,6 +164,10 @@ macro_rules! isle_common_prelude_methods {
             0 == value
         }
 
+        fn i64_is_zero(&mut self, value: i64) -> bool {
+            0 == value
+        }
+
         #[inline]
         fn u64_is_odd(&mut self, x: u64) -> bool {
             x & 1 == 1
