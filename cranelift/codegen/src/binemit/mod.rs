@@ -64,15 +64,21 @@ pub enum Reloc {
     /// Offset within page of TLVP slot.
     MachOAarch64TlsAdrPageOff12,
 
-    /// Aarch64 TLS GD
-    /// Set an ADRP immediate field to the top 21 bits of the final address. Checks for overflow.
-    /// This is equivalent to `R_AARCH64_TLSGD_ADR_PAGE21` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#relocations-for-thread-local-storage)
-    Aarch64TlsGdAdrPage21,
+    /// Aarch64 TLSDESC Adr Page21
+    /// This is equivalent to `R_AARCH64_TLSDESC_ADR_PAGE21` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#57105thread-local-storage-descriptors)
+    Aarch64TlsDescAdrPage21,
 
-    /// Aarch64 TLS GD
-    /// Set the add immediate field to the low 12 bits of the final address. Does not check for overflow.
-    /// This is equivalent to `R_AARCH64_TLSGD_ADD_LO12_NC` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#relocations-for-thread-local-storage)
-    Aarch64TlsGdAddLo12Nc,
+    /// Aarch64 TLSDESC Ld64 Lo12
+    /// This is equivalent to `R_AARCH64_TLSDESC_LD64_LO12` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#57105thread-local-storage-descriptors)
+    Aarch64TlsDescLd64Lo12,
+
+    /// Aarch64 TLSDESC Add Lo12
+    /// This is equivalent to `R_AARCH64_TLSGD_ADD_LO12` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#57105thread-local-storage-descriptors)
+    Aarch64TlsDescAddLo12,
+
+    /// Aarch64 TLSDESC Call
+    /// This is equivalent to `R_AARCH64_TLSDESC_CALL` in the [aaelf64](https://github.com/ARM-software/abi-aa/blob/2bcab1e3b22d55170c563c3c7940134089176746/aaelf64/aaelf64.rst#57105thread-local-storage-descriptors)
+    Aarch64TlsDescCall,
 
     /// AArch64 GOT Page
     /// Set the immediate value of an ADRP to bits 32:12 of X; check that –232 <= X < 232
@@ -141,8 +147,10 @@ impl fmt::Display for Reloc {
             Self::MachOX86_64Tlv => write!(f, "MachOX86_64Tlv"),
             Self::MachOAarch64TlsAdrPage21 => write!(f, "MachOAarch64TlsAdrPage21"),
             Self::MachOAarch64TlsAdrPageOff12 => write!(f, "MachOAarch64TlsAdrPageOff12"),
-            Self::Aarch64TlsGdAdrPage21 => write!(f, "Aarch64TlsGdAdrPage21"),
-            Self::Aarch64TlsGdAddLo12Nc => write!(f, "Aarch64TlsGdAddLo12Nc"),
+            Self::Aarch64TlsDescAdrPage21 => write!(f, "Aarch64TlsDescAdrPage21"),
+            Self::Aarch64TlsDescLd64Lo12 => write!(f, "Aarch64TlsDescLd64Lo12"),
+            Self::Aarch64TlsDescAddLo12 => write!(f, "Aarch64TlsDescAddLo12"),
+            Self::Aarch64TlsDescCall => write!(f, "Aarch64TlsDescCall"),
             Self::Aarch64AdrGotPage21 => write!(f, "Aarch64AdrGotPage21"),
             Self::Aarch64Ld64GotLo12Nc => write!(f, "Aarch64AdrGotLo12Nc"),
             Self::S390xTlsGd64 => write!(f, "TlsGd64"),

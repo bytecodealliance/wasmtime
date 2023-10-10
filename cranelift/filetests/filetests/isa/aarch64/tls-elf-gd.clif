@@ -13,21 +13,11 @@ block0(v0: i32):
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   str x24, [sp, #-16]!
-;   stp d14, d15, [sp, #-16]!
-;   stp d12, d13, [sp, #-16]!
-;   stp d10, d11, [sp, #-16]!
-;   stp d8, d9, [sp, #-16]!
 ; block0:
-;   mov x24, x0
-;   elf_tls_get_addr x0, userextname0
+;   mov x5, x0
+;   elf_tls_get_addr x0, x3, userextname0
 ;   mov x1, x0
-;   mov x0, x24
-;   ldp d8, d9, [sp], #16
-;   ldp d10, d11, [sp], #16
-;   ldp d12, d13, [sp], #16
-;   ldp d14, d15, [sp], #16
-;   ldr x24, [sp], #16
+;   mov x0, x5
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -35,24 +25,16 @@ block0(v0: i32):
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-;   str x24, [sp, #-0x10]!
-;   stp d14, d15, [sp, #-0x10]!
-;   stp d12, d13, [sp, #-0x10]!
-;   stp d10, d11, [sp, #-0x10]!
-;   stp d8, d9, [sp, #-0x10]!
-; block1: ; offset 0x1c
-;   mov x24, x0
-;   adrp x0, #0 ; reloc_external Aarch64TlsGdAdrPage21 u1:0 0
-;   add x0, x0, #0 ; reloc_external Aarch64TlsGdAddLo12Nc u1:0 0
-;   bl #0x28 ; reloc_external Call %ElfTlsGetAddr 0
-;   nop
+; block1: ; offset 0x8
+;   mov x5, x0
+;   adrp x0, #0 ; reloc_external Aarch64TlsDescAdrPage21 u1:0 0
+;   ldr x3, [x0] ; reloc_external Aarch64TlsDescLd64Lo12 u1:0 0
+;   add x0, x0, #0 ; reloc_external Aarch64TlsDescAddLo12 u1:0 0
+;   blr x3 ; reloc_external Aarch64TlsDescCall u1:0 0
+;   mrs x3, tpidr_el0
+;   add x0, x0, x3
 ;   mov x1, x0
-;   mov x0, x24
-;   ldp d8, d9, [sp], #0x10
-;   ldp d10, d11, [sp], #0x10
-;   ldp d12, d13, [sp], #0x10
-;   ldp d14, d15, [sp], #0x10
-;   ldr x24, [sp], #0x10
+;   mov x0, x5
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
