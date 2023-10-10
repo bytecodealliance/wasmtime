@@ -1883,11 +1883,11 @@
 (rule 1 (lower_icmp (IntCC.UnsignedLessThanOrEqual) x y)
   (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) y)
   (if-let imm_inc (imm12_add imm 1))
-  (rv_slti (sext x) imm_inc))
+  (rv_slti (zext x) imm_inc))
 (rule 1 (lower_icmp (IntCC.UnsignedGreaterThanOrEqual) x y)
   (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) x)
   (if-let imm_inc (imm12_add imm 1))
-  (rv_slti (sext y) imm_inc))
+  (rv_slti (zext y) imm_inc))
 
 ;; a >= $imm => !(a < $imm)
 (rule 2 (lower_icmp cc @ (IntCC.SignedGreaterThanOrEqual) x y)
