@@ -710,6 +710,8 @@
   (if-let x_imm (replicated_imm5 x))
   (rv_vand_vi y x_imm (unmasked) ty))
 
+;; `bclr{,i}` specializations from `zbs`
+
 (rule 13 (lower (has_type $I32 (band x (bnot (ishl (i64_from_iconst 1) y)))))
   (if-let $true (has_zbs))
   (rv_bclr x (rv_andi y (imm12_const 31))))
@@ -726,6 +728,46 @@
 (decl pure partial bclr_imm (Type u64) Imm12)
 (extern constructor bclr_imm bclr_imm)
 
+;; `bext{,i}` specializations from `zbs`
+
+(rule 15 (lower (has_type $I32 (band (ushr x y) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bext x (rv_andi y (imm12_const 31))))
+(rule 15 (lower (has_type $I32 (band (sshr x y) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bext x (rv_andi y (imm12_const 31))))
+(rule 15 (lower (has_type $I32 (band (u64_from_iconst 1) (ushr x y))))
+  (if-let $true (has_zbs))
+  (rv_bext x (rv_andi y (imm12_const 31))))
+(rule 15 (lower (has_type $I32 (band (u64_from_iconst 1) (sshr x y))))
+  (if-let $true (has_zbs))
+  (rv_bext x (rv_andi y (imm12_const 31))))
+
+(rule 15 (lower (has_type $I64 (band (ushr x y) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bext x y))
+(rule 15 (lower (has_type $I64 (band (sshr x y) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bext x y))
+(rule 15 (lower (has_type $I64 (band (u64_from_iconst 1) (ushr x y))))
+  (if-let $true (has_zbs))
+  (rv_bext x y))
+(rule 15 (lower (has_type $I64 (band (u64_from_iconst 1) (sshr x y))))
+  (if-let $true (has_zbs))
+  (rv_bext x y))
+
+(rule 16 (lower (has_type $I32 (band (ushr x (imm12_from_value y)) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bexti x (imm12_and y 31)))
+(rule 16 (lower (has_type $I32 (band (sshr x (imm12_from_value y)) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bexti x (imm12_and y 31)))
+(rule 16 (lower (has_type $I64 (band (ushr x (imm12_from_value y)) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bexti x (imm12_and y 63)))
+(rule 16 (lower (has_type $I64 (band (sshr x (imm12_from_value y)) (u64_from_iconst 1))))
+  (if-let $true (has_zbs))
+  (rv_bexti x (imm12_and y 63)))
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int ty) (bor x y)))

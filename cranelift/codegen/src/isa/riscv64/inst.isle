@@ -1669,6 +1669,14 @@
 (rule (rv_bclri rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Bclri) rs1 imm))
 
+(decl rv_bext (XReg XReg) XReg)
+(rule (rv_bext rs1 rs2)
+  (alu_rrr (AluOPRRR.Bext) rs1 rs2))
+
+(decl rv_bexti (XReg Imm12) XReg)
+(rule (rv_bexti rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Bexti) rs1 imm))
+
 ;; `Zbkb` Extension Instructions
 
 ;; Helper for emitting the `pack` ("Pack low halves of registers") instruction.
