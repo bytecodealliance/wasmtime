@@ -949,6 +949,10 @@
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (bnot x)))
   (rv_vnot_v x (unmasked) ty))
 
+(rule 4 (lower (has_type (ty_int_ref_scalar_64 _) (bnot (bxor x y))))
+  (if-let $true (has_zbb))
+  (rv_xnor x y))
+
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 (ty_int ty)) (bitrev x)))
   (lower_bit_reverse x ty))

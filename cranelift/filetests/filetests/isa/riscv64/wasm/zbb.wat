@@ -20,8 +20,16 @@
     (i32.rotr (local.get 0) (i32.const 100)))
   (func (export "rori") (param i64) (result i64)
     (i64.rotr (local.get 0) (i64.const 40)))
-)
 
+  (func (export "xnor32_1") (param i32 i32) (result i32)
+    (i32.xor (i32.xor (local.get 0) (local.get 1)) (i32.const -1)))
+  (func (export "xnor32_2") (param i32 i32) (result i32)
+    (i32.xor (i32.const -1) (i32.xor (local.get 0) (local.get 1))))
+  (func (export "xnor64_1") (param i64 i64) (result i64)
+    (i64.xor (i64.xor (local.get 0) (local.get 1)) (i64.const -1)))
+  (func (export "xnor64_2") (param i64 i64) (result i64)
+    (i64.xor (i64.const -1) (i64.xor (local.get 0) (local.get 1))))
+)
 ;; function u0:0:
 ;; block0:
 ;;   j label1
@@ -76,4 +84,32 @@
 ;;   j label1
 ;; block1:
 ;;   rori a0,a0,40
+;;   ret
+;;
+;; function u0:8:
+;; block0:
+;;   j label1
+;; block1:
+;;   xnor a0,a0,a1
+;;   ret
+;;
+;; function u0:9:
+;; block0:
+;;   j label1
+;; block1:
+;;   xnor a0,a0,a1
+;;   ret
+;;
+;; function u0:10:
+;; block0:
+;;   j label1
+;; block1:
+;;   xnor a0,a0,a1
+;;   ret
+;;
+;; function u0:11:
+;; block0:
+;;   j label1
+;; block1:
+;;   xnor a0,a0,a1
 ;;   ret

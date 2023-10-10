@@ -1558,6 +1558,12 @@
 (rule (rv_orn rs1 rs2)
   (alu_rrr (AluOPRRR.Orn) rs1 rs2))
 
+;; Helper for emitting the `xnor` ("Exclusive NOR") instruction.
+;; rd ← ~(rs1 ^ rs2)
+(decl rv_xnor (XReg XReg) XReg)
+(rule (rv_xnor rs1 rs2)
+  (alu_rrr (AluOPRRR.Xnor) rs1 rs2))
+
 ;; Helper for emitting the `clz` ("Count Leading Zero Bits") instruction.
 (decl rv_clz (XReg) XReg)
 (rule (rv_clz rs1)
