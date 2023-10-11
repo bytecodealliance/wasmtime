@@ -153,7 +153,7 @@ pub enum Table {
     Static {
         /// Where data for this table is stored. The length of this list is the
         /// maximum size of the table.
-        data: &'static mut [TableValue],
+        data: SendSyncPtr<[TableValue]>,
         /// The current size of the table.
         size: u32,
         /// The type of this table.
@@ -200,7 +200,7 @@ impl Table {
     /// Create a new static (immovable) table instance for the specified table plan.
     pub fn new_static(
         plan: &TablePlan,
-        data: &'static mut [TableValue],
+        data: SendSyncPtr<[TableValue]>,
         store: &mut dyn Store,
     ) -> Result<Self> {
         Self::limit_new(plan, store)?;
@@ -215,7 +215,10 @@ impl Table {
             );
         }
         let data = match plan.table.maximum {
-            Some(max) if (max as usize) < data.len() => &mut data[..max as usize],
+            Some(max) if (max as usize) < data.len() => {
+                let ptr = data.as_non_null();
+                SendSyncPtr::new(NonNull::slice_from_raw_parts(ptr.cast(), max as usize))
+            }
             _ => data,
         };
 
@@ -383,9 +386,11 @@ impl Table {
         // First resize the storage and then fill with the init value
         match self {
             Table::Static { size, data, .. } => {
-                debug_assert!(data[*size as usize..new_size as usize]
-                    .iter()
-                    .all(|x| x.is_none()));
+                unsafe {
+                    debug_assert!(data.as_ref()[*size as usize..new_size as usize]
+                        .iter()
+                        .all(|x| x.is_none()));
+                }
                 *size = new_size;
             }
             Table::Dynamic { elements, .. } => {
@@ -472,7 +477,7 @@ impl Table {
     pub fn vmtable(&mut self) -> VMTableDefinition {
         match self {
             Table::Static { data, size, .. } => VMTableDefinition {
-                base: data.as_mut_ptr().cast(),
+                base: data.as_ptr().cast(),
                 current_elements: *size,
             },
             Table::Dynamic { elements, .. } => VMTableDefinition {
@@ -492,14 +497,14 @@ impl Table {
 
     fn elements(&self) -> &[TableValue] {
         match self {
-            Table::Static { data, size, .. } => &data[..*size as usize],
+            Table::Static { data, size, .. } => unsafe { &data.as_ref()[..*size as usize] },
             Table::Dynamic { elements, .. } => &elements[..],
         }
     }
 
     fn elements_mut(&mut self) -> &mut [TableValue] {
         match self {
-            Table::Static { data, size, .. } => &mut data[..*size as usize],
+            Table::Static { data, size, .. } => unsafe { &mut data.as_mut()[..*size as usize] },
             Table::Dynamic { elements, .. } => &mut elements[..],
         }
     }
@@ -590,7 +595,7 @@ impl Drop for Table {
 impl Default for Table {
     fn default() -> Self {
         Table::Static {
-            data: &mut [],
+            data: SendSyncPtr::new(NonNull::from(&mut [])),
             size: 0,
             ty: TableElementType::Func,
         }

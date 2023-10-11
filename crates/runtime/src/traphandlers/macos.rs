@@ -167,6 +167,9 @@ static mut WASMTIME_PORT: mach_port_name_t = MACH_PORT_NULL;
 static mut CHILD_OF_FORKED_PROCESS: bool = false;
 
 pub unsafe fn platform_init() {
+    if cfg!(miri) {
+        return;
+    }
     // Mach ports do not currently work across forks, so configure Wasmtime to
     // panic in `lazy_per_thread_init` if the child attempts to invoke
     // WebAssembly.
@@ -465,6 +468,9 @@ unsafe extern "C" fn unwind(
 /// exception handlers to get registered.
 #[cold]
 pub fn lazy_per_thread_init() {
+    if cfg!(miri) {
+        return;
+    }
     unsafe {
         assert!(
             !CHILD_OF_FORKED_PROCESS,

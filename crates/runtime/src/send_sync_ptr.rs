@@ -39,6 +39,13 @@ impl<T: ?Sized> SendSyncPtr<T> {
     }
 }
 
+impl<T> SendSyncPtr<[T]> {
+    /// Returns the slice's length component of the pointer.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
 impl<T: ?Sized, U> From<U> for SendSyncPtr<T>
 where
     U: Into<NonNull<T>>,
