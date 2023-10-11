@@ -262,6 +262,10 @@ impl Masm for MacroAssembler {
         todo!();
     }
 
+    fn float_sqrt(&mut self, _dst: Reg, _src: Reg, _size: OperandSize) {
+        todo!()
+    }
+
     fn and(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
         todo!()
     }

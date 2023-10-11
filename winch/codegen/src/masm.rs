@@ -383,6 +383,9 @@ pub(crate) trait MacroAssembler {
     /// Perform a floating point floor operation.
     fn float_round(&mut self, mode: RoundingMode, dst: Reg, src: RegImm, size: OperandSize);
 
+    /// Perform a floating point square root operation.
+    fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize);
+
     /// Perform logical and operation.
     fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
