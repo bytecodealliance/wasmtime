@@ -11,7 +11,7 @@ started!
 
 ## Getting started and simple example
 
-First, copy this example WebAssembly text module into your project. It exports a
+First, copy this example WebAssembly text module into your project with the filename `gcd.wat`. It exports a
 function for calculating the greatest common denominator of two numbers.
 
 ```wat
