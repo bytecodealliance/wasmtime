@@ -432,12 +432,16 @@ block0(v0: i64):
 ;   c.srli a0, 0x14
 ;   c.jr ra
 
-function %c_addi4spn() -> i64 {
-  ss0 = explicit_slot 64
+function %c_addi4spn() -> i64, i64, i64, i64, i64 {
+  ss0 = explicit_slot 2048
 
 block0:
-  v0 = stack_addr.i64 ss0+24
-  return v0
+  v0 = stack_addr.i64 ss0+1020
+  v1 = stack_addr.i64 ss0+4
+  v2 = stack_addr.i64 ss0+512
+  v4 = stack_addr.i64 ss0+256
+  v5 = stack_addr.i64 ss0+64
+  return v0, v1, v2, v4, v5
 }
 
 ; VCode:
@@ -445,10 +449,19 @@ block0:
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-64
+;   add sp,-2048
 ; block0:
-;   load_addr a0,24(nominal_sp)
-;   add sp,+64
+;   load_addr a1,1020(nominal_sp)
+;   mv a5,a1
+;   load_addr a1,4(nominal_sp)
+;   load_addr a2,512(nominal_sp)
+;   load_addr a3,256(nominal_sp)
+;   load_addr a4,64(nominal_sp)
+;   sd a2,0(a0)
+;   sd a3,8(a0)
+;   sd a4,16(a0)
+;   mv a0,a5
+;   add sp,+2048
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
@@ -460,10 +473,63 @@ block0:
 ;   c.sdsp ra, 8(sp)
 ;   c.sdsp s0, 0(sp)
 ;   c.mv s0, sp
-;   c.addi16sp sp, -0x40
-; block1: ; offset 0xa
-;   c.addi4spn a0, sp, 0x18
-;   c.addi16sp sp, 0x40
+;   addi sp, sp, -0x800
+; block1: ; offset 0xc
+;   c.addi4spn a1, sp, 0x3fc
+;   c.mv a5, a1
+;   c.addi4spn a1, sp, 4
+;   c.addi4spn a2, sp, 0x200
+;   c.addi4spn a3, sp, 0x100
+;   c.addi4spn a4, sp, 0x40
+;   c.sd a2, 0(a0)
+;   c.sd a3, 8(a0)
+;   c.sd a4, 0x10(a0)
+;   c.mv a0, a5
+;   c.lui t6, 1
+;   addi t6, t6, -0x800
+;   add sp, t6, sp
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+function %out_of_bounds_c_addi4spn() -> i64, i64 {
+  ss0 = explicit_slot 2048
+
+block0:
+  v0 = stack_addr.i64 ss0+1024
+  v1 = stack_addr.i64 ss0+0
+  return v0, v1
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   add sp,-2048
+; block0:
+;   load_addr a0,1024(nominal_sp)
+;   load_addr a1,0(nominal_sp)
+;   add sp,+2048
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   addi sp, sp, -0x800
+; block1: ; offset 0xc
+;   addi a0, sp, 0x400
+;   c.mv a1, sp
+;   c.lui t6, 1
+;   addi t6, t6, -0x800
+;   add sp, t6, sp
 ;   c.ldsp ra, 8(sp)
 ;   c.ldsp s0, 0(sp)
 ;   c.addi16sp sp, 0x10
