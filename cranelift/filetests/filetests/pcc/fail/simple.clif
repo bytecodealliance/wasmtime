@@ -16,7 +16,7 @@ block0(v0 ! mem(mt0, 0): i64, v1 ! max(32, 0xffff_ffff): i32):
 
 ;; Check that the offset in the `mem` is validated too.
 
-function %simple1(i64 vmctx, i32) -> i8 {
+function %simple2(i64 vmctx, i32) -> i8 {
     mt0 = memory 0x8000_0000
 block0(v0 ! mem(mt0, 0): i64, v1 ! max(32, 0xffff_ffff): i32):
     v2 ! max(64, 0xffff_ffff) = uextend.i64 v1

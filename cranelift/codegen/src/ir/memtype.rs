@@ -62,6 +62,9 @@
 //! - A discriminated union is a union of several memory types
 //!   together with a tag field. This will be useful to model and
 //!   verify subtyping/downcasting for Wasm GC, among other uses.
+//!
+//! - Nullability on pointer fields: the fact will hold only if the
+//!   field is not null (all zero bits).
 
 use crate::ir::pcc::Fact;
 use crate::ir::Type;
