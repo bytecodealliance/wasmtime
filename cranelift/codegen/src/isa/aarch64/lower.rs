@@ -10,7 +10,7 @@
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::pcc::PccResult;
 use crate::ir::Inst as IRInst;
-use crate::ir::{Opcode, Value};
+use crate::ir::{Function, Opcode, Value};
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::pcc;
 use crate::isa::aarch64::AArch64Backend;
@@ -131,7 +131,12 @@ impl LowerBackend for AArch64Backend {
         Some(regs::pinned_reg())
     }
 
-    fn check_fact(&self, inst: &Self::MInst, vcode: &VCode<Self::MInst>) -> PccResult<()> {
-        pcc::check(inst, vcode)
+    fn check_fact(
+        &self,
+        inst: &Self::MInst,
+        function: &Function,
+        vcode: &VCode<Self::MInst>,
+    ) -> PccResult<()> {
+        pcc::check(inst, function, vcode)
     }
 }

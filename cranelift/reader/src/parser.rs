@@ -12,7 +12,7 @@ use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType, MemoryType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cranelift_codegen::ir::pcc::{Fact, MemoryRegion};
+use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -1659,7 +1659,7 @@ impl<'a> Parser<'a> {
 
     // Parse one field definition in a memory-type struct decl.
     //
-    // memory-type-field ::=  offset ":" memory-type ["readonly"] [ "!" fact ]
+    // memory-type-field ::=  offset ":" type ["readonly"] [ "!" fact ]
     // offset ::= uimm64
     fn parse_memory_type_field(&mut self) -> ParseResult<MemoryTypeField> {
         let offset: u64 = self
@@ -1671,8 +1671,7 @@ impl<'a> Parser<'a> {
             Token::Colon,
             "expected colon after field offset in struct memory-type declaration",
         )?;
-        let ty =
-            self.match_mt("expected memory type for field in struct memory-type declaration")?;
+        let ty = self.match_type("expected type for field in struct memory-type declaration")?;
         let readonly = if self.token() == Some(Token::Identifier("readonly")) {
             self.consume();
             true
@@ -1698,10 +1697,9 @@ impl<'a> Parser<'a> {
     //
     // memory-type-decl ::= MemoryType(mt) "=" memory-type-desc
     // memory-type-desc ::= "struct" size "{" memory-type-field,* "}"
-    //                    | "static_array" memory-type "*" element-count
-    //                    | "primitive" type
+    //                    | "memory" size
     //                    | "empty"
-    // element-count ::= uimm64
+    // size ::= uimm64
     fn parse_memory_type_decl(&mut self) -> ParseResult<(MemoryType, MemoryTypeData)> {
         let mt = self.match_mt("expected memory type number: mt«n»")?;
         self.match_token(Token::Equal, "expected '=' in memory type declaration")?;
@@ -1725,26 +1723,12 @@ impl<'a> Parser<'a> {
                     Token::RBrace,
                     "expected closing brace after struct fields in struct memory-type declaration",
                 )?;
-                // Ensure fields are sorted ascending by offset.
-                // TODO: check for field overlap and sorted field
-                // order in the CLIF validator.
-                fields.sort_by_key(|f| f.offset);
                 MemoryTypeData::Struct { size, fields }
             }
-            Some(Token::Identifier("static_array")) => {
+            Some(Token::Identifier("memory")) => {
                 self.consume();
-                let element = self.match_mt(
-                    "expected memory type for element in array memory-type declaration",
-                )?;
-                self.match_token(Token::Multiply, "expected `*` to separate element type and count in static array memory-type declaration")?;
-                let length: u64 = self.match_uimm64("expected u64 constant value for element count in array memory-type declaration")?.into();
-                MemoryTypeData::StaticArray { element, length }
-            }
-            Some(Token::Identifier("primitive")) => {
-                self.consume();
-                let ty = self
-                    .match_type("expected primitive type in primitive memory-type declaration")?;
-                MemoryTypeData::Primitive { ty }
+                let size: u64 = self.match_uimm64("expected u64 constant value for size in static-memory memory-type declaration")?.into();
+                MemoryTypeData::Memory { size }
             }
             Some(Token::Identifier("empty")) => {
                 self.consume();
@@ -2164,7 +2148,6 @@ impl<'a> Parser<'a> {
     // Parse a "fact" for proof-carrying code, attached to a value.
     //
     // fact ::= "max" "(" bit-width "," max-value ")"
-    //        | "points_to" "(" valid-range ")"
     //        | "mem" "(" memory-type "," mt-offset ")"
     // bit-width ::= uimm64
     // max-value ::= uimm64
@@ -2200,15 +2183,6 @@ impl<'a> Parser<'a> {
                     max: max.into(),
                 })
             }
-            Some(Token::Identifier("points_to")) => {
-                self.consume();
-                self.match_token(Token::LPar, "expected a `(`")?;
-                let max = self.match_uimm64("expected a max offset for `points_to` fact")?;
-                self.match_token(Token::RPar, "expected a `)`")?;
-                Ok(Fact::PointsTo {
-                    region: MemoryRegion { max: max.into() },
-                })
-            }
             Some(Token::Identifier("mem")) => {
                 self.consume();
                 self.match_token(Token::LPar, "expected a `(`")?;
@@ -2223,7 +2197,7 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::RPar, "expected a `)`")?;
                 Ok(Fact::Mem { ty, offset })
             }
-            _ => Err(self.error("expected a `max` or `points_to` fact")),
+            _ => Err(self.error("expected a `max` or `mem` fact")),
         }
     }
 
