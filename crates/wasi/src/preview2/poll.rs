@@ -51,7 +51,7 @@ where
         remove_index_on_delete: if resource.owned() {
             Some(|table, idx| {
                 let resource = Resource::<T>::new_own(idx);
-                table.delete_resource(resource)?;
+                table.delete(resource)?;
                 Ok(())
             })
         } else {
@@ -60,7 +60,7 @@ where
         make_future: make_future::<T>,
     };
 
-    Ok(table.push_child_resource(pollable, &resource)?)
+    Ok(table.push_child(pollable, &resource)?)
 }
 
 #[async_trait::async_trait]
@@ -75,7 +75,7 @@ impl<T: WasiView> poll::Host for T {
         for (ix, p) in pollables.iter().enumerate() {
             let ix: u32 = ix.try_into()?;
 
-            let pollable = table.get_resource(p)?;
+            let pollable = table.get(p)?;
             let (_, list) = table_futures
                 .entry(pollable.index)
                 .or_insert((pollable.make_future, Vec::new()));
@@ -120,8 +120,8 @@ impl<T: WasiView> poll::Host for T {
     async fn poll_one(&mut self, pollable: Resource<Pollable>) -> Result<()> {
         let table = self.table_mut();
 
-        let pollable = table.get_resource(&pollable)?;
-        let ready = (pollable.make_future)(table.get_as_any_mut(pollable.index)?);
+        let pollable = table.get(&pollable)?;
+        let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
         ready.await;
         Ok(())
     }
@@ -130,7 +130,7 @@ impl<T: WasiView> poll::Host for T {
 #[async_trait::async_trait]
 impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
     fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-        let pollable = self.table_mut().delete_resource(pollable)?;
+        let pollable = self.table_mut().delete(pollable)?;
         if let Some(delete) = pollable.remove_index_on_delete {
             delete(self.table_mut(), pollable.index)?;
         }

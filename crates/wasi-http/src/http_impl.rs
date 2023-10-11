@@ -40,7 +40,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
                 .unwrap_or(600 * 1000) as u64,
         );
 
-        let req = self.table().delete_resource(request_id)?;
+        let req = self.table().delete(request_id)?;
 
         let method = match req.method {
             crate::bindings::http::types::Method::Get => Method::GET,
@@ -176,9 +176,7 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             })
         });
 
-        let fut = self
-            .table()
-            .push_resource(HostFutureIncomingResponse::new(handle))?;
+        let fut = self.table().push(HostFutureIncomingResponse::new(handle))?;
 
         Ok(Ok(fut))
     }

@@ -9,7 +9,7 @@ impl<T: WasiView> instance_network::Host for T {
             pool: self.ctx().pool.clone(),
             allow_ip_name_lookup: self.ctx().allow_ip_name_lookup,
         };
-        let network = self.table_mut().push_resource(network)?;
+        let network = self.table_mut().push(network)?;
         Ok(network)
     }
 }

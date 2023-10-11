@@ -159,23 +159,21 @@ pub enum IsATTY {
 impl<T: WasiView> stdin::Host for T {
     fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stdin.stream();
-        Ok(self
-            .table_mut()
-            .push_resource(streams::InputStream::Host(stream))?)
+        Ok(self.table_mut().push(streams::InputStream::Host(stream))?)
     }
 }
 
 impl<T: WasiView> stdout::Host for T {
     fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stdout.stream();
-        Ok(self.table_mut().push_resource(stream)?)
+        Ok(self.table_mut().push(stream)?)
     }
 }
 
 impl<T: WasiView> stderr::Host for T {
     fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
         let stream = self.ctx_mut().stderr.stream();
-        Ok(self.table_mut().push_resource(stream)?)
+        Ok(self.table_mut().push(stream)?)
     }
 }
 
@@ -185,21 +183,21 @@ pub struct TerminalOutput;
 impl<T: WasiView> terminal_input::Host for T {}
 impl<T: WasiView> terminal_input::HostTerminalInput for T {
     fn drop(&mut self, r: Resource<TerminalInput>) -> anyhow::Result<()> {
-        self.table_mut().delete_resource(r)?;
+        self.table_mut().delete(r)?;
         Ok(())
     }
 }
 impl<T: WasiView> terminal_output::Host for T {}
 impl<T: WasiView> terminal_output::HostTerminalOutput for T {
     fn drop(&mut self, r: Resource<TerminalOutput>) -> anyhow::Result<()> {
-        self.table_mut().delete_resource(r)?;
+        self.table_mut().delete(r)?;
         Ok(())
     }
 }
 impl<T: WasiView> terminal_stdin::Host for T {
     fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<Resource<TerminalInput>>> {
         if self.ctx().stdin.isatty() {
-            let fd = self.table_mut().push_resource(TerminalInput)?;
+            let fd = self.table_mut().push(TerminalInput)?;
             Ok(Some(fd))
         } else {
             Ok(None)
@@ -209,7 +207,7 @@ impl<T: WasiView> terminal_stdin::Host for T {
 impl<T: WasiView> terminal_stdout::Host for T {
     fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx().stdout.isatty() {
-            let fd = self.table_mut().push_resource(TerminalOutput)?;
+            let fd = self.table_mut().push(TerminalOutput)?;
             Ok(Some(fd))
         } else {
             Ok(None)
@@ -219,7 +217,7 @@ impl<T: WasiView> terminal_stdout::Host for T {
 impl<T: WasiView> terminal_stderr::Host for T {
     fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
         if self.ctx().stderr.isatty() {
-            let fd = self.table_mut().push_resource(TerminalOutput)?;
+            let fd = self.table_mut().push(TerminalOutput)?;
             Ok(Some(fd))
         } else {
             Ok(None)
