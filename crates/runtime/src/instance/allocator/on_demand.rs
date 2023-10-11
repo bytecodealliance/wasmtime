@@ -34,6 +34,7 @@ pub struct OnDemandInstanceAllocator {
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
     pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
+        let _ = stack_size; // suppress warnings when async feature is disabled.
         Self {
             mem_creator,
             #[cfg(feature = "async")]

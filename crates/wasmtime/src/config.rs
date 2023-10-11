@@ -1586,12 +1586,18 @@ impl Config {
     }
 
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator + Send + Sync>> {
+        #[cfg(feature = "async")]
+        let stack_size = self.async_stack_size;
+
+        #[cfg(not(feature = "async"))]
+        let stack_size = 0;
+
         match &self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => {
                 #[allow(unused_mut)]
                 let mut allocator = Box::new(OnDemandInstanceAllocator::new(
                     self.mem_creator.clone(),
-                    self.async_stack_size,
+                    stack_size,
                 ));
                 #[cfg(feature = "async")]
                 if let Some(stack_creator) = &self.stack_creator {
@@ -1601,12 +1607,6 @@ impl Config {
             }
             #[cfg(feature = "pooling-allocator")]
             InstanceAllocationStrategy::Pooling(config) => {
-                #[cfg(feature = "async")]
-                let stack_size = self.async_stack_size;
-
-                #[cfg(not(feature = "async"))]
-                let stack_size = 0;
-
                 let mut config = config.config;
                 config.stack_size = stack_size;
                 Ok(Box::new(wasmtime_runtime::PoolingInstanceAllocator::new(
