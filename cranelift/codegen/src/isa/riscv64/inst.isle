@@ -2145,9 +2145,6 @@
 (decl pure partial val_already_extended (ExtendOp Value) bool)
 (rule 0 (val_already_extended _ v @ (value_type $I64)) $true)
 
-;; Immediates are always sign extended to their full 64-bits
-(rule 1 (val_already_extended (ExtendOp.Signed) (iconst _)) $true)
-
 ;; When extending our backend always extends to the full register width, so
 ;; there's no need to extend-an-extend.
 (rule 1 (val_already_extended (ExtendOp.Zero) (uextend _)) $true)
