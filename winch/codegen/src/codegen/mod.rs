@@ -372,14 +372,11 @@ where
         let (defined, cont) = (self.masm.get_label(), self.masm.get_label());
 
         // Push the built-in arguments to the stack.
-        self.context.stack.extend(
-            [
-                TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into(),
-                table_index.as_u32().try_into().unwrap(),
-                index.into(),
-            ]
-            .into_iter(),
-        );
+        self.context.stack.extend([
+            TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into(),
+            table_index.as_u32().try_into().unwrap(),
+            index.into(),
+        ]);
 
         self.masm.branch(
             CmpKind::Ne,
