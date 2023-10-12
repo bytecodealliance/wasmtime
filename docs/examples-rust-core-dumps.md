@@ -5,7 +5,7 @@ repository to run the example locally.
 
 [code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/fib-debug/main.rs
 
-This examples shows how to configure capturing [core dumps] when a Wasm guest
+This example shows how to configure capturing [core dumps] when a Wasm guest
 traps that can then be passed to external tools (like [`wasmgdb`]) for
 post-mortem analysis.
 
