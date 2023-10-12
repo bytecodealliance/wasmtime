@@ -2,7 +2,7 @@
 
 use crate::ir::pcc::*;
 use crate::ir::types::*;
-use crate::ir::{Function, MemFlags};
+use crate::ir::MemFlags;
 use crate::isa::aarch64::inst::args::{PairAMode, ShiftOp};
 use crate::isa::aarch64::inst::ALUOp;
 use crate::isa::aarch64::inst::Inst;
@@ -69,10 +69,7 @@ fn check_output<F: Fn() -> PccResult<Fact>>(
     }
 }
 
-pub(crate) fn check(inst: &Inst, function: &Function, vcode: &VCode<Inst>) -> PccResult<()> {
-    // Create a new fact context with the machine's pointer width.
-    let ctx = FactContext::new(&function.memory_types, 64);
-
+pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccResult<()> {
     trace!("Checking facts on inst: {:?}", inst);
 
     match inst {

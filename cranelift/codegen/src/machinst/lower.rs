@@ -8,7 +8,7 @@
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
-use crate::ir::pcc::{PccError, PccResult};
+use crate::ir::pcc::{FactContext, PccError, PccResult};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
     GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, RelSourceLoc, Type,
@@ -151,9 +151,9 @@ pub trait LowerBackend {
     /// on VRegs.
     fn check_fact(
         &self,
-        _inst: &Self::MInst,
-        _function: &Function,
+        _ctx: &FactContext<'_>,
         _vcode: &VCode<Self::MInst>,
+        _inst: &Self::MInst,
     ) -> PccResult<()> {
         Err(PccError::UnimplementedBackend)
     }

@@ -46,23 +46,30 @@
 //! `FactContext::add()` and friends to forward-propagate facts.
 //!
 //! TODO:
-//! - Check blockparams' preds against blockparams' facts.
+//!
+//! Completeness:
 //! - Propagate facts through optimization (egraph layer).
 //! - Generate facts in cranelift-wasm frontend when lowering memory ops.
-//! - Implement richer "points-to" facts that describe the pointed-to
-//!   memory, so the loaded values can also have facts.
 //! - Support bounds-checking-type operations for dynamic memories and
 //!   tables.
+//!
+//! Generality:
+//! - facts on outputs (in func signature)?
 //! - Implement checking at the CLIF level as well.
 //! - Check instructions that can trap as well?
 //!
+//! Nicer errors:
+//! - attach instruction index or some other identifier to errors
+//!
+//! Text format cleanup:
+//! - make the bitwidth on `max` facts optional in the CLIF text
+//!   format?
 //! - make offset in `mem` fact optional in the text format?
-//! - facts on outputs (in func signature)?
 
 use crate::ir;
 use crate::isa::TargetIsa;
-use crate::machinst::{InsnIndex, LowerBackend, MachInst, VCode};
-use cranelift_entity::PrimaryMap;
+use crate::machinst::{BlockIndex, LowerBackend, MachInst, VCode};
+use regalloc2::Function as _;
 use std::fmt;
 
 #[cfg(feature = "enable-serde")]
@@ -84,6 +91,9 @@ pub enum PccError {
     /// A derivation of an output fact is unsupported (incorrect or
     /// not derivable).
     UnsupportedFact,
+    /// A block parameter claims a fact that one of its predecessors
+    /// does not support.
+    UnsupportedBlockparam,
     /// A memory access is out of bounds.
     OutOfBounds,
     /// Proof-carrying-code checking is not implemented for a
@@ -160,18 +170,15 @@ macro_rules! bail {
 /// context carries environment/global properties, such as the machine
 /// pointer width.
 pub struct FactContext<'a> {
-    memory_types: &'a PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
+    function: &'a ir::Function,
     pointer_width: u16,
 }
 
 impl<'a> FactContext<'a> {
     /// Create a new "fact context" in which to evaluate facts.
-    pub fn new(
-        memory_types: &'a PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
-        pointer_width: u16,
-    ) -> Self {
+    pub fn new(function: &'a ir::Function, pointer_width: u16) -> Self {
         FactContext {
-            memory_types,
+            function,
             pointer_width,
         }
     }
@@ -387,7 +394,7 @@ impl<'a> FactContext<'a> {
                     .ok_or(PccError::Overflow)?;
                 let end_offset: u64 =
                     u64::try_from(end_offset).map_err(|_| PccError::OutOfBounds)?;
-                match &self.memory_types[*ty] {
+                match &self.function.memory_types[*ty] {
                     ir::MemoryTypeData::Struct { size, .. }
                     | ir::MemoryTypeData::Memory { size } => {
                         ensure!(end_offset <= *size, OutOfBounds)
@@ -411,7 +418,7 @@ impl<'a> FactContext<'a> {
         let offset =
             u64::try_from(offset).expect("valid access address cannot have a negative offset");
 
-        if let ir::MemoryTypeData::Struct { fields, .. } = &self.memory_types[ty] {
+        if let ir::MemoryTypeData::Struct { fields, .. } = &self.function.memory_types[ty] {
             let field = fields
                 .iter()
                 .find(|field| field.offset == offset)
@@ -470,15 +477,39 @@ pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
     vcode: &VCode<B::MInst>,
     backend: &B,
 ) -> PccResult<()> {
-    for inst in 0..vcode.num_insts() {
-        let inst = InsnIndex::new(inst);
-        if vcode.inst_defines_facts(inst) || vcode[inst].is_mem_access() {
-            // This instruction defines a register with a new fact, or
-            // has some side-effect we want to be careful to
-            // verify. We'll call into the backend to validate this
-            // fact with respect to the instruction and the input
-            // facts.
-            backend.check_fact(&vcode[inst], f, vcode)?;
+    let ctx = FactContext::new(f, backend.triple().pointer_width().unwrap().bits().into());
+
+    // Check that individual instructions are valid according to input
+    // facts, and support the stated output facts.
+    for block in 0..vcode.num_blocks() {
+        let block = BlockIndex::new(block);
+        for inst in vcode.block_insns(block).iter() {
+            if vcode.inst_defines_facts(inst) || vcode[inst].is_mem_access() {
+                // This instruction defines a register with a new fact, or
+                // has some side-effect we want to be careful to
+                // verify. We'll call into the backend to validate this
+                // fact with respect to the instruction and the input
+                // facts.
+                backend.check_fact(&ctx, vcode, &vcode[inst])?;
+            }
+
+            // If this is a branch, check that all block arguments subsume
+            // the assumed facts on the blockparams of successors.
+            if vcode.is_branch(inst) {
+                for (succ_idx, succ) in vcode.block_succs(block).iter().enumerate() {
+                    for (arg, param) in vcode
+                        .branch_blockparams(block, inst, succ_idx)
+                        .iter()
+                        .zip(vcode.block_params(*succ).iter())
+                    {
+                        let arg_fact = vcode.vreg_fact(*arg);
+                        let param_fact = vcode.vreg_fact(*param);
+                        if !ctx.subsumes_fact_optionals(arg_fact, param_fact) {
+                            return Err(PccError::UnsupportedBlockparam);
+                        }
+                    }
+                }
+            }
         }
     }
     Ok(())
