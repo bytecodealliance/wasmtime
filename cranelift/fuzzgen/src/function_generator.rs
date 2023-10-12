@@ -1135,7 +1135,7 @@ enum BlockTerminatorKind {
 
 /// Alias Analysis Category
 ///
-/// Our alias analysis pass supports 4 categories of accesses to destinguish
+/// Our alias analysis pass supports 4 categories of accesses to distinguish
 /// different regions. The "Other" region is the general case, and is the default
 /// Although they have highly suggestive names there is no difference between any
 /// of the categories.
