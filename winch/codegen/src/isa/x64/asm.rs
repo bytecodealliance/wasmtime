@@ -845,6 +845,20 @@ impl Assembler {
         })
     }
 
+    pub fn sqrt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Sqrtss,
+            OperandSize::S64 => SseOpcode::Sqrtsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmR {
+            op,
+            src: Xmm::from(src).into(),
+            dst: dst.into(),
+        })
+    }
+
     /// Emit a call to an unknown location through a register.
     pub fn call_with_reg(&mut self, callee: Reg) {
         self.emit(Inst::CallUnknown {

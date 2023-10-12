@@ -56,6 +56,8 @@ macro_rules! def_unsupported {
     (emit F64Nearest $($rest:tt)*) => {};
     (emit F32Trunc $($rest:tt)*) => {};
     (emit F64Trunc $($rest:tt)*) => {};
+    (emit F32Sqrt $($rest:tt)*) => {};
+    (emit F64Sqrt $($rest:tt)*) => {};
     (emit I32Add $($rest:tt)*) => {};
     (emit I64Add $($rest:tt)*) => {};
     (emit I32Sub $($rest:tt)*) => {};
@@ -249,6 +251,20 @@ where
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_round(RoundingMode::Zero, reg, RegImm::Reg(reg), size);
+            });
+    }
+
+    fn visit_f32_sqrt(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
+                masm.float_sqrt(reg, reg, size);
+            });
+    }
+
+    fn visit_f64_sqrt(&mut self) {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
+                masm.float_sqrt(reg, reg, size);
             });
     }
 

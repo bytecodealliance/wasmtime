@@ -404,6 +404,10 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize) {
+        self.asm.sqrt(src, dst, size);
+    }
+
     fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
         Self::ensure_two_argument_form(&dst, &lhs);
         match (rhs, dst) {

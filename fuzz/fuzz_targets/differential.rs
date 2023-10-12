@@ -375,6 +375,8 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | F64Abs { .. }
                         | F32Neg { .. }
                         | F64Neg { .. }
+                        | F32Sqrt { .. }
+                        | F64Sqrt { .. }
                         | CallIndirect { .. }
                         | ElemDrop { .. }
                         | TableCopy { .. }
