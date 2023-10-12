@@ -170,7 +170,7 @@ fib(42) = 267914296
 $ perf inject --jit --input perf.data --output perf.jit.data
 ```
 
-And we should have all out information now! We can execute `perf report` for
+And we should have all our information now! We can execute `perf report` for
 example to see that 99% of our runtime (as expected) is spent in our `fib`
 function. Note that the symbol has been demangled to `fib::fib` which is what
 the Rust symbol is:
