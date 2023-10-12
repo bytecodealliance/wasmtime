@@ -47,7 +47,7 @@ their implications in Wasmtime:
   involves acquiring a lock, whereas for `Store` below no locks are necessary.
 
 * `wasmtime::Store` - this is the concept of a "store" in WebAssembly. While
-  there's also a formal definition to go of this it can be thought of as a bag
+  there's also a formal definition to go off of, it can be thought of as a bag
   of related WebAssembly objects. This includes instances, globals, memories,
   tables, etc. A `Store` does not implement any form of garbage collection of
   the internal items (there is a `gc` function but that's just for `externref`
@@ -65,7 +65,7 @@ their implications in Wasmtime:
 
 * `wasmtime_runtime::InstanceHandle` - this is the low-level representation of a
   WebAssembly instance. At the same time this is also used as the representation
-  for all host-defined object. For example if you call `wasmtime::Memory::new`
+  for all host-defined objects. For example if you call `wasmtime::Memory::new`
   it'll create an `InstanceHandle` under the hood. This is a very `unsafe` type
   that should probably have all of its functions marked `unsafe` or otherwise
   have more strict guarantees documented about it, but it's an internal type
@@ -180,7 +180,7 @@ Compilation is roughly broken down into a few phases:
    point the module is ready to be instantiated.
 
 A `wasmtime::Module` is an atomically-reference-counted object where upon
-instantiation into a `Store` the `Store` will hold a strong reference to the
+instantiation into a `Store`, the `Store` will hold a strong reference to the
 internals of the module. This means that all instances of a `wasmtime::Module`
 share the same compiled code. Additionally a `wasmtime::Module` is one of the
 few objects that lives outside of a `wasmtime::Store`. This means that
