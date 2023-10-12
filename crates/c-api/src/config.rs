@@ -424,3 +424,8 @@ pub unsafe extern "C" fn wasmtime_config_host_memory_creator_set(
         new_memory: creator.new_memory,
     }));
 }
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_memory_init_cow_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.memory_init_cow(enable);
+}

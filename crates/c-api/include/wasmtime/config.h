@@ -460,6 +460,22 @@ WASM_API_EXTERN void wasmtime_config_host_memory_creator_set(
     wasm_config_t*,
     wasmtime_memory_creator_t*);
 
+/**
+ * \brief Configures whether copy-on-write memory-mapped data is used to initialize a linear memory.
+ *
+ * Initializing linear memory via a copy-on-write mapping can drastically improve instantiation costs 
+ * of a WebAssembly module because copying memory is deferred. Additionally if a page of memory is 
+ * only ever read from WebAssembly and never written too then the same underlying page of data will
+ * be reused between all instantiations of a module meaning that if a module is instantiated many
+ * times this can lower the overall memory required needed to run that module.
+ *
+ * This option defaults to true.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_init_cow
+ */
+WASMTIME_CONFIG_PROP(void, memory_init_cow, bool)
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
