@@ -123,7 +123,7 @@ have any problems, please don't hesitate to [file an issue]!
 If the jitdump profile doesn't give you enough information by default, you can
 also enable dwarf debug information to be generated for JIT code which should
 give the `perf` profiler more information about what's being profiled. This can
-include information like more desriptive function names, filenames, and line
+include information like more descriptive function names, filenames, and line
 numbers.
 
 Enabling dwarf debug information for JIT code depends on how you're using
