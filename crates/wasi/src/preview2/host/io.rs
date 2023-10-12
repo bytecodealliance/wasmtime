@@ -124,71 +124,53 @@ impl<T: WasiView> streams::HostOutputStream for T {
 
     async fn splice(
         &mut self,
-        _dst: Resource<OutputStream>,
-        _src: Resource<InputStream>,
-        _len: u64,
+        dest: Resource<OutputStream>,
+        src: Resource<InputStream>,
+        len: u64,
     ) -> StreamResult<u64> {
-        // TODO: We can't get two streams at the same time because they both
-        // carry the exclusive lifetime of `ctx`. When [`get_many_mut`] is
-        // stabilized, that could allow us to add a `get_many_stream_mut` or
-        // so which lets us do this.
-        //
-        // [`get_many_mut`]: https://doc.rust-lang.org/stable/std/collections/hash_map/struct.HashMap.html#method.get_many_mut
-        /*
-        let s: &mut Box<dyn crate::InputStream> = ctx
-            .table_mut()
-            .get_input_stream_mut(src)
-            ?;
-        let d: &mut Box<dyn crate::OutputStream> = ctx
-            .table_mut()
-            .get_mut(dst)
-            ?;
+        let len = len.try_into().unwrap_or(usize::MAX);
+        let output = self.table_mut().get_mut(&dest)?;
+        let permit = output.check_write()?;
+        let _ = output;
+        let len = len.min(permit);
+        if len == 0 {
+            return Ok(0);
+        }
 
-        let bytes_spliced: u64 = s.splice(&mut **d, len).await?;
+        let input = self.table_mut().get_mut(&src)?;
+        let contents = match input {
+            InputStream::Host(h) => h.read(len)?,
+            InputStream::File(f) => f.read(len).await?,
+        };
+        let _ = input;
 
-        Ok(bytes_spliced)
-        */
-        todo!("stream splice is not implemented")
+        let len = contents.len();
+        if len == 0 {
+            return Ok(0);
+        }
+
+        let output = self.table_mut().get_mut(&dest)?;
+        output.write(contents)?;
+        Ok(len.try_into().expect("usize can fit in u64"))
     }
 
     async fn blocking_splice(
         &mut self,
-        _dst: Resource<OutputStream>,
-        _src: Resource<InputStream>,
-        _len: u64,
+        dest: Resource<OutputStream>,
+        src: Resource<InputStream>,
+        len: u64,
     ) -> StreamResult<u64> {
-        // TODO: once splice is implemented, figure out what the blocking semantics are for waiting
-        // on src and dest here.
-        todo!("stream splice is not implemented")
-    }
+        use crate::preview2::Subscribe;
 
-    async fn forward(
-        &mut self,
-        _dst: Resource<OutputStream>,
-        _src: Resource<InputStream>,
-    ) -> StreamResult<u64> {
-        // TODO: We can't get two streams at the same time because they both
-        // carry the exclusive lifetime of `ctx`. When [`get_many_mut`] is
-        // stabilized, that could allow us to add a `get_many_stream_mut` or
-        // so which lets us do this.
-        //
-        // [`get_many_mut`]: https://doc.rust-lang.org/stable/std/collections/hash_map/struct.HashMap.html#method.get_many_mut
-        /*
-        let s: &mut Box<dyn crate::InputStream> = ctx
-            .table_mut()
-            .get_input_stream_mut(src)
-            ?;
-        let d: &mut Box<dyn crate::OutputStream> = ctx
-            .table_mut()
-            .get_mut(dst)
-            ?;
+        let output = self.table_mut().get_mut(&dest)?;
+        output.ready().await;
+        let _ = output;
 
-        let bytes_spliced: u64 = s.splice(&mut **d, len).await?;
+        let input = self.table_mut().get_mut(&src)?;
+        input.ready().await;
+        let _ = input;
 
-        Ok(bytes_spliced)
-        */
-
-        todo!("stream forward is not implemented")
+        self.splice(dest, src, len).await
     }
 }
 
@@ -359,14 +341,6 @@ pub mod sync {
             len: u64,
         ) -> StreamResult<u64> {
             in_tokio(async { AsyncHostOutputStream::blocking_splice(self, dst, src, len).await })
-        }
-
-        fn forward(
-            &mut self,
-            dst: Resource<OutputStream>,
-            src: Resource<InputStream>,
-        ) -> StreamResult<u64> {
-            in_tokio(async { AsyncHostOutputStream::forward(self, dst, src).await })
         }
     }
 
