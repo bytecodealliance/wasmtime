@@ -53,3 +53,13 @@ block0(v0: i64, v1: i64):
 ; run: %icmp_uge_i64(0, 1) == 0
 ; run: %icmp_uge_i64(-5, -1) == 0
 ; run: %icmp_uge_i64(1, -1) == 0
+
+
+function %constant_inputs() -> i8 {
+block0:
+    v9 = iconst.i8 128
+    v11 = iconst.i8 0
+    v17 = icmp uge v9, v11
+    return v17
+}
+; run: %constant_inputs() == 1
