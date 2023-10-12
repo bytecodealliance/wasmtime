@@ -371,6 +371,20 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | Return { .. }
                         | F32Const { .. }
                         | F64Const { .. }
+                        | F32Add { .. }
+                        | F64Add { .. }
+                        | F32Sub { .. }
+                        | F64Sub { .. }
+                        | F32Mul { .. }
+                        | F64Mul { .. }
+                        | F32Div { .. }
+                        | F64Div { .. }
+                        | F32Min { .. }
+                        | F64Min { .. }
+                        | F32Max { .. }
+                        | F64Max { .. }
+                        | F32Copysign { .. }
+                        | F64Copysign { .. }
                         | F32Abs { .. }
                         | F64Abs { .. }
                         | F32Neg { .. }

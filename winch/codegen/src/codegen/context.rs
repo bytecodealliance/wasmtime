@@ -218,6 +218,19 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         self.stack.push(typed_reg.into());
     }
 
+    /// Prepares arguments for emitting a binary operation.
+    pub fn binop<F, M>(&mut self, masm: &mut M, size: OperandSize, mut emit: F)
+    where
+        F: FnMut(&mut M, Reg, Reg, OperandSize),
+        M: MacroAssembler,
+    {
+        let src = self.pop_to_reg(masm, None);
+        let dst = self.pop_to_reg(masm, None);
+        emit(masm, dst.reg, src.reg.into(), size);
+        self.free_reg(src);
+        self.stack.push(dst.into());
+    }
+
     /// Prepares arguments for emitting an i32 binary operation.
     pub fn i32_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
     where
@@ -235,11 +248,9 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32);
             self.stack.push(typed_reg.into());
         } else {
-            let src = self.pop_to_reg(masm, None);
-            let dst = self.pop_to_reg(masm, None);
-            emit(masm, dst.reg, src.reg.into(), OperandSize::S32);
-            self.free_reg(src);
-            self.stack.push(dst.into());
+            self.binop(masm, OperandSize::S32, |masm, dst, src, size| {
+                emit(masm, dst, src.into(), size)
+            });
         }
     }
 
@@ -259,11 +270,9 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64);
             self.stack.push(typed_reg.into());
         } else {
-            let src = self.pop_to_reg(masm, None);
-            let dst = self.pop_to_reg(masm, None);
-            emit(masm, dst.reg, src.reg.into(), OperandSize::S64);
-            self.free_reg(src);
-            self.stack.push(dst.into());
+            self.binop(masm, OperandSize::S64, |masm, dst, src, size| {
+                emit(masm, dst, src.into(), size)
+            });
         }
     }
 

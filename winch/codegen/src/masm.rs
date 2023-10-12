@@ -372,6 +372,30 @@ pub(crate) trait MacroAssembler {
     /// Perform multiplication operation.
     fn mul(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
+    /// Perform a floating point add operation.
+    fn float_add(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point subtraction operation.
+    fn float_sub(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point multiply operation.
+    fn float_mul(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point divide operation.
+    fn float_div(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point minimum operation. In x86, this will emit
+    /// multiple instructions.
+    fn float_min(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point maximum operation. In x86, this will emit
+    /// multiple instructions.
+    fn float_max(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point copysign operation. In x86, this will emit
+    /// multiple instructions.
+    fn float_copysign(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
     /// Perform a floating point abs operation.
     fn float_abs(&mut self, dst: Reg, size: OperandSize);
 

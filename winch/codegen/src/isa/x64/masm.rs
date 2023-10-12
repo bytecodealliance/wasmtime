@@ -369,6 +369,60 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn float_add(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst, &lhs);
+        self.asm.xmm_add_rr(rhs, dst, size);
+    }
+
+    fn float_sub(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst, &lhs);
+        self.asm.xmm_sub_rr(rhs, dst, size);
+    }
+
+    fn float_mul(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst, &lhs);
+        self.asm.xmm_mul_rr(rhs, dst, size);
+    }
+
+    fn float_div(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst, &lhs);
+        self.asm.xmm_div_rr(rhs, dst, size);
+    }
+
+    fn float_min(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst, &lhs);
+        self.asm.xmm_min_seq(rhs, dst, size);
+    }
+
+    fn float_max(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst, &lhs);
+        self.asm.xmm_max_seq(rhs, dst, size);
+    }
+
+    fn float_copysign(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        Self::ensure_two_argument_form(&dst, &lhs);
+        let scratch_gpr = regs::scratch();
+        let scratch_xmm = regs::scratch_xmm();
+        let sign_mask = match size {
+            OperandSize::S32 => I::I32(0x80000000),
+            OperandSize::S64 => I::I64(0x8000000000000000),
+            OperandSize::S128 => unreachable!(),
+        };
+        self.load_constant(&sign_mask, scratch_gpr, size);
+        self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
+
+        // Clear everything except sign bit in src.
+        self.asm.xmm_and_rr(scratch_xmm, rhs, size);
+
+        // Clear sign bit in dst using scratch to store result. Then copy the
+        // result back to dst.
+        self.asm.xmm_andn_rr(dst, scratch_xmm, size);
+        self.asm.xmm_mov_rr(scratch_xmm, dst, size);
+
+        // Copy sign bit from src to dst.
+        self.asm.xmm_or_rr(rhs, dst, size);
+    }
+
     fn float_neg(&mut self, dst: Reg, size: OperandSize) {
         assert_eq!(dst.class(), RegClass::Float);
         let mask = match size {

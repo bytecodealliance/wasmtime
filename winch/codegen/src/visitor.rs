@@ -44,6 +44,20 @@ macro_rules! def_unsupported {
     (emit I64Const $($rest:tt)*) => {};
     (emit F32Const $($rest:tt)*) => {};
     (emit F64Const $($rest:tt)*) => {};
+    (emit F32Add $($rest:tt)*) => {};
+    (emit F64Add $($rest:tt)*) => {};
+    (emit F32Sub $($rest:tt)*) => {};
+    (emit F64Sub $($rest:tt)*) => {};
+    (emit F32Mul $($rest:tt)*) => {};
+    (emit F64Mul $($rest:tt)*) => {};
+    (emit F32Div $($rest:tt)*) => {};
+    (emit F64Div $($rest:tt)*) => {};
+    (emit F32Min $($rest:tt)*) => {};
+    (emit F64Min $($rest:tt)*) => {};
+    (emit F32Max $($rest:tt)*) => {};
+    (emit F64Max $($rest:tt)*) => {};
+    (emit F32Copysign $($rest:tt)*) => {};
+    (emit F64Copysign $($rest:tt)*) => {};
     (emit F32Abs $($rest:tt)*) => {};
     (emit F64Abs $($rest:tt)*) => {};
     (emit F32Neg $($rest:tt)*) => {};
@@ -168,6 +182,146 @@ where
 
     fn visit_f64_const(&mut self, val: Ieee64) {
         self.context.stack.push(Val::f64(val));
+    }
+
+    fn visit_f32_add(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S32,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_add(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f64_add(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S64,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_add(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f32_sub(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S32,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_sub(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f64_sub(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S64,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_sub(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f32_mul(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S32,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_mul(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f64_mul(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S64,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_mul(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f32_div(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S32,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_div(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f64_div(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S64,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_div(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f32_min(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S32,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_min(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f64_min(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S64,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_min(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f32_max(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S32,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_max(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f64_max(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S64,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_max(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f32_copysign(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S32,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_copysign(dst, dst, src, size);
+            },
+        );
+    }
+
+    fn visit_f64_copysign(&mut self) {
+        self.context.binop(
+            self.masm,
+            OperandSize::S64,
+            &mut |masm: &mut M, dst, src, size| {
+                masm.float_copysign(dst, dst, src, size);
+            },
+        );
     }
 
     fn visit_f32_abs(&mut self) {
