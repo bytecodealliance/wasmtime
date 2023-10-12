@@ -61,12 +61,22 @@
 //! Nicer errors:
 //! - attach instruction index or some other identifier to errors
 //!
+//! Refactoring:
+//! - avoid the "default fact" infra everywhere we fetch facts,
+//!   instead doing it in the subsume check (and take the type with
+//!   subsume)?
+//!
 //! Text format cleanup:
 //! - make the bitwidth on `max` facts optional in the CLIF text
 //!   format?
 //! - make offset in `mem` fact optional in the text format?
+//!
+//! Bikeshed colors (syntax):
+//! - Put fact bang-annotations after types?
+//!   `v0: i64 ! fact(..)` vs. `v0 ! fact(..): i64`
 
 use crate::ir;
+use crate::ir::types::*;
 use crate::isa::TargetIsa;
 use crate::machinst::{BlockIndex, LowerBackend, MachInst, VCode};
 use regalloc2::Function as _;
@@ -148,6 +158,37 @@ impl fmt::Display for Fact {
         match self {
             Fact::ValueMax { bit_width, max } => write!(f, "max({}, {:#x})", bit_width, max),
             Fact::Mem { ty, offset } => write!(f, "mem({}, {:#x})", ty, offset),
+        }
+    }
+}
+
+impl Fact {
+    /// Try to infer a minimal fact for a value of the given IR type.
+    pub fn infer_from_type(ty: ir::Type) -> Option<&'static Self> {
+        static FACTS: [Fact; 4] = [
+            Fact::ValueMax {
+                bit_width: 8,
+                max: u8::MAX as u64,
+            },
+            Fact::ValueMax {
+                bit_width: 16,
+                max: u16::MAX as u64,
+            },
+            Fact::ValueMax {
+                bit_width: 32,
+                max: u32::MAX as u64,
+            },
+            Fact::ValueMax {
+                bit_width: 64,
+                max: u64::MAX,
+            },
+        ];
+        match ty {
+            I8 => Some(&FACTS[0]),
+            I16 => Some(&FACTS[1]),
+            I32 => Some(&FACTS[2]),
+            I64 => Some(&FACTS[3]),
+            _ => None,
         }
     }
 }
@@ -437,7 +478,8 @@ impl<'a> FactContext<'a> {
     pub fn load<'b>(&'b self, fact: &Fact, access_ty: ir::Type) -> PccResult<Option<&'b Fact>> {
         Ok(self
             .struct_field(fact, access_ty)?
-            .and_then(|field| field.fact.as_ref()))
+            .and_then(|field| field.fact())
+            .or_else(|| Fact::infer_from_type(access_ty)))
     }
 
     /// Check a store.
@@ -453,7 +495,7 @@ impl<'a> FactContext<'a> {
                 bail!(WriteToReadOnlyField);
             }
             // Check that the fact on the stored data subsumes the field's fact.
-            if !self.subsumes_fact_optionals(data_fact, field.fact.as_ref()) {
+            if !self.subsumes_fact_optionals(data_fact, field.fact()) {
                 bail!(InvalidStoredFact);
             }
         }

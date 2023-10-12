@@ -297,6 +297,7 @@ fn check_addr<'a>(
         match op {
             LoadOrStore::Load { result_fact } => {
                 let loaded_fact = ctx.load(addr, ty)?;
+                trace!("checking a load: loaded_fact = {loaded_fact:?} result_fact = {result_fact:?}");
                 if ctx.subsumes_fact_optionals(loaded_fact, result_fact) {
                     Ok(())
                 } else {
@@ -339,7 +340,10 @@ fn check_addr<'a>(
             let rm = get_fact(vcode, rm)?;
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_extended, 64))?;
-            check(&sum, ty)
+            trace!("rn = {rn:?} rm = {rm:?} rm_extended = {rm_extended:?} sum = {sum:?}");
+            check(&sum, ty)?;
+            trace!(" -> checks out!");
+            Ok(())
         }
         &AMode::Unscaled { rn, simm9 } => {
             let rn = get_fact(vcode, rn)?;
