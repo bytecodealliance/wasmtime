@@ -17,7 +17,7 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::immediates::Imm64;
 use crate::ir::types::{self, I128, I64};
-use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
+use crate::ir::{self, InstBuilder, InstructionData, Value};
 use crate::isa::TargetIsa;
 use crate::trace;
 
@@ -80,60 +80,6 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     opcode: ir::Opcode::GlobalValue,
                     global_value,
                 } => expand_global_value(inst, &mut pos.func, isa, global_value),
-                InstructionData::StackLoad {
-                    opcode: ir::Opcode::StackLoad,
-                    stack_slot,
-                    offset,
-                } => {
-                    let ty = pos.func.dfg.value_type(pos.func.dfg.first_result(inst));
-                    let addr_ty = isa.pointer_type();
-
-                    let mut pos = FuncCursor::new(pos.func).at_inst(inst);
-                    pos.use_srcloc(inst);
-
-                    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
-
-                    // Stack slots are required to be accessible.
-                    // We can't currently ensure that they are aligned.
-                    let mut mflags = MemFlags::new();
-                    mflags.set_notrap();
-                    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
-                }
-                InstructionData::DynamicStackLoad {
-                    opcode: ir::Opcode::DynamicStackLoad,
-                    dynamic_stack_slot,
-                } => {
-                    let ty = pos.func.dfg.value_type(pos.func.dfg.first_result(inst));
-                    assert!(ty.is_dynamic_vector());
-                    let addr_ty = isa.pointer_type();
-
-                    let mut pos = FuncCursor::new(pos.func).at_inst(inst);
-                    pos.use_srcloc(inst);
-
-                    let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
-
-                    // Stack slots are required to be accessible and aligned.
-                    let mflags = MemFlags::trusted();
-                    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
-                }
-                InstructionData::DynamicStackStore {
-                    opcode: ir::Opcode::DynamicStackStore,
-                    arg,
-                    dynamic_stack_slot,
-                } => {
-                    pos.use_srcloc(inst);
-                    let addr_ty = isa.pointer_type();
-                    let vector_ty = pos.func.dfg.value_type(arg);
-                    assert!(vector_ty.is_dynamic_vector());
-
-                    let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
-
-                    let mut mflags = MemFlags::new();
-                    // Stack slots are required to be accessible and aligned.
-                    mflags.set_notrap();
-                    mflags.set_aligned();
-                    pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
-                }
                 InstructionData::TableAddr {
                     opcode: ir::Opcode::TableAddr,
                     table,

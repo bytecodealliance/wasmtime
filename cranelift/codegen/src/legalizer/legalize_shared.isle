@@ -102,10 +102,24 @@
 (rule 1 (replace_sextend_i128 x @ (value_type $I64))
   (replace_iconcat $I64 x (ins_sshr $I64 x (ins_i64 63))))
 
-;; ========= `stack_store` ====================================================
+;; ========= `{dynamic_,}stack_{load,store}` ==================================
+
+;; stack_load(slot, offset) => load(stack_addr(slot, offset), 0)
+(rule (legalize (has_type ty (stack_load slot offset)))
+  (let ((addr Value (ins_stack_addr $I64 slot offset)))
+    (replace_load ty (mem_flags_notrap) addr (i32_to_offset32 0))))
 
 ;; stack_store(val, slot, offset) => store(val, stack_addr(slot, offset), 0)
 (rule (legalize (stack_store val @ (value_type ty) slot offset))
   (let ((addr Value (ins_stack_addr $I64 slot offset)))
     (replace_store ty (mem_flags_notrap) val addr (i32_to_offset32 0))))
 
+;; dynamic_stack_load(slot) => load(dynamic_stack_addr(slot), 0)
+(rule (legalize (has_type ty (dynamic_stack_load slot)))
+  (let ((addr Value (ins_dynamic_stack_addr $I64 slot)))
+    (replace_load ty (mem_flags_notrap) addr (i32_to_offset32 0))))
+
+;; dynamic_stack_store(val, slot) => store(val, dynamic_stack_addr(slot), 0)
+(rule (legalize (dynamic_stack_store val @ (value_type ty) slot))
+  (let ((addr Value (ins_dynamic_stack_addr $I64 slot)))
+    (replace_store ty (mem_flags_notrap) val addr (i32_to_offset32 0))))
