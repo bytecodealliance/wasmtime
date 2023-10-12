@@ -346,12 +346,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   slti a0,a0,3
+;   li a4,2
+;   slt a3,a4,a0
+;   xori a0,a3,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slti a0, a0, 3
+;   addi a4, zero, 2
+;   slt a3, a4, a0
+;   xori a0, a3, 1
 ;   ret
 
 function %sle_const_2046(i64) -> i8 system_v {
@@ -362,12 +366,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   slti a0,a0,2047
+;   li a4,2046
+;   slt a3,a4,a0
+;   xori a0,a3,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slti a0, a0, 0x7ff
+;   addi a4, zero, 0x7fe
+;   slt a3, a4, a0
+;   xori a0, a3, 1
 ;   ret
 
 function %sle_const_2047(i64) -> i8 system_v {
@@ -416,12 +424,16 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   slti a0,a0,3
+;   li a4,2
+;   sltu a3,a4,a0
+;   xori a0,a3,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slti a0, a0, 3
+;   addi a4, zero, 2
+;   sltu a3, a4, a0
+;   xori a0, a3, 1
 ;   ret
 
 function %uge_const2(i64) -> i8 system_v {
