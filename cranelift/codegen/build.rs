@@ -188,6 +188,10 @@ fn get_isle_compilations(
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_opt.isle"));
     let prelude_lower_isle =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("prelude_lower.isle"));
+    let legalize_shared_isle = make_isle_source_path_relative(
+        &cur_dir,
+        crate_dir.join("src/legalizer/legalize_shared.isle"),
+    );
 
     // Directory for mid-end optimizations.
     let src_opts = make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("opts"));
@@ -286,7 +290,7 @@ fn get_isle_compilations(
                 output: out_dir.join("legalize_riscv64.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
-                    //..
+                    legalize_shared_isle.clone(),
                     src_isa_risc_v.join("legalize.isle"),
                 ],
                 untracked_inputs: vec![clif_legalize_isle.clone()],
