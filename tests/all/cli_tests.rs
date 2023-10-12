@@ -1201,32 +1201,6 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_stream_pollable_lifetimes() -> Result<()> {
-        // Test program has two modes, dispatching based on argument.
-        run_wasmtime(&[
-            "run",
-            "-Wcomponent-model",
-            CLI_STREAM_POLLABLE_LIFETIMES_COMPONENT,
-            "correct",
-        ])?;
-        let output = get_wasmtime_command()?
-            .args(&[
-                "run",
-                "-Wcomponent-model",
-                CLI_STREAM_POLLABLE_LIFETIMES_COMPONENT,
-                "trap",
-            ])
-            .output()?;
-        assert!(!output.status.success());
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            stderr.contains("entry still has children"),
-            "bad stderr: {stderr}"
-        );
-        Ok(())
-    }
-
-    #[test]
     fn run_wasi_http_component() -> Result<()> {
         let output = super::run_wasmtime_for_output(
             &[

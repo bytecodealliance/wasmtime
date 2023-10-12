@@ -269,3 +269,15 @@ fn preview2_udp_sample_application() {
 fn preview2_tcp_connect() {
     run(PREVIEW2_TCP_CONNECT_COMPONENT, false).unwrap()
 }
+#[test_log::test]
+fn preview2_stream_pollable_correct() {
+    run(PREVIEW2_STREAM_POLLABLE_CORRECT_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_stream_pollable_traps() {
+    let e = run(PREVIEW2_STREAM_POLLABLE_TRAPS_COMPONENT, false).unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "entry still has children"
+    )
+}
