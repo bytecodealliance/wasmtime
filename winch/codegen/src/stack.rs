@@ -1,6 +1,5 @@
 use crate::{isa::reg::Reg, masm::StackSlot};
 use std::collections::VecDeque;
-use std::ops::RangeBounds;
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::WasmType;
 
@@ -322,18 +321,6 @@ impl Stack {
     /// Get a mutable reference to the inner stack representation.
     pub fn inner_mut(&mut self) -> &mut VecDeque<Val> {
         &mut self.inner
-    }
-
-    /// Calculates size in bytes of memory entries within the specified range of
-    /// the stack.
-    pub fn sizeof<R>(&self, range: R) -> u32
-    where
-        R: RangeBounds<usize>,
-    {
-        self.inner.range(range).fold(0, |acc, v| match v {
-            Val::Memory(m) => acc + m.slot.size,
-            _ => acc,
-        })
     }
 }
 

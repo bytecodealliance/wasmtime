@@ -1,8 +1,9 @@
-use wasmtime_environ::{WasmHeapType, WasmType};
+use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
 
 use super::ControlStackFrame;
 use crate::{
     abi::{ABIResult, ABI},
+    codegen::BuiltinFunctions,
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm},
@@ -27,25 +28,37 @@ use std::ops::RangeBounds;
 /// generation process. The code generation context should
 /// be generally used as the single entry point to access
 /// the compound functionality provided by its elements.
-pub(crate) struct CodeGenContext<'a> {
+pub(crate) struct CodeGenContext<'a, 'b: 'a> {
     /// The register allocator.
     pub regalloc: RegAlloc,
     /// The value stack.
     pub stack: Stack,
     /// The current function's frame.
-    pub frame: &'a Frame,
+    pub frame: Frame,
     /// Reachability state.
     pub reachable: bool,
+    /// The built-in functions available to the JIT code.
+    pub builtins: &'b mut BuiltinFunctions,
+    /// A reference to the VMOffsets.
+    pub vmoffsets: &'a VMOffsets<u8>,
 }
 
-impl<'a> CodeGenContext<'a> {
+impl<'a, 'b> CodeGenContext<'a, 'b> {
     /// Create a new code generation context.
-    pub fn new(regalloc: RegAlloc, stack: Stack, frame: &'a Frame) -> Self {
+    pub fn new(
+        regalloc: RegAlloc,
+        stack: Stack,
+        frame: Frame,
+        builtins: &'b mut BuiltinFunctions,
+        vmoffsets: &'a VMOffsets<u8>,
+    ) -> Self {
         Self {
             regalloc,
             stack,
             frame,
             reachable: true,
+            builtins,
+            vmoffsets,
         }
     }
 
@@ -90,10 +103,9 @@ impl<'a> CodeGenContext<'a> {
     /// execution. Only the registers in the `free` iterator will be freed. The
     /// caller must guarantee that in case the iterators are different, the free
     /// iterator must be a subset of the alloc iterator.
-    pub fn without<T, M, F>(
+    pub fn without<'r, T, M, F>(
         &mut self,
-        alloc: impl Iterator<Item = Reg>,
-        free: impl Iterator<Item = Reg>,
+        regs: impl IntoIterator<Item = &'r Reg> + Copy,
         masm: &mut M,
         mut f: F,
     ) -> T
@@ -101,19 +113,30 @@ impl<'a> CodeGenContext<'a> {
         M: MacroAssembler,
         F: FnMut(&mut Self, &mut M) -> T,
     {
-        debug_assert!(free.size_hint().0 <= alloc.size_hint().0);
-
-        for r in alloc {
-            self.reg(r, masm);
+        for r in regs {
+            self.reg(*r, masm);
         }
 
         let result = f(self, masm);
 
-        for r in free {
-            self.free_reg(r);
+        for r in regs {
+            self.free_reg(*r);
         }
 
         result
+    }
+
+    /// Similar to [`Self::without`] but takes an optional, single register
+    /// as a paramter.
+    pub fn maybe_without1<T, M, F>(&mut self, reg: Option<Reg>, masm: &mut M, mut f: F) -> T
+    where
+        M: MacroAssembler,
+        F: FnMut(&mut Self, &mut M) -> T,
+    {
+        match reg {
+            Some(r) => self.without(&[r], masm, f),
+            None => f(self, masm),
+        }
     }
 
     /// Free the given register.
@@ -376,22 +399,6 @@ impl<'a> CodeGenContext<'a> {
                 self.stack.push(typed_reg.into());
             }
         }
-    }
-
-    /// Pops the value at the stack top and assigns it to the local at
-    /// the given index, returning the typed register holding the
-    /// source value.
-    pub fn set_local<M: MacroAssembler>(&mut self, masm: &mut M, index: u32) -> TypedReg {
-        let slot = self
-            .frame
-            .get_local(index)
-            .unwrap_or_else(|| panic!("invalid local slot = {}", index));
-        let size: OperandSize = slot.ty.into();
-        let src = self.pop_to_reg(masm, None);
-        let addr = masm.local_address(&slot);
-        masm.store(RegImm::reg(src.reg), addr, size);
-
-        src
     }
 
     /// Spill locals and registers to memory.

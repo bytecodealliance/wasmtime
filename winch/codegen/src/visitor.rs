@@ -5,7 +5,7 @@
 //! machine code emitter.
 
 use crate::abi::ABI;
-use crate::codegen::{control_index, CodeGen, ControlStackFrame, FnCall};
+use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
 use crate::masm::{
     CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, RoundingMode, ShiftKind,
 };
@@ -146,7 +146,7 @@ macro_rules! def_unsupported {
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
 
-impl<'a, M> VisitOperator<'a> for CodeGen<'a, M>
+impl<'a, 'b, 'c, M> VisitOperator<'a> for CodeGen<'a, 'b, 'c, M>
 where
     M: MacroAssembler,
 {
@@ -197,59 +197,43 @@ where
     }
 
     fn visit_f32_floor(&mut self) {
-        self.context
-            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
-                masm.float_round(RoundingMode::Down, reg, RegImm::Reg(reg), size);
-            });
+        self.masm
+            .float_round(RoundingMode::Down, &mut self.context, OperandSize::S32);
     }
 
     fn visit_f64_floor(&mut self) {
-        self.context
-            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
-                masm.float_round(RoundingMode::Down, reg, RegImm::Reg(reg), size);
-            });
+        self.masm
+            .float_round(RoundingMode::Down, &mut self.context, OperandSize::S64);
     }
 
     fn visit_f32_ceil(&mut self) {
-        self.context
-            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
-                masm.float_round(RoundingMode::Up, reg, RegImm::Reg(reg), size);
-            });
+        self.masm
+            .float_round(RoundingMode::Up, &mut self.context, OperandSize::S32);
     }
 
     fn visit_f64_ceil(&mut self) {
-        self.context
-            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
-                masm.float_round(RoundingMode::Up, reg, RegImm::Reg(reg), size);
-            });
+        self.masm
+            .float_round(RoundingMode::Up, &mut self.context, OperandSize::S64);
     }
 
     fn visit_f32_nearest(&mut self) {
-        self.context
-            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
-                masm.float_round(RoundingMode::Nearest, reg, RegImm::Reg(reg), size);
-            });
+        self.masm
+            .float_round(RoundingMode::Nearest, &mut self.context, OperandSize::S32);
     }
 
     fn visit_f64_nearest(&mut self) {
-        self.context
-            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
-                masm.float_round(RoundingMode::Nearest, reg, RegImm::Reg(reg), size);
-            });
+        self.masm
+            .float_round(RoundingMode::Nearest, &mut self.context, OperandSize::S64);
     }
 
     fn visit_f32_trunc(&mut self) {
-        self.context
-            .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
-                masm.float_round(RoundingMode::Zero, reg, RegImm::Reg(reg), size);
-            });
+        self.masm
+            .float_round(RoundingMode::Zero, &mut self.context, OperandSize::S32);
     }
 
     fn visit_f64_trunc(&mut self) {
-        self.context
-            .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
-                masm.float_round(RoundingMode::Zero, reg, RegImm::Reg(reg), size);
-            });
+        self.masm
+            .float_round(RoundingMode::Zero, &mut self.context, OperandSize::S64);
     }
 
     fn visit_i32_add(&mut self) {
@@ -627,44 +611,25 @@ where
 
     // TODO: verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
-        let src = self.context.set_local(self.masm, index);
+        let (ty, slot) = self.context.frame.get_local_address(index, self.masm);
+        let src = self.emit_set_local(slot, ty.into());
         self.context.free_reg(src);
     }
 
     fn visit_call(&mut self, index: u32) {
         let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
-        self.emit_call(callee);
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| callee.clone());
     }
 
     fn visit_call_indirect(&mut self, type_index: u32, table_index: u32, _: u8) {
         let type_index = TypeIndex::from_u32(type_index);
         let table_index = TableIndex::from_u32(table_index);
-        let table_data = self.env.resolve_table_data(table_index);
-        let ptr_type = self.env.ptr_type();
 
-        let builtin = self
-            .env
-            .builtins
-            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
-
-        FnCall::new(&builtin.sig).with_lib(
-            self.masm,
-            &mut self.context,
-            &builtin,
-            |cx, masm, call, callee| {
-                CodeGen::emit_lazy_init_funcref(
-                    &table_data,
-                    table_index,
-                    ptr_type,
-                    cx,
-                    masm,
-                    call,
-                    callee,
-                );
-            },
-        );
+        self.emit_lazy_init_funcref(table_index);
 
         // Perform the indirect call.
+        // This code assumes that [`Self::emit_lazy_init_funcref`] will
+        // push the funcref to the value stack.
         match self.env.translation.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
                 let funcref_ptr = self.context.stack.peek().map(|v| v.get_reg()).unwrap();
@@ -674,132 +639,96 @@ where
             }
         }
 
-        // Perform call indirect.
-        // `emit_call` expects the callee to be on the stack. Delaying the
-        // computation of the callee address reduces register pressure.
-        self.emit_call(self.env.funcref(type_index));
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
+            self.env.funcref(type_index)
+        })
     }
 
     fn visit_table_init(&mut self, elem: u32, table: u32) {
         let ptr_type = self.env.ptr_type();
-        let table_init = self.env.builtins.table_init::<M::ABI, M::Ptr>();
         let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
 
-        FnCall::new(&table_init.sig).with_lib(
-            self.masm,
-            &mut self.context,
-            &table_init,
-            |cx, masm, call, callee| {
-                // table.init requires at least 3 elements on the value stack.
-                debug_assert!(cx.stack.len() >= 3);
-                let extra_args = [
-                    vmctx.into(),
-                    table.try_into().unwrap(),
-                    elem.try_into().unwrap(),
-                ];
-                let at = cx.stack.len() - 3;
-                cx.stack.insert_many(at, extra_args);
-                // Finalize the call.
-                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
-            },
+        debug_assert!(self.context.stack.len() >= 3);
+        let at = self.context.stack.len() - 3;
+
+        self.context.stack.insert_many(
+            at,
+            [
+                vmctx.into(),
+                table.try_into().unwrap(),
+                elem.try_into().unwrap(),
+            ],
         );
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |cx| {
+            Callee::Builtin(cx.builtins.table_init::<M::ABI, M::Ptr>())
+        });
     }
 
     fn visit_table_copy(&mut self, dst: u32, src: u32) {
         let ptr_type = self.env.ptr_type();
-        let table_copy = self.env.builtins.table_copy::<M::ABI, M::Ptr>();
         let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
+        debug_assert!(self.context.stack.len() >= 3);
+        let at = self.context.stack.len() - 3;
+        self.context.stack.insert_many(
+            at,
+            [
+                vmctx.into(),
+                dst.try_into().unwrap(),
+                src.try_into().unwrap(),
+            ],
+        );
 
-        FnCall::new(&table_copy.sig).with_lib(
-            self.masm,
-            &mut self.context,
-            &table_copy,
-            |cx, masm, call, callee| {
-                // table.copy requires at least 3 elemenents in the value stack.
-                debug_assert!(cx.stack.len() >= 3);
-                let at = cx.stack.len() - 3;
-                cx.stack.insert_many(
-                    at,
-                    [
-                        vmctx.into(),
-                        dst.try_into().unwrap(),
-                        src.try_into().unwrap(),
-                    ],
-                );
-                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
-            },
-        )
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |context| {
+            Callee::Builtin(context.builtins.table_copy::<M::ABI, M::Ptr>())
+        });
     }
 
     fn visit_table_get(&mut self, table: u32) {
-        let ptr_type = self.env.ptr_type();
         let table_index = TableIndex::from_u32(table);
-        let table_data = self.env.resolve_table_data(table_index);
         let plan = self.env.table_plan(table_index);
         let heap_type = plan.table.wasm_ty.heap_type;
-        let style = plan.style.clone();
-        let table_get = self
-            .env
-            .builtins
-            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
+        let style = &plan.style;
 
-        FnCall::new(&table_get.sig).with_lib(
-            self.masm,
-            &mut self.context,
-            &table_get,
-            |cx, masm, call, callee| {
-                match heap_type {
-                    WasmHeapType::Func => match style {
-                        TableStyle::CallerChecksSignature => {
-                            CodeGen::emit_lazy_init_funcref(
-                                &table_data,
-                                table_index,
-                                ptr_type,
-                                cx,
-                                masm,
-                                call,
-                                callee,
-                            );
-                        }
-                    },
-                    t => unimplemented!("Support for WasmHeapType: {t}"),
-                };
+        match heap_type {
+            WasmHeapType::Func => match style {
+                TableStyle::CallerChecksSignature => self.emit_lazy_init_funcref(table_index),
             },
-        );
+            t => unimplemented!("Support for WasmHeapType: {t}"),
+        }
     }
 
     fn visit_table_grow(&mut self, table: u32) {
         let ptr_type = self.env.ptr_type();
+        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         let table_index = TableIndex::from_u32(table);
         let table_plan = self.env.table_plan(table_index);
-        let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
         let builtin = match table_plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI, M::Ptr>(),
+            WasmHeapType::Func => self
+                .context
+                .builtins
+                .table_grow_func_ref::<M::ABI, M::Ptr>(),
             ty => unimplemented!("Support for HeapType: {ty}"),
         };
 
-        FnCall::new(&builtin.sig).with_lib(
-            self.masm,
-            &mut self.context,
-            &builtin,
-            |cx, masm, call, callee| {
-                let len = cx.stack.len();
-                // table.grow requires at least 2 elements on the value stack.
-                debug_assert!(len >= 2);
-                // The table_grow builtin expects the parameters in a different
-                // order.
-                // The value stack at this point should contain:
-                // [ init_value | delta ] (stack top)
-                // but the builtin function expects the init value as the last
-                // argument.
-                cx.stack.inner_mut().swap(len - 1, len - 2);
-                let at = len - 2;
-                cx.stack
-                    .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
+        let len = self.context.stack.len();
+        // table.grow` requires at least 2 elements on the value stack.
+        debug_assert!(len >= 2);
+        let at = len - 2;
 
-                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
-            },
-        );
+        // The table_grow builtin expects the parameters in a different
+        // order.
+        // The value stack at this point should contain:
+        // [ init_value | delta ] (stack top)
+        // but the builtin function expects the init value as the last
+        // argument.
+        self.context.stack.inner_mut().swap(len - 1, len - 2);
+        self.context
+            .stack
+            .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
+
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
+            Callee::Builtin(builtin.clone())
+        });
     }
 
     fn visit_table_size(&mut self, table: u32) {
@@ -814,24 +743,22 @@ where
         let table_index = TableIndex::from_u32(table);
         let table_plan = self.env.table_plan(table_index);
         let builtin = match table_plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func => self.env.builtins.table_fill_func_ref::<M::ABI, M::Ptr>(),
+            WasmHeapType::Func => self
+                .context
+                .builtins
+                .table_fill_func_ref::<M::ABI, M::Ptr>(),
             ty => unimplemented!("Support for heap type: {ty}"),
         };
 
-        FnCall::new(&builtin.sig).with_lib(
-            self.masm,
-            &mut self.context,
-            &builtin,
-            |cx, masm, call, callee| {
-                // table.fill requires at least 3 values on the value stack.
-                debug_assert!(cx.stack.len() >= 3);
-                let at = cx.stack.len() - 3;
-                cx.stack
-                    .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
-
-                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
-            },
-        );
+        let len = self.context.stack.len();
+        debug_assert!(len >= 3);
+        let at = len - 3;
+        self.context
+            .stack
+            .insert_many(at, [vmctx.into(), table.try_into().unwrap()]);
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
+            Callee::Builtin(builtin.clone())
+        })
     }
 
     fn visit_table_set(&mut self, table: u32) {
@@ -873,18 +800,14 @@ where
 
     fn visit_elem_drop(&mut self, index: u32) {
         let ptr_type = self.env.ptr_type();
-        let elem_drop = self.env.builtins.elem_drop::<M::ABI, M::Ptr>();
+        let elem_drop = self.context.builtins.elem_drop::<M::ABI, M::Ptr>();
         let vmctx = TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg());
-
-        FnCall::new(&elem_drop.sig).with_lib(
-            self.masm,
-            &mut self.context,
-            &elem_drop,
-            |cx, masm, call, callee| {
-                cx.stack.extend([vmctx.into(), index.try_into().unwrap()]);
-                call.calculate_call_stack_space(cx).reg(masm, cx, callee);
-            },
-        );
+        self.context
+            .stack
+            .extend([vmctx.into(), index.try_into().unwrap()]);
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
+            Callee::Builtin(elem_drop.clone())
+        });
     }
 
     fn visit_nop(&mut self) {}
@@ -939,9 +862,8 @@ where
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
         let result = frame.as_target_result();
-        let top = self.context.without::<TypedReg, M, _>(
-            result.regs(),
-            result.regs(),
+        let top = self.context.maybe_without1::<TypedReg, M, _>(
+            result.result_reg(),
             self.masm,
             |ctx, masm| ctx.pop_to_reg(masm, None),
         );
@@ -967,9 +889,8 @@ where
 
         let default_index = control_index(targets.default(), self.control_frames.len());
         let default_result = self.control_frames[default_index].as_target_result();
-        let (index, tmp) = self.context.without::<(TypedReg, _), M, _>(
-            default_result.regs(),
-            default_result.regs(),
+        let (index, tmp) = self.context.maybe_without1::<(TypedReg, _), M, _>(
+            default_result.result_reg(),
             self.masm,
             |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
         );
@@ -1023,7 +944,8 @@ where
     }
 
     fn visit_local_tee(&mut self, index: u32) {
-        let typed_reg = self.context.set_local(self.masm, index);
+        let (ty, slot) = self.context.frame.get_local_address(index, self.masm);
+        let typed_reg = self.emit_set_local(slot, ty.into());
         self.context.stack.push(typed_reg.into());
     }
 
@@ -1075,7 +997,7 @@ where
     wasmparser::for_each_operator!(def_unsupported);
 }
 
-impl<'a, M> CodeGen<'a, M>
+impl<'a, 'b, 'c, M> CodeGen<'a, 'b, 'c, M>
 where
     M: MacroAssembler,
 {

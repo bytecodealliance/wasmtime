@@ -1,4 +1,4 @@
-use crate::TrampolineKind;
+use crate::{BuiltinFunctions, TrampolineKind};
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
@@ -149,9 +149,10 @@ pub trait TargetIsa: Send + Sync {
     fn compile_function(
         &self,
         sig: &WasmFuncType,
-        types: &ModuleTypes,
         body: &FunctionBody,
         translation: &ModuleTranslation,
+        types: &ModuleTypes,
+        builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
 

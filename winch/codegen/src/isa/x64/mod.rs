@@ -1,6 +1,6 @@
 use crate::{
     abi::ABI,
-    codegen::{CodeGen, CodeGenContext, FuncEnv},
+    codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv},
 };
 
 use crate::frame::{DefinedLocals, Frame};
@@ -19,7 +19,7 @@ use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFin
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypes, VMOffsets, WasmFuncType};
 
 use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
 
@@ -89,12 +89,15 @@ impl TargetIsa for X64 {
     fn compile_function(
         &self,
         sig: &WasmFuncType,
-        types: &ModuleTypes,
         body: &FunctionBody,
         translation: &ModuleTranslation,
+        types: &ModuleTypes,
+        builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let pointer_bytes = self.pointer_bytes();
+        let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
+
         let mut body = body.get_binary_reader();
         let mut masm = X64Masm::new(
             pointer_bytes,
@@ -118,8 +121,8 @@ impl TargetIsa for X64 {
         );
 
         let regalloc = RegAlloc::from(gpr, fpr);
-        let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let env = FuncEnv::new(pointer_bytes, translation, types, self.wasmtime_call_conv());
+        let env = FuncEnv::new(&vmoffsets, translation, types);
+        let codegen_context = CodeGenContext::new(regalloc, stack, frame, builtins, &vmoffsets);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
