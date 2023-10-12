@@ -21,7 +21,7 @@ mod builtin;
 pub use builtin::*;
 
 /// The code generation abstraction.
-pub(crate) struct CodeGen<'a, 'b: 'a, 'c: 'b, M>
+pub(crate) struct CodeGen<'a, 'translation: 'a, 'data: 'translation, M>
 where
     M: MacroAssembler,
 {
@@ -29,10 +29,10 @@ where
     sig: ABISig,
 
     /// The code generation context.
-    pub context: CodeGenContext<'a, 'b>,
+    pub context: CodeGenContext<'a, 'translation>,
 
     /// A reference to the function compilation environment.
-    pub env: FuncEnv<'a, 'b, 'c, M::Ptr>,
+    pub env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
 
     /// The MacroAssembler.
     pub masm: &'a mut M,
@@ -371,7 +371,7 @@ where
 
         let (defined, cont) = (self.masm.get_label(), self.masm.get_label());
 
-        // Push the built-int arguments to the stack.
+        // Push the built-in arguments to the stack.
         self.context.stack.extend(
             [
                 TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into(),

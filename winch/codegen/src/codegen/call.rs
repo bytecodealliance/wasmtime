@@ -68,27 +68,12 @@ use crate::{
     CallingConvention,
 };
 use smallvec::SmallVec;
+use std::borrow::Cow;
 use wasmtime_environ::{PtrSize, VMOffsets, WasmType};
 
 /// All the information needed to emit a function call.
 #[derive(Copy, Clone)]
 pub(crate) struct FnCall {}
-
-/// Internal wrapping of a function signature.
-enum Sig<'a> {
-    Owned(ABISig),
-    Borrowed(&'a ABISig),
-}
-
-impl<'a> Sig<'a> {
-    /// Get a reference to the underling signature.
-    pub fn as_ref(&self) -> &ABISig {
-        match self {
-            Self::Owned(ref s) => s,
-            Self::Borrowed(b) => b,
-        }
-    }
-}
 
 impl FnCall {
     /// Orchestrates the emission of a function call:
@@ -132,25 +117,25 @@ impl FnCall {
     }
 
     /// Derive the [`ABISig`] for a particulare [`Callee].
-    fn get_sig<M: MacroAssembler>(callee: &Callee, ptr_type: WasmType) -> Sig {
+    fn get_sig<M: MacroAssembler>(callee: &Callee, ptr_type: WasmType) -> Cow<'_, ABISig> {
         match callee {
-            Callee::Builtin(info) => Sig::Borrowed(info.sig()),
+            Callee::Builtin(info) => Cow::Borrowed(info.sig()),
             Callee::Import(info) => {
                 let mut params: SmallVec<[WasmType; 6]> =
                     SmallVec::with_capacity(info.ty.params().len() + 2);
                 params.extend_from_slice(&[ptr_type, ptr_type]);
                 params.extend_from_slice(info.ty.params());
-                Sig::Owned(<M::ABI as ABI>::sig_from(
+                Cow::Owned(<M::ABI as ABI>::sig_from(
                     &params,
                     info.ty.returns(),
                     &CallingConvention::Default,
                 ))
             }
             Callee::Local(info) => {
-                Sig::Owned(<M::ABI as ABI>::sig(&info.ty, &CallingConvention::Default))
+                Cow::Owned(<M::ABI as ABI>::sig(&info.ty, &CallingConvention::Default))
             }
             Callee::FuncRef(ty) => {
-                Sig::Owned(<M::ABI as ABI>::sig(&ty, &CallingConvention::Default))
+                Cow::Owned(<M::ABI as ABI>::sig(&ty, &CallingConvention::Default))
             }
         }
     }
@@ -178,13 +163,13 @@ impl FnCall {
         masm: &mut M,
     ) -> CalleeKind {
         match builtin.ty() {
-            BuiltinType::Dynamic { offset, base } => {
+            BuiltinType::Dynamic { index, base } => {
                 let sig = builtin.sig();
                 let callee = context.without::<Reg, _, _>(&sig.regs, masm, |cx, masm| {
                     let scratch = <M::ABI as ABI>::scratch_reg();
                     let builtins_base = masm.address_at_vmctx(base);
                     masm.load_ptr(builtins_base, scratch);
-                    let addr = masm.address_at_reg(scratch, offset);
+                    let addr = masm.address_at_reg(scratch, index);
                     let callee = cx.any_gpr(masm);
                     masm.load_ptr(addr, callee);
                     callee

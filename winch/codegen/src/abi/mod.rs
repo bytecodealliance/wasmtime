@@ -111,7 +111,7 @@ pub(crate) trait ABI {
 }
 
 /// ABI-specific representation of a function argument.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ABIArg {
     /// A register argument.
     Reg {
@@ -230,7 +230,7 @@ impl ABIResult {
 pub(crate) type ABIParams = SmallVec<[ABIArg; 6]>;
 
 /// An ABI-specific representation of a function signature.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ABISig {
     /// Function parameters.
     pub params: ABIParams,

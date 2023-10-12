@@ -41,31 +41,6 @@ pub enum Callee {
     Builtin(BuiltinFunction),
 }
 
-impl Callee {
-    /// Get the built-in function metadata.
-    ///
-    /// # Panics
-    /// This function panics if the [`Callee`] is not a built-in function.
-    pub fn get_builtin(&self) -> &BuiltinFunction {
-        match self {
-            Self::Builtin(f) => f,
-            _ => panic!(),
-        }
-    }
-
-    /// Get the associated [`CalleeInfo`], if any.
-    ///
-    /// # Panics
-    /// This function panics if the [`Callee`] is not a local or imported
-    /// callee.
-    pub fn get_info(&self) -> &CalleeInfo {
-        match self {
-            Self::Local(i) | Self::Import(i) => i,
-            _ => panic!(),
-        }
-    }
-}
-
 /// Metadata about a function callee. Used by the code generation to
 /// emit function calls to local or imported functions.
 #[derive(Clone)]
@@ -80,13 +55,13 @@ pub struct CalleeInfo {
 ///
 /// Contains all information about the module and runtime that is accessible to
 /// to a particular function during code generation.
-pub struct FuncEnv<'a, 'b: 'a, 'c: 'b, P: PtrSize> {
+pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     /// Offsets to the fields within the `VMContext` ptr.
     pub vmoffsets: &'a VMOffsets<P>,
     /// Metadata about the translation process of a WebAssembly module.
-    pub translation: &'b ModuleTranslation<'c>,
+    pub translation: &'translation ModuleTranslation<'data>,
     /// The module's function types.
-    pub types: &'b ModuleTypes,
+    pub types: &'translation ModuleTypes,
     /// Track resolved table information.
     resolved_tables: HashMap<TableIndex, TableData>,
 }
@@ -97,12 +72,12 @@ pub fn ptr_type_from_ptr_size(size: u8) -> WasmType {
         .unwrap_or_else(|| unimplemented!("Support for non-64-bit architectures"))
 }
 
-impl<'a, 'b, 'c, P: PtrSize> FuncEnv<'a, 'b, 'c, P> {
+impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     /// Create a new function environment.
     pub fn new(
         vmoffsets: &'a VMOffsets<P>,
-        translation: &'b ModuleTranslation<'c>,
-        types: &'b ModuleTypes,
+        translation: &'translation ModuleTranslation<'data>,
+        types: &'translation ModuleTypes,
     ) -> Self {
         Self {
             vmoffsets,

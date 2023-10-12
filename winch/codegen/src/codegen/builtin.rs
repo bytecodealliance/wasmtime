@@ -13,8 +13,8 @@ use wasmtime_environ::{BuiltinFunctionIndex, PtrSize, VMOffsets, WasmType};
 pub(crate) enum BuiltinType {
     /// Dynamic built-in function, derived from the VMContext.
     Dynamic {
-        /// The offset of the built-in function.
-        offset: u32,
+        /// The index of the built-in function.
+        index: u32,
         /// The built-in function base, relative to the VMContext.
         base: u32,
     },
@@ -25,8 +25,8 @@ pub(crate) enum BuiltinType {
 
 impl BuiltinType {
     /// Create a new dynamic built-in function type.
-    pub fn dynamic(offset: u32, base: u32) -> Self {
-        Self::Dynamic { offset, base }
+    pub fn dynamic(index: u32, base: u32) -> Self {
+        Self::Dynamic { index, base }
     }
 
     /// Create a new known built-in function type.
