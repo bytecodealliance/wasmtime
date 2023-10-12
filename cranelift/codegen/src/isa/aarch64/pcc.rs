@@ -297,7 +297,9 @@ fn check_addr<'a>(
         match op {
             LoadOrStore::Load { result_fact } => {
                 let loaded_fact = ctx.load(addr, ty)?;
-                trace!("checking a load: loaded_fact = {loaded_fact:?} result_fact = {result_fact:?}");
+                trace!(
+                    "checking a load: loaded_fact = {loaded_fact:?} result_fact = {result_fact:?}"
+                );
                 if ctx.subsumes_fact_optionals(loaded_fact, result_fact) {
                     Ok(())
                 } else {
