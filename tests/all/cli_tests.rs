@@ -1027,29 +1027,6 @@ mod test_programs {
     }
 
     #[test]
-    fn cli_panic() -> Result<()> {
-        let output = get_wasmtime_command()?
-            .args(&[
-                "run",
-                "-Wcomponent-model",
-                CLI_PANIC_COMPONENT,
-                "diesel",
-                "the",
-                "cat",
-                "scratched",
-                "me",
-                "real",
-                "good",
-                "yesterday",
-            ])
-            .output()?;
-        assert!(!output.status.success());
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(stderr.contains("idk!!!"));
-        Ok(())
-    }
-
-    #[test]
     fn cli_args() -> Result<()> {
         run_wasmtime(&[
             "run",
@@ -1182,6 +1159,8 @@ mod test_programs {
             .args(&["run", "-Wcomponent-model", CLI_EXIT_PANIC_COMPONENT])
             .output()?;
         assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("Curiouser and curiouser!"));
         Ok(())
     }
 
@@ -1218,32 +1197,6 @@ mod test_programs {
             "-Wcomponent-model",
             CLI_EXPORT_CABI_REALLOC_COMPONENT,
         ])?;
-        Ok(())
-    }
-
-    #[test]
-    fn cli_stream_pollable_lifetimes() -> Result<()> {
-        // Test program has two modes, dispatching based on argument.
-        run_wasmtime(&[
-            "run",
-            "-Wcomponent-model",
-            CLI_STREAM_POLLABLE_LIFETIMES_COMPONENT,
-            "correct",
-        ])?;
-        let output = get_wasmtime_command()?
-            .args(&[
-                "run",
-                "-Wcomponent-model",
-                CLI_STREAM_POLLABLE_LIFETIMES_COMPONENT,
-                "trap",
-            ])
-            .output()?;
-        assert!(!output.status.success());
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            stderr.contains("entry still has children"),
-            "bad stderr: {stderr}"
-        );
         Ok(())
     }
 

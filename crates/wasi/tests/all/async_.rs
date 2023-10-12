@@ -328,3 +328,19 @@ async fn preview2_udp_sample_application() {
 async fn preview2_tcp_connect() {
     run(PREVIEW2_TCP_CONNECT_COMPONENT, false).await.unwrap()
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_stream_pollable_correct() {
+    run(PREVIEW2_STREAM_POLLABLE_CORRECT_COMPONENT, false)
+        .await
+        .unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_stream_pollable_traps() {
+    let e = run(PREVIEW2_STREAM_POLLABLE_TRAPS_COMPONENT, false)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        format!("{}", e.source().expect("trap source")),
+        "entry still has children"
+    )
+}
