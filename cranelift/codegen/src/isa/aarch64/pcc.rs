@@ -1,6 +1,7 @@
 //! Proof-carrying code checking for AArch64 VCode.
 
 use crate::ir::pcc::*;
+use crate::ir::types::*;
 use crate::ir::{Function, MemFlags};
 use crate::isa::aarch64::inst::args::{PairAMode, ShiftOp};
 use crate::isa::aarch64::inst::ALUOp;
@@ -81,60 +82,50 @@ pub(crate) fn check(inst: &Inst, function: &Function, vcode: &VCode<Inst>) -> Pc
             // facts given to us in the CLIF should still be true.
             Ok(())
         }
-        Inst::ULoad8 { mem, flags, .. } | Inst::SLoad8 { mem, flags, .. } => {
-            check_addr(&ctx, *flags, mem, vcode, 1)
+        Inst::ULoad8 { rd, mem, flags } | Inst::SLoad8 { rd, mem, flags } => {
+            check_load(&ctx, Some(rd.to_reg()), *flags, mem, vcode, I8)
         }
-        Inst::ULoad16 { mem, flags, .. } | Inst::SLoad16 { mem, flags, .. } => {
-            check_addr(&ctx, *flags, mem, vcode, 2)
+        Inst::ULoad16 { rd, mem, flags } | Inst::SLoad16 { rd, mem, flags } => {
+            check_load(&ctx, Some(rd.to_reg()), *flags, mem, vcode, I16)
         }
-        Inst::ULoad32 { mem, flags, .. } | Inst::SLoad32 { mem, flags, .. } => {
-            check_addr(&ctx, *flags, mem, vcode, 4)
+        Inst::ULoad32 { rd, mem, flags } | Inst::SLoad32 { rd, mem, flags } => {
+            check_load(&ctx, Some(rd.to_reg()), *flags, mem, vcode, I32)
         }
-        Inst::ULoad64 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 8),
-        Inst::FpuLoad32 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 4),
-        Inst::FpuLoad64 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 8),
-        Inst::FpuLoad128 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 16),
-        Inst::LoadP64 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 16),
-        Inst::FpuLoadP64 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 16),
-        Inst::FpuLoadP128 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 32),
-        Inst::VecLoadReplicate { rn, flags, .. } => check_scalar_addr(&ctx, *flags, *rn, vcode, 16),
+        Inst::ULoad64 { rd, mem, flags } => {
+            check_load(&ctx, Some(rd.to_reg()), *flags, mem, vcode, I64)
+        }
+        Inst::FpuLoad32 { mem, flags, .. } => check_load(&ctx, None, *flags, mem, vcode, F32),
+        Inst::FpuLoad64 { mem, flags, .. } => check_load(&ctx, None, *flags, mem, vcode, F64),
+        Inst::FpuLoad128 { mem, flags, .. } => check_load(&ctx, None, *flags, mem, vcode, I8X16),
+        Inst::LoadP64 { mem, flags, .. } => check_load_pair(&ctx, *flags, mem, vcode, 16),
+        Inst::FpuLoadP64 { mem, flags, .. } => check_load_pair(&ctx, *flags, mem, vcode, 16),
+        Inst::FpuLoadP128 { mem, flags, .. } => check_load_pair(&ctx, *flags, mem, vcode, 32),
+        Inst::VecLoadReplicate {
+            rn, flags, size, ..
+        } => check_load_addr(&ctx, *flags, *rn, vcode, size.lane_size().ty()),
         Inst::LoadAcquire {
             access_ty,
             rn,
             flags,
             ..
-        } => check_scalar_addr(
-            &ctx,
-            *flags,
-            *rn,
-            vcode,
-            u8::try_from(access_ty.bytes()).unwrap(),
-        ),
+        } => check_load_addr(&ctx, *flags, *rn, vcode, *access_ty),
 
-        // TODO: stores: once we have memcaps, check that we aren't
-        // overwriting a field that has a pointee type.
-        Inst::Store8 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 1),
-        Inst::Store16 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 2),
-        Inst::Store32 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 4),
-        Inst::Store64 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 8),
-        Inst::FpuStore32 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 4),
-        Inst::FpuStore64 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 8),
-        Inst::FpuStore128 { mem, flags, .. } => check_addr(&ctx, *flags, mem, vcode, 16),
-        Inst::StoreP64 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 16),
-        Inst::FpuStoreP64 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 16),
-        Inst::FpuStoreP128 { mem, flags, .. } => check_addr_pair(&ctx, *flags, mem, vcode, 32),
+        Inst::Store8 { rd, mem, flags } => check_store(&ctx, Some(*rd), *flags, mem, vcode, I8),
+        Inst::Store16 { rd, mem, flags } => check_store(&ctx, Some(*rd), *flags, mem, vcode, I16),
+        Inst::Store32 { rd, mem, flags } => check_store(&ctx, Some(*rd), *flags, mem, vcode, I32),
+        Inst::Store64 { rd, mem, flags } => check_store(&ctx, Some(*rd), *flags, mem, vcode, I64),
+        Inst::FpuStore32 { mem, flags, .. } => check_store(&ctx, None, *flags, mem, vcode, F32),
+        Inst::FpuStore64 { mem, flags, .. } => check_store(&ctx, None, *flags, mem, vcode, F64),
+        Inst::FpuStore128 { mem, flags, .. } => check_store(&ctx, None, *flags, mem, vcode, I8X16),
+        Inst::StoreP64 { mem, flags, .. } => check_store_pair(&ctx, *flags, mem, vcode, 16),
+        Inst::FpuStoreP64 { mem, flags, .. } => check_store_pair(&ctx, *flags, mem, vcode, 16),
+        Inst::FpuStoreP128 { mem, flags, .. } => check_store_pair(&ctx, *flags, mem, vcode, 32),
         Inst::StoreRelease {
             access_ty,
             rn,
             flags,
             ..
-        } => check_scalar_addr(
-            &ctx,
-            *flags,
-            *rn,
-            vcode,
-            u8::try_from(access_ty.bytes()).unwrap(),
-        ),
+        } => check_store_addr(&ctx, *flags, *rn, vcode, *access_ty),
 
         Inst::AluRRR {
             alu_op: ALUOp::Add,
@@ -241,12 +232,63 @@ pub(crate) fn check(inst: &Inst, function: &Function, vcode: &VCode<Inst>) -> Pc
     }
 }
 
-fn check_addr(
+/// The operation we're checking against an amode: either
+///
+/// - a *load*, and we need to validate that the field's fact subsumes
+///   the load result's fact, OR
+///
+/// - a *store*, and we need to validate that the stored data's fact
+///   subsumes the field's fact.
+enum LoadOrStore<'a> {
+    Load { result_fact: Option<&'a Fact> },
+    Store { stored_fact: Option<&'a Fact> },
+}
+
+fn check_load(
+    ctx: &FactContext,
+    rd: Option<Reg>,
+    flags: MemFlags,
+    addr: &AMode,
+    vcode: &VCode<Inst>,
+    ty: Type,
+) -> PccResult<()> {
+    let result_fact = rd.map(|rd| get_fact(vcode, rd)).transpose()?;
+    check_addr(
+        ctx,
+        flags,
+        addr,
+        vcode,
+        ty,
+        LoadOrStore::Load { result_fact },
+    )
+}
+
+fn check_store(
+    ctx: &FactContext,
+    rd: Option<Reg>,
+    flags: MemFlags,
+    addr: &AMode,
+    vcode: &VCode<Inst>,
+    ty: Type,
+) -> PccResult<()> {
+    let stored_fact = rd.map(|rd| get_fact(vcode, rd)).transpose()?;
+    check_addr(
+        ctx,
+        flags,
+        addr,
+        vcode,
+        ty,
+        LoadOrStore::Store { stored_fact },
+    )
+}
+
+fn check_addr<'a>(
     ctx: &FactContext,
     flags: MemFlags,
     addr: &AMode,
     vcode: &VCode<Inst>,
-    size: u8,
+    ty: Type,
+    op: LoadOrStore<'a>,
 ) -> PccResult<()> {
     if !flags.checked() {
         return Ok(());
@@ -254,19 +296,33 @@ fn check_addr(
 
     trace!("check_addr: {:?}", addr);
 
+    let check = |addr: &Fact, ty: Type| -> PccResult<()> {
+        match op {
+            LoadOrStore::Load { result_fact } => {
+                let loaded_fact = ctx.load(addr, ty)?;
+                if ctx.subsumes_fact_optionals(loaded_fact, result_fact) {
+                    Ok(())
+                } else {
+                    Err(PccError::UnsupportedFact)
+                }
+            }
+            LoadOrStore::Store { stored_fact } => ctx.store(addr, ty, stored_fact),
+        }
+    };
+
     match addr {
         &AMode::RegReg { rn, rm } => {
             let rn = get_fact(vcode, rn)?;
             let rm = get_fact(vcode, rm)?;
             let sum = fail_if_missing(ctx.add(&rn, &rm, 64))?;
-            ctx.check_address(&sum, size.into())
+            check(&sum, ty)
         }
         &AMode::RegScaled { rn, rm, ty } => {
             let rn = get_fact(vcode, rn)?;
             let rm = get_fact(vcode, rm)?;
             let rm_scaled = fail_if_missing(ctx.scale(&rm, 64, ty.bytes()))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_scaled, 64))?;
-            ctx.check_address(&sum, size.into())
+            check(&sum, ty)
         }
         &AMode::RegScaledExtended {
             rn,
@@ -279,19 +335,19 @@ fn check_addr(
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
             let rm_scaled = fail_if_missing(ctx.scale(&rm_extended, 64, ty.bytes()))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_scaled, 64))?;
-            ctx.check_address(&sum, size.into())
+            check(&sum, ty)
         }
         &AMode::RegExtended { rn, rm, extendop } => {
             let rn = get_fact(vcode, rn)?;
             let rm = get_fact(vcode, rm)?;
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_extended, 64))?;
-            ctx.check_address(&sum, size.into())
+            check(&sum, ty)
         }
         &AMode::Unscaled { rn, simm9 } => {
             let rn = get_fact(vcode, rn)?;
             let sum = fail_if_missing(ctx.offset(&rn, 64, simm9.value.into()))?;
-            ctx.check_address(&sum, size.into())
+            check(&sum, ty)
         }
         &AMode::UnsignedOffset { rn, uimm12 } => {
             let rn = get_fact(vcode, rn)?;
@@ -299,12 +355,12 @@ fn check_addr(
             // most 32 or 64 for large vector ops, and the `uimm12`'s
             // value is at most 4095.
             let uimm12: u64 = uimm12.value.into();
-            let offset: u64 = uimm12.checked_mul(size.into()).unwrap();
+            let offset: u64 = uimm12.checked_mul(ty.bytes().into()).unwrap();
             // This `unwrap()` will always succeed because the value
             // will always be positive and much smaller than
             // `i64::MAX` (see above).
             let sum = fail_if_missing(ctx.offset(&rn, 64, i64::try_from(offset).unwrap()))?;
-            ctx.check_address(&sum, size.into())
+            check(&sum, ty)
         }
         &AMode::Label { .. } | &AMode::Const { .. } => {
             // Always accept: labels and constants must be within the
@@ -314,7 +370,7 @@ fn check_addr(
         &AMode::RegOffset { rn, off, .. } => {
             let rn = get_fact(vcode, rn)?;
             let sum = fail_if_missing(ctx.offset(&rn, 64, off))?;
-            ctx.check_address(&sum, size.into())
+            check(&sum, ty)
         }
         &AMode::SPOffset { .. }
         | &AMode::FPOffset { .. }
@@ -328,7 +384,7 @@ fn check_addr(
     }
 }
 
-fn check_addr_pair(
+fn check_load_pair(
     _ctx: &FactContext,
     _flags: MemFlags,
     _addr: &PairAMode,
@@ -338,16 +394,42 @@ fn check_addr_pair(
     Err(PccError::UnimplementedInst)
 }
 
-fn check_scalar_addr(
+fn check_store_pair(
+    _ctx: &FactContext,
+    _flags: MemFlags,
+    _addr: &PairAMode,
+    _vcode: &VCode<Inst>,
+    _size: u8,
+) -> PccResult<()> {
+    Err(PccError::UnimplementedInst)
+}
+
+fn check_load_addr(
     ctx: &FactContext,
     flags: MemFlags,
     reg: Reg,
     vcode: &VCode<Inst>,
-    size: u8,
+    ty: Type,
 ) -> PccResult<()> {
     if !flags.checked() {
         return Ok(());
     }
     let fact = get_fact(vcode, reg)?;
-    ctx.check_address(fact, size.into())
+    let _output_fact = ctx.load(fact, ty)?;
+    Ok(())
+}
+
+fn check_store_addr(
+    ctx: &FactContext,
+    flags: MemFlags,
+    reg: Reg,
+    vcode: &VCode<Inst>,
+    ty: Type,
+) -> PccResult<()> {
+    if !flags.checked() {
+        return Ok(());
+    }
+    let fact = get_fact(vcode, reg)?;
+    let _output_fact = ctx.store(fact, ty, None)?;
+    Ok(())
 }

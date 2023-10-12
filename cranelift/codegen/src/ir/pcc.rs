@@ -55,6 +55,9 @@
 //!   tables.
 //! - Implement checking at the CLIF level as well.
 //! - Check instructions that can trap as well?
+//!
+//! - make offset in `mem` fact optional in the text format?
+//! - facts on outputs (in func signature)?
 
 use crate::ir;
 use crate::isa::TargetIsa;
@@ -90,6 +93,15 @@ pub enum PccError {
     /// particular instruction that instruction-selection chose. This
     /// is an internal compiler error.
     UnimplementedInst,
+    /// Access to an invalid or undefined field offset in a struct.
+    InvalidFieldOffset,
+    /// Access to a field via the wrong type.
+    BadFieldType,
+    /// Store to a read-only field.
+    WriteToReadOnlyField,
+    /// Store of data to a field with a fact that does not subsume the
+    /// field's fact.
+    InvalidStoredFact,
 }
 
 /// A fact on a value.
@@ -192,6 +204,18 @@ impl<'a> FactContext<'a> {
             }
 
             _ => false,
+        }
+    }
+
+    /// Computes whether the optional fact `lhs` subsumes (implies)
+    /// the optional fact `lhs`. A `None` never subsumes any fact, and
+    /// is always subsumed by any fact at all (or no fact).
+    pub fn subsumes_fact_optionals(&self, lhs: Option<&Fact>, rhs: Option<&Fact>) -> bool {
+        match (lhs, rhs) {
+            (None, None) => true,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (Some(lhs), Some(rhs)) => self.subsumes(lhs, rhs),
         }
     }
 
@@ -352,7 +376,10 @@ impl<'a> FactContext<'a> {
 
     /// Check that accessing memory via a pointer with this fact, with
     /// a memory access of the given size, is valid.
-    pub fn check_address(&self, fact: &Fact, size: u32) -> PccResult<()> {
+    ///
+    /// If valid, returns the memory type and offset into that type
+    /// that this address accesses.
+    fn check_address(&self, fact: &Fact, size: u32) -> PccResult<(ir::MemoryType, i64)> {
         match fact {
             Fact::Mem { ty, offset } => {
                 let end_offset: i64 = offset
@@ -367,10 +394,62 @@ impl<'a> FactContext<'a> {
                     }
                     ir::MemoryTypeData::Empty => bail!(OutOfBounds),
                 }
+                Ok((*ty, *offset))
             }
             _ => bail!(OutOfBounds),
         }
+    }
 
+    /// Get the access struct field, if any, by a pointer with the
+    /// given fact and an access of the given type.
+    pub fn struct_field<'b>(
+        &'b self,
+        fact: &Fact,
+        access_ty: ir::Type,
+    ) -> PccResult<Option<&'b ir::MemoryTypeField>> {
+        let (ty, offset) = self.check_address(fact, access_ty.bytes())?;
+        let offset =
+            u64::try_from(offset).expect("valid access address cannot have a negative offset");
+
+        if let ir::MemoryTypeData::Struct { fields, .. } = &self.memory_types[ty] {
+            let field = fields
+                .iter()
+                .find(|field| field.offset == offset)
+                .ok_or(PccError::InvalidFieldOffset)?;
+            if field.ty != access_ty {
+                bail!(BadFieldType);
+            }
+            Ok(Some(field))
+        } else {
+            // Access to valid memory, but not a struct: no facts can be attached to the result.
+            Ok(None)
+        }
+    }
+
+    /// Check a load, and determine what fact, if any, the result of the load might have.
+    pub fn load<'b>(&'b self, fact: &Fact, access_ty: ir::Type) -> PccResult<Option<&'b Fact>> {
+        Ok(self
+            .struct_field(fact, access_ty)?
+            .and_then(|field| field.fact.as_ref()))
+    }
+
+    /// Check a store.
+    pub fn store(
+        &self,
+        fact: &Fact,
+        access_ty: ir::Type,
+        data_fact: Option<&Fact>,
+    ) -> PccResult<()> {
+        if let Some(field) = self.struct_field(fact, access_ty)? {
+            // If it's a read-only field, disallow.
+            if field.readonly {
+                bail!(WriteToReadOnlyField);
+            }
+            // Check that the fact on the stored data subsumes the field's fact.
+            if !self.subsumes_fact_optionals(data_fact, field.fact.as_ref()) {
+                bail!(InvalidStoredFact);
+            }
+        }
         Ok(())
     }
 }

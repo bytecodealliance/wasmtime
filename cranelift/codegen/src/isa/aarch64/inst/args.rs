@@ -647,6 +647,17 @@ impl ScalarSize {
             ScalarSize::Size128 => ScalarSize::Size64,
         }
     }
+
+    /// Return a type with the same size as this scalar.
+    pub fn ty(&self) -> Type {
+        match self {
+            ScalarSize::Size8 => I8,
+            ScalarSize::Size16 => I16,
+            ScalarSize::Size32 => I32,
+            ScalarSize::Size64 => I64,
+            ScalarSize::Size128 => I128,
+        }
+    }
 }
 
 /// Type used to communicate the size of a vector operand.
