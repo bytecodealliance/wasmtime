@@ -22,6 +22,7 @@ use crate::isa::TargetIsa;
 use crate::trace;
 
 mod globalvalue;
+pub mod isle;
 mod table;
 
 use self::globalvalue::expand_global_value;

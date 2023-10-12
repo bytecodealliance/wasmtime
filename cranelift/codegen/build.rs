@@ -249,6 +249,16 @@ fn get_isle_compilations(
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],
             },
+            // The x86-64 legalizer.
+            IsleCompilation {
+                output: out_dir.join("legalize_x64.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    legalize_shared_isle.clone(),
+                    // NB: x86-64-specific legalization here when it exists
+                ],
+                untracked_inputs: vec![clif_legalize_isle.clone()],
+            },
             // The aarch64 instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_aarch64.rs"),
@@ -262,6 +272,16 @@ fn get_isle_compilations(
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],
             },
+            // The aarch64 legalizer.
+            IsleCompilation {
+                output: out_dir.join("legalize_aarch64.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    legalize_shared_isle.clone(),
+                    // NB: aarch64-specific legalization here when it exists
+                ],
+                untracked_inputs: vec![clif_legalize_isle.clone()],
+            },
             // The s390x instruction selector.
             IsleCompilation {
                 output: out_dir.join("isle_s390x.rs"),
@@ -272,6 +292,16 @@ fn get_isle_compilations(
                     src_isa_s390x.join("lower.isle"),
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],
+            },
+            // The s390x legalizer.
+            IsleCompilation {
+                output: out_dir.join("legalize_s390x.rs"),
+                inputs: vec![
+                    prelude_isle.clone(),
+                    legalize_shared_isle.clone(),
+                    // NB: s390x-specific legalization here when it exists
+                ],
+                untracked_inputs: vec![clif_legalize_isle.clone()],
             },
             // The risc-v instruction selector.
             IsleCompilation {

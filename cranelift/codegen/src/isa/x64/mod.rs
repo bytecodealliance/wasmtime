@@ -4,6 +4,7 @@ pub use self::inst::{args, CallInfo, EmitInfo, EmitState, Inst};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
+use crate::flowgraph;
 use crate::ir::{types, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
@@ -23,6 +24,7 @@ use target_lexicon::Triple;
 mod abi;
 pub mod encoding;
 mod inst;
+mod legalize;
 mod lower;
 mod pcc;
 pub mod settings;
@@ -190,6 +192,10 @@ impl TargetIsa for X64Backend {
 
     fn has_x86_pmaddubsw_lowering(&self) -> bool {
         self.x64_flags.use_ssse3()
+    }
+
+    fn legalize_function(&self, func: &mut Function, cfg: &mut flowgraph::ControlFlowGraph) {
+        legalize::run(self, func, cfg);
     }
 }
 

@@ -1,6 +1,7 @@
 //! ARM 64-bit Instruction Set Architecture.
 
 use crate::dominator_tree::DominatorTree;
+use crate::flowgraph;
 use crate::ir::{Function, Type};
 use crate::isa::aarch64::settings as aarch64_settings;
 #[cfg(feature = "unwind")]
@@ -20,6 +21,7 @@ use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple}
 // New backend:
 mod abi;
 pub mod inst;
+mod legalize;
 mod lower;
 mod pcc;
 pub mod settings;
@@ -117,6 +119,10 @@ impl TargetIsa for AArch64Backend {
 
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
         16
+    }
+
+    fn legalize_function(&self, func: &mut Function, cfg: &mut flowgraph::ControlFlowGraph) {
+        legalize::run(self, func, cfg);
     }
 
     #[cfg(feature = "unwind")]

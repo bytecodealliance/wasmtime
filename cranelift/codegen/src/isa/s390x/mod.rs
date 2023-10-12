@@ -1,6 +1,7 @@
 //! IBM Z 64-bit Instruction Set Architecture.
 
 use crate::dominator_tree::DominatorTree;
+use crate::flowgraph;
 use crate::ir::{Function, Type};
 use crate::isa::s390x::settings as s390x_settings;
 #[cfg(feature = "unwind")]
@@ -20,6 +21,7 @@ use target_lexicon::{Architecture, Triple};
 // New backend:
 mod abi;
 pub(crate) mod inst;
+mod legalize;
 mod lower;
 mod settings;
 
@@ -113,6 +115,10 @@ impl TargetIsa for S390xBackend {
 
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
         16
+    }
+
+    fn legalize_function(&self, func: &mut Function, cfg: &mut flowgraph::ControlFlowGraph) {
+        legalize::run(self, func, cfg);
     }
 
     #[cfg(feature = "unwind")]

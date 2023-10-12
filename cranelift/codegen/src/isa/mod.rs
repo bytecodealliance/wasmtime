@@ -268,11 +268,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// supported by this backend.
     ///
     /// Note that this is done before optimizations are executed.
-    fn legalize_function(&self, func: &mut ir::Function, cfg: &mut flowgraph::ControlFlowGraph) {
-        // TODO: there shouldn't be a default impl.
-        let _ = func;
-        let _ = cfg;
-    }
+    fn legalize_function(&self, func: &mut ir::Function, cfg: &mut flowgraph::ControlFlowGraph);
 
     /// Compile the given function.
     fn compile_function(
