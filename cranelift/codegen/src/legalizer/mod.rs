@@ -99,25 +99,6 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     mflags.set_notrap();
                     pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
                 }
-                InstructionData::StackStore {
-                    opcode: ir::Opcode::StackStore,
-                    arg,
-                    stack_slot,
-                    offset,
-                } => {
-                    let addr_ty = isa.pointer_type();
-
-                    let mut pos = FuncCursor::new(pos.func).at_inst(inst);
-                    pos.use_srcloc(inst);
-
-                    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
-
-                    // Stack slots are required to be accessible.
-                    // We can't currently ensure that they are aligned.
-                    let mut mflags = MemFlags::new();
-                    mflags.set_notrap();
-                    pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
-                }
                 InstructionData::DynamicStackLoad {
                     opcode: ir::Opcode::DynamicStackLoad,
                     dynamic_stack_slot,
