@@ -353,7 +353,7 @@ typedef struct {
  */
 WASM_API_EXTERN void wasmtime_config_host_stack_creator_set(
     wasm_config_t*,
-    wasmtime_memory_creator_t*);
+    wasmtime_stack_creator_t*);
 
 
 #ifdef __cplusplus
