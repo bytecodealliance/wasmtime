@@ -11,7 +11,7 @@ script. Linux and macOS users can execute the following:
 $ curl https://wasmtime.dev/install.sh -sSf | bash
 ```
 
-This will download a precompiled version of `wasmtime` and place it in
+This will download a precompiled version of `wasmtime`, place it in
 `$HOME/.wasmtime`, and update your shell configuration to place the right
 directory in `PATH`.
 
