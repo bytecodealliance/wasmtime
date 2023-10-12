@@ -149,7 +149,12 @@ pub trait LowerBackend {
 
     /// Check any facts about an instruction, given VCode with facts
     /// on VRegs.
-    fn check_fact(&self, _inst: &Self::MInst, _vcode: &VCode<Self::MInst>) -> PccResult<()> {
+    fn check_fact(
+        &self,
+        _inst: &Self::MInst,
+        _function: &Function,
+        _vcode: &VCode<Self::MInst>,
+    ) -> PccResult<()> {
         Err(PccError::UnimplementedBackend)
     }
 }

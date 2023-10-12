@@ -56,6 +56,11 @@ pub trait FuncWriter {
             self.write_entity_definition(w, func, gv.into(), gv_data)?;
         }
 
+        for (mt, mt_data) in &func.memory_types {
+            any = true;
+            self.write_entity_definition(w, func, mt.into(), mt_data)?;
+        }
+
         for (table, table_data) in &func.tables {
             if !table_data.index_type.is_invalid() {
                 any = true;

@@ -9,10 +9,10 @@ use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
-use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
+use cranelift_codegen::ir::entities::{AnyEntity, DynamicType, MemoryType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cranelift_codegen::ir::pcc::{Fact, MemoryRegion};
+use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -20,8 +20,9 @@ use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
-    GlobalValue, GlobalValueData, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot,
-    StackSlotData, StackSlotKind, Table, TableData, Type, UserFuncName, Value,
+    GlobalValue, GlobalValueData, JumpTableData, MemFlags, MemoryTypeData, MemoryTypeField, Opcode,
+    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
+    UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -315,6 +316,16 @@ impl Context {
             });
         }
         self.function.global_values[gv] = data;
+        Ok(())
+    }
+
+    // Allocate a memory-type slot.
+    fn add_mt(&mut self, mt: MemoryType, data: MemoryTypeData, loc: Location) -> ParseResult<()> {
+        self.map.def_mt(mt, loc)?;
+        while self.function.memory_types.next_key().index() <= mt.index() {
+            self.function.create_memory_type(MemoryTypeData::default());
+        }
+        self.function.memory_types[mt] = data;
         Ok(())
     }
 
@@ -651,6 +662,17 @@ impl<'a> Parser<'a> {
             self.consume();
             if let Some(table) = Table::with_number(table) {
                 return Ok(table);
+            }
+        }
+        err!(self.loc, err_msg)
+    }
+
+    // Match and consume a memory-type reference.
+    fn match_mt(&mut self, err_msg: &str) -> ParseResult<MemoryType> {
+        if let Some(Token::MemoryType(mt)) = self.token() {
+            self.consume();
+            if let Some(mt) = MemoryType::with_number(mt) {
+                return Ok(mt);
             }
         }
         err!(self.loc, err_msg)
@@ -1448,6 +1470,11 @@ impl<'a> Parser<'a> {
                     self.parse_global_value_decl()
                         .and_then(|(gv, dat)| ctx.add_gv(gv, dat, self.loc))
                 }
+                Some(Token::MemoryType(..)) => {
+                    self.start_gathering_comments();
+                    self.parse_memory_type_decl()
+                        .and_then(|(mt, dat)| ctx.add_mt(mt, dat, self.loc))
+                }
                 Some(Token::Table(..)) => {
                     self.start_gathering_comments();
                     self.parse_table_decl()
@@ -1628,6 +1655,99 @@ impl<'a> Parser<'a> {
         self.claim_gathered_comments(gv);
 
         Ok((gv, data))
+    }
+
+    // Parse one field definition in a memory-type struct decl.
+    //
+    // memory-type-field ::=  offset ":" type ["readonly"] [ "!" fact ]
+    // offset ::= uimm64
+    fn parse_memory_type_field(&mut self) -> ParseResult<MemoryTypeField> {
+        let offset: u64 = self
+            .match_uimm64(
+                "expected u64 constant value for field offset in struct memory-type declaration",
+            )?
+            .into();
+        self.match_token(
+            Token::Colon,
+            "expected colon after field offset in struct memory-type declaration",
+        )?;
+        let ty = self.match_type("expected type for field in struct memory-type declaration")?;
+        let readonly = if self.token() == Some(Token::Identifier("readonly")) {
+            self.consume();
+            true
+        } else {
+            false
+        };
+        let fact = if self.token() == Some(Token::Bang) {
+            self.consume();
+            let fact = self.parse_fact()?;
+            Some(fact)
+        } else {
+            None
+        };
+        Ok(MemoryTypeField {
+            offset,
+            ty,
+            readonly,
+            fact,
+        })
+    }
+
+    // Parse a memory-type decl.
+    //
+    // memory-type-decl ::= MemoryType(mt) "=" memory-type-desc
+    // memory-type-desc ::= "struct" size "{" memory-type-field,* "}"
+    //                    | "memory" size
+    //                    | "empty"
+    // size ::= uimm64
+    fn parse_memory_type_decl(&mut self) -> ParseResult<(MemoryType, MemoryTypeData)> {
+        let mt = self.match_mt("expected memory type number: mt«n»")?;
+        self.match_token(Token::Equal, "expected '=' in memory type declaration")?;
+
+        let data = match self.token() {
+            Some(Token::Identifier("struct")) => {
+                self.consume();
+                let size: u64 = self.match_uimm64("expected u64 constant value for struct size in struct memory-type declaration")?.into();
+                self.match_token(Token::LBrace, "expected opening brace to start struct fields in struct memory-type declaration")?;
+                let mut fields = vec![];
+                while self.token() != Some(Token::RBrace) {
+                    let field = self.parse_memory_type_field()?;
+                    fields.push(field);
+                    if self.token() == Some(Token::Comma) {
+                        self.consume();
+                    } else {
+                        break;
+                    }
+                }
+                self.match_token(
+                    Token::RBrace,
+                    "expected closing brace after struct fields in struct memory-type declaration",
+                )?;
+                MemoryTypeData::Struct { size, fields }
+            }
+            Some(Token::Identifier("memory")) => {
+                self.consume();
+                let size: u64 = self.match_uimm64("expected u64 constant value for size in static-memory memory-type declaration")?.into();
+                MemoryTypeData::Memory { size }
+            }
+            Some(Token::Identifier("empty")) => {
+                self.consume();
+                MemoryTypeData::Empty
+            }
+            other => {
+                return err!(
+                    self.loc,
+                    "Unknown memory type declaration kind '{:?}'",
+                    other
+                )
+            }
+        };
+
+        // Collect any trailing comments.
+        self.token();
+        self.claim_gathered_comments(mt);
+
+        Ok((mt, data))
     }
 
     // Parse a table decl.
@@ -2028,10 +2148,11 @@ impl<'a> Parser<'a> {
     // Parse a "fact" for proof-carrying code, attached to a value.
     //
     // fact ::= "max" "(" bit-width "," max-value ")"
-    //        | "points_to" "(" valid-range ")"
+    //        | "mem" "(" memory-type "," mt-offset ")"
     // bit-width ::= uimm64
     // max-value ::= uimm64
     // valid-range ::= uimm64
+    // mt-offset ::= imm64
     fn parse_fact(&mut self) -> ParseResult<Fact> {
         match self.token() {
             Some(Token::Identifier("max")) => {
@@ -2062,16 +2183,21 @@ impl<'a> Parser<'a> {
                     max: max.into(),
                 })
             }
-            Some(Token::Identifier("points_to")) => {
+            Some(Token::Identifier("mem")) => {
                 self.consume();
                 self.match_token(Token::LPar, "expected a `(`")?;
-                let max = self.match_uimm64("expected a max offset for `points_to` fact")?;
+                let ty = self.match_mt("expected a memory type for `mem` fact")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected a comma after memory type in `mem` fact",
+                )?;
+                let offset: i64 = self
+                    .match_imm64("expected an imm64 pointer offset for `mem` fact")?
+                    .into();
                 self.match_token(Token::RPar, "expected a `)`")?;
-                Ok(Fact::PointsTo {
-                    region: MemoryRegion { max: max.into() },
-                })
+                Ok(Fact::Mem { ty, offset })
             }
-            _ => Err(self.error("expected a `max` or `points_to` fact")),
+            _ => Err(self.error("expected a `max` or `mem` fact")),
         }
     }
 

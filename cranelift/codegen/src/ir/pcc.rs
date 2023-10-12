@@ -46,6 +46,7 @@
 //! `FactContext::add()` and friends to forward-propagate facts.
 //!
 //! TODO:
+//! - Check blockparams' preds against blockparams' facts.
 //! - Propagate facts through optimization (egraph layer).
 //! - Generate facts in cranelift-wasm frontend when lowering memory ops.
 //! - Implement richer "points-to" facts that describe the pointed-to
@@ -58,6 +59,7 @@
 use crate::ir;
 use crate::isa::TargetIsa;
 use crate::machinst::{InsnIndex, LowerBackend, MachInst, VCode};
+use cranelift_entity::PrimaryMap;
 use std::fmt;
 
 #[cfg(feature = "enable-serde")]
@@ -110,32 +112,20 @@ pub enum Fact {
         max: u64,
     },
 
-    /// A pointer value to a memory region that can be accessed.
-    PointsTo {
-        /// A description of the memory region this pointer is allowed
-        /// to access (size, etc).
-        region: MemoryRegion,
+    /// A pointer to a memory type.
+    Mem {
+        /// The memory type.
+        ty: ir::MemoryType,
+        /// The offset into the memory type.
+        offset: i64,
     },
-}
-
-/// A memory region that can be accessed. This description is attached
-/// to a particular base pointer.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct MemoryRegion {
-    /// Includes both the actual memory bound as well as any guard
-    /// pages. Inclusive, so we can represent the full range of a
-    /// `u64`. The range is unsigned.
-    pub max: u64,
 }
 
 impl fmt::Display for Fact {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Fact::ValueMax { bit_width, max } => write!(f, "max({}, 0x{:x})", bit_width, max),
-            Fact::PointsTo {
-                region: MemoryRegion { max },
-            } => write!(f, "points_to(0x{:x})", max),
+            Fact::ValueMax { bit_width, max } => write!(f, "max({}, {:#x})", bit_width, max),
+            Fact::Mem { ty, offset } => write!(f, "mem({}, {:#x})", ty, offset),
         }
     }
 }
@@ -157,20 +147,29 @@ macro_rules! bail {
 /// A "context" in which we can evaluate and derive facts. This
 /// context carries environment/global properties, such as the machine
 /// pointer width.
-#[derive(Debug)]
-pub struct FactContext {
+pub struct FactContext<'a> {
+    memory_types: &'a PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
     pointer_width: u16,
 }
 
-impl FactContext {
+impl<'a> FactContext<'a> {
     /// Create a new "fact context" in which to evaluate facts.
-    pub fn new(pointer_width: u16) -> Self {
-        FactContext { pointer_width }
+    pub fn new(
+        memory_types: &'a PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
+        pointer_width: u16,
+    ) -> Self {
+        FactContext {
+            memory_types,
+            pointer_width,
+        }
     }
 
     /// Computes whether `lhs` "subsumes" (implies) `rhs`.
     pub fn subsumes(&self, lhs: &Fact, rhs: &Fact) -> bool {
         match (lhs, rhs) {
+            // Reflexivity.
+            (l, r) if l == r => true,
+
             (
                 Fact::ValueMax {
                     bit_width: bw_lhs,
@@ -191,22 +190,7 @@ impl FactContext {
                 // possible value range.
                 bw_lhs == bw_rhs && max_lhs <= max_rhs
             }
-            (
-                Fact::PointsTo {
-                    region: MemoryRegion { max: max_lhs },
-                },
-                Fact::PointsTo {
-                    region: MemoryRegion { max: max_rhs },
-                },
-            ) => {
-                // If the pointer is valid up to `max_lhs`, and
-                // `max_rhs` is less than or equal to `max_lhs`, then
-                // it is certainly valid up to `max_rhs`.
-                //
-                // In other words, we can always shrink the valid
-                // addressable region.
-                max_rhs <= max_lhs
-            }
+
             _ => false,
         }
     }
@@ -240,19 +224,17 @@ impl FactContext {
                     bit_width: bw_max,
                     max,
                 },
-                Fact::PointsTo { region },
+                Fact::Mem { ty, offset },
             )
             | (
-                Fact::PointsTo { region },
+                Fact::Mem { ty, offset },
                 Fact::ValueMax {
                     bit_width: bw_max,
                     max,
                 },
             ) if *bw_max >= self.pointer_width && add_width >= *bw_max => {
-                let region = MemoryRegion {
-                    max: region.max.checked_sub(*max)?,
-                };
-                Some(Fact::PointsTo { region })
+                let offset = offset.checked_add(i64::try_from(*max).ok()?)?;
+                Some(Fact::Mem { ty: *ty, offset })
             }
 
             _ => None,
@@ -333,15 +315,15 @@ impl FactContext {
 
     /// Offsets a value with a fact by a known amount.
     pub fn offset(&self, fact: &Fact, width: u16, offset: i64) -> Option<Fact> {
-        // If we eventually support two-sided ranges, we can
-        // represent (0..n) + m -> ((0+m)..(n+m)). However,
-        // right now, all ranges start with zero, so any
-        // negative offset could underflow, and removes all
-        // claims of constrained range.
-        let offset = u64::try_from(offset).ok()?;
-
         match fact {
             Fact::ValueMax { bit_width, max } if *bit_width == width => {
+                // If we eventually support two-sided ranges, we can
+                // represent (0..n) + m -> ((0+m)..(n+m)). However,
+                // right now, all ranges start with zero, so any
+                // negative offset could underflow, and removes all
+                // claims of constrained range.
+                let offset = u64::try_from(offset).ok()?;
+
                 let max = match max.checked_add(offset) {
                     Some(max) => max,
                     None => {
@@ -357,13 +339,12 @@ impl FactContext {
                     max,
                 })
             }
-            Fact::PointsTo {
-                region: MemoryRegion { max },
+            Fact::Mem {
+                ty,
+                offset: mem_offset,
             } => {
-                let max = max.checked_sub(offset)?;
-                Some(Fact::PointsTo {
-                    region: MemoryRegion { max },
-                })
+                let offset = mem_offset.checked_sub(offset)?;
+                Some(Fact::Mem { ty: *ty, offset })
             }
             _ => None,
         }
@@ -373,9 +354,20 @@ impl FactContext {
     /// a memory access of the given size, is valid.
     pub fn check_address(&self, fact: &Fact, size: u32) -> PccResult<()> {
         match fact {
-            Fact::PointsTo {
-                region: MemoryRegion { max },
-            } => ensure!(u64::from(size) <= *max, OutOfBounds),
+            Fact::Mem { ty, offset } => {
+                let end_offset: i64 = offset
+                    .checked_add(i64::from(size))
+                    .ok_or(PccError::Overflow)?;
+                let end_offset: u64 =
+                    u64::try_from(end_offset).map_err(|_| PccError::OutOfBounds)?;
+                match &self.memory_types[*ty] {
+                    ir::MemoryTypeData::Struct { size, .. }
+                    | ir::MemoryTypeData::Memory { size } => {
+                        ensure!(end_offset <= *size, OutOfBounds)
+                    }
+                    ir::MemoryTypeData::Empty => bail!(OutOfBounds),
+                }
+            }
             _ => bail!(OutOfBounds),
         }
 
@@ -395,7 +387,7 @@ fn max_value_for_width(bits: u16) -> u64 {
 /// Top-level entry point after compilation: this checks the facts in
 /// VCode.
 pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
-    _f: &ir::Function,
+    f: &ir::Function,
     vcode: &VCode<B::MInst>,
     backend: &B,
 ) -> PccResult<()> {
@@ -407,7 +399,7 @@ pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
             // verify. We'll call into the backend to validate this
             // fact with respect to the instruction and the input
             // facts.
-            backend.check_fact(&vcode[inst], vcode)?;
+            backend.check_fact(&vcode[inst], f, vcode)?;
         }
     }
     Ok(())
