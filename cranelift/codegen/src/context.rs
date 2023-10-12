@@ -290,8 +290,8 @@ impl Context {
         self.loop_analysis.clear();
 
         // Run some specific legalizations only.
-        simple_legalize(&mut self.func, &mut self.cfg, isa);
         isa.legalize_function(&mut self.func, &mut self.cfg);
+        simple_legalize(&mut self.func, &mut self.cfg, isa);
         self.verify_if(isa)
     }
 

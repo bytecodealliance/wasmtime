@@ -337,6 +337,10 @@
 (decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
+;; `MemFlags::notrap`
+(decl pure mem_flags_notrap () MemFlags)
+(extern constructor mem_flags_notrap mem_flags_notrap)
+
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Swap args of an IntCC flag.

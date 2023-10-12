@@ -1229,7 +1229,7 @@ impl IsleTarget {
         }
     }
     fn ignore_value_lists(&self) -> bool {
-        matches!(self, IsleTarget::Opt | IsleTarget::Legalize)
+        matches!(self, IsleTarget::Opt)
     }
     fn match_type(&self) -> bool {
         matches!(self, IsleTarget::Opt)
@@ -1627,6 +1627,9 @@ fn gen_insn_constructor(
     common_ctor: &str,
     ret_ty: &str,
 ) {
+    if inst.format.has_value_list {
+        return;
+    }
     // Generate a constructor if this is the mid-end prelude.
     let input_tys = inst
         .operands_in

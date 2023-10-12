@@ -26,6 +26,13 @@
 (extern constructor value_array_2_ctor value_array_2_ctor)
 (decl value_array_3_ctor (Value Value Value) ValueArray3)
 (extern constructor value_array_3_ctor value_array_3_ctor)
+(decl value_list_slice (ValueSlice) ValueList)
+(extern extractor infallible value_list_slice value_list_slice)
+(decl value_slice_unwrap (Value ValueSlice) ValueSlice)
+(extern extractor value_slice_unwrap value_slice_unwrap)
+(decl unwrap_head_value_list_1 (Value ValueSlice) ValueList)
+(extractor (unwrap_head_value_list_1 head tail)
+           (value_list_slice (value_slice_unwrap head tail)))
 
 (decl pure first_result (Inst) Value)
 (extern constructor first_result first_result)
@@ -48,6 +55,8 @@
 ;; all backends in addition to backend-specific legalization.
 (decl partial legalize (Inst) Inst)
 
+;; ========= `{u,s}extend` ====================================================
+
 ;; Transform extend-to-i128 to an `iconcat` instruction
 (rule 0 (legalize (has_type $I128 (uextend x @ (value_type (fits_in_32 _)))))
   (replace_iconcat $I64 (ins_uextend $I64 x) (ins_i64 0)))
@@ -58,3 +67,10 @@
     (replace_iconcat $I64 val64 (ins_sshr $I64 val64 (ins_i64 63)))))
 (rule 1 (legalize (has_type $I128 (sextend x @ (value_type $I64))))
   (replace_iconcat $I64 x (ins_sshr $I64 x (ins_i64 63))))
+
+;; ========= `stack_store` ====================================================
+
+;; stack_store(val, slot, offset) => store(val, stack_addr(slot, offset), 0)
+(rule (legalize (stack_store val @ (value_type ty) slot offset))
+  (let ((addr Value (ins_stack_addr $I64 slot offset)))
+    (replace_store ty (mem_flags_notrap) val addr (i32_to_offset32 0))))

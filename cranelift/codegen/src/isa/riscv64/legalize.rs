@@ -77,6 +77,19 @@ impl generated::Context for Legalize<'_> {
         }
     }
 
+    fn value_list_slice(&mut self, list: ValueList) -> ValueSlice {
+        (list, 0)
+    }
+
+    fn value_slice_unwrap(&mut self, slice: ValueSlice) -> Option<(Value, ValueSlice)> {
+        let (list, off) = slice;
+        if let Some(val) = list.get(off, &self.pos.func.dfg.value_lists) {
+            Some((val, (list, off + 1)))
+        } else {
+            None
+        }
+    }
+
     fn value_array_2_ctor(&mut self, arg0: Value, arg1: Value) -> ValueArray2 {
         [arg0, arg1]
     }
