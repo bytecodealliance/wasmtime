@@ -498,10 +498,6 @@ criteria = "safe-to-deploy"
 version = "0.8.5"
 criteria = "safe-to-deploy"
 
-[[exemptions.rand_chacha]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.rand_xorshift]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
