@@ -165,6 +165,23 @@ WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t* context);
 WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *store, uint64_t fuel);
 
 /**
+ * \brief Set fuel to this context's store for wasm to consume while executing.
+ *
+ * For this method to work fuel consumption must be enabled via
+ * #wasmtime_config_consume_fuel_set. By default a store starts with 0 fuel
+ * for wasm to execute with (meaning it will immediately trap).
+ * This function must be called for the store to have
+ * some fuel to allow WebAssembly to execute.
+ *
+ * Note that at this time when fuel is entirely consumed it will cause
+ * wasm to trap. More usages of fuel are planned for the future.
+ *
+ * If fuel is not enabled within this store then an error is returned. If fuel
+ * is successfully added then NULL is returned.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_fuel(wasmtime_context_t *store, uint64_t fuel);
+
+/**
  * \brief Returns the amount of fuel consumed by this context's store execution
  * so far.
  *
