@@ -217,11 +217,11 @@ pub extern "C" fn wasmtime_context_add_fuel(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_context_set_fuel(
+pub extern "C" fn wasmtime_context_reset_fuel(
     mut store: CStoreContextMut<'_>,
     fuel: u64,
 ) -> Option<Box<wasmtime_error_t>> {
-    crate::handle_result(store.set_fuel(fuel), |()| {})
+    crate::handle_result(store.reset_fuel(fuel), |()| {})
 }
 
 #[no_mangle]

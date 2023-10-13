@@ -179,7 +179,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *
  * If fuel is not enabled within this store then an error is returned. If fuel
  * is successfully added then NULL is returned.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_fuel(wasmtime_context_t *store, uint64_t fuel);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_reset_fuel(wasmtime_context_t *store, uint64_t fuel);
 
 /**
  * \brief Returns the amount of fuel consumed by this context's store execution

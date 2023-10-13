@@ -147,7 +147,7 @@ fn manual_fuel() {
     assert_eq!(store.fuel_consumed(), Some(10_000));
     assert_eq!(store.consume_fuel(2_500).unwrap(), 2_500);
     assert_eq!(store.fuel_consumed(), Some(12_500));
-    store.set_fuel(5_000).unwrap();
+    store.reset_fuel(5_000).unwrap();
     assert_eq!(store.fuel_consumed(), Some(0));
     assert_eq!(store.consume_fuel(2_500).unwrap(), 2_500);
     assert_eq!(store.fuel_consumed(), Some(2_500));
