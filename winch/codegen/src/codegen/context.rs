@@ -28,7 +28,7 @@ use std::ops::RangeBounds;
 /// generation process. The code generation context should
 /// be generally used as the single entry point to access
 /// the compound functionality provided by its elements.
-pub(crate) struct CodeGenContext<'a, 'b: 'a> {
+pub(crate) struct CodeGenContext<'a, 'builtins: 'a> {
     /// The register allocator.
     pub regalloc: RegAlloc,
     /// The value stack.
@@ -38,18 +38,18 @@ pub(crate) struct CodeGenContext<'a, 'b: 'a> {
     /// Reachability state.
     pub reachable: bool,
     /// The built-in functions available to the JIT code.
-    pub builtins: &'b mut BuiltinFunctions,
+    pub builtins: &'builtins mut BuiltinFunctions,
     /// A reference to the VMOffsets.
     pub vmoffsets: &'a VMOffsets<u8>,
 }
 
-impl<'a, 'b> CodeGenContext<'a, 'b> {
+impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     /// Create a new code generation context.
     pub fn new(
         regalloc: RegAlloc,
         stack: Stack,
         frame: Frame,
-        builtins: &'b mut BuiltinFunctions,
+        builtins: &'builtins mut BuiltinFunctions,
         vmoffsets: &'a VMOffsets<u8>,
     ) -> Self {
         Self {

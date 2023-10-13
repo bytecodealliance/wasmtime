@@ -43,14 +43,14 @@ where
     pub control_frames: SmallVec<[ControlStackFrame; 64]>,
 }
 
-impl<'a, 'b, 'c, M> CodeGen<'a, 'b, 'c, M>
+impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
 where
     M: MacroAssembler,
 {
     pub fn new(
         masm: &'a mut M,
-        context: CodeGenContext<'a, 'b>,
-        env: FuncEnv<'a, 'b, 'c, M::Ptr>,
+        context: CodeGenContext<'a, 'translation>,
+        env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
         sig: ABISig,
     ) -> Self {
         Self {

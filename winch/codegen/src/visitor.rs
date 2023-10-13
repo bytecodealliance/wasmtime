@@ -146,7 +146,7 @@ macro_rules! def_unsupported {
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
 
-impl<'a, 'b, 'c, M> VisitOperator<'a> for CodeGen<'a, 'b, 'c, M>
+impl<'a, 'translation, 'data, M> VisitOperator<'a> for CodeGen<'a, 'translation, 'data, M>
 where
     M: MacroAssembler,
 {
