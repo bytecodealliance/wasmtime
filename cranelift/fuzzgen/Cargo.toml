@@ -15,6 +15,6 @@ cranelift = { workspace = true }
 cranelift-native = { workspace = true }
 
 anyhow = { workspace = true }
-arbitrary = "1.0.0"
+arbitrary = { workspace = true }
 once_cell = { workspace = true }
 target-lexicon = { workspace = true, features = ["std"] }

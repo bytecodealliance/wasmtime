@@ -9,7 +9,7 @@ edition.workspace = true
 cargo-fuzz = true
 
 [dependencies]
-arbitrary = { version = "1.1.0", features = ["derive"] }
+arbitrary = { workspace = true, features = ["derive"] }
 env_logger = { workspace = true }
 libfuzzer-sys = { workspace = true }
 wasmparser = { workspace = true }
