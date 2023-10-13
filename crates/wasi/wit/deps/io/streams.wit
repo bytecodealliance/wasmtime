@@ -246,6 +246,15 @@ interface streams {
 
         /// Read from one stream and write to another.
         ///
+        /// The behavior of splice is equivelant to:
+        /// 1. calling `check-write` on the `output-stream`
+        /// 2. calling `read` on the `input-stream` with the smaller of the
+        /// `check-write` permitted length and the `len` provided to `splice`
+        /// 3. calling `write` on the `output-stream` with that read data.
+        ///
+        /// Any error reported by the call to `check-write`, `read`, or
+        /// `write` ends the splice and reports that error.
+        ///
         /// This function returns the number of bytes transferred; it may be less
         /// than `len`.
         splice: func(
@@ -257,8 +266,9 @@ interface streams {
 
         /// Read from one stream and write to another, with blocking.
         ///
-        /// This is similar to `splice`, except that it blocks until at least
-        /// one byte can be read, and written.
+        /// This is similar to `splice`, except that it blocks until the
+        /// `output-stream` is ready for writing, and the `input-stream`
+        /// is ready for reading, before performing the `splice`.
         blocking-splice: func(
             /// The stream to read from
             src: borrow<input-stream>,
