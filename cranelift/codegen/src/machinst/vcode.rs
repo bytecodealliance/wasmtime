@@ -1290,7 +1290,13 @@ impl<I: VCodeInst> VCode<I> {
     /// Get the fact, if any, for a given VReg.
     pub fn vreg_fact(&self, vreg: VReg) -> Option<&Fact> {
         let vreg = self.resolve_vreg_alias(vreg);
-        self.facts[vreg.vreg()].as_ref()
+        match &self.facts[vreg.vreg()] {
+            // The vreg has a stated fact -- return that.
+            Some(fact) => Some(fact),
+            // The vreg has no fact, but maybe we can infer a minimal
+            // one (e.g., an integer range) from the type.
+            None => Fact::infer_from_type(self.vreg_types[vreg.vreg()]),
+        }
     }
 
     /// Does a given instruction define any facts?
@@ -1299,7 +1305,7 @@ impl<I: VCodeInst> VCode<I> {
             .iter()
             .filter(|o| o.kind() == OperandKind::Def)
             .map(|o| o.vreg())
-            .any(|vreg| self.vreg_fact(vreg).is_some())
+            .any(|vreg| self.facts[vreg.vreg()].is_some())
     }
 }
 

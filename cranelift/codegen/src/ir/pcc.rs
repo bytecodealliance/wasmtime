@@ -46,20 +46,40 @@
 //! `FactContext::add()` and friends to forward-propagate facts.
 //!
 //! TODO:
-//! - Check blockparams' preds against blockparams' facts.
+//!
+//! Completeness:
 //! - Propagate facts through optimization (egraph layer).
 //! - Generate facts in cranelift-wasm frontend when lowering memory ops.
-//! - Implement richer "points-to" facts that describe the pointed-to
-//!   memory, so the loaded values can also have facts.
 //! - Support bounds-checking-type operations for dynamic memories and
 //!   tables.
+//!
+//! Generality:
+//! - facts on outputs (in func signature)?
 //! - Implement checking at the CLIF level as well.
 //! - Check instructions that can trap as well?
+//!
+//! Nicer errors:
+//! - attach instruction index or some other identifier to errors
+//!
+//! Refactoring:
+//! - avoid the "default fact" infra everywhere we fetch facts,
+//!   instead doing it in the subsume check (and take the type with
+//!   subsume)?
+//!
+//! Text format cleanup:
+//! - make the bitwidth on `max` facts optional in the CLIF text
+//!   format?
+//! - make offset in `mem` fact optional in the text format?
+//!
+//! Bikeshed colors (syntax):
+//! - Put fact bang-annotations after types?
+//!   `v0: i64 ! fact(..)` vs. `v0 ! fact(..): i64`
 
 use crate::ir;
+use crate::ir::types::*;
 use crate::isa::TargetIsa;
-use crate::machinst::{InsnIndex, LowerBackend, MachInst, VCode};
-use cranelift_entity::PrimaryMap;
+use crate::machinst::{BlockIndex, LowerBackend, MachInst, VCode};
+use regalloc2::Function as _;
 use std::fmt;
 
 #[cfg(feature = "enable-serde")]
@@ -81,6 +101,9 @@ pub enum PccError {
     /// A derivation of an output fact is unsupported (incorrect or
     /// not derivable).
     UnsupportedFact,
+    /// A block parameter claims a fact that one of its predecessors
+    /// does not support.
+    UnsupportedBlockparam,
     /// A memory access is out of bounds.
     OutOfBounds,
     /// Proof-carrying-code checking is not implemented for a
@@ -90,6 +113,15 @@ pub enum PccError {
     /// particular instruction that instruction-selection chose. This
     /// is an internal compiler error.
     UnimplementedInst,
+    /// Access to an invalid or undefined field offset in a struct.
+    InvalidFieldOffset,
+    /// Access to a field via the wrong type.
+    BadFieldType,
+    /// Store to a read-only field.
+    WriteToReadOnlyField,
+    /// Store of data to a field with a fact that does not subsume the
+    /// field's fact.
+    InvalidStoredFact,
 }
 
 /// A fact on a value.
@@ -130,6 +162,37 @@ impl fmt::Display for Fact {
     }
 }
 
+impl Fact {
+    /// Try to infer a minimal fact for a value of the given IR type.
+    pub fn infer_from_type(ty: ir::Type) -> Option<&'static Self> {
+        static FACTS: [Fact; 4] = [
+            Fact::ValueMax {
+                bit_width: 8,
+                max: u8::MAX as u64,
+            },
+            Fact::ValueMax {
+                bit_width: 16,
+                max: u16::MAX as u64,
+            },
+            Fact::ValueMax {
+                bit_width: 32,
+                max: u32::MAX as u64,
+            },
+            Fact::ValueMax {
+                bit_width: 64,
+                max: u64::MAX,
+            },
+        ];
+        match ty {
+            I8 => Some(&FACTS[0]),
+            I16 => Some(&FACTS[1]),
+            I32 => Some(&FACTS[2]),
+            I64 => Some(&FACTS[3]),
+            _ => None,
+        }
+    }
+}
+
 macro_rules! ensure {
     ( $condition:expr, $err:tt $(,)? ) => {
         if !$condition {
@@ -148,18 +211,15 @@ macro_rules! bail {
 /// context carries environment/global properties, such as the machine
 /// pointer width.
 pub struct FactContext<'a> {
-    memory_types: &'a PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
+    function: &'a ir::Function,
     pointer_width: u16,
 }
 
 impl<'a> FactContext<'a> {
     /// Create a new "fact context" in which to evaluate facts.
-    pub fn new(
-        memory_types: &'a PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
-        pointer_width: u16,
-    ) -> Self {
+    pub fn new(function: &'a ir::Function, pointer_width: u16) -> Self {
         FactContext {
-            memory_types,
+            function,
             pointer_width,
         }
     }
@@ -169,6 +229,14 @@ impl<'a> FactContext<'a> {
         match (lhs, rhs) {
             // Reflexivity.
             (l, r) if l == r => true,
+
+            // Any value on the LHS subsumes a minimal (always-true)
+            // fact about the max value of a given bitwidth on the
+            // RHS: e.g., no matter the value, the bottom 8 bits will
+            // always be <= 255.
+            (_, Fact::ValueMax { bit_width, max }) if *max == max_value_for_width(*bit_width) => {
+                true
+            }
 
             (
                 Fact::ValueMax {
@@ -195,6 +263,18 @@ impl<'a> FactContext<'a> {
         }
     }
 
+    /// Computes whether the optional fact `lhs` subsumes (implies)
+    /// the optional fact `lhs`. A `None` never subsumes any fact, and
+    /// is always subsumed by any fact at all (or no fact).
+    pub fn subsumes_fact_optionals(&self, lhs: Option<&Fact>, rhs: Option<&Fact>) -> bool {
+        match (lhs, rhs) {
+            (None, None) => true,
+            (Some(_), None) => true,
+            (None, Some(_)) => false,
+            (Some(lhs), Some(rhs)) => self.subsumes(lhs, rhs),
+        }
+    }
+
     /// Computes whatever fact can be known about the sum of two
     /// values with attached facts. The add is performed to the given
     /// bit-width. Note that this is distinct from the machine or
@@ -213,6 +293,7 @@ impl<'a> FactContext<'a> {
                 },
             ) if bw_lhs == bw_rhs && add_width >= *bw_lhs => {
                 let computed_max = lhs.checked_add(*rhs)?;
+                let computed_max = std::cmp::min(max_value_for_width(add_width), computed_max);
                 Some(Fact::ValueMax {
                     bit_width: *bw_lhs,
                     max: computed_max,
@@ -352,7 +433,10 @@ impl<'a> FactContext<'a> {
 
     /// Check that accessing memory via a pointer with this fact, with
     /// a memory access of the given size, is valid.
-    pub fn check_address(&self, fact: &Fact, size: u32) -> PccResult<()> {
+    ///
+    /// If valid, returns the memory type and offset into that type
+    /// that this address accesses.
+    fn check_address(&self, fact: &Fact, size: u32) -> PccResult<(ir::MemoryType, i64)> {
         match fact {
             Fact::Mem { ty, offset } => {
                 let end_offset: i64 = offset
@@ -360,17 +444,70 @@ impl<'a> FactContext<'a> {
                     .ok_or(PccError::Overflow)?;
                 let end_offset: u64 =
                     u64::try_from(end_offset).map_err(|_| PccError::OutOfBounds)?;
-                match &self.memory_types[*ty] {
+                match &self.function.memory_types[*ty] {
                     ir::MemoryTypeData::Struct { size, .. }
                     | ir::MemoryTypeData::Memory { size } => {
                         ensure!(end_offset <= *size, OutOfBounds)
                     }
                     ir::MemoryTypeData::Empty => bail!(OutOfBounds),
                 }
+                Ok((*ty, *offset))
             }
             _ => bail!(OutOfBounds),
         }
+    }
 
+    /// Get the access struct field, if any, by a pointer with the
+    /// given fact and an access of the given type.
+    pub fn struct_field<'b>(
+        &'b self,
+        fact: &Fact,
+        access_ty: ir::Type,
+    ) -> PccResult<Option<&'b ir::MemoryTypeField>> {
+        let (ty, offset) = self.check_address(fact, access_ty.bytes())?;
+        let offset =
+            u64::try_from(offset).expect("valid access address cannot have a negative offset");
+
+        if let ir::MemoryTypeData::Struct { fields, .. } = &self.function.memory_types[ty] {
+            let field = fields
+                .iter()
+                .find(|field| field.offset == offset)
+                .ok_or(PccError::InvalidFieldOffset)?;
+            if field.ty != access_ty {
+                bail!(BadFieldType);
+            }
+            Ok(Some(field))
+        } else {
+            // Access to valid memory, but not a struct: no facts can be attached to the result.
+            Ok(None)
+        }
+    }
+
+    /// Check a load, and determine what fact, if any, the result of the load might have.
+    pub fn load<'b>(&'b self, fact: &Fact, access_ty: ir::Type) -> PccResult<Option<&'b Fact>> {
+        Ok(self
+            .struct_field(fact, access_ty)?
+            .and_then(|field| field.fact())
+            .or_else(|| Fact::infer_from_type(access_ty)))
+    }
+
+    /// Check a store.
+    pub fn store(
+        &self,
+        fact: &Fact,
+        access_ty: ir::Type,
+        data_fact: Option<&Fact>,
+    ) -> PccResult<()> {
+        if let Some(field) = self.struct_field(fact, access_ty)? {
+            // If it's a read-only field, disallow.
+            if field.readonly {
+                bail!(WriteToReadOnlyField);
+            }
+            // Check that the fact on the stored data subsumes the field's fact.
+            if !self.subsumes_fact_optionals(data_fact, field.fact()) {
+                bail!(InvalidStoredFact);
+            }
+        }
         Ok(())
     }
 }
@@ -391,15 +528,39 @@ pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
     vcode: &VCode<B::MInst>,
     backend: &B,
 ) -> PccResult<()> {
-    for inst in 0..vcode.num_insts() {
-        let inst = InsnIndex::new(inst);
-        if vcode.inst_defines_facts(inst) || vcode[inst].is_mem_access() {
-            // This instruction defines a register with a new fact, or
-            // has some side-effect we want to be careful to
-            // verify. We'll call into the backend to validate this
-            // fact with respect to the instruction and the input
-            // facts.
-            backend.check_fact(&vcode[inst], f, vcode)?;
+    let ctx = FactContext::new(f, backend.triple().pointer_width().unwrap().bits().into());
+
+    // Check that individual instructions are valid according to input
+    // facts, and support the stated output facts.
+    for block in 0..vcode.num_blocks() {
+        let block = BlockIndex::new(block);
+        for inst in vcode.block_insns(block).iter() {
+            if vcode.inst_defines_facts(inst) || vcode[inst].is_mem_access() {
+                // This instruction defines a register with a new fact, or
+                // has some side-effect we want to be careful to
+                // verify. We'll call into the backend to validate this
+                // fact with respect to the instruction and the input
+                // facts.
+                backend.check_fact(&ctx, vcode, &vcode[inst])?;
+            }
+
+            // If this is a branch, check that all block arguments subsume
+            // the assumed facts on the blockparams of successors.
+            if vcode.is_branch(inst) {
+                for (succ_idx, succ) in vcode.block_succs(block).iter().enumerate() {
+                    for (arg, param) in vcode
+                        .branch_blockparams(block, inst, succ_idx)
+                        .iter()
+                        .zip(vcode.block_params(*succ).iter())
+                    {
+                        let arg_fact = vcode.vreg_fact(*arg);
+                        let param_fact = vcode.vreg_fact(*param);
+                        if !ctx.subsumes_fact_optionals(arg_fact, param_fact) {
+                            return Err(PccError::UnsupportedBlockparam);
+                        }
+                    }
+                }
+            }
         }
     }
     Ok(())

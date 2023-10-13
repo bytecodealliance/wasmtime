@@ -8,9 +8,9 @@
 //! - Floating-point immediates (FIMM instruction).
 
 use crate::ir::condcodes::{FloatCC, IntCC};
-use crate::ir::pcc::PccResult;
+use crate::ir::pcc::{FactContext, PccResult};
 use crate::ir::Inst as IRInst;
-use crate::ir::{Function, Opcode, Value};
+use crate::ir::{Opcode, Value};
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::pcc;
 use crate::isa::aarch64::AArch64Backend;
@@ -133,10 +133,10 @@ impl LowerBackend for AArch64Backend {
 
     fn check_fact(
         &self,
-        inst: &Self::MInst,
-        function: &Function,
+        ctx: &FactContext<'_>,
         vcode: &VCode<Self::MInst>,
+        inst: &Self::MInst,
     ) -> PccResult<()> {
-        pcc::check(inst, function, vcode)
+        pcc::check(ctx, vcode, inst)
     }
 }
