@@ -1063,6 +1063,39 @@ mod test_programs {
     }
 
     #[test]
+    fn cli_splice_stdin() -> Result<()> {
+        let mut child = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_SPLICE_STDIN_COMPONENT])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()?;
+        let msg = "So rested he by the Tumtum tree";
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(msg.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output()?;
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+            eprintln!("{stderr}");
+        }
+
+        assert_eq!(
+            format!(
+                "before splice\n{msg}\ncompleted splicing {} bytes\n",
+                msg.as_bytes().len()
+            ),
+            stdout
+        );
+        Ok(())
+    }
+
+    #[test]
     fn cli_env() -> Result<()> {
         run_wasmtime(&[
             "run",
