@@ -248,12 +248,9 @@ interface streams {
         ///
         /// This function returns the number of bytes transferred; it may be less
         /// than `len`.
-        ///
-        /// Unlike other I/O functions, this function blocks until all the data
-        /// read from the input stream has been written to the output stream.
         splice: func(
             /// The stream to read from
-            src: input-stream,
+            src: borrow<input-stream>,
             /// The number of bytes to splice
             len: u64,
         ) -> result<u64, stream-error>;
@@ -261,29 +258,12 @@ interface streams {
         /// Read from one stream and write to another, with blocking.
         ///
         /// This is similar to `splice`, except that it blocks until at least
-        /// one byte can be read.
+        /// one byte can be read, and written.
         blocking-splice: func(
             /// The stream to read from
-            src: input-stream,
+            src: borrow<input-stream>,
             /// The number of bytes to splice
             len: u64,
-        ) -> result<u64, stream-error>;
-
-        /// Forward the entire contents of an input stream to an output stream.
-        ///
-        /// This function repeatedly reads from the input stream and writes
-        /// the data to the output stream, until the end of the input stream
-        /// is reached, or an error is encountered.
-        ///
-        /// Unlike other I/O functions, this function blocks until the end
-        /// of the input stream is seen and all the data has been written to
-        /// the output stream.
-        ///
-        /// This function returns the number of bytes transferred, and the status of
-        /// the output stream.
-        forward: func(
-            /// The stream to read from
-            src: input-stream
         ) -> result<u64, stream-error>;
     }
 }
