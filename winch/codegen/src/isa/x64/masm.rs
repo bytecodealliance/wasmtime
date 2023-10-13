@@ -12,7 +12,7 @@ use crate::masm::{
 use crate::{abi::ABI, masm::StackSlot, stack::TypedReg};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData},
+    codegen::{ptr_type_from_ptr_size, Callee, CodeGenContext, FnCall, TableData},
     stack::Val,
 };
 use crate::{
@@ -257,6 +257,7 @@ impl Masm for MacroAssembler {
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg),
             CalleeKind::Direct(idx) => self.asm.call_with_index(idx),
+            CalleeKind::Known(lib) => self.asm.call_with_lib(lib),
         };
         total_stack
     }
@@ -396,11 +397,42 @@ impl Masm for MacroAssembler {
         self.asm.and_rr(scratch_xmm, dst, size);
     }
 
-    fn float_round(&mut self, mode: RoundingMode, dst: Reg, src: RegImm, size: OperandSize) {
+    fn float_round(&mut self, mode: RoundingMode, context: &mut CodeGenContext, size: OperandSize) {
         if self.flags.has_sse41() {
-            self.asm.rounds(src.get_reg().unwrap(), dst, mode, size);
+            let src = context.pop_to_reg(self, None);
+            self.asm.rounds(src.into(), src.into(), mode, size);
+            context.stack.push(src.into());
         } else {
-            todo!("libcall fallback for rounding is not implemented")
+            FnCall::emit::<Self, Self::Ptr, _>(self, context, |context| {
+                let b = match (&mode, size) {
+                    (RoundingMode::Up, OperandSize::S32) => {
+                        context.builtins.ceil_f32::<<Self as Masm>::ABI>()
+                    }
+                    (RoundingMode::Up, OperandSize::S64) => {
+                        context.builtins.ceil_f64::<<Self as Masm>::ABI>()
+                    }
+                    (RoundingMode::Down, OperandSize::S32) => {
+                        context.builtins.floor_f32::<<Self as Masm>::ABI>()
+                    }
+                    (RoundingMode::Down, OperandSize::S64) => {
+                        context.builtins.floor_f64::<<Self as Masm>::ABI>()
+                    }
+                    (RoundingMode::Nearest, OperandSize::S32) => {
+                        context.builtins.nearest_f32::<<Self as Masm>::ABI>()
+                    }
+                    (RoundingMode::Nearest, OperandSize::S64) => {
+                        context.builtins.nearest_f64::<<Self as Masm>::ABI>()
+                    }
+                    (RoundingMode::Zero, OperandSize::S32) => {
+                        context.builtins.trunc_f32::<<Self as Masm>::ABI>()
+                    }
+                    (RoundingMode::Zero, OperandSize::S64) => {
+                        context.builtins.trunc_f64::<<Self as Masm>::ABI>()
+                    }
+                    (_, _) => unreachable!(),
+                };
+                Callee::Builtin(b)
+            })
         }
     }
 

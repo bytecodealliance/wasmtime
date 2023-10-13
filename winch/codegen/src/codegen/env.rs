@@ -1,7 +1,4 @@
-use crate::{
-    codegen::{BuiltinFunctions, OperandSize},
-    CallingConvention,
-};
+use crate::codegen::{BuiltinFunction, OperandSize};
 use smallvec::{smallvec, SmallVec};
 use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
@@ -32,6 +29,7 @@ pub struct TableData {
 /// A function callee.
 /// It categorizes how the callee should be treated
 /// when performing the call.
+#[derive(Clone)]
 pub enum Callee {
     /// Locally defined function.
     Local(CalleeInfo),
@@ -39,10 +37,13 @@ pub enum Callee {
     Import(CalleeInfo),
     /// Function reference.
     FuncRef(WasmFuncType),
+    /// A built-in function.
+    Builtin(BuiltinFunction),
 }
 
 /// Metadata about a function callee. Used by the code generation to
 /// emit function calls to local or imported functions.
+#[derive(Clone)]
 pub struct CalleeInfo {
     /// The function type.
     pub ty: WasmFuncType,
@@ -54,15 +55,13 @@ pub struct CalleeInfo {
 ///
 /// Contains all information about the module and runtime that is accessible to
 /// to a particular function during code generation.
-pub struct FuncEnv<'a, P: PtrSize> {
+pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     /// Offsets to the fields within the `VMContext` ptr.
-    pub vmoffsets: VMOffsets<P>,
+    pub vmoffsets: &'a VMOffsets<P>,
     /// Metadata about the translation process of a WebAssembly module.
-    pub translation: &'a ModuleTranslation<'a>,
-    /// Metadata about the builtin functions.
-    pub builtins: BuiltinFunctions,
+    pub translation: &'translation ModuleTranslation<'data>,
     /// The module's function types.
-    pub types: &'a ModuleTypes,
+    pub types: &'translation ModuleTypes,
     /// Track resolved table information.
     resolved_tables: HashMap<TableIndex, TableData>,
 }
@@ -73,30 +72,19 @@ pub fn ptr_type_from_ptr_size(size: u8) -> WasmType {
         .unwrap_or_else(|| unimplemented!("Support for non-64-bit architectures"))
 }
 
-impl<'a, P: PtrSize> FuncEnv<'a, P> {
+impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     /// Create a new function environment.
     pub fn new(
-        ptr: P,
-        translation: &'a ModuleTranslation,
-        types: &'a ModuleTypes,
-        call_conv: CallingConvention,
+        vmoffsets: &'a VMOffsets<P>,
+        translation: &'translation ModuleTranslation<'data>,
+        types: &'translation ModuleTypes,
     ) -> Self {
-        let vmoffsets = VMOffsets::new(ptr, &translation.module);
-        let size = vmoffsets.ptr.size();
-        let builtins_base = vmoffsets.vmctx_builtin_functions();
         Self {
             vmoffsets,
             translation,
-            builtins: BuiltinFunctions::new(size, call_conv, builtins_base),
             types,
             resolved_tables: HashMap::new(),
         }
-    }
-
-    /// Returns a slice of types representing the caller and callee VMContext types.
-    pub(crate) fn vmctx_args_type(&self) -> [WasmType; 2] {
-        let ty = self.ptr_type();
-        [ty, ty]
     }
 
     /// Derive the [`WasmType`] from the pointer size.

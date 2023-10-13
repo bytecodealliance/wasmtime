@@ -6,7 +6,7 @@ use crate::{
 };
 use cranelift_codegen::{
     entity::EntityRef,
-    ir::{types, ConstantPool, ExternalName, Opcode, TrapCode, UserExternalNameRef},
+    ir::{types, ConstantPool, ExternalName, LibCall, Opcode, TrapCode, UserExternalNameRef},
     isa::{
         x64::{
             args::{
@@ -877,6 +877,22 @@ impl Assembler {
     /// Emit a call to a locally defined function through an index.
     pub fn call_with_index(&mut self, index: u32) {
         let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
+        self.emit(Inst::CallKnown {
+            dest,
+            info: Box::new(CallInfo {
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: Default::default(),
+                opcode: Opcode::Call,
+                callee_pop_size: 0,
+                callee_conv: CallConv::SystemV,
+            }),
+        });
+    }
+
+    /// Emit a call to a well-known libcall.
+    pub fn call_with_lib(&mut self, lib: LibCall) {
+        let dest = ExternalName::LibCall(lib);
         self.emit(Inst::CallKnown {
             dest,
             info: Box::new(CallInfo {

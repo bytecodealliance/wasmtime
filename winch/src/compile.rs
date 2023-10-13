@@ -6,9 +6,9 @@ use target_lexicon::Triple;
 use wasmtime_environ::{
     wasmparser::{Parser as WasmParser, Validator},
     DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, ModuleTypes,
-    Tunables, TypeConvert,
+    Tunables, TypeConvert, VMOffsets,
 };
-use winch_codegen::{lookup, TargetIsa};
+use winch_codegen::{lookup, BuiltinFunctions, TargetIsa};
 use winch_filetests::disasm::disasm;
 
 #[derive(Parser, Debug)]
@@ -57,9 +57,18 @@ fn compile(
     let sig = types[types.function_at(index.as_u32())].unwrap_func();
     let sig = translation.module.convert_func_type(sig);
     let FunctionBodyData { body, validator } = f.1;
+    let vmoffsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
+    let mut builtins = BuiltinFunctions::new(&vmoffsets, isa.wasmtime_call_conv());
     let mut validator = validator.into_validator(Default::default());
     let buffer = isa
-        .compile_function(&sig, module_types, &body, &translation, &mut validator)
+        .compile_function(
+            &sig,
+            &body,
+            translation,
+            module_types,
+            &mut builtins,
+            &mut validator,
+        )
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());

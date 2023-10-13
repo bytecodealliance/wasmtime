@@ -1,7 +1,7 @@
 use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::{CodeGenContext, TableData};
 use crate::isa::reg::Reg;
-use cranelift_codegen::{Final, MachBufferFinalized, MachLabel};
+use cranelift_codegen::{ir::LibCall, Final, MachBufferFinalized, MachLabel};
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
 
@@ -183,12 +183,14 @@ impl Imm {
     }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum CalleeKind {
     /// A function call to a raw address.
     Indirect(Reg),
     /// A function call to a local function.
     Direct(u32),
+    /// Call to a well known LibCall.
+    Known(LibCall),
 }
 
 impl CalleeKind {
@@ -200,6 +202,11 @@ impl CalleeKind {
     /// Creates a direct callee kind from a function index.
     pub fn direct(index: u32) -> Self {
         Self::Direct(index)
+    }
+
+    /// Creates a known callee kind from a libcall.
+    pub fn known(call: LibCall) -> Self {
+        Self::Known(call)
     }
 }
 
@@ -231,15 +238,6 @@ impl RegImm {
     #[allow(dead_code)]
     pub fn f64(bits: u64) -> Self {
         RegImm::Imm(Imm::f64(bits))
-    }
-
-    /// Get the underlying register of the operand,
-    /// if it is one.
-    pub fn get_reg(&self) -> Option<Reg> {
-        match self {
-            Self::Reg(r) => Some(*r),
-            _ => None,
-        }
     }
 }
 
@@ -381,7 +379,7 @@ pub(crate) trait MacroAssembler {
     fn float_neg(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform a floating point floor operation.
-    fn float_round(&mut self, mode: RoundingMode, dst: Reg, src: RegImm, size: OperandSize);
+    fn float_round(&mut self, mode: RoundingMode, context: &mut CodeGenContext, size: OperandSize);
 
     /// Perform a floating point square root operation.
     fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize);

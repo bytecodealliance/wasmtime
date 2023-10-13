@@ -46,6 +46,7 @@
 use crate::isa::{reg::Reg, CallingConvention};
 use crate::masm::OperandSize;
 use smallvec::SmallVec;
+use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
 use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
 
@@ -110,7 +111,7 @@ pub(crate) trait ABI {
 }
 
 /// ABI-specific representation of a function argument.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ABIArg {
     /// A register argument.
     Reg {
@@ -229,7 +230,7 @@ impl ABIResult {
 pub(crate) type ABIParams = SmallVec<[ABIArg; 6]>;
 
 /// An ABI-specific representation of a function signature.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct ABISig {
     /// Function parameters.
     pub params: ABIParams,
@@ -237,28 +238,29 @@ pub(crate) struct ABISig {
     pub result: ABIResult,
     /// Stack space needed for stack arguments.
     pub stack_bytes: u32,
+    /// All the registers used in the [`ABISig`].
+    /// Note that this collection is guaranteed to
+    /// be unique: in some cases some registers might
+    /// be used as params as a well as returns (e.g. xmm0 in x64).
+    pub regs: HashSet<Reg>,
 }
 
 impl ABISig {
     /// Create a new ABI signature.
     pub fn new(params: ABIParams, result: ABIResult, stack_bytes: u32) -> Self {
+        let regs = params
+            .iter()
+            .filter_map(|r| r.get_reg())
+            .collect::<SmallVec<[Reg; 6]>>();
+        let result_regs = result.regs();
+        let chained = regs.into_iter().chain(result_regs);
+
         Self {
             params,
             result,
             stack_bytes,
+            regs: HashSet::from_iter(chained),
         }
-    }
-
-    /// Returns an iterator over all the registers used as params.
-    pub fn param_regs(&self) -> impl Iterator<Item = Reg> + '_ {
-        self.params.iter().filter_map(|r| r.get_reg())
-    }
-
-    /// Returns an iterator over all the registers used in the signature.
-    pub fn regs(&self) -> impl Iterator<Item = Reg> + '_ {
-        let params_iter = self.param_regs();
-        let result_iter = self.result.regs();
-        params_iter.chain(result_iter)
     }
 }
 

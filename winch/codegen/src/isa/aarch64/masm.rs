@@ -258,7 +258,12 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn float_round(&mut self, _mode: RoundingMode, _dst: Reg, _src: RegImm, _size: OperandSize) {
+    fn float_round(
+        &mut self,
+        _mode: RoundingMode,
+        _context: &mut CodeGenContext,
+        _size: OperandSize,
+    ) {
         todo!();
     }
 
