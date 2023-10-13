@@ -156,8 +156,10 @@ WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t* context);
  * This function must be called for the store to have
  * some fuel to allow WebAssembly to execute.
  *
- * Note that at this time when fuel is entirely consumed it will cause
- * wasm to trap. More usages of fuel are planned for the future.
+ * Note by default when fuel is entirely consumed it will cause
+ * wasm to trap. If async_support is enabled, you can use 
+ * #wasmtime_context_out_of_fuel_async_yield and the async APIs to yield
+ * execution instead.
  *
  * If fuel is not enabled within this store then an error is returned. If fuel
  * is successfully added then NULL is returned.
@@ -173,8 +175,10 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *
  * This function must be called for the store to have
  * some fuel to allow WebAssembly to execute.
  *
- * Note that at this time when fuel is entirely consumed it will cause
- * wasm to trap. More usages of fuel are planned for the future.
+ * Note by default when fuel is entirely consumed it will cause
+ * wasm to trap. If async_support is enabled, you can use 
+ * #wasmtime_context_out_of_fuel_async_yield and the async APIs to yield
+ * execution instead.
  *
  * If fuel is not enabled within this store then an error is returned. If fuel
  * is successfully added then NULL is returned.
