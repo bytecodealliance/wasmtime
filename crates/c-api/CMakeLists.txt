@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 set(WASMTIME_USER_CARGO_BUILD_OPTIONS "" CACHE STRING "Additional cargo flags (such as --features) to apply to the build command")
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
+option(WASMTIME_ALWAYS_BUILD "If cmake should always invoke cargo to build wasmtime" ON)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
 	set(WASMTIME_BUILD_TYPE_FLAG "--release")
@@ -100,7 +101,7 @@ ExternalProject_Add(
 	INSTALL_COMMAND "${WASMTIME_INSTALL_COMMAND}"
         BUILD_COMMAND ${WASMTIME_PREBUILD_COMMAND} ${WASMTIME_CARGO_BINARY} build ${WASMTIME_BUILD_TYPE_FLAG} ${WASMTIME_USER_CARGO_BUILD_OPTIONS} ${WASMTIME_BUILD_TARGET}
 	BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}
-	BUILD_ALWAYS ON
+        BUILD_ALWAYS ${WASMTIME_ALWAYS_BUILD}
 	BUILD_BYPRODUCTS ${WASMTIME_BUILD_PRODUCT})
 add_library(wasmtime INTERFACE)
 add_dependencies(wasmtime wasmtime-crate)
