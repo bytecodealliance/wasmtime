@@ -82,6 +82,10 @@ impl Wasmtime {
 }
 
 fn main() -> Result<()> {
+    tracing_subscriber::FmtSubscriber::builder()
+        .with_writer(std::io::stderr)
+        .with_env_filter(tracing_subscriber::EnvFilter::from_env("WASMTIME_LOG"))
+        .init();
     Wasmtime::parse().execute()
 }
 
