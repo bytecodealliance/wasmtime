@@ -39,6 +39,7 @@ wasmtime-runtime = { workspace = true }
 clap = { workspace = true, features = ["color", "suggestions", "derive"] }
 anyhow = { workspace = true }
 target-lexicon = { workspace = true }
+tracing-subscriber = { workspace = true }
 once_cell = { workspace = true }
 listenfd = "1.0.0"
 wat = { workspace = true }
@@ -263,7 +264,7 @@ indexmap = "2.0.0"
 pretty_env_logger = "0.5.0"
 syn = "2.0.25"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
-tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter'] }
+tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi'] }
 url = "2.3.1"
 
 [features]
