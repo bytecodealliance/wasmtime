@@ -565,7 +565,7 @@ impl SharedMemory {
     /// Implementation of `memory.atomic.notify` for this shared memory.
     pub fn atomic_notify(&self, addr_index: u64, count: u32) -> Result<u32, Trap> {
         validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
-        log::trace!("memory.atomic.notify(addr={addr_index}, count={count})");
+        log::trace!("memory.atomic.notify(addr={addr_index:#x}, count={count})");
         Ok(self.0.spot.unpark(addr_index, count))
     }
 
@@ -578,7 +578,7 @@ impl SharedMemory {
     ) -> Result<WaitResult, Trap> {
         let addr = validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
         log::trace!(
-            "memory.atomic.wait32(addr={addr_index}, expected={expected}, timeout={timeout:?})"
+            "memory.atomic.wait32(addr={addr_index:#x}, expected={expected}, timeout={timeout:?})"
         );
 
         // SAFETY: `addr_index` was validated by `validate_atomic_addr` above.
@@ -603,7 +603,7 @@ impl SharedMemory {
     ) -> Result<WaitResult, Trap> {
         let addr = validate_atomic_addr(&self.0.def.0, addr_index, 8, 8)?;
         log::trace!(
-            "memory.atomic.wait64(addr={addr_index}, expected={expected}, timeout={timeout:?})"
+            "memory.atomic.wait64(addr={addr_index:#x}, expected={expected}, timeout={timeout:?})"
         );
 
         // SAFETY: `addr_index` was validated by `validate_atomic_addr` above.
