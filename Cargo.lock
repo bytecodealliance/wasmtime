@@ -3393,7 +3393,6 @@ dependencies = [
  "tempfile",
  "test-programs-artifacts",
  "tokio",
- "tracing-subscriber",
  "walkdir",
  "wasm-encoder",
  "wasmparser",
@@ -3423,8 +3422,8 @@ dependencies = [
  "clap",
  "file-per-thread-logger",
  "humantime 2.1.0",
- "pretty_env_logger 0.5.0",
  "rayon",
+ "tracing-subscriber",
  "wasmtime",
 ]
 
