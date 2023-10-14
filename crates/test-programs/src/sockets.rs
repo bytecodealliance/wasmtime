@@ -7,7 +7,9 @@ use crate::wasi::sockets::network::{
     Network,
 };
 use crate::wasi::sockets::tcp::TcpSocket;
-use crate::wasi::sockets::udp::{Datagram, UdpSocket};
+use crate::wasi::sockets::udp::{
+    InboundDatagram, InboundDatagramStream, OutboundDatagram, OutboundDatagramStream, UdpSocket,
+};
 use crate::wasi::sockets::{tcp_create_socket, udp_create_socket};
 use std::ops::Range;
 
@@ -130,7 +132,7 @@ impl UdpSocket {
         &self,
         network: &Network,
         local_address: IpSocketAddress,
-    ) -> Result<(), ErrorCode> {
+    ) -> Result<(InboundDatagramStream, OutboundDatagramStream), ErrorCode> {
         let sub = self.subscribe();
 
         self.start_bind(&network, local_address)?;
@@ -143,14 +145,10 @@ impl UdpSocket {
         }
     }
 
-    pub fn blocking_connect(
-        &self,
-        network: &Network,
-        remote_address: IpSocketAddress,
-    ) -> Result<(), ErrorCode> {
+    pub fn blocking_connect(&self, remote_address: IpSocketAddress) -> Result<(), ErrorCode> {
         let sub = self.subscribe();
 
-        self.start_connect(&network, remote_address)?;
+        self.start_connect(remote_address)?;
 
         loop {
             match self.finish_connect() {
@@ -159,8 +157,10 @@ impl UdpSocket {
             }
         }
     }
+}
 
-    pub fn blocking_send(&self, mut datagrams: &[Datagram]) -> Result<(), ErrorCode> {
+impl OutboundDatagramStream {
+    pub fn blocking_send(&self, mut datagrams: &[OutboundDatagram]) -> Result<(), ErrorCode> {
         let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
         let pollable = self.subscribe();
 
@@ -176,8 +176,10 @@ impl UdpSocket {
 
         Ok(())
     }
+}
 
-    pub fn blocking_receive(&self, count: Range<u64>) -> Result<Vec<Datagram>, ErrorCode> {
+impl InboundDatagramStream {
+    pub fn blocking_receive(&self, count: Range<u64>) -> Result<Vec<InboundDatagram>, ErrorCode> {
         let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
         let pollable = self.subscribe();
         let mut datagrams = vec![];

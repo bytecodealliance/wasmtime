@@ -5,7 +5,7 @@ use crate::preview2::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
         sockets::udp,
     },
-    udp::UdpState,
+    udp::{UdpSocketInner, UdpState},
 };
 use crate::preview2::{Pollable, SocketResult, WasiView};
 use cap_net_ext::{AddressFamily, PoolExt};
@@ -21,15 +21,17 @@ const MAX_UDP_DATAGRAM_SIZE: usize = 65535;
 
 impl<T: WasiView> udp::Host for T {}
 
-impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
+impl<T: WasiView> udp::HostUdpSocket for T {
     fn start_bind(
         &mut self,
         this: Resource<udp::UdpSocket>,
         network: Resource<Network>,
         local_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        let table = self.table_mut();
-        let socket = table.get(&this)?;
+        let table = self.table();
+        let mut socket = table.get(&this)?.inner.lock().unwrap();
+        let network = table.get(&network)?;
+        let local_address: SocketAddr = local_address.into();
 
         match socket.udp_state {
             UdpState::Default => {}
@@ -39,7 +41,6 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
             UdpState::Bound | UdpState::Connected(..) => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let network = table.get(&network)?;
         let binder = network.pool.udp_binder(local_address)?;
 
         // Perform the OS bind call.
@@ -49,34 +50,48 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
                 .as_socketlike_view::<cap_std::net::UdpSocket>(),
         )?;
 
-        let socket = table.get_mut(&this)?;
         socket.udp_state = UdpState::BindStarted;
 
         Ok(())
     }
 
-    fn finish_bind(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<()> {
+    fn finish_bind(
+        &mut self,
+        this: Resource<udp::UdpSocket>,
+    ) -> SocketResult<(
+        Resource<udp::InboundDatagramStream>,
+        Resource<udp::OutboundDatagramStream>,
+    )> {
         let table = self.table_mut();
-        let socket = table.get_mut(&this)?;
+        let outer = table.get(&this)?;
+        {
+            let mut socket = outer.inner.lock().unwrap();
 
-        match socket.udp_state {
-            UdpState::BindStarted => {
-                socket.udp_state = UdpState::Bound;
-                Ok(())
+            match socket.udp_state {
+                UdpState::BindStarted => {}
+                _ => return Err(ErrorCode::NotInProgress.into()),
             }
-            _ => Err(ErrorCode::NotInProgress.into()),
+
+            socket.udp_state = UdpState::Bound;
         }
+
+        let inbound_stream = outer.new_inbound_stream();
+        let outbound_stream = outer.new_outbound_stream();
+
+        Ok((
+            self.table_mut().push_child(inbound_stream, &this)?,
+            self.table_mut().push_child(outbound_stream, &this)?,
+        ))
     }
 
     fn start_connect(
         &mut self,
         this: Resource<udp::UdpSocket>,
-        network: Resource<Network>,
         remote_address: IpSocketAddress,
     ) -> SocketResult<()> {
-        let table = self.table_mut();
-        let socket = table.get(&this)?;
-        let network = table.get(&network)?;
+        let table = self.table();
+        let mut socket = table.get(&this)?.inner.lock().unwrap();
+        let remote_address: SocketAddr = remote_address.into();
 
         match socket.udp_state {
             UdpState::Default | UdpState::Bound => {}
@@ -86,23 +101,15 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
             UdpState::Connected(..) => return Err(ErrorCode::InvalidState.into()),
         }
 
-        let connecter = network.pool.udp_connecter(remote_address)?;
+        rustix::net::connect(socket.udp_socket(), &remote_address)?;
 
-        // Do an OS `connect`.
-        connecter.connect_existing_udp_socket(
-            &*socket
-                .udp_socket()
-                .as_socketlike_view::<cap_std::net::UdpSocket>(),
-        )?;
-
-        let socket = table.get_mut(&this)?;
         socket.udp_state = UdpState::Connecting(remote_address);
         Ok(())
     }
 
     fn finish_connect(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<()> {
-        let table = self.table_mut();
-        let socket = table.get_mut(&this)?;
+        let table = self.table();
+        let mut socket = table.get(&this)?.inner.lock().unwrap();
 
         match socket.udp_state {
             UdpState::Connecting(addr) => {
@@ -113,117 +120,9 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         }
     }
 
-    fn receive(
-        &mut self,
-        this: Resource<udp::UdpSocket>,
-        max_results: u64,
-    ) -> SocketResult<Vec<udp::Datagram>> {
-        if max_results == 0 {
-            return Ok(vec![]);
-        }
-
-        let table = self.table();
-        let socket = table.get(&this)?;
-
-        let udp_socket = socket.udp_socket();
-        let mut datagrams = vec![];
-        let mut buf = [0; MAX_UDP_DATAGRAM_SIZE];
-        match socket.udp_state {
-            UdpState::Default | UdpState::BindStarted => return Err(ErrorCode::InvalidState.into()),
-            UdpState::Bound | UdpState::Connecting(..) => {
-                for i in 0..max_results {
-                    match udp_socket.try_recv_from(&mut buf) {
-                        Ok((size, remote_address)) => datagrams.push(udp::Datagram {
-                            data: buf[..size].into(),
-                            remote_address: remote_address.into(),
-                        }),
-                        Err(_e) if i > 0 => {
-                            return Ok(datagrams);
-                        }
-                        Err(e) => return Err(e.into()),
-                    }
-                }
-            }
-            UdpState::Connected(remote_address) => {
-                for i in 0..max_results {
-                    match udp_socket.try_recv(&mut buf) {
-                        Ok(size) => datagrams.push(udp::Datagram {
-                            data: buf[..size].into(),
-                            remote_address,
-                        }),
-                        Err(_e) if i > 0 => {
-                            return Ok(datagrams);
-                        }
-                        Err(e) => return Err(e.into()),
-                    }
-                }
-            }
-        }
-        Ok(datagrams)
-    }
-
-    fn send(
-        &mut self,
-        this: Resource<udp::UdpSocket>,
-        datagrams: Vec<udp::Datagram>,
-    ) -> SocketResult<u64> {
-        if datagrams.is_empty() {
-            return Ok(0);
-        };
-        let table = self.table();
-        let socket = table.get(&this)?;
-
-        let udp_socket = socket.udp_socket();
-        let mut count = 0;
-        match socket.udp_state {
-            UdpState::Default | UdpState::BindStarted => return Err(ErrorCode::InvalidState.into()),
-            UdpState::Bound | UdpState::Connecting(..) => {
-                for udp::Datagram {
-                    data,
-                    remote_address,
-                } in datagrams
-                {
-                    match udp_socket.try_send_to(&data, remote_address.into()) {
-                        Ok(_size) => count += 1,
-                        Err(_e) if count > 0 => {
-                            return Ok(count);
-                        }
-                        Err(e) => return Err(e.into()),
-                    }
-                }
-            }
-            UdpState::Connected(addr) => {
-                let addr = SocketAddr::from(addr);
-                for udp::Datagram {
-                    data,
-                    remote_address,
-                } in datagrams
-                {
-                    if SocketAddr::from(remote_address) != addr {
-                        // From WIT documentation:
-                        // If at least one datagram has been sent successfully, this function never returns an error.
-                        if count == 0 {
-                            return Err(ErrorCode::InvalidArgument.into());
-                        } else {
-                            return Ok(count);
-                        }
-                    }
-                    match udp_socket.try_send(&data) {
-                        Ok(_size) => count += 1,
-                        Err(_e) if count > 0 => {
-                            return Ok(count);
-                        }
-                        Err(e) => return Err(e.into()),
-                    }
-                }
-            }
-        }
-        Ok(count)
-    }
-
     fn local_address(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<IpSocketAddress> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         let addr = socket
             .udp_socket()
             .as_socketlike_view::<std::net::UdpSocket>()
@@ -233,7 +132,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn remote_address(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<IpSocketAddress> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         let addr = socket
             .udp_socket()
             .as_socketlike_view::<std::net::UdpSocket>()
@@ -246,7 +145,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         this: Resource<udp::UdpSocket>,
     ) -> Result<IpAddressFamily, anyhow::Error> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         match socket.family {
             AddressFamily::Ipv4 => Ok(IpAddressFamily::Ipv4),
             AddressFamily::Ipv6 => Ok(IpAddressFamily::Ipv6),
@@ -255,19 +154,19 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn ipv6_only(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<bool> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         Ok(sockopt::get_ipv6_v6only(socket.udp_socket())?)
     }
 
     fn set_ipv6_only(&mut self, this: Resource<udp::UdpSocket>, value: bool) -> SocketResult<()> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         Ok(sockopt::set_ipv6_v6only(socket.udp_socket(), value)?)
     }
 
     fn unicast_hop_limit(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u8> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
 
         // We don't track whether the socket is IPv4 or IPv6 so try one and
         // fall back to the other.
@@ -288,7 +187,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         value: u8,
     ) -> SocketResult<()> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
 
         // We don't track whether the socket is IPv4 or IPv6 so try one and
         // fall back to the other.
@@ -301,7 +200,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn receive_buffer_size(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u64> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         Ok(sockopt::get_socket_recv_buffer_size(socket.udp_socket())? as u64)
     }
 
@@ -311,7 +210,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         value: u64,
     ) -> SocketResult<()> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         let value = value.try_into().map_err(|_| ErrorCode::OutOfMemory)?;
         Ok(sockopt::set_socket_recv_buffer_size(
             socket.udp_socket(),
@@ -321,7 +220,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
 
     fn send_buffer_size(&mut self, this: Resource<udp::UdpSocket>) -> SocketResult<u64> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         Ok(sockopt::get_socket_send_buffer_size(socket.udp_socket())? as u64)
     }
 
@@ -331,7 +230,7 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
         value: u64,
     ) -> SocketResult<()> {
         let table = self.table();
-        let socket = table.get(&this)?;
+        let socket = table.get(&this)?.inner.lock().unwrap();
         let value = value.try_into().map_err(|_| ErrorCode::OutOfMemory)?;
         Ok(sockopt::set_socket_send_buffer_size(
             socket.udp_socket(),
@@ -344,6 +243,140 @@ impl<T: WasiView> crate::preview2::host::udp::udp::HostUdpSocket for T {
     }
 
     fn drop(&mut self, this: Resource<udp::UdpSocket>) -> Result<(), anyhow::Error> {
+        let table = self.table_mut();
+
+        // As in the filesystem implementation, we assume closing a socket
+        // doesn't block.
+        let dropped = table.delete(this)?;
+        drop(dropped);
+
+        Ok(())
+    }
+}
+
+impl<T: WasiView> udp::HostInboundDatagramStream for T {
+    fn receive(
+        &mut self,
+        this: Resource<udp::InboundDatagramStream>,
+        max_results: u64,
+    ) -> SocketResult<Vec<udp::InboundDatagram>> {
+        fn recv_one(socket: &UdpSocketInner) -> SocketResult<udp::InboundDatagram> {
+            let mut buf = [0; MAX_UDP_DATAGRAM_SIZE];
+            let (size, received_addr) = socket.udp_socket().try_recv_from(&mut buf)?;
+
+            match socket.remote_address() {
+                Some(connected_addr) if connected_addr != received_addr => {
+                    // Normally, this should have already been checked for us by the OS.
+                    // Drop message...
+                    return Err(ErrorCode::WouldBlock.into());
+                }
+                _ => {}
+            }
+
+            // FIXME: check permission to receive from `received_addr`.
+            Ok(udp::InboundDatagram {
+                data: buf[..size].into(),
+                remote_address: received_addr.into(),
+            })
+        }
+
+        let table = self.table();
+        let socket = table.get(&this)?.inner.lock().unwrap();
+
+        if max_results == 0 {
+            return Ok(vec![]);
+        }
+
+        let mut datagrams = vec![];
+
+        for _ in 0..max_results {
+            match recv_one(&socket) {
+                Ok(datagram) => {
+                    datagrams.push(datagram);
+                }
+                Err(_e) if datagrams.len() > 0 => {
+                    return Ok(datagrams);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(datagrams)
+    }
+
+    fn subscribe(
+        &mut self,
+        this: Resource<udp::InboundDatagramStream>,
+    ) -> anyhow::Result<Resource<Pollable>> {
+        crate::preview2::poll::subscribe(self.table_mut(), this)
+    }
+
+    fn drop(&mut self, this: Resource<udp::InboundDatagramStream>) -> Result<(), anyhow::Error> {
+        let table = self.table_mut();
+
+        // As in the filesystem implementation, we assume closing a socket
+        // doesn't block.
+        let dropped = table.delete(this)?;
+        drop(dropped);
+
+        Ok(())
+    }
+}
+
+impl<T: WasiView> udp::HostOutboundDatagramStream for T {
+    fn send(
+        &mut self,
+        this: Resource<udp::OutboundDatagramStream>,
+        datagrams: Vec<udp::OutboundDatagram>,
+    ) -> SocketResult<u64> {
+        fn send_one(socket: &UdpSocketInner, datagram: &udp::OutboundDatagram) -> SocketResult<()> {
+            let provided_addr = datagram.remote_address.map(SocketAddr::from);
+            let addr = match (socket.remote_address(), provided_addr) {
+                (None, Some(addr)) => addr,
+                (Some(addr), None) => addr,
+                (Some(connected_addr), Some(provided_addr)) if connected_addr == provided_addr => {
+                    connected_addr
+                }
+                _ => return Err(ErrorCode::InvalidArgument.into()),
+            };
+
+            // FIXME: check permission to send to `addr`.
+            socket.udp_socket().try_send_to(&datagram.data, addr)?;
+
+            Ok(())
+        }
+
+        let table = self.table();
+        let socket = table.get(&this)?.inner.lock().unwrap();
+
+        if datagrams.is_empty() {
+            return Ok(0);
+        }
+
+        let mut count = 0;
+
+        for datagram in datagrams {
+            match send_one(&socket, &datagram) {
+                Ok(_size) => count += 1,
+                Err(_e) if count > 0 => {
+                    // WIT: "If at least one datagram has been sent successfully, this function never returns an error."
+                    return Ok(count);
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        Ok(count)
+    }
+
+    fn subscribe(
+        &mut self,
+        this: Resource<udp::OutboundDatagramStream>,
+    ) -> anyhow::Result<Resource<Pollable>> {
+        crate::preview2::poll::subscribe(self.table_mut(), this)
+    }
+
+    fn drop(&mut self, this: Resource<udp::OutboundDatagramStream>) -> Result<(), anyhow::Error> {
         let table = self.table_mut();
 
         // As in the filesystem implementation, we assume closing a socket
