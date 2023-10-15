@@ -1179,6 +1179,9 @@ struct Resources {
     blocks_without_params: Vec<Block>,
     block_terminators: Vec<BlockTerminator>,
     func_refs: Vec<(Signature, SigRef, FuncRef)>,
+    /// This field is required to be sorted by stack slot size at all times.
+    /// We use this invariant when searching for stack slots with a given size.
+    /// See [FunctionGenerator::stack_slot_with_size]
     stack_slots: Vec<(StackSlot, StackSize, AACategory)>,
     usercalls: Vec<(UserExternalName, Signature)>,
     libcalls: Vec<LibCall>,
