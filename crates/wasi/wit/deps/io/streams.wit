@@ -246,44 +246,34 @@ interface streams {
 
         /// Read from one stream and write to another.
         ///
+        /// The behavior of splice is equivelant to:
+        /// 1. calling `check-write` on the `output-stream`
+        /// 2. calling `read` on the `input-stream` with the smaller of the
+        /// `check-write` permitted length and the `len` provided to `splice`
+        /// 3. calling `write` on the `output-stream` with that read data.
+        ///
+        /// Any error reported by the call to `check-write`, `read`, or
+        /// `write` ends the splice and reports that error.
+        ///
         /// This function returns the number of bytes transferred; it may be less
         /// than `len`.
-        ///
-        /// Unlike other I/O functions, this function blocks until all the data
-        /// read from the input stream has been written to the output stream.
         splice: func(
             /// The stream to read from
-            src: input-stream,
+            src: borrow<input-stream>,
             /// The number of bytes to splice
             len: u64,
         ) -> result<u64, stream-error>;
 
         /// Read from one stream and write to another, with blocking.
         ///
-        /// This is similar to `splice`, except that it blocks until at least
-        /// one byte can be read.
+        /// This is similar to `splice`, except that it blocks until the
+        /// `output-stream` is ready for writing, and the `input-stream`
+        /// is ready for reading, before performing the `splice`.
         blocking-splice: func(
             /// The stream to read from
-            src: input-stream,
+            src: borrow<input-stream>,
             /// The number of bytes to splice
             len: u64,
-        ) -> result<u64, stream-error>;
-
-        /// Forward the entire contents of an input stream to an output stream.
-        ///
-        /// This function repeatedly reads from the input stream and writes
-        /// the data to the output stream, until the end of the input stream
-        /// is reached, or an error is encountered.
-        ///
-        /// Unlike other I/O functions, this function blocks until the end
-        /// of the input stream is seen and all the data has been written to
-        /// the output stream.
-        ///
-        /// This function returns the number of bytes transferred, and the status of
-        /// the output stream.
-        forward: func(
-            /// The stream to read from
-            src: input-stream
         ) -> result<u64, stream-error>;
     }
 }
