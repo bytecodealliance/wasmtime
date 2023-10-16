@@ -1207,6 +1207,12 @@ criteria = "safe-to-deploy"
 version = "0.2.1"
 notes = "Single unsafe usage that looks sound, no ambient capabilities"
 
+[[audits.embark-studios.audits.valuable]]
+who = "Johan Andersson <opensource@embark-studios.com>"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+notes = "No unsafe usage or ambient capabilities, sane build script"
+
 [[audits.embark-studios.audits.webpki-roots]]
 who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"

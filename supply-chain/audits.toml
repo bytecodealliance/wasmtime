@@ -2120,6 +2120,15 @@ This is a relatively minor set of releases with minor refactorings and bug
 fixes. Nothing fundamental was added in these changes.
 """
 
+[[audits.tracing-log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.3"
+notes = """
+This is a standard adapter between the `log` ecosystem and the `tracing`
+ecosystem. There's one `unsafe` block in this crate and it's well-scoped.
+"""
+
 [[audits.tracing-subscriber]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
