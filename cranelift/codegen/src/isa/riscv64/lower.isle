@@ -1483,7 +1483,7 @@
 ;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmin x y)))
   (let (;; Check if both inputs are not nan.
-        (is_ordered FCmp (emit_fcmp (FloatCC.Ordered) ty x y))
+        (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a nan if any of the inputs is a NaN.
         (nan FReg (rv_fadd ty x y))
         (min FReg (rv_fmin ty x y)))
@@ -1509,7 +1509,7 @@
 ;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmax x y)))
   (let (;; Check if both inputs are not nan.
-        (is_ordered FCmp (emit_fcmp (FloatCC.Ordered) ty x y))
+        (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a NaN if any of the inputs is a NaN.
         (nan FReg (rv_fadd ty x y))
         (max FReg (rv_fmax ty x y)))
@@ -1548,16 +1548,16 @@
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (select c x y)))
-  (gen_select_xreg (lower_int_compare c) x y))
+  (gen_select_xreg (is_nonzero_cmp c) x y))
 
 (rule 1 (lower (has_type $I128 (select c x y)))
-  (gen_select_regs (lower_int_compare c) x y))
+  (gen_select_regs (is_nonzero_cmp c) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register _) (select c x y)))
-  (gen_select_vreg (lower_int_compare c) x y))
+  (gen_select_vreg (is_nonzero_cmp c) x y))
 
 (rule 3 (lower (has_type (ty_scalar_float _) (select c x y)))
-  (gen_select_freg (lower_int_compare c) x y))
+  (gen_select_freg (is_nonzero_cmp c) x y))
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
@@ -1625,7 +1625,7 @@
     (gen_select_xreg (cmp_gt x y) x y)))
 
 (rule 1 (lower (has_type $I128 (smax x y)))
-  (gen_select_regs (cmp_nez (gen_icmp (IntCC.SignedGreaterThan) x y $I128)) x y))
+  (gen_select_regs (icmp_to_int_compare (IntCC.SignedGreaterThan) x y) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smax x y)))
   (rv_vmax_vv x y (unmasked) ty))
@@ -1644,7 +1644,7 @@
     (gen_select_xreg (cmp_lt x y) x y)))
 
 (rule 1 (lower (has_type $I128 (smin x y)))
-  (gen_select_regs (cmp_nez (gen_icmp (IntCC.SignedLessThan) x y $I128)) x y))
+  (gen_select_regs (icmp_to_int_compare (IntCC.SignedLessThan) x y) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smin x y)))
   (rv_vmin_vv x y (unmasked) ty))
@@ -1663,7 +1663,7 @@
     (gen_select_xreg (cmp_gtu x y) x y)))
 
 (rule 1 (lower (has_type $I128 (umax x y)))
-  (gen_select_regs (cmp_nez (gen_icmp (IntCC.UnsignedGreaterThan) x y $I128)) x y))
+  (gen_select_regs (icmp_to_int_compare (IntCC.UnsignedGreaterThan) x y) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umax x y)))
   (rv_vmaxu_vv x y (unmasked) ty))
@@ -1682,7 +1682,7 @@
     (gen_select_xreg (cmp_ltu x y) x y)))
 
 (rule 1 (lower (has_type $I128 (umin x y)))
-  (gen_select_regs (cmp_nez (gen_icmp (IntCC.UnsignedLessThan) x y $I128)) x y))
+  (gen_select_regs (icmp_to_int_compare (IntCC.UnsignedLessThan) x y) x y))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umin x y)))
   (rv_vminu_vv x y (unmasked) ty))
@@ -1827,35 +1827,154 @@
 
 ;;;;;  Rules for `icmp`;;;;;;;;;
 
-(decl gen_icmp (IntCC ValueRegs ValueRegs Type) XReg)
-(rule
-  (gen_icmp cc x y ty)
-  (let
-    ((result WritableXReg (temp_writable_xreg))
-      (_ Unit (emit (MInst.Icmp cc result x y ty))))
-    result))
+;; 8-64 bit comparisons. Mostly fall back onto `IntegerCompare` and then
+;; materializing that, but before that happens try to match some
+;; constant-related patterns
 
-(rule 0 (lower (icmp cc x @ (value_type (ty_int ty)) y))
-  (gen_icmp cc (zext x) (zext y) ty))
+(rule 0 (lower (icmp cc x @ (value_type (fits_in_64 ty)) y))
+  (lower_icmp cc x y))
 
-(rule 1 (lower (icmp cc x @ (value_type (ty_int ty)) y))
-  (if (signed_cond_code cc))
-  (gen_icmp cc (sext x) (sext y) ty))
+(decl lower_icmp (IntCC Value Value) XReg)
+(rule 0 (lower_icmp cc x y)
+  (lower_int_compare (icmp_to_int_compare cc x y)))
 
-(rule 2 (lower (icmp cc x @ (value_type $I128) y))
-  (gen_icmp cc x y $I128))
+;; a == $imm => seqz(xori(..))
+(rule 1 (lower_icmp (IntCC.Equal) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) y)
+  (rv_seqz (rv_xori (sext x) imm)))
+(rule 2 (lower_icmp (IntCC.Equal) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) x)
+  (rv_seqz (rv_xori (sext y) imm)))
 
-(rule 3 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
+;; a != $imm => snez(xori(..))
+(rule 1 (lower_icmp (IntCC.NotEqual) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) y)
+  (rv_snez (rv_xori (sext x) imm)))
+(rule 2 (lower_icmp (IntCC.NotEqual) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) x)
+  (rv_snez (rv_xori (sext y) imm)))
+
+;; a < $imm => slti(..)
+(rule 1 (lower_icmp (IntCC.SignedLessThan) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) y)
+  (rv_slti (sext x) imm))
+(rule 1 (lower_icmp (IntCC.SignedGreaterThan) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 imm))) x)
+  (rv_slti (sext y) imm))
+(rule 1 (lower_icmp (IntCC.UnsignedLessThan) x y)
+  (if-let (u64_from_iconst (u64_nonzero (imm12_from_u64 imm))) y)
+  (rv_sltiu (zext x) imm))
+(rule 1 (lower_icmp (IntCC.UnsignedGreaterThan) x y)
+  (if-let (u64_from_iconst (u64_nonzero (imm12_from_u64 imm))) x)
+  (rv_sltiu (zext y) imm))
+
+;; a >= $imm => !(a < $imm)
+(rule 2 (lower_icmp cc @ (IntCC.SignedGreaterThanOrEqual) x y)
+  (if-let (i64_from_iconst (i64_nonzero (imm12_from_i64 _))) y)
+  (rv_xori (lower_icmp (intcc_complement cc) x y) (imm12_const 1)))
+(rule 2 (lower_icmp cc @ (IntCC.UnsignedGreaterThanOrEqual) x y)
+  (if-let (u64_from_iconst (u64_nonzero (imm12_from_u64 _))) y)
+  (rv_xori (lower_icmp (intcc_complement cc) x y) (imm12_const 1)))
+
+;; Materializes an `IntegerCompare` bundle directly into an `XReg` with a 0
+;; or 1 value.
+(decl lower_int_compare (IntegerCompare) XReg)
+
+;; x == y => x ^ y == 0
+(rule 0 (lower_int_compare (int_compare_decompose (IntCC.Equal) x y))
+  (rv_seqz (rv_xor x y)))
+(rule 1 (lower_int_compare (int_compare_decompose (IntCC.Equal) x (zero_reg)))
+  (rv_seqz x))
+(rule 2 (lower_int_compare (int_compare_decompose (IntCC.Equal) (zero_reg) y))
+  (rv_seqz y))
+;; x != y => x ^ y != 0
+(rule 0 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) x y))
+  (rv_snez (rv_xor x y)))
+(rule 1 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) x (zero_reg)))
+  (rv_snez x))
+(rule 2 (lower_int_compare (int_compare_decompose (IntCC.NotEqual) (zero_reg) x))
+  (rv_snez x))
+;; x < y => x < y
+(rule (lower_int_compare (int_compare_decompose (IntCC.SignedLessThan) x y))
+  (rv_slt x y))
+(rule (lower_int_compare (int_compare_decompose (IntCC.UnsignedLessThan) x y))
+  (rv_sltu x y))
+;; x > y => y < x
+(rule (lower_int_compare (int_compare_decompose (IntCC.SignedGreaterThan) x y))
+  (rv_slt y x))
+(rule (lower_int_compare (int_compare_decompose (IntCC.UnsignedGreaterThan) x y))
+  (rv_sltu y x))
+;; x <= y => !(y < x)
+(rule (lower_int_compare (int_compare_decompose (IntCC.SignedLessThanOrEqual) x y))
+  (rv_xori (rv_slt y x) (imm12_const 1)))
+(rule (lower_int_compare (int_compare_decompose (IntCC.UnsignedLessThanOrEqual) x y))
+  (rv_xori (rv_sltu y x) (imm12_const 1)))
+;; x >= y => !(x < y)
+(rule (lower_int_compare (int_compare_decompose (IntCC.SignedGreaterThanOrEqual) x y))
+  (rv_xori (rv_slt x y) (imm12_const 1)))
+(rule (lower_int_compare (int_compare_decompose (IntCC.UnsignedGreaterThanOrEqual) x y))
+  (rv_xori (rv_sltu x y) (imm12_const 1)))
+
+;; 128-bit comparisons.
+;;
+;; Currently only `==`, `!=`, and `<` are implemented, and everything else
+;; delegates to one of those.
+
+(rule 20 (lower (icmp cc x @ (value_type $I128) y))
+  (lower_icmp_i128 cc x y))
+
+(decl lower_icmp_i128 (IntCC ValueRegs ValueRegs) XReg)
+(rule 0 (lower_icmp_i128 (IntCC.Equal) x y)
+  (let ((lo XReg (rv_xor (value_regs_get x 0) (value_regs_get y 0)))
+        (hi XReg (rv_xor (value_regs_get x 1) (value_regs_get y 1))))
+    (rv_seqz (rv_or lo hi))))
+(rule 0 (lower_icmp_i128 (IntCC.NotEqual) x y)
+  (let ((lo XReg (rv_xor (value_regs_get x 0) (value_regs_get y 0)))
+        (hi XReg (rv_xor (value_regs_get x 1) (value_regs_get y 1))))
+    (rv_snez (rv_or lo hi))))
+
+;; swap args for `>` to use `<` instead
+(rule 0 (lower_icmp_i128 cc @ (IntCC.SignedGreaterThan) x y)
+  (lower_icmp_i128 (intcc_swap_args cc) y x))
+(rule 0 (lower_icmp_i128 cc @ (IntCC.UnsignedGreaterThan) x y)
+  (lower_icmp_i128 (intcc_swap_args cc) y x))
+
+;; complement `=`-related conditions to get ones that don't use `=`.
+(rule 0 (lower_icmp_i128 cc @ (IntCC.SignedLessThanOrEqual) x y)
+  (rv_xori (lower_icmp_i128 (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (lower_icmp_i128 cc @ (IntCC.SignedGreaterThanOrEqual) x y)
+  (rv_xori (lower_icmp_i128 (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (lower_icmp_i128 cc @ (IntCC.UnsignedLessThanOrEqual) x y)
+  (rv_xori (lower_icmp_i128 (intcc_complement cc) x y) (imm12_const 1)))
+(rule 0 (lower_icmp_i128 cc @ (IntCC.UnsignedGreaterThanOrEqual) x y)
+  (rv_xori (lower_icmp_i128 (intcc_complement cc) x y) (imm12_const 1)))
+
+;; Compare both the bottom and upper halves of the 128-bit values. If
+;; the top half is equal use the bottom comparison, otherwise use the upper
+;; comparison. Note that the lower comparison is always unsigned since if it's
+;; used the top halves are all zeros and the semantic values are positive.
+(rule 1 (lower_icmp_i128 cc x y)
+  (if-let (IntCC.UnsignedLessThan) (intcc_unsigned cc))
+  (let ((x_lo Reg (value_regs_get x 0))
+        (x_hi Reg (value_regs_get x 1))
+        (y_lo Reg (value_regs_get y 0))
+        (y_hi Reg (value_regs_get y 1))
+        (top_cmp XReg (lower_int_compare (int_compare cc x_hi y_hi)))
+        (bottom_cmp XReg (rv_sltu x_lo y_lo)))
+    (gen_select_xreg (cmp_eqz (rv_xor x_hi y_hi)) bottom_cmp top_cmp)))
+
+;; vector icmp comparisons
+
+(rule 30 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
   (gen_expand_mask ty (gen_icmp_mask ty cc x y)))
-
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule 0 (lower (fcmp cc x @ (value_type (ty_scalar_float ty)) y))
-  (lower_fcmp (emit_fcmp cc ty x y)))
+  (lower_float_compare (fcmp_to_float_compare cc ty x y)))
 
-(decl lower_fcmp (FCmp) XReg)
-(rule (lower_fcmp (FCmp.One r)) r)
-(rule (lower_fcmp (FCmp.Zero r)) (rv_seqz r))
+(decl lower_float_compare (FloatCompare) XReg)
+(rule (lower_float_compare (FloatCompare.One r)) r)
+(rule (lower_float_compare (FloatCompare.Zero r)) (rv_seqz r))
 
 (rule 1 (lower (fcmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
   (gen_expand_mask ty (gen_fcmp_mask ty cc x y)))

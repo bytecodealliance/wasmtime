@@ -42,17 +42,18 @@
 ;; function u0:0:
 ;; block0:
 ;;   slli a3,a0,32
-;;   srli a4,a3,32
-;;   ld a3,8(a2)
-;;   uge a5,a4,a3##ty=i64
-;;   ld a3,0(a2)
-;;   add a3,a3,a4
-;;   li a4,0
-;;   sub a5,zero,a5
-;;   and a2,a4,a5
-;;   not a4,a5
-;;   and a5,a3,a4
-;;   or a2,a2,a5
+;;   srli a5,a3,32
+;;   ld a4,8(a2)
+;;   sltu a3,a5,a4
+;;   xori a0,a3,1
+;;   ld a4,0(a2)
+;;   add a4,a4,a5
+;;   li a5,0
+;;   sub a0,zero,a0
+;;   and a2,a5,a0
+;;   not a5,a0
+;;   and a0,a4,a5
+;;   or a2,a2,a0
 ;;   sb a1,0(a2)
 ;;   j label1
 ;; block1:
@@ -60,19 +61,20 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   slli a2,a0,32
-;;   srli a4,a2,32
-;;   ld a3,8(a1)
-;;   uge a5,a4,a3##ty=i64
-;;   ld a3,0(a1)
-;;   add a3,a3,a4
-;;   li a4,0
-;;   sub a5,zero,a5
-;;   and a1,a4,a5
-;;   not a4,a5
-;;   and a5,a3,a4
-;;   or a1,a1,a5
-;;   lbu a0,0(a1)
+;;   slli a3,a0,32
+;;   srli a5,a3,32
+;;   ld a4,8(a1)
+;;   sltu a3,a5,a4
+;;   xori a0,a3,1
+;;   ld a4,0(a1)
+;;   add a4,a4,a5
+;;   li a5,0
+;;   sub a0,zero,a0
+;;   and a2,a5,a0
+;;   not a5,a0
+;;   and a0,a4,a5
+;;   or a2,a2,a0
+;;   lbu a0,0(a2)
 ;;   j label1
 ;; block1:
 ;;   ret

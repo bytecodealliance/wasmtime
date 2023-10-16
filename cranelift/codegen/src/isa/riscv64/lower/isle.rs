@@ -181,14 +181,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             link_reg()
         }
     }
-    fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
-        assert!(ty.is_int(), "{:?}", ty);
-        if ty.bits() == 128 {
-            ValueRegs::two(self.zero_reg(), self.zero_reg())
-        } else {
-            ValueRegs::one(self.zero_reg())
-        }
-    }
 
     fn label_to_br_target(&mut self, label: MachLabel) -> CondBrTarget {
         CondBrTarget::Label(label)
@@ -292,8 +284,15 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         writable_zero_reg()
     }
     #[inline]
-    fn zero_reg(&mut self) -> Reg {
-        zero_reg()
+    fn zero_reg(&mut self) -> XReg {
+        XReg::new(zero_reg()).unwrap()
+    }
+    fn is_zero_reg(&mut self, reg: XReg) -> Option<()> {
+        if reg == self.zero_reg() {
+            Some(())
+        } else {
+            None
+        }
     }
     #[inline]
     fn imm_from_bits(&mut self, val: u64) -> Imm12 {
@@ -325,6 +324,9 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
         Imm12::maybe_from_i64((val + add) as i64).unwrap()
+    }
+    fn imm12_add(&mut self, val: Imm12, add: i32) -> Option<Imm12> {
+        Imm12::maybe_from_i64((i32::from(val.as_i16()) + add).into())
     }
 
     //

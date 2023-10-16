@@ -43,7 +43,7 @@
 ;;   srli a5,a3,32
 ;;   lui a3,65536
 ;;   addi a0,a3,-1
-;;   ugt a0,a5,a0##ty=i64
+;;   sltu a0,a0,a5
 ;;   ld a4,0(a2)
 ;;   add a4,a4,a5
 ;;   li a5,0
@@ -63,7 +63,7 @@
 ;;   srli a5,a3,32
 ;;   lui a3,65536
 ;;   addi a0,a3,-1
-;;   ugt a0,a5,a0##ty=i64
+;;   sltu a0,a0,a5
 ;;   ld a4,0(a1)
 ;;   add a4,a4,a5
 ;;   li a5,0
