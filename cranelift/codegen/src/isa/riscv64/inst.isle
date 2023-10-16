@@ -1645,6 +1645,16 @@
 (rule (rv_rorw rs1 rs2)
   (alu_rrr (AluOPRRR.Rorw) rs1 rs2))
 
+;; Helper for emitting the `rori` ("Rotate Right") instruction.
+(decl rv_rori (XReg Imm12) XReg)
+(rule (rv_rori rs1 rs2)
+  (alu_rr_imm12 (AluOPRRI.Rori) rs1 rs2))
+
+;; Helper for emitting the `roriw` ("Rotate Right Word") instruction.
+(decl rv_roriw (XReg Imm12) XReg)
+(rule (rv_roriw rs1 rs2)
+  (alu_rr_imm12 (AluOPRRI.Roriw) rs1 rs2))
+
 ;; Helper for emitting the `rev8` ("Byte Reverse") instruction.
 (decl rv_rev8 (XReg) XReg)
 (rule (rv_rev8 rs1)
@@ -2186,100 +2196,11 @@
     ((tmp XReg (rv_mul rs1 rs2)))
     (rv_srli tmp (imm12_const (ty_bits ty)))))
 
-
-(decl lower_rotl (Type XReg XReg) XReg)
-
-(rule 1
-  (lower_rotl $I64 rs amount)
-  (if-let $true (has_zbb))
-  (rv_rol rs amount))
-
-(rule
-  (lower_rotl $I64 rs amount)
-  (if-let $false (has_zbb))
-  (lower_rotl_shift $I64 rs amount))
-
-(rule 1
-  (lower_rotl $I32 rs amount)
-  (if-let $true (has_zbb))
-  (rv_rolw rs amount))
-
-(rule
-  (lower_rotl $I32 rs amount)
-  (if-let $false (has_zbb))
-  (lower_rotl_shift $I32 rs amount))
-
-(rule -1
-  (lower_rotl ty rs amount)
-  (lower_rotl_shift ty rs amount))
-
-;;; using shift to implement rotl.
-(decl lower_rotl_shift (Type XReg XReg) XReg)
-
-;;; for I8 and I16 ...
-(rule
-  (lower_rotl_shift ty rs amount)
-  (let
-    ((x ValueRegs (gen_shamt ty amount))
-      (shamt Reg (value_regs_get x 0))
-      (len_sub_shamt Reg (value_regs_get x 1))
-      ;;
-      (part1 Reg (rv_sll rs shamt))
-      ;;
-      (part2 Reg (rv_srl rs len_sub_shamt))
-      (part3 Reg (gen_select_xreg (cmp_eqz shamt) (zero_reg) part2)))
-    (rv_or part1 part3)))
-
-
 ;;;; construct shift amount.rotl on i128 will use shift to implement. So can call this function.
 ;;;; this will return shift amount and (ty_bits - "shift amount")
 ;;;; if ty_bits is greater than 64 like i128, then shmat will fallback to 64.because We are 64 bit platform.
 (decl gen_shamt (Type XReg) ValueRegs)
 (extern constructor gen_shamt gen_shamt)
-
-(decl lower_rotr (Type XReg XReg) XReg)
-
-(rule 1
-  (lower_rotr $I64 rs amount)
-  (if-let $true (has_zbb))
-  (rv_ror rs amount))
-(rule
-  (lower_rotr $I64 rs amount)
-  (if-let $false (has_zbb))
-  (lower_rotr_shift $I64 rs amount))
-
-(rule 1
-  (lower_rotr $I32 rs amount)
-  (if-let $true (has_zbb))
-  (rv_rorw rs amount))
-
-(rule
-  (lower_rotr $I32 rs amount)
-  (if-let $false (has_zbb))
-  (lower_rotr_shift $I32 rs amount))
-
-(rule -1
-  (lower_rotr ty rs amount)
-  (lower_rotr_shift ty rs amount))
-
-(decl lower_rotr_shift (Type XReg XReg) XReg)
-
-;;;
-(rule
-  (lower_rotr_shift ty rs amount)
-  (let
-    ((x ValueRegs (gen_shamt ty amount))
-      (shamt XReg (value_regs_get x 0))
-      (len_sub_shamt XReg (value_regs_get x 1))
-      ;;
-      (part1 XReg (rv_srl rs shamt))
-      ;;
-      (part2 XReg (rv_sll rs len_sub_shamt))
-      ;;
-      (part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) part2)))
-    (rv_or part1 part3)))
-
-
 
 ;; bseti: Set a single bit in a register, indexed by a constant.
 (decl gen_bseti (Reg u64) Reg)
@@ -2307,67 +2228,6 @@
       (sum WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.Popcnt sum step tmp rs $I64))))
     (writable_reg_to_reg sum)))
-
-
-(decl lower_i128_rotl (ValueRegs ValueRegs) ValueRegs)
-(rule
-  (lower_i128_rotl x y)
-  (let
-    ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-      (shamt XReg (value_regs_get tmp 0))
-      (len_sub_shamt XReg (value_regs_get tmp 1))
-      ;;
-      (low_part1 XReg (rv_sll (value_regs_get x 0) shamt))
-      (low_part2 XReg (rv_srl (value_regs_get x 1) len_sub_shamt))
-      ;;; if shamt == 0 low_part2 will overflow we should zero instead.
-      (low_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) low_part2))
-      (low XReg (rv_or low_part1 low_part3))
-      ;;
-      (high_part1 XReg (rv_sll (value_regs_get x 1) shamt))
-      (high_part2 XReg (rv_srl (value_regs_get x 0) len_sub_shamt))
-      (high_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) high_part2))
-      (high XReg (rv_or high_part1 high_part3))
-      ;;
-      (const64 XReg (imm $I64 64))
-      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-    ;; right now we only rotate less than 64 bits.
-    ;; if shamt is greater than or equal 64 , we should switch low and high.
-    (gen_select_regs
-      (cmp_geu shamt_128 const64)
-      (value_regs high low)
-      (value_regs low high)
-    )))
-
-
-(decl lower_i128_rotr (ValueRegs ValueRegs) ValueRegs)
-(rule
-  (lower_i128_rotr x y)
-  (let
-    ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-      (shamt XReg (value_regs_get tmp 0))
-      (len_sub_shamt XReg (value_regs_get tmp 1))
-      ;;
-      (low_part1 XReg (rv_srl (value_regs_get x 0) shamt))
-      (low_part2 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
-      ;;; if shamt == 0 low_part2 will overflow we should zero instead.
-      (low_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) low_part2))
-      (low XReg (rv_or low_part1 low_part3))
-      ;;
-      (high_part1 XReg (rv_srl (value_regs_get x 1) shamt))
-      (high_part2 XReg (rv_sll (value_regs_get x 0) len_sub_shamt))
-      (high_part3 XReg (gen_select_xreg (cmp_eqz shamt) (zero_reg) high_part2))
-      (high XReg (rv_or high_part1 high_part3))
-
-      ;;
-      (const64 XReg (imm $I64 64))
-      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-    ;; right now we only rotate less than 64 bits.
-    ;; if shamt is greater than or equal 64 , we should switch low and high.
-    (gen_select_regs
-      (cmp_geu shamt_128 const64)
-      (value_regs high low)
-      (value_regs low high)
-    )))
 
 ;; Generates a AMode that points to a register plus an offset.
 (decl gen_reg_offset_amode (Reg i64 Type) AMode)
