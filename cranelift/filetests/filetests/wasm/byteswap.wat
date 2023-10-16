@@ -1,6 +1,6 @@
-;;! target = "riscv64"
-;;! compile = true
-;;! settings = ["has_zbb", "opt_level=speed"]
+;;! target = "x86_64"
+;;! optimize = true
+;;! settings = ["opt_level=speed"]
 
 (module
   (func (export "bswap32") (param i32) (result i32)
@@ -72,17 +72,22 @@
   )
 )
 
-;; function u0:0:
-;; block0:
-;;   j label1
-;; block1:
-;;   rev8 a4,a0
-;;   srli a0,a4,32
-;;   ret
+;; function u0:0(i32, i64 vmctx) -> i32 fast {
+;;                                 block0(v0: i32, v1: i64):
+;; @0057                               jump block1
 ;;
-;; function u0:1:
-;; block0:
-;;   j label1
-;; block1:
-;;   rev8 a0,a0
-;;   ret
+;;                                 block1:
+;;                                     v18 = bswap.i32 v0
+;;                                     v19 -> v18
+;; @0057                               return v18
+;; }
+;;
+;; function u0:1(i64, i64 vmctx) -> i64 fast {
+;;                                 block0(v0: i64, v1: i64):
+;; @00ad                               jump block1
+;;
+;;                                 block1:
+;;                                     v38 = bswap.i64 v0
+;;                                     v39 -> v38
+;; @00ad                               return v38
+;; }
