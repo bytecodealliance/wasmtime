@@ -76,7 +76,7 @@ pub trait ProfilingAgent: Send + Sync + 'static {
             }
             let address = sym.address();
             let size = sym.size();
-            if address == 0 || size == 0 {
+            if size == 0 {
                 continue;
             }
             if let Ok(name) = sym.name() {
