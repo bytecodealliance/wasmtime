@@ -32,7 +32,7 @@ pub fn get_wasmtime_command() -> Result<Command> {
     // If we're running tests with a "runner" then we might be doing something
     // like cross-emulation, so spin up the emulator rather than the tests
     // itself, which may not be natively executable.
-    let mut cmd = if let Some((_, runner)) = runner {
+    let cmd = if let Some((_, runner)) = runner {
         let mut parts = runner.split_whitespace();
         let mut cmd = Command::new(parts.next().unwrap());
         for arg in parts {
@@ -43,10 +43,6 @@ pub fn get_wasmtime_command() -> Result<Command> {
     } else {
         Command::new(&me)
     };
-
-    if let Ok(val) = std::env::var("WASMTIME_LOG") {
-        cmd.env("WASMTIME_LOG", val);
-    }
 
     Ok(cmd)
 }

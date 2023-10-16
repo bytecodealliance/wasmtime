@@ -5,7 +5,9 @@
 
 use anyhow::Result;
 use clap::Parser;
+use std::io::IsTerminal;
 use std::time::Duration;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 use wasmtime::Config;
 
 pub mod opt;
@@ -328,7 +330,13 @@ impl CommonOptions {
             let prefix = "wasmtime.dbg.";
             init_file_per_thread_logger(prefix);
         } else {
-            pretty_env_logger::init();
+            let mut b = FmtSubscriber::builder()
+                .with_writer(std::io::stderr)
+                .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"));
+            if std::io::stderr().is_terminal() {
+                b = b.with_ansi(true);
+            }
+            b.init();
         }
     }
 
