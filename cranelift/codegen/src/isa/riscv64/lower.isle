@@ -654,8 +654,13 @@
   (rv_rem x y))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (ty_int ty) (band x y)))
-  (gen_and ty x y))
+(rule -1 (lower (has_type (fits_in_64 ty) (band x y)))
+  (rv_and x y))
+
+(rule 0 (lower (has_type $I128 (band x y)))
+  (value_regs
+    (rv_and (value_regs_get x 0) (value_regs_get y 0))
+    (rv_and (value_regs_get x 1) (value_regs_get y 1))))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (band x (imm12_from_value y))))
@@ -2108,17 +2113,24 @@
 ;;
 ;; We don't have cmov's in RISC-V either, but we can emulate those using bitwise
 ;; operations, which is what we do below.
-(rule (lower (has_type ty (select_spectre_guard cmp @ (value_type cmp_ty) x @ (value_type arg_ty) y)))
-  (let (;; Build a mask that is 0 or -1 depending on the input comparision value.
-        ;; `lower_bmask` handles normalizing the input.
-        (mask ValueRegs (lower_bmask cmp arg_ty))
-        ;; Using the mask above we can select either `x` or `y` by
-        ;; performing a bitwise `and` on both sides and then merging them
-        ;; together. We know that only the bits of one of the sides will be selected.
-        ;; TODO: We can use `andn` here if we have `Zbb`
-        (lhs ValueRegs (gen_and arg_ty x mask))
-        (rhs ValueRegs (gen_and arg_ty y (gen_bnot arg_ty mask))))
-    (gen_or arg_ty lhs rhs)))
+
+;; Base case: use `gen_bmask` to generate a 0 mask or -1 mask from the value of
+;; `cmp`. This is then used with some bit twiddling to produce the final result.
+(rule 0 (lower (has_type (fits_in_64 _) (select_spectre_guard cmp x y)))
+  (let ((mask XReg (gen_bmask cmp)))
+    (rv_or (rv_and mask x) (rv_andn y mask))))
+(rule 1 (lower (has_type $I128 (select_spectre_guard cmp x y)))
+  (let ((mask XReg (gen_bmask cmp)))
+    (value_regs
+      (rv_or (rv_and mask (value_regs_get x 0)) (rv_andn (value_regs_get y 0) mask))
+      (rv_or (rv_and mask (value_regs_get x 1)) (rv_andn (value_regs_get y 1) mask)))))
+
+;; Special case when an argument is the constant zero as some ands and ors
+;; can be folded away.
+(rule 2 (lower (has_type (fits_in_64 _) (select_spectre_guard cmp (i64_from_iconst 0) y)))
+  (rv_andn y (gen_bmask cmp)))
+(rule 3 (lower (has_type (fits_in_64 _) (select_spectre_guard cmp x (i64_from_iconst 0))))
+  (rv_and x (gen_bmask cmp)))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule

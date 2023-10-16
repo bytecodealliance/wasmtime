@@ -41,34 +41,28 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ld a3,8(a2)
-;;   sltu a3,a3,a0
-;;   ld a2,0(a2)
-;;   add a2,a2,a0
-;;   li a4,0
-;;   sub a3,zero,a3
-;;   and a5,a4,a3
-;;   not a3,a3
-;;   and a3,a2,a3
-;;   or a5,a5,a3
-;;   sw a1,0(a5)
+;;   ld a4,8(a2)
+;;   sltu a4,a4,a0
+;;   ld a5,0(a2)
+;;   add a5,a5,a0
+;;   sub a2,zero,a4
+;;   not a4,a2
+;;   and a0,a5,a4
+;;   sw a1,0(a0)
 ;;   j label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ld a2,8(a1)
-;;   sltu a2,a2,a0
-;;   ld a1,0(a1)
-;;   add a1,a1,a0
-;;   li a3,0
-;;   sub a4,zero,a2
-;;   and a5,a3,a4
-;;   not a2,a4
-;;   and a3,a1,a2
-;;   or a5,a5,a3
-;;   lw a0,0(a5)
+;;   ld a4,8(a1)
+;;   sltu a4,a4,a0
+;;   ld a5,0(a1)
+;;   add a5,a5,a0
+;;   sub a2,zero,a4
+;;   not a4,a2
+;;   and a0,a5,a4
+;;   lw a0,0(a0)
 ;;   j label1
 ;; block1:
 ;;   ret

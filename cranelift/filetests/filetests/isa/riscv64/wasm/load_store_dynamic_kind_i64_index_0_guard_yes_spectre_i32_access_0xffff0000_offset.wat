@@ -42,23 +42,20 @@
 ;; function u0:0:
 ;; block0:
 ;;   lui a3,262140
-;;   addi a3,a3,1
-;;   slli a4,a3,2
-;;   add a3,a0,a4
-;;   trap_if heap_oob##(a3 ult a0)
-;;   ld a4,8(a2)
-;;   sltu a3,a4,a3
-;;   ld a4,0(a2)
-;;   add a4,a4,a0
-;;   lui a2,65535
-;;   slli a5,a2,4
-;;   add a4,a4,a5
-;;   li a5,0
-;;   sub a0,zero,a3
-;;   and a2,a5,a0
-;;   not a3,a0
-;;   and a5,a4,a3
-;;   or a2,a2,a5
+;;   addi a5,a3,1
+;;   slli a3,a5,2
+;;   add a5,a0,a3
+;;   trap_if heap_oob##(a5 ult a0)
+;;   ld a3,8(a2)
+;;   sltu a3,a3,a5
+;;   ld a2,0(a2)
+;;   add a0,a2,a0
+;;   lui a5,65535
+;;   slli a2,a5,4
+;;   add a0,a0,a2
+;;   sub a4,zero,a3
+;;   not a2,a4
+;;   and a2,a0,a2
 ;;   sw a1,0(a2)
 ;;   j label1
 ;; block1:
@@ -66,25 +63,22 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   lui a2,262140
-;;   addi a2,a2,1
-;;   slli a4,a2,2
-;;   add a2,a0,a4
-;;   trap_if heap_oob##(a2 ult a0)
-;;   ld a3,8(a1)
-;;   sltu a3,a3,a2
-;;   ld a4,0(a1)
-;;   add a4,a4,a0
-;;   lui a2,65535
-;;   slli a5,a2,4
-;;   add a4,a4,a5
-;;   li a5,0
-;;   sub a0,zero,a3
-;;   and a1,a5,a0
-;;   not a3,a0
-;;   and a5,a4,a3
-;;   or a1,a1,a5
-;;   lw a0,0(a1)
+;;   lui a3,262140
+;;   addi a5,a3,1
+;;   slli a2,a5,2
+;;   add a5,a0,a2
+;;   trap_if heap_oob##(a5 ult a0)
+;;   ld a2,8(a1)
+;;   sltu a2,a2,a5
+;;   ld a1,0(a1)
+;;   add a0,a1,a0
+;;   lui a5,65535
+;;   slli a1,a5,4
+;;   add a0,a0,a1
+;;   sub a4,zero,a2
+;;   not a1,a4
+;;   and a2,a0,a1
+;;   lw a0,0(a2)
 ;;   j label1
 ;; block1:
 ;;   ret
