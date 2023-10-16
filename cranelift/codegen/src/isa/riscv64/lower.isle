@@ -1218,6 +1218,7 @@
 (rule 0 (lower (has_type (fits_in_64 ty) (rotl rs amount)))
   (let
     ((rs XReg (zext rs))
+      (amount XReg (value_regs_get amount 0))
       (x ValueRegs (gen_shamt ty amount))
       (shamt XReg (value_regs_get x 0))
       (len_sub_shamt Reg (value_regs_get x 1))
@@ -1230,7 +1231,7 @@
 
 (rule 1 (lower (has_type $I32 (rotl rs amount)))
   (if-let $true (has_zbb))
-  (rv_rolw rs amount))
+  (rv_rolw rs (value_regs_get amount 0)))
 
 (rule 2 (lower (has_type $I32 (rotl rs (u64_from_iconst n))))
   (if-let $true (has_zbb))
@@ -1239,7 +1240,7 @@
 
 (rule 1 (lower (has_type $I64 (rotl rs amount)))
   (if-let $true (has_zbb))
-  (rv_rol rs amount))
+  (rv_rol rs (value_regs_get amount 0)))
 
 (rule 2 (lower (has_type $I64 (rotl rs (u64_from_iconst n))))
   (if-let $true (has_zbb))
@@ -1278,6 +1279,7 @@
 (rule (lower (has_type (fits_in_64 ty) (rotr rs amount)))
   (let
     ((rs XReg (zext rs))
+      (amount XReg (value_regs_get amount 0))
       (x ValueRegs (gen_shamt ty amount))
       (shamt XReg (value_regs_get x 0))
       (len_sub_shamt XReg (value_regs_get x 1))
@@ -1291,7 +1293,7 @@
 
 (rule 1 (lower (has_type $I32 (rotr rs amount)))
   (if-let $true (has_zbb))
-  (rv_rorw rs amount))
+  (rv_rorw rs (value_regs_get amount 0)))
 
 (rule 2 (lower (has_type $I32 (rotr rs (imm12_from_value n))))
   (if-let $true (has_zbb))
@@ -1299,7 +1301,7 @@
 
 (rule 1 (lower (has_type $I64 (rotr rs amount)))
   (if-let $true (has_zbb))
-  (rv_ror rs amount))
+  (rv_ror rs (value_regs_get amount 0)))
 
 (rule 2 (lower (has_type $I64 (rotr rs (imm12_from_value n))))
   (if-let $true (has_zbb))
