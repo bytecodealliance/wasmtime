@@ -96,8 +96,22 @@ interface types {
       path-with-query: option<string>,
       scheme: option<scheme>,
       authority: option<string>,
-      headers: borrow<headers>
+      headers: headers
     );
+
+    method: func() -> method;
+    set-method: func(method: method);
+
+    path-with-query: func() -> option<string>;
+    set-path-with-query: func(path-with-query: option<string>);
+
+    scheme: func() -> option<scheme>;
+    set-scheme: func(scheme: option<scheme>);
+
+    authority: func() -> option<string>;
+    set-authority: func(authority: option<string>);
+
+    headers: func() -> /* child */ headers;
 
     // Will return the outgoing-body child at most once. If called more than
     // once, subsequent calls will return error.
@@ -175,6 +189,11 @@ interface types {
 
   resource outgoing-response {
     constructor(status-code: status-code, headers: borrow<headers>);
+
+    status-code: func() -> status-code;
+    set-status-code: func(status-code: status-code);
+
+    headers: func() -> /* child */ headers;
 
     /// Will give the child outgoing-response at most once. subsequent calls will
     /// return an error.
