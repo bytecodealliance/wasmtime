@@ -188,8 +188,11 @@ interface types {
 
     /// Finalize an outgoing body, optionally providing trailers. This must be
     /// called to signal that the response is complete. If the `outgoing-body` is
-    /// dropped without calling `outgoing-body-finalize`, the implementation
+    /// dropped without calling `outgoing-body-finish`, the implementation
     /// should treat the body as corrupted.
+    ///
+    /// Note that it's valid to call `finish` while one or more forwarding
+    /// operations on the body's output stream are ongoing or pending.
     finish: static func(this: outgoing-body, trailers: option<trailers>);
   }
 
@@ -198,7 +201,7 @@ interface types {
   /// `future<result<response, error>>` in advance of Preview3. Given a
   /// `future-incoming-response`, the client can call the non-blocking `get`
   /// method to get the result if it is available. If the result is not available,
-  /// the client can call `listen` to get a `pollable` that can be passed to
+  /// the client can call `subscribe` to get a `pollable` that can be passed to
   /// `wasi:io/poll.poll-list`.
   resource future-incoming-response {
     /// option indicates readiness.

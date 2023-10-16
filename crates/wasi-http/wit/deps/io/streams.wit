@@ -275,5 +275,50 @@ interface streams {
             /// The number of bytes to splice
             len: u64,
         ) -> result<u64, stream-error>;
+
+        /// Forward the entire contents of an `input-stream` to an `output-stream`
+        /// without blocking.
+        ///
+        /// Returns immediately, with the forwarding operation happening concurrently,
+        /// and only after any previously queued forwarding operations have completed.
+        /// Can be called multiple times, causing the input streams to be queued up
+        /// in order.
+        ///
+        /// `forward` takes ownership of `src`, ensuring that the forwarding operation
+        /// is unobservable by and cannot be influenced by the calling component.
+        ///
+        /// If forwarding any of the queued-up streams results in an error, the
+        /// `future-forward-result` will be resolved to a `result` containing that
+        /// error as well as a list containing the remaining, non-forwarded streams.
+        forward: func(
+            /// The stream to forward.
+            src: input-stream,
+        ) -> result<future-forward-result>;
+    }
+
+    /// The following block defines a special resource type used by the
+    /// `wasi:io/output-stream` interface to emulate
+    /// `future<result<response, error>>` in advance of Preview3. Given a
+    /// `future-forward-result`, the client can call the non-blocking `get`
+    /// method to get the result if it is available. If the result is not available,
+    /// the client can call `subscribe` to get a `pollable` that can be passed to
+    /// `wasi:io/poll.poll-list`.
+    resource future-forward-result {
+        /// Returns the status of the forwarding operation.
+        ///
+        /// The structure of the return value works as follows:
+        /// - The option indicates readiness.
+        /// - The outer result indicates you are allowed to get the inner result at
+        ///   most once. subsequent calls after ready will return an error here.
+        /// - The inner result indicates whether the forwarding operation succeeded
+        ///   and returns the number of bytes written if so.
+        /// - The tuple in the inner result's error case contains the error that
+        ///   occurred, as well as a list of any remaining streams that were not
+        ///   yet completely forwarded.
+        ///   The first stream in this list might have been partially forwarded.
+        get: func() -> option<result<result<u64, tuple<stream-error, list<input-stream>>>>>;
+
+        /// Returns a pollable that resolves once the forwarding operation completes.
+        subscribe: func() -> /* child */ pollable;
     }
 }
