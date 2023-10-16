@@ -230,14 +230,6 @@ impl<'a> FactContext<'a> {
             // Reflexivity.
             (l, r) if l == r => true,
 
-            // Any value on the LHS subsumes a minimal (always-true)
-            // fact about the max value of a given bitwidth on the
-            // RHS: e.g., no matter the value, the bottom 8 bits will
-            // always be <= 255.
-            (_, Fact::ValueMax { bit_width, max }) if *max == max_value_for_width(*bit_width) => {
-                true
-            }
-
             (
                 Fact::ValueMax {
                     bit_width: bw_lhs,
@@ -487,8 +479,7 @@ impl<'a> FactContext<'a> {
     pub fn load<'b>(&'b self, fact: &Fact, access_ty: ir::Type) -> PccResult<Option<&'b Fact>> {
         Ok(self
             .struct_field(fact, access_ty)?
-            .and_then(|field| field.fact())
-            .or_else(|| Fact::infer_from_type(access_ty)))
+            .and_then(|field| field.fact()))
     }
 
     /// Check a store.

@@ -3,6 +3,7 @@
 use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
+use crate::ir::Type;
 use crate::isa::aarch64::inst::args::{PairAMode, ShiftOp};
 use crate::isa::aarch64::inst::ALUOp;
 use crate::isa::aarch64::inst::Inst;
@@ -11,8 +12,11 @@ use crate::machinst::Reg;
 use crate::machinst::VCode;
 use crate::trace;
 
-fn get_fact(vcode: &VCode<Inst>, reg: Reg) -> PccResult<&Fact> {
-    vcode.vreg_fact(reg.into()).ok_or(PccError::MissingFact)
+fn get_fact_or_default(vcode: &VCode<Inst>, reg: Reg) -> PccResult<&Fact> {
+    vcode
+        .vreg_fact(reg.into())
+        .or_else(|| Fact::infer_from_type(vcode.vreg_type(reg.into())))
+        .ok_or(PccError::MissingFact)
 }
 
 fn has_fact(vcode: &VCode<Inst>, reg: Reg) -> bool {
@@ -130,21 +134,19 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             rd,
             rn,
             rm,
-        } if has_fact(vcode, *rn) && has_fact(vcode, *rm) => {
-            check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact(vcode, *rn)?;
-                let rm = get_fact(vcode, *rm)?;
-                fail_if_missing(ctx.add(rn, rm, size.bits().into()))
-            })
-        }
+        } => check_output(&ctx, vcode, rd.to_reg(), || {
+            let rn = get_fact_or_default(vcode, *rn)?;
+            let rm = get_fact_or_default(vcode, *rm)?;
+            fail_if_missing(ctx.add(rn, rm, size.bits().into()))
+        }),
         Inst::AluRRImm12 {
             alu_op: ALUOp::Add,
             size,
             rd,
             rn,
             imm12,
-        } if has_fact(vcode, *rn) => check_output(&ctx, vcode, rd.to_reg(), || {
-            let rn = get_fact(vcode, *rn)?;
+        } => check_output(&ctx, vcode, rd.to_reg(), || {
+            let rn = get_fact_or_default(vcode, *rn)?;
             let imm_fact = Fact::ValueMax {
                 bit_width: size.bits().into(),
                 max: imm12.value(),
@@ -160,8 +162,8 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             shiftop,
         } if shiftop.op() == ShiftOp::LSL && has_fact(vcode, *rn) && has_fact(vcode, *rm) => {
             check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact(vcode, *rn)?;
-                let rm = get_fact(vcode, *rm)?;
+                let rn = get_fact_or_default(vcode, *rn)?;
+                let rm = get_fact_or_default(vcode, *rm)?;
                 let rm_shifted = fail_if_missing(ctx.shl(
                     &rm,
                     size.bits().into(),
@@ -179,8 +181,8 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             extendop,
         } if has_fact(vcode, *rn) && has_fact(vcode, *rm) => {
             check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact(vcode, *rn)?;
-                let rm = get_fact(vcode, *rm)?;
+                let rn = get_fact_or_default(vcode, *rn)?;
+                let rm = get_fact_or_default(vcode, *rm)?;
                 let rm_extended = fail_if_missing(extend_fact(&ctx, rm, *extendop))?;
                 fail_if_missing(ctx.add(&rn, &rm_extended, size.bits().into()))
             })
@@ -193,7 +195,7 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             immshift,
         } if has_fact(vcode, *rn) && has_fact(vcode, *rn) => {
             check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact(vcode, *rn)?;
+                let rn = get_fact_or_default(vcode, *rn)?;
                 fail_if_missing(ctx.shl(&rn, size.bits().into(), immshift.value().into()))
             })
         }
@@ -204,7 +206,7 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             from_bits,
             to_bits,
         } if has_fact(vcode, *rn) => check_output(&ctx, vcode, rd.to_reg(), || {
-            let rn = get_fact(vcode, *rn)?;
+            let rn = get_fact_or_default(vcode, *rn)?;
             fail_if_missing(ctx.uextend(&rn, (*from_bits).into(), (*to_bits).into()))
         }),
         Inst::AluRRR { size, rd, .. }
@@ -249,7 +251,7 @@ fn check_load(
     vcode: &VCode<Inst>,
     ty: Type,
 ) -> PccResult<()> {
-    let result_fact = rd.map(|rd| get_fact(vcode, rd)).transpose()?;
+    let result_fact = rd.and_then(|rd| vcode.vreg_fact(rd.into()));
     check_addr(
         ctx,
         flags,
@@ -268,7 +270,7 @@ fn check_store(
     vcode: &VCode<Inst>,
     ty: Type,
 ) -> PccResult<()> {
-    let stored_fact = rd.map(|rd| get_fact(vcode, rd)).transpose()?;
+    let stored_fact = rd.and_then(|rd| vcode.vreg_fact(rd.into()));
     check_addr(
         ctx,
         flags,
@@ -312,14 +314,14 @@ fn check_addr<'a>(
 
     match addr {
         &AMode::RegReg { rn, rm } => {
-            let rn = get_fact(vcode, rn)?;
-            let rm = get_fact(vcode, rm)?;
+            let rn = get_fact_or_default(vcode, rn)?;
+            let rm = get_fact_or_default(vcode, rm)?;
             let sum = fail_if_missing(ctx.add(&rn, &rm, 64))?;
             check(&sum, ty)
         }
         &AMode::RegScaled { rn, rm, ty } => {
-            let rn = get_fact(vcode, rn)?;
-            let rm = get_fact(vcode, rm)?;
+            let rn = get_fact_or_default(vcode, rn)?;
+            let rm = get_fact_or_default(vcode, rm)?;
             let rm_scaled = fail_if_missing(ctx.scale(&rm, 64, ty.bytes()))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_scaled, 64))?;
             check(&sum, ty)
@@ -330,16 +332,16 @@ fn check_addr<'a>(
             ty,
             extendop,
         } => {
-            let rn = get_fact(vcode, rn)?;
-            let rm = get_fact(vcode, rm)?;
+            let rn = get_fact_or_default(vcode, rn)?;
+            let rm = get_fact_or_default(vcode, rm)?;
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
             let rm_scaled = fail_if_missing(ctx.scale(&rm_extended, 64, ty.bytes()))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_scaled, 64))?;
             check(&sum, ty)
         }
         &AMode::RegExtended { rn, rm, extendop } => {
-            let rn = get_fact(vcode, rn)?;
-            let rm = get_fact(vcode, rm)?;
+            let rn = get_fact_or_default(vcode, rn)?;
+            let rm = get_fact_or_default(vcode, rm)?;
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_extended, 64))?;
             trace!("rn = {rn:?} rm = {rm:?} rm_extended = {rm_extended:?} sum = {sum:?}");
@@ -348,12 +350,12 @@ fn check_addr<'a>(
             Ok(())
         }
         &AMode::Unscaled { rn, simm9 } => {
-            let rn = get_fact(vcode, rn)?;
+            let rn = get_fact_or_default(vcode, rn)?;
             let sum = fail_if_missing(ctx.offset(&rn, 64, simm9.value.into()))?;
             check(&sum, ty)
         }
         &AMode::UnsignedOffset { rn, uimm12 } => {
-            let rn = get_fact(vcode, rn)?;
+            let rn = get_fact_or_default(vcode, rn)?;
             // Safety: this will not overflow: `size` should be at
             // most 32 or 64 for large vector ops, and the `uimm12`'s
             // value is at most 4095.
@@ -371,7 +373,7 @@ fn check_addr<'a>(
             Ok(())
         }
         &AMode::RegOffset { rn, off, .. } => {
-            let rn = get_fact(vcode, rn)?;
+            let rn = get_fact_or_default(vcode, rn)?;
             let sum = fail_if_missing(ctx.offset(&rn, 64, off))?;
             check(&sum, ty)
         }
@@ -417,7 +419,7 @@ fn check_load_addr(
     if !flags.checked() {
         return Ok(());
     }
-    let fact = get_fact(vcode, reg)?;
+    let fact = get_fact_or_default(vcode, reg)?;
     let _output_fact = ctx.load(fact, ty)?;
     Ok(())
 }
@@ -432,7 +434,7 @@ fn check_store_addr(
     if !flags.checked() {
         return Ok(());
     }
-    let fact = get_fact(vcode, reg)?;
+    let fact = get_fact_or_default(vcode, reg)?;
     let _output_fact = ctx.store(fact, ty, None)?;
     Ok(())
 }

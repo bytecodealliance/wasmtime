@@ -160,12 +160,9 @@ pub struct MemoryTypeField {
 }
 
 impl MemoryTypeField {
-    /// Get the fact, if any, on a field. Fills in a default inferred
-    /// fact based on the type if no explicit fact is present.
+    /// Get the fact, if any, on a field.
     pub fn fact(&self) -> Option<&Fact> {
-        self.fact
-            .as_ref()
-            .or_else(|| Fact::infer_from_type(self.ty))
+        self.fact.as_ref()
     }
 }
 
