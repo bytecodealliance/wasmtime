@@ -129,20 +129,20 @@ impl<T: WasiView> streams::HostOutputStream for T {
         len: u64,
     ) -> StreamResult<u64> {
         let len = len.try_into().unwrap_or(usize::MAX);
-        let output = self.table_mut().get_mut(&dest)?;
-        let permit = output.check_write()?;
-        let _ = output;
+
+        let permit = {
+            let output = self.table_mut().get_mut(&dest)?;
+            output.check_write()?
+        };
         let len = len.min(permit);
         if len == 0 {
             return Ok(0);
         }
 
-        let input = self.table_mut().get_mut(&src)?;
-        let contents = match input {
+        let contents = match self.table_mut().get_mut(&src)? {
             InputStream::Host(h) => h.read(len)?,
             InputStream::File(f) => f.read(len).await?,
         };
-        let _ = input;
 
         let len = contents.len();
         if len == 0 {
@@ -162,13 +162,9 @@ impl<T: WasiView> streams::HostOutputStream for T {
     ) -> StreamResult<u64> {
         use crate::preview2::Subscribe;
 
-        let output = self.table_mut().get_mut(&dest)?;
-        output.ready().await;
-        let _ = output;
+        self.table_mut().get_mut(&dest)?.ready().await;
 
-        let input = self.table_mut().get_mut(&src)?;
-        input.ready().await;
-        let _ = input;
+        self.table_mut().get_mut(&src)?.ready().await;
 
         self.splice(dest, src, len).await
     }
