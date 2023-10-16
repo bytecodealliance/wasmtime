@@ -143,6 +143,14 @@ fn manual_fuel() {
     assert_eq!(store.consume_fuel(1).unwrap(), 0);
     assert_eq!(store.consume_fuel(0).unwrap(), 0);
     assert_eq!(store.fuel_remaining(), Some(0));
+    store.add_fuel(5_000).unwrap();
+    assert_eq!(store.fuel_consumed(), Some(10_000));
+    assert_eq!(store.consume_fuel(2_500).unwrap(), 2_500);
+    assert_eq!(store.fuel_consumed(), Some(12_500));
+    store.reset_fuel(5_000).unwrap();
+    assert_eq!(store.fuel_consumed(), Some(0));
+    assert_eq!(store.consume_fuel(2_500).unwrap(), 2_500);
+    assert_eq!(store.fuel_consumed(), Some(2_500));
 }
 
 #[test]
@@ -168,7 +176,9 @@ fn host_function_consumes_all() {
     store.add_fuel(FUEL).unwrap();
     let func = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| {
         let consumed = caller.fuel_consumed().unwrap();
-        assert_eq!(caller.consume_fuel((FUEL - consumed) - 1).unwrap(), 1);
+        let remaining = caller.fuel_remaining().unwrap();
+        assert_eq!(remaining, FUEL - consumed);
+        assert_eq!(caller.consume_fuel(remaining - 1).unwrap(), 1);
     });
 
     let instance = Instance::new(&mut store, &module, &[func.into()]).unwrap();

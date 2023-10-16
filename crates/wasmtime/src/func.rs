@@ -1902,6 +1902,13 @@ impl<T> Caller<'_, T> {
         self.store.fuel_consumed()
     }
 
+    /// Returns the remaining fuel in the store.
+    ///
+    /// For more information see [`Store::fuel_remaining`](crate::Store::fuel_remaining)
+    pub fn fuel_remaining(&self) -> Option<u64> {
+        self.store.fuel_remaining()
+    }
+
     /// Inject more fuel into this store to be consumed when executing wasm code.
     ///
     /// For more information see [`Store::add_fuel`](crate::Store::add_fuel)
