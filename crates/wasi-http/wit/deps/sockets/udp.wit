@@ -4,7 +4,7 @@ interface udp {
     use network.{network, error-code, ip-socket-address, ip-address-family};
 
     /// A received datagram.
-    record inbound-datagram {
+    record incoming-datagram {
         /// The payload.
         /// 
         /// Theoretical max size: ~64 KiB. In practice, typically less than 1500 bytes.
@@ -19,7 +19,7 @@ interface udp {
     }
 
     /// A datagram to be sent out.
-    record outbound-datagram {
+    record outgoing-datagram {
         /// The payload.
         /// 
         /// Theoretical max size: ~64 KiB. In practice, typically less than 1500 bytes.
@@ -65,7 +65,7 @@ interface udp {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=bind&sektion=2&format=html>
         start-bind: func(network: borrow<network>, local-address: ip-socket-address) -> result<_, error-code>;
-        finish-bind: func() -> result<tuple<inbound-datagram-stream, outbound-datagram-stream>, error-code>;
+        finish-bind: func() -> result<tuple<incoming-datagram-stream, outgoing-datagram-stream>, error-code>;
 
         /// Set the destination address.
         ///
@@ -172,7 +172,7 @@ interface udp {
         subscribe: func() -> pollable;
     }
 
-    resource inbound-datagram-stream {
+    resource incoming-datagram-stream {
         /// Receive messages on the socket.
         ///
         /// This function attempts to receive up to `max-results` datagrams on the socket without blocking.
@@ -192,7 +192,7 @@ interface udp {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-recvfrom>
         /// - <https://learn.microsoft.com/en-us/previous-versions/windows/desktop/legacy/ms741687(v=vs.85)>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=recv&sektion=2>
-        receive: func(max-results: u64) -> result<list<inbound-datagram>, error-code>;
+        receive: func(max-results: u64) -> result<list<incoming-datagram>, error-code>;
 
         /// Create a `pollable` which will resolve once the stream is ready to receive again.
         ///
@@ -201,7 +201,7 @@ interface udp {
         subscribe: func() -> pollable;
     }
 
-    resource outbound-datagram-stream {
+    resource outgoing-datagram-stream {
         /// Send messages on the socket.
         ///
         /// This function attempts to send all provided `datagrams` on the socket without blocking and
@@ -233,7 +233,7 @@ interface udp {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-sendto>
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasendmsg>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=send&sektion=2>
-        send: func(datagrams: list<outbound-datagram>) -> result<u64, error-code>;
+        send: func(datagrams: list<outgoing-datagram>) -> result<u64, error-code>;
         
         /// Create a `pollable` which will resolve once the stream is ready to send again.
         ///

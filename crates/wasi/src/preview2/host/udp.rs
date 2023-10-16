@@ -59,8 +59,8 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         &mut self,
         this: Resource<udp::UdpSocket>,
     ) -> SocketResult<(
-        Resource<udp::InboundDatagramStream>,
-        Resource<udp::OutboundDatagramStream>,
+        Resource<udp::IncomingDatagramStream>,
+        Resource<udp::OutgoingDatagramStream>,
     )> {
         let table = self.table_mut();
         let outer = table.get(&this)?;
@@ -75,12 +75,12 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             socket.udp_state = UdpState::Bound;
         }
 
-        let inbound_stream = outer.new_inbound_stream();
-        let outbound_stream = outer.new_outbound_stream();
+        let incoming_stream = outer.new_incoming_stream();
+        let outgoing_stream = outer.new_outgoing_stream();
 
         Ok((
-            self.table_mut().push_child(inbound_stream, &this)?,
-            self.table_mut().push_child(outbound_stream, &this)?,
+            self.table_mut().push_child(incoming_stream, &this)?,
+            self.table_mut().push_child(outgoing_stream, &this)?,
         ))
     }
 
@@ -254,13 +254,13 @@ impl<T: WasiView> udp::HostUdpSocket for T {
     }
 }
 
-impl<T: WasiView> udp::HostInboundDatagramStream for T {
+impl<T: WasiView> udp::HostIncomingDatagramStream for T {
     fn receive(
         &mut self,
-        this: Resource<udp::InboundDatagramStream>,
+        this: Resource<udp::IncomingDatagramStream>,
         max_results: u64,
-    ) -> SocketResult<Vec<udp::InboundDatagram>> {
-        fn recv_one(socket: &UdpSocketInner) -> SocketResult<udp::InboundDatagram> {
+    ) -> SocketResult<Vec<udp::IncomingDatagram>> {
+        fn recv_one(socket: &UdpSocketInner) -> SocketResult<udp::IncomingDatagram> {
             let mut buf = [0; MAX_UDP_DATAGRAM_SIZE];
             let (size, received_addr) = socket.udp_socket().try_recv_from(&mut buf)?;
 
@@ -274,7 +274,7 @@ impl<T: WasiView> udp::HostInboundDatagramStream for T {
             }
 
             // FIXME: check permission to receive from `received_addr`.
-            Ok(udp::InboundDatagram {
+            Ok(udp::IncomingDatagram {
                 data: buf[..size].into(),
                 remote_address: received_addr.into(),
             })
@@ -306,12 +306,12 @@ impl<T: WasiView> udp::HostInboundDatagramStream for T {
 
     fn subscribe(
         &mut self,
-        this: Resource<udp::InboundDatagramStream>,
+        this: Resource<udp::IncomingDatagramStream>,
     ) -> anyhow::Result<Resource<Pollable>> {
         crate::preview2::poll::subscribe(self.table_mut(), this)
     }
 
-    fn drop(&mut self, this: Resource<udp::InboundDatagramStream>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<udp::IncomingDatagramStream>) -> Result<(), anyhow::Error> {
         let table = self.table_mut();
 
         // As in the filesystem implementation, we assume closing a socket
@@ -323,13 +323,13 @@ impl<T: WasiView> udp::HostInboundDatagramStream for T {
     }
 }
 
-impl<T: WasiView> udp::HostOutboundDatagramStream for T {
+impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
     fn send(
         &mut self,
-        this: Resource<udp::OutboundDatagramStream>,
-        datagrams: Vec<udp::OutboundDatagram>,
+        this: Resource<udp::OutgoingDatagramStream>,
+        datagrams: Vec<udp::OutgoingDatagram>,
     ) -> SocketResult<u64> {
-        fn send_one(socket: &UdpSocketInner, datagram: &udp::OutboundDatagram) -> SocketResult<()> {
+        fn send_one(socket: &UdpSocketInner, datagram: &udp::OutgoingDatagram) -> SocketResult<()> {
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
             let addr = match (socket.remote_address(), provided_addr) {
                 (None, Some(addr)) => addr,
@@ -371,12 +371,12 @@ impl<T: WasiView> udp::HostOutboundDatagramStream for T {
 
     fn subscribe(
         &mut self,
-        this: Resource<udp::OutboundDatagramStream>,
+        this: Resource<udp::OutgoingDatagramStream>,
     ) -> anyhow::Result<Resource<Pollable>> {
         crate::preview2::poll::subscribe(self.table_mut(), this)
     }
 
-    fn drop(&mut self, this: Resource<udp::OutboundDatagramStream>) -> Result<(), anyhow::Error> {
+    fn drop(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> Result<(), anyhow::Error> {
         let table = self.table_mut();
 
         // As in the filesystem implementation, we assume closing a socket

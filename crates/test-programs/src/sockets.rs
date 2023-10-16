@@ -8,7 +8,7 @@ use crate::wasi::sockets::network::{
 };
 use crate::wasi::sockets::tcp::TcpSocket;
 use crate::wasi::sockets::udp::{
-    InboundDatagram, InboundDatagramStream, OutboundDatagram, OutboundDatagramStream, UdpSocket,
+    IncomingDatagram, IncomingDatagramStream, OutgoingDatagram, OutgoingDatagramStream, UdpSocket,
 };
 use crate::wasi::sockets::{tcp_create_socket, udp_create_socket};
 use std::ops::Range;
@@ -132,7 +132,7 @@ impl UdpSocket {
         &self,
         network: &Network,
         local_address: IpSocketAddress,
-    ) -> Result<(InboundDatagramStream, OutboundDatagramStream), ErrorCode> {
+    ) -> Result<(IncomingDatagramStream, OutgoingDatagramStream), ErrorCode> {
         let sub = self.subscribe();
 
         self.start_bind(&network, local_address)?;
@@ -159,8 +159,8 @@ impl UdpSocket {
     }
 }
 
-impl OutboundDatagramStream {
-    pub fn blocking_send(&self, mut datagrams: &[OutboundDatagram]) -> Result<(), ErrorCode> {
+impl OutgoingDatagramStream {
+    pub fn blocking_send(&self, mut datagrams: &[OutgoingDatagram]) -> Result<(), ErrorCode> {
         let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
         let pollable = self.subscribe();
 
@@ -178,8 +178,8 @@ impl OutboundDatagramStream {
     }
 }
 
-impl InboundDatagramStream {
-    pub fn blocking_receive(&self, count: Range<u64>) -> Result<Vec<InboundDatagram>, ErrorCode> {
+impl IncomingDatagramStream {
+    pub fn blocking_receive(&self, count: Range<u64>) -> Result<Vec<IncomingDatagram>, ErrorCode> {
         let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
         let pollable = self.subscribe();
         let mut datagrams = vec![];

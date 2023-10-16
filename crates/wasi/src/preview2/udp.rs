@@ -30,7 +30,7 @@ pub(crate) enum UdpState {
     Connected(SocketAddr),
 }
 
-/// Operational data shared between the UdpSocket, InboundDatagramStream & OutboundDatagramStream
+/// Operational data shared between the UdpSocket, IncomingDatagramStream & OutgoingDatagramStream
 pub(crate) struct UdpSocketInner {
     pub(crate) native_socket: Arc<tokio::net::UdpSocket>,
 
@@ -79,14 +79,14 @@ impl UdpSocket {
         Ok(tokio_socket)
     }
 
-    pub(crate) fn new_inbound_stream(&self) -> InboundDatagramStream {
-        InboundDatagramStream {
+    pub(crate) fn new_incoming_stream(&self) -> IncomingDatagramStream {
+        IncomingDatagramStream {
             inner: self.inner.clone(),
         }
     }
 
-    pub(crate) fn new_outbound_stream(&self) -> OutboundDatagramStream {
-        OutboundDatagramStream {
+    pub(crate) fn new_outgoing_stream(&self) -> OutgoingDatagramStream {
+        OutgoingDatagramStream {
             inner: self.inner.clone(),
         }
     }
@@ -106,12 +106,12 @@ impl UdpSocketInner {
     }
 }
 
-pub struct InboundDatagramStream {
+pub struct IncomingDatagramStream {
     pub(crate) inner: Arc<Mutex<UdpSocketInner>>,
 }
 
 #[async_trait]
-impl Subscribe for InboundDatagramStream {
+impl Subscribe for IncomingDatagramStream {
     async fn ready(&mut self) {
         let native_socket = {
             // Make sure the lock guard is released before the await.
@@ -127,12 +127,12 @@ impl Subscribe for InboundDatagramStream {
     }
 }
 
-pub struct OutboundDatagramStream {
+pub struct OutgoingDatagramStream {
     pub(crate) inner: Arc<Mutex<UdpSocketInner>>,
 }
 
 #[async_trait]
-impl Subscribe for OutboundDatagramStream {
+impl Subscribe for OutgoingDatagramStream {
     async fn ready(&mut self) {
         let native_socket = {
             // Make sure the lock guard is released before the await.
