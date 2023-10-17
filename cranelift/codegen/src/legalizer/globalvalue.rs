@@ -82,7 +82,11 @@ fn iadd_imm_addr(
             .special_param(ir::ArgumentPurpose::VMContext)
             .expect("Missing vmctx parameter")
     } else {
-        pos.ins().global_value(global_type, base)
+        let gv = pos.ins().global_value(global_type, base);
+        if let Some(fact) = &pos.func.global_value_facts[base] {
+            pos.func.dfg.facts[gv] = Some(fact.clone());
+        }
+        gv
     };
 
     // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
@@ -113,7 +117,11 @@ fn load_addr(
             .special_param(ir::ArgumentPurpose::VMContext)
             .expect("Missing vmctx parameter")
     } else {
-        pos.ins().global_value(ptr_ty, base)
+        let gv = pos.ins().global_value(ptr_ty, base);
+        if let Some(fact) = &pos.func.global_value_facts[base] {
+            pos.func.dfg.facts[gv] = Some(fact.clone());
+        }
+        gv
     };
 
     // Perform the load.
