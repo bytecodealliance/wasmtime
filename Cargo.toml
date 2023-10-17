@@ -279,6 +279,7 @@ default = [
   "demangle",
   "cranelift",
   "profiling",
+  "coredump",
 
   # All subcommands are included by default.
   "compile",
@@ -307,6 +308,7 @@ compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
 demangle = ["wasmtime/demangle"]
 cranelift = ["wasmtime-cli-flags/cranelift", "dep:wasmtime-cranelift"]
 profiling = ["wasmtime/profiling"]
+coredump = ["wasmtime-cli-flags/coredump"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

@@ -394,7 +394,10 @@ impl CommonOptions {
             config.debug_info(enable);
         }
         if self.debug.coredump.is_some() {
+            #[cfg(feature = "coredump")]
             config.coredump_on_trap(true);
+            #[cfg(not(feature = "coredump"))]
+            anyhow::bail!("support for coredumps disabled at compile time");
         }
         match_feature! {
             ["cranelift" : self.opts.opt_level]

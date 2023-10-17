@@ -10,8 +10,6 @@ use crate::common::{Profile, RunCommon, RunTarget};
 use anyhow::{anyhow, bail, Context as _, Error, Result};
 use clap::Parser;
 use std::ffi::OsString;
-use std::fs::File;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
@@ -539,6 +537,7 @@ impl RunCommand {
         Ok(())
     }
 
+    #[cfg(feature = "coredump")]
     fn handle_core_dump(&self, store: &mut Store<Host>, err: Error) -> Error {
         let coredump_path = match &self.run.common.debug.coredump {
             Some(path) => path,
@@ -557,6 +556,11 @@ impl RunCommand {
         } else {
             err.context(format!("core dumped at {}", coredump_path))
         }
+    }
+
+    #[cfg(not(feature = "coredump"))]
+    fn handle_core_dump(&self, _store: &mut Store<Host>, err: Error) -> Error {
+        err
     }
 
     /// Populates the given `Linker` with WASI APIs.
@@ -848,12 +852,16 @@ fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<u
     Ok(num_fd)
 }
 
+#[cfg(feature = "coredump")]
 fn write_core_dump(
     store: &mut Store<Host>,
     err: &anyhow::Error,
     name: &str,
     path: &str,
 ) -> Result<()> {
+    use std::fs::File;
+    use std::io::Write;
+
     let core_dump = err
         .downcast_ref::<wasmtime::WasmCoreDump>()
         .expect("should have been configured to capture core dumps");

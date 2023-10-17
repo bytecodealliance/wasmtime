@@ -395,7 +395,6 @@ mod compiler;
 
 mod code;
 mod config;
-mod coredump;
 mod engine;
 mod externals;
 mod instance;
@@ -419,7 +418,6 @@ mod values;
 mod stack;
 
 pub use crate::config::*;
-pub use crate::coredump::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::func::*;
@@ -444,6 +442,11 @@ pub use crate::values::*;
 
 #[cfg(feature = "async")]
 pub use crate::stack::*;
+
+#[cfg(feature = "coredump")]
+mod coredump;
+#[cfg(feature = "coredump")]
+pub use crate::coredump::*;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.
 ///

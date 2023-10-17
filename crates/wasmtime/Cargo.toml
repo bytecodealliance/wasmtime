@@ -29,7 +29,7 @@ wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
-wasm-encoder = { workspace = true }
+wasm-encoder = { workspace = true, optional = true }
 anyhow = { workspace = true }
 libc = "0.2"
 cfg-if = { workspace = true }
@@ -136,3 +136,6 @@ wmemcheck = ["wasmtime-runtime/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
 # Enables support for demangling WebAssembly function names at runtime in
 # errors such as backtraces.
 demangle = ["wasmtime-jit/demangle"]
+
+# Enable support for generating core dumps on traps.
+coredump = ["dep:wasm-encoder"]
