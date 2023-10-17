@@ -51,8 +51,7 @@ wasm-encoder = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
-http-body = { workspace = true }
-http-body-util = { workspace = true }
+http-body-util = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }
@@ -304,7 +303,7 @@ parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
-serve = ["wasi-http", "component-model"]
+serve = ["wasi-http", "component-model", "dep:http-body-util"]
 explore = ["dep:wasmtime-explorer"]
 wast = ["dep:wasmtime-wast"]
 config = ["cache"]
