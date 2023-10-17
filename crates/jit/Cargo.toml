@@ -41,6 +41,5 @@ features = ["Win32_System_Diagnostics_Debug"]
 ittapi = { version = "0.3.4", optional = true }
 
 [features]
-jitdump = ['wasmtime-jit-debug']
-vtune = ['ittapi']
+profiling = ['dep:wasmtime-jit-debug', 'dep:ittapi']
 demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']

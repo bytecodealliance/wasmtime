@@ -15,10 +15,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
-use wasmtime::{
-    AsContextMut, Engine, Func, GuestProfiler, Module, Store, StoreLimits, UpdateDeadline, Val,
-    ValType,
-};
+use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::preview2;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
@@ -288,66 +285,15 @@ impl RunCommand {
         &self,
         store: &mut Store<Host>,
         modules: Vec<(String, Module)>,
-    ) -> Box<dyn FnOnce(&mut Store<Host>)> {
+    ) -> Result<Box<dyn FnOnce(&mut Store<Host>)>> {
         if let Some(Profile::Guest { path, interval }) = &self.run.profile {
-            let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
-            let interval = *interval;
-            store.data_mut().guest_profiler =
-                Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
-
-            fn sample(mut store: impl AsContextMut<Data = Host>) {
-                let mut profiler = store
-                    .as_context_mut()
-                    .data_mut()
-                    .guest_profiler
-                    .take()
-                    .unwrap();
-                Arc::get_mut(&mut profiler)
-                    .expect("profiling doesn't support threads yet")
-                    .sample(&store);
-                store.as_context_mut().data_mut().guest_profiler = Some(profiler);
+            #[cfg(feature = "profiling")]
+            return Ok(self.setup_guest_profiler(store, modules, path, *interval));
+            #[cfg(not(feature = "profiling"))]
+            {
+                let _ = (modules, path, interval);
+                bail!("support for profiling disabled at compile time");
             }
-
-            if let Some(timeout) = self.run.common.wasm.timeout {
-                let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
-                assert!(timeout > 0);
-                store.epoch_deadline_callback(move |mut store| {
-                    sample(&mut store);
-                    timeout -= 1;
-                    if timeout == 0 {
-                        bail!("timeout exceeded");
-                    }
-                    Ok(UpdateDeadline::Continue(1))
-                });
-            } else {
-                store.epoch_deadline_callback(move |mut store| {
-                    sample(&mut store);
-                    Ok(UpdateDeadline::Continue(1))
-                });
-            }
-
-            store.set_epoch_deadline(1);
-            let engine = store.engine().clone();
-            thread::spawn(move || loop {
-                thread::sleep(interval);
-                engine.increment_epoch();
-            });
-
-            let path = path.clone();
-            return Box::new(move |store| {
-                let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
-                    .expect("profiling doesn't support threads yet");
-                if let Err(e) = std::fs::File::create(&path)
-                    .map_err(anyhow::Error::new)
-                    .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
-                {
-                    eprintln!("failed writing profile at {path}: {e:#}");
-                } else {
-                    eprintln!();
-                    eprintln!("Profile written to: {path}");
-                    eprintln!("View this profile at https://profiler.firefox.com/.");
-                }
-            });
         }
 
         if let Some(timeout) = self.run.common.wasm.timeout {
@@ -359,7 +305,76 @@ impl RunCommand {
             });
         }
 
-        Box::new(|_store| {})
+        Ok(Box::new(|_store| {}))
+    }
+
+    #[cfg(feature = "profiling")]
+    fn setup_guest_profiler(
+        &self,
+        store: &mut Store<Host>,
+        modules: Vec<(String, Module)>,
+        path: &str,
+        interval: std::time::Duration,
+    ) -> Box<dyn FnOnce(&mut Store<Host>)> {
+        use wasmtime::{AsContextMut, GuestProfiler, UpdateDeadline};
+
+        let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
+        store.data_mut().guest_profiler =
+            Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
+
+        fn sample(mut store: impl AsContextMut<Data = Host>) {
+            let mut profiler = store
+                .as_context_mut()
+                .data_mut()
+                .guest_profiler
+                .take()
+                .unwrap();
+            Arc::get_mut(&mut profiler)
+                .expect("profiling doesn't support threads yet")
+                .sample(&store);
+            store.as_context_mut().data_mut().guest_profiler = Some(profiler);
+        }
+
+        if let Some(timeout) = self.run.common.wasm.timeout {
+            let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
+            assert!(timeout > 0);
+            store.epoch_deadline_callback(move |mut store| {
+                sample(&mut store);
+                timeout -= 1;
+                if timeout == 0 {
+                    bail!("timeout exceeded");
+                }
+                Ok(UpdateDeadline::Continue(1))
+            });
+        } else {
+            store.epoch_deadline_callback(move |mut store| {
+                sample(&mut store);
+                Ok(UpdateDeadline::Continue(1))
+            });
+        }
+
+        store.set_epoch_deadline(1);
+        let engine = store.engine().clone();
+        thread::spawn(move || loop {
+            thread::sleep(interval);
+            engine.increment_epoch();
+        });
+
+        let path = path.to_string();
+        return Box::new(move |store| {
+            let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
+                .expect("profiling doesn't support threads yet");
+            if let Err(e) = std::fs::File::create(&path)
+                .map_err(anyhow::Error::new)
+                .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
+            {
+                eprintln!("failed writing profile at {path}: {e:#}");
+            } else {
+                eprintln!();
+                eprintln!("Profile written to: {path}");
+                eprintln!("View this profile at https://profiler.firefox.com/.");
+            }
+        });
     }
 
     fn load_main_module(
@@ -396,7 +411,7 @@ impl RunCommand {
             bail!("support for `unknown-imports-trap` disabled at compile time");
         }
 
-        let finish_epoch_handler = self.setup_epoch_handler(store, modules);
+        let finish_epoch_handler = self.setup_epoch_handler(store, modules)?;
 
         let result = match linker {
             CliLinker::Core(linker) => {
@@ -759,7 +774,8 @@ struct Host {
     #[cfg(feature = "wasi-http")]
     wasi_http: Option<Arc<WasiHttpCtx>>,
     limits: StoreLimits,
-    guest_profiler: Option<Arc<GuestProfiler>>,
+    #[cfg(feature = "profiling")]
+    guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
 }
 
 impl preview2::WasiView for Host {

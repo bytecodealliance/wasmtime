@@ -268,10 +268,8 @@ url = "2.3.1"
 
 [features]
 default = [
-  "jitdump",
   "wat",
   "parallel-compilation",
-  "vtune",
   "wasi-nn",
   "wasi-threads",
   "wasi-http",
@@ -280,15 +278,15 @@ default = [
   "logging",
   "demangle",
   "cranelift",
+  "profiling",
 
   # All subcommands are included by default.
+  "compile",
   "explore",
   "serve",
   "wast",
   "config",
 ]
-jitdump = ["wasmtime/jitdump"]
-vtune = ["wasmtime/vtune"]
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper", "wasmtime-wasi-http?/sync"]
@@ -308,6 +306,7 @@ logging = ["wasmtime-cli-flags/logging"]
 compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
 demangle = ["wasmtime/demangle"]
 cranelift = ["wasmtime-cli-flags/cranelift", "dep:wasmtime-cranelift"]
+profiling = ["wasmtime/profiling"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

@@ -403,6 +403,7 @@ mod limits;
 mod linker;
 mod memory;
 mod module;
+#[cfg(feature = "profiling")]
 mod profiling;
 mod r#ref;
 mod resources;
@@ -427,6 +428,7 @@ pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::Module;
+#[cfg(feature = "profiling")]
 pub use crate::profiling::GuestProfiler;
 pub use crate::r#ref::ExternRef;
 pub use crate::resources::*;
