@@ -5,7 +5,6 @@
 
 use anyhow::Result;
 use clap::Parser;
-use wasmtime_cli::commands::{CompileCommand, RunCommand, SettingsCommand};
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser)]
@@ -38,7 +37,7 @@ struct Wasmtime {
     #[clap(subcommand)]
     subcommand: Option<Subcommand>,
     #[clap(flatten)]
-    run: RunCommand,
+    run: wasmtime_cli::commands::RunCommand,
 }
 
 #[derive(Parser)]
@@ -47,17 +46,19 @@ enum Subcommand {
     #[cfg(feature = "cache")]
     Config(wasmtime_cli::commands::ConfigCommand),
     /// Compiles a WebAssembly module.
-    Compile(CompileCommand),
+    #[cfg(feature = "cranelift")]
+    Compile(wasmtime_cli::commands::CompileCommand),
     /// Explore the compilation of a WebAssembly module to native code.
     #[cfg(feature = "explore")]
     Explore(wasmtime_cli::commands::ExploreCommand),
     /// Runs a WebAssembly module
-    Run(RunCommand),
+    Run(wasmtime_cli::commands::RunCommand),
     /// Serves requests from a wasi-http proxy component.
     #[cfg(feature = "serve")]
     Serve(wasmtime_cli::commands::ServeCommand),
     /// Displays available Cranelift settings for a target.
-    Settings(SettingsCommand),
+    #[cfg(feature = "cranelift")]
+    Settings(wasmtime_cli::commands::SettingsCommand),
     /// Runs a WebAssembly test script file
     #[cfg(feature = "wast")]
     Wast(wasmtime_cli::commands::WastCommand),
@@ -70,12 +71,14 @@ impl Wasmtime {
         match subcommand {
             #[cfg(feature = "cache")]
             Subcommand::Config(c) => c.execute(),
+            #[cfg(feature = "cranelift")]
             Subcommand::Compile(c) => c.execute(),
             #[cfg(feature = "explore")]
             Subcommand::Explore(c) => c.execute(),
             Subcommand::Run(c) => c.execute(),
             #[cfg(feature = "serve")]
             Subcommand::Serve(c) => c.execute(),
+            #[cfg(feature = "cranelift")]
             Subcommand::Settings(c) => c.execute(),
             #[cfg(feature = "wast")]
             Subcommand::Wast(c) => c.execute(),

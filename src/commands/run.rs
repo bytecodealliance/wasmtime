@@ -195,12 +195,17 @@ impl RunCommand {
 
             // Add the module's functions to the linker.
             match &mut linker {
+                #[cfg(feature = "cranelift")]
                 CliLinker::Core(linker) => {
                     linker.module(&mut store, name, &module).context(format!(
                         "failed to process preload `{}` at `{}`",
                         name,
                         path.display()
                     ))?;
+                }
+                #[cfg(not(feature = "cranelift"))]
+                CliLinker::Core(_) => {
+                    bail!("support for --preload disabled at compile time");
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(_) => {
@@ -367,22 +372,28 @@ impl RunCommand {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.run.common.wasm.unknown_imports_trap == Some(true) {
+            #[cfg(feature = "cranelift")]
             match linker {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_traps(module.unwrap_core())?;
                 }
                 _ => bail!("cannot use `--trap-unknown-imports` with components"),
             }
+            #[cfg(not(feature = "cranelift"))]
+            bail!("support for `unknown-imports-trap` disabled at compile time");
         }
 
         // ...or as default values.
         if self.run.common.wasm.unknown_imports_default == Some(true) {
+            #[cfg(feature = "cranelift")]
             match linker {
                 CliLinker::Core(linker) => {
                     linker.define_unknown_imports_as_default_values(module.unwrap_core())?;
                 }
                 _ => bail!("cannot use `--default-values-unknown-imports` with components"),
             }
+            #[cfg(not(feature = "cranelift"))]
+            bail!("support for `unknown-imports-trap` disabled at compile time");
         }
 
         let finish_epoch_handler = self.setup_epoch_handler(store, modules);
@@ -391,23 +402,20 @@ impl RunCommand {
             CliLinker::Core(linker) => {
                 // Use "" as a default module name.
                 let module = module.unwrap_core();
-                linker.module(&mut *store, "", &module).context(format!(
+                let instance = linker.instantiate(&mut *store, &module).context(format!(
                     "failed to instantiate {:?}",
                     self.module_and_args[0]
                 ))?;
 
                 // If a function to invoke was given, invoke it.
                 let func = if let Some(name) = &self.invoke {
-                    match linker
-                        .get(&mut *store, "", name)
-                        .ok_or_else(|| anyhow!("no export named `{}` found", name))?
-                        .into_func()
-                    {
-                        Some(func) => func,
-                        None => bail!("export of `{}` wasn't a function", name),
-                    }
+                    instance
+                        .get_func(&mut *store, name)
+                        .ok_or_else(|| anyhow!("no func export named `{}` found", name))?
                 } else {
-                    linker.get_default(&mut *store, "")?
+                    instance
+                        .get_func(&mut *store, "_start")
+                        .ok_or_else(|| anyhow!("no `_start` function found"))?
                 };
 
                 self.invoke_func(store, func)

@@ -206,7 +206,10 @@ impl RunCommon {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    RunTarget::Core(Module::new(engine, &bytes)?)
+                    #[cfg(feature = "cranelift")]
+                    return Ok(RunTarget::Core(Module::new(engine, &bytes)?));
+                    #[cfg(not(feature = "cranelift"))]
+                    bail!("support for compiling modules was disabled at compile time");
                 }
             }
         })

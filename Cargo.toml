@@ -22,10 +22,10 @@ path = "src/bin/wasmtime.rs"
 doc = false
 
 [dependencies]
-wasmtime = { workspace = true, features = ['cranelift'] }
+wasmtime = { workspace = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-cli-flags = { workspace = true }
-wasmtime-cranelift = { workspace = true }
+wasmtime-cranelift = { workspace = true, optional = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
 wasmtime-wast = { workspace = true, optional = true }
@@ -279,6 +279,7 @@ default = [
   "cache",
   "logging",
   "demangle",
+  "cranelift",
 
   # All subcommands are included by default.
   "explore",
@@ -306,6 +307,7 @@ parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
 logging = ["wasmtime-cli-flags/logging"]
 compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
 demangle = ["wasmtime/demangle"]
+cranelift = ["wasmtime-cli-flags/cranelift", "dep:wasmtime-cranelift"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
@@ -313,6 +315,7 @@ serve = ["wasi-http", "component-model", "dep:http-body-util"]
 explore = ["dep:wasmtime-explorer"]
 wast = ["dep:wasmtime-wast"]
 config = ["cache"]
+compile = ["cranelift"]
 
 [[test]]
 name = "host_segfault"

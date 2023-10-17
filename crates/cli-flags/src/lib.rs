@@ -310,6 +310,27 @@ pub struct CommonOptions {
     pub wasi: WasiOptions,
 }
 
+macro_rules! match_feature {
+    (
+        [$feat:tt : $config:expr]
+        $val:ident => $e:expr,
+        $p:pat => err,
+    ) => {
+        #[cfg(feature = $feat)]
+        {
+            if let Some($val) = $config {
+                $e;
+            }
+        }
+        #[cfg(not(feature = $feat))]
+        {
+            if let Some($p) = $config {
+                anyhow::bail!(concat!("support for ", $feat, " disabled at compile time"));
+            }
+        }
+    };
+}
+
 impl CommonOptions {
     fn configure(&mut self) {
         if self.configured {
@@ -354,18 +375,20 @@ impl CommonOptions {
         self.configure();
         let mut config = Config::new();
 
-        if let Some(strategy) = self.codegen.compiler {
-            config.strategy(strategy);
+        match_feature! {
+            ["cranelift" : self.codegen.compiler]
+            strategy => config.strategy(strategy),
+            _ => err,
         }
-
-        // Set the target before setting any cranelift options, since the
-        // target will reset any target-specific options.
-        if let Some(target) = target {
-            config.target(target)?;
+        match_feature! {
+            ["cranelift" : target]
+            target => config.target(target)?,
+            _ => err,
         }
-
-        if let Some(enable) = self.codegen.cranelift_debug_verifier {
-            config.cranelift_debug_verifier(enable);
+        match_feature! {
+            ["cranelift" : self.codegen.cranelift_debug_verifier]
+            enable => config.cranelift_debug_verifier(enable),
+            true => err,
         }
         if let Some(enable) = self.debug.debug_info {
             config.debug_info(enable);
@@ -373,11 +396,15 @@ impl CommonOptions {
         if self.debug.coredump.is_some() {
             config.coredump_on_trap(true);
         }
-        if let Some(level) = self.opts.opt_level {
-            config.cranelift_opt_level(level);
+        match_feature! {
+            ["cranelift" : self.opts.opt_level]
+            level => config.cranelift_opt_level(level),
+            _ => err,
         }
-        if let Some(enable) = self.wasm.nan_canonicalization {
-            config.cranelift_nan_canonicalization(enable);
+        match_feature! {
+            ["cranelift" : self.wasm.nan_canonicalization]
+            enable => config.cranelift_nan_canonicalization(enable),
+            true => err,
         }
         if let Some(enable) = self.codegen.enable_pcc {
             config.cranelift_pcc(enable);
@@ -385,6 +412,7 @@ impl CommonOptions {
 
         self.enable_wasm_features(&mut config)?;
 
+        #[cfg(feature = "cranelift")]
         for (name, value) in self.codegen.cranelift.iter() {
             let name = name.replace('-', "_");
             unsafe {
@@ -397,6 +425,10 @@ impl CommonOptions {
                     }
                 }
             }
+        }
+        #[cfg(not(feature = "cranelift"))]
+        if !self.codegen.cranelift.is_empty() {
+            anyhow::bail!("support for cranelift disabled at compile time");
         }
 
         #[cfg(feature = "cache")]
@@ -415,13 +447,10 @@ impl CommonOptions {
             anyhow::bail!("support for caching disabled at compile time");
         }
 
-        #[cfg(feature = "parallel-compilation")]
-        if let Some(enable) = self.codegen.parallel_compilation {
-            config.parallel_compilation(enable);
-        }
-        #[cfg(not(feature = "parallel-compilation"))]
-        if let Some(true) = self.codegen.parallel_compilation {
-            anyhow::bail!("support for parallel compilation disabled at compile time");
+        match_feature! {
+            ["parallel-compilation" : self.codegen.parallel_compilation]
+            enable => config.parallel_compilation(enable),
+            true => err,
         }
 
         if let Some(max) = self.opts.static_memory_maximum_size {
@@ -458,11 +487,14 @@ impl CommonOptions {
             config.memory_init_cow(enable);
         }
 
-        if self.opts.pooling_allocator == Some(true) {
-            #[cfg(feature = "pooling-allocator")]
-            config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
-            #[cfg(not(feature = "pooling-allocator"))]
-            anyhow::bail!("support for the pooling allocator was disabled at compile-time");
+        match_feature! {
+            ["pooling-allocator" : self.opts.pooling_allocator]
+            enable => {
+                if enable {
+                    config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
+                }
+            },
+            true => err,
         }
 
         if let Some(max) = self.wasm.max_wasm_stack {
@@ -472,8 +504,10 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.relaxed_simd_deterministic {
             config.relaxed_simd_deterministic(enable);
         }
-        if let Some(enable) = self.wasm.wmemcheck {
-            config.wmemcheck(enable);
+        match_feature! {
+            ["cranelift" : self.wasm.wmemcheck]
+            enable => config.wmemcheck(enable),
+            true => err,
         }
 
         Ok(config)
