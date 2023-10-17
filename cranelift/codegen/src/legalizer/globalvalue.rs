@@ -21,7 +21,7 @@ pub fn expand_global_value(
     );
 
     match func.global_values[global_value] {
-        ir::GlobalValueData::VMContext => vmctx_addr(inst, func),
+        ir::GlobalValueData::VMContext => vmctx_addr(global_value, inst, func),
         ir::GlobalValueData::IAddImm {
             base,
             offset,
@@ -52,7 +52,7 @@ fn const_vector_scale(inst: ir::Inst, func: &mut ir::Function, ty: ir::Type, isa
 }
 
 /// Expand a `global_value` instruction for a vmctx global.
-fn vmctx_addr(inst: ir::Inst, func: &mut ir::Function) {
+fn vmctx_addr(global_value: ir::GlobalValue, inst: ir::Inst, func: &mut ir::Function) {
     // Get the value representing the `vmctx` argument.
     let vmctx = func
         .special_param(ir::ArgumentPurpose::VMContext)
@@ -63,6 +63,22 @@ fn vmctx_addr(inst: ir::Inst, func: &mut ir::Function) {
     func.dfg.clear_results(inst);
     func.dfg.change_to_alias(result, vmctx);
     func.layout.remove_inst(inst);
+
+    crate::trace!(
+        "expanding vmctx gv {}: fact = {:?}, vmctx arg = {}",
+        global_value,
+        func.global_value_facts[global_value],
+        vmctx
+    );
+
+    // If there was a fact on the GV, then copy it to the vmctx arg
+    // blockparam def.
+    if let Some(fact) = &func.global_value_facts[global_value] {
+        if func.dfg.facts[vmctx].is_none() {
+            let fact = fact.clone();
+            func.dfg.facts[vmctx] = Some(fact);
+        }
+    }
 }
 
 /// Expand a `global_value` instruction for an iadd_imm global.
@@ -75,19 +91,11 @@ fn iadd_imm_addr(
 ) {
     let mut pos = FuncCursor::new(func).at_inst(inst);
 
-    // Get the value for the lhs. For tidiness, expand VMContext here so that we avoid
-    // `vmctx_addr` which creates an otherwise unneeded value alias.
-    let lhs = if let ir::GlobalValueData::VMContext = pos.func.global_values[base] {
-        pos.func
-            .special_param(ir::ArgumentPurpose::VMContext)
-            .expect("Missing vmctx parameter")
-    } else {
-        let gv = pos.ins().global_value(global_type, base);
-        if let Some(fact) = &pos.func.global_value_facts[base] {
-            pos.func.dfg.facts[gv] = Some(fact.clone());
-        }
-        gv
-    };
+    // Get the value for the lhs.
+    let lhs = pos.ins().global_value(global_type, base);
+    if let Some(fact) = &pos.func.global_value_facts[base] {
+        pos.func.dfg.facts[lhs] = Some(fact.clone());
+    }
 
     // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
     pos.func.dfg.replace(inst).iadd_imm(lhs, offset);
@@ -110,19 +118,11 @@ fn load_addr(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    // Get the value for the base. For tidiness, expand VMContext here so that we avoid
-    // `vmctx_addr` which creates an otherwise unneeded value alias.
-    let base_addr = if let ir::GlobalValueData::VMContext = pos.func.global_values[base] {
-        pos.func
-            .special_param(ir::ArgumentPurpose::VMContext)
-            .expect("Missing vmctx parameter")
-    } else {
-        let gv = pos.ins().global_value(ptr_ty, base);
-        if let Some(fact) = &pos.func.global_value_facts[base] {
-            pos.func.dfg.facts[gv] = Some(fact.clone());
-        }
-        gv
-    };
+    // Get the value for the base.
+    let base_addr = pos.ins().global_value(ptr_ty, base);
+    if let Some(fact) = &pos.func.global_value_facts[base] {
+        pos.func.dfg.facts[base_addr] = Some(fact.clone());
+    }
 
     // Perform the load.
     pos.func

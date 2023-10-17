@@ -1,6 +1,6 @@
 //! Heaps to implement WebAssembly linear memories.
 
-use cranelift_codegen::ir::{GlobalValue, Type};
+use cranelift_codegen::ir::{GlobalValue, MemoryType, Type};
 use cranelift_entity::entity_impl;
 
 /// An opaque reference to a [`HeapData`][crate::HeapData].
@@ -82,6 +82,9 @@ pub struct HeapData {
 
     /// The index type for the heap.
     pub index_type: Type,
+
+    /// The memory type for the pointed-to memory, if using proof-carrying code.
+    pub memory_type: Option<MemoryType>,
 }
 
 /// Style of heap including style-specific information.
