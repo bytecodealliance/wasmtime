@@ -46,7 +46,6 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 wasmparser = { workspace = true }
-wasm-encoder = { workspace = true }
 tracing = { workspace = true }
 log = { workspace = true }
 
@@ -279,6 +278,7 @@ default = [
   "pooling-allocator",
   "cache",
   "logging",
+  "demangle",
 
   # All subcommands are included by default.
   "explore",
@@ -305,6 +305,7 @@ cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
 parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
 logging = ["wasmtime-cli-flags/logging"]
 compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
+demangle = ["wasmtime/demangle"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

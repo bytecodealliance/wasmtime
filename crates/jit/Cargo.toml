@@ -25,8 +25,8 @@ serde = "1.0.188"
 serde_derive = "1.0.188"
 addr2line = { version = "0.21.0", default-features = false }
 bincode = "1.2.1"
-rustc-demangle = "0.1.16"
-cpp_demangle = "0.3.2"
+rustc-demangle = { version = "0.1.16", optional = true }
+cpp_demangle = { version = "0.3.2", optional = true }
 log = { workspace = true }
 wasmtime-jit-icache-coherence = { workspace = true }
 
@@ -43,3 +43,4 @@ ittapi = { version = "0.3.4", optional = true }
 [features]
 jitdump = ['wasmtime-jit-debug']
 vtune = ['ittapi']
+demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']

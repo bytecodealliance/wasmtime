@@ -73,6 +73,7 @@ default = [
   'cranelift',
   'pooling-allocator',
   'vtune',
+  'demangle',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -135,3 +136,7 @@ component-model = [
 ]
 
 wmemcheck = ["wasmtime-runtime/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
+
+# Enables support for demangling WebAssembly function names at runtime in
+# errors such as backtraces.
+demangle = ["wasmtime-jit/demangle"]
