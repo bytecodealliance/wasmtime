@@ -556,7 +556,7 @@
 (rule 1 (lower (has_type (fits_in_16 ty) (sdiv x y @ (iconst imm))))
   (if-let $true (has_m))
   (if (safe_divisor_from_imm64 ty imm))
-  (rv_divw (sext x) y))
+  (rv_divw (sext x) (sext y)))
 
 (rule 2 (lower (has_type $I32 (sdiv x y)))
   (if-let $true (has_m))
@@ -604,7 +604,7 @@
 (rule 1 (lower (has_type (fits_in_16 ty) (urem x y @ (iconst imm))))
   (if-let $true (has_m))
   (if (safe_divisor_from_imm64 ty imm))
-  (rv_remuw (zext x) y))
+  (rv_remuw (zext x) (zext y)))
 
 (rule 2 (lower (has_type $I32 (urem x y)))
   (if-let $true (has_m))
@@ -633,7 +633,7 @@
 (rule 1 (lower (has_type (fits_in_16 ty) (srem x y @ (iconst imm))))
   (if-let $true (has_m))
   (if (safe_divisor_from_imm64 ty imm))
-  (rv_remw (sext x) y))
+  (rv_remw (sext x) (sext y)))
 
 (rule 2 (lower (has_type $I32 (srem x y)))
   (if-let $true (has_m))
