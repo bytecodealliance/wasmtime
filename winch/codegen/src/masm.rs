@@ -32,11 +32,11 @@ pub struct StackSlot {
     pub size: u32,
 }
 
-/// Kinds of binary comparison in WebAssembly. The [`MacroAssembler`] implementation for
-/// each ISA is responsible for emitting the correct sequence of instructions
-/// when lowering to machine code.
+/// Kinds of integer binary comparison in WebAssembly. The [`MacroAssembler`]
+/// implementation for each ISA is responsible for emitting the correct
+/// sequence of instructions when lowering to machine code.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum CmpKind {
+pub(crate) enum IntCmpKind {
     /// Equal.
     Eq,
     /// Not equal.
@@ -57,6 +57,25 @@ pub(crate) enum CmpKind {
     GeS,
     /// Unsigned greater than or equal.
     GeU,
+}
+
+/// Kinds of float binary comparison in WebAssembly. The [`MacroAssembler`]
+/// implementation for each ISA is responsible for emitting the correct
+/// sequence of instructions when lowering code.
+#[derive(Debug)]
+pub(crate) enum FloatCmpKind {
+    /// Equal.
+    Eq,
+    /// Not equal.
+    Ne,
+    /// Less than.
+    Lt,
+    /// Greater than.
+    Gt,
+    /// Less than or equal.
+    Le,
+    /// Greater than or equal.
+    Ge,
 }
 
 /// Kinds of shifts in WebAssembly.The [`masm`] implementation for each ISA is
@@ -361,7 +380,7 @@ pub(crate) trait MacroAssembler {
     fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize);
 
     /// Perform a conditional move.
-    fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize);
+    fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize);
 
     /// Perform add operation.
     fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
@@ -446,7 +465,18 @@ pub(crate) trait MacroAssembler {
 
     /// Compare src and dst and put the result in dst.
     /// This function will potentially emit a series of instructions.
-    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: CmpKind, size: OperandSize);
+    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize);
+
+    /// Compare floats in src1 and src2 and put the result in dst.
+    /// In x86, this will emit multiple instructions.
+    fn float_cmp_with_set(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: Reg,
+        kind: FloatCmpKind,
+        size: OperandSize,
+    );
 
     /// Count the number of leading zeroes in src and put the result in dst.
     /// In x64, this will emit multiple instructions if the `has_lzcnt` flag is
@@ -535,7 +565,14 @@ pub(crate) trait MacroAssembler {
     /// Performs a comparison between the two operands,
     /// and immediately after emits a jump to the given
     /// label destination if the condition is met.
-    fn branch(&mut self, kind: CmpKind, lhs: RegImm, rhs: Reg, taken: MachLabel, size: OperandSize);
+    fn branch(
+        &mut self,
+        kind: IntCmpKind,
+        lhs: RegImm,
+        rhs: Reg,
+        taken: MachLabel,
+        size: OperandSize,
+    );
 
     /// Emits and unconditional jump to the given label.
     fn jmp(&mut self, target: MachLabel);
@@ -548,7 +585,7 @@ pub(crate) trait MacroAssembler {
     fn unreachable(&mut self);
 
     /// Traps if the condition code is met.
-    fn trapif(&mut self, cc: CmpKind, code: TrapCode);
+    fn trapif(&mut self, cc: IntCmpKind, code: TrapCode);
 
     /// Trap if the source register is zero.
     fn trapz(&mut self, src: Reg, code: TrapCode);
