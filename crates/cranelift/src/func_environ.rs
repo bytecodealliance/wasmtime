@@ -5,7 +5,7 @@ use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentPurpose, Function, InstBuilder, Signature, UserFuncName, Value,
+    AbiParam, ArgumentPurpose, Function, InstBuilder, MemFlags, Signature, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::{EntityRef, PrimaryMap};
@@ -352,7 +352,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 base: vmctx,
                 offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                 global_type: pointer_type,
-                readonly: true,
+                flags: MemFlags::trusted().with_readonly(),
             });
             (global, 0)
         }
@@ -1237,7 +1237,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    readonly: true,
+                    flags: MemFlags::trusted().with_readonly(),
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
                 let current_elements_offset =
@@ -1250,7 +1250,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            readonly: false,
+            flags: MemFlags::trusted(),
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
@@ -1259,7 +1259,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
             )
             .unwrap(),
-            readonly: false,
+            flags: MemFlags::trusted(),
         });
 
         let element_size = u64::from(
@@ -1774,7 +1774,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         base: vmctx,
                         offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                         global_type: pointer_type,
-                        readonly: true,
+                        flags: MemFlags::trusted().with_readonly(),
                     });
                     let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
@@ -1797,7 +1797,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    readonly: true,
+                    flags: MemFlags::trusted().with_readonly(),
                 });
                 let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
@@ -1819,7 +1819,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: ptr,
                     offset: Offset32::new(current_length_offset),
                     global_type: pointer_type,
-                    readonly: false,
+                    flags: MemFlags::trusted(),
                 });
                 (
                     offset_guard_size,
@@ -1843,11 +1843,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             ),
         };
 
+        let mut flags = MemFlags::trusted();
+        if readonly_base {
+            flags.set_readonly();
+        }
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            readonly: readonly_base,
+            flags,
         });
         Ok(self.heaps.push(HeapData {
             base: heap_base,
