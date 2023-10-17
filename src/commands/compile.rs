@@ -87,7 +87,11 @@ impl CompileCommand {
             );
         }
 
+        #[cfg(feature = "wat")]
         let input = wat::parse_file(&self.module).with_context(|| "failed to read input file")?;
+        #[cfg(not(feature = "wat"))]
+        let input = std::fs::read(&self.module)
+            .with_context(|| format!("failed to read input file: {:?}", self.module))?;
 
         let output = self.output.take().unwrap_or_else(|| {
             let mut output: PathBuf = self.module.file_name().unwrap().into();

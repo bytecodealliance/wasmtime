@@ -189,22 +189,24 @@ impl RunCommon {
             None => {
                 // Parse the text format here specifically to add the `path` to
                 // the error message if there's a syntax error.
-                let wasm = wat::parse_bytes(bytes).map_err(|mut e| {
+                #[cfg(feature = "wat")]
+                let bytes = wat::parse_bytes(bytes).map_err(|mut e| {
                     e.set_path(path);
                     e
                 })?;
-                if wasmparser::Parser::is_component(&wasm) {
+                let _ = path;
+                if wasmparser::Parser::is_component(&bytes) {
                     #[cfg(feature = "component-model")]
                     {
                         self.ensure_allow_components()?;
-                        RunTarget::Component(Component::new(engine, &wasm)?)
+                        RunTarget::Component(Component::new(engine, &bytes)?)
                     }
                     #[cfg(not(feature = "component-model"))]
                     {
                         bail!("support for components was not enabled at compile time");
                     }
                 } else {
-                    RunTarget::Core(Module::new(engine, &wasm)?)
+                    RunTarget::Core(Module::new(engine, &bytes)?)
                 }
             }
         })

@@ -41,7 +41,7 @@ anyhow = { workspace = true }
 target-lexicon = { workspace = true }
 once_cell = { workspace = true }
 listenfd = "1.0.0"
-wat = { workspace = true }
+wat = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
@@ -269,7 +269,7 @@ url = "2.3.1"
 [features]
 default = [
   "jitdump",
-  "wasmtime/wat",
+  "wat",
   "wasmtime/parallel-compilation",
   "vtune",
   "wasi-nn",
@@ -296,6 +296,7 @@ component-model = [
 ]
 winch = ["wasmtime/winch"]
 wmemcheck = ["wasmtime/wmemcheck"]
+wat = ["dep:wat"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
