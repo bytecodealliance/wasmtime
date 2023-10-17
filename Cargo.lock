@@ -3396,6 +3396,7 @@ dependencies = [
  "tempfile",
  "test-programs-artifacts",
  "tokio",
+ "tracing",
  "walkdir",
  "wasm-encoder",
  "wasmparser",

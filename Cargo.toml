@@ -47,6 +47,8 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true }
+tracing = { workspace = true }
+log = { workspace = true }
 
 async-trait = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
@@ -300,6 +302,7 @@ wmemcheck = ["wasmtime/wmemcheck"]
 wat = ["dep:wat"]
 cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
 parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
+compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
