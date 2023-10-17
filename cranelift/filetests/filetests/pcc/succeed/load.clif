@@ -62,3 +62,23 @@ block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(64, 0, 0xfff): i64):
     v5 = load.i64 checked v4
     return v5
 }
+
+;; UnsignedOffset mode on aarch64.
+function %f6(i64) -> i64 {
+    mt0 = memory 0x8000
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v2 = iconst.i64 8
+    v3 ! mem(mt0, 8, 8) = iadd.i64 v0, v2
+    v4 = load.i64 checked v3
+    return v4
+}
+
+;; Unscaled mode on aarch64.
+function %f6(i64) -> i64 {
+    mt0 = memory 0x8000
+block0(v0 ! mem(mt0, 8, 8): i64):
+    v2 = iconst.i64 8
+    v3 ! mem(mt0, 0, 0) = isub.i64 v0, v2
+    v4 = load.i64 checked v3
+    return v4
+}

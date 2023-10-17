@@ -23,6 +23,7 @@ use super::Reachability;
 use crate::{FuncEnvironment, HeapData, HeapStyle};
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
+    ir::pcc::Fact,
     ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
 };
 use cranelift_frontend::FunctionBuilder;
@@ -56,6 +57,7 @@ where
     );
     let offset_and_size = offset_plus_size(offset, access_size);
     let spectre_mitigations_enabled = env.heap_access_spectre_mitigation();
+    let pcc = env.proof_carrying_code();
 
     // We need to emit code that will trap (or compute an address that will trap
     // when accessed) if
@@ -95,6 +97,7 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
+                pcc,
                 oob,
             ))
         }
@@ -134,6 +137,7 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
+                pcc,
                 oob,
             ))
         }
@@ -158,6 +162,7 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
+                pcc,
                 oob,
             ))
         }
@@ -187,6 +192,7 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
+                pcc,
                 oob,
             ))
         }
@@ -254,6 +260,7 @@ where
                 env.pointer_type(),
                 index,
                 offset,
+                pcc,
             ))
         }
 
@@ -283,6 +290,7 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
+                pcc,
                 oob,
             ))
         }
@@ -332,6 +340,8 @@ fn explicit_check_oob_condition_and_compute_addr(
     offset: u32,
     // Whether Spectre mitigations are enabled for heap accesses.
     spectre_mitigations_enabled: bool,
+    // Whether we're emitting PCC facts.
+    pcc: bool,
     // The `i8` boolean value that is non-zero when the heap access is out of
     // bounds (and therefore we should trap) and is zero when the heap access is
     // in bounds (and therefore we can proceed).
@@ -342,7 +352,7 @@ fn explicit_check_oob_condition_and_compute_addr(
             .trapnz(oob_condition, ir::TrapCode::HeapOutOfBounds);
     }
 
-    let mut addr = compute_addr(pos, heap, addr_ty, index, offset);
+    let mut addr = compute_addr(pos, heap, addr_ty, index, offset, pcc);
 
     if spectre_mitigations_enabled {
         let null = pos.ins().iconst(addr_ty, 0);
@@ -364,11 +374,42 @@ fn compute_addr(
     addr_ty: ir::Type,
     index: ir::Value,
     offset: u32,
+    pcc: bool,
 ) -> ir::Value {
     debug_assert_eq!(pos.func.dfg.value_type(index), addr_ty);
 
     let heap_base = pos.ins().global_value(addr_ty, heap.base);
+
+    let pcc_memtype = if pcc {
+        Some(
+            heap.memory_type
+                .expect("A memory type is required when PCC is enabled"),
+        )
+    } else {
+        None
+    };
+
+    if let Some(ty) = pcc_memtype {
+        pos.func.dfg.facts[heap_base] = Some(Fact::Mem {
+            ty,
+            min_offset: 0,
+            max_offset: 0,
+        });
+    }
+
     let base_and_index = pos.ins().iadd(heap_base, index);
+
+    if let Some(ty) = pcc_memtype {
+        // TODO: handle memory64 as well. For now we assert that we
+        // have a 32-bit `heap.index_type`.
+        assert_eq!(heap.index_type, ir::types::I32);
+        pos.func.dfg.facts[base_and_index] = Some(Fact::Mem {
+            ty,
+            min_offset: 0,
+            max_offset: u64::from(u32::MAX),
+        });
+    }
+
     if offset == 0 {
         base_and_index
     } else {
@@ -376,7 +417,19 @@ fn compute_addr(
         // `select_spectre_guard`, if any. If it happens after, then we
         // potentially are letting speculative execution read the whole first
         // 4GiB of memory.
-        pos.ins().iadd_imm(base_and_index, offset as i64)
+        let result = pos.ins().iadd_imm(base_and_index, offset as i64);
+        if let Some(ty) = pcc_memtype {
+            pos.func.dfg.facts[result] = Some(Fact::Mem {
+                ty,
+                min_offset: u64::from(offset),
+                // Safety: can't overflow -- two u32s summed in a
+                // 64-bit add. TODO: when memory64 is supported here,
+                // `u32::MAX` is no longer true, and we'll need to
+                // handle overflow here.
+                max_offset: u64::from(u32::MAX) + u64::from(offset),
+            });
+        }
+        result
     }
 }
 

@@ -967,6 +967,29 @@ impl Config {
         self
     }
 
+    /// Controls whether proof-carrying code (PCC) is used to validate
+    /// lowering of Wasm sandbox checks.
+    ///
+    /// Proof-carrying code carries "facts" about program values from
+    /// the IR all the way to machine code, and checks those facts
+    /// against known machine-instruction semantics. This guards
+    /// against bugs in instruction lowering that might create holes
+    /// in the Wasm sandbox.
+    ///
+    /// PCC is designed to be fast: it does not require complex
+    /// solvers or logic engines to verify, but only a linear pass
+    /// over a trail of "breadcrumbs" or facts at each intermediate
+    /// value. Thus, it is appropriate to enable in production.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
+    pub fn cranelift_pcc(&mut self, enable: bool) -> &mut Self {
+        let val = if enable { "true" } else { "false" };
+        self.compiler_config
+            .settings
+            .insert("enable_pcc".to_string(), val.to_string());
+        self
+    }
+
     /// Allows setting a Cranelift boolean flag or preset. This allows
     /// fine-tuning of Cranelift settings.
     ///

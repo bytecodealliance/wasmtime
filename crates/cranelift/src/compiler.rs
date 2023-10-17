@@ -197,7 +197,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
-            readonly: true,
+            flags: MemFlags::trusted().with_readonly(),
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
@@ -205,7 +205,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
-            readonly: false,
+            flags: MemFlags::trusted(),
         });
         context.func.stack_limit = Some(stack_limit);
         let FunctionBodyData { validator, body } = input;

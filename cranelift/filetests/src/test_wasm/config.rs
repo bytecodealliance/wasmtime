@@ -113,6 +113,10 @@ impl TestGlobal {
         if self.vmctx {
             ir::GlobalValueData::VMContext
         } else if let Some(load) = &self.load {
+            let mut flags = ir::MemFlags::trusted();
+            if load.readonly {
+                flags.set_readonly();
+            }
             ir::GlobalValueData::Load {
                 base: name_to_ir_global[&load.base],
                 offset: i32::try_from(load.offset).unwrap().into(),
@@ -121,7 +125,7 @@ impl TestGlobal {
                     "i64" => ir::types::I64,
                     other => panic!("test globals cannot be of type '{other}'"),
                 },
-                readonly: load.readonly,
+                flags,
             }
         } else {
             unreachable!()
@@ -178,6 +182,7 @@ impl TestHeap {
                 "i64" => ir::types::I64,
                 other => panic!("heap indices may only be i32 or i64, found '{other}'"),
             },
+            memory_type: None,
         }
     }
 

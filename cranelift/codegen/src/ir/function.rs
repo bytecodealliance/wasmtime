@@ -5,10 +5,10 @@
 
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
-    self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
-    DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
-    JumpTableData, Layout, MemoryType, MemoryTypeData, Opcode, SigRef, Signature, SourceLocs,
-    StackSlot, StackSlotData, StackSlots, Table, TableData, Type,
+    self, pcc::Fact, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData,
+    DynamicStackSlots, DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst,
+    JumpTable, JumpTableData, Layout, MemoryType, MemoryTypeData, Opcode, SigRef, Signature,
+    SourceLocs, StackSlot, StackSlotData, StackSlots, Table, TableData, Type,
 };
 use crate::isa::CallConv;
 use crate::write::write_function;
@@ -172,6 +172,9 @@ pub struct FunctionStencil {
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
 
+    /// Global value proof-carrying-code facts.
+    pub global_value_facts: SecondaryMap<ir::GlobalValue, Option<Fact>>,
+
     /// Memory types for proof-carrying code.
     pub memory_types: PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
 
@@ -204,6 +207,7 @@ impl FunctionStencil {
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
+        self.global_value_facts.clear();
         self.memory_types.clear();
         self.tables.clear();
         self.dfg.clear();
@@ -417,6 +421,7 @@ impl Function {
                 sized_stack_slots: StackSlots::new(),
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
+                global_value_facts: SecondaryMap::new(),
                 memory_types: PrimaryMap::new(),
                 tables: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),

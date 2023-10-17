@@ -305,7 +305,13 @@ impl Context {
     }
 
     // Allocate a global value slot.
-    fn add_gv(&mut self, gv: GlobalValue, data: GlobalValueData, loc: Location) -> ParseResult<()> {
+    fn add_gv(
+        &mut self,
+        gv: GlobalValue,
+        data: GlobalValueData,
+        maybe_fact: Option<Fact>,
+        loc: Location,
+    ) -> ParseResult<()> {
         self.map.def_gv(gv, loc)?;
         while self.function.global_values.next_key().index() <= gv.index() {
             self.function.create_global_value(GlobalValueData::Symbol {
@@ -316,6 +322,9 @@ impl Context {
             });
         }
         self.function.global_values[gv] = data;
+        if let Some(fact) = maybe_fact {
+            self.function.global_value_facts[gv] = Some(fact);
+        }
         Ok(())
     }
 
@@ -1468,7 +1477,7 @@ impl<'a> Parser<'a> {
                 Some(Token::GlobalValue(..)) => {
                     self.start_gathering_comments();
                     self.parse_global_value_decl()
-                        .and_then(|(gv, dat)| ctx.add_gv(gv, dat, self.loc))
+                        .and_then(|(gv, dat, maybe_fact)| ctx.add_gv(gv, dat, maybe_fact, self.loc))
                 }
                 Some(Token::MemoryType(..)) => {
                     self.start_gathering_comments();
@@ -1574,15 +1583,24 @@ impl<'a> Parser<'a> {
 
     // Parse a global value decl.
     //
-    // global-val-decl ::= * GlobalValue(gv) "=" global-val-desc
+    // global-val-decl ::= * GlobalValue(gv) [ "!" fact ] "=" global-val-desc
     // global-val-desc ::= "vmctx"
     //                   | "load" "." type "notrap" "aligned" GlobalValue(base) [offset]
     //                   | "iadd_imm" "(" GlobalValue(base) ")" imm64
     //                   | "symbol" ["colocated"] name + imm64
     //                   | "dyn_scale_target_const" "." type
     //
-    fn parse_global_value_decl(&mut self) -> ParseResult<(GlobalValue, GlobalValueData)> {
+    fn parse_global_value_decl(
+        &mut self,
+    ) -> ParseResult<(GlobalValue, GlobalValueData, Option<Fact>)> {
         let gv = self.match_gv("expected global value number: gv«n»")?;
+
+        let fact = if self.token() == Some(Token::Bang) {
+            self.consume();
+            Some(self.parse_fact()?)
+        } else {
+            None
+        };
 
         self.match_token(Token::Equal, "expected '=' in global value declaration")?;
 
@@ -1605,7 +1623,7 @@ impl<'a> Parser<'a> {
                     base,
                     offset,
                     global_type,
-                    readonly: flags.readonly(),
+                    flags,
                 }
             }
             "iadd_imm" => {
@@ -1654,7 +1672,7 @@ impl<'a> Parser<'a> {
         self.token();
         self.claim_gathered_comments(gv);
 
-        Ok((gv, data))
+        Ok((gv, data, fact))
     }
 
     // Parse one field definition in a memory-type struct decl.

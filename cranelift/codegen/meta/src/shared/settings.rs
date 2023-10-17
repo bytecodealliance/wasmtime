@@ -67,7 +67,12 @@ pub(crate) fn define() -> SettingGroup {
         "enable_pcc",
         "Enable proof-carrying code translation validation.",
         r#"
-            This adds a proof-carrying code mode. TODO ADD MORE
+            This adds a proof-carrying-code mode. Proof-carrying code (PCC) is a strategy to verify
+            that the compiler preserves certain properties or invariants in the compiled code.
+            For example, a frontend that translates WebAssembly to CLIF can embed PCC facts in
+            the CLIF, and Cranelift will verify that the final machine code satisfies the stated
+            facts at each intermediate computed value. Loads and stores can be marked as "checked"
+            and their memory effects can be verified as safe.
         "#,
         false,
     );
