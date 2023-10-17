@@ -2147,39 +2147,50 @@ impl<'a> Parser<'a> {
 
     // Parse a "fact" for proof-carrying code, attached to a value.
     //
-    // fact ::= "max" "(" bit-width "," max-value ")"
-    //        | "mem" "(" memory-type "," mt-offset ")"
+    // fact ::= "range" "(" bit-width "," min-value "," max-value ")"
+    //        | "mem" "(" memory-type "," mt-offset "," mt-offset ")"
     // bit-width ::= uimm64
+    // min-value ::= uimm64
     // max-value ::= uimm64
     // valid-range ::= uimm64
-    // mt-offset ::= imm64
+    // mt-offset ::= uimm64
     fn parse_fact(&mut self) -> ParseResult<Fact> {
         match self.token() {
-            Some(Token::Identifier("max")) => {
+            Some(Token::Identifier("range")) => {
                 self.consume();
-                self.match_token(Token::LPar, "`max` fact needs an opening `(`")?;
+                self.match_token(Token::LPar, "`range` fact needs an opening `(`")?;
                 let bit_width: u64 = self
-                    .match_uimm64("expected a bit-width value for `max` fact")?
+                    .match_uimm64("expected a bit-width value for `range` fact")?
+                    .into();
+                self.match_token(Token::Comma, "expected a comma")?;
+                let min: u64 = self
+                    .match_uimm64("expected a min value for `range` fact")?
                     .into();
                 self.match_token(Token::Comma, "expected a comma")?;
                 let max: u64 = self
-                    .match_uimm64("expected a max value for `max` fact")?
+                    .match_uimm64("expected a max value for `range` fact")?
                     .into();
-                self.match_token(Token::RPar, "`max` fact needs a closing `)`")?;
+                self.match_token(Token::RPar, "`range` fact needs a closing `)`")?;
                 let bit_width_max = match bit_width {
                     x if x > 64 => {
-                        return Err(self.error("bitwidth must be <= 64 bits on a `max` fact"));
+                        return Err(self.error("bitwidth must be <= 64 bits on a `range` fact"));
                     }
                     64 => u64::MAX,
                     x => (1u64 << x) - 1,
                 };
+                if min > max {
+                    return Err(self.error(
+                        "min value must be less than or equal to max value on a `range` fact",
+                    ));
+                }
                 if max > bit_width_max {
                     return Err(
-                        self.error("max value is out of range for bitwidth on a `max` fact")
+                        self.error("max value is out of range for bitwidth on a `range` fact")
                     );
                 }
-                Ok(Fact::ValueMax {
+                Ok(Fact::Range {
                     bit_width: u16::try_from(bit_width).unwrap(),
+                    min: min.into(),
                     max: max.into(),
                 })
             }
@@ -2191,13 +2202,24 @@ impl<'a> Parser<'a> {
                     Token::Comma,
                     "expected a comma after memory type in `mem` fact",
                 )?;
-                let offset: i64 = self
-                    .match_imm64("expected an imm64 pointer offset for `mem` fact")?
+                let min_offset: u64 = self
+                    .match_uimm64("expected a uimm64 minimum pointer offset for `mem` fact")?
+                    .into();
+                self.match_token(
+                    Token::Comma,
+                    "expected a comma after memory type in `mem` fact",
+                )?;
+                let max_offset: u64 = self
+                    .match_uimm64("expected a uimm64 maximum pointer offset for `mem` fact")?
                     .into();
                 self.match_token(Token::RPar, "expected a `)`")?;
-                Ok(Fact::Mem { ty, offset })
+                Ok(Fact::Mem {
+                    ty,
+                    min_offset,
+                    max_offset,
+                })
             }
-            _ => Err(self.error("expected a `max` or `mem` fact")),
+            _ => Err(self.error("expected a `range` or `mem` fact")),
         }
     }
 
