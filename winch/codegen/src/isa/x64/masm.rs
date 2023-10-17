@@ -380,7 +380,7 @@ impl Masm for MacroAssembler {
         self.load_constant(&mask, scratch_gpr, size);
         let scratch_xmm = regs::scratch_xmm();
         self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
-        self.asm.xor_rr(scratch_xmm, dst, size);
+        self.asm.xmm_xor_rr(scratch_xmm, dst, size);
     }
 
     fn float_abs(&mut self, dst: Reg, size: OperandSize) {
@@ -394,13 +394,13 @@ impl Masm for MacroAssembler {
         self.load_constant(&mask, scratch_gpr, size);
         let scratch_xmm = regs::scratch_xmm();
         self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
-        self.asm.and_rr(scratch_xmm, dst, size);
+        self.asm.xmm_and_rr(scratch_xmm, dst, size);
     }
 
     fn float_round(&mut self, mode: RoundingMode, context: &mut CodeGenContext, size: OperandSize) {
         if self.flags.has_sse41() {
             let src = context.pop_to_reg(self, None);
-            self.asm.rounds(src.into(), src.into(), mode, size);
+            self.asm.xmm_rounds_rr(src.into(), src.into(), mode, size);
             context.stack.push(src.into());
         } else {
             FnCall::emit::<Self, Self::Ptr, _>(self, context, |context| {

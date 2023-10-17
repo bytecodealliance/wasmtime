@@ -1,7 +1,7 @@
 //! Assembler library implementation for x64.
 
 use crate::{
-    isa::reg::{Reg, RegClass},
+    isa::reg::Reg,
     masm::{CmpKind, DivKind, OperandSize, RemKind, RoundingMode, ShiftKind},
 };
 use cranelift_codegen::{
@@ -409,32 +409,13 @@ impl Assembler {
 
     /// "and" two registers.
     pub fn and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        match dst.class() {
-            RegClass::Int => {
-                self.emit(Inst::AluRmiR {
-                    size: size.into(),
-                    op: AluRmiROpcode::And,
-                    src1: dst.into(),
-                    src2: src.into(),
-                    dst: dst.into(),
-                });
-            }
-            RegClass::Float => {
-                let op = match size {
-                    OperandSize::S32 => SseOpcode::Andps,
-                    OperandSize::S64 => SseOpcode::Andpd,
-                    OperandSize::S128 => unreachable!(),
-                };
-
-                self.emit(Inst::XmmRmR {
-                    op,
-                    src1: dst.into(),
-                    src2: XmmMemAligned::from(Xmm::from(src)),
-                    dst: dst.into(),
-                });
-            }
-            RegClass::Vector => unreachable!(),
-        }
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::And,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
+        });
     }
 
     pub fn and_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
@@ -444,6 +425,22 @@ impl Assembler {
             op: AluRmiROpcode::And,
             src1: dst.into(),
             src2: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    /// "and" two float registers.
+    pub fn xmm_and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Andps,
+            OperandSize::S64 => SseOpcode::Andpd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmR {
+            op,
+            src1: dst.into(),
+            src2: XmmMemAligned::from(Xmm::from(src)),
             dst: dst.into(),
         });
     }
@@ -487,32 +484,13 @@ impl Assembler {
 
     /// Logical exclusive or with registers.
     pub fn xor_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        match dst.class() {
-            RegClass::Int => {
-                self.emit(Inst::AluRmiR {
-                    size: size.into(),
-                    op: AluRmiROpcode::Xor,
-                    src1: dst.into(),
-                    src2: src.into(),
-                    dst: dst.into(),
-                });
-            }
-            RegClass::Float => {
-                let op = match size {
-                    OperandSize::S32 => SseOpcode::Xorps,
-                    OperandSize::S64 => SseOpcode::Xorpd,
-                    OperandSize::S128 => unreachable!(),
-                };
-
-                self.emit(Inst::XmmRmR {
-                    op,
-                    src1: dst.into(),
-                    src2: XmmMemAligned::from(Xmm::from(src)),
-                    dst: dst.into(),
-                });
-            }
-            RegClass::Vector => todo!(),
-        }
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Xor,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
+        });
     }
 
     pub fn xor_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
@@ -523,6 +501,22 @@ impl Assembler {
             op: AluRmiROpcode::Xor,
             src1: dst.into(),
             src2: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Logical exclusive or with float registers.
+    pub fn xmm_xor_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Xorps,
+            OperandSize::S64 => SseOpcode::Xorpd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmR {
+            op,
+            src1: dst.into(),
+            src2: XmmMemAligned::from(Xmm::from(src)),
             dst: dst.into(),
         });
     }
@@ -823,7 +817,9 @@ impl Assembler {
         });
     }
 
-    pub fn rounds(&mut self, src: Reg, dst: Reg, mode: RoundingMode, size: OperandSize) {
+    /// Perform rounding operation on float register src and place results in
+    /// float register dst.
+    pub fn xmm_rounds_rr(&mut self, src: Reg, dst: Reg, mode: RoundingMode, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => SseOpcode::Roundss,
             OperandSize::S64 => SseOpcode::Roundsd,
