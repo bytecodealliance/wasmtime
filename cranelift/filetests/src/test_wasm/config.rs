@@ -182,6 +182,7 @@ impl TestHeap {
                 "i64" => ir::types::I64,
                 other => panic!("heap indices may only be i32 or i64, found '{other}'"),
             },
+            memory_type: None,
         }
     }
 
