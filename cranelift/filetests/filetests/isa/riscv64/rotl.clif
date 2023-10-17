@@ -9,13 +9,13 @@ block0(v0: i128, v1: i128):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   sd s7,-8(sp)
 ;   sd s9,-16(sp)
-;   add sp,-16
+;   addi sp,sp,-16
 ; block0:
 ;   andi a5,a2,63
 ;   li a3,64
@@ -31,12 +31,12 @@ block0(v0: i128, v1: i128):
 ;   li a4,64
 ;   andi a2,a2,127
 ;   select [a0,a1],[a5,a3],[a3,a5]##condition=(a2 uge a4)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ld s7,-8(sp)
 ;   ld s9,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

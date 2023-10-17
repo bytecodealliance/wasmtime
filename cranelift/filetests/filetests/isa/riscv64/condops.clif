@@ -129,21 +129,21 @@ block0(v0: i8, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   sd s4,-8(sp)
-;   add sp,-16
+;   addi sp,sp,-16
 ; block0:
 ;   mv s4,a1
 ;   andi a5,a0,255
 ;   select [a0,a1],[s4,a2],[a3,a4]##condition=(a5 ne zero)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ld s4,-8(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

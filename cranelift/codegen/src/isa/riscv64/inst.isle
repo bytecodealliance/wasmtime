@@ -103,8 +103,6 @@
       (from_bits u8)
       (to_bits u8))
 
-    (AdjustSp
-      (amount i64))
     (Call
       (info BoxCallInfo))
 

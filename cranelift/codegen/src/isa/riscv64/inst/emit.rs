@@ -238,7 +238,6 @@ impl Inst {
             | Inst::Rets { .. }
             | Inst::Ret { .. }
             | Inst::Extend { .. }
-            | Inst::AdjustSp { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
             | Inst::ReturnCall { .. }
@@ -1200,29 +1199,7 @@ impl Inst {
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
-            &Inst::AdjustSp { amount } => {
-                if let Some(imm) = Imm12::maybe_from_i64(amount) {
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Addi,
-                        rd: writable_stack_reg(),
-                        rs: stack_reg(),
-                        imm12: imm,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                } else {
-                    let tmp = writable_spilltmp_reg();
-                    let mut insts = Inst::load_constant_u64(tmp, amount as u64);
-                    insts.push(Inst::AluRRR {
-                        alu_op: AluOPRRR::Add,
-                        rd: writable_stack_reg(),
-                        rs1: tmp.to_reg(),
-                        rs2: stack_reg(),
-                    });
-                    insts
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
-                }
-            }
+
             &Inst::Call { ref info } => {
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
@@ -3227,7 +3204,6 @@ impl Inst {
                 from_bits,
                 to_bits,
             },
-            Inst::AdjustSp { .. } => self,
 
             Inst::Call { .. } => self,
             Inst::CallInd { mut info } => {
