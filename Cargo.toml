@@ -22,8 +22,8 @@ path = "src/bin/wasmtime.rs"
 doc = false
 
 [dependencies]
-wasmtime = { workspace = true, features = ['cache', 'cranelift'] }
-wasmtime-cache = { workspace = true }
+wasmtime = { workspace = true, features = ['cranelift'] }
+wasmtime-cache = { workspace = true, optional = true }
 wasmtime-cli-flags = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 wasmtime-environ = { workspace = true }
@@ -270,17 +270,19 @@ url = "2.3.1"
 default = [
   "jitdump",
   "wat",
-  "wasmtime/parallel-compilation",
+  "parallel-compilation",
   "vtune",
   "wasi-nn",
   "wasi-threads",
   "wasi-http",
   "pooling-allocator",
+  "cache",
 
   # All subcommands are included by default.
   "explore",
   "serve",
   "wast",
+  "config",
 ]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
@@ -297,12 +299,15 @@ component-model = [
 winch = ["wasmtime/winch"]
 wmemcheck = ["wasmtime/wmemcheck"]
 wat = ["dep:wat"]
+cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
+parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
 serve = ["wasi-http", "component-model"]
 explore = ["dep:wasmtime-explorer"]
 wast = ["dep:wasmtime-wast"]
+config = ["cache"]
 
 [[test]]
 name = "host_segfault"

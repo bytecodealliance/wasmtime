@@ -391,6 +391,7 @@ impl CommonOptions {
             }
         }
 
+        #[cfg(feature = "cache")]
         if self.codegen.cache != Some(false) {
             match &self.codegen.cache_config {
                 Some(path) => {
@@ -401,9 +402,18 @@ impl CommonOptions {
                 }
             }
         }
+        #[cfg(not(feature = "cache"))]
+        if self.codegen.cache == Some(true) {
+            anyhow::bail!("support for caching disabled at compile time");
+        }
 
+        #[cfg(feature = "parallel-compilation")]
         if let Some(enable) = self.codegen.parallel_compilation {
             config.parallel_compilation(enable);
+        }
+        #[cfg(not(feature = "parallel-compilation"))]
+        if let Some(true) = self.codegen.parallel_compilation {
+            anyhow::bail!("support for parallel compilation disabled at compile time");
         }
 
         if let Some(max) = self.opts.static_memory_maximum_size {

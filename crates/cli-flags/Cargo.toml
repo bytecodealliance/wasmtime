@@ -18,12 +18,7 @@ wasmtime = { workspace = true }
 humantime = "2.0.0"
 
 [features]
-default = [
-    "wasmtime/cache",
-    "wasmtime/cranelift",
-    "wasmtime/jitdump",
-    "wasmtime/vtune",
-    "wasmtime/parallel-compilation",
-]
 pooling-allocator = []
 component-model = ["wasmtime/component-model"]
+cache = ["wasmtime/cache"]
+parallel-compilation = ["wasmtime/parallel-compilation"]

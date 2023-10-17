@@ -1,11 +1,10 @@
 //! The module for the Wasmtime CLI commands.
 
 mod compile;
-mod config;
 mod run;
 mod settings;
 
-pub use self::{compile::*, config::*, run::*, settings::*};
+pub use self::{compile::*, run::*, settings::*};
 
 #[cfg(feature = "serve")]
 mod serve;
@@ -21,3 +20,8 @@ pub use self::explore::*;
 mod wast;
 #[cfg(feature = "wast")]
 pub use self::wast::*;
+
+#[cfg(feature = "cache")]
+mod config;
+#[cfg(feature = "cache")]
+pub use self::config::*;

@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use wasmtime_cli::commands::{CompileCommand, ConfigCommand, RunCommand, SettingsCommand};
+use wasmtime_cli::commands::{CompileCommand, RunCommand, SettingsCommand};
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser)]
@@ -44,7 +44,8 @@ struct Wasmtime {
 #[derive(Parser)]
 enum Subcommand {
     /// Controls Wasmtime configuration settings
-    Config(ConfigCommand),
+    #[cfg(feature = "cache")]
+    Config(wasmtime_cli::commands::ConfigCommand),
     /// Compiles a WebAssembly module.
     Compile(CompileCommand),
     /// Explore the compilation of a WebAssembly module to native code.
@@ -67,6 +68,7 @@ impl Wasmtime {
     pub fn execute(self) -> Result<()> {
         let subcommand = self.subcommand.unwrap_or(Subcommand::Run(self.run));
         match subcommand {
+            #[cfg(feature = "cache")]
             Subcommand::Config(c) => c.execute(),
             Subcommand::Compile(c) => c.execute(),
             #[cfg(feature = "explore")]
