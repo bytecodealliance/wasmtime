@@ -256,7 +256,7 @@ impl Config {
     pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
         if self.wasmtime.consume_fuel {
-            store.add_fuel(u64::max_value()).unwrap();
+            store.set_fuel(u64::MAX).unwrap();
         }
         if self.wasmtime.epoch_interruption {
             // Without fuzzing of async execution, we can't test the

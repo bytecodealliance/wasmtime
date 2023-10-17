@@ -71,19 +71,24 @@ WASMTIME_CONFIG_PROP(void, async_support, bool)
 WASMTIME_CONFIG_PROP(void, async_stack_size, uint64_t)
 
 /**
- * \brief Configures a Store to yield execution of async WebAssembly code periodically.
+ * \brief Configures a Store to yield execution of async WebAssembly code
+ * periodically.
  *
- * When a Store is configured to consume fuel with `wasmtime_config_consume_fuel` 
- * this method will configure what happens when fuel runs out. Specifically executing
- * WebAssembly will be suspended and control will be yielded back to the caller.
+ * When a Store is configured to consume fuel with
+ * `wasmtime_config_consume_fuel` this method will configure what happens when
+ * fuel runs out. Specifically executing WebAssembly will be suspended and
+ * control will be yielded back to the caller.
  *
- * This is only suitable with use of a store associated with an async config because
- * only then are futures used and yields are possible.
+ * This is only suitable with use of a store associated with an async config
+ * because only then are futures used and yields are possible.
+ *
+ * \param context the context for the store to configure.
+ * \param interval the amount of fuel at which to yield. A value of 0 will
+ *        disable yielding.
  */
-WASM_API_EXTERN void wasmtime_context_out_of_fuel_async_yield(
-    wasmtime_context_t *context,
-    uint64_t injection_count,
-    uint64_t fuel_to_inject);
+WASM_API_EXTERN void
+wasmtime_context_fuel_async_yield_interval(wasmtime_context_t *context,
+                                           uint64_t interval);
 
 /**
  * \brief Configures epoch-deadline expiration to yield to the async caller and the update the deadline.
@@ -94,7 +99,7 @@ WASM_API_EXTERN void wasmtime_context_out_of_fuel_async_yield(
  * See the Rust documentation for more:
  * https://docs.wasmtime.dev/api/wasmtime/struct.Store.html#method.epoch_deadline_async_yield_and_update
  */
-WASM_API_EXTERN void wasmtime_context_epoch_deadline_async_yield_and_update(
+WASM_API_EXTERN wasmtime_error_t* wasmtime_context_epoch_deadline_async_yield_and_update(
     wasmtime_context_t *context,
     uint64_t delta);
 
@@ -170,8 +175,8 @@ typedef struct wasmtime_call_future wasmtime_call_future_t;
  * called again for a given future.
  *
  * This function returns false if execution has yielded either due to being out of fuel 
- * (see wasmtime_store_out_of_fuel_async_yield), or the epoch has been incremented enough 
- * (see wasmtime_store_epoch_deadline_async_yield_and_update). The function may also return false if 
+ * (see wasmtime_context_fuel_async_yield_interval), or the epoch has been incremented enough 
+ * (see wasmtime_context_epoch_deadline_async_yield_and_update). The function may also return false if 
  * asynchronous host functions have been called, which then calling this  function will call the 
  * continuation from the async host function.
  *

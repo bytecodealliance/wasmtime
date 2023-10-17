@@ -176,7 +176,7 @@ impl RunCommand {
         // If fuel has been configured, we want to add the configured
         // fuel amount to this store.
         if let Some(fuel) = self.run.common.wasm.fuel {
-            store.add_fuel(fuel)?;
+            store.set_fuel(fuel)?;
         }
 
         // Load the preload wasm modules.

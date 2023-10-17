@@ -84,11 +84,11 @@ use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use crate::{Global, Instance, Memory};
 use anyhow::{anyhow, bail, Result};
 use std::cell::UnsafeCell;
-use std::convert::TryFrom;
 use std::fmt;
 use std::future::Future;
 use std::marker;
 use std::mem::{self, ManuallyDrop};
+use std::num::NonZeroU64;
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::ptr;
@@ -306,12 +306,14 @@ pub struct StoreOpaque {
     memory_limit: usize,
     table_count: usize,
     table_limit: usize,
-    /// An adjustment to add to the fuel consumed value in `runtime_limits` above
-    /// to get the true amount of fuel consumed.
-    fuel_adj: i64,
     #[cfg(feature = "async")]
     async_state: AsyncState,
-    out_of_gas_behavior: OutOfGas,
+    // If fuel_yield_interval is enabled, then we store the remaining fuel (that isn't in
+    // runtime_limits) here. The total amount of fuel is the runtime limits and reserve added
+    // together. Then when we run out of gas, we inject the yield amount from the reserve
+    // until the reserve is empty.
+    fuel_reserve: u64,
+    fuel_yield_interval: Option<NonZeroU64>,
     /// Indexed data within this `Store`, used to store information about
     /// globals, functions, memories, etc.
     ///
@@ -458,15 +460,6 @@ enum StoreInstanceKind {
     Dummy,
 }
 
-#[derive(Copy, Clone)]
-enum OutOfGas {
-    Trap,
-    InjectFuel {
-        injection_count: u64,
-        fuel_to_inject: u64,
-    },
-}
-
 impl<T> Store<T> {
     /// Creates a new [`Store`] to be associated with the given [`Engine`] and
     /// `data` provided.
@@ -498,13 +491,13 @@ impl<T> Store<T> {
                 memory_limit: crate::DEFAULT_MEMORY_LIMIT,
                 table_count: 0,
                 table_limit: crate::DEFAULT_TABLE_LIMIT,
-                fuel_adj: 0,
                 #[cfg(feature = "async")]
                 async_state: AsyncState {
                     current_suspend: UnsafeCell::new(ptr::null()),
                     current_poll_cx: UnsafeCell::new(ptr::null_mut()),
                 },
-                out_of_gas_behavior: OutOfGas::Trap,
+                fuel_reserve: 0,
+                fuel_yield_interval: None,
                 store_data: ManuallyDrop::new(StoreData::new()),
                 default_caller: InstanceHandle::null(),
                 hostcall_val_storage: Vec::new(),
@@ -787,31 +780,17 @@ impl<T> Store<T> {
         self.inner.gc()
     }
 
-    /// Returns the amount of fuel consumed by this store's execution so far.
+    /// Returns the amount fuel in this [`Store`].
     ///
     /// If fuel consumption is not enabled via
     /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
     /// function will return `None`. Also note that fuel, if enabled, must be
-    /// originally configured via [`Store::add_fuel`] or [`Store::reset_fuel`].
-    ///
-    /// Note that this function returns the amount of fuel consumed since the
-    /// last time [`reset_fuel`][Store::reset_fuel] was called, or since the creation
-    /// of the store if it's never been called.
-    pub fn fuel_consumed(&self) -> Option<u64> {
-        self.inner.fuel_consumed()
+    /// originally configured via [`Store::set_fuel`].
+    pub fn get_fuel(&self) -> Result<u64> {
+        self.inner.get_fuel()
     }
 
-    /// Returns remaining fuel in this [`Store`].
-    ///
-    /// If fuel consumption is not enabled via
-    /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
-    /// function will return `None`. Also note that fuel, if enabled, must be
-    /// originally configured via [`Store::add_fuel`].
-    pub fn fuel_remaining(&mut self) -> Option<u64> {
-        self.inner.fuel_remaining()
-    }
-
-    /// Adds fuel to this [`Store`] for wasm to consume while executing.
+    /// Set the fuel to this [`Store`] for wasm to consume while executing.
     ///
     /// For this method to work fuel consumption must be enabled via
     /// [`Config::consume_fuel`](crate::Config::consume_fuel). By default a
@@ -824,66 +803,14 @@ impl<T> Store<T> {
     /// units, as any execution cost associated with them involves other
     /// instructions which do consume fuel.
     ///
-    /// Note that at this time when fuel is entirely consumed it will cause
-    /// wasm to trap. More usages of fuel are planned for the future.
+    /// Note that when fuel is entirely consumed it will cause wasm to trap.
     ///
     /// # Errors
     ///
     /// This function will return an error if fuel consumption is not enabled via
     /// [`Config::consume_fuel`](crate::Config::consume_fuel).
-    pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
-        self.inner.add_fuel(fuel)
-    }
-    ///
-    /// Set the remaining fuel to this [`Store`] for wasm to consume while executing.
-    ///
-    /// See [`Store::add_fuel`] for more information about fuel.
-    ///
-    /// This method will also reset the amount of fuel that has been consumed.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if fuel consumption is not enabled via
-    /// [`Config::consume_fuel`](crate::Config::consume_fuel).
-    pub fn reset_fuel(&mut self, fuel: u64) -> Result<()> {
-        self.inner.reset_fuel(fuel)
-    }
-
-    /// Synthetically consumes fuel from this [`Store`].
-    ///
-    /// For this method to work fuel consumption must be enabled via
-    /// [`Config::consume_fuel`](crate::Config::consume_fuel).
-    ///
-    /// WebAssembly execution will automatically consume fuel but if so desired
-    /// the embedder can also consume fuel manually to account for relative
-    /// costs of host functions, for example.
-    ///
-    /// This function will attempt to consume `fuel` units of fuel from within
-    /// this store. If the remaining amount of fuel allows this then `Ok(N)` is
-    /// returned where `N` is the amount of remaining fuel. Otherwise an error
-    /// is returned and no fuel is consumed.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error either if fuel consumption is not
-    /// enabled via [`Config::consume_fuel`](crate::Config::consume_fuel) or if
-    /// `fuel` exceeds the amount of remaining fuel within this store.
-    pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
-        self.inner.consume_fuel(fuel)
-    }
-
-    /// Configures a [`Store`] to generate a [`Trap`] whenever it runs out of
-    /// fuel.
-    ///
-    /// When a [`Store`] is configured to consume fuel with
-    /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
-    /// configure what happens when fuel runs out. Specifically a WebAssembly
-    /// trap will be raised and the current execution of WebAssembly will be
-    /// aborted.
-    ///
-    /// This is the default behavior for running out of fuel.
-    pub fn out_of_fuel_trap(&mut self) {
-        self.inner.out_of_fuel_trap()
+    pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.inner.set_fuel(fuel)
     }
 
     /// Configures a [`Store`] to yield execution of async WebAssembly code
@@ -891,11 +818,10 @@ impl<T> Store<T> {
     ///
     /// When a [`Store`] is configured to consume fuel with
     /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
-    /// configure what happens when fuel runs out. Specifically executing
-    /// WebAssembly will be suspended and control will be yielded back to the
-    /// caller. This is only suitable with use of a store associated with an [async
-    /// config](crate::Config::async_support) because only then are futures used and yields
-    /// are possible.
+    /// configure WebAssembly to be suspended and control will be yielded back to the
+    /// caller every `interval` units of fuel consumed. This is only suitable with use of
+    /// a store associated with an [async config](crate::Config::async_support) because
+    /// only then are futures used and yields are possible.
     ///
     /// The purpose of this behavior is to ensure that futures which represent
     /// execution of WebAssembly do not execute too long inside their
@@ -908,21 +834,15 @@ impl<T> Store<T> {
     /// WebAssembly will continue to execute, just after giving the host an
     /// opportunity to do something else.
     ///
-    /// The `fuel_to_inject` parameter indicates how much fuel should be
-    /// automatically re-injected after fuel runs out. This is how much fuel
-    /// will be consumed between yields of an async future.
+    /// The `interval` parameter indicates how much fuel should be
+    /// consumed between yields of an async future. When fuel runs out wasm will trap.
     ///
-    /// The `injection_count` parameter indicates how many times this fuel will
-    /// be injected. Multiplying the two parameters is the total amount of fuel
-    /// this store is allowed before wasm traps.
+    /// # Error
     ///
-    /// # Panics
-    ///
-    /// This method will panic if it is not called on a store associated with an [async
+    /// This method will error if it is not called on a store associated with an [async
     /// config](crate::Config::async_support).
-    pub fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
-        self.inner
-            .out_of_fuel_async_yield(injection_count, fuel_to_inject)
+    pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
+        self.inner.fuel_async_yield_interval(interval)
     }
 
     /// Sets the epoch deadline to a certain number of ticks in the future.
@@ -1066,18 +986,11 @@ impl<'a, T> StoreContext<'a, T> {
         self.0.data()
     }
 
-    /// Returns the fuel consumed by this store.
+    /// Returns the remaining fuel in this store.
     ///
-    /// For more information see [`Store::fuel_consumed`].
-    pub fn fuel_consumed(&self) -> Option<u64> {
-        self.0.fuel_consumed()
-    }
-
-    /// Returns remaining fuel in this store.
-    ///
-    /// For more information see [`Store::fuel_remaining`]
-    pub fn fuel_remaining(&mut self) -> Option<u64> {
-        self.0.fuel_remaining()
+    /// For more information see [`Store::get_fuel`].
+    pub fn get_fuel(&self) -> Result<u64> {
+        self.0.get_fuel()
     }
 }
 
@@ -1108,55 +1021,25 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.gc()
     }
 
-    /// Returns the fuel consumed by this store.
-    ///
-    /// For more information see [`Store::fuel_consumed`].
-    pub fn fuel_consumed(&self) -> Option<u64> {
-        self.0.fuel_consumed()
-    }
-
     /// Returns remaining fuel in this store.
     ///
-    /// For more information see [`Store::fuel_remaining`]
-    pub fn fuel_remaining(&self) -> Option<u64> {
-        self.0.fuel_remaining()
+    /// For more information see [`Store::get_fuel`]
+    pub fn get_fuel(&self) -> Result<u64> {
+        self.0.get_fuel()
     }
 
-    /// Inject more fuel into this store to be consumed when executing wasm code.
+    /// Set the amount of fuel in this store.
     ///
-    /// For more information see [`Store::add_fuel`]
-    pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
-        self.0.add_fuel(fuel)
+    /// For more information see [`Store::set_fuel`]
+    pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.0.set_fuel(fuel)
     }
 
-    /// Synthetically consume fuel from this store.
+    /// Configures this `Store` to periodically yield while executing futures.
     ///
-    /// For more information see [`Store::consume_fuel`]
-    pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
-        self.0.consume_fuel(fuel)
-    }
-
-    /// Set the fuel for this store to be consumed when executing wasm code.
-    ///
-    /// For more information see [`Store::reset_fuel`]
-    pub fn reset_fuel(&mut self, fuel: u64) -> Result<()> {
-        self.0.reset_fuel(fuel)
-    }
-
-    /// Configures this `Store` to trap whenever fuel runs out.
-    ///
-    /// For more information see [`Store::out_of_fuel_trap`]
-    pub fn out_of_fuel_trap(&mut self) {
-        self.0.out_of_fuel_trap()
-    }
-
-    /// Configures this `Store` to yield while executing futures whenever fuel
-    /// runs out.
-    ///
-    /// For more information see [`Store::out_of_fuel_async_yield`]
-    pub fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
-        self.0
-            .out_of_fuel_async_yield(injection_count, fuel_to_inject)
+    /// For more information see [`Store::fuel_async_yield_interval`]
+    pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
+        self.0.fuel_async_yield_interval(interval)
     }
 
     /// Sets the epoch deadline to a certain number of ticks in the future.
@@ -1222,6 +1105,45 @@ impl<T> StoreInner<T> {
             None => Ok(()),
         }
     }
+}
+
+fn get_fuel(injected_fuel: i64, fuel_reserve: u64) -> u64 {
+    fuel_reserve.saturating_add_signed(-injected_fuel)
+}
+
+// Add remaining fuel from the reserve into the active fuel if there is any left.
+fn refuel(
+    injected_fuel: &mut i64,
+    fuel_reserve: &mut u64,
+    yield_interval: Option<NonZeroU64>,
+) -> bool {
+    let fuel = get_fuel(*injected_fuel, *fuel_reserve);
+    if fuel > 0 {
+        set_fuel(injected_fuel, fuel_reserve, yield_interval, fuel);
+        true
+    } else {
+        false
+    }
+}
+
+fn set_fuel(
+    injected_fuel: &mut i64,
+    fuel_reserve: &mut u64,
+    yield_interval: Option<NonZeroU64>,
+    new_fuel_amount: u64,
+) {
+    let interval = yield_interval.unwrap_or(NonZeroU64::MAX).get();
+    // If we're yielding periodically we only store the "active" amount of fuel into consumed_ptr
+    // for the VM to use.
+    let injected = std::cmp::min(interval, new_fuel_amount);
+    // Fuel in the VM is stored as an i64, so we have to cap the amount of fuel we inject into the
+    // VM at once to be i64 range.
+    let injected = std::cmp::min(injected, i64::MAX as u64);
+    // Add whatever is left over after injection to the reserve for later use.
+    *fuel_reserve = new_fuel_amount - injected;
+    // Within the VM we increment to count fuel, so inject a negative amount. The VM will halt when
+    // this counter is positive.
+    *injected_fuel = -(injected as i64);
 }
 
 #[doc(hidden)]
@@ -1465,35 +1387,55 @@ impl StoreOpaque {
         })
     }
 
-    pub fn fuel_consumed(&self) -> Option<u64> {
-        if !self.engine.config().tunables.consume_fuel {
-            return None;
-        }
-        let consumed = unsafe { *self.runtime_limits.fuel_consumed.get() };
-        Some(u64::try_from(self.fuel_adj + consumed).unwrap())
-    }
-
-    fn fuel_remaining(&self) -> Option<u64> {
-        if !self.engine.config().tunables.consume_fuel {
-            return None;
-        }
-        let consumed = unsafe { *self.runtime_limits.fuel_consumed.get() };
-        Some(u64::try_from(-consumed).unwrap())
-    }
-
-    fn out_of_fuel_trap(&mut self) {
-        self.out_of_gas_behavior = OutOfGas::Trap;
-    }
-
-    fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
-        assert!(
-            self.async_support(),
-            "cannot use `out_of_fuel_async_yield` without enabling async support in the config"
+    pub fn get_fuel(&self) -> Result<u64> {
+        anyhow::ensure!(
+            self.engine().config().tunables.consume_fuel,
+            "fuel is not configured in this store"
         );
-        self.out_of_gas_behavior = OutOfGas::InjectFuel {
-            injection_count,
-            fuel_to_inject,
-        };
+        let injected_fuel = unsafe { *self.runtime_limits.fuel_consumed.get() };
+        Ok(get_fuel(injected_fuel, self.fuel_reserve))
+    }
+
+    fn refuel(&mut self) -> bool {
+        let injected_fuel = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
+        refuel(
+            injected_fuel,
+            &mut self.fuel_reserve,
+            self.fuel_yield_interval,
+        )
+    }
+
+    pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        anyhow::ensure!(
+            self.engine().config().tunables.consume_fuel,
+            "fuel is not configured in this store"
+        );
+        let injected_fuel = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
+        set_fuel(
+            injected_fuel,
+            &mut self.fuel_reserve,
+            self.fuel_yield_interval,
+            fuel,
+        );
+        Ok(())
+    }
+
+    pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
+        anyhow::ensure!(
+            self.engine().config().tunables.consume_fuel,
+            "fuel is not configured in this store"
+        );
+        anyhow::ensure!(
+            self.engine().config().async_support,
+            "async support is not configured in this store"
+        );
+        anyhow::ensure!(
+            interval != Some(0),
+            "fuel_async_yield_interval must not be 0"
+        );
+        self.fuel_yield_interval = interval.and_then(|i| NonZeroU64::new(i));
+        // Reset the fuel active + reserve states by resetting the amount.
+        self.set_fuel(self.get_fuel()?)
     }
 
     /// Yields execution to the caller on out-of-gas or epoch interruption.
@@ -1539,69 +1481,6 @@ impl StoreOpaque {
                 .expect("attempted to pull async context during shutdown")
                 .block_on(Pin::new_unchecked(&mut future))
         }
-    }
-
-    fn add_fuel(&mut self, fuel: u64) -> Result<()> {
-        anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
-            "fuel is not configured in this store"
-        );
-
-        // Fuel is stored as an i64, so we need to cast it. If the provided fuel
-        // value overflows that just assume that i64::max will suffice. Wasm
-        // execution isn't fast enough to burn through i64::max fuel in any
-        // reasonable amount of time anyway.
-        let fuel = i64::try_from(fuel).unwrap_or(i64::max_value());
-        let adj = self.fuel_adj;
-        let consumed_ptr = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
-
-        match (consumed_ptr.checked_sub(fuel), adj.checked_add(fuel)) {
-            // If we succesfully did arithmetic without overflowing then we can
-            // just update our fields.
-            (Some(consumed), Some(adj)) => {
-                self.fuel_adj = adj;
-                *consumed_ptr = consumed;
-            }
-
-            // Otherwise something overflowed. Make sure that we preserve the
-            // amount of fuel that's already consumed, but otherwise assume that
-            // we were given infinite fuel.
-            _ => {
-                self.fuel_adj = i64::max_value();
-                *consumed_ptr = (*consumed_ptr + adj) - i64::max_value();
-            }
-        }
-
-        Ok(())
-    }
-
-    fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
-        anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
-            "fuel is not configured in this store"
-        );
-        let consumed_ptr = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
-        match i64::try_from(fuel)
-            .ok()
-            .and_then(|fuel| consumed_ptr.checked_add(fuel))
-        {
-            Some(consumed) if consumed <= 0 => {
-                *consumed_ptr = consumed;
-                Ok(u64::try_from(-consumed).unwrap())
-            }
-            _ => bail!("not enough fuel remaining in store"),
-        }
-    }
-
-    fn reset_fuel(&mut self, fuel: u64) -> Result<()> {
-        anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
-            "fuel is not configured in this store"
-        );
-        let fuel = i64::try_from(fuel).unwrap_or(i64::max_value());
-        self.fuel_adj = fuel;
-        unsafe { *self.runtime_limits.fuel_consumed.get() = -fuel };
-        Ok(())
     }
 
     #[inline]
@@ -2212,28 +2091,15 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
-    fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
-        return match &mut self.out_of_gas_behavior {
-            OutOfGas::Trap => Err(Trap::OutOfFuel.into()),
-            #[cfg(feature = "async")]
-            OutOfGas::InjectFuel {
-                injection_count,
-                fuel_to_inject,
-            } => {
-                if *injection_count == 0 {
-                    return Err(Trap::OutOfFuel.into());
-                }
-                *injection_count -= 1;
-                let fuel = *fuel_to_inject;
-                self.async_yield_impl()?;
-                if fuel > 0 {
-                    self.add_fuel(fuel).unwrap();
-                }
-                Ok(())
-            }
-            #[cfg(not(feature = "async"))]
-            OutOfGas::InjectFuel { .. } => unreachable!(),
-        };
+    fn out_of_gas(&mut self) -> Result<()> {
+        if !self.refuel() {
+            return Err(Trap::OutOfFuel.into());
+        }
+        #[cfg(feature = "async")]
+        if self.fuel_yield_interval.is_some() {
+            self.async_yield_impl()?;
+        }
+        Ok(())
     }
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
@@ -2396,5 +2262,127 @@ impl<T: Copy> Drop for Reset<T> {
         unsafe {
             *self.0 = self.1;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get_fuel, refuel, set_fuel};
+    use std::num::NonZeroU64;
+
+    struct FuelTank {
+        pub consumed_fuel: i64,
+        pub reserve_fuel: u64,
+        pub yield_interval: Option<NonZeroU64>,
+    }
+
+    impl FuelTank {
+        fn new() -> Self {
+            FuelTank {
+                consumed_fuel: 0,
+                reserve_fuel: 0,
+                yield_interval: None,
+            }
+        }
+        fn get_fuel(&self) -> u64 {
+            get_fuel(self.consumed_fuel, self.reserve_fuel)
+        }
+        fn refuel(&mut self) -> bool {
+            refuel(
+                &mut self.consumed_fuel,
+                &mut self.reserve_fuel,
+                self.yield_interval,
+            )
+        }
+        fn set_fuel(&mut self, fuel: u64) {
+            set_fuel(
+                &mut self.consumed_fuel,
+                &mut self.reserve_fuel,
+                self.yield_interval,
+                fuel,
+            );
+        }
+    }
+
+    #[test]
+    fn smoke() {
+        let mut tank = FuelTank::new();
+        tank.set_fuel(10);
+        assert_eq!(tank.consumed_fuel, -10);
+        assert_eq!(tank.reserve_fuel, 0);
+
+        tank.yield_interval = NonZeroU64::new(10);
+        tank.set_fuel(25);
+        assert_eq!(tank.consumed_fuel, -10);
+        assert_eq!(tank.reserve_fuel, 15);
+    }
+
+    #[test]
+    fn does_not_lose_precision() {
+        let mut tank = FuelTank::new();
+        tank.set_fuel(u64::MAX);
+        assert_eq!(tank.get_fuel(), u64::MAX);
+
+        tank.set_fuel(i64::MAX as u64);
+        assert_eq!(tank.get_fuel(), i64::MAX as u64);
+
+        tank.set_fuel(i64::MAX as u64 + 1);
+        assert_eq!(tank.get_fuel(), i64::MAX as u64 + 1);
+    }
+
+    #[test]
+    fn yielding_does_not_lose_precision() {
+        let mut tank = FuelTank::new();
+
+        tank.yield_interval = NonZeroU64::new(10);
+        tank.set_fuel(u64::MAX);
+        assert_eq!(tank.get_fuel(), u64::MAX);
+        assert_eq!(tank.consumed_fuel, -10);
+        assert_eq!(tank.reserve_fuel, u64::MAX - 10);
+
+        tank.yield_interval = NonZeroU64::new(u64::MAX);
+        tank.set_fuel(u64::MAX);
+        assert_eq!(tank.get_fuel(), u64::MAX);
+        assert_eq!(tank.consumed_fuel, -i64::MAX);
+        assert_eq!(tank.reserve_fuel, u64::MAX - (i64::MAX as u64));
+
+        tank.yield_interval = NonZeroU64::new((i64::MAX as u64) + 1);
+        tank.set_fuel(u64::MAX);
+        assert_eq!(tank.get_fuel(), u64::MAX);
+        assert_eq!(tank.consumed_fuel, -i64::MAX);
+        assert_eq!(tank.reserve_fuel, u64::MAX - (i64::MAX as u64));
+    }
+
+    #[test]
+    fn refueling() {
+        // It's possible to fuel to have consumed over the limit as some instructions can consume
+        // multiple units of fuel at once. Refueling should be strict in it's consumption and not
+        // add more fuel than there is.
+        let mut tank = FuelTank::new();
+
+        tank.yield_interval = NonZeroU64::new(10);
+        tank.reserve_fuel = 42;
+        tank.consumed_fuel = 4;
+        assert!(tank.refuel());
+        assert_eq!(tank.reserve_fuel, 28);
+        assert_eq!(tank.consumed_fuel, -10);
+
+        tank.yield_interval = NonZeroU64::new(1);
+        tank.reserve_fuel = 8;
+        tank.consumed_fuel = 4;
+        assert_eq!(tank.get_fuel(), 4);
+        assert!(tank.refuel());
+        assert_eq!(tank.reserve_fuel, 3);
+        assert_eq!(tank.consumed_fuel, -1);
+        assert_eq!(tank.get_fuel(), 4);
+
+        tank.yield_interval = NonZeroU64::new(10);
+        tank.reserve_fuel = 3;
+        tank.consumed_fuel = 4;
+        assert_eq!(tank.get_fuel(), 0);
+        assert!(!tank.refuel());
+        assert_eq!(tank.reserve_fuel, 3);
+        assert_eq!(tank.consumed_fuel, 4);
+        assert_eq!(tank.get_fuel(), 0);
     }
 }

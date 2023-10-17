@@ -338,7 +338,7 @@ impl Config {
     ///
     /// * Alternatively you can enable the
     ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
-    ///   as [`crate::Store::out_of_fuel_async_yield`] When doing so this will
+    ///   as [`crate::Store::fuel_async_yield_interval`] When doing so this will
     ///   configure Wasmtime futures to yield periodically while they're
     ///   executing WebAssembly code. After consuming the specified amount of
     ///   fuel wasm futures will return `Poll::Pending` from their `poll`
@@ -456,8 +456,9 @@ impl Config {
     ///
     /// This can be used to deterministically prevent infinitely-executing
     /// WebAssembly code by instrumenting generated code to consume fuel as it
-    /// executes. When fuel runs out the behavior is defined by configuration
-    /// within a [`Store`], and by default a trap is raised.
+    /// executes. When fuel runs out a trap is raised, however [`Store`] can be
+    /// configured to yield execution periodically via
+    /// [`crate::Store::fuel_async_yield_interval`].
     ///
     /// Note that a [`Store`] starts with no fuel, so if you enable this option
     /// you'll have to be sure to pour some fuel into [`Store`] before
