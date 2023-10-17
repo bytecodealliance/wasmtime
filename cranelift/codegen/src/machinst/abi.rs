@@ -1319,7 +1319,7 @@ fn generate_gv<M: ABIMachineSpec>(
             base,
             offset,
             global_type: _,
-            readonly: _,
+            flags: _,
         } => {
             let base = generate_gv::<M>(f, sigs, sig, base, insts);
             let into_reg = Writable::from_reg(M::get_stacklimit_reg(f.stencil.signature.call_conv));

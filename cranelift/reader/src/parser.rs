@@ -1623,7 +1623,7 @@ impl<'a> Parser<'a> {
                     base,
                     offset,
                     global_type,
-                    readonly: flags.readonly(),
+                    flags,
                 }
             }
             "iadd_imm" => {

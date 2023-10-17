@@ -53,6 +53,10 @@
 //! - Support bounds-checking-type operations for dynamic memories and
 //!   tables.
 //!
+//! More checks:
+//! - Check that facts on `vmctx` GVs are subsumed by the actual facts
+//!   on the vmctx arg in block0 (function arg).
+//!
 //! Generality:
 //! - facts on outputs (in func signature)?
 //! - Implement checking at the CLIF level as well.
@@ -79,6 +83,7 @@ use crate::ir;
 use crate::ir::types::*;
 use crate::isa::TargetIsa;
 use crate::machinst::{BlockIndex, LowerBackend, MachInst, VCode};
+use crate::trace;
 use regalloc2::Function as _;
 use std::fmt;
 
@@ -440,6 +445,13 @@ impl<'a> FactContext<'a> {
         // support positive offsets.
         let offset = u64::try_from(offset).ok()?;
 
+        trace!(
+            "FactContext::offset: {:?} + {} in width {}",
+            fact,
+            offset,
+            width
+        );
+
         match fact {
             Fact::Range {
                 bit_width,
@@ -460,8 +472,8 @@ impl<'a> FactContext<'a> {
                 min_offset: mem_min_offset,
                 max_offset: mem_max_offset,
             } => {
-                let min_offset = mem_min_offset.checked_sub(offset)?;
-                let max_offset = mem_max_offset.checked_sub(offset)?;
+                let min_offset = mem_min_offset.checked_add(offset)?;
+                let max_offset = mem_max_offset.checked_add(offset)?;
                 Some(Fact::Mem {
                     ty: *ty,
                     min_offset,

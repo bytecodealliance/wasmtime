@@ -346,9 +346,7 @@ fn check_addr<'a>(
             let rm = get_fact_or_default(vcode, rm)?;
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_extended, 64))?;
-            trace!("rn = {rn:?} rm = {rm:?} rm_extended = {rm_extended:?} sum = {sum:?}");
             check(&sum, ty)?;
-            trace!(" -> checks out!");
             Ok(())
         }
         &AMode::Unscaled { rn, simm9 } => {
@@ -358,11 +356,13 @@ fn check_addr<'a>(
         }
         &AMode::UnsignedOffset { rn, uimm12 } => {
             let rn = get_fact_or_default(vcode, rn)?;
-            // Safety: this will not overflow: `size` should be at
-            // most 32 or 64 for large vector ops, and the `uimm12`'s
-            // value is at most 4095.
-            let uimm12: u64 = uimm12.value.into();
-            let offset: u64 = uimm12.checked_mul(ty.bytes().into()).unwrap();
+            // N.B.: the architecture scales the immediate in the
+            // encoded instruction by the size of the loaded type, so
+            // e.g. an offset field of 4095 can mean a load of offset
+            // 32760 (= 4095 * 8) for I64s. The `UImm12Scaled` type
+            // stores the *scaled* value, so we don't need to multiply
+            // (again) by the type's size here.
+            let offset: u64 = uimm12.value.into();
             // This `unwrap()` will always succeed because the value
             // will always be positive and much smaller than
             // `i64::MAX` (see above).
