@@ -74,8 +74,8 @@ pub mod bindings {
                 ",
                 tracing: true,
                 trappable_error_type: {
-                    "wasi:io/streams@0.2.0/stream-error" => StreamError,
-                    "wasi:filesystem/types@0.2.0/error-code" => FsError,
+                    "wasi:io/streams/stream-error" => StreamError,
+                    "wasi:filesystem/types/error-code" => FsError,
                 },
                 with: {
                     "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
@@ -153,9 +153,9 @@ pub mod bindings {
             ],
         },
         trappable_error_type: {
-            "wasi:io/streams@0.2.0/stream-error" => crate::preview2::StreamError,
-            "wasi:filesystem/types@0.2.0/error-code" => crate::preview2::FsError,
-            "wasi:sockets/network@0.2.0/error-code" => crate::preview2::SocketError,
+            "wasi:io/streams/stream-error" => crate::preview2::StreamError,
+            "wasi:filesystem/types/error-code" => crate::preview2::FsError,
+            "wasi:sockets/network/error-code" => crate::preview2::SocketError,
         },
         with: {
             "wasi:sockets/network/network": super::network::Network,

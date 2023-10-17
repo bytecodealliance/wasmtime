@@ -1,6 +1,6 @@
 use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use heck::*;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -825,27 +825,65 @@ impl Wasmtime {
 }
 
 fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<TypeId> {
-    // foo:bar/baz
-
-    let (_, interface) = resolve
-        .packages
+    // Build a map, `packages_to_omit_version`, where that package can be
+    // uniquely identified by its name/namespace combo and as such version
+    // information is not required.
+    let mut packages_with_same_name = HashMap::new();
+    for (id, pkg) in resolve.packages.iter() {
+        packages_with_same_name
+            .entry(PackageName {
+                version: None,
+                ..pkg.name.clone()
+            })
+            .or_insert(Vec::new())
+            .push(id)
+    }
+    let packages_to_omit_version = packages_with_same_name
         .iter()
-        .flat_map(|(_, p)| p.interfaces.iter())
-        .find(|(_, id)| wit_path.starts_with(&resolve.id_of(**id).unwrap()))
-        .ok_or_else(|| anyhow!("no package/interface found to match `{wit_path}`"))?;
+        .filter_map(
+            |(_name, list)| {
+                if list.len() == 1 {
+                    Some(list)
+                } else {
+                    None
+                }
+            },
+        )
+        .flat_map(|l| l)
+        .collect::<HashSet<_>>();
 
-    let wit_path = wit_path
-        .strip_prefix(&resolve.id_of(*interface).unwrap())
-        .unwrap();
-    let wit_path = wit_path
-        .strip_prefix('/')
-        .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
+    // Look for an interface whose assigned prefix starts `wit_path`. Not
+    // exactly the most efficient thing ever but is sufficient for now.
+    for (id, interface) in resolve.interfaces.iter() {
+        let iface_name = match &interface.name {
+            Some(name) => name,
+            None => continue,
+        };
+        let pkgid = interface.package.unwrap();
+        let pkgname = &resolve.packages[pkgid].name;
+        let prefix = if packages_to_omit_version.contains(&pkgid) {
+            let mut name = pkgname.clone();
+            name.version = None;
+            format!("{name}/{iface_name}")
+        } else {
+            resolve.id_of(id).unwrap()
+        };
+        let wit_path = match wit_path.strip_prefix(&prefix) {
+            Some(rest) => rest,
+            None => continue,
+        };
+        let wit_path = wit_path
+            .strip_prefix('/')
+            .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
 
-    resolve.interfaces[*interface]
-        .types
-        .get(wit_path)
-        .copied()
-        .ok_or_else(|| anyhow!("no types found to match `{wit_path}` in interface"))
+        return interface
+            .types
+            .get(wit_path)
+            .copied()
+            .ok_or_else(|| anyhow!("no types found to match `{wit_path}` in interface"));
+    }
+
+    bail!("no package/interface found to match `{wit_path}`")
 }
 
 struct InterfaceGenerator<'a> {
