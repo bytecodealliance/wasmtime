@@ -19,6 +19,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
     // https://docs.rs/rayon/1.1.0/rayon/struct.ThreadPoolBuilder.html#method.spawn_handler
     // Source code says DefaultSpawner is implementation detail and
     // shouldn't be used directly.
+    #[cfg(feature = "parallel-compilation")]
     rayon::ThreadPoolBuilder::new()
         .spawn_handler(move |thread| {
             let mut b = std::thread::Builder::new();
