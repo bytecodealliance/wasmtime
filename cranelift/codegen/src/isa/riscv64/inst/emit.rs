@@ -269,7 +269,6 @@ impl Inst {
             | Inst::DummyUse { .. }
             | Inst::FloatRound { .. }
             | Inst::Popcnt { .. }
-            | Inst::Rev8 { .. }
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
             | Inst::StackProbeLoop { .. } => None,
@@ -2535,71 +2534,6 @@ impl Inst {
                 }
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
-            &Inst::Rev8 { rs, rd, tmp, step } => {
-                // init.
-                Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
-                Inst::gen_move(tmp, rs, I64).emit(&[], sink, emit_info, state);
-                // load 56 to step.
-                Inst::load_imm12(step, Imm12::from_i16(56)).emit(&[], sink, emit_info, state);
-                let label_done = sink.get_label();
-                let label_loop = sink.get_label();
-                sink.bind_label(label_loop, &mut state.ctrl_plane);
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_done),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::SignedLessThan,
-                        rs1: step.to_reg(),
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-                Inst::AluRRImm12 {
-                    alu_op: AluOPRRI::Andi,
-                    rd: writable_spilltmp_reg(),
-                    rs: tmp.to_reg(),
-                    imm12: Imm12::from_i16(255),
-                }
-                .emit(&[], sink, emit_info, state);
-                Inst::AluRRR {
-                    alu_op: AluOPRRR::Sll,
-                    rd: writable_spilltmp_reg(),
-                    rs1: spilltmp_reg(),
-                    rs2: step.to_reg(),
-                }
-                .emit(&[], sink, emit_info, state);
-
-                Inst::AluRRR {
-                    alu_op: AluOPRRR::Or,
-                    rd: rd,
-                    rs1: rd.to_reg(),
-                    rs2: spilltmp_reg(),
-                }
-                .emit(&[], sink, emit_info, state);
-
-                {
-                    // reset step
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Addi,
-                        rd: step,
-                        rs: step.to_reg(),
-                        imm12: Imm12::from_i16(-8),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    //reset tmp.
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Srli,
-                        rd: tmp,
-                        rs: tmp.to_reg(),
-                        imm12: Imm12::from_i16(8),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    // loop.
-                    Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
-                }
-
-                sink.bind_label(label_done, &mut state.ctrl_plane);
-            }
             &Inst::Cltz {
                 sum,
                 tmp,
@@ -3447,14 +3381,6 @@ impl Inst {
                 sum: allocs.next_writable(sum),
                 ty,
             },
-
-            Inst::Rev8 { rs, rd, tmp, step } => Inst::Rev8 {
-                rs: allocs.next(rs),
-                tmp: allocs.next_writable(tmp),
-                step: allocs.next_writable(step),
-                rd: allocs.next_writable(rd),
-            },
-
             Inst::Cltz {
                 sum,
                 tmp,
