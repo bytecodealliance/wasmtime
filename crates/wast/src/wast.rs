@@ -465,6 +465,10 @@ impl<T> WastContext<T> {
                 }
             }
             AssertException { .. } => bail!("unimplemented assert_exception"),
+
+            Thread(_) => bail!("unimplemented `thread`"),
+
+            Wait { .. } => bail!("unimplemented `wait`"),
         }
 
         Ok(())
