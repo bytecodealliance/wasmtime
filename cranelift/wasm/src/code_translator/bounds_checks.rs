@@ -400,8 +400,9 @@ fn compute_addr(
     let base_and_index = pos.ins().iadd(heap_base, index);
 
     if let Some(ty) = pcc_memtype {
-        // TODO: handle memory64 as well (pass in the CLIF type of
-        // `index`).
+        // TODO: handle memory64 as well. For now we assert that we
+        // have a 32-bit `heap.index_type`.
+        assert_eq!(heap.index_type, ir::types::I32);
         pos.func.dfg.facts[base_and_index] = Some(Fact::Mem {
             ty,
             min_offset: 0,
@@ -416,8 +417,6 @@ fn compute_addr(
         // `select_spectre_guard`, if any. If it happens after, then we
         // potentially are letting speculative execution read the whole first
         // 4GiB of memory.
-        //
-        // TODO: add a fact on the result value.
         let result = pos.ins().iadd_imm(base_and_index, offset as i64);
         if let Some(ty) = pcc_memtype {
             pos.func.dfg.facts[result] = Some(Fact::Mem {

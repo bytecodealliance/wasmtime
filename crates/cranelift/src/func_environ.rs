@@ -251,11 +251,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                             .checked_add(plan.offset_guard_size)
                             .expect("Memory plan has overflowing size plus guard"),
                     });
-                    log::trace!(
-                        "data_mt: static bound is {:x}, offset guard size is {:?}",
-                        static_bound,
-                        plan.offset_guard_size
-                    );
 
                     self.pcc_memory_memtypes[memory_idx] = Some(data_mt);
 

@@ -64,13 +64,6 @@ fn vmctx_addr(global_value: ir::GlobalValue, inst: ir::Inst, func: &mut ir::Func
     func.dfg.change_to_alias(result, vmctx);
     func.layout.remove_inst(inst);
 
-    crate::trace!(
-        "expanding vmctx gv {}: fact = {:?}, vmctx arg = {}",
-        global_value,
-        func.global_value_facts[global_value],
-        vmctx
-    );
-
     // If there was a fact on the GV, then copy it to the vmctx arg
     // blockparam def.
     if let Some(fact) = &func.global_value_facts[global_value] {
