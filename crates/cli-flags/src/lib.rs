@@ -5,13 +5,12 @@
 
 use anyhow::Result;
 use clap::Parser;
-use std::io::IsTerminal;
 use std::time::Duration;
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
 use wasmtime::Config;
 
 pub mod opt;
 
+#[cfg(feature = "logging")]
 fn init_file_per_thread_logger(prefix: &'static str) {
     file_per_thread_logger::initialize(prefix);
 
@@ -324,15 +323,18 @@ impl CommonOptions {
         self.wasi.configure_with(&self.wasi_raw);
     }
 
-    pub fn init_logging(&mut self) {
+    pub fn init_logging(&mut self) -> Result<()> {
         self.configure();
         if self.debug.logging == Some(false) {
-            return;
+            return Ok(());
         }
+        #[cfg(feature = "logging")]
         if self.debug.log_to_files == Some(true) {
             let prefix = "wasmtime.dbg.";
             init_file_per_thread_logger(prefix);
         } else {
+            use std::io::IsTerminal;
+            use tracing_subscriber::{EnvFilter, FmtSubscriber};
             let mut b = FmtSubscriber::builder()
                 .with_writer(std::io::stderr)
                 .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"));
@@ -341,6 +343,11 @@ impl CommonOptions {
             }
             b.init();
         }
+        #[cfg(not(feature = "logging"))]
+        if self.debug.log_to_files == Some(true) || self.debug.logging == Some(true) {
+            anyhow::bail!("support for logging disabled at compile time");
+        }
+        Ok(())
     }
 
     pub fn config(&mut self, target: Option<&str>) -> Result<Config> {

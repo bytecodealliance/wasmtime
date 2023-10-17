@@ -115,7 +115,7 @@ enum CliLinker {
 impl RunCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        self.run.common.init_logging();
+        self.run.common.init_logging()?;
 
         let mut config = self.run.common.config(None)?;
 

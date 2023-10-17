@@ -278,6 +278,7 @@ default = [
   "wasi-http",
   "pooling-allocator",
   "cache",
+  "logging",
 
   # All subcommands are included by default.
   "explore",
@@ -302,6 +303,7 @@ wmemcheck = ["wasmtime/wmemcheck"]
 wat = ["dep:wat"]
 cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
 parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
+logging = ["wasmtime-cli-flags/logging"]
 compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
