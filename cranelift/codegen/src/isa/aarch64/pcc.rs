@@ -147,8 +147,9 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             imm12,
         } => check_output(&ctx, vcode, rd.to_reg(), || {
             let rn = get_fact_or_default(vcode, *rn)?;
-            let imm_fact = Fact::ValueMax {
+            let imm_fact = Fact::Range {
                 bit_width: size.bits().into(),
+                min: imm12.value(),
                 max: imm12.value(),
             };
             fail_if_missing(ctx.add(&rn, &imm_fact, size.bits().into()))
@@ -218,8 +219,9 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             // Any ALU op can validate a max-value fact where the
             // value is the maximum for its bit-width.
             check_output(&ctx, vcode, rd.to_reg(), || {
-                Ok(Fact::ValueMax {
+                Ok(Fact::Range {
                     bit_width: size.bits().into(),
+                    min: 0,
                     max: size.max_value(),
                 })
             })
