@@ -611,7 +611,7 @@ impl RunCommand {
             {
                 // Silence the unused warning for `module` as it is only used in the
                 // conditionally-compiled wasi-threads.
-                drop(&module);
+                let _ = &module;
 
                 bail!(
                     "Cannot enable wasi-threads when the binary is not compiled with this feature."

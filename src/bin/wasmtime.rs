@@ -5,10 +5,8 @@
 
 use anyhow::Result;
 use clap::Parser;
-#[cfg(feature = "serve")]
-use wasmtime_cli::commands::ServeCommand;
 use wasmtime_cli::commands::{
-    CompileCommand, ConfigCommand, ExploreCommand, RunCommand, SettingsCommand, WastCommand,
+    CompileCommand, ConfigCommand, RunCommand, SettingsCommand, WastCommand,
 };
 
 /// Wasmtime WebAssembly Runtime
@@ -52,12 +50,13 @@ enum Subcommand {
     /// Compiles a WebAssembly module.
     Compile(CompileCommand),
     /// Explore the compilation of a WebAssembly module to native code.
-    Explore(ExploreCommand),
+    #[cfg(feature = "explore")]
+    Explore(wasmtime_cli::commands::ExploreCommand),
     /// Runs a WebAssembly module
     Run(RunCommand),
     /// Serves requests from a wasi-http proxy component.
     #[cfg(feature = "serve")]
-    Serve(ServeCommand),
+    Serve(wasmtime_cli::commands::ServeCommand),
     /// Displays available Cranelift settings for a target.
     Settings(SettingsCommand),
     /// Runs a WebAssembly test script file
@@ -71,6 +70,7 @@ impl Wasmtime {
         match subcommand {
             Subcommand::Config(c) => c.execute(),
             Subcommand::Compile(c) => c.execute(),
+            #[cfg(feature = "explore")]
             Subcommand::Explore(c) => c.execute(),
             Subcommand::Run(c) => c.execute(),
             #[cfg(feature = "serve")]

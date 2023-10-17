@@ -270,6 +270,9 @@ jobs:
     - run: cargo check --features component-model
     - run: cargo check -p wasmtime --features incremental-cache
 
+    # Feature combinations of the `wasmtime-cli`
+    - run: cargo check -p wasmtime-cli --no-default-features
+
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen
 
