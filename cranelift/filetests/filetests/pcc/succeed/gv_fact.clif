@@ -1,0 +1,14 @@
+test compile
+set enable_pcc=true
+target aarch64
+
+function %f0(i64 vmctx) -> i64 {
+    mt0 = struct 16 { 8: i64 ! mem(mt1, 0, 0) }
+    mt1 = memory 0x1_0000_0000
+    gv0 ! mem(mt0, 0, 0) = vmctx
+    gv1 ! mem(mt1, 0, 0) = load.i64 notrap aligned gv0+8
+    
+block0(v0: i64):
+    v1 ! mem(mt1, 0, 0) = global_value.i64 gv1
+    return v1
+}
