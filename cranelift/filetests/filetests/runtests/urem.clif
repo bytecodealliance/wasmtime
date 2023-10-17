@@ -135,3 +135,13 @@ block0(v0: i8):
 ; run: %urem_imm_i8(-19) == 0
 ; run: %urem_imm_i8(0xC0) == 0
 ; run: %urem_imm_i8(0x80) == 2
+
+
+function %constant_inputs() -> i8  {
+block0:
+    v3 = iconst.i8 208
+    v11 = urem v3, v3  ; v3 = 208, v3 = 208
+    return v11
+}
+
+; run: %constant_inputs() == 0
