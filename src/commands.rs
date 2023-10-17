@@ -4,9 +4,8 @@ mod compile;
 mod config;
 mod run;
 mod settings;
-mod wast;
 
-pub use self::{compile::*, config::*, run::*, settings::*, wast::*};
+pub use self::{compile::*, config::*, run::*, settings::*};
 
 #[cfg(feature = "serve")]
 mod serve;
@@ -17,3 +16,8 @@ pub use self::serve::*;
 mod explore;
 #[cfg(feature = "explore")]
 pub use self::explore::*;
+
+#[cfg(feature = "wast")]
+mod wast;
+#[cfg(feature = "wast")]
+pub use self::wast::*;

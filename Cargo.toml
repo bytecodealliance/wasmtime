@@ -28,7 +28,7 @@ wasmtime-cli-flags = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-explorer = { workspace = true, optional = true }
-wasmtime-wast = { workspace = true }
+wasmtime-wast = { workspace = true, optional = true }
 wasmtime-wasi = { workspace = true, default-features = true, features = [
   "exit",
 ] }
@@ -280,6 +280,7 @@ default = [
   # All subcommands are included by default.
   "explore",
   "serve",
+  "wast",
 ]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
@@ -300,6 +301,7 @@ wmemcheck = ["wasmtime/wmemcheck"]
 # for more information on each subcommand.
 serve = ["wasi-http", "component-model"]
 explore = ["dep:wasmtime-explorer"]
+wast = ["dep:wasmtime-wast"]
 
 [[test]]
 name = "host_segfault"

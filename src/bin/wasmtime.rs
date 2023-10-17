@@ -5,9 +5,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use wasmtime_cli::commands::{
-    CompileCommand, ConfigCommand, RunCommand, SettingsCommand, WastCommand,
-};
+use wasmtime_cli::commands::{CompileCommand, ConfigCommand, RunCommand, SettingsCommand};
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser)]
@@ -60,7 +58,8 @@ enum Subcommand {
     /// Displays available Cranelift settings for a target.
     Settings(SettingsCommand),
     /// Runs a WebAssembly test script file
-    Wast(WastCommand),
+    #[cfg(feature = "wast")]
+    Wast(wasmtime_cli::commands::WastCommand),
 }
 
 impl Wasmtime {
@@ -76,6 +75,7 @@ impl Wasmtime {
             #[cfg(feature = "serve")]
             Subcommand::Serve(c) => c.execute(),
             Subcommand::Settings(c) => c.execute(),
+            #[cfg(feature = "wast")]
             Subcommand::Wast(c) => c.execute(),
         }
     }
