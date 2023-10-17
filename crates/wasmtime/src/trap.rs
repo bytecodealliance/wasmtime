@@ -478,6 +478,8 @@ impl FrameInfo {
         // custom section contents.
         let mut symbols = Vec::new();
 
+        let _ = &mut symbols;
+        #[cfg(feature = "addr2line")]
         if let Some(s) = &compiled_module.symbolize_context().ok().and_then(|c| c) {
             if let Some(offset) = instr.and_then(|i| i.file_offset()) {
                 let to_lookup = u64::from(offset) - s.code_section_offset();

@@ -73,6 +73,7 @@ default = [
   'cranelift',
   'pooling-allocator',
   'demangle',
+  'addr2line',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -139,3 +140,7 @@ demangle = ["wasmtime-jit/demangle"]
 
 # Enable support for generating core dumps on traps.
 coredump = ["dep:wasm-encoder"]
+
+# Support address-to-file/line information in traps when wasm files have DWARF
+# debugging information.
+addr2line = ["wasmtime-jit/addr2line"]

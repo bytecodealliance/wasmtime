@@ -280,6 +280,7 @@ default = [
   "cranelift",
   "profiling",
   "coredump",
+  "addr2line",
 
   # All subcommands are included by default.
   "compile",
@@ -309,6 +310,7 @@ demangle = ["wasmtime/demangle"]
 cranelift = ["wasmtime-cli-flags/cranelift", "dep:wasmtime-cranelift"]
 profiling = ["wasmtime/profiling"]
 coredump = ["wasmtime-cli-flags/coredump"]
+addr2line = ["wasmtime/addr2line"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
