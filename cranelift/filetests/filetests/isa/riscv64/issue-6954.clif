@@ -119,11 +119,11 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-384
+;   addi sp,sp,-384
 ; block0:
 ;   vle8.v v11,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vle8.v v15,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
@@ -277,10 +277,10 @@ block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x
 ;   vse8.v v11,80(a6) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v11,96(a6) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   mv a0,a5
-;   add sp,+384
+;   addi sp,sp,384
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

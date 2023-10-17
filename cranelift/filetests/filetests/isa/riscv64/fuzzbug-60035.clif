@@ -13,7 +13,7 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -38,7 +38,7 @@ block0:
 ;   fsd fs9,-152(sp)
 ;   fsd fs10,-160(sp)
 ;   fsd fs11,-168(sp)
-;   add sp,-192
+;   addi sp,sp,-192
 ; block0:
 ;   load_sym t0,userextname0+0
 ;   sd t0,0(nominal_sp)
@@ -46,7 +46,7 @@ block0:
 ;   callind t0
 ;   ld t0,0(nominal_sp)
 ;   callind t0
-;   add sp,+192
+;   addi sp,sp,192
 ;   ld s1,-8(sp)
 ;   ld s2,-16(sp)
 ;   ld s3,-24(sp)
@@ -70,7 +70,7 @@ block0:
 ;   fld fs11,-168(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

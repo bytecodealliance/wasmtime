@@ -11,22 +11,22 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   sd s1,-8(sp)
-;   add sp,-16
+;   addi sp,sp,-16
 ; block0:
 ;   mv s1,a0
 ;   elf_tls_get_addr a0,userextname0
 ;   mv a1,a0
 ;   mv a0,s1
-;   add sp,+16
+;   addi sp,sp,16
 ;   ld s1,-8(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -64,7 +64,7 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -75,7 +75,7 @@ block0(v0: i64):
 ;   li a0,0
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

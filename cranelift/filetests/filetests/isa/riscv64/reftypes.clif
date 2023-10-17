@@ -86,13 +86,13 @@ block3(v7: r64, v8: r64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   sd s5,-8(sp)
 ;   sd s9,-16(sp)
-;   add sp,-48
+;   addi sp,sp,-48
 ; block0:
 ;   mv a3,a0
 ;   mv s5,a2
@@ -118,12 +118,12 @@ block3(v7: r64, v8: r64):
 ;   ld a2,0(nominal_sp)
 ;   mv a3,s5
 ;   sd a2,0(a3)
-;   add sp,+48
+;   addi sp,sp,48
 ;   ld s5,-8(sp)
 ;   ld s9,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

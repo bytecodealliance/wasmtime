@@ -178,7 +178,7 @@ block0(v0: i8):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -228,7 +228,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -236,7 +236,7 @@ block0(v0: i64, v1: i64):
 ;   callind a1
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -356,17 +356,17 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-16
+;   addi sp,sp,-16
 ; block0:
 ;   load_addr a0,0(nominal_sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -445,11 +445,11 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-2048
+;   addi sp,sp,-2048
 ; block0:
 ;   load_addr a1,1020(nominal_sp)
 ;   mv a5,a1
@@ -461,10 +461,12 @@ block0:
 ;   sd a3,8(a0)
 ;   sd a4,16(a0)
 ;   mv a0,a5
-;   add sp,+2048
+;   lui t6,1
+;   addi t6,t6,-2048
+;   add sp,t6,sp
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -503,18 +505,20 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-2048
+;   addi sp,sp,-2048
 ; block0:
 ;   load_addr a0,1024(nominal_sp)
 ;   load_addr a1,0(nominal_sp)
-;   add sp,+2048
+;   lui t6,1
+;   addi t6,t6,-2048
+;   add sp,t6,sp
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -544,17 +548,17 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-1024
+;   addi sp,sp,-1024
 ; block0:
 ;   load_addr a0,512(nominal_sp)
-;   add sp,+1024
+;   addi sp,sp,1024
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -672,17 +676,17 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-16
+;   addi sp,sp,-16
 ; block0:
 ;   lw a0,12(nominal_sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -709,17 +713,17 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-128
+;   addi sp,sp,-128
 ; block0:
 ;   ld a0,64(nominal_sp)
-;   add sp,+128
+;   addi sp,sp,128
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -746,17 +750,17 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-16
+;   addi sp,sp,-16
 ; block0:
 ;   sw a0,12(nominal_sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -783,17 +787,17 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-128
+;   addi sp,sp,-128
 ; block0:
 ;   sd a0,64(nominal_sp)
-;   add sp,+128
+;   addi sp,sp,128
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -810,7 +814,6 @@ block0(v0: i64):
 ;   c.ldsp s0, 0(sp)
 ;   c.addi16sp sp, 0x10
 ;   c.jr ra
-
 
 function %c_sw(i64, i32) {
 block0(v0: i64, v1: i32):
