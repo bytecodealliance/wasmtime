@@ -1,4 +1,4 @@
-package wasi:cli;
+package wasi:cli@0.2.0;
 
 world command {
   include reactor;

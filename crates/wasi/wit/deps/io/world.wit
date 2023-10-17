@@ -1,4 +1,4 @@
-package wasi:io;
+package wasi:io@0.2.0;
 
 world imports {
     import streams;

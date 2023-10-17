@@ -3,7 +3,7 @@ pub mod bindings {
 
     wit_bindgen::generate!({
         path: "../wasi-http/wit",
-        world: "wasi:http/proxy",
+        world: "wasi:http/proxy@0.2.0",
         exports: {
             "wasi:http/incoming-handler": T,
         },

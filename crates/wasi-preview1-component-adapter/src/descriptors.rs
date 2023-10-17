@@ -181,7 +181,7 @@ impl Descriptors {
         }))
         .trapping_unwrap();
 
-        #[link(wasm_import_module = "wasi:filesystem/preopens")]
+        #[link(wasm_import_module = "wasi:filesystem/preopens@0.2.0")]
         #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
         extern "C" {
             #[link_name = "get-directories"]

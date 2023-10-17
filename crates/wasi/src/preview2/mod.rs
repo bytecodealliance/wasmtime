@@ -68,23 +68,23 @@ pub mod bindings {
             wasmtime::component::bindgen!({
                 path: "wit",
                 interfaces: "
-                    import wasi:io/poll;
-                    import wasi:io/streams;
-                    import wasi:filesystem/types;
+                    import wasi:io/poll@0.2.0;
+                    import wasi:io/streams@0.2.0;
+                    import wasi:filesystem/types@0.2.0;
                 ",
                 tracing: true,
                 trappable_error_type: {
-                    "wasi:io/streams/stream-error" => StreamError,
-                    "wasi:filesystem/types/error-code" => FsError,
+                    "wasi:io/streams@0.2.0/stream-error" => StreamError,
+                    "wasi:filesystem/types@0.2.0/error-code" => FsError,
                 },
                 with: {
-                    "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
-                    "wasi:filesystem/types/descriptor": super::super::filesystem::types::Descriptor,
-                    "wasi:filesystem/types/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
-                    "wasi:io/poll/pollable": super::super::io::poll::Pollable,
-                    "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
-                    "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
-                    "wasi:io/streams/error": super::super::io::streams::Error,
+                    "wasi:clocks/wall-clock@0.2.0": crate::preview2::bindings::clocks::wall_clock,
+                    "wasi:filesystem/types@0.2.0/descriptor": super::super::filesystem::types::Descriptor,
+                    "wasi:filesystem/types@0.2.0/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
+                    "wasi:io/poll@0.2.0/pollable": super::super::io::poll::Pollable,
+                    "wasi:io/streams@0.2.0/input-stream": super::super::io::streams::InputStream,
+                    "wasi:io/streams@0.2.0/output-stream": super::super::io::streams::OutputStream,
+                    "wasi:io/streams@0.2.0/error": super::super::io::streams::Error,
                 }
             });
         }
@@ -93,7 +93,7 @@ pub mod bindings {
 
     wasmtime::component::bindgen!({
         path: "wit",
-        interfaces: "include wasi:cli/reactor;",
+        interfaces: "include wasi:cli/reactor@0.2.0;",
         tracing: true,
         async: {
             // Only these functions are `async` and everything else is sync
@@ -153,23 +153,23 @@ pub mod bindings {
             ],
         },
         trappable_error_type: {
-            "wasi:io/streams/stream-error" => crate::preview2::StreamError,
-            "wasi:filesystem/types/error-code" => crate::preview2::FsError,
-            "wasi:sockets/network/error-code" => crate::preview2::SocketError,
+            "wasi:io/streams@0.2.0/stream-error" => crate::preview2::StreamError,
+            "wasi:filesystem/types@0.2.0/error-code" => crate::preview2::FsError,
+            "wasi:sockets/network@0.2.0/error-code" => crate::preview2::SocketError,
         },
         with: {
-            "wasi:sockets/network/network": super::network::Network,
-            "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
-            "wasi:sockets/udp/udp-socket": super::udp::UdpSocket,
-            "wasi:sockets/ip-name-lookup/resolve-address-stream": super::ip_name_lookup::ResolveAddressStream,
-            "wasi:filesystem/types/directory-entry-stream": super::filesystem::ReaddirIterator,
-            "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,
-            "wasi:io/streams/input-stream": super::stream::InputStream,
-            "wasi:io/streams/output-stream": super::stream::OutputStream,
-            "wasi:io/streams/error": super::stream::Error,
-            "wasi:io/poll/pollable": super::poll::Pollable,
-            "wasi:cli/terminal-input/terminal-input": super::stdio::TerminalInput,
-            "wasi:cli/terminal-output/terminal-output": super::stdio::TerminalOutput,
+            "wasi:sockets/network@0.2.0/network": super::network::Network,
+            "wasi:sockets/tcp@0.2.0/tcp-socket": super::tcp::TcpSocket,
+            "wasi:sockets/udp@0.2.0/udp-socket": super::udp::UdpSocket,
+            "wasi:sockets/ip-name-lookup@0.2.0/resolve-address-stream": super::ip_name_lookup::ResolveAddressStream,
+            "wasi:filesystem/types@0.2.0/directory-entry-stream": super::filesystem::ReaddirIterator,
+            "wasi:filesystem/types@0.2.0/descriptor": super::filesystem::Descriptor,
+            "wasi:io/streams@0.2.0/input-stream": super::stream::InputStream,
+            "wasi:io/streams@0.2.0/output-stream": super::stream::OutputStream,
+            "wasi:io/streams@0.2.0/error": super::stream::Error,
+            "wasi:io/poll@0.2.0/pollable": super::poll::Pollable,
+            "wasi:cli/terminal-input@0.2.0/terminal-input": super::stdio::TerminalInput,
+            "wasi:cli/terminal-output@0.2.0/terminal-output": super::stdio::TerminalOutput,
         },
     });
 

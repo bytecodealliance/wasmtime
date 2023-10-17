@@ -1,6 +1,6 @@
 
 interface udp {
-	use wasi:io/poll.{pollable};
+	use wasi:io/poll@0.2.0.{pollable};
 	use network.{network, error-code, ip-socket-address, ip-address-family};
 
 
@@ -146,7 +146,7 @@ interface udp {
 		/// > stored in the object pointed to by `address` is unspecified.
 		///
 		/// WASI is stricter and requires `local-address` to return `invalid-state` when the socket hasn't been bound yet.
-		/// 
+		///
 		/// # Typical errors
 		/// - `invalid-state`: The socket is not bound to any local address.
 		///
