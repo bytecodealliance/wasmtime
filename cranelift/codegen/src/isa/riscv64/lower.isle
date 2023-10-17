@@ -2713,6 +2713,11 @@
         (mask VReg (gen_vec_mask 1)))
     (rv_vmerge_vvm zero elem mask ty)))
 
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector (imm5_from_value x))))
+  (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
+		(mask VReg (gen_vec_mask 1)))
+	(rv_vmerge_vim zero x mask ty)))
+
 ;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_vec_fits_in_register ty) (sqmul_round_sat x y)))
