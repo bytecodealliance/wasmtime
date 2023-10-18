@@ -534,10 +534,9 @@ mod test {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
 
-        metadata.shared_flags.insert(
-            "preserve_frame_pointers".to_string(),
-            FlagValue::Bool(false),
-        );
+        metadata
+            .shared_flags
+            .push(("preserve_frame_pointers", FlagValue::Bool(false)));
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -560,7 +559,7 @@ Caused by:
 
         metadata
             .isa_flags
-            .insert("not_a_flag".to_string(), FlagValue::Bool(true));
+            .push(("not_a_flag", FlagValue::Bool(true)));
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
