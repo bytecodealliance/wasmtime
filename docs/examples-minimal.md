@@ -48,6 +48,21 @@ notably means it does not have a compiler for WebAssembly files. This means that
 fed to `wasmtime run` to execute files. Additionally error messages will be
 worse in this mode as less contextual information is provided.
 
+The final Wasmtime-specific optimization you can apply is to disable logging
+statements. Wasmtime and its dependencies make use of the [`log`
+crate](https://docs.rs/log) and [`tracing` crate](https://docs.rs/tracing) for
+debugging and diagnosing. For a minimal build this isn't needed though so this
+can all be disabled through Cargo features to shave off a small amount of code.
+Note that for custom embeddings you'd need to replicate the `disable-logging`
+feature which sets the `max_level_off` feature for the `log` and `tracing`
+crate.
+
+```
+$ cargo build --release --no-default-features --features disable-logging
+$ ls -l ./target/release/wasmtime
+-rwxr-xr-x@ 1 root  root    6.7M Oct 18 08:37 target/release/wasmtime
+```
+
 At this point the next line of tricks to apply to minimize binary size are
 [general tricks-of-the-trade for Rust
 programs](https://github.com/johnthagen/min-sized-rust) and are no longer
@@ -61,7 +76,7 @@ this.
 
 ```
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
-$ cargo build --release --no-default-features
+$ cargo build --release --no-default-features --features disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    6.8M Oct 18 08:40 target/release/wasmtime
 ```
@@ -81,7 +96,7 @@ executable.
 ```
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
-$ cargo build --release --no-default-features
+$ cargo build --release --no-default-features --features disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    5.0M Oct 18 08:40 target/release/wasmtime
 ```
@@ -96,7 +111,7 @@ to compile than previously. Here LTO is configured with
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
-$ cargo build --release --no-default-features
+$ cargo build --release --no-default-features --features disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    3.3M Oct 18 08:42 target/release/wasmtime
 ```
@@ -111,7 +126,7 @@ $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-$ cargo build --release --no-default-features
+$ cargo build --release --no-default-features --features disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    3.3M Oct 18 08:43 target/release/wasmtime
 ```
@@ -136,7 +151,7 @@ $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export RUSTFLAGS="-Zlocation-detail=none"
-$ cargo +nightly build --release --no-default-features
+$ cargo +nightly build --release --no-default-features --features disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    3.2M Oct 18 08:43 target/release/wasmtime
 ```
@@ -153,7 +168,7 @@ $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export RUSTFLAGS="-Zlocation-detail=none"
-$ cargo +nightly build --release --no-default-features \
+$ cargo +nightly build --release --no-default-features --features disable-logging \
     -Z build-std=std,panic_abort --target aarch64-apple-darwin
 $ ls -l ./target/aarch64-apple-darwin/release/wasmtime
 -rwxr-xr-x@ 1 root  root    2.3M Oct 18 09:39 target/aarch64-apple-darwin/release/wasmtime
@@ -171,7 +186,7 @@ $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export RUSTFLAGS="-Zlocation-detail=none"
-$ cargo +nightly build --release --no-default-features \
+$ cargo +nightly build --release --no-default-features --features disable-logging \
     -Z build-std=std,panic_abort --target aarch64-apple-darwin \
     -Z build-std-features=
 $ ls -l ./target/aarch64-apple-darwin/release/wasmtime
