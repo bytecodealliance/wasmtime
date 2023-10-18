@@ -825,22 +825,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-encoder]]
-version = "0.33.2"
-when = "2023-09-26"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-encoder]]
 version = "0.35.0"
 when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-metadata]]
-version = "0.10.6"
-when = "2023-09-26"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -853,22 +839,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-mutate]]
-version = "0.2.35"
-when = "2023-09-26"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-mutate]]
 version = "0.2.38"
 when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-smith]]
-version = "0.12.18"
-when = "2023-09-26"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -881,22 +853,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasmparser]]
-version = "0.113.2"
-when = "2023-09-26"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmparser]]
 version = "0.115.0"
 when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmprinter]]
-version = "0.2.67"
-when = "2023-09-26"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1052,23 +1010,15 @@ when = "2023-09-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.wast]]
-version = "65.0.2"
-when = "2023-09-26"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
+[[publisher.wasmtime-wmemcheck]]
+version = "13.0.0"
+when = "2023-09-20"
+user-id = 73222
+user-login = "wasmtime-publish"
 
 [[publisher.wast]]
 version = "66.0.2"
 when = "2023-10-14"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wat]]
-version = "1.0.74"
-when = "2023-09-26"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1189,67 +1139,46 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.12.0"
-when = "2023-09-18"
+version = "0.13.0"
+when = "2023-10-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wit-bindgen-core]]
-version = "0.12.0"
-when = "2023-09-18"
+version = "0.13.0"
+when = "2023-10-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.12.0"
-when = "2023-09-18"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-bindgen-rust-lib]]
-version = "0.12.0"
-when = "2023-09-18"
+version = "0.13.0"
+when = "2023-10-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.12.0"
-when = "2023-09-18"
+version = "0.13.0"
+when = "2023-10-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wit-component]]
-version = "0.14.4"
-when = "2023-09-27"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wit-component]]
-version = "0.15.0"
-when = "2023-10-14"
+version = "0.16.0"
+when = "2023-10-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wit-parser]]
-version = "0.11.3"
-when = "2023-09-27"
+version = "0.12.1"
+when = "2023-10-18"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
-
-[[publisher.wit-parser]]
-version = "0.12.0"
-when = "2023-10-12"
-user-id = 696
-user-login = "fitzgen"
-user-name = "Nick Fitzgerald"
 
 [[audits.embark-studios.wildcard-audits.spdx]]
 who = "Jake Shadle <opensource@embark-studios.com>"
