@@ -45,7 +45,7 @@ struct Settings {
     bools: Vec<SettingData>,
     presets: Vec<SettingData>,
 
-    inferred: Option<Vec<String>>,
+    inferred: Option<Vec<&'static str>>,
 }
 
 impl Settings {
