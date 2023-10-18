@@ -210,11 +210,11 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.triple()
     }
 
-    fn flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
+    fn flags(&self) -> Vec<(&'static str, wasmtime_environ::FlagValue<'static>)> {
         wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.flags().iter())
     }
 
-    fn isa_flags(&self) -> std::collections::BTreeMap<String, wasmtime_environ::FlagValue> {
+    fn isa_flags(&self) -> Vec<(&'static str, wasmtime_environ::FlagValue<'static>)> {
         wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.isa_flags())
     }
 
