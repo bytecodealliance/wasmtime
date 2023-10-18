@@ -2008,23 +2008,6 @@
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
 
-(decl gen_bnot (Type ValueRegs) ValueRegs)
-(rule 2 (gen_bnot (ty_scalar_float ty) x)
-  (let ((val FReg (value_regs_get x 0))
-        (x_val XReg (move_f_to_x val ty))
-        (inverted XReg (rv_not x_val))
-        (res FReg (move_x_to_f inverted (float_int_of_same_size ty))))
-    (value_reg res)))
-
-(rule 1 (gen_bnot $I128 x)
-  (let ((lo XReg (rv_not (value_regs_get x 0)))
-        (hi XReg (rv_not (value_regs_get x 1))))
-    (value_regs lo hi)))
-
-(rule 0 (gen_bnot (ty_int_ref_scalar_64 _) x)
-  (rv_not (value_regs_get x 0)))
-
-
 (decl gen_andi (XReg u64) XReg)
 (rule 1 (gen_andi x (imm12_from_u64 y))
   (rv_andi x y))

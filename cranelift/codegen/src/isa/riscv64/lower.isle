@@ -934,10 +934,19 @@
 (extern constructor binvi_imm binvi_imm)
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 0 (lower (has_type (ty_scalar ty) (bnot x)))
-  (gen_bnot ty x))
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bnot x)))
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 _) (bnot x)))
+  (rv_not x))
+
+(rule 1 (lower (has_type (ty_scalar_float ty) (bnot x)))
+  (move_x_to_f (rv_not (move_f_to_x x ty)) (float_int_of_same_size ty)))
+
+(rule 2 (lower (has_type $I128 (bnot x)))
+  (value_regs
+    (rv_not (value_regs_get x 0))
+    (rv_not (value_regs_get x 1))))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (bnot x)))
   (rv_vnot_v x (unmasked) ty))
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
