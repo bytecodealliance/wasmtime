@@ -53,6 +53,14 @@ use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
 pub(crate) mod local;
 pub(crate) use local::*;
 
+/// Internal classification for params or returns,
+/// mainly used for params and return register assignment.
+#[derive(Clone, Copy)]
+pub(super) enum ParamsOrReturns {
+    Params,
+    Returns,
+}
+
 /// Trait implemented by a specific ISA and used to provide
 /// information about alignment, parameter passing, usage of
 /// specific registers, etc.
@@ -77,9 +85,8 @@ pub(crate) trait ABI {
     fn sig_from(params: &[WasmType], returns: &[WasmType], call_conv: &CallingConvention)
         -> ABISig;
 
-    /// Construct the ABI-specific result from a slice of
-    /// [`wasmtime_environ::WasmtType`].
-    fn result(returns: &[WasmType], call_conv: &CallingConvention) -> ABIResult;
+    /// Construct [`ABIResults`] from a slice of [`WasmType`].
+    fn abi_results(returns: &[WasmType], call_conv: &CallingConvention) -> ABIResults;
 
     /// Returns the number of bits in a word.
     fn word_bits() -> u32;
@@ -118,128 +125,263 @@ pub(crate) trait ABI {
     /// calling convention.
     fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]>;
 
-    /// Returns the size of each argument stack slot per argument type.
-    fn stack_arg_slot_size_for_type(ty: WasmType) -> u32;
+    /// The size, in bytes, of each stack slot used for stack parameter passing.
+    fn stack_slot_size() -> u32;
+
+    /// Returns the size in bytes of the given [`WasmType`].
+    fn sizeof(ty: &WasmType) -> u32 {
+        match ty {
+            WasmType::Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => Self::word_bytes(),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
+            WasmType::F64 | WasmType::I64 => Self::word_bytes(),
+            WasmType::F32 | WasmType::I32 => Self::word_bytes() / 2,
+            ty => unimplemented!("Support for WasmType: {ty}"),
+        }
+    }
 }
 
-/// ABI-specific representation of a function argument.
+/// ABI-specific representation of function argument or result.
 #[derive(Clone, Debug)]
-pub enum ABIArg {
-    /// A register argument.
+pub enum ABIOperand {
+    /// A register [`ABIOperand`].
     Reg {
-        /// Type of the argument.
+        /// The type of the [`ABIOperand`].
         ty: WasmType,
-        /// Register holding the argument.
+        /// Register holding the [`ABIOperand`].
         reg: Reg,
+        /// The size of the [`ABIOperand`], in bytes.
+        size: u32,
     },
-    /// A stack argument.
+    /// A stack [`ABIOperand`].
     Stack {
-        /// The type of the argument.
+        /// The type of the [`ABIOperand`].
         ty: WasmType,
-        /// Offset of the argument relative to the frame pointer.
+        /// Offset of the operand referenced through FP by the callee and
+        /// through SP by the caller.
         offset: u32,
+        /// The size of the [`ABIOperand`], in bytes.
+        size: u32,
     },
 }
 
-impl ABIArg {
-    /// Allocate a new register abi arg.
-    pub fn reg(reg: Reg, ty: WasmType) -> Self {
-        Self::Reg { reg, ty }
+impl ABIOperand {
+    /// Allocate a new register [`ABIOperand`].
+    pub fn reg(reg: Reg, ty: WasmType, size: u32) -> Self {
+        Self::Reg { reg, ty, size }
     }
 
-    /// Allocate a new stack abi arg.
-    pub fn stack_offset(offset: u32, ty: WasmType) -> Self {
-        Self::Stack { ty, offset }
+    /// Allocate a new stack [`ABIOperand`].
+    pub fn stack_offset(offset: u32, ty: WasmType, size: u32) -> Self {
+        Self::Stack { ty, offset, size }
     }
 
-    /// Is this abi arg in a register.
+    /// Is this [`ABIOperand`] in a register.
     pub fn is_reg(&self) -> bool {
         match *self {
-            ABIArg::Reg { .. } => true,
+            ABIOperand::Reg { .. } => true,
             _ => false,
         }
     }
 
-    /// Get the register associated to this arg.
+    /// Unwraps the underlying register if it is one.
+    ///
+    /// # Panics
+    /// This function panics if the [`ABIOperand`] is not a register.
+    pub fn unwrap_reg(&self) -> Reg {
+        match self {
+            ABIOperand::Reg { reg, .. } => *reg,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Get the register associated to this [`ABIOperand`].
     pub fn get_reg(&self) -> Option<Reg> {
         match *self {
-            ABIArg::Reg { reg, .. } => Some(reg),
+            ABIOperand::Reg { reg, .. } => Some(reg),
             _ => None,
         }
     }
 
-    /// Get the type associated to this arg.
+    /// Get the type associated to this [`ABIOperand`].
     pub fn ty(&self) -> WasmType {
         match *self {
-            ABIArg::Reg { ty, .. } | ABIArg::Stack { ty, .. } => ty,
+            ABIOperand::Reg { ty, .. } | ABIOperand::Stack { ty, .. } => ty,
         }
     }
 }
 
-/// ABI-specific representation of the function result.
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum ABIResult {
-    Void,
-    Reg {
-        /// Type of the result.
-        ty: WasmType,
-        /// Register to hold the result.
-        reg: Reg,
-    },
+/// Information about the [`ABIOperand`] information used in [`ABISig`].
+#[derive(Clone, Debug)]
+pub(crate) struct ABIOperands {
+    /// All the operands.
+    pub inner: SmallVec<[ABIOperand; 6]>,
+    /// All the registers used as operands.
+    pub regs: HashSet<Reg>,
+    /// Stack bytes used by the operands.
+    pub bytes: u32,
 }
 
-impl Default for ABIResult {
+impl Default for ABIOperands {
     fn default() -> Self {
-        Self::Void
+        Self {
+            inner: Default::default(),
+            regs: HashSet::with_capacity(0),
+            bytes: 0,
+        }
     }
 }
 
-impl ABIResult {
-    /// Create a register ABI result.
-    pub fn reg(ty: WasmType, reg: Reg) -> Self {
-        Self::Reg { ty, reg }
-    }
+/// ABI-specific representation of an [`ABISig`].
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ABIResults {
+    /// The result operands.
+    operands: ABIOperands,
+}
 
-    /// Createa void ABI result.
-    pub fn void() -> Self {
-        Self::Void
-    }
-
-    /// Get the result reg.
-    pub fn result_reg(&self) -> Option<Reg> {
-        match self {
-            Self::Reg { reg, .. } => Some(*reg),
-            _ => None,
+impl ABIResults {
+    /// Creates [`ABIResults`] from a slice of `WasmType`.
+    pub fn from<F>(returns: &[WasmType], mut map: F) -> Self
+    where
+        F: FnMut(&WasmType, u32) -> (ABIOperand, u32),
+    {
+        if returns.len() == 0 {
+            return Self::default();
         }
+
+        let register_capacity = returns.len().min(2);
+        let (operands, regs, bytes): (SmallVec<[ABIOperand; 6]>, HashSet<Reg>, u32) =
+            returns.iter().fold(
+                (
+                    SmallVec::new(),
+                    HashSet::with_capacity(register_capacity),
+                    0,
+                ),
+                |(mut operands, mut regs, stack_bytes), arg| {
+                    let (operand, bytes) = map(arg, stack_bytes);
+                    if operand.is_reg() {
+                        regs.insert(operand.unwrap_reg());
+                    }
+                    operands.push(operand);
+                    (operands, regs, bytes)
+                },
+            );
+
+        Self::new(ABIOperands {
+            inner: operands,
+            regs,
+            bytes,
+        })
     }
 
-    /// Checks if the result is void.
-    pub fn is_void(&self) -> bool {
-        match self {
-            Self::Void => true,
-            _ => false,
-        }
+    /// Create a new [`ABIResults`] from [`ABIOperands`].
+    pub fn new(operands: ABIOperands) -> Self {
+        Self { operands }
+    }
+
+    /// Returns an iterator over the result registers.
+    pub fn regs(&self) -> &HashSet<Reg> {
+        &self.operands.regs
+    }
+
+    /// Get a slice over all the result [`ABIOperand`]s.
+    pub fn operands(&self) -> &[ABIOperand] {
+        &self.operands.inner
     }
 
     /// Returns the length of the result.
     pub fn len(&self) -> usize {
-        if self.is_void() {
-            0
-        } else {
-            1
-        }
+        self.operands.inner.len()
     }
 
-    /// Returns an iterator over the result registers.
+    /// Get the [`ABIOperand`] result in the nth position.
+    #[cfg(test)]
+    pub fn get(&self, n: usize) -> Option<&ABIOperand> {
+        self.operands.inner.get(n)
+    }
+
+    /// Returns the first [`ABIOperand`].
+    /// Useful in situations where the function signature is known to
+    /// have a single return.
     ///
-    /// NOTE: Currently only one or zero registers
-    /// will be returned until suport for multi-value is introduced.
-    pub fn regs(&self) -> impl Iterator<Item = Reg> + '_ {
-        std::iter::once(self.result_reg()).filter_map(|v| v)
+    /// # Panics
+    /// This function panics if the function signature contains more
+    pub fn unwrap_singleton(&self) -> &ABIOperand {
+        assert!(self.len() == 1);
+        &self.operands.inner[0]
     }
 }
 
-pub(crate) type ABIParams = SmallVec<[ABIArg; 6]>;
+/// ABI-specific representation of an [`ABISig`].
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ABIParams {
+    /// The param operands.
+    operands: ABIOperands,
+}
+
+impl ABIParams {
+    /// Creates [`ABIParams`] from a slice of `WasmType`.
+    pub fn from<F>(params: &[WasmType], initial_bytes: u32, mut map: F) -> Self
+    where
+        F: FnMut(&WasmType, u32) -> (ABIOperand, u32),
+    {
+        if params.len() == 0 {
+            return Self::with_bytes(initial_bytes);
+        }
+
+        let regiser_capacity = params.len().min(6);
+        let (operands, regs, stack_bytes): (SmallVec<[ABIOperand; 6]>, HashSet<Reg>, u32) =
+            params.iter().fold(
+                (
+                    SmallVec::new(),
+                    HashSet::with_capacity(regiser_capacity),
+                    initial_bytes,
+                ),
+                |(mut operands, mut regs, stack_bytes), arg| {
+                    let (operand, bytes) = map(arg, stack_bytes);
+                    if operand.is_reg() {
+                        regs.insert(operand.unwrap_reg());
+                    }
+                    operands.push(operand);
+                    (operands, regs, bytes)
+                },
+            );
+
+        Self::new(ABIOperands {
+            inner: operands,
+            regs,
+            bytes: stack_bytes,
+        })
+    }
+
+    /// Creates new [`ABIParams`], with the specified amount of stack bytes.
+    pub fn with_bytes(bytes: u32) -> Self {
+        let mut params = Self::default();
+        params.operands.bytes = bytes;
+        params
+    }
+
+    /// Create [`ABIParams`] from [`ABIOperands`].
+    pub fn new(operands: ABIOperands) -> Self {
+        Self { operands }
+    }
+
+    /// Get the [`ABIOperand`] param in the nth position.
+    pub fn get(&self, n: usize) -> Option<&ABIOperand> {
+        self.operands.inner.get(n)
+    }
+
+    /// Get a slice over all the parameter [`ABIOperand`]s.
+    pub fn operands(&self) -> &[ABIOperand] {
+        &self.operands.inner
+    }
+
+    /// Returns the length of the params.
+    pub fn len(&self) -> usize {
+        self.operands.inner.len()
+    }
+}
 
 /// An ABI-specific representation of a function signature.
 #[derive(Debug, Clone)]
@@ -247,49 +389,46 @@ pub(crate) struct ABISig {
     /// Function parameters.
     pub params: ABIParams,
     /// Function result.
-    pub result: ABIResult,
-    /// Stack space needed for stack arguments.
-    pub stack_bytes: u32,
-    /// All the registers used in the [`ABISig`].
-    /// Note that this collection is guaranteed to
-    /// be unique: in some cases some registers might
-    /// be used as params as a well as returns (e.g. xmm0 in x64).
+    pub results: ABIResults,
+    /// A unique set of registers used in the entire [`ABISig`].
     pub regs: HashSet<Reg>,
 }
 
 impl ABISig {
     /// Create a new ABI signature.
-    pub fn new(params: ABIParams, result: ABIResult, stack_bytes: u32) -> Self {
+    pub fn new(params: ABIParams, results: ABIResults) -> Self {
         let regs = params
-            .iter()
-            .filter_map(|r| r.get_reg())
-            .collect::<SmallVec<[Reg; 6]>>();
-        let result_regs = result.regs();
-        let chained = regs.into_iter().chain(result_regs);
-
+            .operands
+            .regs
+            .union(&results.operands.regs)
+            .copied()
+            .collect();
         Self {
             params,
-            result,
-            stack_bytes,
-            regs: HashSet::from_iter(chained),
+            results,
+            regs,
         }
     }
-}
 
-/// Returns the size in bytes of a given WebAssembly type.
-pub(crate) fn ty_size(ty: &WasmType) -> u32 {
-    match *ty {
-        WasmType::I32 | WasmType::F32 => 4,
-        WasmType::I64 | WasmType::F64 => 8,
-        WasmType::Ref(rt) => match rt.heap_type {
-            // TODO: Similar to the comment in visitor.rs at impl From<WasmType> for
-            // OperandSize, Once Wasmtime supports 32-bit architectures, this will
-            // need to be updated to derive operand size from the target's pointer
-            // size.
-            WasmHeapType::Func => 8,
-            ht => unimplemented!("Support for WasmHeapType: {ht}"),
-        },
-        t => unimplemented!("Support for WasmType: {t}"),
+    /// Returns an iterator over all the parameter operands.
+    pub fn params(&self) -> &[ABIOperand] {
+        self.params.operands()
+    }
+
+    /// Returns an iterator over all the result operands.
+    pub fn results(&self) -> &[ABIOperand] {
+        self.results.operands()
+    }
+
+    /// Returns the stack size, in bytes, needed for arguments on the stack.
+    pub fn params_stack_size(&self) -> u32 {
+        self.params.operands.bytes
+    }
+
+    /// Returns the stack size, in bytes, needed for results on the stack.
+    #[allow(dead_code)] // Until multi-value is supported.
+    pub fn results_stack_size(&self) -> u32 {
+        self.results.operands.bytes
     }
 }
 

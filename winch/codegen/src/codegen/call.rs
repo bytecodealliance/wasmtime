@@ -58,7 +58,7 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    abi::{ABIArg, ABISig, ABI},
+    abi::{ABIOperand, ABISig, ABI},
     codegen::{
         ptr_type_from_ptr_size, BuiltinFunction, BuiltinType, Callee, CalleeInfo, CodeGenContext,
         TypedReg,
@@ -94,7 +94,7 @@ impl FnCall {
         let sig = Self::get_sig::<M>(&callee, ptr_type);
         let sig = sig.as_ref();
 
-        let arg_stack_space = sig.stack_bytes;
+        let arg_stack_space = sig.params_stack_size();
         let kind = Self::map(&context.vmoffsets, &callee, sig, context, masm);
         let call_stack_space = Self::save(context, masm, &sig);
 
@@ -115,7 +115,7 @@ impl FnCall {
         );
     }
 
-    /// Derive the [`ABISig`] for a particulare [`Callee].
+    /// Derive the [`ABISig`] for a particulare [`Callee`].
     fn get_sig<M: MacroAssembler>(callee: &Callee, ptr_type: WasmType) -> Cow<'_, ABISig> {
         match callee {
             Callee::Builtin(info) => Cow::Borrowed(info.sig()),
@@ -250,19 +250,17 @@ impl FnCall {
         let arg_count = sig.params.len();
         let stack = &context.stack;
         let mut stack_values = stack.peekn(arg_count);
-
-        for arg in &sig.params {
+        for arg in sig.params() {
             let val = stack_values
                 .next()
                 .unwrap_or_else(|| panic!("expected stack value for function argument"));
-            match &arg {
-                &ABIArg::Reg { ty: _, reg } => {
-                    context.move_val_to_reg(&val, *reg, masm);
+            match arg {
+                &ABIOperand::Reg { reg, .. } => {
+                    context.move_val_to_reg(&val, reg, masm);
                 }
-                &ABIArg::Stack { ty, offset } => {
-                    let addr = masm.address_at_sp(*offset);
-                    let size: OperandSize = (*ty).into();
-                    let scratch = <M::ABI as ABI>::scratch_for(&ty);
+                &ABIOperand::Stack { ty, offset, .. } => {
+                    let addr = masm.address_at_sp(offset);
+                    let size: OperandSize = (ty).into();
                     context.move_val_to_reg(val, scratch, masm);
                     masm.store(scratch.into(), addr, size);
                 }
@@ -344,6 +342,6 @@ impl FnCall {
                 regalloc.free(v.get_reg().into());
             }
         });
-        context.push_abi_results(&sig.result, masm);
+        context.push_abi_results(&sig.results, masm);
     }
 }

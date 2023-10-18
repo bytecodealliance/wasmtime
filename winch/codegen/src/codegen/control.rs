@@ -30,7 +30,7 @@
 
 use super::{CodeGenContext, MacroAssembler, OperandSize};
 use crate::{
-    abi::{ABIResult, ABI},
+    abi::{ABIResults, ABI},
     masm::IntCmpKind,
     CallingConvention,
 };
@@ -47,7 +47,7 @@ pub(crate) enum ControlStackFrame {
         /// The exit label of the block.
         exit: MachLabel,
         /// The return values of the block.
-        result: ABIResult,
+        results: ABIResults,
         /// The size of the value stack at the beginning of the If.
         original_stack_len: usize,
         /// The stack pointer offset at the beginning of the If.
@@ -59,7 +59,7 @@ pub(crate) enum ControlStackFrame {
         /// The exit label of the block.
         exit: MachLabel,
         /// The return values of the block.
-        result: ABIResult,
+        results: ABIResults,
         /// The size of the value stack at the beginning of the Else.
         original_stack_len: usize,
         /// The stack pointer offset at the beginning of the Else.
@@ -73,7 +73,7 @@ pub(crate) enum ControlStackFrame {
         /// The size of the value stack at the beginning of the block.
         original_stack_len: usize,
         /// The return values of the block.
-        result: ABIResult,
+        results: ABIResults,
         /// The stack pointer offset at the beginning of the Block.
         original_sp_offset: u32,
         /// Exit state of the block.
@@ -91,7 +91,7 @@ pub(crate) enum ControlStackFrame {
         /// The stack pointer offset at the beginning of the Block.
         original_sp_offset: u32,
         /// The return values of the block.
-        result: ABIResult,
+        results: ABIResults,
     },
 }
 
@@ -102,11 +102,11 @@ impl ControlStackFrame {
         masm: &mut M,
         context: &mut CodeGenContext,
     ) -> Self {
-        let result = <M::ABI as ABI>::result(&returns, &CallingConvention::Default);
+        let results = <M::ABI as ABI>::abi_results(&returns, &CallingConvention::Default);
         let mut control = Self::If {
             cont: masm.get_label(),
             exit: masm.get_label(),
-            result,
+            results,
             reachable: context.reachable,
             original_stack_len: 0,
             original_sp_offset: 0,
@@ -119,13 +119,13 @@ impl ControlStackFrame {
     /// Creates a block that represents the base
     /// block for the function body.
     pub fn function_body_block<M: MacroAssembler>(
-        result: ABIResult,
+        results: ABIResults,
         masm: &mut M,
         context: &mut CodeGenContext,
     ) -> Self {
         Self::Block {
             original_stack_len: context.stack.len(),
-            result,
+            results,
             is_branch_target: false,
             exit: masm.get_label(),
             original_sp_offset: masm.sp_offset(),
@@ -138,10 +138,10 @@ impl ControlStackFrame {
         masm: &mut M,
         context: &mut CodeGenContext,
     ) -> Self {
-        let result = <M::ABI as ABI>::result(&returns, &CallingConvention::Default);
+        let results = <M::ABI as ABI>::abi_results(&returns, &CallingConvention::Default);
         let mut control = Self::Block {
             original_stack_len: 0,
-            result,
+            results,
             is_branch_target: false,
             exit: masm.get_label(),
             original_sp_offset: 0,
@@ -157,10 +157,10 @@ impl ControlStackFrame {
         masm: &mut M,
         context: &mut CodeGenContext,
     ) -> Self {
-        let result = <M::ABI as ABI>::result(&returns, &CallingConvention::Default);
+        let results = <M::ABI as ABI>::abi_results(&returns, &CallingConvention::Default);
         let mut control = Self::Loop {
             original_stack_len: 0,
-            result,
+            results,
             head: masm.get_label(),
             original_sp_offset: 0,
         };
@@ -235,15 +235,15 @@ impl ControlStackFrame {
         use ControlStackFrame::*;
         match self {
             If {
-                result,
+                results,
                 original_stack_len,
                 exit,
                 ..
             } => {
-                assert!((*original_stack_len + result.len()) == context.stack.len());
+                assert!((*original_stack_len + results.len()) == context.stack.len());
                 // Before emitting an unconditional jump to the exit branch,
                 // we handle the result of the if-then block.
-                context.pop_abi_results(&result, masm);
+                context.pop_abi_results(&results, masm);
                 // Before binding the else branch, we emit the jump to the end
                 // label.
                 masm.jmp(*exit);
@@ -261,7 +261,7 @@ impl ControlStackFrame {
         match self {
             If {
                 cont,
-                result,
+                results,
                 original_stack_len,
                 original_sp_offset,
                 exit,
@@ -274,7 +274,7 @@ impl ControlStackFrame {
                 *self = ControlStackFrame::Else {
                     exit: *exit,
                     original_stack_len: *original_stack_len,
-                    result: *result,
+                    results: results.clone(),
                     reachable,
                     original_sp_offset: *original_sp_offset,
                 };
@@ -288,35 +288,35 @@ impl ControlStackFrame {
         use ControlStackFrame::*;
         match self {
             If {
-                result,
+                results,
                 original_stack_len,
                 ..
             }
             | Else {
-                result,
+                results,
                 original_stack_len,
                 ..
             } => {
-                assert!((*original_stack_len + result.len()) == context.stack.len());
+                assert!((*original_stack_len + results.len()) == context.stack.len());
                 // Before binding the exit label, we handle the block results.
-                context.pop_abi_results(&result, masm);
+                context.pop_abi_results(&results, masm);
                 self.bind_end(masm, context);
             }
             Block {
                 original_stack_len,
-                result,
+                results,
                 ..
             } => {
-                assert!((*original_stack_len + result.len()) == context.stack.len());
-                context.pop_abi_results(&result, masm);
+                assert!((*original_stack_len + results.len()) == context.stack.len());
+                context.pop_abi_results(&results, masm);
                 self.bind_end(masm, context);
             }
             Loop {
-                result,
+                results,
                 original_stack_len,
                 ..
             } => {
-                assert!((*original_stack_len + result.len()) == context.stack.len());
+                assert!((*original_stack_len + results.len()) == context.stack.len());
             }
         }
     }
@@ -325,7 +325,7 @@ impl ControlStackFrame {
     /// ABI results to the value stack.
     pub fn bind_end<M: MacroAssembler>(&self, masm: &mut M, context: &mut CodeGenContext) {
         // Push the results to the value stack.
-        context.push_abi_results(self.result(), masm);
+        context.push_abi_results(self.results(), masm);
         self.bind_exit_label(masm);
     }
 
@@ -379,16 +379,16 @@ impl ControlStackFrame {
         }
     }
 
-    /// Returns [`crate::abi::ABIResult`] of the control stack frame
+    /// Returns [`crate::abi::ABIResults`] of the control stack frame
     /// block.
-    pub fn result(&self) -> &ABIResult {
+    pub fn results(&self) -> &ABIResults {
         use ControlStackFrame::*;
 
         match self {
-            If { result, .. }
-            | Else { result, .. }
-            | Block { result, .. }
-            | Loop { result, .. } => result,
+            If { results, .. }
+            | Else { results, .. }
+            | Block { results, .. }
+            | Loop { results, .. } => results,
         }
     }
 
@@ -446,11 +446,12 @@ impl ControlStackFrame {
     /// jump target Notably in the case of loops we don't take into
     /// account the frame's results, just the params (void until
     /// multi-value is supported).
-    pub fn as_target_result(&self) -> ABIResult {
+    pub fn as_target_results(&self) -> ABIResults {
         use ControlStackFrame::*;
         match self {
-            Loop { .. } => ABIResult::void(),
-            f => *f.result(),
+            //TODO: For now, once we fully switch we'll use the loop's params.
+            Loop { .. } => ABIResults::default(),
+            f => f.results().clone(),
         }
     }
 }

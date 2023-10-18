@@ -878,7 +878,7 @@ where
             if !is_outermost {
                 control.emit_end(self.masm, &mut self.context);
             } else {
-                self.context.pop_abi_results(control.result(), self.masm);
+                self.context.pop_abi_results(control.results(), self.masm);
                 control.bind_exit_label(self.masm);
             }
         }
@@ -1154,7 +1154,7 @@ where
         let frame = &mut self.control_frames[index];
         self.context
             .unconditional_jump(frame, self.masm, |masm, cx, frame| {
-                cx.pop_abi_results(&frame.as_target_result(), masm);
+                cx.pop_abi_results(&frame.as_target_results(), masm);
             });
     }
 
@@ -1162,13 +1162,13 @@ where
         let index = control_index(depth, self.control_frames.len());
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
-        let result = frame.as_target_result();
-        let top = self.context.maybe_without1::<TypedReg, M, _>(
-            result.result_reg(),
-            self.masm,
-            |ctx, masm| ctx.pop_to_reg(masm, None),
-        );
-        self.context.top_abi_results(&result, self.masm);
+        let results = frame.as_target_results();
+        let top = self
+            .context
+            .without::<TypedReg, M, _>(results.regs(), self.masm, |ctx, masm| {
+                ctx.pop_to_reg(masm, None)
+            });
+        self.context.top_abi_results(&results, self.masm);
         self.masm.branch(
             IntCmpKind::Ne,
             top.reg.into(),
@@ -1188,10 +1188,9 @@ where
         let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
 
         let default_index = control_index(targets.default(), self.control_frames.len());
-        let default_frame = &self.control_frames[default_index];
-        let default_result = default_frame.as_target_result();
-        let (index, tmp) = self.context.maybe_without1::<(TypedReg, _), M, _>(
-            default_result.result_reg(),
+        let default_result = self.control_frames[default_index].as_target_results();
+        let (index, tmp) = self.context.without::<(TypedReg, _), M, _>(
+            default_result.regs(),
             self.masm,
             |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
         );
@@ -1230,7 +1229,7 @@ where
         let outermost = &mut self.control_frames[0];
         self.context
             .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
-                cx.pop_abi_results(&frame.as_target_result(), masm);
+                cx.pop_abi_results(&frame.as_target_results(), masm);
             });
     }
 

@@ -84,7 +84,7 @@ where
         // base control flow block.
         self.control_frames
             .push(ControlStackFrame::function_body_block(
-                self.sig.result,
+                self.sig.results.clone(),
                 self.masm,
                 &mut self.context,
             ));
@@ -317,7 +317,7 @@ where
     fn spill_register_arguments(&mut self) {
         use WasmType::*;
         self.sig
-            .params
+            .params()
             .iter()
             .enumerate()
             .filter(|(_, a)| a.is_reg())
@@ -378,7 +378,10 @@ where
         // the builtin's signature.
         let elem_value: Reg = self
             .context
-            .reg(builtin.sig().result.result_reg().unwrap(), self.masm)
+            .reg(
+                builtin.sig().results.unwrap_singleton().unwrap_reg(),
+                self.masm,
+            )
             .into();
 
         let index = self.context.pop_to_reg(self.masm, None);

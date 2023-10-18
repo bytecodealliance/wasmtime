@@ -55,10 +55,10 @@ impl Masm for MacroAssembler {
 
     fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
         let bytes = if reg.is_int() {
+            let bytes = <Self::ABI as ABI>::word_bytes();
             self.asm.push_r(reg);
-            let increment = <Self::ABI as ABI>::word_bytes();
-            self.increment_sp(increment);
-            increment
+            self.increment_sp(bytes);
+            bytes
         } else {
             let bytes = size.bytes();
             self.reserve_stack(bytes);

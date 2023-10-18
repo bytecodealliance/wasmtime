@@ -2,7 +2,7 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
 
 use super::{CodeGen, ControlStackFrame};
 use crate::{
-    abi::{ABIResult, ABI},
+    abi::{ABIOperand, ABIResults, ABI},
     codegen::BuiltinFunctions,
     frame::Frame,
     isa::reg::RegClass,
@@ -124,19 +124,6 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         }
 
         result
-    }
-
-    /// Similar to [`Self::without`] but takes an optional, single register
-    /// as a paramter.
-    pub fn maybe_without1<T, M, F>(&mut self, reg: Option<Reg>, masm: &mut M, mut f: F) -> T
-    where
-        M: MacroAssembler,
-        F: FnMut(&mut Self, &mut M) -> T,
-    {
-        match reg {
-            Some(r) => self.without(&[r], masm, f),
-            None => f(self, masm),
-        }
     }
 
     /// Free the given register.
@@ -412,26 +399,32 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
     /// Handles the emission of the ABI result. This function is used at the end
     /// of a block or function to pop the results from the value stack into the
     /// corresponding ABI result representation.
-    pub fn pop_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
-        match result {
-            ABIResult::Void => {}
-            ABIResult::Reg { reg, .. } => {
-                let TypedReg { reg, ty: _ } = self.pop_to_reg(masm, Some(*reg));
-                self.free_reg(reg);
+    pub fn pop_abi_results<M: MacroAssembler>(&mut self, results: &ABIResults, masm: &mut M) {
+        assert!(results.len() <= 1);
+        for operand in results.operands() {
+            match operand {
+                ABIOperand::Reg { reg, .. } => {
+                    let TypedReg { reg, .. } = self.pop_to_reg(masm, Some(*reg));
+                    self.free_reg(reg);
+                }
+                _ => unimplemented!(),
             }
         }
     }
 
-    /// Push ABI results in to the value stack. This function is used at the end
+    /// Push ABI results into the value stack. This function is used at the end
     /// of a block or after a function call to push the corresponding ABI
     /// results into the value stack.
-    pub fn push_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
-        match result {
-            ABIResult::Void => {}
-            ABIResult::Reg { ty, reg } => {
-                assert!(self.regalloc.reg_available(*reg));
-                let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm));
-                self.stack.push(typed_reg.into());
+    pub fn push_abi_results<M: MacroAssembler>(&mut self, results: &ABIResults, masm: &mut M) {
+        assert!(results.len() <= 1);
+        for operand in results.operands() {
+            match operand {
+                ABIOperand::Reg { reg, ty, .. } => {
+                    assert!(self.regalloc.reg_available(*reg));
+                    let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm));
+                    self.stack.push(typed_reg.into());
+                }
+                _ => unimplemented!(),
             }
         }
     }

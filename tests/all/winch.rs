@@ -27,7 +27,8 @@ const MODULE: &'static str = r#"
         local.get $arg_9
         i32.add
         local.get $arg_10
-        i32.add)
+        i32.add
+        )
 
       (func $call_add (param i32 i32) (result i32)
         (local.get 0)
