@@ -629,27 +629,27 @@ Caused by:
     #[test]
     fn test_feature_mismatch() -> Result<()> {
         let mut config = Config::new();
-        config.wasm_simd(true);
+        config.wasm_threads(true);
 
         let engine = Engine::new(&config)?;
         let mut metadata = Metadata::new(&engine);
-        metadata.features.simd = false;
+        metadata.features.threads = false;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled without WebAssembly SIMD support but it is enabled for the host"),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled without WebAssembly threads support but it is enabled for the host"),
         }
 
         let mut config = Config::new();
-        config.wasm_simd(false);
+        config.wasm_threads(false);
 
         let engine = Engine::new(&config)?;
         let mut metadata = Metadata::new(&engine);
-        metadata.features.simd = true;
+        metadata.features.threads = true;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled with WebAssembly SIMD support but it is not enabled for the host"),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled with WebAssembly threads support but it is not enabled for the host"),
         }
 
         Ok(())

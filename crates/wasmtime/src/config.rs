@@ -230,10 +230,6 @@ impl Config {
         ret.wasm_simd(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
-        ret.wasm_relaxed_simd(false);
-        ret.wasm_threads(false);
-        ret.wasm_multi_memory(false);
-
         // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
         // but it's not implemented in Wasmtime yet so disable it.
         ret.features.tail_call = false;
@@ -660,31 +656,23 @@ impl Config {
         self
     }
 
-    /// Configures whether the WebAssembly threads proposal will be enabled for
-    /// compilation.
-    ///
-    /// The [WebAssembly threads proposal][threads] is not currently fully
-    /// standardized and is undergoing development. Additionally the support in
-    /// wasmtime itself is still being worked on. Support for this feature can
-    /// be enabled through this method for appropriate wasm modules.
+    /// Configures whether the WebAssembly [threads] proposal will be enabled
+    /// for compilation.
     ///
     /// This feature gates items such as shared memories and atomic
-    /// instructions. Note that the threads feature depends on the
-    /// bulk memory feature, which is enabled by default.
+    /// instructions. Note that the threads feature depends on the bulk memory
+    /// feature, which is enabled by default. Additionally note that while the
+    /// wasm feature is called "threads" it does not actually include the
+    /// ability to spawn threads. Spawning threads is part of the [wasi-threads]
+    /// proposal which is a separately gated feature in Wasmtime.
     ///
-    /// This is `false` by default.
+    /// Embeddings of Wasmtime are able to build their own custom threading
+    /// scheme on top of the core wasm threads proposal, however.
     ///
-    /// > **Note**: Wasmtime does not implement everything for the wasm threads
-    /// > spec at this time, so bugs, panics, and possibly segfaults should be
-    /// > expected. This should not be enabled in a production setting right
-    /// > now.
-    ///
-    /// # Errors
-    ///
-    /// The validation of this feature are deferred until the engine is being built,
-    /// and thus may cause `Engine::new` fail if the `bulk_memory` feature is disabled.
+    /// This is `true` by default.
     ///
     /// [threads]: https://github.com/webassembly/threads
+    /// [wasi-threads]: https://github.com/webassembly/wasi-threads
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
         self.features.threads = enable;
         self
@@ -750,15 +738,13 @@ impl Config {
     /// Configures whether the WebAssembly Relaxed SIMD proposal will be
     /// enabled for compilation.
     ///
-    /// The [WebAssembly Relaxed SIMD proposal][proposal] is not, at the time of
-    /// this writing, at stage 4. The relaxed SIMD proposal adds new
-    /// instructions to WebAssembly which, for some specific inputs, are allowed
-    /// to produce different results on different hosts. More-or-less this
-    /// proposal enables exposing platform-specific semantics of SIMD
-    /// instructions in a controlled fashion to a WebAssembly program. From an
-    /// embedder's perspective this means that WebAssembly programs may execute
-    /// differently depending on whether the host is x86_64 or AArch64, for
-    /// example.
+    /// The relaxed SIMD proposal adds new instructions to WebAssembly which,
+    /// for some specific inputs, are allowed to produce different results on
+    /// different hosts. More-or-less this proposal enables exposing
+    /// platform-specific semantics of SIMD instructions in a controlled
+    /// fashion to a WebAssembly program. From an embedder's perspective this
+    /// means that WebAssembly programs may execute differently depending on
+    /// whether the host is x86_64 or AArch64, for example.
     ///
     /// By default Wasmtime lowers relaxed SIMD instructions to the fastest
     /// lowering for the platform it's running on. This means that, by default,
@@ -768,7 +754,7 @@ impl Config {
     /// deterministic behavior across all platforms, as classified by the
     /// specification, at the cost of performance.
     ///
-    /// This is `false` by default.
+    /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/relaxed-simd
     pub fn wasm_relaxed_simd(&mut self, enable: bool) -> &mut Self {
@@ -840,7 +826,7 @@ impl Config {
     /// This feature gates modules having more than one linear memory
     /// declaration or import.
     ///
-    /// This is `false` by default.
+    /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/multi-memory
     pub fn wasm_multi_memory(&mut self, enable: bool) -> &mut Self {

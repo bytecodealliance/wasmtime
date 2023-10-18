@@ -43,7 +43,7 @@ fn caches_across_engines() {
         // differ in wasm features enabled (which can affect
         // runtime/compilation settings)
         let res = Module::deserialize(
-            &Engine::new(Config::new().wasm_simd(false)).unwrap(),
+            &Engine::new(Config::new().wasm_threads(false)).unwrap(),
             &bytes,
         );
         assert!(res.is_err());
