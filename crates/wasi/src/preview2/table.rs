@@ -234,6 +234,21 @@ impl Table {
             (item, v)
         })
     }
+
+    /// Iterate over all children belonging to the provided parent
+    pub fn iter_children<T>(
+        &self,
+        parent: &Resource<T>,
+    ) -> Result<impl Iterator<Item = &(dyn Any + Send + Sync)>, TableError>
+    where
+        T: 'static,
+    {
+        let parent_entry = self.map.get(&parent.rep()).ok_or(TableError::NotPresent)?;
+        Ok(parent_entry.children.iter().map(|child_index| {
+            let child = self.map.get(child_index).expect("missing child");
+            child.entry.as_ref()
+        }))
+    }
 }
 
 impl Default for Table {

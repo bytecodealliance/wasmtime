@@ -14,13 +14,14 @@ fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddres
 
     let server = UdpSocket::new(family).unwrap();
 
-    let (server_incoming, _) = server.blocking_bind(&net, bind_address).unwrap();
+    server.blocking_bind(&net, bind_address).unwrap();
+    let (server_incoming, _) = server.stream(None).unwrap();
     let addr = server.local_address().unwrap();
 
     let client_addr = {
         let client = UdpSocket::new(family).unwrap();
-        let (_, client_outgoing) = client.blocking_bind(&net, unspecified_addr).unwrap();
-        client.blocking_connect(addr).unwrap();
+        client.blocking_bind(&net, unspecified_addr).unwrap();
+        let (_, client_outgoing) = client.stream(Some(addr)).unwrap();
 
         let datagrams = [
             OutgoingDatagram {
@@ -52,8 +53,8 @@ fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddres
     // Another client
     {
         let client = UdpSocket::new(family).unwrap();
-        let (_, client_outgoing) = client.blocking_bind(&net, unspecified_addr).unwrap();
-        // Send without connect
+        client.blocking_bind(&net, unspecified_addr).unwrap();
+        let (_, client_outgoing) = client.stream(None).unwrap();
 
         let datagrams = [OutgoingDatagram {
             data: third_message.to_vec(),

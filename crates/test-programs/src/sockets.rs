@@ -132,26 +132,13 @@ impl UdpSocket {
         &self,
         network: &Network,
         local_address: IpSocketAddress,
-    ) -> Result<(IncomingDatagramStream, OutgoingDatagramStream), ErrorCode> {
+    ) -> Result<(), ErrorCode> {
         let sub = self.subscribe();
 
         self.start_bind(&network, local_address)?;
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
-                result => return result,
-            }
-        }
-    }
-
-    pub fn blocking_connect(&self, remote_address: IpSocketAddress) -> Result<(), ErrorCode> {
-        let sub = self.subscribe();
-
-        self.start_connect(remote_address)?;
-
-        loop {
-            match self.finish_connect() {
                 Err(ErrorCode::WouldBlock) => sub.wait(),
                 result => return result,
             }

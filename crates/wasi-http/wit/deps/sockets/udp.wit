@@ -12,7 +12,7 @@ interface udp {
 
         /// The source address.
         /// 
-        /// If the socket is connected, this field is guaranteed to equal the configured remote address.
+        /// This field is guaranteed to match the remote address the stream was initialized with, if any.
         /// 
         /// Equivalent to the `src_addr` out parameter of `recvfrom`.
         remote-address: ip-socket-address,
@@ -27,8 +27,9 @@ interface udp {
 
         /// The destination address.
         ///
-        /// On connected sockets this field must be None or match the connected remote address exactly.
-        /// On unconnected sockets, this field is required.
+        /// The requirements on this field depend on how the stream was initialized:
+        /// - with a remote address: this field must be None or match the stream's remote address exactly.
+        /// - without a remote address: this field is required.
         ///
         /// If this value is None, the send operation is equivalent to `send` in POSIX. Otherwise it is equivalent to `sendto`.
         remote-address: option<ip-socket-address>,
@@ -42,9 +43,7 @@ interface udp {
         ///
         /// If the IP address is zero (`0.0.0.0` in IPv4, `::` in IPv6), it is left to the implementation to decide which
         /// network interface(s) to bind to.
-        /// If the TCP/UDP port is zero, the socket will be bound to a random free port.
-        ///
-        /// When a socket is not explicitly bound, the first invocation to connect will implicitly bind the socket.
+        /// If the port is zero, the socket will be bound to a random free port.
         ///
         /// Unlike in POSIX, this function is async. This enables interactive WASI hosts to inject permission prompts.
         ///
@@ -65,40 +64,49 @@ interface udp {
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind>
         /// - <https://man.freebsd.org/cgi/man.cgi?query=bind&sektion=2&format=html>
         start-bind: func(network: borrow<network>, local-address: ip-socket-address) -> result<_, error-code>;
-        finish-bind: func() -> result<tuple<incoming-datagram-stream, outgoing-datagram-stream>, error-code>;
+        finish-bind: func() -> result<_, error-code>;
 
-        /// Set the destination address.
+        /// Set up inbound & outbound communication channels, optionally to a specific peer.
         ///
-        /// The local-address may be updated based on the best network path to `remote-address`.
+        /// This function only changes the local socket configuration and does not generate any network traffic.
+        /// On success, the `remote-address` of the socket is updated. The `local-address` may be updated as well,
+        /// based on the best network path to `remote-address`.
         ///
-        /// When a destination address is set:
-        /// - all receive operations will only return datagrams sent from the provided `remote-address`.
-        /// - the `send` function can only be used to send to this destination.
+        /// When a `remote-address` is provided, the returned streams are limited to communicating with that specific peer:
+        /// - `send` can only be used to send to this destination.
+        /// - `receive` will only return datagrams sent from the provided `remote-address`.
         ///
-        /// Note that this function does not generate any network traffic and the peer is not aware of this "connection".
+        /// This method may be called multiple times on the same socket to change its association, but
+        /// only the most recently returned pair of streams will be operational. Implementations may trap if
+        /// the streams returned by a previous invocation haven't been dropped yet before calling `stream` again.
         ///
-        /// Unlike in POSIX:
-        /// - The socket must already be explicitly bound.
-        /// - This function is async. This enables interactive WASI hosts to inject permission prompts.
+        /// The POSIX equivalent in pseudo-code is:
+        /// ```
+        /// if (was previously connected) {
+        /// 	connect(s, AF_UNSPEC)
+        /// }
+        /// if (remote_address is Some) {
+        /// 	connect(s, remote_address)
+        /// }
+        /// ```
         ///
-        /// # Typical `start` errors
+        /// Unlike in POSIX, the socket must already be explicitly bound.
+        /// 
+        /// # Typical errors
         /// - `invalid-argument`:          The `remote-address` has the wrong address family. (EAFNOSUPPORT)
         /// - `invalid-argument`:          `remote-address` is a non-IPv4-mapped IPv6 address, but the socket was bound to a specific IPv4-mapped IPv6 address. (or vice versa)
         /// - `invalid-argument`:          The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EDESTADDRREQ, EADDRNOTAVAIL)
         /// - `invalid-argument`:          The port in `remote-address` is set to 0. (EDESTADDRREQ, EADDRNOTAVAIL)
-        ///
-        /// # Typical `finish` errors
+        /// - `invalid-state`:             The socket is not bound.
         /// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
-        /// - `not-in-progress`:           A `connect` operation is not in progress.
-        /// - `would-block`:               Can't finish the operation, it is still in progress. (EWOULDBLOCK, EAGAIN)
+        /// - `remote-unreachable`:        The remote address is not reachable. (ECONNREFUSED, ECONNRESET, ENETRESET, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
         ///
         /// # References
         /// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/connect.html>
         /// - <https://man7.org/linux/man-pages/man2/connect.2.html>
         /// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
         /// - <https://man.freebsd.org/cgi/man.cgi?connect>
-        start-connect: func(remote-address: ip-socket-address) -> result<_, error-code>;
-        finish-connect: func() -> result<_, error-code>;
+        %stream: func(remote-address: option<ip-socket-address>) -> result<tuple<incoming-datagram-stream, outgoing-datagram-stream>, error-code>;
 
         /// Get the current bound address.
         ///
@@ -118,10 +126,10 @@ interface udp {
         /// - <https://man.freebsd.org/cgi/man.cgi?getsockname>
         local-address: func() -> result<ip-socket-address, error-code>;
 
-        /// Get the address set with `connect`.
+        /// Get the address the socket is currently streaming to.
         ///
         /// # Typical errors
-        /// - `invalid-state`: The socket is not connected to a remote address. (ENOTCONN)
+        /// - `invalid-state`: The socket is not streaming to a specific remote address. (ENOTCONN)
         ///
         /// # References
         /// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/getpeername.html>
@@ -218,7 +226,7 @@ interface udp {
         /// - `invalid-argument`:        `remote-address` is a non-IPv4-mapped IPv6 address, but the socket was bound to a specific IPv4-mapped IPv6 address. (or vice versa)
         /// - `invalid-argument`:        The IP address in `remote-address` is set to INADDR_ANY (`0.0.0.0` / `::`). (EDESTADDRREQ, EADDRNOTAVAIL)
         /// - `invalid-argument`:        The port in `remote-address` is set to 0. (EDESTADDRREQ, EADDRNOTAVAIL)
-        /// - `invalid-argument`:        The socket is in "connected" mode and `remote-address` is `some` value that does not match the address passed to `connect`. (EISCONN)
+        /// - `invalid-argument`:        The socket is in "connected" mode and `remote-address` is `some` value that does not match the address passed to `stream`. (EISCONN)
         /// - `invalid-argument`:        The socket is not "connected" and no value for `remote-address` was provided. (EDESTADDRREQ)
         /// - `remote-unreachable`:      The remote address is not reachable. (ECONNREFUSED, ECONNRESET, ENETRESET on Windows, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
         /// - `datagram-too-large`:      The datagram is too large. (EMSGSIZE)
