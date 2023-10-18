@@ -15,7 +15,7 @@ Many Wasmtime embeddings go through the `wasmtime` crate as opposed to the
 command line executable. By default the wasmtime command line executable is
 relatively large:
 
-```
+```shell
 $ cargo build
 $ ls -l ./target/debug/wasmtime
 -rwxr-xr-x@ 1 root  root    140M Oct 18 08:33 target/debug/wasmtime
@@ -25,7 +25,7 @@ The easiest size optimization is to compile with optimizations. This will strip
 lots of dead code and additionally generate much less debug information by
 default
 
-```
+```shell
 $ cargo build --release
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root     33M Oct 18 08:34 target/release/wasmtime
@@ -36,7 +36,7 @@ disable the default features of the `wasmtime-cli` crate. This will remove all
 optional functionality from the crate and strip it down to the bare bones
 functionality.
 
-```
+```shell
 $ cargo build --release --no-default-features
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    6.7M Oct 18 08:37 target/release/wasmtime
@@ -57,7 +57,7 @@ Note that for custom embeddings you'd need to replicate the `disable-logging`
 feature which sets the `max_level_off` feature for the `log` and `tracing`
 crate.
 
-```
+```shell
 $ cargo build --release --no-default-features --features disable-logging
 $ ls -l ./target/release/wasmtime
 -rwxr-xr-x@ 1 root  root    6.7M Oct 18 08:37 target/release/wasmtime
@@ -74,7 +74,7 @@ this.
 
 [cargo-env-config]: https://doc.rust-lang.org/cargo/reference/config.html#profile
 
-```
+```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ cargo build --release --no-default-features --features disable-logging
 $ ls -l ./target/release/wasmtime
@@ -93,7 +93,7 @@ Rust's "panic=abort" mode where panics translate to process aborts rather than
 unwinding. This removes landing pads from code as well as unwind tables from the
 executable.
 
-```
+```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ cargo build --release --no-default-features --features disable-logging
@@ -107,7 +107,7 @@ deduplicate. Do note that this will take a significantly longer amount of time
 to compile than previously. Here LTO is configured with
 `CARGO_PROFILE_RELEASE_LTO=true`.
 
-```
+```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -121,7 +121,7 @@ their own single object file instead of multiple by default. This again
 increases compile times. Here that's done with
 `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1`.
 
-```
+```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -141,7 +141,7 @@ debug information for local crates, but the Rust standard library may have debug
 information still included with it. This is configured via
 `CARGO_PROFILE_RELEASE_STRIP=debuginfo`
 
-```
+```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -162,7 +162,7 @@ these commands don't work and we'll update the documentation.
 The first nightly feature we can leverage is to remove filename and line number
 information in panics with `-Zlocation-detail=none`
 
-```
+```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -180,7 +180,7 @@ the standard library. This uses the `-Zbuild-std` flag to Cargo. Note that this
 additionally requires `--target` as well which will need to be configured for
 your particular platform.
 
-```
+```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -199,7 +199,7 @@ environments so the features of the standard library can be disabled with the
 `-Zbuild-std-features=` flag which configures the set of enabled features to be
 empty.
 
-```
+```shell
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
