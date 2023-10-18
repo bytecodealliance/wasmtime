@@ -12,3 +12,7 @@ wasi = "0.11.0"
 wit-bindgen = { workspace = true, features = ['default'] }
 libc = { workspace = true }
 getrandom = "0.2.9"
+futures = { workspace = true, default-features = false, features = ['alloc'] }
+url = { workspace = true }
+sha2 = "0.10.2"
+base64 = "0.21.0"

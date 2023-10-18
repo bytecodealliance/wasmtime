@@ -125,6 +125,11 @@ async fn api_read_only() -> Result<()> {
 #[allow(dead_code)]
 fn api_proxy() {}
 
+// This is tested in the wasi-http crate, but need to satisfy the `foreach_api!`
+// macro above.
+#[allow(dead_code)]
+fn api_proxy_streaming() {}
+
 wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,
