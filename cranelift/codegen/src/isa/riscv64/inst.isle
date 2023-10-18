@@ -1558,6 +1558,12 @@
 (rule (rv_orn rs1 rs2)
   (alu_rrr (AluOPRRR.Orn) rs1 rs2))
 
+;; Helper for emitting the `xnor` ("Exclusive NOR") instruction.
+;; rd ← ~(rs1 ^ rs2)
+(decl rv_xnor (XReg XReg) XReg)
+(rule (rv_xnor rs1 rs2)
+  (alu_rrr (AluOPRRR.Xnor) rs1 rs2))
+
 ;; Helper for emitting the `clz` ("Count Leading Zero Bits") instruction.
 (decl rv_clz (XReg) XReg)
 (rule (rv_clz rs1)
@@ -2006,23 +2012,6 @@
 (decl select_addi (Type) AluOPRRI)
 (rule 1 (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
-
-
-(decl gen_bnot (Type ValueRegs) ValueRegs)
-(rule 2 (gen_bnot (ty_scalar_float ty) x)
-  (let ((val FReg (value_regs_get x 0))
-        (x_val XReg (move_f_to_x val ty))
-        (inverted XReg (rv_not x_val))
-        (res FReg (move_x_to_f inverted (float_int_of_same_size ty))))
-    (value_reg res)))
-
-(rule 1 (gen_bnot $I128 x)
-  (let ((lo XReg (rv_not (value_regs_get x 0)))
-        (hi XReg (rv_not (value_regs_get x 1))))
-    (value_regs lo hi)))
-
-(rule 0 (gen_bnot (ty_int_ref_scalar_64 _) x)
-  (rv_not (value_regs_get x 0)))
 
 
 (decl gen_andi (XReg u64) XReg)
