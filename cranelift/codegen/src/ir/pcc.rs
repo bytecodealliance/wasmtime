@@ -164,6 +164,11 @@ pub enum Fact {
         /// The maximum offset into the memory type, inclusive.
         max_offset: u64,
     },
+
+    /// A "conflict fact": this fact results from merging two other
+    /// facts, and it can never be satisfied -- checking any value
+    /// against this fact will fail.
+    Conflict,
 }
 
 impl fmt::Display for Fact {
@@ -179,6 +184,7 @@ impl fmt::Display for Fact {
                 min_offset,
                 max_offset,
             } => write!(f, "mem({}, {:#x}, {:#x})", ty, min_offset, max_offset),
+            Fact::Conflict => write!(f, "conflict"),
         }
     }
 }

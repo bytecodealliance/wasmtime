@@ -1,0 +1,30 @@
+test compile expect-fail
+set enable_pcc=true
+set opt_level=speed
+target aarch64
+
+;; Failed merge of two facts.
+function %f0(i64, i32) {
+    mt0 = struct 4 { 0: i32 ! range(32, 1, 3) }
+
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 1): i32):
+    v2 ! range(32, 1, 1) = iconst.i32 1
+    v3 ! range(32, 1, 2) = iadd.i32 v1, v2
+
+    v4 ! range(32, 1, 1) = iconst.i32 1
+    v5 ! range(32, 1, 3) = iadd.i32 v1, v4  ;; should GVN onto v3.
+
+    ;; v3/v5's facts should merge to `conflict`. Even though we *could*
+    ;; take the union of possible ranges, we don't; so even though the
+    ;; stored range *would* subsume the field's fact if we could
+    ;; compute it more precisely, here we should expect a failure. We
+    ;; can revisit this if we decide to admit lattice-meet merging
+    ;; later.
+    ;;
+    ;; (Note that we have to use both v3 and v5 here so one doesn't
+    ;; get DCE'd away before opt merges them.)
+    store.i32 checked v3, v0
+    store.i32 checked v5, v0
+
+    return
+}

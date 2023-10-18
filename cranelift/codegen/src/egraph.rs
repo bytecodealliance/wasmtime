@@ -162,6 +162,7 @@ where
                 let result = self.func.dfg.first_result(inst);
                 self.value_to_opt_value[result] = orig_result;
                 self.eclasses.union(result, orig_result);
+                self.func.dfg.merge_facts(result, orig_result);
                 self.stats.union += 1;
                 result
             } else {
@@ -256,6 +257,11 @@ where
                 // still works, but take *only* the subsuming
                 // value, and break now.
                 isle_ctx.ctx.eclasses.union(optimized_value, union_value);
+                isle_ctx
+                    .ctx
+                    .func
+                    .dfg
+                    .merge_facts(optimized_value, union_value);
                 union_value = optimized_value;
                 break;
             }
@@ -273,6 +279,11 @@ where
                 .ctx
                 .eclasses
                 .union(old_union_value, optimized_value);
+            isle_ctx
+                .ctx
+                .func
+                .dfg
+                .merge_facts(old_union_value, optimized_value);
             isle_ctx.ctx.eclasses.union(old_union_value, union_value);
         }
 
