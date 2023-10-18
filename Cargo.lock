@@ -3398,6 +3398,7 @@ dependencies = [
  "tokio",
  "tracing",
  "walkdir",
+ "wasmparser 0.115.0",
  "wasmtime",
  "wasmtime-cache",
  "wasmtime-cli-flags",
