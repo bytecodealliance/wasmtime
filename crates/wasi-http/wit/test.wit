@@ -1,46 +1,46 @@
 // only used as part of `test-programs`
 world test-reactor {
 
-  import wasi:cli/environment;
-  import wasi:io/poll;
-  import wasi:io/streams;
-  import wasi:filesystem/types;
-  import wasi:filesystem/preopens;
-  import wasi:cli/exit;
+  import wasi:cli/environment@0.2.0-rc-2023-10-18;
+  import wasi:io/poll@0.2.0-rc-2023-10-18;
+  import wasi:io/streams@0.2.0-rc-2023-10-18;
+  import wasi:filesystem/types@0.2.0-rc-2023-10-18;
+  import wasi:filesystem/preopens@0.2.0-rc-2023-10-18;
+  import wasi:cli/exit@0.2.0-rc-2023-10-18;
 
   export add-strings: func(s: list<string>) -> u32;
   export get-strings: func() -> list<string>;
 
-  use wasi:io/streams.{output-stream};
+  use wasi:io/streams@0.2.0-rc-2023-10-18.{output-stream};
 
   export write-strings-to: func(o: output-stream) -> result;
 
-  use wasi:filesystem/types.{descriptor-stat};
+  use wasi:filesystem/types@0.2.0-rc-2023-10-18.{descriptor-stat};
   export pass-an-imported-record: func(d: descriptor-stat) -> string;
 }
 
 world test-command {
-  import wasi:io/poll;
-  import wasi:io/streams;
-  import wasi:cli/environment;
-  import wasi:cli/stdin;
-  import wasi:cli/stdout;
-  import wasi:cli/stderr;
+  import wasi:io/poll@0.2.0-rc-2023-10-18;
+  import wasi:io/streams@0.2.0-rc-2023-10-18;
+  import wasi:cli/environment@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdin@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdout@0.2.0-rc-2023-10-18;
+  import wasi:cli/stderr@0.2.0-rc-2023-10-18;
 }
 
 world test-command-with-sockets {
-  import wasi:io/poll;
-  import wasi:io/streams;
-  import wasi:cli/environment;
-  import wasi:cli/stdin;
-  import wasi:cli/stdout;
-  import wasi:cli/stderr;
-  import wasi:sockets/tcp;
-  import wasi:sockets/tcp-create-socket;
-  import wasi:sockets/udp;
-  import wasi:sockets/udp-create-socket;
-  import wasi:sockets/network;
-  import wasi:sockets/instance-network;
-  import wasi:sockets/ip-name-lookup;
-  import wasi:clocks/monotonic-clock;
+  import wasi:io/poll@0.2.0-rc-2023-10-18;
+  import wasi:io/streams@0.2.0-rc-2023-10-18;
+  import wasi:cli/environment@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdin@0.2.0-rc-2023-10-18;
+  import wasi:cli/stdout@0.2.0-rc-2023-10-18;
+  import wasi:cli/stderr@0.2.0-rc-2023-10-18;
+  import wasi:sockets/tcp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/tcp-create-socket@0.2.0-rc-2023-10-18;
+  import wasi:sockets/udp@0.2.0-rc-2023-10-18;
+  import wasi:sockets/udp-create-socket@0.2.0-rc-2023-10-18;
+  import wasi:sockets/network@0.2.0-rc-2023-10-18;
+  import wasi:sockets/instance-network@0.2.0-rc-2023-10-18;
+  import wasi:sockets/ip-name-lookup@0.2.0-rc-2023-10-18;
+  import wasi:clocks/monotonic-clock@0.2.0-rc-2023-10-18;
 }

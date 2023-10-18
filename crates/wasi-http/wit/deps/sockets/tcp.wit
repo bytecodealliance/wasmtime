@@ -1,7 +1,7 @@
 
 interface tcp {
-	use wasi:io/streams.{input-stream, output-stream};
-	use wasi:io/poll.{pollable};
+	use wasi:io/streams@0.2.0-rc-2023-10-18.{input-stream, output-stream};
+	use wasi:io/poll@0.2.0-rc-2023-10-18.{pollable};
 	use network.{network, error-code, ip-socket-address, ip-address-family};
 
 	enum shutdown-type {

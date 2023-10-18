@@ -175,8 +175,6 @@ impl Wasmtime {
         name: &WorldKey,
         is_export: bool,
     ) -> bool {
-        let with_name = resolve.name_world_key(name);
-
         let mut path = Vec::new();
         if is_export {
             path.push("exports".to_string());
@@ -193,7 +191,8 @@ impl Wasmtime {
                 path.push(iface.name.as_ref().unwrap().to_snake_case());
             }
         }
-        let entry = if let Some(remapped_path) = self.opts.with.get(&with_name) {
+        let entry = if let Some(remapped_path) = self.lookup_replacement(resolve, name, None) {
+            let remapped_path = remapped_path.to_string();
             let name = format!("__with_name{}", self.with_name_counter);
             self.with_name_counter += 1;
             uwriteln!(self.src, "use {remapped_path} as {name};");
@@ -663,6 +662,44 @@ impl Wasmtime {
             }
         }
     }
+
+    fn lookup_replacement(
+        &self,
+        resolve: &Resolve,
+        key: &WorldKey,
+        item: Option<&str>,
+    ) -> Option<&str> {
+        // First try to lookup the exact name of the interface as specified
+        // via `name_world_key`.
+        let name = resolve.name_world_key(key);
+        let candidate1 = match item {
+            Some(item) => format!("{name}/{item}"),
+            None => name.clone(),
+        };
+        if let Some(ret) = self.opts.with.get(&candidate1) {
+            return Some(ret);
+        }
+
+        // .. if the above failed allow omitting the `@...` version information
+        // and see if there's a `with` key for that.
+        //
+        // NB: this means that in a scenario where there's packages with the
+        // same name/namespace where one has a version and one doesn't there's
+        // no way to use `with` to specify just one and not the other. That
+        // should be ok for now, but this should ideally detect a situation like
+        // that and omit this fallback in such a situation.
+        let version_start = name.find('@')?;
+        let name = &name[..version_start];
+        let candidate2 = match item {
+            Some(item) => format!("{name}/{item}"),
+            None => name.to_string(),
+        };
+        if let Some(ret) = self.opts.with.get(&candidate2) {
+            return Some(ret);
+        }
+
+        None
+    }
 }
 
 impl Wasmtime {
@@ -928,11 +965,11 @@ impl<'a> InterfaceGenerator<'a> {
         if self.types_imported() {
             self.rustdoc(docs);
 
-            let with_key = match self.current_interface {
-                Some((_, key, _)) => format!("{}/{name}", self.resolve.name_world_key(key)),
-                None => name.to_string(),
+            let replacement = match self.current_interface {
+                Some((_, key, _)) => self.gen.lookup_replacement(self.resolve, key, Some(name)),
+                None => self.gen.opts.with.get(name).map(|s| s.as_str()),
             };
-            match self.gen.opts.with.get(&with_key) {
+            match replacement {
                 Some(path) => {
                     uwriteln!(
                         self.src,
