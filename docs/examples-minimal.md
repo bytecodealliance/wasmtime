@@ -135,6 +135,23 @@ Note that with LTO using a single codegen unit may only have marginal benefit.
 If not using LTO, however, a single codegen unit will likely provide benefit
 over the default 16 codegen units.
 
+One final flag before getting to nightly features is to strip debug information
+from the standard library. In `--release` mode Cargo by default doesn't generate
+debug information for local crates, but the Rust standard library may have debug
+information still included with it. This is configured via
+`CARGO_PROFILE_RELEASE_STRIP=debuginfo`
+
+```
+$ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
+$ export CARGO_PROFILE_RELEASE_PANIC=abort
+$ export CARGO_PROFILE_RELEASE_LTO=true
+$ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+$ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
+$ cargo build --release --no-default-features --features disable-logging
+$ ls -l ./target/release/wasmtime
+-rwxr-xr-x@ 1 root  root    2.4M Oct 18 08:44 target/release/wasmtime
+```
+
 Next, if your use case allows it, the Nightly Rust toolchain provides a number
 of other options to minimize the size of binaries. Note the usage of `+nightly` here
 to the `cargo` command to use a Nightly toolchain (assuming your local toolchain
@@ -150,10 +167,11 @@ $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+$ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
 $ cargo +nightly build --release --no-default-features --features disable-logging
 $ ls -l ./target/release/wasmtime
--rwxr-xr-x@ 1 root  root    3.2M Oct 18 08:43 target/release/wasmtime
+-rwxr-xr-x@ 1 root  root    2.4M Oct 18 08:43 target/release/wasmtime
 ```
 
 Further along the line of nightly features the next optimization will recompile
@@ -167,6 +185,7 @@ $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+$ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
 $ cargo +nightly build --release --no-default-features --features disable-logging \
     -Z build-std=std,panic_abort --target aarch64-apple-darwin
@@ -185,6 +204,7 @@ $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
 $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+$ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
 $ cargo +nightly build --release --no-default-features --features disable-logging \
     -Z build-std=std,panic_abort --target aarch64-apple-darwin \
