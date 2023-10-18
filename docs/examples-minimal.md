@@ -7,8 +7,8 @@ of Wasmtime and how to best produce a minimal build of Wasmtime.
 ## Building a minimal CLI
 
 > *Note*: the exact numbers in this section were last updated on 2023-10-18 on a
-> macOS host. They should provide a general ballpark estimate but should be
-> confirmed locally again before being totally relied upon.
+> macOS aarch64 host. They should provide a general ballpark estimate but should
+> be confirmed locally again before being totally relied upon.
 
 Many Wasmtime embeddings go through the `wasmtime` crate as opposed to the
 `wasmtime` CLI executable, but to start out let's take a look at minimizing the
