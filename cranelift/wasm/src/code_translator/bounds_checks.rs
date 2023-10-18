@@ -417,7 +417,22 @@ fn compute_addr(
         // `select_spectre_guard`, if any. If it happens after, then we
         // potentially are letting speculative execution read the whole first
         // 4GiB of memory.
-        let result = pos.ins().iadd_imm(base_and_index, offset as i64);
+        let offset_val = pos.ins().iconst(addr_ty, i64::from(offset));
+        if pcc {
+            pos.func.dfg.facts[offset_val] = Some(Fact::Range {
+                bit_width: u16::try_from(addr_ty.bits()).unwrap(),
+                min: u64::from(offset),
+                max: u64::from(offset),
+            });
+        }
+        let result = pos.ins().iadd(base_and_index, offset_val);
+        if pcc {
+            pos.func.dfg.facts[offset_val] = Some(Fact::Range {
+                bit_width: u16::try_from(addr_ty.bits()).unwrap(),
+                min: u64::from(offset),
+                max: u64::from(u32::MAX) + u64::from(offset),
+            });
+        }
         if let Some(ty) = pcc_memtype {
             pos.func.dfg.facts[result] = Some(Fact::Mem {
                 ty,

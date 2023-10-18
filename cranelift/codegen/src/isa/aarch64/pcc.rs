@@ -5,11 +5,11 @@ use crate::ir::types::*;
 use crate::ir::MemFlags;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::args::{PairAMode, ShiftOp};
-use crate::isa::aarch64::inst::ALUOp;
 use crate::isa::aarch64::inst::Inst;
+use crate::isa::aarch64::inst::{ALUOp, MoveWideOp};
 use crate::isa::aarch64::inst::{AMode, ExtendOp};
 use crate::machinst::Reg;
-use crate::machinst::VCode;
+use crate::machinst::{InsnIndex, VCode};
 use crate::trace;
 
 fn get_fact_or_default(vcode: &VCode<Inst>, reg: Reg) -> PccResult<&Fact> {
@@ -59,25 +59,62 @@ fn extend_fact(ctx: &FactContext, value: &Fact, mode: ExtendOp) -> Option<Fact> 
     }
 }
 
-fn check_output<F: Fn() -> PccResult<Fact>>(
+fn check_output<F: Fn(&VCode<Inst>) -> PccResult<Fact>>(
     ctx: &FactContext,
-    vcode: &VCode<Inst>,
+    vcode: &mut VCode<Inst>,
     out: Reg,
+    ins: &[Reg],
     f: F,
 ) -> PccResult<()> {
     if let Some(fact) = vcode.vreg_fact(out.into()) {
-        let result = f()?;
+        let result = f(vcode)?;
         check_subsumes(ctx, &result, fact)
+    } else if ins.iter().any(|r| {
+        vcode
+            .vreg_fact(r.into())
+            .map(|fact| fact.propagates())
+            .unwrap_or(false)
+    }) {
+        if let Ok(fact) = f(vcode) {
+            trace!("setting vreg {:?} to {:?}", out, fact);
+            vcode.set_vreg_fact(out.into(), fact);
+        }
+        Ok(())
     } else {
         Ok(())
     }
 }
 
-pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccResult<()> {
-    trace!("Checking facts on inst: {:?}", inst);
+fn check_constant(
+    ctx: &FactContext,
+    vcode: &mut VCode<Inst>,
+    out: Reg,
+    bit_width: u16,
+    value: u64,
+) -> PccResult<()> {
+    let result = Fact::Range {
+        bit_width,
+        min: value,
+        max: value,
+    };
+    if let Some(fact) = vcode.vreg_fact(out.into()) {
+        check_subsumes(ctx, &result, fact)
+    } else {
+        trace!("setting vreg {:?} to {:?}", out, result);
+        vcode.set_vreg_fact(out.into(), result);
+        Ok(())
+    }
+}
 
-    match inst {
-        Inst::Args { .. } => {
+pub(crate) fn check(
+    ctx: &FactContext,
+    vcode: &mut VCode<Inst>,
+    inst_idx: InsnIndex,
+) -> PccResult<()> {
+    trace!("Checking facts on inst: {:?}", vcode[inst_idx]);
+
+    match &vcode[inst_idx] {
+        &Inst::Args { .. } => {
             // Defs on the args have "axiomatic facts": we trust the
             // ABI code to pass through the values unharmed, so the
             // facts given to us in the CLIF should still be true.
@@ -134,26 +171,38 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             rd,
             rn,
             rm,
-        } => check_output(&ctx, vcode, rd.to_reg(), || {
-            let rn = get_fact_or_default(vcode, *rn)?;
-            let rm = get_fact_or_default(vcode, *rm)?;
-            fail_if_missing(ctx.add(rn, rm, size.bits().into()))
-        }),
+        } => {
+            let size = *size;
+            let rd = *rd;
+            let rn = *rn;
+            let rm = *rm;
+            check_output(&ctx, vcode, rd.to_reg(), &[rn, rm], |vcode| {
+                let rn = get_fact_or_default(vcode, rn)?;
+                let rm = get_fact_or_default(vcode, rm)?;
+                fail_if_missing(ctx.add(rn, rm, size.bits().into()))
+            })
+        }
         Inst::AluRRImm12 {
             alu_op: ALUOp::Add,
             size,
             rd,
             rn,
             imm12,
-        } => check_output(&ctx, vcode, rd.to_reg(), || {
-            let rn = get_fact_or_default(vcode, *rn)?;
-            let imm_fact = Fact::Range {
-                bit_width: size.bits().into(),
-                min: imm12.value(),
-                max: imm12.value(),
-            };
-            fail_if_missing(ctx.add(&rn, &imm_fact, size.bits().into()))
-        }),
+        } => {
+            let size = *size;
+            let rd = *rd;
+            let rn = *rn;
+            let imm12 = *imm12;
+            check_output(&ctx, vcode, rd.to_reg(), &[rn], |vcode| {
+                let rn = get_fact_or_default(vcode, rn)?;
+                let imm_fact = Fact::Range {
+                    bit_width: size.bits().into(),
+                    min: imm12.value(),
+                    max: imm12.value(),
+                };
+                fail_if_missing(ctx.add(&rn, &imm_fact, size.bits().into()))
+            })
+        }
         Inst::AluRRRShift {
             alu_op: ALUOp::Add,
             size,
@@ -162,9 +211,14 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             rm,
             shiftop,
         } if shiftop.op() == ShiftOp::LSL && has_fact(vcode, *rn) && has_fact(vcode, *rm) => {
-            check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact_or_default(vcode, *rn)?;
-                let rm = get_fact_or_default(vcode, *rm)?;
+            let size = *size;
+            let rd = *rd;
+            let rn = *rn;
+            let rm = *rm;
+            let shiftop = *shiftop;
+            check_output(&ctx, vcode, rd.to_reg(), &[rn, rm], |vcode| {
+                let rn = get_fact_or_default(vcode, rn)?;
+                let rm = get_fact_or_default(vcode, rm)?;
                 let rm_shifted = fail_if_missing(ctx.shl(
                     &rm,
                     size.bits().into(),
@@ -181,10 +235,15 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             rm,
             extendop,
         } if has_fact(vcode, *rn) && has_fact(vcode, *rm) => {
-            check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact_or_default(vcode, *rn)?;
-                let rm = get_fact_or_default(vcode, *rm)?;
-                let rm_extended = fail_if_missing(extend_fact(&ctx, rm, *extendop))?;
+            let size = *size;
+            let rd = *rd;
+            let rn = *rn;
+            let rm = *rm;
+            let extendop = *extendop;
+            check_output(&ctx, vcode, rd.to_reg(), &[rn, rm], |vcode| {
+                let rn = get_fact_or_default(vcode, rn)?;
+                let rm = get_fact_or_default(vcode, rm)?;
+                let rm_extended = fail_if_missing(extend_fact(&ctx, rm, extendop))?;
                 fail_if_missing(ctx.add(&rn, &rm_extended, size.bits().into()))
             })
         }
@@ -195,8 +254,12 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             rn,
             immshift,
         } if has_fact(vcode, *rn) && has_fact(vcode, *rn) => {
-            check_output(&ctx, vcode, rd.to_reg(), || {
-                let rn = get_fact_or_default(vcode, *rn)?;
+            let size = *size;
+            let rd = *rd;
+            let rn = *rn;
+            let immshift = *immshift;
+            check_output(&ctx, vcode, rd.to_reg(), &[rn], |vcode| {
+                let rn = get_fact_or_default(vcode, rn)?;
                 fail_if_missing(ctx.shl(&rn, size.bits().into(), immshift.value().into()))
             })
         }
@@ -206,19 +269,27 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             signed: false,
             from_bits,
             to_bits,
-        } if has_fact(vcode, *rn) => check_output(&ctx, vcode, rd.to_reg(), || {
-            let rn = get_fact_or_default(vcode, *rn)?;
-            fail_if_missing(ctx.uextend(&rn, (*from_bits).into(), (*to_bits).into()))
-        }),
+        } if has_fact(vcode, *rn) => {
+            let rd = *rd;
+            let rn = *rn;
+            let from_bits = *from_bits;
+            let to_bits = *to_bits;
+            check_output(&ctx, vcode, rd.to_reg(), &[rn], |vcode| {
+                let rn = get_fact_or_default(vcode, rn)?;
+                fail_if_missing(ctx.uextend(&rn, from_bits.into(), to_bits.into()))
+            })
+        }
         Inst::AluRRR { size, rd, .. }
         | Inst::AluRRImm12 { rd, size, .. }
         | Inst::AluRRRShift { rd, size, .. }
         | Inst::AluRRRExtend { rd, size, .. }
         | Inst::AluRRImmLogic { rd, size, .. }
         | Inst::AluRRImmShift { rd, size, .. } => {
+            let rd = *rd;
+            let size = *size;
             // Any ALU op can validate a max-value fact where the
             // value is the maximum for its bit-width.
-            check_output(&ctx, vcode, rd.to_reg(), || {
+            check_output(&ctx, vcode, rd.to_reg(), &[], |_vcode| {
                 Ok(Fact::Range {
                     bit_width: size.bits().into(),
                     min: 0,
@@ -227,9 +298,54 @@ pub(crate) fn check(ctx: &FactContext, vcode: &VCode<Inst>, inst: &Inst) -> PccR
             })
         }
 
-        i => {
-            panic!("Fact on unknown inst: {:?}", i);
+        Inst::MovWide {
+            op: MoveWideOp::MovZ,
+            imm,
+            size: _,
+            rd,
+        } => {
+            let constant = u64::from(imm.bits) << (imm.shift * 16);
+            check_constant(&ctx, vcode, rd.to_reg(), 64, constant)
         }
+
+        Inst::MovWide {
+            op: MoveWideOp::MovN,
+            imm,
+            size,
+            rd,
+        } => {
+            let constant = !(u64::from(imm.bits) << (imm.shift * 16)) & size.max_value();
+            check_constant(&ctx, vcode, rd.to_reg(), 64, constant)
+        }
+
+        Inst::MovK { rd, rn, imm, .. } => {
+            let input = get_fact_or_default(vcode, *rn)?;
+            trace!("MovK: input = {:?}", input);
+            if let Some(input_constant) = input.is_const(64) {
+                trace!(" -> input_constant: {}", input_constant);
+                let constant = u64::from(imm.bits) << (imm.shift * 16);
+                let constant = input_constant | constant;
+                trace!(" -> merged constant: {}", constant);
+                check_constant(&ctx, vcode, rd.to_reg(), 64, constant)
+            } else {
+                check_output(ctx, vcode, rd.to_reg(), &[], |_vcode| {
+                    Ok(Fact::Range {
+                        bit_width: 64,
+                        min: 0,
+                        max: u64::MAX,
+                    })
+                })
+            }
+        }
+
+        i if vcode.inst_defines_facts(inst_idx) => {
+            panic!(
+                "Instruction {:?} defines facts but we cannot validate its semantics",
+                i
+            );
+        }
+
+        _ => Ok(()),
     }
 }
 
@@ -319,6 +435,7 @@ fn check_addr<'a>(
             let rn = get_fact_or_default(vcode, rn)?;
             let rm = get_fact_or_default(vcode, rm)?;
             let sum = fail_if_missing(ctx.add(&rn, &rm, 64))?;
+            trace!("rn = {rn:?} rm = {rm:?} sum = {sum:?}");
             check(&sum, ty)
         }
         &AMode::RegScaled { rn, rm, ty } => {
@@ -343,9 +460,13 @@ fn check_addr<'a>(
         }
         &AMode::RegExtended { rn, rm, extendop } => {
             let rn = get_fact_or_default(vcode, rn)?;
+            trace!("rn = {rn:?}");
             let rm = get_fact_or_default(vcode, rm)?;
+            trace!("rm = {rm:?}");
             let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
+            trace!("rm_extended = {rm_extended:?}");
             let sum = fail_if_missing(ctx.add(&rn, &rm_extended, 64))?;
+            trace!("sum = {sum:?}");
             check(&sum, ty)?;
             Ok(())
         }

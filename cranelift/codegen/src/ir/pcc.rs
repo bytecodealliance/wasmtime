@@ -82,7 +82,7 @@
 use crate::ir;
 use crate::ir::types::*;
 use crate::isa::TargetIsa;
-use crate::machinst::{BlockIndex, LowerBackend, MachInst, VCode};
+use crate::machinst::{BlockIndex, LowerBackend, VCode};
 use crate::trace;
 use regalloc2::Function as _;
 use std::fmt;
@@ -222,6 +222,83 @@ impl Fact {
             _ => None,
         }
     }
+
+    /// Does this fact "propagate" automatically, i.e., cause
+    /// instructions that process it to infer their own output facts?
+    /// Not all facts propagate automatically; otherwise, verification
+    /// would be much slower.
+    pub fn propagates(&self) -> bool {
+        match self {
+            Fact::Mem { .. } => true,
+            _ => false,
+        }
+    }
+
+    /// Is this a constant value of the given bitwidth?
+    pub fn is_const(&self, bits: u16) -> Option<u64> {
+        match self {
+            Fact::Range {
+                bit_width,
+                min,
+                max,
+            } if *bit_width == bits && min == max => Some(*min),
+            _ => None,
+        }
+    }
+
+    /// Merge two facts. We take the *intersection*: that is, we know
+    /// both facts to be true, so we can intersect ranges. This is the
+    /// opposite of the usual lattice-meet definition.
+    pub fn meet(a: &Fact, b: &Fact, ty: Type) -> Fact {
+        match (a, b) {
+            (
+                Fact::Range {
+                    bit_width: bw_lhs,
+                    min: min_lhs,
+                    max: max_lhs,
+                },
+                Fact::Range {
+                    bit_width: bw_rhs,
+                    min: min_rhs,
+                    max: max_rhs,
+                },
+            ) if bw_lhs == bw_rhs && max_lhs >= min_rhs && max_rhs >= min_lhs => Fact::Range {
+                bit_width: *bw_lhs,
+                min: std::cmp::max(*min_lhs, *min_rhs),
+                max: std::cmp::min(*max_lhs, *max_rhs),
+            },
+
+            (
+                Fact::Mem {
+                    ty: ty_lhs,
+                    min_offset: min_offset_lhs,
+                    max_offset: max_offset_lhs,
+                },
+                Fact::Mem {
+                    ty: ty_rhs,
+                    min_offset: min_offset_rhs,
+                    max_offset: max_offset_rhs,
+                },
+            ) if ty_lhs == ty_rhs
+                && max_offset_lhs >= min_offset_rhs
+                && max_offset_rhs >= min_offset_lhs =>
+            {
+                Fact::Mem {
+                    ty: *ty_lhs,
+                    min_offset: std::cmp::max(*min_offset_lhs, *min_offset_rhs),
+                    max_offset: std::cmp::min(*max_offset_lhs, *max_offset_rhs),
+                }
+            }
+
+            _ => {
+                if let Some(f) = Self::infer_from_type(ty) {
+                    f.clone()
+                } else {
+                    Fact::Conflict
+                }
+            }
+        }
+    }
 }
 
 macro_rules! ensure {
@@ -281,6 +358,23 @@ impl<'a> FactContext<'a> {
                 // In other words, we can always expand the claimed
                 // possible value range.
                 bw_lhs == bw_rhs && max_lhs <= max_rhs && min_lhs >= min_rhs
+            }
+
+            (
+                Fact::Mem {
+                    ty: ty_lhs,
+                    min_offset: min_offset_lhs,
+                    max_offset: max_offset_lhs,
+                },
+                Fact::Mem {
+                    ty: ty_rhs,
+                    min_offset: min_offset_rhs,
+                    max_offset: max_offset_rhs,
+                },
+            ) => {
+                ty_lhs == ty_rhs
+                    && max_offset_lhs <= max_offset_rhs
+                    && min_offset_lhs >= min_offset_rhs
             }
 
             _ => false,
@@ -497,6 +591,7 @@ impl<'a> FactContext<'a> {
     /// that this address accesses, if known, or `None` if the range
     /// doesn't constrain the access to exactly one location.
     fn check_address(&self, fact: &Fact, size: u32) -> PccResult<Option<(ir::MemoryType, u64)>> {
+        trace!("check_address: fact {:?} size {}", fact, size);
         match fact {
             Fact::Mem {
                 ty,
@@ -592,7 +687,7 @@ fn max_value_for_width(bits: u16) -> u64 {
 /// VCode.
 pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
     f: &ir::Function,
-    vcode: &VCode<B::MInst>,
+    vcode: &mut VCode<B::MInst>,
     backend: &B,
 ) -> PccResult<()> {
     let ctx = FactContext::new(f, backend.triple().pointer_width().unwrap().bits().into());
@@ -602,14 +697,8 @@ pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
     for block in 0..vcode.num_blocks() {
         let block = BlockIndex::new(block);
         for inst in vcode.block_insns(block).iter() {
-            if vcode.inst_defines_facts(inst) || vcode[inst].is_mem_access() {
-                // This instruction defines a register with a new fact, or
-                // has some side-effect we want to be careful to
-                // verify. We'll call into the backend to validate this
-                // fact with respect to the instruction and the input
-                // facts.
-                backend.check_fact(&ctx, vcode, &vcode[inst])?;
-            }
+            // Check any output facts on this inst.
+            backend.check_fact(&ctx, vcode, inst)?;
 
             // If this is a branch, check that all block arguments subsume
             // the assumed facts on the blockparams of successors.
