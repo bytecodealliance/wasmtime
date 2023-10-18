@@ -63,6 +63,15 @@ tempfile = "3.0"
 wasmtime-wasi = { path = "../wasi", default-features = true }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 
+# =============================================================================
+#
+# Features for the Wasmtime crate.
+#
+# This section contains the compile-time features of the `wasmtime` crate. These
+# features can be used to add more functionality and APIs exposed from the
+# crate's API. Most of them are enabled by default. Disabling features can be
+# done to cut down on binary size by disabling features that are not required
+# for a particular embedding.
 [features]
 default = [
   'async',

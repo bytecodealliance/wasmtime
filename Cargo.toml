@@ -266,13 +266,34 @@ test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
 
+# =============================================================================
+#
+# Features for the Wasmtime CLI executable
+#
+#
+# Note that many of these features are inherited from Wasmtime itself or
+# otherwise configure the `wasmtime` crate's execution. Features are provided as
+# compile-time switches to disable functionality primarily if one is interested
+# in configuring binary size and or exploring the binary size implications of
+# various features. Most features are enabled by default but most embeddings
+# likely won't need all features.
 [features]
 default = [
-  "wat",
-  "parallel-compilation",
+  # All subcommands are included by default.
+  "compile",
+  "explore",
+  "serve",
+  "wast",
+  "config",
+
+  # On-by-default WASI features
   "wasi-nn",
   "wasi-threads",
   "wasi-http",
+
+  # Most features of Wasmtime are enabled by default.
+  "wat",
+  "parallel-compilation",
   "pooling-allocator",
   "cache",
   "logging",
@@ -281,31 +302,38 @@ default = [
   "profiling",
   "coredump",
   "addr2line",
-
-  # All subcommands are included by default.
-  "compile",
-  "explore",
-  "serve",
-  "wast",
-  "config",
 ]
+
+# ========================================
+# Off-by-default features
+#
+# These features are off-by-default but may optionally be enabled.
+all-arch = ["wasmtime/all-arch"]
+winch = ["wasmtime/winch"]
+wmemcheck = ["wasmtime/wmemcheck"]
+
+# This feature, when enabled, will statically compile out all logging statements
+# throughout Wasmtime and its dependencies.
+compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
+
+# ========================================
+# On-by-default features
+#
+# These features are all included in the `default` set above and this is
+# the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-threads = ["dep:wasmtime-wasi-threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper", "wasmtime-wasi-http?/sync"]
 pooling-allocator = ["wasmtime/pooling-allocator", "wasmtime-cli-flags/pooling-allocator"]
-all-arch = ["wasmtime/all-arch"]
 component-model = [
   "wasmtime/component-model",
   "wasmtime-wast/component-model",
   "wasmtime-cli-flags/component-model"
 ]
-winch = ["wasmtime/winch"]
-wmemcheck = ["wasmtime/wmemcheck"]
 wat = ["dep:wat"]
 cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
 parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
 logging = ["wasmtime-cli-flags/logging"]
-compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
 demangle = ["wasmtime/demangle"]
 cranelift = ["wasmtime-cli-flags/cranelift", "dep:wasmtime-cranelift"]
 profiling = ["wasmtime/profiling"]

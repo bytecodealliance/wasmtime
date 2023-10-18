@@ -89,7 +89,7 @@ wasmtime_option_group! {
         /// Whether or not to enable parallel compilation of modules.
         pub parallel_compilation: Option<bool>,
         /// Whether to enable proof-carrying code (PCC)-based validation.
-        pub enable_pcc: Option<bool>,
+        pub pcc: Option<bool>,
 
         #[prefixed = "cranelift"]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
@@ -409,8 +409,10 @@ impl CommonOptions {
             enable => config.cranelift_nan_canonicalization(enable),
             true => err,
         }
-        if let Some(enable) = self.codegen.enable_pcc {
-            config.cranelift_pcc(enable);
+        match_feature! {
+            ["cranelift" : self.codegen.pcc]
+            enable => config.cranelift_pcc(enable),
+            true => err,
         }
 
         self.enable_wasm_features(&mut config)?;
