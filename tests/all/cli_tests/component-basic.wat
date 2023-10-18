@@ -7,6 +7,6 @@
   (func $run (result (result))
     (canon lift (core func $i "run")))
 
-  (instance (export (interface "wasi:cli/run@0.2.0"))
+  (instance (export (interface "wasi:cli/run@0.2.0-rc-2023-10-18"))
     (export "run" (func $run)))
 )
