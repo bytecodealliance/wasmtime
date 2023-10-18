@@ -23,9 +23,7 @@ use self::engine::{DiffEngine, DiffInstance};
 use crate::generators::{self, DiffValue, DiffValueType};
 use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
-use std::cell::Cell;
-use std::rc::Rc;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use wasmtime::*;
@@ -62,35 +60,36 @@ pub fn log_wasm(wasm: &[u8]) {
 /// The `T` in `Store<T>` for fuzzing stores, used to limit resource
 /// consumption during fuzzing.
 #[derive(Clone)]
-pub struct StoreLimits(Rc<LimitsState>);
+pub struct StoreLimits(Arc<LimitsState>);
 
 struct LimitsState {
     /// Remaining memory, in bytes, left to allocate
-    remaining_memory: Cell<usize>,
+    remaining_memory: AtomicUsize,
     /// Whether or not an allocation request has been denied
-    oom: Cell<bool>,
+    oom: AtomicBool,
 }
 
 impl StoreLimits {
     /// Creates the default set of limits for all fuzzing stores.
     pub fn new() -> StoreLimits {
-        StoreLimits(Rc::new(LimitsState {
+        StoreLimits(Arc::new(LimitsState {
             // Limits tables/memories within a store to at most 1gb for now to
             // exercise some larger address but not overflow various limits.
-            remaining_memory: Cell::new(1 << 30),
-            oom: Cell::new(false),
+            remaining_memory: AtomicUsize::new(1 << 30),
+            oom: AtomicBool::new(false),
         }))
     }
 
     fn alloc(&mut self, amt: usize) -> bool {
         log::trace!("alloc {amt:#x} bytes");
-        match self.0.remaining_memory.get().checked_sub(amt) {
-            Some(mem) => {
-                self.0.remaining_memory.set(mem);
-                true
-            }
-            None => {
-                self.0.oom.set(true);
+        match self
+            .0
+            .remaining_memory
+            .fetch_update(SeqCst, SeqCst, |remaining| remaining.checked_sub(amt))
+        {
+            Ok(_) => true,
+            Err(_) => {
+                self.0.oom.store(true, SeqCst);
                 log::debug!("OOM hit");
                 false
             }
@@ -98,7 +97,7 @@ impl StoreLimits {
     }
 
     fn is_oom(&self) -> bool {
-        self.0.oom.get()
+        self.0.oom.load(SeqCst)
     }
 }
 
