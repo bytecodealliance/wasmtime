@@ -1,6 +1,6 @@
 use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use heck::*;
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -172,8 +172,6 @@ impl Wasmtime {
         name: &WorldKey,
         is_export: bool,
     ) -> bool {
-        let with_name = resolve.name_world_key(name);
-
         let mut path = Vec::new();
         if is_export {
             path.push("exports".to_string());
@@ -190,7 +188,8 @@ impl Wasmtime {
                 path.push(iface.name.as_ref().unwrap().to_snake_case());
             }
         }
-        let entry = if let Some(remapped_path) = self.opts.with.get(&with_name) {
+        let entry = if let Some(remapped_path) = self.lookup_replacement(resolve, name, None) {
+            let remapped_path = remapped_path.to_string();
             let name = format!("__with_name{}", self.with_name_counter);
             self.with_name_counter += 1;
             uwriteln!(self.src, "use {remapped_path} as {name};");
@@ -660,6 +659,44 @@ impl Wasmtime {
             }
         }
     }
+
+    fn lookup_replacement(
+        &self,
+        resolve: &Resolve,
+        key: &WorldKey,
+        item: Option<&str>,
+    ) -> Option<&str> {
+        // First try to lookup the exact name of the interface as specified
+        // via `name_world_key`.
+        let name = resolve.name_world_key(key);
+        let candidate1 = match item {
+            Some(item) => format!("{name}/{item}"),
+            None => name.clone(),
+        };
+        if let Some(ret) = self.opts.with.get(&candidate1) {
+            return Some(ret);
+        }
+
+        // .. if the above failed allow omitting the `@...` version information
+        // and see if there's a `with` key for that.
+        //
+        // NB: this means that in a scenario where there's packages with the
+        // same name/namespace where one has a version and one doesn't there's
+        // no way to use `with` to specify just one and not the other. That
+        // should be ok for now, but this should ideally detect a situation like
+        // that and omit this fallback in such a situation.
+        let version_start = name.find('@')?;
+        let name = &name[..version_start];
+        let candidate2 = match item {
+            Some(item) => format!("{name}/{item}"),
+            None => name.to_string(),
+        };
+        if let Some(ret) = self.opts.with.get(&candidate2) {
+            return Some(ret);
+        }
+
+        None
+    }
 }
 
 impl Wasmtime {
@@ -788,28 +825,65 @@ impl Wasmtime {
 }
 
 fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<TypeId> {
-    // foo:bar/baz
-
-    let (_, interface) = resolve
-        .packages
+    // Build a map, `packages_to_omit_version`, where that package can be
+    // uniquely identified by its name/namespace combo and as such version
+    // information is not required.
+    let mut packages_with_same_name = HashMap::new();
+    for (id, pkg) in resolve.packages.iter() {
+        packages_with_same_name
+            .entry(PackageName {
+                version: None,
+                ..pkg.name.clone()
+            })
+            .or_insert(Vec::new())
+            .push(id)
+    }
+    let packages_to_omit_version = packages_with_same_name
         .iter()
-        .flat_map(|(_, p)| p.interfaces.iter())
-        .find(|(_, id)| wit_path.starts_with(&resolve.id_of(**id).unwrap()))
-        .ok_or_else(|| anyhow!("no package/interface found to match `{wit_path}`"))?;
+        .filter_map(
+            |(_name, list)| {
+                if list.len() == 1 {
+                    Some(list)
+                } else {
+                    None
+                }
+            },
+        )
+        .flat_map(|l| l)
+        .collect::<HashSet<_>>();
 
-    let wit_path = wit_path
-        .strip_prefix(&resolve.id_of(*interface).unwrap())
-        .unwrap();
-    let wit_path = wit_path
-        .strip_prefix('/')
-        .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
+    // Look for an interface whose assigned prefix starts `wit_path`. Not
+    // exactly the most efficient thing ever but is sufficient for now.
+    for (id, interface) in resolve.interfaces.iter() {
+        let iface_name = match &interface.name {
+            Some(name) => name,
+            None => continue,
+        };
+        let pkgid = interface.package.unwrap();
+        let pkgname = &resolve.packages[pkgid].name;
+        let prefix = if packages_to_omit_version.contains(&pkgid) {
+            let mut name = pkgname.clone();
+            name.version = None;
+            format!("{name}/{iface_name}")
+        } else {
+            resolve.id_of(id).unwrap()
+        };
+        let wit_path = match wit_path.strip_prefix(&prefix) {
+            Some(rest) => rest,
+            None => continue,
+        };
+        let wit_path = wit_path
+            .strip_prefix('/')
+            .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
 
-    let (_, id) = resolve.interfaces[*interface]
-        .types
-        .iter()
-        .find(|(name, _)| wit_path == name.as_str())
-        .ok_or_else(|| anyhow!("no types found to match `{wit_path}` in interface"))?;
-    Ok(*id)
+        return interface
+            .types
+            .get(wit_path)
+            .copied()
+            .ok_or_else(|| anyhow!("no types found to match `{wit_path}` in interface"));
+    }
+
+    bail!("no package/interface found to match `{wit_path}`")
 }
 
 struct InterfaceGenerator<'a> {
@@ -877,11 +951,11 @@ impl<'a> InterfaceGenerator<'a> {
         if self.types_imported() {
             self.rustdoc(docs);
 
-            let with_key = match self.current_interface {
-                Some((_, key, _)) => format!("{}/{name}", self.resolve.name_world_key(key)),
-                None => name.to_string(),
+            let replacement = match self.current_interface {
+                Some((_, key, _)) => self.gen.lookup_replacement(self.resolve, key, Some(name)),
+                None => self.gen.opts.with.get(name).map(|s| s.as_str()),
             };
-            match self.gen.opts.with.get(&with_key) {
+            match replacement {
                 Some(path) => {
                     uwriteln!(
                         self.src,

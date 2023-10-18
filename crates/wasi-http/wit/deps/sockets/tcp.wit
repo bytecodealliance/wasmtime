@@ -1,7 +1,7 @@
 
 interface tcp {
-	use wasi:io/streams.{input-stream, output-stream};
-	use wasi:io/poll.{pollable};
+	use wasi:io/streams@0.2.0-rc-2023-10-18.{input-stream, output-stream};
+	use wasi:io/poll@0.2.0-rc-2023-10-18.{pollable};
 	use network.{network, error-code, ip-socket-address, ip-address-family};
 
 	enum shutdown-type {
@@ -59,12 +59,12 @@ interface tcp {
 		/// POSIX mentions:
 		/// > If connect() fails, the state of the socket is unspecified. Conforming applications should
 		/// > close the file descriptor and create a new socket before attempting to reconnect.
-		/// 
+		///
 		/// WASI prescribes the following behavior:
 		/// - If `connect` fails because an input/state validation error, the socket should remain usable.
 		/// - If a connection was actually attempted but failed, the socket should become unusable for further network communication.
 		///   Besides `drop`, any method after such a failure may return an error.
-		/// 
+		///
 		/// # Typical `start` errors
 		/// - `invalid-argument`:          The `remote-address` has the wrong address family. (EAFNOSUPPORT)
 		/// - `invalid-argument`:          `remote-address` is not a unicast address. (EINVAL, ENETUNREACH on Linux, EAFNOSUPPORT on MacOS)
@@ -154,7 +154,7 @@ interface tcp {
 		/// > stored in the object pointed to by `address` is unspecified.
 		///
 		/// WASI is stricter and requires `local-address` to return `invalid-state` when the socket hasn't been bound yet.
-		/// 
+		///
 		/// # Typical errors
 		/// - `invalid-state`: The socket is not bound to any local address.
 		///
