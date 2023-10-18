@@ -314,7 +314,7 @@ wmemcheck = ["wasmtime/wmemcheck"]
 
 # This feature, when enabled, will statically compile out all logging statements
 # throughout Wasmtime and its dependencies.
-compile-out-logging = ["log/max_level_off", "tracing/max_level_off"]
+disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 
 # ========================================
 # On-by-default features
