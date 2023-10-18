@@ -2167,6 +2167,7 @@ impl<'a> Parser<'a> {
     //
     // fact ::= "range" "(" bit-width "," min-value "," max-value ")"
     //        | "mem" "(" memory-type "," mt-offset "," mt-offset ")"
+    //        | "conflict"
     // bit-width ::= uimm64
     // min-value ::= uimm64
     // max-value ::= uimm64
@@ -2237,7 +2238,11 @@ impl<'a> Parser<'a> {
                     max_offset,
                 })
             }
-            _ => Err(self.error("expected a `range` or `mem` fact")),
+            Some(Token::Identifier("conflict")) => {
+                self.consume();
+                Ok(Fact::Conflict)
+            }
+            _ => Err(self.error("expected a `range`, `mem` or `conflict` fact")),
         }
     }
 
