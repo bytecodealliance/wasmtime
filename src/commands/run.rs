@@ -427,8 +427,9 @@ impl RunCommand {
                         .ok_or_else(|| anyhow!("no func export named `{}` found", name))?
                 } else {
                     instance
-                        .get_func(&mut *store, "_start")
-                        .ok_or_else(|| anyhow!("no `_start` function found"))?
+                        .get_func(&mut *store, "")
+                        .or_else(|| instance.get_func(&mut *store, "_start"))
+                        .ok_or_else(|| anyhow!("no `_start` or `` function found"))?
                 };
 
                 self.invoke_func(store, func)
