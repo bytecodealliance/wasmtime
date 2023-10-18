@@ -413,26 +413,36 @@ impl RunCommand {
 
         let result = match linker {
             CliLinker::Core(linker) => {
-                // Use "" as a default module name.
                 let module = module.unwrap_core();
                 let instance = linker.instantiate(&mut *store, &module).context(format!(
                     "failed to instantiate {:?}",
                     self.module_and_args[0]
                 ))?;
 
-                // If a function to invoke was given, invoke it.
+                // If `_initialize` is present, meaning a reactor, then invoke
+                // the function.
+                if let Some(func) = instance.get_func(&mut *store, "_initialize") {
+                    func.typed::<(), ()>(&store)?.call(&mut *store, ())?;
+                }
+
+                // Look for the specific function provided or otherwise look for
+                // "" or "_start" exports to run as a "main" function.
                 let func = if let Some(name) = &self.invoke {
-                    instance
-                        .get_func(&mut *store, name)
-                        .ok_or_else(|| anyhow!("no func export named `{}` found", name))?
+                    Some(
+                        instance
+                            .get_func(&mut *store, name)
+                            .ok_or_else(|| anyhow!("no func export named `{}` found", name))?,
+                    )
                 } else {
                     instance
                         .get_func(&mut *store, "")
                         .or_else(|| instance.get_func(&mut *store, "_start"))
-                        .ok_or_else(|| anyhow!("no `_start` or `` function found"))?
                 };
 
-                self.invoke_func(store, func)
+                match func {
+                    Some(func) => self.invoke_func(store, func),
+                    None => Ok(()),
+                }
             }
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
