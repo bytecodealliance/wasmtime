@@ -142,7 +142,7 @@ pub fn check_compatible(engine: &Engine, mmap: &MmapVec, expected: ObjectKind) -
         }
         ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
-    bincode::deserialize::<Metadata>(data)?.check_compatible(engine)
+    bincode::deserialize::<Metadata<'_>>(data)?.check_compatible(engine)
 }
 
 fn detect_precompiled<'data, R: object::ReadRef<'data>>(
@@ -174,10 +174,12 @@ pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Opti
 }
 
 #[derive(Serialize, Deserialize)]
-struct Metadata {
+struct Metadata<'a> {
     target: String,
-    shared_flags: BTreeMap<String, FlagValue>,
-    isa_flags: BTreeMap<String, FlagValue>,
+    #[serde(borrow)]
+    shared_flags: Vec<(&'a str, FlagValue<'a>)>,
+    #[serde(borrow)]
+    isa_flags: Vec<(&'a str, FlagValue<'a>)>,
     tunables: Tunables,
     features: WasmFeatures,
 }
@@ -200,9 +202,9 @@ struct WasmFeatures {
     function_references: bool,
 }
 
-impl Metadata {
+impl Metadata<'_> {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    fn new(engine: &Engine) -> Metadata {
+    fn new(engine: &Engine) -> Metadata<'static> {
         let wasmparser::WasmFeatures {
             reference_types,
             multi_value,

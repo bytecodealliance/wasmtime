@@ -12,7 +12,6 @@ use object::{Architecture, BinaryFormat, FileFlags};
 use serde_derive::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;
-use std::collections::BTreeMap;
 use std::fmt;
 use std::path;
 use std::sync::Arc;
@@ -348,10 +347,10 @@ pub trait Compiler: Send + Sync {
     }
 
     /// Returns a list of configured settings for this compiler.
-    fn flags(&self) -> BTreeMap<String, FlagValue>;
+    fn flags(&self) -> Vec<(&'static str, FlagValue<'static>)>;
 
     /// Same as [`Compiler::flags`], but ISA-specific (a cranelift-ism)
-    fn isa_flags(&self) -> BTreeMap<String, FlagValue>;
+    fn isa_flags(&self) -> Vec<(&'static str, FlagValue<'static>)>;
 
     /// Get a flag indicating whether branch protection is enabled.
     fn is_branch_protection_enabled(&self) -> bool;
@@ -383,16 +382,16 @@ pub trait Compiler: Send + Sync {
 
 /// Value of a configured setting for a [`Compiler`]
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
-pub enum FlagValue {
+pub enum FlagValue<'a> {
     /// Name of the value that has been configured for this setting.
-    Enum(Cow<'static, str>),
+    Enum(&'a str),
     /// The numerical value of the configured settings.
     Num(u8),
     /// Whether the setting is on or off.
     Bool(bool),
 }
 
-impl fmt::Display for FlagValue {
+impl fmt::Display for FlagValue<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Enum(v) => v.fmt(f),
