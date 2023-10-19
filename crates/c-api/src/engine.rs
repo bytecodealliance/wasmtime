@@ -19,6 +19,7 @@ pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
     // Note that we `drop` the result here since this fails after the first
     // initialization attempt. We don't mind that though because this function
     // can be called multiple times, so we just ignore the result.
+    #[cfg(feature = "logging")]
     drop(env_logger::try_init());
 
     Box::new(wasm_engine_t {

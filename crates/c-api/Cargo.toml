@@ -11,17 +11,19 @@ publish = false
 
 [lib]
 name = "wasmtime"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["staticlib", "cdylib"]
 doc = false
 test = false
 doctest = false
 
 [dependencies]
-env_logger = { workspace = true }
+env_logger = { workspace = true, optional = true }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift'] }
 wasmtime-c-api-macros = { path = "macros" }
+log = { workspace = true }
+tracing = { workspace = true }
 
 # Optional dependency for the `wat2wasm` API
 wat = { workspace = true, optional = true }
@@ -36,9 +38,22 @@ wasi-common = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 
 [features]
-default = ['profiling', 'wat', 'wasi', 'cache', 'parallel-compilation', 'async']
+default = [
+  'profiling',
+  'wat',
+  'wasi',
+  'cache',
+  'parallel-compilation',
+  'async',
+  'coredump',
+  'addr2line',
+]
 async = ['wasmtime/async', 'futures']
 profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']
 wasi = ['wasi-cap-std-sync', 'wasmtime-wasi', 'cap-std', 'wasi-common']
+logging = ['dep:env_logger']
+disable-logging = ["log/max_level_off", "tracing/max_level_off"]
+coredump = ["wasmtime/coredump"]
+addr2line = ["wasmtime/addr2line"]
