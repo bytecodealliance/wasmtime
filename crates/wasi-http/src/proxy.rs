@@ -2,7 +2,7 @@ use crate::{bindings, WasiHttpView};
 use wasmtime_wasi::preview2;
 
 wasmtime::component::bindgen!({
-    world: "wasi:http/proxy@0.2.0-rc-2023-10-18",
+    world: "wasi:http/proxy",
     tracing: true,
     async: true,
     with: {
@@ -40,7 +40,7 @@ pub mod sync {
     use wasmtime_wasi::preview2;
 
     wasmtime::component::bindgen!({
-        world: "wasi:http/proxy@0.2.0-rc-2023-10-18",
+        world: "wasi:http/proxy",
         tracing: true,
         async: false,
         with: {

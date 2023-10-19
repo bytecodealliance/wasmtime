@@ -30,7 +30,7 @@ pub mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen::generate!({
         path: "../wasi/wit",
-        world: "wasi:cli/command@0.2.0-rc-2023-10-18",
+        world: "wasi:cli/command",
         std_feature,
         raw_strings,
         // Automatically generated bindings for these functions will allocate
