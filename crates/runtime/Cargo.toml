@@ -58,10 +58,7 @@ wasmtime-versioned-export-macros = { workspace = true }
 
 [features]
 async = ["wasmtime-fiber"]
-
-# Enables support for the pooling instance allocator
 pooling-allocator = []
-
 component-model = ["wasmtime-environ/component-model", "dep:encoding_rs"]
-
 wmemcheck = []
+debug-builtins = []

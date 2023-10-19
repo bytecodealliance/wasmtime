@@ -84,6 +84,7 @@ default = [
   'demangle',
   'addr2line',
   'coredump',
+  'debug-builtins',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -154,3 +155,7 @@ coredump = ["dep:wasm-encoder"]
 # Support address-to-file/line information in traps when wasm files have DWARF
 # debugging information.
 addr2line = ["wasmtime-jit/addr2line"]
+
+# Export some symbols from the final binary to assist in debugging
+# Cranelift-generated code with native debuggers like GDB and LLDB.
+debug-builtins = ["wasmtime-runtime/debug-builtins"]
