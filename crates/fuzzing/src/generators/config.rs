@@ -171,6 +171,10 @@ impl Config {
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
             .generate_address_map(self.wasmtime.generate_address_map);
 
+        if !self.module_config.config.simd_enabled {
+            cfg.wasm_relaxed_simd(false);
+        }
+
         let compiler_strategy = &self.wasmtime.compiler_strategy;
         let cranelift_strategy = *compiler_strategy == CompilerStrategy::Cranelift;
         cfg.strategy(self.wasmtime.compiler_strategy.to_wasmtime());
