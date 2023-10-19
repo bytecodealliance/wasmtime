@@ -1116,7 +1116,7 @@ mod test_programs {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
-            &format!("--dir=/::{}", dir.path().to_str().unwrap()),
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
             CLI_FILE_READ_COMPONENT,
         ])?;
         Ok(())
@@ -1132,7 +1132,7 @@ mod test_programs {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
-            &format!("--dir=/::{}", dir.path().to_str().unwrap()),
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
             CLI_FILE_APPEND_COMPONENT,
         ])?;
 
@@ -1157,7 +1157,7 @@ mod test_programs {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
-            &format!("--dir=/::{}", dir.path().to_str().unwrap()),
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
             CLI_FILE_DIR_SYNC_COMPONENT,
         ])?;
 
@@ -1211,7 +1211,7 @@ mod test_programs {
         run_wasmtime(&[
             "run",
             "-Wcomponent-model",
-            &format!("--dir=/::{}", dir.path().to_str().unwrap()),
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
             CLI_DIRECTORY_LIST_COMPONENT,
         ])?;
         Ok(())
