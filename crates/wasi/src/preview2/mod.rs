@@ -93,7 +93,7 @@ pub mod bindings {
 
     wasmtime::component::bindgen!({
         path: "wit",
-        interfaces: "include wasi:cli/reactor@0.2.0-rc-2023-10-18;",
+        world: "wasi:cli/reactor",
         tracing: true,
         async: {
             // Only these functions are `async` and everything else is sync
