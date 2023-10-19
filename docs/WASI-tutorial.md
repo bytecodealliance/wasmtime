@@ -240,7 +240,7 @@ links as well.
 `wasmtime` also has the ability to remap directories:
 
 ```
-$ wasmtime --dir=. --dir=/tmp::/var/tmp demo.wasm test.txt /tmp/somewhere.txt
+$ wasmtime --dir=. --dir=/var/tmp::/tmp demo.wasm test.txt /tmp/somewhere.txt
 $ cat /var/tmp/somewhere.txt
 hello world
 ```

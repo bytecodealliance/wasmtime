@@ -37,12 +37,12 @@ fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
 
 fn parse_dirs(s: &str) -> Result<(String, String)> {
     let mut parts = s.split("::");
-    let guest = parts.next().unwrap();
-    let host = match parts.next() {
-        Some(host) => host,
-        None => guest,
+    let host = parts.next().unwrap();
+    let guest = match parts.next() {
+        Some(guest) => guest,
+        None => host,
     };
-    Ok((guest.into(), host.into()))
+    Ok((host.into(), guest.into()))
 }
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
@@ -62,11 +62,11 @@ pub struct RunCommand {
 
     /// Grant access of a host directory to a guest.
     ///
-    /// If specified as just `GUEST_DIR` then the same directory name on the
-    /// host is made available within the guest. If specified as `GUEST::HOST`
+    /// If specified as just `HOST_DIR` then the same directory name on the
+    /// host is made available within the guest. If specified as `HOST::GUEST`
     /// then the `HOST` directory is opened and made available as the name
     /// `GUEST` in the guest.
-    #[clap(long = "dir", value_name = "GUEST_DIR[::HOST_DIR]", value_parser = parse_dirs)]
+    #[clap(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
     dirs: Vec<(String, String)>,
 
     /// Pass an environment variable to the program.
@@ -233,7 +233,7 @@ impl RunCommand {
     fn compute_preopen_dirs(&self) -> Result<Vec<(String, Dir)>> {
         let mut preopen_dirs = Vec::new();
 
-        for (guest, host) in self.dirs.iter() {
+        for (host, guest) in self.dirs.iter() {
             preopen_dirs.push((
                 guest.clone(),
                 Dir::open_ambient_dir(host, ambient_authority())
