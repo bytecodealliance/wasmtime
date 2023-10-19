@@ -68,9 +68,9 @@ pub mod bindings {
             wasmtime::component::bindgen!({
                 path: "wit",
                 interfaces: "
-                    import wasi:io/poll@0.2.0-rc-2023-10-18;
-                    import wasi:io/streams@0.2.0-rc-2023-10-18;
-                    import wasi:filesystem/types@0.2.0-rc-2023-10-18;
+                    import wasi:io/poll@0.2.0-rc-2023-11-05;
+                    import wasi:io/streams@0.2.0-rc-2023-11-05;
+                    import wasi:filesystem/types@0.2.0-rc-2023-11-05;
                 ",
                 tracing: true,
                 trappable_error_type: {

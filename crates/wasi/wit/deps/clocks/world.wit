@@ -1,4 +1,4 @@
-package wasi:clocks@0.2.0-rc-2023-10-18;
+package wasi:clocks@0.2.0-rc-2023-11-05;
 
 world imports {
     import monotonic-clock;

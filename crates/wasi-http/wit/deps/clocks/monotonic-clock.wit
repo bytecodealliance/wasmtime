@@ -9,7 +9,7 @@
 ///
 /// It is intended for measuring elapsed time.
 interface monotonic-clock {
-    use wasi:io/poll@0.2.0-rc-2023-10-18.{pollable};
+    use wasi:io/poll@0.2.0-rc-2023-11-05.{pollable};
 
     /// A timestamp in nanoseconds.
     type instant = u64;
