@@ -83,6 +83,7 @@ default = [
   'pooling-allocator',
   'demangle',
   'addr2line',
+  'coredump',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
