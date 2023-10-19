@@ -250,6 +250,34 @@ impl Masm for MacroAssembler {
         }
     }
 
+    fn float_add(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn float_sub(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn float_mul(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn float_div(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn float_min(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn float_max(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn float_copysign(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
+        todo!()
+    }
+
     fn float_neg(&mut self, _dst: Reg, _size: OperandSize) {
         todo!()
     }

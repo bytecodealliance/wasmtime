@@ -445,6 +445,22 @@ impl Assembler {
         });
     }
 
+    /// "and not" two float registers.
+    pub fn xmm_andn_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Andnps,
+            OperandSize::S64 => SseOpcode::Andnpd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmR {
+            op,
+            src1: dst.into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
     pub fn gpr_to_xmm(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => SseOpcode::Movd,
@@ -478,6 +494,21 @@ impl Assembler {
             op: AluRmiROpcode::Or,
             src1: dst.into(),
             src2: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    pub fn xmm_or_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Orps,
+            OperandSize::S64 => SseOpcode::Orpd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmR {
+            op,
+            src1: dst.into(),
+            src2: XmmMemAligned::from(Xmm::from(src)),
             dst: dst.into(),
         });
     }
@@ -813,6 +844,92 @@ impl Assembler {
             size: size.into(),
             op: args::UnaryRmROpcode::Bsf,
             src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs float addition on src and dst and places result in dst.
+    pub fn xmm_add_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Addss,
+            OperandSize::S64 => SseOpcode::Addsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmRUnaligned {
+            op,
+            src1: Xmm::from(dst).into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs float subtraction on src and dst and places result in dst.
+    pub fn xmm_sub_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Subss,
+            OperandSize::S64 => SseOpcode::Subsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmRUnaligned {
+            op,
+            src1: Xmm::from(dst).into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs float multiplication on src and dst and places result in dst.
+    pub fn xmm_mul_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Mulss,
+            OperandSize::S64 => SseOpcode::Mulsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmRUnaligned {
+            op,
+            src1: Xmm::from(dst).into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs float division on src and dst and places result in dst.
+    pub fn xmm_div_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Divss,
+            OperandSize::S64 => SseOpcode::Divsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmRUnaligned {
+            op,
+            src1: Xmm::from(dst).into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Mininum for src and dst XMM registers with results put in dst.
+    pub fn xmm_min_seq(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::XmmMinMaxSeq {
+            size: size.into(),
+            is_min: true,
+            lhs: src.into(),
+            rhs: dst.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Maximum for src and dst XMM registers with results put in dst.
+    pub fn xmm_max_seq(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::XmmMinMaxSeq {
+            size: size.into(),
+            is_min: false,
+            lhs: src.into(),
+            rhs: dst.into(),
             dst: dst.into(),
         });
     }
