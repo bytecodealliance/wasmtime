@@ -221,6 +221,10 @@ impl Config {
         ret.wasm_simd(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
+        ret.wasm_threads(false);
+        ret.wasm_relaxed_simd(false);
+        ret.wasm_multi_memory(false);
+
         // This is on-by-default in `wasmparser` since it's a stage 4+ proposal
         // but it's not implemented in Wasmtime yet so disable it.
         ret.features.tail_call = false;
