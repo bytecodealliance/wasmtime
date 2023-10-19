@@ -7,7 +7,7 @@ use super::Stats;
 use crate::dominator_tree::DominatorTree;
 use crate::fx::FxHashSet;
 use crate::ir::{Block, Function, Inst, Value, ValueDef};
-use crate::loop_analysis::{Loop, LoopAnalysis, LoopLevel};
+use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
 use crate::unionfind::UnionFind;
@@ -211,26 +211,24 @@ impl<'a> Elaborator<'a> {
                 // at this point, only the side-effecting skeleton),
                 // then it must be computed and thus we give it zero
                 // cost.
-                ValueDef::Result(inst, _) if self.func.layout.inst_block(inst).is_some() => {
-                    best[value] = (Cost::zero(), value);
-                }
                 ValueDef::Result(inst, _) => {
-                    trace!(" -> value {}: result, computing cost", value);
-                    let inst_data = &self.func.dfg.insts[inst];
-                    let loop_level = self
-                        .func
-                        .layout
-                        .inst_block(inst)
-                        .map(|block| self.loop_analysis.loop_level(block))
-                        .unwrap_or(LoopLevel::root());
-                    // N.B.: at this point we know that the opcode is
-                    // pure, so `pure_op_cost`'s precondition is
-                    // satisfied.
-                    let cost = self.func.dfg.inst_values(inst).fold(
-                        pure_op_cost(inst_data.opcode()).at_level(loop_level.level()),
-                        |cost, value| cost + best[value].0,
-                    );
-                    best[value] = (cost, value);
+                    if let Some(_) = self.func.layout.inst_block(inst) {
+                        best[value] = (Cost::zero(), value);
+                    } else {
+                        trace!(" -> value {}: result, computing cost", value);
+                        let inst_data = &self.func.dfg.insts[inst];
+                        // N.B.: at this point we know that the opcode is
+                        // pure, so `pure_op_cost`'s precondition is
+                        // satisfied.
+                        let cost = self
+                            .func
+                            .dfg
+                            .inst_values(inst)
+                            .fold(pure_op_cost(inst_data.opcode()), |cost, value| {
+                                cost + best[value].0
+                            });
+                        best[value] = (cost, value);
+                    }
                 }
             };
             debug_assert_ne!(best[value].0, Cost::infinity());
@@ -259,12 +257,9 @@ impl<'a> Elaborator<'a> {
     }
 
     fn process_elab_stack(&mut self) {
-        while let Some(entry) = self.elab_stack.last() {
+        while let Some(entry) = self.elab_stack.pop() {
             match entry {
-                &ElabStackEntry::Start { value, before } => {
-                    // We always replace the Start entry, so pop it now.
-                    self.elab_stack.pop();
-
+                ElabStackEntry::Start { value, before } => {
                     debug_assert_ne!(value, Value::reserved_value());
                     let value = self.func.dfg.resolve_aliases(value);
 
@@ -376,15 +371,13 @@ impl<'a> Elaborator<'a> {
                     }
                 }
 
-                &ElabStackEntry::PendingInst {
+                ElabStackEntry::PendingInst {
                     inst,
                     result_idx,
                     num_args,
                     remat,
                     before,
                 } => {
-                    self.elab_stack.pop();
-
                     trace!(
                         "PendingInst: {} result {} args {} remat {} before {}",
                         inst,
