@@ -670,7 +670,7 @@ pub(crate) struct Stats {
     pub(crate) elaborate_visit_node: u64,
     pub(crate) elaborate_memoize_hit: u64,
     pub(crate) elaborate_memoize_miss: u64,
-    pub(crate) elaborate_memoize_miss_remat: u64,
+    pub(crate) elaborate_remat: u64,
     pub(crate) elaborate_licm_hoist: u64,
     pub(crate) elaborate_func: u64,
     pub(crate) elaborate_func_pre_insts: u64,
