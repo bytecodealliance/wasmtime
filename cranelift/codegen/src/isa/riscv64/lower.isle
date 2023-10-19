@@ -2700,18 +2700,23 @@
 
 ;;;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector x)))
-  (if (ty_vector_not_float ty))
-  (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
-        (mask VReg (gen_vec_mask 1)))
-    (rv_vmerge_vxm zero x mask ty)))
-
 (rule 0 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector x)))
   (if (ty_vector_float ty))
   (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
         (elem VReg (rv_vfmv_sf x ty))
         (mask VReg (gen_vec_mask 1)))
     (rv_vmerge_vvm zero elem mask ty)))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector x)))
+  (if (ty_vector_not_float ty))
+  (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
+        (mask VReg (gen_vec_mask 1)))
+    (rv_vmerge_vxm zero x mask ty)))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (scalar_to_vector (imm5_from_value x))))
+  (let ((zero VReg (rv_vmv_vx (zero_reg) ty))
+        (mask VReg (gen_vec_mask 1)))
+    (rv_vmerge_vim zero x mask ty)))
 
 ;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

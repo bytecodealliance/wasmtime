@@ -1888,9 +1888,13 @@
 (decl pure partial i8_to_imm5 (i8) Imm5)
 (extern constructor i8_to_imm5 i8_to_imm5)
 
+;; Helper to go directly from a `Value` to an `Imm5`.
+(decl imm5_from_value (Imm5) Value)
+(extractor (imm5_from_value n) (i64_from_iconst (imm5_from_i64 n)))
+
 ;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
 (decl pure partial replicated_imm5 (Value) Imm5)
-(rule (replicated_imm5 (splat (i64_from_iconst (imm5_from_i64 n)))) n)
+(rule (replicated_imm5 (splat (imm5_from_value n))) n)
 (rule (replicated_imm5 (vconst (u128_from_constant n128)))
   (if-let (u128_replicated_u64 n64) n128)
   (if-let (u64_replicated_u32 n32) n64)
