@@ -362,6 +362,21 @@ fn explicit_check_oob_condition_and_compute_addr(
     addr
 }
 
+fn add_fact<F: Fn(ir::MemoryType) -> Fact>(
+    pos: &mut FuncCursor,
+    pcc_memtype: Option<ir::MemoryType>,
+    value: ir::Value,
+    make_fact: F,
+) {
+    if let Some(ty) = pcc_memtype {
+        assert!(
+            pos.func.dfg.facts[value].is_none(),
+            "Overwriting a fact is invalid"
+        );
+        pos.func.dfg.facts[value] = Some(make_fact(ty));
+    }
+}
+
 /// Emit code for the native address computation of a Wasm address,
 /// without any bounds checks or overflow checks.
 ///
@@ -389,26 +404,24 @@ fn compute_addr(
         None
     };
 
-    if let Some(ty) = pcc_memtype {
-        pos.func.dfg.facts[heap_base] = Some(Fact::Mem {
-            ty,
-            min_offset: 0,
-            max_offset: 0,
-        });
-    }
+    add_fact(pos, pcc_memtype, heap_base, |ty| Fact::Mem {
+        ty,
+        min_offset: 0,
+        max_offset: 0,
+    });
 
     let base_and_index = pos.ins().iadd(heap_base, index);
 
-    if let Some(ty) = pcc_memtype {
+    add_fact(pos, pcc_memtype, base_and_index, |ty| {
         // TODO: handle memory64 as well. For now we assert that we
         // have a 32-bit `heap.index_type`.
         assert_eq!(heap.index_type, ir::types::I32);
-        pos.func.dfg.facts[base_and_index] = Some(Fact::Mem {
+        Fact::Mem {
             ty,
             min_offset: 0,
             max_offset: u64::from(u32::MAX),
-        });
-    }
+        }
+    });
 
     if offset == 0 {
         base_and_index
@@ -418,32 +431,19 @@ fn compute_addr(
         // potentially are letting speculative execution read the whole first
         // 4GiB of memory.
         let offset_val = pos.ins().iconst(addr_ty, i64::from(offset));
-        if pcc {
-            pos.func.dfg.facts[offset_val] = Some(Fact::Range {
-                bit_width: u16::try_from(addr_ty.bits()).unwrap(),
-                min: u64::from(offset),
-                max: u64::from(offset),
-            });
-        }
+        add_fact(pos, pcc_memtype, offset_val, |_| {
+            Fact::constant(u16::try_from(addr_ty.bits()).unwrap(), u64::from(offset))
+        });
         let result = pos.ins().iadd(base_and_index, offset_val);
-        if pcc {
-            pos.func.dfg.facts[offset_val] = Some(Fact::Range {
-                bit_width: u16::try_from(addr_ty.bits()).unwrap(),
-                min: u64::from(offset),
-                max: u64::from(u32::MAX) + u64::from(offset),
-            });
-        }
-        if let Some(ty) = pcc_memtype {
-            pos.func.dfg.facts[result] = Some(Fact::Mem {
-                ty,
-                min_offset: u64::from(offset),
-                // Safety: can't overflow -- two u32s summed in a
-                // 64-bit add. TODO: when memory64 is supported here,
-                // `u32::MAX` is no longer true, and we'll need to
-                // handle overflow here.
-                max_offset: u64::from(u32::MAX) + u64::from(offset),
-            });
-        }
+        add_fact(pos, pcc_memtype, result, |ty| Fact::Mem {
+            ty,
+            min_offset: u64::from(offset),
+            // Safety: can't overflow -- two u32s summed in a
+            // 64-bit add. TODO: when memory64 is supported here,
+            // `u32::MAX` is no longer true, and we'll need to
+            // handle overflow here.
+            max_offset: u64::from(u32::MAX) + u64::from(offset),
+        });
         result
     }
 }

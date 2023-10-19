@@ -1309,8 +1309,7 @@ impl DataFlowGraph {
             }
             (Some(a_fact), Some(b_fact)) => {
                 assert_eq!(self.value_type(a), self.value_type(b));
-                let ty = self.value_type(a);
-                let merged = Fact::meet(a_fact, b_fact, ty);
+                let merged = Fact::intersect(a_fact, b_fact);
                 crate::trace!(
                     "facts merge on {} and {}: {:?}, {:?} -> {:?}",
                     a,

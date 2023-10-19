@@ -190,29 +190,43 @@ impl fmt::Display for Fact {
 }
 
 impl Fact {
-    /// Try to infer a minimal fact for a value of the given IR type.
-    pub fn infer_from_type(ty: ir::Type) -> Option<&'static Self> {
-        static FACTS: [Fact; 4] = [
-            Fact::Range {
-                bit_width: 8,
+    /// Create a range fact that specifies a single known constant value.
+    pub fn constant(bit_width: u16, value: u64) -> Self {
+        debug_assert!(value <= max_value_for_width(bit_width));
+        // `min` and `max` are inclusive, so this specifies a range of
+        // exactly one value.
+        Fact::Range {
+            bit_width,
+            min: value,
+            max: value,
+        }
+    }
+
+    /// Create a range fact that specifies the maximum range for a
+    /// value of the given bit-width.
+    pub const fn max_range_for_width(bit_width: u16) -> Self {
+        match bit_width {
+            bit_width if bit_width < 64 => Fact::Range {
+                bit_width,
                 min: 0,
-                max: u8::MAX as u64,
+                max: (1u64 << bit_width) - 1,
             },
-            Fact::Range {
-                bit_width: 16,
-                min: 0,
-                max: u16::MAX as u64,
-            },
-            Fact::Range {
-                bit_width: 32,
-                min: 0,
-                max: u32::MAX as u64,
-            },
-            Fact::Range {
+            64 => Fact::Range {
                 bit_width: 64,
                 min: 0,
                 max: u64::MAX,
             },
+            _ => panic!("bit width too large!"),
+        }
+    }
+
+    /// Try to infer a minimal fact for a value of the given IR type.
+    pub fn infer_from_type(ty: ir::Type) -> Option<&'static Self> {
+        static FACTS: [Fact; 4] = [
+            Fact::max_range_for_width(8),
+            Fact::max_range_for_width(16),
+            Fact::max_range_for_width(32),
+            Fact::max_range_for_width(64),
         ];
         match ty {
             I8 => Some(&FACTS[0]),
@@ -234,8 +248,9 @@ impl Fact {
         }
     }
 
-    /// Is this a constant value of the given bitwidth?
-    pub fn is_const(&self, bits: u16) -> Option<u64> {
+    /// Is this a constant value of the given bitwidth? Return it as a
+    /// `Some(value)` if so.
+    pub fn as_const(&self, bits: u16) -> Option<u64> {
         match self {
             Fact::Range {
                 bit_width,
@@ -247,9 +262,11 @@ impl Fact {
     }
 
     /// Merge two facts. We take the *intersection*: that is, we know
-    /// both facts to be true, so we can intersect ranges. This is the
-    /// opposite of the usual lattice-meet definition.
-    pub fn meet(a: &Fact, b: &Fact, ty: Type) -> Fact {
+    /// both facts to be true, so we can intersect ranges. (This
+    /// differs from the usual static analysis approach, where we are
+    /// merging multiple possibilities into a generalized / widened
+    /// fact. We want to narrow here.)
+    pub fn intersect(a: &Fact, b: &Fact) -> Fact {
         match (a, b) {
             (
                 Fact::Range {
@@ -290,13 +307,7 @@ impl Fact {
                 }
             }
 
-            _ => {
-                if let Some(f) = Self::infer_from_type(ty) {
-                    f.clone()
-                } else {
-                    Fact::Conflict
-                }
-            }
+            _ => Fact::Conflict,
         }
     }
 }
