@@ -15,9 +15,9 @@ use crate::ir::{
     Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
-    writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, LoweredBlock, MachLabel, Reg,
-    SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
-    ValueRegs, Writable,
+    writable_value_regs, BlockIndex, BlockLoweringOrder, Callee, InsnIndex, LoweredBlock,
+    MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants,
+    VCodeInst, ValueRegs, Writable,
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
@@ -148,12 +148,13 @@ pub trait LowerBackend {
     }
 
     /// Check any facts about an instruction, given VCode with facts
-    /// on VRegs.
+    /// on VRegs. Takes mutable `VCode` so that it can propagate some
+    /// kinds of facts automatically.
     fn check_fact(
         &self,
         _ctx: &FactContext<'_>,
-        _vcode: &VCode<Self::MInst>,
-        _inst: &Self::MInst,
+        _vcode: &mut VCode<Self::MInst>,
+        _inst: InsnIndex,
     ) -> PccResult<()> {
         Err(PccError::UnimplementedBackend)
     }

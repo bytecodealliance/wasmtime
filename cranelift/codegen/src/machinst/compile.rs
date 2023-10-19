@@ -29,7 +29,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     let lower = crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs)?;
 
     // Lower the IR.
-    let vcode = {
+    let mut vcode = {
         log::debug!(
             "Number of CLIF instructions to lower: {}",
             f.dfg.num_insts()
@@ -49,7 +49,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
 
     // Perform validation of proof-carrying-code facts, if requested.
     if b.flags().enable_pcc() {
-        pcc::check_vcode_facts(f, &vcode, b).map_err(CodegenError::Pcc)?;
+        pcc::check_vcode_facts(f, &mut vcode, b).map_err(CodegenError::Pcc)?;
     }
 
     // Perform register allocation.

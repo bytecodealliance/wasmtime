@@ -134,8 +134,8 @@ impl LowerBackend for AArch64Backend {
     fn check_fact(
         &self,
         ctx: &FactContext<'_>,
-        vcode: &VCode<Self::MInst>,
-        inst: &Self::MInst,
+        vcode: &mut VCode<Self::MInst>,
+        inst: InsnIndex,
     ) -> PccResult<()> {
         pcc::check(ctx, vcode, inst)
     }

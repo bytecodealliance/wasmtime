@@ -1298,6 +1298,12 @@ impl<I: VCodeInst> VCode<I> {
         self.facts[vreg.vreg()].as_ref()
     }
 
+    /// Set the fact for a given VReg.
+    pub fn set_vreg_fact(&mut self, vreg: VReg, fact: Fact) {
+        let vreg = self.resolve_vreg_alias(vreg);
+        self.facts[vreg.vreg()] = Some(fact);
+    }
+
     /// Does a given instruction define any facts?
     pub fn inst_defines_facts(&self, inst: InsnIndex) -> bool {
         self.inst_operands(inst)

@@ -353,6 +353,7 @@ where
                 new_result
             );
             self.value_to_opt_value[result] = new_result;
+            self.func.dfg.merge_facts(result, new_result);
             true
         }
         // Otherwise, generic side-effecting op -- always keep it, and
