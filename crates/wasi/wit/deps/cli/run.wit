@@ -1,4 +1,4 @@
 interface run {
   /// Run the program.
-  run: func() -> result
+  run: func() -> result;
 }

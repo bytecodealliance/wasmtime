@@ -89,7 +89,7 @@ impl Parse for Config {
                         }
                         inline = Some(format!(
                             "
-                                package wasmtime:component-macro-synthesized
+                                package wasmtime:component-macro-synthesized;
 
                                 world interfaces {{
                                     {}

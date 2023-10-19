@@ -1,5 +1,5 @@
-package foo:foo
+package foo:foo;
 
 world foo {
-  import foo: func()
+  import foo: func();
 }

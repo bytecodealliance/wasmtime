@@ -9,13 +9,13 @@ mod empty_error {
     use super::*;
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         world result-playground {
             import imports: interface {
-                empty-error: func(a: float64) -> result<float64>
+                empty-error: func(a: float64) -> result<float64>;
             }
 
-            export empty-error: func(a: float64) -> result<float64>
+            export empty-error: func(a: float64) -> result<float64>;
         }",
     });
 
@@ -110,13 +110,13 @@ mod string_error {
     use super::*;
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         world result-playground {
             import imports: interface {
-                string-error: func(a: float64) -> result<float64, string>
+                string-error: func(a: float64) -> result<float64, string>;
             }
 
-            export string-error: func(a: float64) -> result<float64, string>
+            export string-error: func(a: float64) -> result<float64, string>;
         }",
     });
 
@@ -226,16 +226,16 @@ mod enum_error {
 
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         interface imports {
             enum e1 { a, b, c }
-            enum-error: func(a: float64) -> result<float64, e1>
+            enum-error: func(a: float64) -> result<float64, e1>;
         }
         world result-playground {
-            import imports
+            import imports;
             export foo: interface {
                 enum e1 { a, b, c }
-                enum-error: func(a: float64) -> result<float64, e1>
+                enum-error: func(a: float64) -> result<float64, e1>;
             }
         }",
         trappable_error_type: { "inline:inline/imports"::e1: TrappableE1 }
@@ -406,16 +406,16 @@ mod record_error {
 
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         interface imports {
             record e2 { line: u32, col: u32 }
-            record-error: func(a: float64) -> result<float64, e2>
+            record-error: func(a: float64) -> result<float64, e2>;
         }
         world result-playground {
-            import imports
+            import imports;
             export foo: interface {
                 record e2 { line: u32, col: u32 }
-                record-error: func(a: float64) -> result<float64, e2>
+                record-error: func(a: float64) -> result<float64, e2>;
             }
         }",
         // Literal strings can be used for the interface and typename fields instead of
@@ -575,20 +575,20 @@ mod variant_error {
 
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         interface imports {
             enum e1 { a, b, c }
             record e2 { line: u32, col: u32 }
             variant e3 { E1(e1), E2(e2) }
-            variant-error: func(a: float64) -> result<float64, e3>
+            variant-error: func(a: float64) -> result<float64, e3>;
         }
         world result-playground {
-            import imports
+            import imports;
             export foo: interface {
                 enum e1 { a, b, c }
                 record e2 { line: u32, col: u32 }
                 variant e3 { E1(e1), E2(e2) }
-                variant-error: func(a: float64) -> result<float64, e3>
+                variant-error: func(a: float64) -> result<float64, e3>;
             }
         }",
         trappable_error_type: { "inline:inline/imports"::e3: TrappableE3 }
@@ -770,20 +770,20 @@ mod multiple_interfaces_error {
 
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         interface types {
             enum e1 { a, b, c }
-            enum-error: func(a: float64) -> result<float64, e1>
+            enum-error: func(a: float64) -> result<float64, e1>;
         }
         interface imports {
-            use types.{e1}
-            enum-error: func(a: float64) -> result<float64, e1>
+            use types.{e1};
+            enum-error: func(a: float64) -> result<float64, e1>;
         }
         world result-playground {
-            import imports
+            import imports;
             export foo: interface {
                 enum e1 { a, b, c }
-                enum-error: func(a: float64) -> result<float64, e1>
+                enum-error: func(a: float64) -> result<float64, e1>;
             }
         }",
         trappable_error_type: { "inline:inline/types"::e1: TrappableE1 }
@@ -967,20 +967,20 @@ mod with_remapping {
         wasmtime::component::bindgen!({
             interfaces: "
             import imports: interface {
-                empty-error: func(a: float64) -> result<float64>
+                empty-error: func(a: float64) -> result<float64>;
             }",
         });
     }
 
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         world result-playground {
             import imports: interface {
-                empty-error: func(a: float64) -> result<float64>
+                empty-error: func(a: float64) -> result<float64>;
             }
 
-            export empty-error: func(a: float64) -> result<float64>
+            export empty-error: func(a: float64) -> result<float64>;
         }",
         with: {
             "imports": interfaces::imports,

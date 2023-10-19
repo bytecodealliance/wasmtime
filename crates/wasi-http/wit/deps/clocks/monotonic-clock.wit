@@ -9,24 +9,24 @@
 ///
 /// It is intended for measuring elapsed time.
 interface monotonic-clock {
-    use wasi:io/poll.{pollable}
+    use wasi:io/poll.{pollable};
 
     /// A timestamp in nanoseconds.
-    type instant = u64
+    type instant = u64;
 
     /// Read the current value of the clock.
     ///
     /// The clock is monotonic, therefore calling this function repeatedly will
     /// produce a sequence of non-decreasing values.
-    now: func() -> instant
+    now: func() -> instant;
 
     /// Query the resolution of the clock.
-    resolution: func() -> instant
+    resolution: func() -> instant;
 
     /// Create a `pollable` which will resolve once the specified time has been
     /// reached.
     subscribe: func(
         when: instant,
         absolute: bool
-    ) -> pollable
+    ) -> pollable;
 }
