@@ -80,7 +80,7 @@ pub struct ServeCommand {
 impl ServeCommand {
     /// Start a server to run the given wasi-http proxy component
     pub fn execute(mut self) -> Result<()> {
-        self.run.common.init_logging();
+        self.run.common.init_logging()?;
 
         // We force cli errors before starting to listen for connections so tha we don't
         // accidentally delay them to the first request.

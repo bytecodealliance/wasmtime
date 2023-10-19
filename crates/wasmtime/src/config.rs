@@ -1516,6 +1516,8 @@ impl Config {
     /// the anyhow::Error when a trap is raised.
     ///
     /// This option is disabled by default.
+    #[cfg(feature = "coredump")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "coredump")))]
     pub fn coredump_on_trap(&mut self, enable: bool) -> &mut Self {
         self.coredump_on_trap = enable;
         self

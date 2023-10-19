@@ -288,6 +288,23 @@
 //!   run-time via [`Config::memory_init_cow`] (which is also enabled by
 //!   default).
 //!
+//! * `demangle` - Enabled by default, this will affect how backtraces are
+//!   printed and whether symbol names from WebAssembly are attempted to be
+//!   demangled. Rust and C++ demanglings are currently supported.
+//!
+//! * `coredump` - Enabled by default, this will provide support for generating
+//!   a core dump when a trap happens. This can be configured via
+//!   [`Config::coredump_on_trap`].
+//!
+//! * `addr2line` - Enabled by default, this feature configures whether traps
+//!   will attempt to parse DWARF debug information and convert WebAssembly
+//!   addresses to source filenames and line numbers.
+//!
+//! More crate features can be found in the [manifest] of Wasmtime itself for
+//! seeing what can be enabled and disabled.
+//!
+//! [manifest]: https://github.com/bytecodealliance/wasmtime/blob/main/crates/wasmtime/Cargo.toml
+//!
 //! ## Examples
 //!
 //! In addition to the examples below be sure to check out the [online embedding
@@ -395,7 +412,6 @@ mod compiler;
 
 mod code;
 mod config;
-mod coredump;
 mod engine;
 mod externals;
 mod instance;
@@ -403,6 +419,7 @@ mod limits;
 mod linker;
 mod memory;
 mod module;
+#[cfg(feature = "profiling")]
 mod profiling;
 mod r#ref;
 mod resources;
@@ -418,7 +435,6 @@ mod values;
 mod stack;
 
 pub use crate::config::*;
-pub use crate::coredump::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::func::*;
@@ -427,6 +443,7 @@ pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::Module;
+#[cfg(feature = "profiling")]
 pub use crate::profiling::GuestProfiler;
 pub use crate::r#ref::ExternRef;
 pub use crate::resources::*;
@@ -442,6 +459,11 @@ pub use crate::values::*;
 
 #[cfg(feature = "async")]
 pub use crate::stack::*;
+
+#[cfg(feature = "coredump")]
+mod coredump;
+#[cfg(feature = "coredump")]
+pub use crate::coredump::*;
 
 /// A convenience wrapper for `Result<T, anyhow::Error>`.
 ///

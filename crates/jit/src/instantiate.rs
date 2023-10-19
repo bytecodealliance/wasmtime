@@ -667,6 +667,7 @@ impl CompiledModule {
     ///
     /// Basically this makes a thing which parses debuginfo and can tell you
     /// what filename and line number a wasm pc comes from.
+    #[cfg(feature = "addr2line")]
     pub fn symbolize_context(&self) -> Result<Option<SymbolizeContext<'_>>> {
         use gimli::EndianSlice;
         if !self.meta.has_wasm_debuginfo {
@@ -721,15 +722,18 @@ impl CompiledModule {
     }
 }
 
+#[cfg(feature = "addr2line")]
 type Addr2LineContext<'a> = addr2line::Context<gimli::EndianSlice<'a, gimli::LittleEndian>>;
 
 /// A context which contains dwarf debug information to translate program
 /// counters back to filenames and line numbers.
+#[cfg(feature = "addr2line")]
 pub struct SymbolizeContext<'a> {
     inner: Addr2LineContext<'a>,
     code_section_offset: u64,
 }
 
+#[cfg(feature = "addr2line")]
 impl<'a> SymbolizeContext<'a> {
     /// Returns access to the [`addr2line::Context`] which can be used to query
     /// frame information with.

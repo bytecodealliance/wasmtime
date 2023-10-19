@@ -1,3 +1,4 @@
+#[cfg(feature = "coredump")]
 use crate::coredump::WasmCoreDump;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
@@ -134,11 +135,14 @@ pub(crate) fn from_runtime_box(
         }
     }
 
+    let _ = &coredumpstack;
+    #[cfg(feature = "coredump")]
     if let Some(coredump) = coredumpstack {
         let bt = WasmBacktrace::from_captured(store, coredump.bt, pc);
         let cd = WasmCoreDump::new(store, bt);
         error = error.context(cd);
     }
+
     error
 }
 
@@ -474,6 +478,8 @@ impl FrameInfo {
         // custom section contents.
         let mut symbols = Vec::new();
 
+        let _ = &mut symbols;
+        #[cfg(feature = "addr2line")]
         if let Some(s) = &compiled_module.symbolize_context().ok().and_then(|c| c) {
             if let Some(offset) = instr.and_then(|i| i.file_offset()) {
                 let to_lookup = u64::from(offset) - s.code_section_offset();

@@ -28,6 +28,7 @@
     - [Debugging](./examples-c-debugging.md)
     - [Using Multi-Value](./examples-c-multi-value.md)
   - [Checking Guests' Memory Accesses](./wmemcheck.md)
+  - [Building a minimal embedding](./examples-minimal.md)
 - [Using WebAssembly from your language](./lang.md)
   - [Rust](./lang-rust.md)
   - [C](./lang-c.md)

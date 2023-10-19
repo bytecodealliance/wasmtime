@@ -36,9 +36,9 @@ wasi-common = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 
 [features]
-default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation', 'async']
+default = ['profiling', 'wat', 'wasi', 'cache', 'parallel-compilation', 'async']
 async = ['wasmtime/async', 'futures']
-jitdump = ["wasmtime/jitdump"]
+profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']
 wasi = ['wasi-cap-std-sync', 'wasmtime-wasi', 'cap-std', 'wasi-common']

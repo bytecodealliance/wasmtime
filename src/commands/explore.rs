@@ -29,7 +29,7 @@ pub struct ExploreCommand {
 impl ExploreCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        self.common.init_logging();
+        self.common.init_logging()?;
 
         let config = self.common.config(self.target.as_deref())?;
 
