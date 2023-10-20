@@ -11,9 +11,9 @@ interface udp {
         data: list<u8>,
 
         /// The source address.
-        /// 
+        ///
         /// This field is guaranteed to match the remote address the stream was initialized with, if any.
-        /// 
+        ///
         /// Equivalent to the `src_addr` out parameter of `recvfrom`.
         remote-address: ip-socket-address,
     }
@@ -79,16 +79,16 @@ interface udp {
         /// This method may be called multiple times on the same socket to change its association, but
         /// only the most recently returned pair of streams will be operational. Implementations may trap if
         /// the streams returned by a previous invocation haven't been dropped yet before calling `stream` again.
-        ///
+        /// 
         /// The POSIX equivalent in pseudo-code is:
-        /// ```
+        ///
         /// if (was previously connected) {
         /// 	connect(s, AF_UNSPEC)
         /// }
         /// if (remote_address is Some) {
         /// 	connect(s, remote_address)
         /// }
-        /// ```
+        ///
         ///
         /// Unlike in POSIX, the socket must already be explicitly bound.
         /// 
