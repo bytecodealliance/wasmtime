@@ -2,7 +2,7 @@
 
 ## 14.0.0
 
-Unreleased.
+Released 2023-10-20.
 
 One of the larger changes in this release is a redesign of Wasmtime's CLI
 arguments and where arguments are passed. This means that previous invocations
