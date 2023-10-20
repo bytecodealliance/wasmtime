@@ -9,4 +9,4 @@ publish = false
 [dependencies]
 cranelift-isle = { version = "*", path = "../isle/", features = ["fancy-errors", "logging"] }
 env_logger = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ['default'] }
