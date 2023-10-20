@@ -11,7 +11,7 @@ publish = false
 
 [lib]
 name = "wasmtime"
-crate-type = ["staticlib", "cdylib"]
+crate-type = ["staticlib", "cdylib", "rlib"]
 doc = false
 test = false
 doctest = false
