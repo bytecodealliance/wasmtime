@@ -302,6 +302,7 @@ default = [
   "profiling",
   "coredump",
   "addr2line",
+  "debug-builtins",
 ]
 
 # ========================================
@@ -339,6 +340,7 @@ cranelift = ["wasmtime-cli-flags/cranelift", "dep:wasmtime-cranelift"]
 profiling = ["wasmtime/profiling"]
 coredump = ["wasmtime-cli-flags/coredump"]
 addr2line = ["wasmtime/addr2line"]
+debug-builtins = ["wasmtime/debug-builtins"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

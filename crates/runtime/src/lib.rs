@@ -29,6 +29,7 @@ mod table;
 mod traphandlers;
 mod vmcontext;
 
+#[cfg(feature = "debug-builtins")]
 pub mod debug_builtins;
 pub mod libcalls;
 pub mod mpk;
