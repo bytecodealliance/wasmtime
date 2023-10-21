@@ -454,13 +454,6 @@
                          (dst WritableXmm)
                          (src2_size OperandSize))
 
-       ;; Converts an unsigned int64 to a float32/float64.
-       (CvtUint64ToFloatSeq (dst_size OperandSize) ;; 4 or 8
-                            (src Gpr)
-                            (dst WritableXmm)
-                            (tmp_gpr1 WritableGpr)
-                            (tmp_gpr2 WritableGpr))
-
        ;; Converts a scalar xmm to a signed int32/int64.
        (CvtFloatToSintSeq (dst_size OperandSize)
                           (src_size OperandSize)
@@ -2093,15 +2086,6 @@
 (rule (cvt_int_to_float_vex op src1 src2 size)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.CvtIntToFloatVex op src1 src2 dst size))))
-        dst))
-
-(decl cvt_u64_to_float_seq (Type Gpr) Xmm)
-(rule (cvt_u64_to_float_seq ty src)
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            (dst WritableXmm (temp_writable_xmm))
-            (tmp_gpr1 WritableGpr (temp_writable_gpr))
-            (tmp_gpr2 WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src dst tmp_gpr1 tmp_gpr2))))
         dst))
 
 (decl cvt_float_to_uint_seq (Type Value bool) Gpr)

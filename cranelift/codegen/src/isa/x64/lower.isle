@@ -3409,8 +3409,7 @@
 (rule 1 (lower (has_type $F64 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
       (x64_cvtsi2sd $I64 (xmm_zero $F64X2) (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
-(rule (lower (has_type ty (fcvt_from_uint val @ (value_type $I64))))
-      (cvt_u64_to_float_seq ty val))
+;; NB: fcvt_from_uint for 64-bit values is handled in `legalize.isle.`
 
 ;; Algorithm uses unpcklps to help create a float that is equivalent
 ;; 0x1.0p52 + double(src). 0x1.0p52 is unique because at this exponent

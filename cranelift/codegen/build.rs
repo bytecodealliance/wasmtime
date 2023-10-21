@@ -255,7 +255,7 @@ fn get_isle_compilations(
                 inputs: vec![
                     prelude_isle.clone(),
                     legalize_shared_isle.clone(),
-                    // NB: x86-64-specific legalization here when it exists
+                    src_isa_x64.join("legalize.isle"),
                 ],
                 untracked_inputs: vec![clif_legalize_isle.clone()],
             },

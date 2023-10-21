@@ -285,12 +285,29 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   cvtsi2ss %xmm6, %r8, %xmm6
 ;   uninit  %xmm7
 ;   xorps   %xmm7, %xmm7, %xmm7
-;   movl    %edx, %r8d
-;   cvtsi2ss %xmm7, %r8, %xmm7
-;   u64_to_f32_seq %rcx, %xmm4, %r8, %rdx
+;   movl    %edx, %edx
+;   cvtsi2ss %xmm7, %rdx, %xmm7
+;   testq   %rcx, %rcx
+;   jl      label2; j label1
+; block1:
+;   uninit  %xmm3
+;   xorps   %xmm3, %xmm3, %xmm3
+;   cvtsi2ss %xmm3, %rcx, %xmm3
+;   jmp     label3
+; block2:
+;   movq    %rcx, %rdx
+;   shrq    $1, %rdx, %rdx
+;   andq    %rcx, $1, %rcx
+;   orq     %rdx, %rcx, %rdx
+;   uninit  %xmm3
+;   xorps   %xmm3, %xmm3, %xmm3
+;   cvtsi2ss %xmm3, %rdx, %xmm3
+;   addss   %xmm3, %xmm3, %xmm3
+;   jmp     label3
+; block3:
 ;   addss   %xmm0, %xmm6, %xmm0
 ;   addss   %xmm0, %xmm7, %xmm0
-;   addss   %xmm0, %xmm4, %xmm0
+;   addss   %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -307,22 +324,26 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   movzwq %si, %r8
 ;   cvtsi2ssq %r8, %xmm6
 ;   xorps %xmm7, %xmm7
-;   movl %edx, %r8d
-;   cvtsi2ssq %r8, %xmm7
-;   cmpq $0, %rcx
-;   jl 0x3b
-;   cvtsi2ssq %rcx, %xmm4
-;   jmp 0x55
-;   movq %rcx, %r8
-;   shrq $1, %r8
+;   movl %edx, %edx
+;   cvtsi2ssq %rdx, %xmm7
+;   testq %rcx, %rcx
+;   jl 0x3c
+; block2: ; offset 0x2f
+;   xorps %xmm3, %xmm3
+;   cvtsi2ssq %rcx, %xmm3
+;   jmp 0x56
+; block3: ; offset 0x3c
 ;   movq %rcx, %rdx
-;   andq $1, %rdx
-;   orq %r8, %rdx
-;   cvtsi2ssq %rdx, %xmm4
-;   addss %xmm4, %xmm4
+;   shrq $1, %rdx
+;   andq $1, %rcx
+;   orq %rcx, %rdx
+;   xorps %xmm3, %xmm3
+;   cvtsi2ssq %rdx, %xmm3
+;   addss %xmm3, %xmm3
+; block4: ; offset 0x56
 ;   addss %xmm6, %xmm0
 ;   addss %xmm7, %xmm0
-;   addss %xmm4, %xmm0
+;   addss %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
