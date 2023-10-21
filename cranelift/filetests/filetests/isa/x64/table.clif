@@ -1,6 +1,7 @@
 test compile precise-output
 set enable_safepoints=true
 set enable_table_access_spectre_mitigation=true
+set opt_level=speed
 
 target x86_64
 
@@ -24,8 +25,8 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   cmpl    %r11d, %edi
 ;   jnb     label2; j label1
 ; block1:
-;   movl    %edi, %ecx
 ;   movq    0(%rdx), %rax
+;   movl    %edi, %ecx
 ;   lea     0(%rax,%rcx,1), %rcx
 ;   cmpl    %r11d, %edi
 ;   cmovnbq %rax, %rcx, %rcx
@@ -45,8 +46,8 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   cmpl %r11d, %edi
 ;   jae 0x28
 ; block2: ; offset 0x11
-;   movl %edi, %ecx
 ;   movq (%rdx), %rax
+;   movl %edi, %ecx
 ;   addq %rax, %rcx
 ;   cmpl %r11d, %edi
 ;   cmovaeq %rax, %rcx

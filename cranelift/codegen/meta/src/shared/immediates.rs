@@ -182,6 +182,7 @@ impl Immediates {
                 trapcode_values.insert("int_ovf", "IntegerOverflow");
                 trapcode_values.insert("int_divz", "IntegerDivisionByZero");
                 trapcode_values.insert("bad_toint", "BadConversionToInteger");
+                trapcode_values.insert("table_oob", "TableOutOfBounds");
                 new_enum(
                     "code",
                     "ir::TrapCode",

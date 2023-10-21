@@ -334,3 +334,55 @@
     ret))
 (decl update_inst_facts_with_gv (GlobalValue Value) Unit)
 (extern constructor update_inst_facts_with_gv update_inst_facts_with_gv)
+
+;; ========= `table_addr` =====================================================
+
+(rule (legalize (has_type addr_ty (table_addr table idx @ (value_type idx_ty) offset)))
+  (let (
+    ;; Start with the bounds check. Trap if `index + 1 > bound`.
+    ;; `index > bound - 1` is the same as `index >= bound`.
+    (bound Inst (ins_global_value_copy_facts idx_ty (table_bound_gv table)))
+    (cmp Inst (ins_icmp $I8 (IntCC.UnsignedGreaterThanOrEqual) idx bound))
+    (_ Inst (ins_trapnz $I8 cmp (TrapCode.TableOutOfBounds)))
+
+    ;; Calculate the offset, in bytes, by multiplying `idx` by the byte size
+    ;; of the table element.
+    (idx Value (extend_index_to_addr idx addr_ty))
+    (idx_offset Value (ins_imul_imm addr_ty idx (imm64 (table_element_size table))))
+
+    ;; Calculate the final address by adding the table base address to the
+    ;; element offset to the static offset in the `table_addr` instruction.
+    (base Value (ins_global_value_copy_facts addr_ty (table_base_gv table)))
+    (offset Value (ins_iconst addr_ty (imm64 (i64_as_u64 (offset32_to_i32 offset)))))
+    (elem_addr Value (ins_iadd addr_ty (ins_iadd addr_ty base idx_offset) offset))
+
+    ;; Generate the final `result` and replace the current instruction with that.
+    (result Value (select_table_addr cmp base elem_addr))
+    (_ Inst (replace_with_aliases result))
+  )
+  ;; re-legalize the above instructions
+  (prev_position)))
+
+(decl select_table_addr (Value Value Value) Value)
+(rule (select_table_addr cmp base @ (value_type ty) element_addr)
+  (if-let $true (enable_table_access_spectre_mitigation))
+  (ins_select_spectre_guard ty cmp base element_addr))
+(rule (select_table_addr cmp base @ (value_type ty) element_addr)
+  (if-let $false (enable_table_access_spectre_mitigation))
+  element_addr)
+
+(decl extend_index_to_addr (Value Type) Value)
+(rule 0 (extend_index_to_addr val ty) (ins_uextend ty val))
+(rule 1 (extend_index_to_addr val @ (value_type ty) ty) val)
+
+(decl table_bound_gv (Table) GlobalValue)
+(extern constructor table_bound_gv table_bound_gv)
+(decl table_base_gv (Table) GlobalValue)
+(extern constructor table_base_gv table_base_gv)
+(decl table_element_size (Table) u64)
+(extern constructor table_element_size table_element_size)
+(decl pure enable_table_access_spectre_mitigation () bool)
+(extern constructor enable_table_access_spectre_mitigation enable_table_access_spectre_mitigation)
+
+(decl replace_with_aliases (Value) Inst)
+(extern constructor replace_with_aliases replace_with_aliases)

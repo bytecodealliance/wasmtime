@@ -16,7 +16,6 @@ use crate::egraph::EgraphPass;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
-use crate::legalizer::simple_legalize;
 use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
@@ -291,7 +290,6 @@ impl Context {
 
         // Run some specific legalizations only.
         isa.legalize_function(&mut self.func, &mut self.cfg);
-        simple_legalize(&mut self.func, &mut self.cfg, isa);
         self.verify_if(isa)
     }
 

@@ -28,7 +28,7 @@ pub fn run<T>(
             cx.replace = Some(inst);
             match constructor_legalize(&mut cx, inst) {
                 Some(pos) => cx.pos.set_position(pos),
-                None => {}
+                None => cx.prev_position = cx.pos.position(),
             }
         }
     }
@@ -183,7 +183,7 @@ macro_rules! isle_common_legalizer_methods {
                 }
             }
 
-            CursorPosition::At(inst)
+            self.prev_position
         }
 
         fn cursor_position_at(&mut self, i: Inst) -> CursorPosition {
@@ -192,6 +192,31 @@ macro_rules! isle_common_legalizer_methods {
 
         fn prev_position(&mut self) -> CursorPosition {
             self.prev_position
+        }
+
+        fn table_bound_gv(&mut self, table: Table) -> GlobalValue {
+            self.pos.func.tables[table].bound_gv
+        }
+
+        fn table_base_gv(&mut self, table: Table) -> GlobalValue {
+            self.pos.func.tables[table].base_gv
+        }
+
+        fn table_element_size(&mut self, table: Table) -> u64 {
+            self.pos.func.tables[table].element_size.into()
+        }
+
+        fn enable_table_access_spectre_mitigation(&mut self) -> bool {
+            self.backend
+                .flags()
+                .enable_table_access_spectre_mitigation()
+        }
+
+        fn replace_with_aliases(&mut self, val: Value) -> Inst {
+            let new_inst = self.pos.func.dfg.value_def(val).inst().unwrap();
+            let inst = self.replace.unwrap();
+            self.pos.func.dfg.replace_with_aliases(inst, new_inst);
+            crate::cursor::Cursor::remove_inst(&mut self.pos)
         }
     };
 }
