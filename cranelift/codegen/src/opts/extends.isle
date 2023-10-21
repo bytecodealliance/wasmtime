@@ -32,3 +32,9 @@
 ;; actually doing the extend in the first place.
 (rule (simplify (ireduce ty (sextend _ x @ (value_type ty)))) x)
 (rule (simplify (ireduce ty (uextend _ x @ (value_type ty)))) x)
+
+;; Ignore extens in `fcvt_from_{uint,sint}` since extension won't change the
+;; result and backends can sometimes have more optimal lowerings if it's known
+;; that the type is smaller.
+(rule (simplify (fcvt_from_uint ty (uextend _ x))) (fcvt_from_uint ty x))
+(rule (simplify (fcvt_from_uint ty (sextend _ x))) (fcvt_from_uint ty x))
