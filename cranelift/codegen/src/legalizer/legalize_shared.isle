@@ -23,6 +23,8 @@
 ;; ========= Type Definitions =================================================
 
 (type Inst (primitive Inst))
+(type CursorPosition (primitive CursorPosition))
+(type ExternalName extern (enum))
 
 ;; ========= Helper extractors/constructors ===================================
 
@@ -69,12 +71,26 @@
 (decl result_type (Type) Inst)
 (extern extractor result_type result_type)
 
+(decl cursor_position_at (Inst) CursorPosition)
+(extern constructor cursor_position_at cursor_position_at)
+(convert Inst CursorPosition cursor_position_at)
+
+;; Returns the position of the cursor just before the current instruction was
+;; being legalized. This can be used to re-legalize the sequence of instructions
+;; used to replace another instruction.
+(decl prev_position () CursorPosition)
+(extern constructor prev_position prev_position)
+
+(decl pointer_type () Type)
+(extern constructor pointer_type pointer_type)
+
 ;; Helper to generate an `iconst` value which has type `I64` and the provided
 ;; value.
 (decl ins_i64 (i64) Value)
 (rule (ins_i64 val) (ins_iconst $I64 (imm64 (i64_as_u64 val))))
 
-;; Optionally "legalize" an instruction to a new instruction.
+;; Optionally "legalize" an instruction by replacing the current instruction or
+;; inserting new instructions/blocks.
 ;;
 ;; This is used to transform CLIF into something which can be handled by each
 ;; individual backend. There is both common functionality of legalization for
@@ -83,7 +99,13 @@
 ;; Note that this function is defined here and while some legalizations are
 ;; performed in this file there are also backend-specific legalizations
 ;; throughout each backend as well.
-(decl partial legalize (Inst) Inst)
+;;
+;; The return value of this function is where to resume legalization. By default
+;; this is the current instruction which means that legalization will continue
+;; after the current instruction. If the inserted code itself needs to be
+;; re-legalized then the `(prev_position)` constructor can be used to rerun
+;; over the sequence of replaced instructions.
+(decl partial legalize (Inst) CursorPosition)
 
 ;; ========= `{u,s}extend` ====================================================
 
@@ -130,15 +152,15 @@
 ;; expand these instructions
 
 (rule (legalize (trapz val code)) (expand_trapz val code))
-(decl expand_trapz (Value TrapCode) Inst)
+(decl expand_trapz (Value TrapCode) CursorPosition)
 (extern constructor expand_trapz expand_trapz)
 
 (rule (legalize (trapnz val code)) (expand_trapnz val code))
-(decl expand_trapnz (Value TrapCode) Inst)
+(decl expand_trapnz (Value TrapCode) CursorPosition)
 (extern constructor expand_trapnz expand_trapnz)
 
 (rule (legalize (resumable_trapnz val code)) (expand_resumable_trapnz val code))
-(decl expand_resumable_trapnz (Value TrapCode) Inst)
+(decl expand_resumable_trapnz (Value TrapCode) CursorPosition)
 (extern constructor expand_resumable_trapnz expand_resumable_trapnz)
 
 ;; ========= `*_imm` instrs ===================================================
@@ -227,3 +249,88 @@
 
 (rule (legalize (has_type ty (bxor_not a b)))
   (replace_bxor ty a (ins_bnot ty b)))
+
+;; ========= `global_value` ===================================================
+
+(rule (legalize (global_value gv @ (gv_vmcontext)))
+  (replace_vmctx_addr gv))
+(decl replace_vmctx_addr (GlobalValue) CursorPosition)
+(extern constructor replace_vmctx_addr replace_vmctx_addr)
+
+(rule (legalize (global_value (gv_load base offset ty flags)))
+  (let ((base Value (ins_global_value_copy_facts (pointer_type) base))
+        (_ Inst (replace_load ty flags base offset)))
+    ;; re-legalize the previous instrs to legalize the new `global_value` node
+    (prev_position)))
+
+(rule (legalize (global_value (gv_iadd_imm base offset ty)))
+  (let ((base Value (ins_global_value_copy_facts ty base))
+        (_ Inst (replace_iadd_imm ty base offset)))
+    ;; re-legalize the previous instrs to legalize the new `global_value` node
+    (prev_position)))
+
+(rule (legalize (global_value (gv_const_vector_scale ty)))
+  (replace_iconst (pointer_type) (imm64 (const_vector_scale ty))))
+(decl const_vector_scale (Type) u64)
+(extern constructor const_vector_scale const_vector_scale)
+
+(rule (legalize (global_value gv @ (gv_symbol _ _)))
+  (replace_symbol_value (pointer_type) gv))
+
+(rule (legalize (global_value gv @ (gv_tls_symbol _ _)))
+  (replace_tls_value (pointer_type) gv))
+
+(type GlobalValueData extern (enum
+  (VMContext)
+  (Load
+    (base GlobalValue)
+    (offset Offset32)
+    (global_type Type)
+    (flags MemFlags))
+  (IAddImm
+    (base GlobalValue)
+    (offset Imm64)
+    (global_type Type))
+  (Symbol
+    (name ExternalName)
+    (offset Imm64)
+    (colocated bool)
+    (tls bool))
+  (DynScaleTargetConst
+    (vector_type Type))
+))
+
+;; Convert from `GlobalValue` to `GlobalValueData`
+(decl gv_data (GlobalValueData) GlobalValue)
+(extern extractor infallible gv_data gv_data)
+
+;; Helper extractors for each variant of `GlobalValue`
+(decl gv_vmcontext () GlobalValue)
+(extractor (gv_vmcontext)
+  (gv_data (GlobalValueData.VMContext)))
+(decl gv_load (GlobalValue Offset32 Type MemFlags) GlobalValue)
+(extractor (gv_load base offset ty flags)
+  (gv_data (GlobalValueData.Load base offset ty flags)))
+(decl gv_iadd_imm (GlobalValue Offset32 Type) GlobalValue)
+(extractor (gv_iadd_imm base offset ty)
+  (gv_data (GlobalValueData.IAddImm base offset ty)))
+(decl gv_symbol (Imm64 bool) GlobalValue)
+(extractor (gv_symbol offset colocated)
+  (gv_data (GlobalValueData.Symbol _ offset colocated $false)))
+(decl gv_tls_symbol (Imm64 bool) GlobalValue)
+(extractor (gv_tls_symbol offset colocated)
+  (gv_data (GlobalValueData.Symbol _ offset colocated $true)))
+(decl gv_const_vector_scale (Type) GlobalValue)
+(extractor (gv_const_vector_scale ty)
+  (gv_data (GlobalValueData.DynScaleTargetConst ty)))
+
+;; This is the dual of the `ins_global_value` constructor except that this one
+;; additionally copies PCC facts from the `GlobalValue` onto the returned
+;; `Inst`.
+(decl ins_global_value_copy_facts (Type GlobalValue) Inst)
+(rule (ins_global_value_copy_facts ty gv)
+  (let ((ret Inst (ins_global_value ty gv))
+        (_ Unit (update_inst_facts_with_gv gv ret)))
+    ret))
+(decl update_inst_facts_with_gv (GlobalValue Value) Unit)
+(extern constructor update_inst_facts_with_gv update_inst_facts_with_gv)

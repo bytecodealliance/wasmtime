@@ -1,27 +1,33 @@
-use crate::cursor::{Cursor, FuncCursor};
+use crate::cursor::{Cursor, CursorPosition, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{self, Inst, InstBuilder};
+use crate::isa::TargetIsa;
 use crate::trace;
 
 pub fn run<T>(
     backend: &T,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    constructor_legalize: fn(&mut LegalizeContext<'_, T>, Inst) -> Option<Inst>,
-) {
+    constructor_legalize: fn(&mut LegalizeContext<'_, T>, Inst) -> Option<CursorPosition>,
+) where
+    T: TargetIsa,
+{
+    let pos = FuncCursor::new(func);
     let mut cx = LegalizeContext {
         backend,
-        pos: FuncCursor::new(func),
+        prev_position: pos.position(),
+        pos,
         cfg,
         replace: None,
     };
     let func_begin = cx.pos.position();
     cx.pos.set_position(func_begin);
     while let Some(_block) = cx.pos.next_block() {
+        cx.prev_position = cx.pos.position();
         while let Some(inst) = cx.pos.next_inst() {
             cx.replace = Some(inst);
             match constructor_legalize(&mut cx, inst) {
-                Some(_) => {}
+                Some(pos) => cx.pos.set_position(pos),
                 None => {}
             }
         }
@@ -33,6 +39,7 @@ pub struct LegalizeContext<'a, T> {
     pub pos: FuncCursor<'a>,
     pub cfg: &'a mut ControlFlowGraph,
     pub replace: Option<Inst>,
+    pub prev_position: CursorPosition,
 }
 
 /// Generate common methods for the legalization trait on `LegalizeContext`.
@@ -43,6 +50,10 @@ macro_rules! isle_common_legalizer_methods {
 
         fn inst_data(&mut self, inst: Inst) -> InstructionData {
             self.pos.func.dfg.insts[inst]
+        }
+
+        fn gv_data(&mut self, gv: GlobalValue) -> GlobalValueData {
+            self.pos.func.global_values[gv].clone()
         }
 
         fn ins(&mut self, ty: Type, data: &InstructionData) -> Inst {
@@ -94,7 +105,7 @@ macro_rules! isle_common_legalizer_methods {
             [arg0, arg1, arg2]
         }
 
-        fn expand_trapz(&mut self, arg: Value, cc: &ir::TrapCode) -> Inst {
+        fn expand_trapz(&mut self, arg: Value, cc: &ir::TrapCode) -> CursorPosition {
             crate::legalizer::isle::expand_cond_trap(
                 self.replace.unwrap(),
                 self.pos.func,
@@ -105,7 +116,7 @@ macro_rules! isle_common_legalizer_methods {
             )
         }
 
-        fn expand_trapnz(&mut self, arg: Value, cc: &ir::TrapCode) -> Inst {
+        fn expand_trapnz(&mut self, arg: Value, cc: &ir::TrapCode) -> CursorPosition {
             crate::legalizer::isle::expand_cond_trap(
                 self.replace.unwrap(),
                 self.pos.func,
@@ -116,7 +127,7 @@ macro_rules! isle_common_legalizer_methods {
             )
         }
 
-        fn expand_resumable_trapnz(&mut self, arg: Value, cc: &ir::TrapCode) -> Inst {
+        fn expand_resumable_trapnz(&mut self, arg: Value, cc: &ir::TrapCode) -> CursorPosition {
             crate::legalizer::isle::expand_cond_trap(
                 self.replace.unwrap(),
                 self.pos.func,
@@ -125,6 +136,62 @@ macro_rules! isle_common_legalizer_methods {
                 arg,
                 *cc,
             )
+        }
+
+        fn pointer_type(&mut self) -> ir::Type {
+            (self.backend as &dyn crate::isa::TargetIsa).pointer_type()
+        }
+
+        fn const_vector_scale(&mut self, ty: ir::Type) -> u64 {
+            assert!(ty.bytes() <= 16);
+
+            // Use a minimum of 128-bits for the base type.
+            let base_bytes = std::cmp::max(ty.bytes(), 16);
+            (self.backend.dynamic_vector_bytes(ty) / base_bytes).into()
+        }
+
+        fn update_inst_facts_with_gv(&mut self, gv: GlobalValue, val: Value) {
+            if let Some(fact) = &self.pos.func.global_value_facts[gv] {
+                if self.pos.func.dfg.facts[val].is_none() {
+                    let fact = fact.clone();
+                    self.pos.func.dfg.facts[val] = Some(fact);
+                }
+            }
+        }
+
+        fn replace_vmctx_addr(&mut self, global_value: ir::GlobalValue) -> CursorPosition {
+            // Get the value representing the `vmctx` argument.
+            let vmctx = self
+                .pos
+                .func
+                .special_param(ir::ArgumentPurpose::VMContext)
+                .expect("Missing vmctx parameter");
+            let inst = self.replace.unwrap();
+
+            // Replace the `global_value` instruction's value with an alias to the vmctx arg.
+            let result = self.pos.func.dfg.first_result(inst);
+            self.pos.func.dfg.clear_results(inst);
+            self.pos.func.dfg.change_to_alias(result, vmctx);
+            self.pos.func.layout.remove_inst(inst);
+
+            // If there was a fact on the GV, then copy it to the vmctx arg
+            // blockparam def.
+            if let Some(fact) = &self.pos.func.global_value_facts[global_value] {
+                if self.pos.func.dfg.facts[vmctx].is_none() {
+                    let fact = fact.clone();
+                    self.pos.func.dfg.facts[vmctx] = Some(fact);
+                }
+            }
+
+            CursorPosition::At(inst)
+        }
+
+        fn cursor_position_at(&mut self, i: Inst) -> CursorPosition {
+            CursorPosition::At(i)
+        }
+
+        fn prev_position(&mut self) -> CursorPosition {
+            self.prev_position
         }
     };
 }
@@ -137,7 +204,7 @@ pub fn expand_cond_trap(
     opcode: ir::Opcode,
     arg: ir::Value,
     code: ir::TrapCode,
-) -> Inst {
+) -> CursorPosition {
     trace!(
         "expanding conditional trap: {:?}: {}",
         inst,
@@ -191,14 +258,16 @@ pub fn expand_cond_trap(
     pos.use_srcloc(inst);
     pos.insert_block(new_block_trap);
 
-    let inst = match opcode {
-        ir::Opcode::Trapz | ir::Opcode::Trapnz => pos.ins().trap(code),
+    match opcode {
+        ir::Opcode::Trapz | ir::Opcode::Trapnz => {
+            pos.ins().trap(code);
+        }
         ir::Opcode::ResumableTrapnz => {
             pos.ins().resumable_trap(code);
-            pos.ins().jump(new_block_resume, &[])
+            pos.ins().jump(new_block_resume, &[]);
         }
         _ => unreachable!(),
-    };
+    }
 
     // Insert the new label and resume the execution when the trap fails.
     pos.insert_block(new_block_resume);
@@ -208,5 +277,5 @@ pub fn expand_cond_trap(
     cfg.recompute_block(pos.func, new_block_resume);
     cfg.recompute_block(pos.func, new_block_trap);
 
-    inst
+    CursorPosition::Before(new_block_resume)
 }
