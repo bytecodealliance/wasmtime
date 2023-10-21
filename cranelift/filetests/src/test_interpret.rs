@@ -6,15 +6,17 @@
 use crate::runone::FileUpdate;
 use crate::subtest::SubTest;
 use anyhow::Context;
-use cranelift_codegen::ir::Function;
+use cranelift_codegen::data_value::DataValue;
+use cranelift_codegen::ir::{Function, LibCall};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Flags;
 use cranelift_codegen::{self, ir};
 use cranelift_interpreter::environment::FunctionStore;
-use cranelift_interpreter::interpreter::{Interpreter, InterpreterState};
+use cranelift_interpreter::interpreter::{Interpreter, InterpreterState, LibCallValues};
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_reader::{parse_run_command, Details, TestCommand, TestFile};
 use log::{info, trace};
+use smallvec::smallvec;
 use std::borrow::Cow;
 
 struct TestInterpret;
@@ -83,7 +85,20 @@ fn run_test(func_store: &FunctionStore, func: &Function, details: &Details) -> a
                 .run(|func_name, run_args| {
                     // Rebuild the interpreter state on every run to ensure that we don't accidentally depend on
                     // some leftover state
-                    let state = InterpreterState::default().with_function_store(func_store.clone());
+                    let state = InterpreterState::default()
+                        .with_function_store(func_store.clone())
+                        .with_libcall_handler(|libcall: LibCall, args: LibCallValues| {
+                            use LibCall::*;
+                            Ok(smallvec![match (libcall, &args[..]) {
+                                (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
+                                (CeilF64, [DataValue::F64(a)]) => DataValue::F64(a.ceil()),
+                                (FloorF32, [DataValue::F32(a)]) => DataValue::F32(a.floor()),
+                                (FloorF64, [DataValue::F64(a)]) => DataValue::F64(a.floor()),
+                                (TruncF32, [DataValue::F32(a)]) => DataValue::F32(a.trunc()),
+                                (TruncF64, [DataValue::F64(a)]) => DataValue::F64(a.trunc()),
+                                _ => unreachable!(),
+                            }])
+                        });
 
                     let mut args = Vec::with_capacity(run_args.len());
                     args.extend_from_slice(run_args);

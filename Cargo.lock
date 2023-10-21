@@ -647,6 +647,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "similar",
+ "smallvec",
  "target-lexicon",
  "thiserror",
  "toml",
