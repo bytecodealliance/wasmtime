@@ -473,6 +473,27 @@ impl Inst {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn shift_r(
+        size: OperandSize,
+        kind: ShiftKind,
+        num_bits: Imm8Gpr,
+        src: Reg,
+        dst: Writable<Reg>,
+    ) -> Inst {
+        if let Imm8Reg::Imm8 { imm: num_bits } = num_bits.clone().to_imm8_reg() {
+            debug_assert!(num_bits < size.to_bits());
+        }
+        debug_assert!(dst.to_reg().class() == RegClass::Int);
+        Inst::ShiftR {
+            size,
+            kind,
+            src: Gpr::new(src).unwrap(),
+            num_bits,
+            dst: WritableGpr::from_writable_reg(dst).unwrap(),
+        }
+    }
+
     /// Does a comparison of dst - src for operands of size `size`, as stated by the machine
     /// instruction semantics. Be careful with the order of parameters!
     pub(crate) fn cmp_rmi_r(size: OperandSize, src: RegMemImm, dst: Reg) -> Inst {
