@@ -122,6 +122,7 @@ where
         let flags = settings::Flags::new({
             let mut builder = settings::builder();
             builder.set("enable_verifier", "false").unwrap();
+            builder.set("enable_nan_canonicalization", "true").unwrap();
             builder
         });
 
@@ -129,9 +130,7 @@ where
             .expect("Unable to build a TargetIsa for the current host")
             .finish(flags)
             .expect("Failed to build TargetISA");
-
-        ctx.canonicalize_nans(isa.as_ref())
-            .expect("Failed NaN canonicalization pass");
+        isa.legalize_function(&mut ctx.func, &mut ctx.cfg);
 
         // Run the int_divz pass
         //

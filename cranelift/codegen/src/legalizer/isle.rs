@@ -25,10 +25,17 @@ pub fn run<T>(
     while let Some(_block) = cx.pos.next_block() {
         cx.prev_position = cx.pos.position();
         while let Some(inst) = cx.pos.next_inst() {
+            trace!("legalizing {}", cx.pos.func.dfg.display_inst(inst));
             cx.replace = Some(inst);
             match constructor_legalize(&mut cx, inst) {
-                Some(pos) => cx.pos.set_position(pos),
-                None => cx.prev_position = cx.pos.position(),
+                Some(pos) => {
+                    trace!("moving to {pos:?}");
+                    cx.pos.set_position(pos);
+                }
+                None => {
+                    trace!("fallthrough");
+                    cx.prev_position = cx.pos.position();
+                }
             }
         }
     }
@@ -57,12 +64,16 @@ macro_rules! isle_common_legalizer_methods {
         }
 
         fn ins(&mut self, ty: Type, data: &InstructionData) -> Inst {
-            self.pos.ins().build(data.clone(), ty).0
+            let ret = self.pos.ins().build(data.clone(), ty).0;
+            crate::trace!("ins {}", self.pos.func.dfg.display_inst(ret));
+            ret
         }
 
         fn replace(&mut self, ty: Type, data: &InstructionData) -> Inst {
             let ins = self.pos.func.dfg.replace(self.replace.unwrap());
-            ins.build(data.clone(), ty).0
+            let ret = ins.build(data.clone(), ty).0;
+            crate::trace!("replace {}", self.pos.func.dfg.display_inst(ret));
+            ret
         }
 
         fn value_type(&mut self, val: Value) -> Type {
@@ -217,6 +228,21 @@ macro_rules! isle_common_legalizer_methods {
             let inst = self.replace.unwrap();
             self.pos.func.dfg.replace_with_aliases(inst, new_inst);
             crate::cursor::Cursor::remove_inst(&mut self.pos)
+        }
+
+        fn enable_nan_canonicalization(&mut self) -> bool {
+            self.backend.flags().enable_nan_canonicalization()
+        }
+
+        fn canon_nan32(&mut self) -> Value {
+            static CANON_32BIT_NAN: u32 = 0b01111111110000000000000000000000;
+            self.pos.ins().f32const(Ieee32::with_bits(CANON_32BIT_NAN))
+        }
+
+        fn canon_nan64(&mut self) -> Value {
+            static CANON_64BIT_NAN: u64 =
+                0b0111111111111000000000000000000000000000000000000000000000000000;
+            self.pos.ins().f64const(Ieee64::with_bits(CANON_64BIT_NAN))
         }
     };
 }

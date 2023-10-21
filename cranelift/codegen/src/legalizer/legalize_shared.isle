@@ -386,3 +386,78 @@
 
 (decl replace_with_aliases (Value) Inst)
 (extern constructor replace_with_aliases replace_with_aliases)
+
+;; ========= NaN canonicalization =============================================
+
+(rule (legalize (has_type ty (ceil val)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_ceil ty val)))
+
+(rule (legalize (has_type ty (floor val)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_floor ty val)))
+
+(rule (legalize (has_type ty (nearest val)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_nearest ty val)))
+
+(rule (legalize (has_type ty (trunc val)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_trunc ty val)))
+
+(rule (legalize (has_type ty (sqrt val)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_sqrt ty val)))
+
+(rule (legalize (has_type ty (fadd a b)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_fadd ty a b)))
+
+(rule (legalize (has_type ty (fsub a b)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_fsub ty a b)))
+
+(rule (legalize (has_type ty (fmul a b)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_fmul ty a b)))
+
+(rule (legalize (has_type ty (fdiv a b)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_fdiv ty a b)))
+
+(rule (legalize (has_type ty (fmin a b)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_fmin ty a b)))
+
+(rule (legalize (has_type ty (fmax a b)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_fmax ty a b)))
+
+(rule (legalize (has_type ty (fma a b c)))
+  (if-let $true (enable_nan_canonicalization))
+  (replace_canonicalized ty (ins_fma ty a b c)))
+
+(decl replace_canonicalized (Type Value) Inst)
+(rule (replace_canonicalized $F32 val)
+  (replace_select $F32 (ins_fcmp $I8 (FloatCC.NotEqual) val val) (canon_nan32) val))
+(rule (replace_canonicalized $F64 val)
+  (replace_select $F64 (ins_fcmp $I8 (FloatCC.NotEqual) val val) (canon_nan64) val))
+(rule (replace_canonicalized $F32X4 val)
+  (let ((cmp Value (ins_fcmp $I32X4 (FloatCC.NotEqual) val val))
+        (canon Value (ins_splat $F32X4 (canon_nan32)))
+        (mask Value (ins_bitcast $F32X4 (mem_flags_empty) cmp)))
+    (replace_bitselect $F32X4 mask canon val)))
+(rule (replace_canonicalized $F64X2 val)
+  (let ((canon Value (ins_splat $F64X2 (canon_nan64)))
+        (cmp Value (ins_fcmp $I64X2 (FloatCC.NotEqual) val val))
+        (mask Value (ins_bitcast $F64X2 (mem_flags_empty) cmp)))
+    (replace_bitselect $F64X2 mask canon val)))
+
+(decl pure enable_nan_canonicalization () bool)
+(extern constructor enable_nan_canonicalization enable_nan_canonicalization)
+
+(decl canon_nan32 () Value)
+(extern constructor canon_nan32 canon_nan32)
+
+(decl canon_nan64 () Value)
+(extern constructor canon_nan64 canon_nan64)
