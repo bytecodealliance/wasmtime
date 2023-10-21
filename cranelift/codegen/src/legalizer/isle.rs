@@ -1,11 +1,12 @@
 use crate::cursor::{Cursor, FuncCursor};
-use crate::flowgraph;
-use crate::ir::{self, Inst};
+use crate::flowgraph::ControlFlowGraph;
+use crate::ir::{self, Inst, InstBuilder};
+use crate::trace;
 
 pub fn run<T>(
     backend: &T,
     func: &mut ir::Function,
-    cfg: &mut flowgraph::ControlFlowGraph,
+    cfg: &mut ControlFlowGraph,
     constructor_legalize: fn(&mut LegalizeContext<'_, T>, Inst) -> Option<Inst>,
 ) {
     let mut cx = LegalizeContext {
@@ -30,7 +31,7 @@ pub fn run<T>(
 pub struct LegalizeContext<'a, T> {
     pub backend: &'a T,
     pub pos: FuncCursor<'a>,
-    pub cfg: &'a mut flowgraph::ControlFlowGraph,
+    pub cfg: &'a mut ControlFlowGraph,
     pub replace: Option<Inst>,
 }
 
@@ -92,5 +93,120 @@ macro_rules! isle_common_legalizer_methods {
         fn value_array_3_ctor(&mut self, arg0: Value, arg1: Value, arg2: Value) -> ValueArray3 {
             [arg0, arg1, arg2]
         }
+
+        fn expand_trapz(&mut self, arg: Value, cc: &ir::TrapCode) -> Inst {
+            crate::legalizer::isle::expand_cond_trap(
+                self.replace.unwrap(),
+                self.pos.func,
+                self.cfg,
+                ir::Opcode::Trapz,
+                arg,
+                *cc,
+            )
+        }
+
+        fn expand_trapnz(&mut self, arg: Value, cc: &ir::TrapCode) -> Inst {
+            crate::legalizer::isle::expand_cond_trap(
+                self.replace.unwrap(),
+                self.pos.func,
+                self.cfg,
+                ir::Opcode::Trapnz,
+                arg,
+                *cc,
+            )
+        }
+
+        fn expand_resumable_trapnz(&mut self, arg: Value, cc: &ir::TrapCode) -> Inst {
+            crate::legalizer::isle::expand_cond_trap(
+                self.replace.unwrap(),
+                self.pos.func,
+                self.cfg,
+                ir::Opcode::ResumableTrapnz,
+                arg,
+                *cc,
+            )
+        }
     };
+}
+
+/// Custom expansion for conditional trap instructions.
+pub fn expand_cond_trap(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    cfg: &mut ControlFlowGraph,
+    opcode: ir::Opcode,
+    arg: ir::Value,
+    code: ir::TrapCode,
+) -> Inst {
+    trace!(
+        "expanding conditional trap: {:?}: {}",
+        inst,
+        func.dfg.display_inst(inst)
+    );
+
+    // Parse the instruction.
+    let trapz = match opcode {
+        ir::Opcode::Trapz => true,
+        ir::Opcode::Trapnz | ir::Opcode::ResumableTrapnz => false,
+        _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst)),
+    };
+
+    // Split the block after `inst`:
+    //
+    //     trapnz arg
+    //     ..
+    //
+    // Becomes:
+    //
+    //     brif arg, new_block_trap, new_block_resume
+    //
+    //   new_block_trap:
+    //     trap
+    //
+    //   new_block_resume:
+    //     ..
+    let old_block = func
+        .layout
+        .inst_block(inst)
+        .expect("Instruction not in layout.");
+    let new_block_trap = func.dfg.make_block();
+    let new_block_resume = func.dfg.make_block();
+
+    // Trapping is a rare event, mark the trapping block as cold.
+    func.layout.set_cold(new_block_trap);
+
+    // Replace trap instruction by the inverted condition.
+    if trapz {
+        func.dfg
+            .replace(inst)
+            .brif(arg, new_block_resume, &[], new_block_trap, &[]);
+    } else {
+        func.dfg
+            .replace(inst)
+            .brif(arg, new_block_trap, &[], new_block_resume, &[]);
+    }
+
+    // Insert the new label and the unconditional trap terminator.
+    let mut pos = FuncCursor::new(func).after_inst(inst);
+    pos.use_srcloc(inst);
+    pos.insert_block(new_block_trap);
+
+    let inst = match opcode {
+        ir::Opcode::Trapz | ir::Opcode::Trapnz => pos.ins().trap(code),
+        ir::Opcode::ResumableTrapnz => {
+            pos.ins().resumable_trap(code);
+            pos.ins().jump(new_block_resume, &[])
+        }
+        _ => unreachable!(),
+    };
+
+    // Insert the new label and resume the execution when the trap fails.
+    pos.insert_block(new_block_resume);
+
+    // Finally update the CFG.
+    cfg.recompute_block(pos.func, old_block);
+    cfg.recompute_block(pos.func, new_block_resume);
+    cfg.recompute_block(pos.func, new_block_trap);
+
+    inst
 }

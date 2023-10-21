@@ -67,12 +67,11 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
             match pos.func.dfg.insts[inst] {
                 // control flow
                 InstructionData::CondTrap {
-                    opcode:
-                        opcode @ (ir::Opcode::Trapnz | ir::Opcode::Trapz | ir::Opcode::ResumableTrapnz),
+                    opcode: ir::Opcode::Trapnz,
                     arg,
                     code,
                 } => {
-                    expand_cond_trap(inst, &mut pos.func, cfg, opcode, arg, code);
+                    expand_cond_trap(inst, &mut pos.func, cfg, ir::Opcode::Trapnz, arg, code);
                 }
 
                 // memory and constants

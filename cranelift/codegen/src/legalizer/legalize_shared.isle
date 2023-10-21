@@ -123,3 +123,20 @@
 (rule (legalize (dynamic_stack_store val @ (value_type ty) slot))
   (let ((addr Value (ins_dynamic_stack_addr $I64 slot)))
     (replace_store ty (mem_flags_notrap) val addr (i32_to_offset32 0))))
+
+;; ========= `trapz`, `trapnz`, `resumable_trapnz` ============================
+
+;; Delegate back to Rust to perform the basic-block manipulation necessary to
+;; expand these instructions
+
+(rule (legalize (trapz val code)) (expand_trapz val code))
+(decl expand_trapz (Value TrapCode) Inst)
+(extern constructor expand_trapz expand_trapz)
+
+(rule (legalize (trapnz val code)) (expand_trapnz val code))
+(decl expand_trapnz (Value TrapCode) Inst)
+(extern constructor expand_trapnz expand_trapnz)
+
+(rule (legalize (resumable_trapnz val code)) (expand_resumable_trapnz val code))
+(decl expand_resumable_trapnz (Value TrapCode) Inst)
+(extern constructor expand_resumable_trapnz expand_resumable_trapnz)
