@@ -1,0 +1,18 @@
+test legalizer
+target x86_64
+
+function %foo() -> i32 {
+block0:
+    v1 = iconst.i32 1
+    v2 = iadd_imm v1, 1
+    v3 = iadd_imm v2, 1
+    return v3
+}
+
+; check: v1 = iconst.i32 1
+; check: v4 = iconst.i32 1
+; check: v2 = iadd v1, v4
+; check: v5 = iconst.i32 1
+; check: v3 = iadd v2, v5
+; check: return v3
+
