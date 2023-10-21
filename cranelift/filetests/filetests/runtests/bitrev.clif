@@ -4,6 +4,9 @@ target aarch64
 target s390x
 target x86_64
 target riscv64
+target riscv64 has_zbb
+target riscv64 has_zbkb
+target riscv64 has_zbb has_zbkb
 target riscv64 has_c has_zcb
 
 function %bitrev_i8(i8) -> i8 {

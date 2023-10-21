@@ -954,14 +954,30 @@
   (rv_xnor x y))
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 (ty_int ty)) (bitrev x)))
-  (lower_bit_reverse x ty))
+
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (bitrev x)))
+  (gen_bitrev ty x))
 
 (rule 1 (lower (has_type $I128 (bitrev x)))
-  (let ((val ValueRegs x)
-    (lo_rev XReg (lower_bit_reverse (value_regs_get val 0) $I64))
-    (hi_rev XReg (lower_bit_reverse (value_regs_get val 1) $I64)))
-    (value_regs hi_rev lo_rev)))
+  (value_regs
+    (gen_bitrev $I64 (value_regs_get x 1))
+    (gen_bitrev $I64 (value_regs_get x 0))))
+
+
+;; Constructs a sequence of instructions that reverse all bits in `x` up to
+;; the given type width.
+(decl gen_bitrev (Type XReg) XReg)
+
+(rule 0 (gen_bitrev (ty_16_or_32 (ty_int ty)) x)
+  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
+  (rv_srli (gen_bitrev $I64 x) shift_amt))
+
+(rule 1 (gen_bitrev $I8 x)
+  (gen_brev8 x $I8))
+
+(rule 1 (gen_bitrev $I64 x)
+  (gen_brev8 (gen_bswap $I64 x) $I64))
+
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -973,22 +989,8 @@
     (gen_bswap $I64 (value_regs_get x 1))
     (gen_bswap $I64 (value_regs_get x 0))))
 
-(rule 3 (lower (has_type (fits_in_32 ty) (bswap x)))
-  (if-let $true (has_zbb))
-  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
-  (rv_srli (rv_rev8 x) shift_amt))
-
-(rule 4 (lower (has_type $I64 (bswap x)))
-  (if-let $true (has_zbb))
-  (rv_rev8 x))
-
-(rule 5 (lower (has_type $I128 (bswap x)))
-  (if-let $true (has_zbb))
-  (value_regs
-    (rv_rev8 (value_regs_get x 1))
-    (rv_rev8 (value_regs_get x 0))))
-
-;; Helper to generate a fallback byte-swap sequence when `zbb` isn't available.
+;; Builds a sequence of instructions that swaps the bytes in `x` up to the given
+;; type width.
 (decl gen_bswap (Type XReg) XReg)
 
 ;; This is only here to make the rule below work. bswap.i8 isn't valid
@@ -1011,6 +1013,15 @@
         (bot_shifted_left XReg (rv_slli swap_bot shift))
         (bot XReg (rv_srli bot_shifted_left shift)))
     (rv_or top bot)))
+
+(rule 2 (gen_bswap (ty_16_or_32 (ty_int ty)) x)
+  (if-let $true (has_zbb))
+  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
+  (rv_srli (rv_rev8 x) shift_amt))
+
+(rule 3 (gen_bswap $I64 x)
+  (if-let $true (has_zbb))
+  (rv_rev8 x))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (ctz x)))

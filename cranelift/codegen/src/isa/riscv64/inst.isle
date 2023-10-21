@@ -284,13 +284,7 @@
       (tmp WritableReg)
       (rs Reg)
       (ty Type))
-    ;; Byte-reverse register
-    (Rev8
-      (rs Reg)
-      (step WritableReg)
-      (tmp WritableReg)
-      (rd WritableReg))
-    ;;
+
     (Brev8
       (rs Reg)
       (ty Type)
@@ -2035,34 +2029,6 @@
 (rule 0 (gen_or (fits_in_64 _) x y)
   (rv_or (value_regs_get x 0) (value_regs_get y 0)))
 
-(decl lower_bit_reverse (Reg Type) Reg)
-
-(rule
-  (lower_bit_reverse r $I8)
-  (gen_brev8 r $I8))
-
-(rule
-  (lower_bit_reverse r $I16)
-  (let
-    ((tmp XReg (gen_brev8 r $I16))
-      (tmp2 XReg (gen_rev8 tmp))
-      (result XReg (rv_srli tmp2 (imm12_const 48))))
-    result))
-
-(rule
-  (lower_bit_reverse r $I32)
-  (let
-    ((tmp XReg (gen_brev8 r $I32))
-      (tmp2 XReg (gen_rev8 tmp))
-      (result XReg (rv_srli tmp2 (imm12_const 32))))
-    result))
-
-(rule
-  (lower_bit_reverse r $I64)
-  (let
-    ((tmp XReg (gen_rev8 r)))
-    (gen_brev8 tmp $I64)))
-
 
 (decl lower_ctz (Type Reg) Reg)
 (rule (lower_ctz ty x)
@@ -2726,23 +2692,6 @@
 (decl float_int_of_same_size (Type) Type)
 (rule (float_int_of_same_size $F32) $I32)
 (rule (float_int_of_same_size $F64) $I64)
-
-
-(decl gen_rev8 (XReg) XReg)
-(rule 1
-  (gen_rev8 rs)
-  (if-let $true (has_zbb))
-  (rv_rev8 rs))
-
-(rule
-  (gen_rev8 rs)
-  (if-let $false (has_zbb))
-  (let
-    ((rd WritableXReg (temp_writable_xreg))
-      (tmp WritableXReg (temp_writable_xreg))
-      (step WritableXReg (temp_writable_xreg))
-      (_ Unit (emit (MInst.Rev8 rs step tmp rd))))
-    (writable_reg_to_reg rd)))
 
 
 (decl gen_brev8 (Reg Type) Reg)

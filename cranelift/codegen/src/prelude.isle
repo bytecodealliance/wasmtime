@@ -431,6 +431,10 @@
 (decl ty_8_or_16 (Type) Type)
 (extern extractor ty_8_or_16 ty_8_or_16)
 
+;; An extractor that matches 16- and 32-bit types only.
+(decl ty_16_or_32 (Type) Type)
+(extern extractor ty_16_or_32 ty_16_or_32)
+
 ;; An extractor that matches int types that fit in 32 bits.
 (decl int_fits_in_32 (Type) Type)
 (extern extractor int_fits_in_32 int_fits_in_32)
