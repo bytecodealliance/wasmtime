@@ -87,99 +87,11 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                 } => expand_table_addr(isa, inst, &mut pos.func, table, arg, offset),
 
                 InstructionData::BinaryImm64 { opcode, arg, imm } => {
-                    let is_signed = match opcode {
-                        ir::Opcode::IaddImm
-                        | ir::Opcode::IrsubImm
-                        | ir::Opcode::ImulImm
-                        | ir::Opcode::SdivImm
-                        | ir::Opcode::SremImm => true,
-                        _ => false,
-                    };
-
-                    let imm = imm_const(&mut pos, arg, imm, is_signed);
-                    let replace = pos.func.dfg.replace(inst);
                     match opcode {
-                        // bitops
-                        ir::Opcode::BandImm => {
-                            replace.band(arg, imm);
-                        }
-                        ir::Opcode::BorImm => {
-                            replace.bor(arg, imm);
-                        }
-                        ir::Opcode::BxorImm => {
-                            replace.bxor(arg, imm);
-                        }
-                        // bitshifting
-                        ir::Opcode::IshlImm => {
-                            replace.ishl(arg, imm);
-                        }
-                        ir::Opcode::RotlImm => {
-                            replace.rotl(arg, imm);
-                        }
-                        ir::Opcode::RotrImm => {
-                            replace.rotr(arg, imm);
-                        }
-                        ir::Opcode::SshrImm => {
-                            replace.sshr(arg, imm);
-                        }
-                        ir::Opcode::UshrImm => {
-                            replace.ushr(arg, imm);
-                        }
-                        // math
                         ir::Opcode::IaddImm => {
+                            let imm = imm_const(&mut pos, arg, imm, true);
+                            let replace = pos.func.dfg.replace(inst);
                             replace.iadd(arg, imm);
-                        }
-                        ir::Opcode::IrsubImm => {
-                            // note: arg order reversed
-                            replace.isub(imm, arg);
-                        }
-                        ir::Opcode::ImulImm => {
-                            replace.imul(arg, imm);
-                        }
-                        ir::Opcode::SdivImm => {
-                            replace.sdiv(arg, imm);
-                        }
-                        ir::Opcode::SremImm => {
-                            replace.srem(arg, imm);
-                        }
-                        ir::Opcode::UdivImm => {
-                            replace.udiv(arg, imm);
-                        }
-                        ir::Opcode::UremImm => {
-                            replace.urem(arg, imm);
-                        }
-                        _ => prev_pos = pos.position(),
-                    };
-                }
-
-                // comparisons
-                InstructionData::IntCompareImm {
-                    opcode: ir::Opcode::IcmpImm,
-                    cond,
-                    arg,
-                    imm,
-                } => {
-                    let imm = imm_const(&mut pos, arg, imm, true);
-                    pos.func.dfg.replace(inst).icmp(cond, arg, imm);
-                }
-
-                // Legalize the fused bitwise-plus-not instructions into simpler
-                // instructions to assist with optimizations. Lowering will
-                // pattern match this sequence regardless when architectures
-                // support the instruction natively.
-                InstructionData::Binary { opcode, args } => {
-                    match opcode {
-                        ir::Opcode::BandNot => {
-                            let neg = pos.ins().bnot(args[1]);
-                            pos.func.dfg.replace(inst).band(args[0], neg);
-                        }
-                        ir::Opcode::BorNot => {
-                            let neg = pos.ins().bnot(args[1]);
-                            pos.func.dfg.replace(inst).bor(args[0], neg);
-                        }
-                        ir::Opcode::BxorNot => {
-                            let neg = pos.ins().bnot(args[1]);
-                            pos.func.dfg.replace(inst).bxor(args[0], neg);
                         }
                         _ => prev_pos = pos.position(),
                     };

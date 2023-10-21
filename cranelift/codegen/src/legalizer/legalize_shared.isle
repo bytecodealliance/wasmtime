@@ -140,3 +140,90 @@
 (rule (legalize (resumable_trapnz val code)) (expand_resumable_trapnz val code))
 (decl expand_resumable_trapnz (Value TrapCode) Inst)
 (extern constructor expand_resumable_trapnz expand_resumable_trapnz)
+
+;; ========= `*_imm` instrs ===================================================
+
+(rule (legalize (has_type ty (band_imm val imm)))
+  (replace_band ty val (ins_unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (bor_imm val imm)))
+  (replace_bor ty val (ins_unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (bxor_imm val imm)))
+  (replace_bxor ty val (ins_unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (ishl_imm val imm)))
+  (replace_ishl ty val (ins_unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (sshr_imm val imm)))
+  (replace_sshr ty val (ins_unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (ushr_imm val imm)))
+  (replace_ushr ty val (ins_unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (rotl_imm val imm)))
+  (replace_rotl ty val (ins_unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (rotr_imm val imm)))
+  (replace_rotr ty val (ins_unsigned_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (iadd_imm val imm)))
+  (replace_iadd ty val (ins_signed_const (lane_type ty) imm)))
+
+;; note the reversed arguments in the `isub`
+(rule (legalize (has_type ty (irsub_imm val imm)))
+  (replace_isub ty (ins_signed_const (lane_type ty) imm) val))
+
+(rule (legalize (has_type ty (imul_imm val imm)))
+  (replace_imul ty val (ins_signed_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (sdiv_imm val imm)))
+  (replace_sdiv ty val (ins_signed_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (srem_imm val imm)))
+  (replace_srem ty val (ins_signed_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (udiv_imm val imm)))
+  (replace_udiv ty val (ins_signed_const (lane_type ty) imm)))
+
+(rule (legalize (has_type ty (urem_imm val imm)))
+  (replace_urem ty val (ins_signed_const (lane_type ty) imm)))
+
+(rule (legalize (icmp_imm cc val @ (value_type ty) imm))
+  (replace_icmp ty cc val (ins_signed_const (lane_type ty) imm)))
+
+(decl ins_unsigned_const (Type Imm64) Value)
+(rule (ins_unsigned_const $I8 (u64_from_imm64 n))
+  (ins_iconst $I8 (imm64 (u64_and n 0xff))))
+(rule (ins_unsigned_const $I16 (u64_from_imm64 n))
+  (ins_iconst $I16 (imm64 (u64_and n 0xffff))))
+(rule (ins_unsigned_const $I32 (u64_from_imm64 n))
+  (ins_iconst $I32 (imm64 (u64_and n 0xffffffff))))
+(rule (ins_unsigned_const $I64 imm)
+  (ins_iconst $I64 imm))
+(rule (ins_unsigned_const $I128 imm)
+  (ins_iconcat $I64 (ins_iconst $I64 imm) (ins_i64 0)))
+
+(decl ins_signed_const (Type Imm64) Value)
+(rule 0 (ins_signed_const (fits_in_64 ty) imm)
+  (ins_unsigned_const ty imm))
+(rule 1 (ins_signed_const $I128 imm)
+  (ins_iconcat $I64
+    (ins_iconst $I64 imm)
+    (ins_iconst $I64 (imm64_sshr $I64 imm (imm64 63)))))
+
+;; ========= `*_not` instrs ===================================================
+
+;; Legalize the fused bitwise-plus-not instructions into simpler
+;; instructions to assist with optimizations. Lowering will
+;; pattern match this sequence regardless when architectures
+;; support the instruction natively.
+
+(rule (legalize (has_type ty (band_not a b)))
+  (replace_band ty a (ins_bnot ty b)))
+
+(rule (legalize (has_type ty (bor_not a b)))
+  (replace_bor ty a (ins_bnot ty b)))
+
+(rule (legalize (has_type ty (bxor_not a b)))
+  (replace_bxor ty a (ins_bnot ty b)))
