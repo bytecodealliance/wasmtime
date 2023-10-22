@@ -809,9 +809,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_ext_mode(
         _call_conv: isa::CallConv,
-        _specified: ir::ArgumentExtension,
+        specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension {
-        ir::ArgumentExtension::None
+        specified
     }
 
     fn compute_frame_layout(
