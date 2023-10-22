@@ -159,7 +159,7 @@ impl Inst {
             } else {
                 FpuOPRRR::FeqD
             },
-            frm: None,
+            frm: FRM::RDN,
             rd: rd,
             rs1: rs,
             rs2: rs,
@@ -173,7 +173,7 @@ impl Inst {
             } else {
                 FpuOPRRR::FsgnjxD
             },
-            frm: None,
+            frm: FRM::RDN,
             rd: rd,
             rs1: rs,
             rs2: rs,
@@ -195,7 +195,7 @@ impl Inst {
         };
         insts.push(Inst::FpuRR {
             alu_op: class_op,
-            frm: None,
+            frm: FRM::RTZ,
             rd: tmp,
             rs: rs,
         });
@@ -968,7 +968,7 @@ impl Inst {
             } => {
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | alu_op.funct3(frm) << 12
+                    | frm.as_u32() << 12
                     | reg_to_gpr_num(rs) << 15
                     | alu_op.rs2_funct5() << 20
                     | alu_op.funct7() << 25;
@@ -988,7 +988,7 @@ impl Inst {
             } => {
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | alu_op.funct3(frm) << 12
+                    | frm.as_u32() << 12
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct2() << 25
@@ -1005,7 +1005,7 @@ impl Inst {
             } => {
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | (alu_op.funct3(frm)) << 12
+                    | frm.as_u32() << 12
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
@@ -1337,7 +1337,7 @@ impl Inst {
                         } else {
                             FpuOPRRR::FsgnjD
                         },
-                        frm: None,
+                        frm: FRM::RNE,
                         rd: rd,
                         rs1: rm,
                         rs2: rm,
@@ -2000,7 +2000,7 @@ impl Inst {
                     // rd := rs <= tmp
                     Inst::FpuRRR {
                         alu_op: le_op,
-                        frm: None,
+                        frm: FRM::RNE,
                         rd,
                         rs1: rs,
                         rs2: tmp.to_reg(),
@@ -2029,7 +2029,7 @@ impl Inst {
                     // rd := rs >= tmp
                     Inst::FpuRRR {
                         alu_op: le_op,
-                        frm: None,
+                        frm: FRM::RNE,
                         rd,
                         rs1: tmp.to_reg(),
                         rs2: rs,
@@ -2046,7 +2046,7 @@ impl Inst {
                 }
                 // convert to int normally.
                 Inst::FpuRR {
-                    frm: Some(FRM::RTZ),
+                    frm: FRM::RTZ,
                     alu_op: FpuOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
                     rd,
                     rs,
@@ -2368,7 +2368,7 @@ impl Inst {
 
                 // branch if f_tmp < rd
                 Inst::FpuRRR {
-                    frm: None,
+                    frm: FRM::RTZ,
                     alu_op: if ty == F32 {
                         FpuOPRRR::FltS
                     } else {
@@ -2394,7 +2394,7 @@ impl Inst {
                 //convert to int.
                 Inst::FpuRR {
                     alu_op: FpuOPRR::float_convert_2_int_op(ty, true, I64),
-                    frm: Some(op.to_frm()),
+                    frm: op.to_frm(),
                     rd: int_tmp,
                     rs: rs,
                 }
@@ -2406,7 +2406,7 @@ impl Inst {
                     } else {
                         FpuOPRR::FcvtDL
                     },
-                    frm: Some(op.to_frm()),
+                    frm: op.to_frm(),
                     rd,
                     rs: int_tmp.to_reg(),
                 }
@@ -2418,7 +2418,7 @@ impl Inst {
                     } else {
                         FpuOPRRR::FsgnjD
                     },
-                    frm: None,
+                    frm: FRM::RNE,
                     rd,
                     rs1: rd.to_reg(),
                     rs2: rs,
@@ -2434,7 +2434,7 @@ impl Inst {
                     } else {
                         FpuOPRRR::FaddD
                     },
-                    frm: None,
+                    frm: FRM::RNE,
                     rd: rd,
                     rs1: rs,
                     rs2: rs,

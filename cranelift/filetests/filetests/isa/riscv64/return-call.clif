@@ -99,7 +99,7 @@ block0(v0: f64):
 ;   lui a3,1027
 ;   slli a5,a3,40
 ;   fmv.d.x fa1,a5
-;   fadd.d ft0,ft0,fa1
+;   fadd.d ft0,ft0,fa1,rne
 ;   ret
 ;
 ; Disassembled:
@@ -107,7 +107,7 @@ block0(v0: f64):
 ;   lui a3, 0x403
 ;   slli a5, a3, 0x28
 ;   fmv.d.x fa1, a5
-;   fadd.d ft0, ft0, fa1
+;   fadd.d ft0, ft0, fa1, rne
 ;   ret
 
 function %call_f64(f64) -> f64 tail {

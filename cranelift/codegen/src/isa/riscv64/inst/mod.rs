@@ -259,7 +259,7 @@ impl Inst {
         let tmp = alloc_tmp(I64);
         insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::move_x_to_f_op(F32),
             rd,
             rs: tmp.to_reg(),
@@ -277,7 +277,7 @@ impl Inst {
         let tmp = alloc_tmp(I64);
         insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::move_x_to_f_op(F64),
             rd,
             rs: tmp.to_reg(),
@@ -1044,12 +1044,8 @@ impl Inst {
             x
         };
 
-        fn format_frm(rounding_mode: Option<FRM>) -> String {
-            if let Some(r) = rounding_mode {
-                format!(",{}", r.to_static_str(),)
-            } else {
-                "".into()
-            }
+        fn format_frm(rounding_mode: FRM) -> String {
+            format!(",{}", rounding_mode.to_static_str())
         }
 
         let mut empty_allocs = AllocationConsumer::default();
@@ -1317,7 +1313,16 @@ impl Inst {
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}{}", alu_op.op_name(), rd, rs, format_frm(frm))
+                let frm = match alu_op {
+                    FpuOPRR::FmvXW
+                    | FpuOPRR::FmvWX
+                    | FpuOPRR::FmvXD
+                    | FpuOPRR::FmvDX
+                    | FpuOPRR::FclassS
+                    | FpuOPRR::FclassD => String::new(),
+                    _ => format_frm(frm),
+                };
+                format!("{} {rd},{rs}{frm}", alu_op.op_name())
             }
             &Inst::FpuRRR {
                 alu_op,
@@ -1332,35 +1337,32 @@ impl Inst {
                 let rs1_is_rs2 = rs1 == rs2;
                 if rs1_is_rs2 && alu_op.is_copy_sign() {
                     // this is move instruction.
-                    format!(
-                        "fmv.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fmv.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else if rs1_is_rs2 && alu_op.is_copy_neg_sign() {
-                    format!(
-                        "fneg.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fneg.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else if rs1_is_rs2 && alu_op.is_copy_xor_sign() {
-                    format!(
-                        "fabs.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fabs.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else {
-                    format!(
-                        "{} {},{},{}{}",
-                        alu_op.op_name(),
-                        rd,
-                        rs1,
-                        rs2,
-                        format_frm(frm)
-                    )
+                    let frm = match alu_op {
+                        FpuOPRRR::FsgnjS
+                        | FpuOPRRR::FsgnjnS
+                        | FpuOPRRR::FsgnjxS
+                        | FpuOPRRR::FsgnjD
+                        | FpuOPRRR::FsgnjnD
+                        | FpuOPRRR::FsgnjxD
+                        | FpuOPRRR::FminS
+                        | FpuOPRRR::FminD
+                        | FpuOPRRR::FmaxS
+                        | FpuOPRRR::FmaxD
+                        | FpuOPRRR::FeqS
+                        | FpuOPRRR::FeqD
+                        | FpuOPRRR::FltS
+                        | FpuOPRRR::FltD
+                        | FpuOPRRR::FleS
+                        | FpuOPRRR::FleD => String::new(),
+                        _ => format_frm(frm),
+                    };
+                    format!("{} {rd},{rs1},{rs2}{frm}", alu_op.op_name())
                 }
             }
             &Inst::FpuRRRR {

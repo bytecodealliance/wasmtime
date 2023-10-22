@@ -345,10 +345,6 @@ impl FpuOPRRRR {
         }
     }
 
-    pub(crate) fn funct3(self, rounding_mode: Option<FRM>) -> u32 {
-        rounding_mode.unwrap_or_default().as_u32()
-    }
-
     pub(crate) fn op_code(self) -> u32 {
         match self {
             FpuOPRRRR::FmaddS => 0b1000011,
@@ -554,38 +550,6 @@ impl FpuOPRR {
             FpuOPRR::FsqrtD => 0b0101101,
         }
     }
-
-    pub(crate) fn funct3(self, rounding_mode: Option<FRM>) -> u32 {
-        let rounding_mode = rounding_mode.unwrap_or_default().as_u32();
-        match self {
-            FpuOPRR::FsqrtS => rounding_mode,
-            FpuOPRR::FcvtWS => rounding_mode,
-            FpuOPRR::FcvtWuS => rounding_mode,
-            FpuOPRR::FmvXW => 0b000,
-            FpuOPRR::FclassS => 0b001,
-            FpuOPRR::FcvtSw => rounding_mode,
-            FpuOPRR::FcvtSwU => rounding_mode,
-            FpuOPRR::FmvWX => 0b000,
-            FpuOPRR::FcvtLS => rounding_mode,
-            FpuOPRR::FcvtLuS => rounding_mode,
-            FpuOPRR::FcvtSL => rounding_mode,
-            FpuOPRR::FcvtSLU => rounding_mode,
-            FpuOPRR::FcvtLD => rounding_mode,
-            FpuOPRR::FcvtLuD => rounding_mode,
-            FpuOPRR::FmvXD => 0b000,
-            FpuOPRR::FcvtDL => rounding_mode,
-            FpuOPRR::FcvtDLu => rounding_mode,
-            FpuOPRR::FmvDX => 0b000,
-            FpuOPRR::FcvtSD => rounding_mode,
-            FpuOPRR::FcvtDS => rounding_mode,
-            FpuOPRR::FclassD => 0b001,
-            FpuOPRR::FcvtWD => rounding_mode,
-            FpuOPRR::FcvtWuD => rounding_mode,
-            FpuOPRR::FcvtDW => rounding_mode,
-            FpuOPRR::FcvtDWU => 0b000,
-            FpuOPRR::FsqrtD => rounding_mode,
-        }
-    }
 }
 
 impl FpuOPRRR {
@@ -615,41 +579,6 @@ impl FpuOPRRR {
             Self::FeqD => "feq.d",
             Self::FltD => "flt.d",
             Self::FleD => "fle.d",
-        }
-    }
-
-    pub fn funct3(self, rounding_mode: Option<FRM>) -> u32 {
-        let rounding_mode = rounding_mode.unwrap_or_default();
-        let rounding_mode = rounding_mode.as_u32();
-        match self {
-            Self::FaddS => rounding_mode,
-            Self::FsubS => rounding_mode,
-            Self::FmulS => rounding_mode,
-            Self::FdivS => rounding_mode,
-
-            Self::FsgnjS => 0b000,
-            Self::FsgnjnS => 0b001,
-            Self::FsgnjxS => 0b010,
-            Self::FminS => 0b000,
-            Self::FmaxS => 0b001,
-
-            Self::FeqS => 0b010,
-            Self::FltS => 0b001,
-            Self::FleS => 0b000,
-
-            Self::FaddD => rounding_mode,
-            Self::FsubD => rounding_mode,
-            Self::FmulD => rounding_mode,
-            Self::FdivD => rounding_mode,
-
-            Self::FsgnjD => 0b000,
-            Self::FsgnjnD => 0b001,
-            Self::FsgnjxD => 0b010,
-            Self::FminD => 0b000,
-            Self::FmaxD => 0b001,
-            Self::FeqD => 0b010,
-            Self::FltD => 0b001,
-            Self::FleD => 0b000,
         }
     }
 

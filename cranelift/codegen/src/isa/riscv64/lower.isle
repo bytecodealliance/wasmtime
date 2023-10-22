@@ -1500,7 +1500,7 @@
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fma x y z)))
-  (rv_fmadd ty x y z))
+  (rv_fmadd ty (FRM.RNE) x y z))
 
 ;; (fma x y z) computes x * y + z
 ;; vfmacc computes vd[i] = +(vs1[i] * vs2[i]) + vd[i]
@@ -1539,7 +1539,7 @@
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (sqrt x)))
-  (rv_fsqrt ty x))
+  (rv_fsqrt ty (FRM.RNE) x))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (sqrt x)))
   (rv_vfsqrt_v x (unmasked) ty))
@@ -1651,7 +1651,7 @@
 
 ;;;;;  Rules for `fdemote`;;;;;;;;;;;;;;;;;;
 (rule (lower (fdemote x))
-  (rv_fcvtsd x))
+  (rv_fcvtsd (FRM.RNE) x))
 
 ;;;;;  Rules for `fvdemote`;;;;;;;;;;;;;;;;;
 
@@ -1670,7 +1670,7 @@
 ;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_scalar_float ty) (fadd x y)))
-  (rv_fadd ty x y))
+  (rv_fadd ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fadd x y)))
   (rv_vfadd_vv x y (unmasked) ty))
@@ -1684,7 +1684,7 @@
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fsub x y)))
-  (rv_fsub ty x y))
+  (rv_fsub ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fsub x y)))
   (rv_vfsub_vv x y (unmasked) ty))
@@ -1697,7 +1697,7 @@
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmul x y)))
-  (rv_fmul ty x y))
+  (rv_fmul ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmul x y)))
   (rv_vfmul_vv x y (unmasked) ty))
@@ -1711,7 +1711,7 @@
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fdiv x y)))
-  (rv_fdiv ty x y))
+  (rv_fdiv ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fdiv x y)))
   (rv_vfdiv_vv x y (unmasked) ty))
@@ -1731,7 +1731,7 @@
   (let (;; Check if both inputs are not nan.
         (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a nan if any of the inputs is a NaN.
-        (nan FReg (rv_fadd ty x y))
+        (nan FReg (rv_fadd ty (FRM.RNE) x y))
         (min FReg (rv_fmin ty x y)))
     (gen_select_freg is_ordered min nan)))
 
@@ -1757,7 +1757,7 @@
   (let (;; Check if both inputs are not nan.
         (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a NaN if any of the inputs is a NaN.
-        (nan FReg (rv_fadd ty x y))
+        (nan FReg (rv_fadd ty (FRM.RNE) x y))
         (max FReg (rv_fmax ty x y)))
     (gen_select_freg is_ordered max nan)))
 
@@ -2261,44 +2261,44 @@
 
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
 (rule 0 (lower (has_type $F32 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtsl (sext v)))
+  (rv_fcvtsl (FRM.RNE) (sext v)))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I32))))
-  (rv_fcvtsw v))
+  (rv_fcvtsw (FRM.RNE) v))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I64))))
-  (rv_fcvtsl v))
+  (rv_fcvtsl (FRM.RNE) v))
 
 (rule 0 (lower (has_type $F64 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtdl (sext v)))
+  (rv_fcvtdl (FRM.RNE) (sext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I32))))
-  (rv_fcvtdw v))
+  (rv_fcvtdw (FRM.RNE) v))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I64))))
-  (rv_fcvtdl v))
+  (rv_fcvtdl (FRM.RNE) v))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_sint v @ (value_type from_ty))))
   (rv_vfcvt_f_x_v v (unmasked) from_ty))
 
 ;;;;;  Rules for `fcvt_from_uint`;;;;;;;;;
 (rule 0 (lower (has_type $F32 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtslu (zext v)))
+  (rv_fcvtslu (FRM.RNE) (zext v)))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I32))))
-  (rv_fcvtswu v))
+  (rv_fcvtswu (FRM.RNE) v))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I64))))
-  (rv_fcvtslu v))
+  (rv_fcvtslu (FRM.RNE) v))
 
 (rule 0 (lower (has_type $F64 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtdlu (zext v)))
+  (rv_fcvtdlu (FRM.RNE) (zext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I32))))
-  (rv_fcvtdwu v))
+  (rv_fcvtdwu (FRM.RNE) v))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I64))))
-  (rv_fcvtdlu v))
+  (rv_fcvtdlu (FRM.RNE) v))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_uint v @ (value_type from_ty))))
   (rv_vfcvt_f_xu_v v (unmasked) from_ty))

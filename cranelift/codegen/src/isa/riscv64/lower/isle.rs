@@ -303,10 +303,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm12::maybe_from_i64(val).unwrap()
     }
 
-    fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
-        None
-    }
-
     fn frm_bits(&mut self, frm: &FRM) -> UImm5 {
         UImm5::maybe_from_u8(frm.bits()).unwrap()
     }
