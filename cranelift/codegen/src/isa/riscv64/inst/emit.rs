@@ -259,7 +259,6 @@ impl Inst {
             | Inst::Atomic { .. }
             | Inst::Select { .. }
             | Inst::AtomicCas { .. }
-            | Inst::FcvtToInt { .. }
             | Inst::RawData { .. }
             | Inst::AtomicStore { .. }
             | Inst::AtomicLoad { .. }
@@ -1951,175 +1950,6 @@ impl Inst {
                 .emit(&[], sink, emit_info, state);
             }
 
-            &Inst::FcvtToInt {
-                is_sat,
-                rd,
-                rs,
-                is_signed,
-                in_type,
-                out_type,
-                tmp,
-            } => {
-                let label_nan = sink.get_label();
-                let label_jump_over = sink.get_label();
-                // get if nan.
-                Inst::emit_not_nan(rd, rs, in_type).emit(&[], sink, emit_info, state);
-                // jump to nan.
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_nan),
-                    not_taken: CondBrTarget::Fallthrough,
-                    kind: IntegerCompare {
-                        kind: IntCC::Equal,
-                        rs2: zero_reg(),
-                        rs1: rd.to_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-
-                if !is_sat {
-                    let f32_bounds = f32_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
-                    let f64_bounds = f64_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
-                    if in_type == F32 {
-                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.0), |_| {
-                            writable_spilltmp_reg()
-                        })
-                    } else {
-                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.0), |_| {
-                            writable_spilltmp_reg()
-                        })
-                    }
-                    .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                    let le_op = if in_type == F32 {
-                        FpuOPRRR::FleS
-                    } else {
-                        FpuOPRRR::FleD
-                    };
-
-                    // rd := rs <= tmp
-                    Inst::FpuRRR {
-                        alu_op: le_op,
-                        frm: FRM::RNE,
-                        rd,
-                        rs1: rs,
-                        rs2: tmp.to_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::TrapIf {
-                        cc: IntCC::NotEqual,
-                        rs1: rd.to_reg(),
-                        rs2: zero_reg(),
-                        trap_code: TrapCode::IntegerOverflow,
-                    }
-                    .emit(&[], sink, emit_info, state);
-
-                    if in_type == F32 {
-                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.1), |_| {
-                            writable_spilltmp_reg()
-                        })
-                    } else {
-                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.1), |_| {
-                            writable_spilltmp_reg()
-                        })
-                    }
-                    .iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                    // rd := rs >= tmp
-                    Inst::FpuRRR {
-                        alu_op: le_op,
-                        frm: FRM::RNE,
-                        rd,
-                        rs1: tmp.to_reg(),
-                        rs2: rs,
-                    }
-                    .emit(&[], sink, emit_info, state);
-
-                    Inst::TrapIf {
-                        cc: IntCC::NotEqual,
-                        rs1: rd.to_reg(),
-                        rs2: zero_reg(),
-                        trap_code: TrapCode::IntegerOverflow,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                }
-                // convert to int normally.
-                Inst::FpuRR {
-                    frm: FRM::RTZ,
-                    alu_op: FpuOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
-                    rd,
-                    rs,
-                }
-                .emit(&[], sink, emit_info, state);
-                if out_type.bits() < 32 && is_signed {
-                    // load value part mask.
-                    Inst::load_constant_u32(
-                        writable_spilltmp_reg(),
-                        if 16 == out_type.bits() {
-                            (u16::MAX >> 1) as u64
-                        } else {
-                            // I8
-                            (u8::MAX >> 1) as u64
-                        },
-                    )
-                    .into_iter()
-                    .for_each(|x| x.emit(&[], sink, emit_info, state));
-                    // keep value part.
-                    Inst::AluRRR {
-                        alu_op: AluOPRRR::And,
-                        rd: writable_spilltmp_reg(),
-                        rs1: rd.to_reg(),
-                        rs2: spilltmp_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    // extact sign bit.
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Srli,
-                        rd: rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_i16(31),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Slli,
-                        rd: rd,
-                        rs: rd.to_reg(),
-                        imm12: Imm12::from_i16(if 16 == out_type.bits() {
-                            15
-                        } else {
-                            // I8
-                            7
-                        }),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                    // make result,sign bit and value part.
-                    Inst::AluRRR {
-                        alu_op: AluOPRRR::Or,
-                        rd: rd,
-                        rs1: rd.to_reg(),
-                        rs2: spilltmp_reg(),
-                    }
-                    .emit(&[], sink, emit_info, state);
-                }
-
-                // I already have the result,jump over.
-                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
-                // here is nan , move 0 into rd register
-                sink.bind_label(label_nan, &mut state.ctrl_plane);
-                if is_sat {
-                    Inst::load_imm12(rd, Imm12::ZERO).emit(&[], sink, emit_info, state);
-                } else {
-                    // here is ud2.
-                    Inst::Udf {
-                        trap_code: TrapCode::BadConversionToInteger,
-                    }
-                    .emit(&[], sink, emit_info, state);
-                }
-                // bind jump_over
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
-
             &Inst::LoadExtName {
                 rd,
                 ref name,
@@ -3294,24 +3124,6 @@ impl Inst {
                 x: allocs.next(x),
                 t0: allocs.next_writable(t0),
                 dst: allocs.next_writable(dst),
-            },
-
-            Inst::FcvtToInt {
-                is_sat,
-                rd,
-                rs,
-                is_signed,
-                in_type,
-                out_type,
-                tmp,
-            } => Inst::FcvtToInt {
-                is_sat,
-                is_signed,
-                in_type,
-                out_type,
-                rs: allocs.next(rs),
-                tmp: allocs.next_writable(tmp),
-                rd: allocs.next_writable(rd),
             },
 
             Inst::LoadExtName { rd, name, offset } => Inst::LoadExtName {

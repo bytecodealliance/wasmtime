@@ -556,11 +556,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(dst);
         }
 
-        &Inst::FcvtToInt { rd, rs, tmp, .. } => {
-            collector.reg_use(rs);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(rd);
-        }
         &Inst::RawData { .. } => {}
         &Inst::AtomicStore { src, p, .. } => {
             collector.reg_use(src);
@@ -1197,29 +1192,6 @@ impl Inst {
                     ty,
                     tmp,
                     step
-                )
-            }
-            &Inst::FcvtToInt {
-                is_sat,
-                rd,
-                rs,
-                is_signed,
-                in_type,
-                out_type,
-                tmp,
-            } => {
-                let rs = format_reg(rs, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "fcvt_to_{}int{}.{} {},{}##in_ty={} tmp={}",
-                    if is_signed { "s" } else { "u" },
-                    if is_sat { "_sat" } else { "" },
-                    out_type,
-                    rd,
-                    rs,
-                    in_type,
-                    tmp
                 )
             }
             &Inst::AtomicCas {

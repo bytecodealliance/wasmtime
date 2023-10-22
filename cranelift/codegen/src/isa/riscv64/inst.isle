@@ -239,14 +239,6 @@
       (addr Reg)
       (v Reg)
       (ty Type))
-    (FcvtToInt
-      (is_sat bool)
-      (rd WritableReg)
-      (tmp WritableReg) ;; a float register to load bounds.
-      (rs Reg)
-      (is_signed bool)
-      (in_type Type)
-      (out_type Type))
 
     (RawData (data VecU8))
 
@@ -1444,6 +1436,58 @@
 (decl rv_fcvtdlu (FRM XReg) FReg)
 (rule (rv_fcvtdlu frm rs1) (fpu_rr (FpuOPRR.FcvtDLu) $F32 frm rs1))
 
+;; Helper for emitting the `fcvt.w.s` instruction.
+(decl rv_fcvtws (FRM FReg) XReg)
+(rule (rv_fcvtws frm rs1) (fpu_rr (FpuOPRR.FcvtWS) $I64 frm rs1))
+
+;; Helper for emitting the `fcvt.l.s` instruction.
+(decl rv_fcvtls (FRM FReg) XReg)
+(rule (rv_fcvtls frm rs1) (fpu_rr (FpuOPRR.FcvtLS) $I64 frm rs1))
+
+;; Helper for emitting the `fcvt.wu.s` instruction.
+(decl rv_fcvtwus (FRM FReg) XReg)
+(rule (rv_fcvtwus frm rs1) (fpu_rr (FpuOPRR.FcvtWuS) $I64 frm rs1))
+
+;; Helper for emitting the `fcvt.lu.s` instruction.
+(decl rv_fcvtlus (FRM FReg) XReg)
+(rule (rv_fcvtlus frm rs1) (fpu_rr (FpuOPRR.FcvtLuS) $I64 frm rs1))
+
+;; Helper for emitting the `fcvt.w.d` instruction.
+(decl rv_fcvtwd (FRM FReg) XReg)
+(rule (rv_fcvtwd frm rs1) (fpu_rr (FpuOPRR.FcvtWD) $I64 frm rs1))
+
+;; Helper for emitting the `fcvt.l.d` instruction.
+(decl rv_fcvtld (FRM FReg) XReg)
+(rule (rv_fcvtld frm rs1) (fpu_rr (FpuOPRR.FcvtLD) $I64 frm rs1))
+
+;; Helper for emitting the `fcvt.wu.d` instruction.
+(decl rv_fcvtwud (FRM FReg) XReg)
+(rule (rv_fcvtwud frm rs1) (fpu_rr (FpuOPRR.FcvtWuD) $I64 frm rs1))
+
+;; Helper for emitting the `fcvt.lu.d` instruction.
+(decl rv_fcvtlud (FRM FReg) XReg)
+(rule (rv_fcvtlud frm rs1) (fpu_rr (FpuOPRR.FcvtLuD) $I64 frm rs1))
+
+;; Helper for emitting the `fcvt.w.*` instructions.
+(decl rv_fcvtw (Type FRM FReg) XReg)
+(rule (rv_fcvtw $F32 frm rs1) (rv_fcvtws frm rs1))
+(rule (rv_fcvtw $F64 frm rs1) (rv_fcvtwd frm rs1))
+
+;; Helper for emitting the `fcvt.l.*` instructions.
+(decl rv_fcvtl (Type FRM FReg) XReg)
+(rule (rv_fcvtl $F32 frm rs1) (rv_fcvtls frm rs1))
+(rule (rv_fcvtl $F64 frm rs1) (rv_fcvtld frm rs1))
+
+;; Helper for emitting the `fcvt.wu.*` instructions.
+(decl rv_fcvtwu (Type FRM FReg) XReg)
+(rule (rv_fcvtwu $F32 frm rs1) (rv_fcvtwus frm rs1))
+(rule (rv_fcvtwu $F64 frm rs1) (rv_fcvtwud frm rs1))
+
+;; Helper for emitting the `fcvt.lu.*` instructions.
+(decl rv_fcvtlu (Type FRM FReg) XReg)
+(rule (rv_fcvtlu $F32 frm rs1) (rv_fcvtlus frm rs1))
+(rule (rv_fcvtlu $F64 frm rs1) (rv_fcvtlud frm rs1))
+
 ;; Helper for emitting the `fsgnj` ("Floating Point Sign Injection") instruction.
 ;; The output of this instruction is `rs1` with the sign bit from `rs2`
 ;; This implements the `copysign` operation
@@ -2474,16 +2518,6 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ElfTlsGetAddr dst name))))
         dst))
-
-;;;;
-(decl gen_fcvt_int (bool FReg bool Type Type) XReg)
-(rule
-  (gen_fcvt_int is_sat rs is_signed in_type out_type)
-  (let
-    ((result WritableReg (temp_writable_reg out_type))
-      (tmp WritableFReg (temp_writable_freg))
-      (_ Unit (emit (MInst.FcvtToInt is_sat result tmp rs is_signed in_type out_type))))
-    (writable_reg_to_reg result)))
 
 ;;; some float binary operation
 ;;; 1. need move into x reister.

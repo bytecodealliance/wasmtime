@@ -537,6 +537,81 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn bseti_imm(&mut self, i: u64) -> Option<Imm12> {
         self.binvi_imm(i)
     }
+
+    fn fcvt_smin_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
+        if let I8 | I16 = int {
+            if saturating {
+                let val = match int {
+                    I8 => f32::from(i8::MIN),
+                    _ => f32::from(i16::MIN),
+                };
+                return match float {
+                    F32 => val.to_bits().into(),
+                    F64 => f64::from(val).to_bits(),
+                    _ => unimplemented!(),
+                };
+            }
+        }
+        assert!(!saturating);
+        match float {
+            F32 => f32_cvt_to_int_bounds(true, int.bits()).0.to_bits().into(),
+            F64 => f64_cvt_to_int_bounds(true, int.bits()).0.to_bits(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn fcvt_smax_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
+        if let I8 | I16 = int {
+            if saturating {
+                let val = match int {
+                    I8 => f32::from(i8::MAX),
+                    _ => f32::from(i16::MAX),
+                };
+                return match float {
+                    F32 => val.to_bits().into(),
+                    F64 => f64::from(val).to_bits(),
+                    _ => unimplemented!(),
+                };
+            }
+        }
+        assert!(!saturating);
+        match float {
+            F32 => f32_cvt_to_int_bounds(true, int.bits()).1.to_bits().into(),
+            F64 => f64_cvt_to_int_bounds(true, int.bits()).1.to_bits(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn fcvt_umax_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
+        if let I8 | I16 = int {
+            if saturating {
+                let val = match int {
+                    I8 => f32::from(u8::MAX),
+                    _ => f32::from(u16::MAX),
+                };
+                return match float {
+                    F32 => val.to_bits().into(),
+                    F64 => f64::from(val).to_bits(),
+                    _ => unimplemented!(),
+                };
+            }
+        }
+        assert!(!saturating);
+        match float {
+            F32 => f32_cvt_to_int_bounds(false, int.bits()).1.to_bits().into(),
+            F64 => f64_cvt_to_int_bounds(false, int.bits()).1.to_bits(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn fcvt_umin_bound(&mut self, float: Type, saturating: bool) -> u64 {
+        assert!(!saturating);
+        match float {
+            F32 => (-1.0f32).to_bits().into(),
+            F64 => (-1.0f64).to_bits(),
+            _ => unimplemented!(),
+        }
+    }
 }
 
 /// The main entry point for lowering with ISLE.

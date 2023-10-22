@@ -1632,7 +1632,7 @@ pub(crate) fn f64_bits(f: f64) -> u64 {
 }
 
 ///
-pub(crate) fn f32_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f32, f32) {
+pub(crate) fn f32_cvt_to_int_bounds(signed: bool, out_bits: u32) -> (f32, f32) {
     match (signed, out_bits) {
         (true, 8) => (i8::min_value() as f32 - 1., i8::max_value() as f32 + 1.),
         (true, 16) => (i16::min_value() as f32 - 1., i16::max_value() as f32 + 1.),
@@ -1646,7 +1646,7 @@ pub(crate) fn f32_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f32, f32) {
     }
 }
 
-pub(crate) fn f64_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
+pub(crate) fn f64_cvt_to_int_bounds(signed: bool, out_bits: u32) -> (f64, f64) {
     match (signed, out_bits) {
         (true, 8) => (i8::min_value() as f64 - 1., i8::max_value() as f64 + 1.),
         (true, 16) => (i16::min_value() as f64 - 1., i16::max_value() as f64 + 1.),
