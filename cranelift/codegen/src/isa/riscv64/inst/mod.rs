@@ -1,9 +1,5 @@
 //! This module defines riscv64-specific machine instruction types.
 
-// Some variants are not constructed, but we still want them as options in the future.
-#![allow(dead_code)]
-#![allow(non_camel_case_types)]
-
 use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpMasking};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
@@ -44,12 +40,8 @@ mod emit_tests;
 
 use std::fmt::{Display, Formatter};
 
-pub(crate) type OptionReg = Option<Reg>;
-pub(crate) type OptionImm12 = Option<Imm12>;
-pub(crate) type OptionUimm5 = Option<UImm5>;
-pub(crate) type OptionFloatRoundingMode = Option<FRM>;
 pub(crate) type VecU8 = Vec<u8>;
-pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
+
 //=============================================================================
 // Instructions (top level): definition
 
@@ -58,10 +50,6 @@ pub use crate::isa::riscv64::lower::isle::generated_code::{
     FpuOPRR, FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
-
-type BoxCallInfo = Box<CallInfo>;
-type BoxCallIndInfo = Box<CallIndInfo>;
-type BoxReturnCallInfo = Box<ReturnCallInfo>;
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
 /// the Inst enum.
@@ -1943,6 +1931,7 @@ impl MachInstLabelUse for LabelUse {
 }
 
 impl LabelUse {
+    #[allow(dead_code)] // in case it's needed in the future
     fn offset_in_range(self, offset: i64) -> bool {
         let min = -(self.max_neg_range() as i64);
         let max = self.max_pos_range() as i64;

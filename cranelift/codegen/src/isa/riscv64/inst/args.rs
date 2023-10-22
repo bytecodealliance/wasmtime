@@ -1,7 +1,5 @@
 //! Riscv64 ISA definitions: instruction arguments.
 
-// Some variants are never constructed, but we still want them as options in the future.
-#![allow(dead_code)]
 use super::*;
 use crate::ir::condcodes::CondCode;
 
@@ -251,17 +249,8 @@ impl BranchFunct3 {
             BranchFunct3::Geu => 0b111,
         }
     }
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            BranchFunct3::Eq => "eq",
-            BranchFunct3::Ne => "ne",
-            BranchFunct3::Lt => "lt",
-            BranchFunct3::Ge => "ge",
-            BranchFunct3::Ltu => "ltu",
-            BranchFunct3::Geu => "geu",
-        }
-    }
 }
+
 impl IntegerCompare {
     pub(crate) fn op_code(self) -> u32 {
         0b1100011
@@ -409,15 +398,6 @@ impl FpuOPRR {
         match ty {
             F32 => Self::FmvWX,
             F64 => Self::FmvDX,
-            _ => unreachable!("ty:{:?}", ty),
-        }
-    }
-
-    // move from f register to x register.
-    pub(crate) fn move_f_to_x_op(ty: Type) -> Self {
-        match ty {
-            F32 => Self::FmvXW,
-            F64 => Self::FmvXD,
             _ => unreachable!("ty:{:?}", ty),
         }
     }
@@ -1168,6 +1148,7 @@ impl FRM {
 
 impl FFlagsException {
     #[inline]
+    #[allow(dead_code)]
     pub(crate) fn mask(self) -> u32 {
         match self {
             FFlagsException::NV => 1 << 4,
@@ -1292,6 +1273,7 @@ impl StoreOP {
     }
 }
 
+#[allow(dead_code)]
 impl FClassResult {
     pub(crate) const fn bit(self) -> u32 {
         match self {
@@ -1622,13 +1604,6 @@ impl FloatRoundOP {
             FloatRoundOP::Trunc => FRM::RTZ,
         }
     }
-}
-
-pub(crate) fn f32_bits(f: f32) -> u32 {
-    u32::from_le_bytes(f.to_le_bytes())
-}
-pub(crate) fn f64_bits(f: f64) -> u64 {
-    u64::from_le_bytes(f.to_le_bytes())
 }
 
 ///

@@ -68,10 +68,6 @@ impl EmitState {
         self.stack_map.take()
     }
 
-    fn clear_post_insn(&mut self) {
-        self.stack_map = None;
-    }
-
     fn cur_srcloc(&self) -> RelSourceLoc {
         self.cur_srcloc
     }
@@ -178,43 +174,6 @@ impl Inst {
             rs1: rs,
             rs2: rs,
         }
-    }
-    /// If a float is zero.
-    pub(crate) fn emit_if_float_not_zero(
-        tmp: Writable<Reg>,
-        rs: Reg,
-        ty: Type,
-        taken: CondBrTarget,
-        not_taken: CondBrTarget,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        let class_op = if ty == F32 {
-            FpuOPRR::FclassS
-        } else {
-            FpuOPRR::FclassD
-        };
-        insts.push(Inst::FpuRR {
-            alu_op: class_op,
-            frm: FRM::RTZ,
-            rd: tmp,
-            rs: rs,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd: tmp,
-            rs: tmp.to_reg(),
-            imm12: Imm12::from_i16(FClassResult::is_zero_bits() as i16),
-        });
-        insts.push(Inst::CondBr {
-            taken,
-            not_taken,
-            kind: IntegerCompare {
-                kind: IntCC::Equal,
-                rs1: tmp.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        insts
     }
 
     /// Returns Some(VState) if this insturction is expecting a specific vector state
