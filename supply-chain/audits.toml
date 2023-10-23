@@ -1457,6 +1457,11 @@ criteria = "safe-to-deploy"
 delta = "0.3.1 -> 0.3.3"
 notes = "I am the author of this crate."
 
+[[audits.ittapi]]
+who = "rahulchaphalkar <rahul.s.chaphalkar@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.4 -> 0.4.0"
+
 [[audits.ittapi-sys]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -1467,6 +1472,11 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.3.1 -> 0.3.3"
 notes = "Unsafe code is due to auto-generated bindings to a widely-deployed C library."
+
+[[audits.ittapi-sys]]
+who = "rahulchaphalkar <rahul.s.chaphalkar@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.4 -> 0.4.0"
 
 [[audits.leb128]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
