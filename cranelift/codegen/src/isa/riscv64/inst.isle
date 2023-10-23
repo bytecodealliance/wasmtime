@@ -767,6 +767,8 @@
 (type CSR (enum
   ;; Floating-Point Dynamic Rounding Mode
   (Frm)
+  ;; Floating-Point Exception Flags
+  (Fflags)
 ))
 
 

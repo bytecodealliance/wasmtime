@@ -596,15 +596,11 @@ block0(v0: f32):
 ; block0:
 ;   feq.s a2,fa0,fa0
 ;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,-264192
-;   fmv.w.x fa1,a5
-;   fle.s a3,fa0,fa1
-;   trap_if int_ovf##(a3 ne zero)
-;   lui a0,325632
-;   fmv.w.x fa2,a0
-;   fle.s a4,fa2,fa0
-;   trap_if int_ovf##(a4 ne zero)
+;   csrrw zero,fflags,zero
 ;   fcvt.wu.s a0,fa0,rtz
+;   csrrs a2,fflags,zero
+;   andi a4,a2,16
+;   trap_if int_ovf##(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -612,17 +608,12 @@ block0(v0: f32):
 ;   feq.s a2, fa0, fa0
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xbf800
-;   fmv.w.x fa1, a5
-;   fle.s a3, fa0, fa1
-;   beqz a3, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a0, 0x4f800
-;   fmv.w.x fa2, a0
-;   fle.s a4, fa2, fa0
+;   fsflags zero
+;   fcvt.wu.s a0, fa0, rtz
+;   frflags a2
+;   andi a4, a2, 0x10
 ;   beqz a4, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.wu.s a0, fa0, rtz
 ;   ret
 
 function %f34(f32) -> i32 {
@@ -635,16 +626,11 @@ block0(v0: f32):
 ; block0:
 ;   feq.s a2,fa0,fa0
 ;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,-200704
-;   addi a1,a5,1
-;   fmv.w.x fa3,a1
-;   fle.s a5,fa0,fa3
-;   trap_if int_ovf##(a5 ne zero)
-;   lui a2,323584
-;   fmv.w.x fa4,a2
-;   fle.s a0,fa4,fa0
-;   trap_if int_ovf##(a0 ne zero)
+;   csrrw zero,fflags,zero
 ;   fcvt.w.s a0,fa0,rtz
+;   csrrs a2,fflags,zero
+;   andi a4,a2,16
+;   trap_if int_ovf##(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -652,18 +638,12 @@ block0(v0: f32):
 ;   feq.s a2, fa0, fa0
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xcf000
-;   addi a1, a5, 1
-;   fmv.w.x fa3, a1
-;   fle.s a5, fa0, fa3
-;   beqz a5, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a2, 0x4f000
-;   fmv.w.x fa4, a2
-;   fle.s a0, fa4, fa0
-;   beqz a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fsflags zero
 ;   fcvt.w.s a0, fa0, rtz
+;   frflags a2
+;   andi a4, a2, 0x10
+;   beqz a4, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   ret
 
 function %f35(f32) -> i64 {
@@ -676,15 +656,11 @@ block0(v0: f32):
 ; block0:
 ;   feq.s a2,fa0,fa0
 ;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,-264192
-;   fmv.w.x fa1,a5
-;   fle.s a3,fa0,fa1
-;   trap_if int_ovf##(a3 ne zero)
-;   lui a0,391168
-;   fmv.w.x fa2,a0
-;   fle.s a4,fa2,fa0
-;   trap_if int_ovf##(a4 ne zero)
+;   csrrw zero,fflags,zero
 ;   fcvt.lu.s a0,fa0,rtz
+;   csrrs a2,fflags,zero
+;   andi a4,a2,16
+;   trap_if int_ovf##(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -692,17 +668,12 @@ block0(v0: f32):
 ;   feq.s a2, fa0, fa0
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xbf800
-;   fmv.w.x fa1, a5
-;   fle.s a3, fa0, fa1
-;   beqz a3, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a0, 0x5f800
-;   fmv.w.x fa2, a0
-;   fle.s a4, fa2, fa0
+;   fsflags zero
+;   fcvt.lu.s a0, fa0, rtz
+;   frflags a2
+;   andi a4, a2, 0x10
 ;   beqz a4, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   fcvt.lu.s a0, fa0, rtz
 ;   ret
 
 function %f36(f32) -> i64 {
@@ -715,16 +686,11 @@ block0(v0: f32):
 ; block0:
 ;   feq.s a2,fa0,fa0
 ;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,-135168
-;   addi a1,a5,1
-;   fmv.w.x fa3,a1
-;   fle.s a5,fa0,fa3
-;   trap_if int_ovf##(a5 ne zero)
-;   lui a2,389120
-;   fmv.w.x fa4,a2
-;   fle.s a0,fa4,fa0
-;   trap_if int_ovf##(a0 ne zero)
+;   csrrw zero,fflags,zero
 ;   fcvt.l.s a0,fa0,rtz
+;   csrrs a2,fflags,zero
+;   andi a4,a2,16
+;   trap_if int_ovf##(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -732,18 +698,12 @@ block0(v0: f32):
 ;   feq.s a2, fa0, fa0
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xdf000
-;   addi a1, a5, 1
-;   fmv.w.x fa3, a1
-;   fle.s a5, fa0, fa3
-;   beqz a5, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a2, 0x5f000
-;   fmv.w.x fa4, a2
-;   fle.s a0, fa4, fa0
-;   beqz a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fsflags zero
 ;   fcvt.l.s a0, fa0, rtz
+;   frflags a2
+;   andi a4, a2, 0x10
+;   beqz a4, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   ret
 
 function %f37(f64) -> i32 {
@@ -756,17 +716,11 @@ block0(v0: f64):
 ; block0:
 ;   feq.d a2,fa0,fa0
 ;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,3071
-;   slli a1,a5,40
-;   fmv.d.x fa3,a1
-;   fle.d a5,fa0,fa3
-;   trap_if int_ovf##(a5 ne zero)
-;   lui a2,1055
-;   slli a4,a2,40
-;   fmv.d.x fa1,a4
-;   fle.d a2,fa1,fa0
-;   trap_if int_ovf##(a2 ne zero)
+;   csrrw zero,fflags,zero
 ;   fcvt.wu.d a0,fa0,rtz
+;   csrrs a2,fflags,zero
+;   andi a4,a2,16
+;   trap_if int_ovf##(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -774,19 +728,12 @@ block0(v0: f64):
 ;   feq.d a2, fa0, fa0
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xbff
-;   slli a1, a5, 0x28
-;   fmv.d.x fa3, a1
-;   fle.d a5, fa0, fa3
-;   beqz a5, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a2, 0x41f
-;   slli a4, a2, 0x28
-;   fmv.d.x fa1, a4
-;   fle.d a2, fa1, fa0
-;   beqz a2, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fsflags zero
 ;   fcvt.wu.d a0, fa0, rtz
+;   frflags a2
+;   andi a4, a2, 0x10
+;   beqz a4, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   ret
 
 function %f38(f64) -> i32 {
@@ -799,16 +746,11 @@ block0(v0: f64):
 ; block0:
 ;   feq.d a2,fa0,fa0
 ;   trap_if bad_toint##(a2 eq zero)
-;   ld a5,[const(0)]
-;   fmv.d.x fa1,a5
-;   fle.d a3,fa0,fa1
-;   trap_if int_ovf##(a3 ne zero)
-;   lui a0,527
-;   slli a2,a0,41
-;   fmv.d.x fa4,a2
-;   fle.d a0,fa4,fa0
-;   trap_if int_ovf##(a0 ne zero)
+;   csrrw zero,fflags,zero
 ;   fcvt.w.d a0,fa0,rtz
+;   csrrs a2,fflags,zero
+;   andi a4,a2,16
+;   trap_if int_ovf##(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -816,23 +758,13 @@ block0(v0: f64):
 ;   feq.d a2, fa0, fa0
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   auipc a5, 0
-;   ld a5, 0x3c(a5)
-;   fmv.d.x fa1, a5
-;   fle.d a3, fa0, fa1
-;   beqz a3, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a0, 0x20f
-;   slli a2, a0, 0x29
-;   fmv.d.x fa4, a2
-;   fle.d a0, fa4, fa0
-;   beqz a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fsflags zero
 ;   fcvt.w.d a0, fa0, rtz
+;   frflags a2
+;   andi a4, a2, 0x10
+;   beqz a4, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x20, 0x00
-;   .byte 0x00, 0x00, 0xe0, 0xc1
 
 function %f39(f64) -> i64 {
 block0(v0: f64):
@@ -844,17 +776,11 @@ block0(v0: f64):
 ; block0:
 ;   feq.d a2,fa0,fa0
 ;   trap_if bad_toint##(a2 eq zero)
-;   lui a5,3071
-;   slli a1,a5,40
-;   fmv.d.x fa3,a1
-;   fle.d a5,fa0,fa3
-;   trap_if int_ovf##(a5 ne zero)
-;   lui a2,1087
-;   slli a4,a2,40
-;   fmv.d.x fa1,a4
-;   fle.d a2,fa1,fa0
-;   trap_if int_ovf##(a2 ne zero)
+;   csrrw zero,fflags,zero
 ;   fcvt.lu.d a0,fa0,rtz
+;   csrrs a2,fflags,zero
+;   andi a4,a2,16
+;   trap_if int_ovf##(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -862,19 +788,12 @@ block0(v0: f64):
 ;   feq.d a2, fa0, fa0
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   lui a5, 0xbff
-;   slli a1, a5, 0x28
-;   fmv.d.x fa3, a1
-;   fle.d a5, fa0, fa3
-;   beqz a5, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a2, 0x43f
-;   slli a4, a2, 0x28
-;   fmv.d.x fa1, a4
-;   fle.d a2, fa1, fa0
-;   beqz a2, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fsflags zero
 ;   fcvt.lu.d a0, fa0, rtz
+;   frflags a2
+;   andi a4, a2, 0x10
+;   beqz a4, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   ret
 
 function %f40(f64) -> i64 {
@@ -887,16 +806,11 @@ block0(v0: f64):
 ; block0:
 ;   feq.d a2,fa0,fa0
 ;   trap_if bad_toint##(a2 eq zero)
-;   ld a5,[const(0)]
-;   fmv.d.x fa1,a5
-;   fle.d a3,fa0,fa1
-;   trap_if int_ovf##(a3 ne zero)
-;   lui a0,543
-;   slli a2,a0,41
-;   fmv.d.x fa4,a2
-;   fle.d a0,fa4,fa0
-;   trap_if int_ovf##(a0 ne zero)
+;   csrrw zero,fflags,zero
 ;   fcvt.l.d a0,fa0,rtz
+;   csrrs a2,fflags,zero
+;   andi a4,a2,16
+;   trap_if int_ovf##(a4 ne zero)
 ;   ret
 ;
 ; Disassembled:
@@ -904,23 +818,13 @@ block0(v0: f64):
 ;   feq.d a2, fa0, fa0
 ;   bnez a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: bad_toint
-;   auipc a5, 0
-;   ld a5, 0x3c(a5)
-;   fmv.d.x fa1, a5
-;   fle.d a3, fa0, fa1
-;   beqz a3, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   lui a0, 0x21f
-;   slli a2, a0, 0x29
-;   fmv.d.x fa4, a2
-;   fle.d a0, fa4, fa0
-;   beqz a0, 8
-;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
+;   fsflags zero
 ;   fcvt.l.d a0, fa0, rtz
+;   frflags a2
+;   andi a4, a2, 0x10
+;   beqz a4, 8
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x01, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0xe0, 0xc3
 
 function %f41(i32) -> f32 {
 block0(v0: i32):

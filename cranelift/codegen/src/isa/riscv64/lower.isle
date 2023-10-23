@@ -2235,40 +2235,51 @@
 ;; RISC-V float-to-integer conversion does not trap, but Cranelift semantics are
 ;; to trap. This manually performs checks for NaN and out-of-bounds values and
 ;; traps in such cases.
-;;
-;; TODO: could this perhaps be more optimal through inspection of the `fcsr`?
-;; Unsure whether that needs to be preserved across function calls and/or would
-;; cause other problems. Also unsure whether it's actually more performant.
-(rule (lower (has_type ity (fcvt_to_uint v @ (value_type fty))))
+(rule 0 (lower (has_type (ty_8_or_16 ity) (fcvt_to_uint v @ (value_type fty))))
   (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
         (min FReg (imm fty (fcvt_umin_bound fty $false)))
         (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.IntegerOverflow)))
         (max FReg (imm fty (fcvt_umax_bound fty ity $false)))
         (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.IntegerOverflow))))
-    (lower_inbounds_fcvt_to_uint ity fty v)))
+    (rv_fcvtwu fty (FRM.RTZ) v)))
 
-(decl lower_inbounds_fcvt_to_uint (Type Type FReg) XReg)
-(rule 0 (lower_inbounds_fcvt_to_uint (fits_in_32 _) fty v)
-  (rv_fcvtwu fty (FRM.RTZ) v))
-(rule 1 (lower_inbounds_fcvt_to_uint $I64 fty v)
-  (rv_fcvtlu fty (FRM.RTZ) v))
+;; For 32/64-bit destinations we can avoid some manual checks against the
+;; min/max bounds and instead use the fflags CSR to detect, after the fact,
+;; if any exceptions were flagged during the conversion operation.
+;;
+;; NaN is still tested explicitly to generate a different kind of trap, but
+;; after that the fflags CSR is cleared. After the conversion operation itself
+;; the CSR is read and the "NV" flag is tested. This flag is bit 5 in the
+;; register and if it's set it means that the original operands wasn't in-range
+;; for the destination type and a trap is generated indicating as such.
+(rule 1 (lower (has_type (ty_32_or_64 ity) (fcvt_to_uint v @ (value_type fty))))
+  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
+        (_ Unit (emit_side_effect (rv_csrrw (CSR.Fflags) (zero_reg))))
+        (result XReg (lower_fcvt_to_uint_sat fty ity v))
+        (fflags XReg (rv_csrrs_swap (CSR.Fflags) (zero_reg)))
+        (is_invalid_op XReg (rv_andi fflags (imm12_const 0x10)))
+        (_ InstOutput (gen_trapnz is_invalid_op (TrapCode.IntegerOverflow))))
+    result))
 
 ;;;;;  Rules for `fcvt_to_sint`;;;;;;;;;
 
 ;; NB: see above with `fcvt_to_uint` as this is similar
-(rule (lower (has_type ity (fcvt_to_sint v @ (value_type fty))))
+(rule 0 (lower (has_type ity (fcvt_to_sint v @ (value_type fty))))
   (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
         (min FReg (imm fty (fcvt_smin_bound fty ity $false)))
         (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.IntegerOverflow)))
         (max FReg (imm fty (fcvt_smax_bound fty ity $false)))
         (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.IntegerOverflow))))
-    (lower_inbounds_fcvt_to_sint ity fty v)))
+    (rv_fcvtw fty (FRM.RTZ) v)))
 
-(decl lower_inbounds_fcvt_to_sint (Type Type FReg) XReg)
-(rule 0 (lower_inbounds_fcvt_to_sint (fits_in_32 _) fty v)
-  (rv_fcvtw fty (FRM.RTZ) v))
-(rule 1 (lower_inbounds_fcvt_to_sint $I64 fty v)
-  (rv_fcvtl fty (FRM.RTZ) v))
+(rule 1 (lower (has_type (ty_32_or_64 ity) (fcvt_to_sint v @ (value_type fty))))
+  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
+        (_ Unit (emit_side_effect (rv_csrrw (CSR.Fflags) (zero_reg))))
+        (result XReg (lower_fcvt_to_sint_sat fty ity v))
+        (fflags XReg (rv_csrrs_swap (CSR.Fflags) (zero_reg)))
+        (is_invalid_op XReg (rv_andi fflags (imm12_const 0x10)))
+        (_ InstOutput (gen_trapnz is_invalid_op (TrapCode.IntegerOverflow))))
+    result))
 
 ;;;;;  Rules for `fcvt_to_sint_sat`;;;;;;;;;
 

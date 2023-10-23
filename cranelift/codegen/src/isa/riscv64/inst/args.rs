@@ -1694,12 +1694,14 @@ impl Display for CsrImmOP {
 impl CSR {
     pub(crate) fn bits(self) -> Imm12 {
         Imm12::from_i16(match self {
-            CSR::Frm => 0x0002,
+            CSR::Fflags => 0x001,
+            CSR::Frm => 0x002,
         })
     }
 
     pub(crate) fn name(self) -> &'static str {
         match self {
+            CSR::Fflags => "fflags",
             CSR::Frm => "frm",
         }
     }
