@@ -6,7 +6,6 @@ use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::Interest;
 
 /// The state of a UDP socket.
 ///
@@ -84,31 +83,22 @@ pub struct IncomingDatagramStream {
     pub(crate) remote_address: Option<SocketAddr>,
 }
 
-#[async_trait]
-impl Subscribe for IncomingDatagramStream {
-    async fn ready(&mut self) {
-        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-        self.inner
-            .ready(Interest::READABLE)
-            .await
-            .expect("failed to await UDP socket readiness");
-    }
-}
-
 pub struct OutgoingDatagramStream {
     pub(crate) inner: Arc<tokio::net::UdpSocket>,
 
     /// If this has a value, the stream is "connected".
     pub(crate) remote_address: Option<SocketAddr>,
+
+    pub(crate) send_state: SendState,
 }
 
-#[async_trait]
-impl Subscribe for OutgoingDatagramStream {
-    async fn ready(&mut self) {
-        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-        self.inner
-            .ready(Interest::WRITABLE)
-            .await
-            .expect("failed to await UDP socket readiness");
-    }
+pub(crate) enum SendState {
+    /// Waiting for the API consumer to call `check-send`.
+    Idle,
+
+    /// Ready to send up to x datagrams.
+    Permitted(usize),
+
+    /// Waiting for the OS.
+    Waiting,
 }

@@ -5,20 +5,23 @@ use crate::preview2::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
         sockets::udp,
     },
-    udp::{IncomingDatagramStream, OutgoingDatagramStream, UdpState},
+    udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
+    Subscribe,
 };
 use crate::preview2::{Pollable, SocketError, SocketResult, WasiView};
 use anyhow::anyhow;
+use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, PoolExt};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
+use tokio::io::Interest;
 use wasmtime::component::Resource;
 
 /// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
 /// but we do not account for e.g. the transport layer here for simplicity.
 /// In practice, datagrams are typically less than 1500 bytes.
-const MAX_UDP_DATAGRAM_SIZE: usize = 65535;
+const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 impl<T: WasiView> udp::Host for T {}
 
@@ -113,6 +116,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
         let outgoing_stream = OutgoingDatagramStream {
             inner: socket.inner.clone(),
             remote_address,
+            send_state: SendState::Idle,
         };
 
         Ok((
@@ -261,28 +265,31 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
         this: Resource<udp::IncomingDatagramStream>,
         max_results: u64,
     ) -> SocketResult<Vec<udp::IncomingDatagram>> {
-        fn recv_one(stream: &IncomingDatagramStream) -> SocketResult<udp::IncomingDatagram> {
+        // Returns Ok(None) when the message was dropped.
+        fn recv_one(
+            stream: &IncomingDatagramStream,
+        ) -> SocketResult<Option<udp::IncomingDatagram>> {
             let mut buf = [0; MAX_UDP_DATAGRAM_SIZE];
             let (size, received_addr) = stream.inner.try_recv_from(&mut buf)?;
 
             match stream.remote_address {
                 Some(connected_addr) if connected_addr != received_addr => {
                     // Normally, this should have already been checked for us by the OS.
-                    // Drop message...
-                    return Err(ErrorCode::WouldBlock.into());
+                    return Ok(None);
                 }
                 _ => {}
             }
 
             // FIXME: check permission to receive from `received_addr`.
-            Ok(udp::IncomingDatagram {
+            Ok(Some(udp::IncomingDatagram {
                 data: buf[..size].into(),
                 remote_address: received_addr.into(),
-            })
+            }))
         }
 
         let table = self.table();
-        let socket = table.get(&this)?;
+        let stream = table.get(&this)?;
+        let max_results: usize = max_results.try_into().unwrap_or(usize::MAX);
 
         if max_results == 0 {
             return Ok(vec![]);
@@ -290,15 +297,23 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
 
         let mut datagrams = vec![];
 
-        for _ in 0..max_results {
-            match recv_one(socket) {
-                Ok(datagram) => {
+        while datagrams.len() < max_results {
+            match recv_one(stream) {
+                Ok(Some(datagram)) => {
                     datagrams.push(datagram);
                 }
-                Err(_e) if datagrams.len() > 0 => {
+                Ok(None) => {
+                    // Message was dropped
+                }
+                Err(_) if datagrams.len() > 0 => {
                     return Ok(datagrams);
                 }
-                Err(e) => return Err(e),
+                Err(e) if matches!(e.downcast_ref(), Some(ErrorCode::WouldBlock)) => {
+                    return Ok(datagrams);
+                }
+                Err(e) => {
+                    return Err(e);
+                }
             }
         }
 
@@ -324,7 +339,35 @@ impl<T: WasiView> udp::HostIncomingDatagramStream for T {
     }
 }
 
+#[async_trait]
+impl Subscribe for IncomingDatagramStream {
+    async fn ready(&mut self) {
+        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
+        self.inner
+            .ready(Interest::READABLE)
+            .await
+            .expect("failed to await UDP socket readiness");
+    }
+}
+
 impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
+    fn check_send(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> SocketResult<u64> {
+        let table = self.table_mut();
+        let stream = table.get_mut(&this)?;
+
+        let permit = match stream.send_state {
+            SendState::Idle => {
+                const PERMIT: usize = 16;
+                stream.send_state = SendState::Permitted(PERMIT);
+                PERMIT
+            }
+            SendState::Permitted(n) => n,
+            SendState::Waiting => 0,
+        };
+
+        Ok(permit.try_into().unwrap())
+    }
+
     fn send(
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
@@ -334,6 +377,10 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             stream: &OutgoingDatagramStream,
             datagram: &udp::OutgoingDatagram,
         ) -> SocketResult<()> {
+            if datagram.data.len() > MAX_UDP_DATAGRAM_SIZE {
+                return Err(ErrorCode::DatagramTooLarge.into());
+            }
+
             let provided_addr = datagram.remote_address.map(SocketAddr::from);
             let addr = match (stream.remote_address, provided_addr) {
                 (None, Some(addr)) => addr,
@@ -350,8 +397,24 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             Ok(())
         }
 
-        let table = self.table();
-        let socket = table.get(&this)?;
+        let table = self.table_mut();
+        let stream = table.get_mut(&this)?;
+
+        match stream.send_state {
+            SendState::Permitted(n) if n >= datagrams.len() => {
+                stream.send_state = SendState::Idle;
+            }
+            SendState::Permitted(_) => {
+                return Err(SocketError::trap(anyhow::anyhow!(
+                    "unpermitted: argument exceeds permitted size"
+                )))
+            }
+            SendState::Idle | SendState::Waiting => {
+                return Err(SocketError::trap(anyhow::anyhow!(
+                    "unpermitted: must call check-send first"
+                )))
+            }
+        }
 
         if datagrams.is_empty() {
             return Ok(0);
@@ -360,13 +423,19 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
         let mut count = 0;
 
         for datagram in datagrams {
-            match send_one(socket, &datagram) {
-                Ok(_size) => count += 1,
-                Err(_e) if count > 0 => {
+            match send_one(stream, &datagram) {
+                Ok(_) => count += 1,
+                Err(_) if count > 0 => {
                     // WIT: "If at least one datagram has been sent successfully, this function never returns an error."
                     return Ok(count);
                 }
-                Err(e) => return Err(e.into()),
+                Err(e) if matches!(e.downcast_ref(), Some(ErrorCode::WouldBlock)) => {
+                    stream.send_state = SendState::Waiting;
+                    return Ok(count);
+                }
+                Err(e) => {
+                    return Err(e);
+                }
             }
         }
 
@@ -389,5 +458,22 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
         drop(dropped);
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl Subscribe for OutgoingDatagramStream {
+    async fn ready(&mut self) {
+        match self.send_state {
+            SendState::Idle | SendState::Permitted(_) => {}
+            SendState::Waiting => {
+                // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
+                self.inner
+                    .ready(Interest::WRITABLE)
+                    .await
+                    .expect("failed to await UDP socket readiness");
+                self.send_state = SendState::Idle;
+            }
+        }
     }
 }

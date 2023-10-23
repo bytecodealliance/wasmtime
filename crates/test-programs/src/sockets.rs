@@ -147,16 +147,29 @@ impl UdpSocket {
 }
 
 impl OutgoingDatagramStream {
+    fn blocking_check_send(&self, timeout: &Pollable) -> Result<u64, ErrorCode> {
+        let sub = self.subscribe();
+
+        loop {
+            match self.check_send() {
+                Ok(0) => sub.wait_until(timeout)?,
+                result => return result,
+            }
+        }
+    }
+
     pub fn blocking_send(&self, mut datagrams: &[OutgoingDatagram]) -> Result<(), ErrorCode> {
         let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
-        let pollable = self.subscribe();
 
         while !datagrams.is_empty() {
-            match self.send(datagrams) {
+            let permit = self.blocking_check_send(&timeout)?;
+            let chunk_len = datagrams.len().min(permit as usize);
+            match self.send(&datagrams[..chunk_len]) {
+                Ok(0) => {}
                 Ok(packets_sent) => {
-                    datagrams = &datagrams[(packets_sent as usize)..];
+                    let packets_sent = packets_sent as usize;
+                    datagrams = &datagrams[packets_sent..];
                 }
-                Err(ErrorCode::WouldBlock) => pollable.wait_until(&timeout)?,
                 Err(err) => return Err(err),
             }
         }
@@ -176,11 +189,6 @@ impl IncomingDatagramStream {
                 Ok(mut chunk) => {
                     datagrams.append(&mut chunk);
 
-                    if datagrams.len() >= count.start as usize {
-                        return Ok(datagrams);
-                    }
-                }
-                Err(ErrorCode::WouldBlock) => {
                     if datagrams.len() >= count.start as usize {
                         return Ok(datagrams);
                     } else {
