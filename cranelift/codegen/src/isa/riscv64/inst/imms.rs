@@ -199,10 +199,6 @@ impl Imm6 {
         value.try_into().ok().and_then(Imm6::maybe_from_i16)
     }
 
-    pub fn maybe_from_i64(value: i64) -> Option<Self> {
-        value.try_into().ok().and_then(Imm6::maybe_from_i16)
-    }
-
     pub fn maybe_from_imm12(value: Imm12) -> Option<Self> {
         Imm6::maybe_from_i16(value.as_i16())
     }

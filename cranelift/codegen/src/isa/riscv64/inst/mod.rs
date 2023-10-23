@@ -1,9 +1,5 @@
 //! This module defines riscv64-specific machine instruction types.
 
-// Some variants are not constructed, but we still want them as options in the future.
-#![allow(dead_code)]
-#![allow(non_camel_case_types)]
-
 use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpMasking};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
@@ -44,12 +40,8 @@ mod emit_tests;
 
 use std::fmt::{Display, Formatter};
 
-pub(crate) type OptionReg = Option<Reg>;
-pub(crate) type OptionImm12 = Option<Imm12>;
-pub(crate) type OptionUimm5 = Option<UImm5>;
-pub(crate) type OptionFloatRoundingMode = Option<FRM>;
 pub(crate) type VecU8 = Vec<u8>;
-pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
+
 //=============================================================================
 // Instructions (top level): definition
 
@@ -58,10 +50,6 @@ pub use crate::isa::riscv64::lower::isle::generated_code::{
     FpuOPRR, FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
-
-type BoxCallInfo = Box<CallInfo>;
-type BoxCallIndInfo = Box<CallIndInfo>;
-type BoxReturnCallInfo = Box<ReturnCallInfo>;
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
 /// the Inst enum.
@@ -259,7 +247,7 @@ impl Inst {
         let tmp = alloc_tmp(I64);
         insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::move_x_to_f_op(F32),
             rd,
             rs: tmp.to_reg(),
@@ -277,7 +265,7 @@ impl Inst {
         let tmp = alloc_tmp(I64);
         insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::move_x_to_f_op(F64),
             rd,
             rs: tmp.to_reg(),
@@ -556,11 +544,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(dst);
         }
 
-        &Inst::FcvtToInt { rd, rs, tmp, .. } => {
-            collector.reg_use(rs);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(rd);
-        }
         &Inst::RawData { .. } => {}
         &Inst::AtomicStore { src, p, .. } => {
             collector.reg_use(src);
@@ -1044,12 +1027,8 @@ impl Inst {
             x
         };
 
-        fn format_frm(rounding_mode: Option<FRM>) -> String {
-            if let Some(r) = rounding_mode {
-                format!(",{}", r.to_static_str(),)
-            } else {
-                "".into()
-            }
+        fn format_frm(rounding_mode: FRM) -> String {
+            format!(",{}", rounding_mode.to_static_str())
         }
 
         let mut empty_allocs = AllocationConsumer::default();
@@ -1203,29 +1182,6 @@ impl Inst {
                     step
                 )
             }
-            &Inst::FcvtToInt {
-                is_sat,
-                rd,
-                rs,
-                is_signed,
-                in_type,
-                out_type,
-                tmp,
-            } => {
-                let rs = format_reg(rs, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "fcvt_to_{}int{}.{} {},{}##in_ty={} tmp={}",
-                    if is_signed { "s" } else { "u" },
-                    if is_sat { "_sat" } else { "" },
-                    out_type,
-                    rd,
-                    rs,
-                    in_type,
-                    tmp
-                )
-            }
             &Inst::AtomicCas {
                 offset,
                 t0,
@@ -1317,7 +1273,18 @@ impl Inst {
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}{}", alu_op.op_name(), rd, rs, format_frm(frm))
+                let frm = match alu_op {
+                    FpuOPRR::FmvXW
+                    | FpuOPRR::FmvWX
+                    | FpuOPRR::FmvXD
+                    | FpuOPRR::FmvDX
+                    | FpuOPRR::FclassS
+                    | FpuOPRR::FclassD
+                    | FpuOPRR::FcvtDW
+                    | FpuOPRR::FcvtDWU => String::new(),
+                    _ => format_frm(frm),
+                };
+                format!("{} {rd},{rs}{frm}", alu_op.op_name())
             }
             &Inst::FpuRRR {
                 alu_op,
@@ -1332,35 +1299,32 @@ impl Inst {
                 let rs1_is_rs2 = rs1 == rs2;
                 if rs1_is_rs2 && alu_op.is_copy_sign() {
                     // this is move instruction.
-                    format!(
-                        "fmv.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fmv.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else if rs1_is_rs2 && alu_op.is_copy_neg_sign() {
-                    format!(
-                        "fneg.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fneg.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else if rs1_is_rs2 && alu_op.is_copy_xor_sign() {
-                    format!(
-                        "fabs.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fabs.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else {
-                    format!(
-                        "{} {},{},{}{}",
-                        alu_op.op_name(),
-                        rd,
-                        rs1,
-                        rs2,
-                        format_frm(frm)
-                    )
+                    let frm = match alu_op {
+                        FpuOPRRR::FsgnjS
+                        | FpuOPRRR::FsgnjnS
+                        | FpuOPRRR::FsgnjxS
+                        | FpuOPRRR::FsgnjD
+                        | FpuOPRRR::FsgnjnD
+                        | FpuOPRRR::FsgnjxD
+                        | FpuOPRRR::FminS
+                        | FpuOPRRR::FminD
+                        | FpuOPRRR::FmaxS
+                        | FpuOPRRR::FmaxD
+                        | FpuOPRRR::FeqS
+                        | FpuOPRRR::FeqD
+                        | FpuOPRRR::FltS
+                        | FpuOPRRR::FltD
+                        | FpuOPRRR::FleS
+                        | FpuOPRRR::FleD => String::new(),
+                        _ => format_frm(frm),
+                    };
+                    format!("{} {rd},{rs1},{rs2}{frm}", alu_op.op_name())
                 }
             }
             &Inst::FpuRRRR {
@@ -1969,6 +1933,7 @@ impl MachInstLabelUse for LabelUse {
 }
 
 impl LabelUse {
+    #[allow(dead_code)] // in case it's needed in the future
     fn offset_in_range(self, offset: i64) -> bool {
         let min = -(self.max_neg_range() as i64);
         let max = self.max_pos_range() as i64;

@@ -1500,7 +1500,7 @@
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fma x y z)))
-  (rv_fmadd ty x y z))
+  (rv_fmadd ty (FRM.RNE) x y z))
 
 ;; (fma x y z) computes x * y + z
 ;; vfmacc computes vd[i] = +(vs1[i] * vs2[i]) + vd[i]
@@ -1539,7 +1539,7 @@
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (sqrt x)))
-  (rv_fsqrt ty x))
+  (rv_fsqrt ty (FRM.RNE) x))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (sqrt x)))
   (rv_vfsqrt_v x (unmasked) ty))
@@ -1651,7 +1651,7 @@
 
 ;;;;;  Rules for `fdemote`;;;;;;;;;;;;;;;;;;
 (rule (lower (fdemote x))
-  (rv_fcvtsd x))
+  (rv_fcvtsd (FRM.RNE) x))
 
 ;;;;;  Rules for `fvdemote`;;;;;;;;;;;;;;;;;
 
@@ -1670,7 +1670,7 @@
 ;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_scalar_float ty) (fadd x y)))
-  (rv_fadd ty x y))
+  (rv_fadd ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fadd x y)))
   (rv_vfadd_vv x y (unmasked) ty))
@@ -1684,7 +1684,7 @@
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fsub x y)))
-  (rv_fsub ty x y))
+  (rv_fsub ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fsub x y)))
   (rv_vfsub_vv x y (unmasked) ty))
@@ -1697,7 +1697,7 @@
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmul x y)))
-  (rv_fmul ty x y))
+  (rv_fmul ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmul x y)))
   (rv_vfmul_vv x y (unmasked) ty))
@@ -1711,7 +1711,7 @@
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fdiv x y)))
-  (rv_fdiv ty x y))
+  (rv_fdiv ty (FRM.RNE) x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fdiv x y)))
   (rv_vfdiv_vv x y (unmasked) ty))
@@ -1731,7 +1731,7 @@
   (let (;; Check if both inputs are not nan.
         (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a nan if any of the inputs is a NaN.
-        (nan FReg (rv_fadd ty x y))
+        (nan FReg (rv_fadd ty (FRM.RNE) x y))
         (min FReg (rv_fmin ty x y)))
     (gen_select_freg is_ordered min nan)))
 
@@ -1757,7 +1757,7 @@
   (let (;; Check if both inputs are not nan.
         (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a NaN if any of the inputs is a NaN.
-        (nan FReg (rv_fadd ty x y))
+        (nan FReg (rv_fadd ty (FRM.RNE) x y))
         (max FReg (rv_fmax ty x y)))
     (gen_select_freg is_ordered max nan)))
 
@@ -2231,17 +2231,81 @@
   (load_ext_name name 0))
 
 ;;;;;  Rules for `fcvt_to_uint`;;;;;;;;;
-(rule
-  (lower (has_type to (fcvt_to_uint v @ (value_type from))))
-  (gen_fcvt_int $false v $false from to))
+
+;; RISC-V float-to-integer conversion does not trap, but Cranelift semantics are
+;; to trap. This manually performs checks for NaN and out-of-bounds values and
+;; traps in such cases.
+;;
+;; TODO: could this perhaps be more optimal through inspection of the `fcsr`?
+;; Unsure whether that needs to be preserved across function calls and/or would
+;; cause other problems. Also unsure whether it's actually more performant.
+(rule (lower (has_type ity (fcvt_to_uint v @ (value_type fty))))
+  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
+        (min FReg (imm fty (fcvt_umin_bound fty $false)))
+        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.IntegerOverflow)))
+        (max FReg (imm fty (fcvt_umax_bound fty ity $false)))
+        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.IntegerOverflow))))
+    (lower_inbounds_fcvt_to_uint ity fty v)))
+
+(decl lower_inbounds_fcvt_to_uint (Type Type FReg) XReg)
+(rule 0 (lower_inbounds_fcvt_to_uint (fits_in_32 _) fty v)
+  (rv_fcvtwu fty (FRM.RTZ) v))
+(rule 1 (lower_inbounds_fcvt_to_uint $I64 fty v)
+  (rv_fcvtlu fty (FRM.RTZ) v))
 
 ;;;;;  Rules for `fcvt_to_sint`;;;;;;;;;
-(rule 0 (lower (has_type to (fcvt_to_sint v @ (value_type (ty_scalar_float from)))))
-  (gen_fcvt_int $false v $true from to))
+
+;; NB: see above with `fcvt_to_uint` as this is similar
+(rule (lower (has_type ity (fcvt_to_sint v @ (value_type fty))))
+  (let ((_ InstOutput (gen_trapz (rv_feq fty v v) (TrapCode.BadConversionToInteger)))
+        (min FReg (imm fty (fcvt_smin_bound fty ity $false)))
+        (_ InstOutput (gen_trapnz (rv_fle fty v min) (TrapCode.IntegerOverflow)))
+        (max FReg (imm fty (fcvt_smax_bound fty ity $false)))
+        (_ InstOutput (gen_trapnz (rv_fge fty v max) (TrapCode.IntegerOverflow))))
+    (lower_inbounds_fcvt_to_sint ity fty v)))
+
+(decl lower_inbounds_fcvt_to_sint (Type Type FReg) XReg)
+(rule 0 (lower_inbounds_fcvt_to_sint (fits_in_32 _) fty v)
+  (rv_fcvtw fty (FRM.RTZ) v))
+(rule 1 (lower_inbounds_fcvt_to_sint $I64 fty v)
+  (rv_fcvtl fty (FRM.RTZ) v))
 
 ;;;;;  Rules for `fcvt_to_sint_sat`;;;;;;;;;
+
 (rule 0 (lower (has_type to (fcvt_to_sint_sat v @ (value_type (ty_scalar_float from)))))
-  (gen_fcvt_int $true v $true from to))
+  (handle_fcvt_to_int_nan from v (lower_fcvt_to_sint_sat from to v)))
+
+;; Lowers to a `rv_fcvt*` instruction but handles 8/16-bit cases where the
+;; float is clamped before the conversion.
+(decl lower_fcvt_to_sint_sat (Type Type FReg) XReg)
+(rule 0 (lower_fcvt_to_sint_sat ty (fits_in_16 out_ty) v)
+  (let ((max FReg (imm ty (fcvt_smax_bound ty out_ty $true)))
+        (min FReg (imm ty (fcvt_smin_bound ty out_ty $true)))
+        (clamped FReg (rv_fmin ty max (rv_fmax ty min v))))
+    (rv_fcvtw ty (FRM.RTZ) clamped)))
+(rule 1 (lower_fcvt_to_sint_sat ty $I32 v) (rv_fcvtw ty (FRM.RTZ) v))
+(rule 1 (lower_fcvt_to_sint_sat ty $I64 v) (rv_fcvtl ty (FRM.RTZ) v))
+
+(decl fcvt_smax_bound (Type Type bool) u64)
+(extern constructor fcvt_smax_bound fcvt_smax_bound)
+(decl fcvt_smin_bound (Type Type bool) u64)
+(extern constructor fcvt_smin_bound fcvt_smin_bound)
+
+;; RISC-V float-to-int conversions generate the same output for NaN and +Inf,
+;; but Cranelift semantics are to produce 0 for NaN instead. This helper
+;; translates these semantics by taking the float being converted (with the type
+;; specified) and the native RISC-V output as an `XReg`. The returned `XReg`
+;; will be zeroed out if the float is NaN.
+;;
+;; This is done by comparing the float to itself, generating 0 if it's NaN. This
+;; bit is then negated to become either all-ones or all-zeros which is then
+;; and-ed against the native output. That'll produce all zeros if the input is
+;; NaN or the native output otherwise.
+(decl handle_fcvt_to_int_nan (Type FReg XReg) XReg)
+(rule (handle_fcvt_to_int_nan ty freg xreg)
+  (let ((is_not_nan XReg (rv_feq ty freg freg))
+        (not_nan_mask XReg (rv_neg is_not_nan)))
+    (rv_and xreg not_nan_mask)))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_sint_sat v @ (value_type from_ty))))
   (if-let zero (i8_to_imm5 0))
@@ -2250,8 +2314,25 @@
     (rv_vmerge_vim cvt zero is_nan from_ty)))
 
 ;;;;;  Rules for `fcvt_to_uint_sat`;;;;;;;;;
+
 (rule 0 (lower (has_type to (fcvt_to_uint_sat v @ (value_type (ty_scalar_float from)))))
-  (gen_fcvt_int $true v $false from to))
+  (handle_fcvt_to_int_nan from v (lower_fcvt_to_uint_sat from to v)))
+
+;; Lowers to a `rv_fcvt*` instruction but handles 8/16-bit cases where the
+;; float is clamped before the conversion.
+(decl lower_fcvt_to_uint_sat (Type Type FReg) XReg)
+(rule 0 (lower_fcvt_to_uint_sat ty (fits_in_16 out_ty) v)
+  (let ((max FReg (imm ty (fcvt_umax_bound ty out_ty $true)))
+        (min FReg (rv_fmvdx (zero_reg)))
+        (clamped FReg (rv_fmin ty max (rv_fmax ty min v))))
+    (rv_fcvtwu ty (FRM.RTZ) clamped)))
+(rule 1 (lower_fcvt_to_uint_sat ty $I32 v) (rv_fcvtwu ty (FRM.RTZ) v))
+(rule 1 (lower_fcvt_to_uint_sat ty $I64 v) (rv_fcvtlu ty (FRM.RTZ) v))
+
+(decl fcvt_umax_bound (Type Type bool) u64)
+(extern constructor fcvt_umax_bound fcvt_umax_bound)
+(decl fcvt_umin_bound (Type bool) u64)
+(extern constructor fcvt_umin_bound fcvt_umin_bound)
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register _) (fcvt_to_uint_sat v @ (value_type from_ty))))
   (if-let zero (i8_to_imm5 0))
@@ -2261,44 +2342,44 @@
 
 ;;;;;  Rules for `fcvt_from_sint`;;;;;;;;;
 (rule 0 (lower (has_type $F32 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtsl (sext v)))
+  (rv_fcvtsl (FRM.RNE) (sext v)))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I32))))
-  (rv_fcvtsw v))
+  (rv_fcvtsw (FRM.RNE) v))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint v @ (value_type $I64))))
-  (rv_fcvtsl v))
+  (rv_fcvtsl (FRM.RNE) v))
 
 (rule 0 (lower (has_type $F64 (fcvt_from_sint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtdl (sext v)))
+  (rv_fcvtdl (FRM.RNE) (sext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I32))))
   (rv_fcvtdw v))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I64))))
-  (rv_fcvtdl v))
+  (rv_fcvtdl (FRM.RNE) v))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_sint v @ (value_type from_ty))))
   (rv_vfcvt_f_x_v v (unmasked) from_ty))
 
 ;;;;;  Rules for `fcvt_from_uint`;;;;;;;;;
 (rule 0 (lower (has_type $F32 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtslu (zext v)))
+  (rv_fcvtslu (FRM.RNE) (zext v)))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I32))))
-  (rv_fcvtswu v))
+  (rv_fcvtswu (FRM.RNE) v))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint v @ (value_type $I64))))
-  (rv_fcvtslu v))
+  (rv_fcvtslu (FRM.RNE) v))
 
 (rule 0 (lower (has_type $F64 (fcvt_from_uint v @ (value_type (fits_in_16 ty)))))
-  (rv_fcvtdlu (zext v)))
+  (rv_fcvtdlu (FRM.RNE) (zext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I32))))
   (rv_fcvtdwu v))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I64))))
-  (rv_fcvtdlu v))
+  (rv_fcvtdlu (FRM.RNE) v))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register _) (fcvt_from_uint v @ (value_type from_ty))))
   (rv_vfcvt_f_xu_v v (unmasked) from_ty))

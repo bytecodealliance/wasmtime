@@ -181,6 +181,7 @@ impl Immediates {
                 trapcode_values.insert("heap_oob", "HeapOutOfBounds");
                 trapcode_values.insert("int_ovf", "IntegerOverflow");
                 trapcode_values.insert("int_divz", "IntegerDivisionByZero");
+                trapcode_values.insert("bad_toint", "BadConversionToInteger");
                 new_enum(
                     "code",
                     "ir::TrapCode",
