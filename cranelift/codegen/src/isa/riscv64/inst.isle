@@ -1413,12 +1413,12 @@
 (rule (rv_fcvtswu frm rs1) (fpu_rr (FpuOPRR.FcvtSwU) $F32 frm rs1))
 
 ;; Helper for emitting the `fcvt.d.w` instruction.
-(decl rv_fcvtdw (FRM XReg) FReg)
-(rule (rv_fcvtdw frm rs1) (fpu_rr (FpuOPRR.FcvtDW) $F32 frm rs1))
+(decl rv_fcvtdw (XReg) FReg)
+(rule (rv_fcvtdw rs1) (fpu_rr (FpuOPRR.FcvtDW) $F32 (FRM.RNE) rs1))
 
 ;; Helper for emitting the `fcvt.d.wu` instruction.
-(decl rv_fcvtdwu (FRM XReg) FReg)
-(rule (rv_fcvtdwu frm rs1) (fpu_rr (FpuOPRR.FcvtDWU) $F32 frm rs1))
+(decl rv_fcvtdwu (XReg) FReg)
+(rule (rv_fcvtdwu rs1) (fpu_rr (FpuOPRR.FcvtDWU) $F32 (FRM.RNE) rs1))
 
 ;; Helper for emitting the `fcvt.s.l` instruction.
 (decl rv_fcvtsl (FRM XReg) FReg)

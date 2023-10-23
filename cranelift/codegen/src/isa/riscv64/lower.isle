@@ -2354,7 +2354,7 @@
   (rv_fcvtdl (FRM.RNE) (sext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I32))))
-  (rv_fcvtdw (FRM.RNE) v))
+  (rv_fcvtdw v))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint v @ (value_type $I64))))
   (rv_fcvtdl (FRM.RNE) v))
@@ -2376,7 +2376,7 @@
   (rv_fcvtdlu (FRM.RNE) (zext v)))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I32))))
-  (rv_fcvtdwu (FRM.RNE) v))
+  (rv_fcvtdwu v))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint v @ (value_type $I64))))
   (rv_fcvtdlu (FRM.RNE) v))

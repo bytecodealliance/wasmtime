@@ -1279,7 +1279,9 @@ impl Inst {
                     | FpuOPRR::FmvXD
                     | FpuOPRR::FmvDX
                     | FpuOPRR::FclassS
-                    | FpuOPRR::FclassD => String::new(),
+                    | FpuOPRR::FclassD
+                    | FpuOPRR::FcvtDW
+                    | FpuOPRR::FcvtDWU => String::new(),
                     _ => format_frm(frm),
                 };
                 format!("{} {rd},{rs}{frm}", alu_op.op_name())
