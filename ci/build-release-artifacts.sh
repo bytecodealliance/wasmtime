@@ -28,7 +28,7 @@ if [[ "$build" = *-min ]]; then
   export RUSTFLAGS=-Zlocation-detail=none
   export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
   export CARGO_PROFILE_RELEASE_LTO=true
-  flags="-Zbuild-std=std,panic_abort --no-default-features -Zbuild-std-features="
+  flags="-Zbuild-std=std,panic_abort --no-default-features -Zbuild-std-features=std_detect_dlsym_getauxval"
   flags="$flags --features disable-logging"
 else
   # For release builds the CLI is built a bit more feature-ful than the Cargo
