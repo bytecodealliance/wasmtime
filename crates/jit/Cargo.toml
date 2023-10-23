@@ -38,7 +38,7 @@ workspace = true
 features = ["Win32_System_Diagnostics_Debug"]
 
 [target.'cfg(all(target_arch = "x86_64", not(target_os = "android")))'.dependencies]
-ittapi = { version = "0.3.4", optional = true }
+ittapi = { version = "0.4.0", optional = true }
 
 [features]
 profiling = ['dep:wasmtime-jit-debug', 'dep:ittapi']
