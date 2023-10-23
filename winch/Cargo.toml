@@ -19,7 +19,7 @@ wasmtime-environ = { workspace = true }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
 wasmparser = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ['default'] }
 wat = { workspace = true }
 cranelift-codegen = { workspace = true }
 capstone = { workspace = true }
