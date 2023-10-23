@@ -371,7 +371,7 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const ch
 /**
  * Return the data from a LinearMemory instance.
  *
- * The size in bytes as well as the maximum number of bytes that can be allocated should be 
+ * The size in bytes as well as the maximum number of bytes that can be allocated should be
  * returned as well.
  *
  * For more information about see the Rust documentation at
@@ -398,7 +398,7 @@ typedef wasmtime_error_t *(*wasmtime_memory_grow_callback_t)(
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
  */
-typedef struct {
+typedef struct wasmtime_linear_memory {
   /// User provided value to be passed to get_memory and grow_memory
   void *env;
   /// Callback to get the memory and size of this LinearMemory
@@ -412,7 +412,7 @@ typedef struct {
 /**
  * A callback to create a new LinearMemory from the specified parameters.
  *
- * The result should be written to `memory_ret` and wasmtime will own the values written 
+ * The result should be written to `memory_ret` and wasmtime will own the values written
  * into that struct.
  *
  * This callback must be thread-safe.
@@ -435,7 +435,7 @@ typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html
  */
-typedef struct {
+typedef struct wasmtime_memory_creator {
   /// User provided value to be passed to new_memory
   void* env;
   /// The callback to create new memory, must be thread safe
@@ -450,7 +450,7 @@ typedef struct {
  * Custom memory creators are used when creating host Memory objects or when creating instance
  * linear memories for the on-demand instance allocation strategy.
  *
- * The config does **not** take ownership of the #wasmtime_memory_creator_t passed in, but 
+ * The config does **not** take ownership of the #wasmtime_memory_creator_t passed in, but
  * instead copies all the values in the struct.
  *
  * For more information see the Rust documentation at
@@ -463,8 +463,8 @@ WASM_API_EXTERN void wasmtime_config_host_memory_creator_set(
 /**
  * \brief Configures whether copy-on-write memory-mapped data is used to initialize a linear memory.
  *
- * Initializing linear memory via a copy-on-write mapping can drastically improve instantiation costs 
- * of a WebAssembly module because copying memory is deferred. Additionally if a page of memory is 
+ * Initializing linear memory via a copy-on-write mapping can drastically improve instantiation costs
+ * of a WebAssembly module because copying memory is deferred. Additionally if a page of memory is
  * only ever read from WebAssembly and never written too then the same underlying page of data will
  * be reused between all instantiations of a module meaning that if a module is instantiated many
  * times this can lower the overall memory required needed to run that module.
