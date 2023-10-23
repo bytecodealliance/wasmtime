@@ -103,7 +103,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
     }
 
     fn needs_init(&self) -> bool {
-        true
+        self.mem.needs_init()
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {

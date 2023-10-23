@@ -620,6 +620,13 @@ pub unsafe trait LinearMemory: Send + Sync + 'static {
     /// Returns `Ok` if memory was grown successfully.
     fn grow_to(&mut self, new_size: usize) -> Result<()>;
 
+    /// Does this memory need initialization? It may not if it already has
+    /// initial contents.
+
+    fn needs_init(&self) -> bool {
+        true
+    }
+
     /// Return the allocated memory as a mutable pointer to u8.
     fn as_ptr(&self) -> *mut u8;
 
