@@ -101,7 +101,7 @@ members = [
   "cranelift/isle/islec",
   "cranelift/serde",
   "crates/bench-api",
-  "crates/c-api",
+  "crates/c-api/artifact",
   "crates/environ/fuzz",
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",

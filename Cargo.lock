@@ -3324,6 +3324,13 @@ dependencies = [
 name = "wasmtime-c-api"
 version = "15.0.0"
 dependencies = [
+ "wasmtime-c-api-impl",
+]
+
+[[package]]
+name = "wasmtime-c-api-impl"
+version = "15.0.0"
+dependencies = [
  "anyhow",
  "cap-std",
  "env_logger 0.10.0",

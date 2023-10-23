@@ -1,0 +1,42 @@
+[package]
+name = "wasmtime-c-api"
+version.workspace = true
+authors.workspace = true
+description = "C API to expose the Wasmtime runtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition.workspace = true
+publish = false
+
+[lib]
+name = "wasmtime"
+crate-type = ["staticlib", "cdylib"]
+doc = false
+test = false
+doctest = false
+
+[dependencies]
+wasmtime-c-api = { path = '..', package = 'wasmtime-c-api-impl' }
+
+[features]
+default = [
+  'profiling',
+  'wat',
+  'wasi',
+  'cache',
+  'parallel-compilation',
+  'async',
+  'coredump',
+  'addr2line',
+]
+async = ['wasmtime-c-api/async']
+profiling = ["wasmtime-c-api/profiling"]
+cache = ["wasmtime-c-api/cache"]
+parallel-compilation = ['wasmtime-c-api/parallel-compilation']
+wasi = ['wasmtime-c-api/wasi']
+logging = ['wasmtime-c-api/logging']
+disable-logging = ["wasmtime-c-api/disable-logging"]
+coredump = ["wasmtime-c-api/coredump"]
+addr2line = ["wasmtime-c-api/addr2line"]
+wat = ["wasmtime-c-api/wat"]
