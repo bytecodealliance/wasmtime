@@ -4,14 +4,18 @@ start:
   :JMP(finalizeExecution)
 function_1:
   SP + 1 => SP
-  RR :MSTORE(SP)
+  RR :MSTORE(SP - 1)
+  SP + 2 => SP
+  B :MSTORE(SP - 1)
   2 => A
   3 => B
   zkPC + 2 => RR
   :JMP(function_2)
   5 => B
   B :ASSERT
-  $ => RR :MLOAD(SP)
+  $ => B :MLOAD(SP - 1)
+  SP - 2 => SP
+  $ => RR :MLOAD(SP - 1)
   SP - 1 => SP
   :JMP(RR)
 function_2:

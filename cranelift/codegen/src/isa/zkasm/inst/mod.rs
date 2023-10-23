@@ -326,7 +326,10 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(rn);
             collector.reg_def(rd);
         }
-        &Inst::AdjustSp { .. } => {}
+
+        &Inst::ReserveSp { .. } => {}
+        &Inst::ReleaseSp { .. } => {}
+
         &Inst::Call { ref info } => {
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
@@ -1031,10 +1034,16 @@ impl Inst {
                 ref rets,
                 stack_bytes_to_pop,
             } => {
-                let mut s = if stack_bytes_to_pop == 0 {
-                    "  :JMP(RR)".to_string()
+                let mut s = if stack_bytes_to_pop != 0 {
+                    format!(
+                        "  {}\n  :JMP(RR)",
+                        Inst::ReleaseSp {
+                            amount: stack_bytes_to_pop
+                        }
+                        .print_with_state(_state, allocs)
+                    )
                 } else {
-                    format!("  SP - {stack_bytes_to_pop} => SP\n  :JMP(RR)")
+                    "  :JMP(RR)".to_string()
                 };
 
                 let mut empty_allocs = AllocationConsumer::default();
@@ -1046,7 +1055,7 @@ impl Inst {
                 s
             }
 
-            &MInst::Extend {
+            &Inst::Extend {
                 rd,
                 rn,
                 signed,
@@ -1063,15 +1072,22 @@ impl Inst {
                     format!("slli {rd},{rn},{shift_bits}; {op} {rd},{rd},{shift_bits}")
                 };
             }
-            &MInst::AdjustSp { amount } => {
-                format!("{} sp,{:+}", "add", amount)
+            &Inst::ReserveSp { amount } => {
+                // FIXME: conversion methods
+                let amount = amount.checked_div(8).unwrap();
+                format!("  SP + {} => SP", amount)
             }
-            &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),
-            &MInst::CallInd { ref info } => {
+            &Inst::ReleaseSp { amount } => {
+                // FIXME: conversion methods
+                let amount = amount.checked_div(8).unwrap();
+                format!("  SP - {} => SP", amount)
+            }
+            &Inst::Call { ref info } => format!("call {}", info.dest.display(None)),
+            &Inst::CallInd { ref info } => {
                 let rd = format_reg(info.rn, allocs);
                 format!("callind {}", rd)
             }
-            &MInst::ReturnCall {
+            &Inst::ReturnCall {
                 ref callee,
                 ref info,
             } => {
@@ -1086,7 +1102,7 @@ impl Inst {
                 }
                 s
             }
-            &MInst::ReturnCallInd { callee, ref info } => {
+            &Inst::ReturnCallInd { callee, ref info } => {
                 let callee = format_reg(callee, allocs);
                 let mut s = format!(
                     "return_call_ind {callee} old_stack_arg_size:{} new_stack_arg_size:{}",
@@ -1099,10 +1115,10 @@ impl Inst {
                 }
                 s
             }
-            &MInst::TrapIf { test, trap_code } => {
+            &Inst::TrapIf { test, trap_code } => {
                 format!("trap_if {},{}", format_reg(test, allocs), trap_code,)
             }
-            &MInst::TrapIfC {
+            &Inst::TrapIfC {
                 rs1,
                 rs2,
                 cc,
@@ -1112,10 +1128,10 @@ impl Inst {
                 let rs2 = format_reg(rs2, allocs);
                 format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
             }
-            &MInst::Jal { dest, .. } => {
+            &Inst::Jal { dest, .. } => {
                 format!("{} {}", "j", dest)
             }
-            &MInst::CondBr {
+            &Inst::CondBr {
                 taken,
                 not_taken,
                 kind,
@@ -1138,7 +1154,7 @@ impl Inst {
                     x
                 }
             }
-            &MInst::LoadExtName {
+            &Inst::LoadExtName {
                 rd,
                 ref name,
                 offset,
@@ -1146,26 +1162,26 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
             }
-            &MInst::LoadAddr { ref rd, ref mem } => {
+            &Inst::LoadAddr { ref rd, ref mem } => {
                 let rs = mem.to_string_with_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_addr {},{}", rd, rs)
             }
-            &MInst::VirtualSPOffsetAdj { amount } => {
+            &Inst::VirtualSPOffsetAdj { amount } => {
                 format!("virtual_sp_offset_adj {:+}", amount)
             }
-            &MInst::Mov { rd, rm, ty } => {
+            &Inst::Mov { rd, rm, ty } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let rm = format_reg(rm, allocs);
                 format!("{rm} => {rd}")
             }
-            &MInst::MovFromPReg { rd, rm } => {
+            &Inst::MovFromPReg { rd, rm } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 debug_assert!([px_reg(2), px_reg(8)].contains(&rm));
                 let rm = reg_name(Reg::from(rm));
                 format!("mv {},{}", rd, rm)
             }
-            &MInst::Select {
+            &Inst::Select {
                 ref dst,
                 condition,
                 ref x,
@@ -1179,9 +1195,9 @@ impl Inst {
                 let dst = format_regs(&dst[..], allocs);
                 format!("select_{} {},{},{}##condition={}", ty, dst, x, y, condition)
             }
-            &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
-            &MInst::EBreak {} => String::from("ebreak"),
-            &MInst::ECall {} => String::from("ecall"),
+            &Inst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
+            &Inst::EBreak {} => String::from("ebreak"),
+            &Inst::ECall {} => String::from("ecall"),
         }
     }
 }

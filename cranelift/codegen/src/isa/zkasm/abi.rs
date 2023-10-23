@@ -13,7 +13,6 @@ use crate::isa::zkasm::{inst::EmitState, inst::*};
 use crate::isa::CallConv;
 use crate::machinst::*;
 
-use crate::ir::types::I8;
 use crate::ir::LibCall;
 use crate::ir::Signature;
 use crate::isa::zkasm::settings::Flags;
@@ -54,7 +53,7 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
 
     /// Return required stack alignment in bytes.
     fn stack_align(_call_conv: isa::CallConv) -> u32 {
-        1
+        8
     }
 
     fn compute_arg_locs<'a, I>(
@@ -294,8 +293,15 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
         if amount == 0 {
             return insts;
         }
-        insts.push(Inst::AdjustSp {
-            amount: amount as i64,
+        // FIXME: is this right/sufficient for stack growing up
+        insts.push(if amount < 0 {
+            Inst::ReserveSp {
+                amount: -amount as u64,
+            }
+        } else {
+            Inst::ReleaseSp {
+                amount: amount as u64,
+            }
         });
         insts
     }
@@ -330,13 +336,14 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
         // Compute linkage frame size.
         let setup_area_size = if flags.preserve_frame_pointers()
             || !is_leaf
+            // FIXME: we don’t currently maintain a frame pointer?
             // The function arguments that are passed on the stack are addressed
             // relative to the Frame Pointer.
             || stack_args_size > 0
             || clobber_size > 0
             || fixed_frame_storage_size > 0
         {
-            16 // FP, LR
+            8 // RR
         } else {
             0
         };
@@ -362,34 +369,14 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
         let mut insts = SmallVec::new();
 
         if frame_layout.setup_area_size > 0 {
-            // add  sp,sp,-16    ;; alloc stack space for fp.
-            // sd   ra,8(sp)     ;; save ra.
-            // sd   fp,0(sp)     ;; store old fp.
-            // mv   fp,sp        ;; set fp to sp.
-            insts.push(Inst::AdjustSp { amount: -1 });
+            insts.push(Inst::ReserveSp {
+                amount: frame_layout.setup_area_size.into(),
+            });
             insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(0, I64),
+                StackAMode::SPOffset(-1, I64),
                 link_reg(),
                 I64,
             ));
-            // insts.push(Self::gen_store_stack(
-            //     StackAMode::SPOffset(0, I64),
-            //     fp_reg(),
-            //     I64,
-            // ));
-
-            // if flags.unwind_info() {
-            //     insts.push(Inst::Unwind {
-            //         inst: UnwindInst::PushFrameRegs {
-            //             offset_upward_to_caller_sp: frame_layout.setup_area_size,
-            //         },
-            //     });
-            // }
-            // insts.push(Inst::Mov {
-            //     rd: writable_fp_reg(),
-            //     rm: stack_reg(),
-            //     ty: I64,
-            // });
         }
 
         insts
@@ -405,22 +392,17 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
 
         if frame_layout.setup_area_size > 0 {
             insts.push(Self::gen_load_stack(
-                StackAMode::SPOffset(0, I64),
+                StackAMode::SPOffset(-1, I64),
                 writable_link_reg(),
                 I64,
             ));
-            // insts.push(Self::gen_load_stack(
-            //     StackAMode::SPOffset(0, I64),
-            //     writable_fp_reg(),
-            //     I64,
-            // ));
-            insts.push(Inst::AdjustSp { amount: 1 });
+            insts.push(Inst::ReleaseSp {
+                amount: frame_layout.setup_area_size.into(),
+            });
         }
 
-        if call_conv == isa::CallConv::Tail && frame_layout.stack_args_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.stack_args_size.try_into().unwrap(),
-            ));
+        if call_conv == isa::CallConv::Tail {
+            todo!()
         }
         insts.push(Inst::Ret {
             rets: vec![],
@@ -430,73 +412,35 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
         insts
     }
 
-    fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
-        insts.extend(Inst::load_constant_u32(
-            writable_a0(),
-            frame_size as u64,
-            &mut |_| writable_a0(),
-        ));
-        insts.push(Inst::Call {
-            info: Box::new(CallInfo {
-                dest: ExternalName::LibCall(LibCall::Probestack),
-                uses: smallvec![CallArgPair {
-                    vreg: a0(),
-                    preg: a0(),
-                }],
-                defs: smallvec![],
-                clobbers: PRegSet::empty(),
-                opcode: Opcode::Call,
-                callee_callconv: CallConv::SystemV,
-                caller_callconv: CallConv::SystemV,
-                callee_pop_size: 0,
-            }),
-        });
+    fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _frame_size: u32) {
+        todo!()
     }
 
     fn gen_inline_probestack(
-        insts: &mut SmallInstVec<Self::I>,
-        call_conv: isa::CallConv,
-        frame_size: u32,
-        guard_size: u32,
+        _insts: &mut SmallInstVec<Self::I>,
+        _call_conv: isa::CallConv,
+        _frame_size: u32,
+        _guard_size: u32,
     ) {
-        // Unroll at most n consecutive probes, before falling back to using a loop
-        const PROBE_MAX_UNROLL: u32 = 3;
-        // Number of probes that we need to perform
-        let probe_count = align_to(frame_size, guard_size) / guard_size;
-
-        if probe_count <= PROBE_MAX_UNROLL {
-            Self::gen_probestack_unroll(insts, guard_size, probe_count)
-        } else {
-            Self::gen_probestack_loop(insts, call_conv, guard_size, probe_count)
-        }
+        todo!()
     }
 
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
-        flags: &settings::Flags,
+        _flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
-        // Adjust the stack pointer downward for clobbers and the function fixed
+        // Adjust the stack pointer upward for clobbers and the function fixed
         // frame (spillslots and storage slots).
         let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
-        // Each stack slot is 64 bit and can fit a u8 value.
-        let stack_size = stack_size / 8;
-        if flags.unwind_info() && frame_layout.setup_area_size > 0 {
-            // The *unwind* frame (but not the actual frame) starts at the
-            // clobbers, just below the saved FP/LR pair.
-            // insts.push(Inst::Unwind {
-            //     inst: UnwindInst::DefineNewFrame {
-            //         offset_downward_to_clobbers: frame_layout.clobber_size,
-            //         offset_upward_to_caller_sp: frame_layout.setup_area_size,
-            //     },
-            // });
-        }
         // Store each clobbered register in order at offsets from SP,
         // placing them above the fixed frame slots.
         if stack_size > 0 {
-            // since we use fp, we didn't need use UnwindInst::StackAlloc.
-            let mut cur_offset = 1;
+            insts.push(Inst::ReserveSp {
+                amount: stack_size.into(),
+            });
+            let mut cur_offset = -1;
             for reg in &frame_layout.clobbered_callee_saves {
                 let r_reg = reg.to_reg();
                 let ty = match r_reg.class() {
@@ -504,24 +448,13 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
                     RegClass::Float => F64,
                     RegClass::Vector => unimplemented!("Vector Clobber Saves"),
                 };
-                if flags.unwind_info() {
-                    // insts.push(Inst::Unwind {
-                    //     inst: UnwindInst::SaveReg {
-                    //         clobber_offset: frame_layout.clobber_size - cur_offset,
-                    //         reg: r_reg,
-                    //     },
-                    // });
-                }
                 insts.push(Self::gen_store_stack(
-                    StackAMode::SPOffset(-(cur_offset as i64), ty),
+                    StackAMode::SPOffset(cur_offset, ty),
                     real_reg_to_reg(reg.to_reg()),
                     ty,
                 ));
-                cur_offset += 1
+                cur_offset -= 1
             }
-            insts.push(Inst::AdjustSp {
-                amount: -(stack_size as i64),
-            });
         }
         insts
     }
@@ -533,27 +466,25 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
         let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
-        // Each stack slot is 64 bit and can fit a u8 value.
-        let stack_size = stack_size / 8;
         if stack_size > 0 {
-            insts.push(Inst::AdjustSp {
-                amount: stack_size as i64,
+            let mut cur_offset = -1;
+            for reg in &frame_layout.clobbered_callee_saves {
+                let rreg = reg.to_reg();
+                let ty = match rreg.class() {
+                    RegClass::Int => I64,
+                    RegClass::Float => F64,
+                    RegClass::Vector => unimplemented!("Vector Clobber Restores"),
+                };
+                insts.push(Self::gen_load_stack(
+                    StackAMode::SPOffset(cur_offset, ty),
+                    Writable::from_reg(real_reg_to_reg(reg.to_reg())),
+                    ty,
+                ));
+                cur_offset -= 1
+            }
+            insts.push(Inst::ReleaseSp {
+                amount: stack_size.into(),
             });
-        }
-        let mut cur_offset = 1;
-        for reg in &frame_layout.clobbered_callee_saves {
-            let rreg = reg.to_reg();
-            let ty = match rreg.class() {
-                RegClass::Int => I64,
-                RegClass::Float => F64,
-                RegClass::Vector => unimplemented!("Vector Clobber Restores"),
-            };
-            insts.push(Self::gen_load_stack(
-                StackAMode::SPOffset(-cur_offset, ty),
-                Writable::from_reg(real_reg_to_reg(reg.to_reg())),
-                ty,
-            ));
-            cur_offset += 1
         }
         insts
     }
@@ -671,12 +602,8 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
         MACHINE_ENV.get_or_init(create_reg_environment)
     }
 
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
-        if call_conv_of_callee == isa::CallConv::Tail {
-            TAIL_CLOBBERS
-        } else {
-            DEFAULT_CLOBBERS
-        }
+    fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
+        PRegSet::empty()
     }
 
     fn get_ext_mode(
@@ -726,32 +653,19 @@ impl ZkAsmABICallSite {
     }
 }
 
-// TODO(akashin): Figure out the correct clobbering convention.
-const CALLEE_SAVE_X_REG: [bool; 32] = [
-    false, false, false, false, false, false, false, false, // 0-7
-    false, false, false, false, false, false, false, false, // 8-15
-    false, false, false, false, false, false, false, false, // 16-23
-    false, false, false, false, false, false, false, false, // 24-31
-];
-const CALLEE_SAVE_F_REG: [bool; 32] = [
-    false, false, false, false, false, false, false, false, // 0-7
-    true, false, false, false, false, false, false, false, // 8-15
-    false, false, true, true, true, true, true, true, // 16-23
-    true, true, true, true, false, false, false, false, // 24-31
-];
-
 /// This should be the registers that must be saved by callee.
 #[inline]
 fn is_reg_saved_in_prologue(conv: CallConv, reg: RealReg) -> bool {
     if conv == CallConv::Tail {
-        return false;
+        todo!()
     }
-
+    // TODO(akashin): Figure out the correct calling convention.
     match reg.class() {
-        RegClass::Int => CALLEE_SAVE_X_REG[reg.hw_enc() as usize],
-        RegClass::Float => CALLEE_SAVE_F_REG[reg.hw_enc() as usize],
-        // All vector registers are caller saved.
-        RegClass::Vector => false,
+        // FIXME(#45): Register A for returns? Find where in the code is that defined.
+        RegClass::Int if reg.hw_enc() == 10 => false,
+        RegClass::Int => true,
+        RegClass::Float => todo!(),
+        RegClass::Vector => todo!(),
     }
 }
 
@@ -762,227 +676,9 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
             RegClass::Int => {
                 clobbered_size += 8;
             }
-            RegClass::Float => {
-                clobbered_size += 8;
-            }
-            RegClass::Vector => unimplemented!("Vector Size Clobbered"),
+            RegClass::Float => unimplemented!("floats are not supported"),
+            RegClass::Vector => unimplemented!("vectors are not supported"),
         }
     }
     align_to(clobbered_size, 16)
-}
-
-const fn default_clobbers() -> PRegSet {
-    PRegSet::empty()
-        .with(px_reg(1))
-        .with(px_reg(5))
-        .with(px_reg(6))
-        .with(px_reg(7))
-        .with(px_reg(10))
-        .with(px_reg(11))
-        // CTX register is not clobbered.
-        // .with(px_reg(12))
-        .with(px_reg(13))
-        .with(px_reg(14))
-        .with(px_reg(15))
-        .with(px_reg(16))
-        .with(px_reg(17))
-        .with(px_reg(28))
-        .with(px_reg(29))
-        .with(px_reg(30))
-        .with(px_reg(31))
-    // F Regs
-    // .with(pf_reg(0))
-    // .with(pf_reg(1))
-    // .with(pf_reg(2))
-    // .with(pf_reg(3))
-    // .with(pf_reg(4))
-    // .with(pf_reg(5))
-    // .with(pf_reg(6))
-    // .with(pf_reg(7))
-    // .with(pf_reg(9))
-    // .with(pf_reg(10))
-    // .with(pf_reg(11))
-    // .with(pf_reg(12))
-    // .with(pf_reg(13))
-    // .with(pf_reg(14))
-    // .with(pf_reg(15))
-    // .with(pf_reg(16))
-    // .with(pf_reg(17))
-    // .with(pf_reg(28))
-    // .with(pf_reg(29))
-    // .with(pf_reg(30))
-    // .with(pf_reg(31))
-    // V Regs - All vector regs get clobbered
-    // .with(pv_reg(0))
-    // .with(pv_reg(1))
-    // .with(pv_reg(2))
-    // .with(pv_reg(3))
-    // .with(pv_reg(4))
-    // .with(pv_reg(5))
-    // .with(pv_reg(6))
-    // .with(pv_reg(7))
-    // .with(pv_reg(8))
-    // .with(pv_reg(9))
-    // .with(pv_reg(10))
-    // .with(pv_reg(11))
-    // .with(pv_reg(12))
-    // .with(pv_reg(13))
-    // .with(pv_reg(14))
-    // .with(pv_reg(15))
-    // .with(pv_reg(16))
-    // .with(pv_reg(17))
-    // .with(pv_reg(18))
-    // .with(pv_reg(19))
-    // .with(pv_reg(20))
-    // .with(pv_reg(21))
-    // .with(pv_reg(22))
-    // .with(pv_reg(23))
-    // .with(pv_reg(24))
-    // .with(pv_reg(25))
-    // .with(pv_reg(26))
-    // .with(pv_reg(27))
-    // .with(pv_reg(28))
-    // .with(pv_reg(29))
-    // .with(pv_reg(30))
-    // .with(pv_reg(31))
-}
-
-const DEFAULT_CLOBBERS: PRegSet = default_clobbers();
-
-// All allocatable registers are clobbered by calls using the `tail` calling
-// convention.
-const fn tail_clobbers() -> PRegSet {
-    PRegSet::empty()
-        // `x0` is the zero register, and not allocatable.
-        .with(px_reg(1))
-        // `x2` is the stack pointer, `x3` is the global pointer, and `x4` is
-        // the thread pointer. None are allocatable.
-        .with(px_reg(5))
-        .with(px_reg(6))
-        .with(px_reg(7))
-        // `x8` is the frame pointer, and not allocatable.
-        .with(px_reg(9))
-        .with(px_reg(10))
-        .with(px_reg(10))
-        .with(px_reg(11))
-        .with(px_reg(12))
-        .with(px_reg(13))
-        .with(px_reg(14))
-        .with(px_reg(15))
-        .with(px_reg(16))
-        .with(px_reg(17))
-        .with(px_reg(18))
-        .with(px_reg(19))
-        .with(px_reg(20))
-        .with(px_reg(21))
-        .with(px_reg(22))
-        .with(px_reg(23))
-        .with(px_reg(24))
-        .with(px_reg(25))
-        .with(px_reg(26))
-        .with(px_reg(27))
-        .with(px_reg(28))
-        .with(px_reg(29))
-    // `x30` and `x31` are reserved as scratch registers, and are not
-    // allocatable.
-    //
-    // F Regs
-    // .with(pf_reg(0))
-    // .with(pf_reg(1))
-    // .with(pf_reg(2))
-    // .with(pf_reg(3))
-    // .with(pf_reg(4))
-    // .with(pf_reg(5))
-    // .with(pf_reg(6))
-    // .with(pf_reg(7))
-    // .with(pf_reg(9))
-    // .with(pf_reg(10))
-    // .with(pf_reg(11))
-    // .with(pf_reg(12))
-    // .with(pf_reg(13))
-    // .with(pf_reg(14))
-    // .with(pf_reg(15))
-    // .with(pf_reg(16))
-    // .with(pf_reg(17))
-    // .with(pf_reg(18))
-    // .with(pf_reg(19))
-    // .with(pf_reg(20))
-    // .with(pf_reg(21))
-    // .with(pf_reg(22))
-    // .with(pf_reg(23))
-    // .with(pf_reg(24))
-    // .with(pf_reg(25))
-    // .with(pf_reg(26))
-    // .with(pf_reg(27))
-    // .with(pf_reg(28))
-    // .with(pf_reg(29))
-    // .with(pf_reg(30))
-    // .with(pf_reg(31))
-    // V Regs
-    // .with(pv_reg(0))
-    // .with(pv_reg(1))
-    // .with(pv_reg(2))
-    // .with(pv_reg(3))
-    // .with(pv_reg(4))
-    // .with(pv_reg(5))
-    // .with(pv_reg(6))
-    // .with(pv_reg(7))
-    // .with(pv_reg(8))
-    // .with(pv_reg(9))
-    // .with(pv_reg(10))
-    // .with(pv_reg(11))
-    // .with(pv_reg(12))
-    // .with(pv_reg(13))
-    // .with(pv_reg(14))
-    // .with(pv_reg(15))
-    // .with(pv_reg(16))
-    // .with(pv_reg(17))
-    // .with(pv_reg(18))
-    // .with(pv_reg(19))
-    // .with(pv_reg(20))
-    // .with(pv_reg(21))
-    // .with(pv_reg(22))
-    // .with(pv_reg(23))
-    // .with(pv_reg(24))
-    // .with(pv_reg(25))
-    // .with(pv_reg(26))
-    // .with(pv_reg(27))
-    // .with(pv_reg(28))
-    // .with(pv_reg(29))
-    // .with(pv_reg(30))
-    // .with(pv_reg(31))
-}
-
-const TAIL_CLOBBERS: PRegSet = tail_clobbers();
-
-impl ZkAsmMachineDeps {
-    fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
-        insts.reserve(probe_count as usize);
-        for i in 0..probe_count {
-            let offset = (guard_size * (i + 1)) as i64;
-            insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(-offset, I8),
-                zero_reg(),
-                I32,
-            ));
-        }
-    }
-
-    fn gen_probestack_loop(
-        insts: &mut SmallInstVec<Inst>,
-        call_conv: isa::CallConv,
-        guard_size: u32,
-        probe_count: u32,
-    ) {
-        // Must be a caller-saved register that is not an argument.
-        let tmp = match call_conv {
-            isa::CallConv::Tail => Writable::from_reg(x_reg(1)),
-            _ => Writable::from_reg(x_reg(28)), // t3
-        };
-        insts.push(Inst::StackProbeLoop {
-            guard_size,
-            probe_count,
-            tmp,
-        });
-    }
 }
