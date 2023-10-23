@@ -13,14 +13,14 @@ use wasmtime_wasi::preview2::{
     self, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError, Subscribe,
 };
 
-pub type HyperIncomingBody = BoxBody<Bytes, anyhow::Error>;
+pub type HyperIncomingBody = BoxBody<Bytes, types::Error>;
 
 /// Holds onto the things needed to construct a [`HostIncomingBody`] until we are ready to build
 /// one. The HostIncomingBody spawns a task that starts consuming the incoming body, and we don't
 /// want to do that unless the user asks to consume the body.
 pub struct HostIncomingBodyBuilder {
     pub body: HyperIncomingBody,
-    pub worker: Option<Arc<AbortOnDropJoinHandle<anyhow::Result<()>>>>,
+    pub worker: Option<Arc<AbortOnDropJoinHandle<Result<(), types::Error>>>>,
     pub between_bytes_timeout: Duration,
 }
 
@@ -118,7 +118,7 @@ impl HostIncomingBodyBuilder {
 pub struct HostIncomingBody {
     pub worker: AbortOnDropJoinHandle<()>,
     pub stream: Option<HostIncomingBodyStream>,
-    pub trailers: oneshot::Receiver<Result<hyper::HeaderMap, anyhow::Error>>,
+    pub trailers: oneshot::Receiver<Result<hyper::HeaderMap, types::Error>>,
 }
 
 impl HostIncomingBody {
@@ -132,13 +132,13 @@ impl HostIncomingBody {
 
 pub struct HostIncomingBodyStream {
     pub open: bool,
-    pub receiver: mpsc::Receiver<Result<Bytes, anyhow::Error>>,
+    pub receiver: mpsc::Receiver<Result<Bytes, types::Error>>,
     pub buffer: Bytes,
     pub error: Option<anyhow::Error>,
 }
 
 impl HostIncomingBodyStream {
-    fn new(receiver: mpsc::Receiver<Result<Bytes, anyhow::Error>>) -> Self {
+    fn new(receiver: mpsc::Receiver<Result<Bytes, types::Error>>) -> Self {
         Self {
             open: true,
             receiver,
@@ -180,7 +180,7 @@ impl HostInputStream for HostIncomingBodyStream {
 
             Ok(Err(e)) => {
                 self.open = false;
-                return Err(StreamError::LastOperationFailed(e));
+                return Err(StreamError::LastOperationFailed(e.into()));
             }
 
             Err(TryRecvError::Empty) => {
@@ -210,7 +210,7 @@ impl Subscribe for HostIncomingBodyStream {
             Some(Ok(bytes)) => self.buffer = bytes,
 
             Some(Err(e)) => {
-                self.error = Some(e);
+                self.error = Some(e.into());
                 self.open = false;
             }
 
@@ -225,7 +225,7 @@ pub struct HostFutureTrailers {
 }
 
 pub enum HostFutureTrailersState {
-    Waiting(oneshot::Receiver<Result<hyper::HeaderMap, anyhow::Error>>),
+    Waiting(oneshot::Receiver<Result<hyper::HeaderMap, types::Error>>),
     Done(Result<Option<FieldMap>, types::Error>),
 }
 
@@ -251,7 +251,7 @@ impl Subscribe for HostFutureTrailers {
     }
 }
 
-pub type HyperOutgoingBody = BoxBody<Bytes, anyhow::Error>;
+pub type HyperOutgoingBody = BoxBody<Bytes, types::Error>;
 
 pub enum FinishMessage {
     Finished,
@@ -276,7 +276,7 @@ impl HostOutgoingBody {
         }
         impl Body for BodyImpl {
             type Data = Bytes;
-            type Error = anyhow::Error;
+            type Error = types::Error;
             fn poll_frame(
                 mut self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
@@ -299,7 +299,7 @@ impl HostOutgoingBody {
                                         Poll::Ready(Some(Ok(Frame::trailers(trailers))))
                                     }
                                     FinishMessage::Abort => Poll::Ready(Some(Err(
-                                        anyhow::anyhow!("response corrupted"),
+                                        types::Error::ProtocolError("response corrupted".into()),
                                     ))),
                                 },
                                 Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),

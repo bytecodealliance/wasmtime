@@ -265,13 +265,16 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                       between_bytes_timeout,
                       ..
                   }| {
-                Ok(view.table().push(HostFutureIncomingResponse::Ready(
-                    handle(request.into_parts().0).map(|resp| IncomingResponseInternal {
+                let response = handle(request.into_parts().0).map(|resp| {
+                    Ok(IncomingResponseInternal {
                         resp,
                         worker: Arc::new(preview2::spawn(future::ready(Ok(())))),
                         between_bytes_timeout,
-                    }),
-                ))?)
+                    })
+                });
+                Ok(view
+                    .table()
+                    .push(HostFutureIncomingResponse::Ready(response))?)
             },
         ) as RequestSender)
     } else {
@@ -375,7 +378,7 @@ async fn wasi_http_echo() -> Result<()> {
         .header("content-type", "application/octet-stream")
         .body(BoxBody::new(StreamBody::new(stream::iter(
             body.chunks(16 * 1024)
-                .map(|chunk| Ok::<_, anyhow::Error>(Frame::data(Bytes::copy_from_slice(chunk))))
+                .map(|chunk| Ok::<_, Error>(Frame::data(Bytes::copy_from_slice(chunk))))
                 .collect::<Vec<_>>(),
         ))))?;
 
