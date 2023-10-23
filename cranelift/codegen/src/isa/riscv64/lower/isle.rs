@@ -539,67 +539,49 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
 
     fn fcvt_smin_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
-        if let I8 | I16 = int {
-            if saturating {
-                let val = match int {
-                    I8 => f32::from(i8::MIN),
-                    _ => f32::from(i16::MIN),
-                };
-                return match float {
-                    F32 => val.to_bits().into(),
-                    F64 => f64::from(val).to_bits(),
-                    _ => unimplemented!(),
-                };
-            }
-        }
-        assert!(!saturating);
-        match float {
-            F32 => f32_cvt_to_int_bounds(true, int.bits()).0.to_bits().into(),
-            F64 => f64_cvt_to_int_bounds(true, int.bits()).0.to_bits(),
+        match (float, int) {
+            // Saturating cases for larger integers are handled using the
+            // `fcvt.{w,d}.{s,d}` instruction directly, that automatically
+            // saturates up/down to the correct limit.
+            //
+            // NB: i32/i64 don't use this function because the native RISC-V
+            // instruction does everything we already need, so only cases for
+            // i8/i16 are listed here.
+            (I8, F32) if saturating => f32::from(i8::MIN).to_bits().into(),
+            (I8, F64) if saturating => f64::from(i8::MIN).to_bits(),
+            (I16, F32) if saturating => f32::from(i16::MIN).to_bits().into(),
+            (I16, F64) if saturating => f64::from(i16::MIN).to_bits(),
+
+            (_, F32) if !saturating => f32_cvt_to_int_bounds(true, int.bits()).0.to_bits().into(),
+            (_, F64) if !saturating => f64_cvt_to_int_bounds(true, int.bits()).0.to_bits(),
             _ => unimplemented!(),
         }
     }
 
     fn fcvt_smax_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
-        if let I8 | I16 = int {
-            if saturating {
-                let val = match int {
-                    I8 => f32::from(i8::MAX),
-                    _ => f32::from(i16::MAX),
-                };
-                return match float {
-                    F32 => val.to_bits().into(),
-                    F64 => f64::from(val).to_bits(),
-                    _ => unimplemented!(),
-                };
-            }
-        }
-        assert!(!saturating);
-        match float {
-            F32 => f32_cvt_to_int_bounds(true, int.bits()).1.to_bits().into(),
-            F64 => f64_cvt_to_int_bounds(true, int.bits()).1.to_bits(),
+        // NB: see `fcvt_smin_bound` for some more comments
+        match (float, int) {
+            (I8, F32) if saturating => f32::from(i8::MAX).to_bits().into(),
+            (I8, F64) if saturating => f64::from(i8::MAX).to_bits(),
+            (I16, F32) if saturating => f32::from(i16::MAX).to_bits().into(),
+            (I16, F64) if saturating => f64::from(i16::MAX).to_bits(),
+
+            (_, F32) if !saturating => f32_cvt_to_int_bounds(true, int.bits()).1.to_bits().into(),
+            (_, F64) if !saturating => f64_cvt_to_int_bounds(true, int.bits()).1.to_bits(),
             _ => unimplemented!(),
         }
     }
 
     fn fcvt_umax_bound(&mut self, float: Type, int: Type, saturating: bool) -> u64 {
-        if let I8 | I16 = int {
-            if saturating {
-                let val = match int {
-                    I8 => f32::from(u8::MAX),
-                    _ => f32::from(u16::MAX),
-                };
-                return match float {
-                    F32 => val.to_bits().into(),
-                    F64 => f64::from(val).to_bits(),
-                    _ => unimplemented!(),
-                };
-            }
-        }
-        assert!(!saturating);
-        match float {
-            F32 => f32_cvt_to_int_bounds(false, int.bits()).1.to_bits().into(),
-            F64 => f64_cvt_to_int_bounds(false, int.bits()).1.to_bits(),
+        // NB: see `fcvt_smin_bound` for some more comments
+        match (float, int) {
+            (I8, F32) if saturating => f32::from(u8::MAX).to_bits().into(),
+            (I8, F64) if saturating => f64::from(u8::MAX).to_bits(),
+            (I16, F32) if saturating => f32::from(u16::MAX).to_bits().into(),
+            (I16, F64) if saturating => f64::from(u16::MAX).to_bits(),
+
+            (_, F32) if !saturating => f32_cvt_to_int_bounds(false, int.bits()).1.to_bits().into(),
+            (_, F64) if !saturating => f64_cvt_to_int_bounds(false, int.bits()).1.to_bits(),
             _ => unimplemented!(),
         }
     }
