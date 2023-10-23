@@ -1855,10 +1855,10 @@
 ;; In the general case we need to first switch into the appropriate rounding mode.
 (rule 0 (gen_vfcvt_x_f x frm vstate)
   (let (;; Set the rounding mode and save the current mode
-        (saved_frm XReg (rv_fsrmi frm))
+        (saved_frm XReg (rv_fsrmi_swap frm))
         (res VReg (rv_vfcvt_x_f_v x (unmasked) vstate))
         ;; Restore the previous rounding mode
-        (_ Unit (rv_fsrm saved_frm)))
+        (_ Unit (emit_side_effect (rv_fsrm saved_frm))))
     res))
 
 

@@ -1759,29 +1759,13 @@
 
 ;; `Zicsr` Extension Instructions
 
-;; Helper for emitting the `csrrwi` instruction.
-(decl rv_csrrwi (CSR UImm5) XReg)
-(rule (rv_csrrwi csr imm)
-  (csr_imm (CsrImmOP.CsrRWI) csr imm))
-
 ;; This is a special case of `csrrwi` when the CSR is the `frm` CSR.
-(decl rv_fsrmi (FRM) XReg)
-(rule (rv_fsrmi frm) (rv_csrrwi (CSR.Frm) frm))
-
-
-;; Helper for emitting the `csrw` instruction. This is a special case of
-;; `csrrw` where the destination register is always `x0`.
-(decl rv_csrw (CSR XReg) Unit)
-(rule (rv_csrw csr rs)
-  (csr_reg_dst_zero (CsrRegOP.CsrRW) csr rs))
+(decl rv_fsrmi_swap (FRM) XReg)
+(rule (rv_fsrmi_swap frm) (rv_csrrwi_swap (CSR.Frm) frm))
 
 ;; This is a special case of `csrw` when the CSR is the `frm` CSR.
-(decl rv_fsrm (XReg) Unit)
-(rule (rv_fsrm rs) (rv_csrw (CSR.Frm) rs))
-
-
-
-
+(decl rv_fsrm (XReg) SideEffectNoResult)
+(rule (rv_fsrm rs) (rv_csrrw (CSR.Frm) rs))
 
 ;; Generate a mask for the bit-width of the given type
 (decl pure shift_mask (Type) u64)
@@ -2033,18 +2017,91 @@
             (_ Unit (emit (MInst.Lui dst imm))))
         dst))
 
-;; Helper for emitting `MInst.CsrImm` instructions.
-(decl csr_imm (CsrImmOP CSR UImm5) XReg)
+;; Helper for emitting a `MInst.CsrReg` instruction that writes the result to
+;; x0 and discards it.
+(decl csr_reg (CsrRegOP CSR XReg) SideEffectNoResult)
+(rule (csr_reg op csr rs)
+  (SideEffectNoResult.Inst (MInst.CsrReg op (writable_zero_reg) rs csr)))
+
+;; Helper for emitting a `MInst.CsrReg` instruction that writes the result to
+;; an allocatable register to get used later.
+(decl csr_reg_result (CsrRegOP CSR XReg) XReg)
+(rule (csr_reg_result op csr rs)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.CsrReg op dst rs csr))))
+        dst))
+
+;; Helper for emitting the `csrrw` instruction which reads the value into x0
+;; and discard the result.
+(decl rv_csrrw (CSR XReg) SideEffectNoResult)
+(rule (rv_csrrw csr rs) (csr_reg (CsrRegOP.CsrRW) csr rs))
+
+;; Helper for emitting the `csrrw` instruction "Atomic Read/Write CSR".
+;;
+;; The old value is returned in an integer register.
+(decl rv_csrrw_swap (CSR XReg) XReg)
+(rule (rv_csrrw_swap csr rs) (csr_reg_result (CsrRegOP.CsrRW) csr rs))
+
+;; Helper for emitting the `csrrs` instruction which reads the value into x0
+;; and discard the result.
+(decl rv_csrrs (CSR XReg) SideEffectNoResult)
+(rule (rv_csrrs csr rs) (csr_reg (CsrRegOP.CsrRS) csr rs))
+
+;; Helper for emitting the `csrrs` instruction "Atomic Read and Set Bits in CSR"
+;;
+;; The old value is returned in an integer register.
+(decl rv_csrrs_swap (CSR XReg) XReg)
+(rule (rv_csrrs_swap csr rs) (csr_reg_result (CsrRegOP.CsrRS) csr rs))
+
+;; Helper for emitting the `csrrc` instruction which reads the value into x0
+;; and discard the result.
+(decl rv_csrrc (CSR XReg) SideEffectNoResult)
+(rule (rv_csrrc csr rc) (csr_reg (CsrRegOP.CsrRC) csr rc))
+
+;; Helper for emitting the `csrrc` instruction "Atomic Read and Clear Bits in
+;; CSR"
+;;
+;; The old value is returned in an integer register.
+(decl rv_csrrc_swap (CSR XReg) XReg)
+(rule (rv_csrrc_swap csr rc) (csr_reg_result (CsrRegOP.CsrRC) csr rc))
+
+;; Helper for emitting `MInst.CsrImm` instructions where the result is stored
+;; in the zero register and discarded.
+(decl csr_imm (CsrImmOP CSR UImm5) SideEffectNoResult)
 (rule (csr_imm op csr imm)
+      (SideEffectNoResult.Inst (MInst.CsrImm op (writable_zero_reg) imm csr)))
+
+;; Helper for emitting `MInst.CsrImm` instructions which has a result in an
+;; allocatable register.
+(decl csr_imm_result (CsrImmOP CSR UImm5) XReg)
+(rule (csr_imm_result op csr imm)
       (let ((dst WritableXReg (temp_writable_xreg))
             (_ Unit (emit (MInst.CsrImm op dst imm csr))))
         dst))
 
-;; Helper for emitting a `MInst.CsrReg` instruction that writes the result to x0.
-(decl csr_reg_dst_zero (CsrRegOP CSR XReg) Unit)
-(rule (csr_reg_dst_zero op csr rs)
-      (emit (MInst.CsrReg op (writable_zero_reg) rs csr)))
+;; Same as `rv_csrrw` but uses an immediate instead of register operand.
+(decl rv_csrrwi (CSR UImm5) SideEffectNoResult)
+(rule (rv_csrrwi csr imm) (csr_imm (CsrImmOP.CsrRWI) csr imm))
 
+;; Same as `rv_csrrw_swap` but uses an immediate instead of register operand.
+(decl rv_csrrwi_swap (CSR UImm5) XReg)
+(rule (rv_csrrwi_swap csr imm) (csr_imm_result (CsrImmOP.CsrRWI) csr imm))
+
+;; Same as `rv_csrrs` but uses an immediate instead of register operand.
+(decl rv_csrrsi (CSR UImm5) SideEffectNoResult)
+(rule (rv_csrrsi csr imm) (csr_imm (CsrImmOP.CsrRSI) csr imm))
+
+;; Same as `rv_csrrs_swap` but uses an immediate instead of register operand.
+(decl rv_csrrsi_swap (CSR UImm5) XReg)
+(rule (rv_csrrsi_swap csr imm) (csr_imm_result (CsrImmOP.CsrRSI) csr imm))
+
+;; Same as `rv_csrrc` but uses an immediate instead of register operand.
+(decl rv_csrrci (CSR UImm5) SideEffectNoResult)
+(rule (rv_csrrci csr imm) (csr_imm (CsrImmOP.CsrRCI) csr imm))
+
+;; Same as `rv_csrrc_swap` but uses an immediate instead of register operand.
+(decl rv_csrrci_swap (CSR UImm5) XReg)
+(rule (rv_csrrci_swap csr imm) (csr_imm_result (CsrImmOP.CsrRCI) csr imm))
 
 
 (decl select_addi (Type) AluOPRRI)
