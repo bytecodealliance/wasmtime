@@ -42,7 +42,6 @@ mod emit_tests;
 use std::fmt::{Display, Formatter};
 
 pub(crate) type OptionReg = Option<Reg>;
-pub(crate) type OptionImm12 = Option<Imm12>;
 pub(crate) type VecBranchTarget = Vec<BranchTarget>;
 pub(crate) type OptionUimm5 = Option<UImm5>;
 pub(crate) type VecU8 = Vec<u8>;
@@ -155,15 +154,6 @@ pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
     x
 }
 
-pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
-    let x = 0b1100111
-        | reg_to_gpr_num(rd.to_reg()) << 7
-        | 0b000 << 12
-        | reg_to_gpr_num(base) << 15
-        | offset.as_u32() << 20;
-    x
-}
-
 /// rd and src must have the same length.
 pub(crate) fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst> {
     assert!(rd.len() == src.len());
@@ -178,11 +168,6 @@ pub(crate) fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst>
 
 impl Inst {
     const INSTRUCTION_SIZE: i32 = 4;
-
-    #[inline]
-    pub(crate) fn load_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
-        todo!()
-    }
 
     pub(crate) fn load_constant_u32<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
@@ -204,23 +189,11 @@ impl Inst {
     }
 
     pub(crate) fn construct_auipc_and_jalr(
-        link: Option<Writable<Reg>>,
-        tmp: Writable<Reg>,
-        offset: i64,
+        _link: Option<Writable<Reg>>,
+        _tmp: Writable<Reg>,
+        _offset: i64,
     ) -> [Inst; 2] {
-        Inst::generate_imm(offset as u64, |imm20, imm12| {
-            let a = Inst::Auipc {
-                rd: tmp,
-                imm: imm20.unwrap_or_default(),
-            };
-            let b = Inst::Jalr {
-                rd: link.unwrap_or(writable_zero_reg()),
-                base: tmp.to_reg(),
-                offset: imm12.unwrap_or_default(),
-            };
-            [a, b]
-        })
-        .expect("code range is too big.")
+        todo!()
     }
 
     /// Create instructions that load a 32-bit floating-point constant.

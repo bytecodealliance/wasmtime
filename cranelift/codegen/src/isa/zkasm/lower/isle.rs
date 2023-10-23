@@ -229,10 +229,6 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
         v.clone()
     }
 
-    fn imm12_and(&mut self, imm: Imm12, x: u64) -> Imm12 {
-        Imm12::from_bits(imm.as_i16() & (x as i16))
-    }
-
     fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
         if ty.is_int() || ty == R32 || ty == R64 {
             if ty.bits() <= 64 {
@@ -261,10 +257,6 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
     #[inline]
     fn emit(&mut self, arg0: &MInst) -> Unit {
         self.lower_ctx.emit(arg0.clone());
-    }
-    #[inline]
-    fn imm12_from_u64(&mut self, arg0: u64) -> Option<Imm12> {
-        Imm12::maybe_from_u64(arg0)
     }
 
     #[inline]
@@ -296,22 +288,9 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
         writable_zero_reg()
     }
     #[inline]
-    fn neg_imm12(&mut self, arg0: Imm12) -> Imm12 {
-        -arg0
-    }
-    #[inline]
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
     }
-    #[inline]
-    fn imm_from_bits(&mut self, val: u64) -> Imm12 {
-        Imm12::maybe_from_u64(val).unwrap()
-    }
-    #[inline]
-    fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {
-        Imm12::maybe_from_u64(val as u64).unwrap()
-    }
-
     fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
         let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
         self.emit(&MInst::SelectReg {
@@ -335,17 +314,6 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
     }
     fn u8_as_i32(&mut self, x: u8) -> i32 {
         x as i32
-    }
-
-    fn imm12_const(&mut self, val: i32) -> Imm12 {
-        if let Some(res) = Imm12::maybe_from_u64(val as u64) {
-            res
-        } else {
-            panic!("Unable to make an Imm12 value from {}", val)
-        }
-    }
-    fn imm12_const_add(&mut self, val: i32, add: i32) -> Imm12 {
-        Imm12::maybe_from_u64((val + add) as u64).unwrap()
     }
 
     //

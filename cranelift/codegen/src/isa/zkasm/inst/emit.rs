@@ -372,7 +372,7 @@ fn put_string(s: &str, sink: &mut MachBuffer<Inst>) {
     sink.put_data(s.as_bytes());
 }
 
-fn access_reg_with_offset(reg: Reg, offset: i16) -> String {
+fn access_reg_with_offset(reg: Reg, offset: i64) -> String {
     let name = reg_name(reg);
     match offset.cmp(&0) {
         core::cmp::Ordering::Less => format!("{name} - {}", -offset),
@@ -496,70 +496,62 @@ impl MachInstEmit for Inst {
                 let from = from.clone().with_allocs(&mut allocs);
                 let base = from.get_base_register();
                 let offset = from.get_offset_with_state(state);
-                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
                 let rd = allocs.next_writable(rd);
-
-                let (addr, imm12) = match (base, offset_imm12) {
-                    // If the offset fits into an imm12 we can directly encode it.
-                    (Some(base), Some(imm12)) => (base, imm12),
-                    // Otherwise load the address it into a reg and load from it.
-                    _ => {
-                        let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
-                        (tmp.to_reg(), Imm12::zero())
-                    }
-                };
-                put_string(
-                    &format!(
+                let insn = match from {
+                    AMode::RegOffset(r, off, _) => format!(
                         "$ => {} :MLOAD({})\n",
                         reg_name(rd.to_reg()),
-                        access_reg_with_offset(addr, imm12.bits),
+                        access_reg_with_offset(r, off),
                     ),
-                    sink,
-                );
-
-                // let srcloc = state.cur_srcloc();
-                // if !srcloc.is_default() && !flags.notrap() {
-                //     // Register the offset at which the actual load instruction starts.
-                //     sink.add_trap(TrapCode::HeapOutOfBounds);
-                // }
-                //
-                // sink.put4(encode_i_type(op.op_code(), rd, op.funct3(), addr, imm12));
+                    AMode::SPOffset(off, _) | AMode::NominalSPOffset(off, _) => {
+                        format!(
+                            "$ => {} :MLOAD({})\n",
+                            reg_name(rd.to_reg()),
+                            access_reg_with_offset(stack_reg(), off),
+                        )
+                    }
+                    AMode::FPOffset(off, _) => {
+                        format!(
+                            "$ => {} :MLOAD({})\n",
+                            reg_name(rd.to_reg()),
+                            access_reg_with_offset(fp_reg(), off),
+                        )
+                    }
+                    // FIXME: these don't actually produce valid zkASM
+                    AMode::Const(_) => format!("$ => {} :MLOAD({})\n", reg_name(rd.to_reg()), from),
+                    AMode::Label(_) => format!("$ => {} :MLOAD({})\n", reg_name(rd.to_reg()), from),
+                };
+                put_string(&insn, sink);
             }
             &Inst::Store { op, src, flags, to } => {
                 let to = to.clone().with_allocs(&mut allocs);
                 let src = allocs.next(src);
 
-                let base = to.get_base_register();
-                let offset = to.get_offset_with_state(state);
-                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
-
-                let (addr, imm12) = match (base, offset_imm12) {
-                    // If the offset fits into an imm12 we can directly encode it.
-                    (Some(base), Some(imm12)) => (base, imm12),
-                    // Otherwise load the address it into a reg and load from it.
-                    _ => {
-                        let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr { rd: tmp, mem: to }.emit(&[], sink, emit_info, state);
-                        (tmp.to_reg(), Imm12::zero())
-                    }
-                };
-                put_string(
-                    &format!(
+                let insn = match to {
+                    AMode::RegOffset(r, off, _) => format!(
                         "{} :MSTORE({})\n",
                         reg_name(src),
-                        access_reg_with_offset(addr, imm12.bits),
+                        access_reg_with_offset(r, off),
                     ),
-                    sink,
-                );
-
-                // let srcloc = state.cur_srcloc();
-                // if !srcloc.is_default() && !flags.notrap() {
-                //     // Register the offset at which the actual load instruction starts.
-                //     sink.add_trap(TrapCode::HeapOutOfBounds);
-                // }
-                //
-                // sink.put4(encode_s_type(op.op_code(), op.funct3(), addr, src, imm12));
+                    AMode::SPOffset(off, _) | AMode::NominalSPOffset(off, _) => {
+                        format!(
+                            "{} :MSTORE({})\n",
+                            reg_name(src),
+                            access_reg_with_offset(stack_reg(), off),
+                        )
+                    }
+                    AMode::FPOffset(off, _) => {
+                        format!(
+                            "{} :MSTORE({})\n",
+                            reg_name(src),
+                            access_reg_with_offset(fp_reg(), off),
+                        )
+                    }
+                    // FIXME: these don't actually produce valid zkASM
+                    AMode::Const(_) => format!("{} :MSTORE({})\n", reg_name(src), to),
+                    AMode::Label(_) => format!("{} :MSTORE({})\n", reg_name(src), to),
+                };
+                put_string(&insn, sink);
             }
             &Inst::Args { .. } => {
                 // Nothing: this is a pseudoinstruction that serves

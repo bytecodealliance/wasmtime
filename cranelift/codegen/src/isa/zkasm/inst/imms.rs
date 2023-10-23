@@ -5,53 +5,9 @@ use super::Inst;
 #[allow(dead_code)]
 use std::fmt::{Debug, Display, Formatter, Result};
 
-// TODO: remove
-#[derive(Copy, Clone, Debug, Default)]
-pub struct Imm12 {
-    pub bits: i16,
-}
-
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Imm32 {
     pub bits: i32,
-}
-
-impl Imm12 {
-    pub(crate) const FALSE: Self = Self { bits: 0 };
-    pub(crate) const TRUE: Self = Self { bits: 1 };
-    pub fn maybe_from_u64(val: u64) -> Option<Imm12> {
-        let sign_bit = 1 << 11;
-        if val == 0 {
-            Some(Imm12 { bits: 0 })
-        } else if (val & sign_bit) != 0 && (val >> 12) == 0xffff_ffff_ffff_f {
-            Some(Imm12 {
-                bits: (val & 0xffff) as i16,
-            })
-        } else if (val & sign_bit) == 0 && (val >> 12) == 0 {
-            Some(Imm12 {
-                bits: (val & 0xffff) as i16,
-            })
-        } else {
-            None
-        }
-    }
-    #[inline]
-    pub fn from_bits(bits: i16) -> Self {
-        Self { bits: bits & 0xfff }
-    }
-    /// Create a zero immediate of this format.
-    #[inline]
-    pub fn zero() -> Self {
-        Imm12 { bits: 0 }
-    }
-    #[inline]
-    pub fn as_i16(self) -> i16 {
-        self.bits
-    }
-    #[inline]
-    pub fn as_u32(&self) -> u32 {
-        (self.bits as u32) & 0xfff
-    }
 }
 
 impl Imm32 {
@@ -73,28 +29,9 @@ impl Imm32 {
     }
 }
 
-impl Into<i64> for Imm12 {
-    fn into(self) -> i64 {
-        self.bits as i64
-    }
-}
-
-impl Display for Imm12 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{:+}", self.bits)
-    }
-}
-
 impl Display for Imm32 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{:+}", self.bits)
-    }
-}
-
-impl std::ops::Neg for Imm12 {
-    type Output = Self;
-    fn neg(self) -> Self::Output {
-        Self { bits: -self.bits }
     }
 }
 
@@ -214,13 +151,8 @@ impl Inst {
     /// this helper returns `None`.
     pub(crate) fn generate_imm<R>(
         value: u64,
-        mut handle_imm: impl FnMut(Option<Imm20>, Option<Imm12>) -> R,
+        mut handle_imm: impl FnMut(Option<Imm20>) -> R,
     ) -> Option<R> {
-        if let Some(imm12) = Imm12::maybe_from_u64(value) {
-            // can be load using single imm12.
-            let r = handle_imm(None, Some(imm12));
-            return Some(r);
-        }
         let value = value as i64;
         if !(value >= Self::imm_min() && value <= Self::imm_max()) {
             // not in range, return None.
@@ -251,31 +183,17 @@ impl Inst {
         };
         assert!(imm20 >= -(0x7_ffff + 1) && imm20 <= 0x7_ffff);
         assert!(imm20 != 0 || imm12 != 0);
-        Some(handle_imm(
-            if imm20 != 0 {
-                Some(Imm20::from_bits(imm20 as i32))
-            } else {
-                None
-            },
-            if imm12 != 0 {
-                Some(Imm12::from_bits(imm12 as i16))
-            } else {
-                None
-            },
-        ))
+        Some(handle_imm(if imm20 != 0 {
+            Some(Imm20::from_bits(imm20 as i32))
+        } else {
+            None
+        }))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn test_imm12() {
-        let x = Imm12::zero();
-        assert_eq!(0, x.as_u32());
-        Imm12::maybe_from_u64(0xffff_ffff_ffff_ffff).unwrap();
-    }
-
     #[test]
     fn imm20_and_imm12() {
         assert!(Inst::imm_max() == (i32::MAX - 2048) as i64);

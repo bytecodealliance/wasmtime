@@ -235,21 +235,17 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
         imm: u32,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
-        if let Some(_imm12) = Imm12::maybe_from_u64(imm as u64) {
-            todo!();
-        } else {
-            insts.extend(Inst::load_constant_u32(
-                writable_spilltmp_reg2(),
-                imm as u64,
-                &mut |_| writable_spilltmp_reg2(),
-            ));
-            insts.push(Inst::AluRRR {
-                alu_op: AluOPRRR::Add,
-                rd: into_reg,
-                rs1: spilltmp_reg2(),
-                rs2: from_reg,
-            });
-        }
+        insts.extend(Inst::load_constant_u32(
+            writable_spilltmp_reg2(),
+            imm as u64,
+            &mut |_| writable_spilltmp_reg2(),
+        ));
+        insts.push(Inst::AluRRR {
+            alu_op: AluOPRRR::Add,
+            rd: into_reg,
+            rs1: spilltmp_reg2(),
+            rs2: from_reg,
+        });
         insts
     }
 

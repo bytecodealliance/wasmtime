@@ -148,7 +148,7 @@
       ;;Plain unconditional jumps (assembler pseudo-op J) are encoded as a JAL with rd=x0.
       (rd WritableReg)
       (base Reg)
-      (offset Imm12))
+      (offset Imm32))
 
     ;; select x or y base on condition
     (Select
@@ -829,57 +829,24 @@
 
 ;; Imm12 Rules
 
-(decl pure imm12_zero () Imm12)
-(rule
-  (imm12_zero)
-  (imm12_const 0))
-
-(decl pure imm12_const (i32) Imm12)
-(extern constructor imm12_const imm12_const)
-
 ; (decl load_imm12 (i32) Reg)
 ; (rule
 ;   (load_imm12 x)
 ;   (rv_addi (zero_reg) (imm12_const x)))
 
-;; for load immediate
-(decl imm_from_bits (u64) Imm12)
-(extern constructor imm_from_bits imm_from_bits)
-
-(decl imm_from_neg_bits (i64) Imm12)
-(extern constructor imm_from_neg_bits imm_from_neg_bits)
-
-(decl imm12_const_add (i32 i32) Imm12)
-(extern constructor imm12_const_add imm12_const_add)
-
-(decl imm12_and (Imm12 u64) Imm12)
-(extern constructor imm12_and imm12_and)
-
-;; Helper for get negative of Imm12
-(decl neg_imm12 (Imm12) Imm12)
-(extern constructor neg_imm12 neg_imm12)
-
 ;; Imm12 Extractors
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
-(decl imm12_from_value (Imm12) Value)
-(extractor
-  (imm12_from_value n)
-  (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
-
 (decl imm32_from_value (Imm32) Value)
 (extractor
   (imm32_from_value n)
   (def_inst (iconst (u64_from_imm64 (imm32_from_u64 n)))))
 
-(decl imm12_from_u64 (Imm12) u64)
-(extern extractor imm12_from_u64 imm12_from_u64)
-
 (decl imm32_from_u64 (Imm32) u64)
 (extern extractor imm32_from_u64 imm32_from_u64)
 
-(decl pure partial u64_to_imm12 (u64) Imm12)
-(rule (u64_to_imm12 (imm12_from_u64 n)) n)
+(decl pure partial u64_to_imm32 (u64) Imm32)
+(rule (u64_to_imm32 (imm32_from_u64 n)) n)
 
 
 ;; Imm5 Extractors

@@ -615,19 +615,6 @@ impl AluOPRRI {
         x
     }
 
-    pub(crate) fn imm12(self, imm12: Imm12) -> u32 {
-        let x = imm12.as_u32();
-        if let Some(func) = self.option_funct6() {
-            func << 6 | (x & 0b11_1111)
-        } else if let Some(func) = self.option_funct7() {
-            func << 5 | (x & 0b1_1111)
-        } else if let Some(func) = self.option_funct12() {
-            func
-        } else {
-            x
-        }
-    }
-
     pub(crate) fn option_funct12(self) -> Option<u32> {
         match self {
             Self::Clz => Some(0b011000000000),

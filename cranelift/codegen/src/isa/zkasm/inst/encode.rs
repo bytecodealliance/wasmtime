@@ -6,7 +6,7 @@
 //! Some instructions especially in extensions have slight variations from
 //! the base RISC-V specification.
 
-use super::{Imm12, Imm5, UImm5};
+use super::{Imm5, UImm5};
 use crate::isa::zkasm::inst::reg_to_gpr_num;
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -47,35 +47,4 @@ pub fn encode_r_type(
         reg_to_gpr_num(rs2),
         funct7,
     )
-}
-
-/// Encode an I-type instruction.
-///
-/// Layout:
-/// 0-------6-7-------11-12------14-15------19-20------------------31
-/// | Opcode |   rd     |  width   |   rs1    |     Offset[11:0]    |
-pub fn encode_i_type(opcode: u32, rd: WritableReg, width: u32, rs1: Reg, offset: Imm12) -> u32 {
-    let mut bits = 0;
-    bits |= unsigned_field_width(opcode, 7);
-    bits |= reg_to_gpr_num(rd.to_reg()) << 7;
-    bits |= unsigned_field_width(width, 3) << 12;
-    bits |= reg_to_gpr_num(rs1) << 15;
-    bits |= unsigned_field_width(offset.as_u32(), 12) << 20;
-    bits
-}
-
-/// Encode an S-type instruction.
-///
-/// Layout:
-/// 0-------6-7-------11-12------14-15------19-20---24-25-------------31
-/// | Opcode | imm[4:0] |  width   |   base   |  src  |    imm[11:5]   |
-pub fn encode_s_type(opcode: u32, width: u32, base: Reg, src: Reg, offset: Imm12) -> u32 {
-    let mut bits = 0;
-    bits |= unsigned_field_width(opcode, 7);
-    bits |= (offset.as_u32() & 0b11111) << 7;
-    bits |= unsigned_field_width(width, 3) << 12;
-    bits |= reg_to_gpr_num(base) << 15;
-    bits |= reg_to_gpr_num(src) << 20;
-    bits |= unsigned_field_width(offset.as_u32() >> 5, 7) << 25;
-    bits
 }
