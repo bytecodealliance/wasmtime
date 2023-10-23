@@ -181,9 +181,8 @@ int main() {
   // This pointer is unowned.
   auto *context = wasmtime_store_context(store.get());
   // Configure the store to periodically yield control
-  wasmtime_context_out_of_fuel_async_yield(context,
-                                           /*injection_count=*/10,
-                                           /*fuel_to_inject=*/10000);
+  wasmtime_context_set_fuel(context, 100000);
+  wasmtime_context_fuel_async_yield_interval(context, /*interval=*/10000);
 
   auto compiled_module =
       compile_wat_module_from_file(engine.get(), "examples/async.wat");

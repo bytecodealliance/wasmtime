@@ -1895,50 +1895,26 @@ impl<T> Caller<'_, T> {
         self.store.gc()
     }
 
-    /// Returns the fuel consumed by this store.
-    ///
-    /// For more information see [`Store::fuel_consumed`](crate::Store::fuel_consumed)
-    pub fn fuel_consumed(&self) -> Option<u64> {
-        self.store.fuel_consumed()
-    }
-
     /// Returns the remaining fuel in the store.
     ///
-    /// For more information see [`Store::fuel_remaining`](crate::Store::fuel_remaining)
-    pub fn fuel_remaining(&self) -> Option<u64> {
-        self.store.fuel_remaining()
+    /// For more information see [`Store::get_fuel`](crate::Store::get_fuel)
+    pub fn get_fuel(&self) -> Result<u64> {
+        self.store.get_fuel()
     }
 
-    /// Inject more fuel into this store to be consumed when executing wasm code.
+    /// Set the amount of fuel in this store to be consumed when executing wasm code.
     ///
-    /// For more information see [`Store::add_fuel`](crate::Store::add_fuel)
-    pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
-        self.store.add_fuel(fuel)
+    /// For more information see [`Store::set_fuel`](crate::Store::set_fuel)
+    pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.store.set_fuel(fuel)
     }
 
-    /// Synthetically consumes fuel from the store.
-    ///
-    /// For more information see [`Store::consume_fuel`](crate::Store::consume_fuel)
-    pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
-        self.store.consume_fuel(fuel)
-    }
-
-    /// Configures this `Store` to trap whenever fuel runs out.
+    /// Configures this `Store` to yield while executing futures every N units of fuel.
     ///
     /// For more information see
-    /// [`Store::out_of_fuel_trap`](crate::Store::out_of_fuel_trap)
-    pub fn out_of_fuel_trap(&mut self) {
-        self.store.out_of_fuel_trap()
-    }
-
-    /// Configures this `Store` to yield while executing futures whenever fuel
-    /// runs out.
-    ///
-    /// For more information see
-    /// [`Store::out_of_fuel_async_yield`](crate::Store::out_of_fuel_async_yield)
-    pub fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
-        self.store
-            .out_of_fuel_async_yield(injection_count, fuel_to_inject)
+    /// [`Store::fuel_async_yield_interval`](crate::Store::fuel_async_yield_interval)
+    pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
+        self.store.fuel_async_yield_interval(interval)
     }
 }
 

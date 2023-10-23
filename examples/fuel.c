@@ -43,9 +43,9 @@ int main() {
   assert(store != NULL);
   wasmtime_context_t *context = wasmtime_store_context(store);
 
-  error = wasmtime_context_add_fuel(context, 10000);
+  error = wasmtime_context_set_fuel(context, 10000);
   if (error != NULL)
-    exit_with_error("failed to add fuel", error, NULL);
+    exit_with_error("failed to set fuel", error, NULL);
 
   // Load our input file to parse it next
   FILE* file = fopen("examples/fuel.wat", "r");
@@ -93,7 +93,7 @@ int main() {
   // Call it repeatedly until it fails
   for (int n = 1; ; n++) {
     uint64_t fuel_before;
-    wasmtime_context_fuel_consumed(context, &fuel_before);
+    wasmtime_context_get_fuel(context, &fuel_before);
     wasmtime_val_t params[1];
     params[0].kind = WASMTIME_I32;
     params[0].of.i32 = n;
@@ -110,13 +110,13 @@ int main() {
     }
 
     uint64_t fuel_after;
-    wasmtime_context_fuel_consumed(context, &fuel_after);
+    wasmtime_context_get_fuel(context, &fuel_after);
     assert(results[0].kind == WASMTIME_I32);
-    printf("fib(%d) = %d [consumed %lld fuel]\n", n, results[0].of.i32, fuel_after - fuel_before);
+    printf("fib(%d) = %d [consumed %lu fuel]\n", n, results[0].of.i32, fuel_after - fuel_before);
 
-    error = wasmtime_context_add_fuel(context, fuel_after - fuel_before);
+    error = wasmtime_context_set_fuel(context, 10000);
     if (error != NULL)
-      exit_with_error("failed to add fuel", error, NULL);
+      exit_with_error("failed to set fuel", error, NULL);
   }
 
   // Clean up after ourselves at this point

@@ -10,14 +10,14 @@ fn main() -> Result<()> {
     config.consume_fuel(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
-    store.add_fuel(10_000)?;
+    store.set_fuel(10_000)?;
     let module = Module::from_file(store.engine(), "examples/fuel.wat")?;
     let instance = Instance::new(&mut store, &module, &[])?;
 
     // Invoke `fibonacci` export with higher and higher numbers until we exhaust our fuel.
     let fibonacci = instance.get_typed_func::<i32, i32>(&mut store, "fibonacci")?;
     for n in 1.. {
-        let fuel_before = store.fuel_consumed().unwrap();
+        let fuel_before = store.get_fuel().unwrap();
         let output = match fibonacci.call(&mut store, n) {
             Ok(v) => v,
             Err(e) => {
@@ -26,9 +26,9 @@ fn main() -> Result<()> {
                 break;
             }
         };
-        let fuel_consumed = store.fuel_consumed().unwrap() - fuel_before;
+        let fuel_consumed = fuel_before - store.get_fuel().unwrap();
         println!("fib({}) = {} [consumed {} fuel]", n, output, fuel_consumed);
-        store.add_fuel(fuel_consumed)?;
+        store.set_fuel(10_000)?;
     }
     Ok(())
 }

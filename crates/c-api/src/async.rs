@@ -1,6 +1,7 @@
 use std::ffi::c_void;
 use std::future::Future;
 use std::mem::{self, MaybeUninit};
+use std::num::NonZeroU64;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -36,12 +37,14 @@ pub extern "C" fn wasmtime_context_epoch_deadline_async_yield_and_update(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_context_out_of_fuel_async_yield(
+pub extern "C" fn wasmtime_context_fuel_async_yield_interval(
     mut store: CStoreContextMut<'_>,
-    injection_count: u64,
-    fuel_to_inject: u64,
-) {
-    store.out_of_fuel_async_yield(injection_count, fuel_to_inject);
+    interval: Option<NonZeroU64>,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        store.fuel_async_yield_interval(interval.map(|n| n.get())),
+        |()| {},
+    )
 }
 
 pub type wasmtime_func_async_callback_t = extern "C" fn(
