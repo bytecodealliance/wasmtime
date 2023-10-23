@@ -37,20 +37,19 @@ fn test_zkasm_binemit() {
     // TODO: a test with `rets`.
     insns.push(TestUnit::new(
         Inst::Mov {
-            rd: writable_fa0(),
-            rm: fa1(),
-            ty: F32,
+            rd: writable_a0(),
+            rm: b0(),
+            ty: I64,
         },
-        "fa1 => fa0", // FIXME: wrong register names!
+        "B => A",
     ));
-
     insns.push(TestUnit::new(
         Inst::Mov {
-            rd: writable_fa0(),
-            rm: fa1(),
-            ty: F64,
+            rd: writable_a0(),
+            rm: b0(),
+            ty: I32, // FIXME: This *must* zero out the upper 32 bits!
         },
-        "fa1 => fa0", // FIXME: wrong register names!
+        "B => A",
     ));
     // insns.push(TestUnit::new(
     //     Inst::AluRRImm12 {

@@ -8,7 +8,7 @@ use generated_code::{Context, ExtendOp, MInst};
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::zkasm::abi::ZkAsmABICallSite;
-use crate::isa::zkasm::lower::args::{FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg};
+use crate::isa::zkasm::lower::args::{WritableXReg, XReg};
 use crate::isa::zkasm::ZkAsmBackend;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
@@ -118,21 +118,6 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
         InstOutput::new()
     }
 
-    fn vreg_new(&mut self, r: Reg) -> VReg {
-        VReg::new(r).unwrap()
-    }
-    fn writable_vreg_new(&mut self, r: WritableReg) -> WritableVReg {
-        r.map(|wr| VReg::new(wr).unwrap())
-    }
-    fn writable_vreg_to_vreg(&mut self, arg0: WritableVReg) -> VReg {
-        arg0.to_reg()
-    }
-    fn writable_vreg_to_writable_reg(&mut self, arg0: WritableVReg) -> WritableReg {
-        arg0.map(|vr| vr.to_reg())
-    }
-    fn vreg_to_reg(&mut self, arg0: VReg) -> Reg {
-        *arg0
-    }
     fn xreg_new(&mut self, r: Reg) -> XReg {
         XReg::new(r).unwrap()
     }
@@ -146,21 +131,6 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
         arg0.map(|xr| xr.to_reg())
     }
     fn xreg_to_reg(&mut self, arg0: XReg) -> Reg {
-        *arg0
-    }
-    fn freg_new(&mut self, r: Reg) -> FReg {
-        FReg::new(r).unwrap()
-    }
-    fn writable_freg_new(&mut self, r: WritableReg) -> WritableFReg {
-        r.map(|wr| FReg::new(wr).unwrap())
-    }
-    fn writable_freg_to_freg(&mut self, arg0: WritableFReg) -> FReg {
-        arg0.to_reg()
-    }
-    fn writable_freg_to_writable_reg(&mut self, arg0: WritableFReg) -> WritableReg {
-        arg0.map(|fr| fr.to_reg())
-    }
-    fn freg_to_reg(&mut self, arg0: FReg) -> Reg {
         *arg0
     }
 
@@ -342,9 +312,6 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
         Imm12::maybe_from_u64(val as u64).unwrap()
     }
 
-    fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
-        None
-    }
     fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
         let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
         self.emit(&MInst::SelectReg {
@@ -415,14 +382,6 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
     }
     fn default_memflags(&mut self) -> MemFlags {
         MemFlags::new()
-    }
-
-    fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
-        Some(*f)
-    }
-
-    fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
-        FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }
 
     fn gen_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {

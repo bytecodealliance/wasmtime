@@ -241,19 +241,6 @@
 
 ))
 
-
-(type FloatSelectOP (enum
-  (Max)
-  (Min)
-))
-
-(type FloatRoundOP (enum
-  (Nearest)
-  (Ceil)
-  (Floor)
-  (Trunc)
-))
-
 (type IntSelectOP (enum
   (Smax)
   (Umax)
@@ -284,82 +271,6 @@
   (AmomaxD)
   (AmominuD)
   (AmomaxuD)
-))
-
-(type FpuOPRRRR (enum
-  ;; float32
-  (FmaddS)
-  (FmsubS)
-  (FnmsubS)
-  (FnmaddS)
-  ;; float64
-  (FmaddD)
-  (FmsubD)
-  (FnmsubD)
-  (FnmaddD)
-))
-
-(type FClassResult (enum
-  ;;0 rs1 is −∞.
-  (NegInfinite)
-  ;; 1 rs1 is a negative normal number.
-  (NegNormal)
-  ;; 2 rs1 is a negative subnormal number.
-  (NegSubNormal)
-  ;; 3 rs1 is −0.
-  (NegZero)
-  ;; 4 rs1 is +0.
-  (PosZero)
-  ;; 5 rs1 is a positive subnormal number.
-  (PosSubNormal)
-  ;; 6 rs1 is a positive normal number.
-  (PosNormal)
-  ;; 7 rs1 is +∞.
-  (PosInfinite)
-  ;; 8 rs1 is a signaling NaN.
-  (SNaN)
-  ;; 9 rs1 is a quiet NaN.
-  (QNaN)
-))
-
-(type FpuOPRR (enum
-  ;; RV32F Standard Extension
-  (FsqrtS)
-  (FcvtWS)
-  (FcvtWuS)
-  (FmvXW)
-  (FclassS)
-  (FcvtSw)
-  (FcvtSwU)
-  (FmvWX)
-
-
-  ;; RV64F Standard Extension (in addition to RV32F)
-  (FcvtLS)
-  (FcvtLuS)
-  (FcvtSL)
-  (FcvtSLU)
-
-
-  ;; RV64D Standard Extension (in addition to RV32D)
-  (FcvtLD)
-  (FcvtLuD)
-  (FmvXD)
-  (FcvtDL)
-  (FcvtDLu)
-  (FmvDX)
-
-  ;; RV32D Standard Extension
-  (FsqrtD)
-  (FcvtSD)
-  (FcvtDS)
-  (FclassD)
-  (FcvtWD)
-  (FcvtWuD)
-  (FcvtDW)
-  (FcvtDWU)
-  ;; bitmapip
-
 ))
 
 (type LoadOP (enum
@@ -463,39 +374,6 @@
 ))
 
 
-(type FpuOPRRR (enum
-  ;; RV32F Standard Extension
-  (FaddS)
-  (FsubS)
-  (FmulS)
-  (FdivS)
-
-  (FsgnjS)
-  (FsgnjnS)
-  (FsgnjxS)
-  (FminS)
-  (FmaxS)
-  (FeqS)
-  (FltS)
-  (FleS)
-
-  ;; RV32D Standard Extension
-  (FaddD)
-  (FsubD)
-  (FmulD)
-  (FdivD)
-  (FsgnjD)
-  (FsgnjnD)
-  (FsgnjxD)
-  (FminD)
-  (FmaxD)
-  (FeqD)
-  (FltD)
-  (FleD)
-))
-
-
-
 (type AluOPRRI (enum
   ;; Base ISA
   (Addi)
@@ -538,23 +416,6 @@
   (Bseti)
 ))
 
-
-(type FRM (enum
-  ;; Round to Nearest, ties to Even
-  (RNE)
-  ;; Round towards Zero
-  (RTZ)
-  ;;  Round Down (towards −∞)
-  (RDN)
-  ;; Round Up (towards +∞)
-  (RUP)
-  ;; Round to Nearest, ties to Max Magnitude
-  (RMM)
-  ;; In instruction’s rm field, selects dynamic rounding mode;
-  ;;In Rounding Mode register, Invalid.
-  (Fcsr)
-))
-
 (type FFlagsException (enum
   ;; Invalid Operation
   (NV)
@@ -590,7 +451,6 @@
 (type Imm20 (primitive Imm20))
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
-(type OptionFloatRoundingMode (primitive OptionFloatRoundingMode))
 (type VecU8 (primitive VecU8))
 (type AMO (primitive AMO))
 (type VecMachLabel extern (enum))
@@ -664,130 +524,6 @@
 ;; Allocates a new `WritableXReg`.
 (decl temp_writable_xreg () WritableXReg)
 (rule (temp_writable_xreg) (temp_writable_reg $I64))
-
-
-;; Construct a new `FReg` from a `Reg`.
-;;
-;; Asserts that the register has a Float RegClass.
-(decl freg_new (Reg) FReg)
-(extern constructor freg_new freg_new)
-(convert Reg FReg freg_new)
-
-;; Construct a new `WritableFReg` from a `WritableReg`.
-;;
-;; Asserts that the register has a Float RegClass.
-(decl writable_freg_new (WritableReg) WritableFReg)
-(extern constructor writable_freg_new writable_freg_new)
-(convert WritableReg WritableFReg writable_freg_new)
-
-;; Put a value into a FReg.
-;;
-;; Asserts that the value goes into a FReg.
-(decl put_in_freg (Value) FReg)
-(rule (put_in_freg val) (freg_new (put_in_reg val)))
-(convert Value FReg put_in_freg)
-
-;; Construct an `InstOutput` out of a single FReg register.
-(decl output_freg (FReg) InstOutput)
-(rule (output_freg x) (output_reg x))
-(convert FReg InstOutput output_freg)
-
-;; Convert a `WritableFReg` to an `FReg`.
-(decl pure writable_freg_to_freg (WritableFReg) FReg)
-(extern constructor writable_freg_to_freg writable_freg_to_freg)
-(convert WritableFReg FReg writable_freg_to_freg)
-
-;; Convert a `WritableFReg` to an `WritableReg`.
-(decl pure writable_freg_to_writable_reg (WritableFReg) WritableReg)
-(extern constructor writable_freg_to_writable_reg writable_freg_to_writable_reg)
-(convert WritableFReg WritableReg writable_freg_to_writable_reg)
-
-;; Convert a `WritableFReg` to an `Reg`.
-(decl pure writable_freg_to_reg (WritableFReg) Reg)
-(rule (writable_freg_to_reg x) (writable_freg_to_writable_reg x))
-(convert WritableFReg Reg writable_freg_to_reg)
-
-;; Convert an `FReg` to a `Reg`.
-(decl pure freg_to_reg (FReg) Reg)
-(extern constructor freg_to_reg freg_to_reg)
-(convert FReg Reg freg_to_reg)
-
-;; Convert a `FReg` to a `ValueRegs`.
-(decl freg_to_value_regs (FReg) ValueRegs)
-(rule (freg_to_value_regs x) (value_reg x))
-(convert FReg ValueRegs xreg_to_reg)
-
-;; Convert a `WritableFReg` to a `ValueRegs`.
-(decl writable_freg_to_value_regs (WritableFReg) ValueRegs)
-(rule (writable_freg_to_value_regs x) (value_reg x))
-(convert WritableFReg ValueRegs writable_freg_to_value_regs)
-
-;; Allocates a new `WritableFReg`.
-(decl temp_writable_freg () WritableFReg)
-(rule (temp_writable_freg) (temp_writable_reg $F64))
-
-
-
-;; Construct a new `VReg` from a `Reg`.
-;;
-;; Asserts that the register has a Vector RegClass.
-(decl vreg_new (Reg) VReg)
-(extern constructor vreg_new vreg_new)
-(convert Reg VReg vreg_new)
-
-;; Construct a new `WritableVReg` from a `WritableReg`.
-;;
-;; Asserts that the register has a Vector RegClass.
-(decl writable_vreg_new (WritableReg) WritableVReg)
-(extern constructor writable_vreg_new writable_vreg_new)
-(convert WritableReg WritableVReg writable_vreg_new)
-
-;; Put a value into a VReg.
-;;
-;; Asserts that the value goes into a VReg.
-(decl put_in_vreg (Value) VReg)
-(rule (put_in_vreg val) (vreg_new (put_in_reg val)))
-(convert Value VReg put_in_vreg)
-
-;; Construct an `InstOutput` out of a single VReg register.
-(decl output_vreg (VReg) InstOutput)
-(rule (output_vreg x) (output_reg x))
-(convert VReg InstOutput output_vreg)
-
-;; Convert a `WritableVReg` to an `VReg`.
-(decl pure writable_vreg_to_vreg (WritableVReg) VReg)
-(extern constructor writable_vreg_to_vreg writable_vreg_to_vreg)
-(convert WritableVReg VReg writable_vreg_to_vreg)
-
-;; Convert a `WritableVReg` to an `WritableReg`.
-(decl pure writable_vreg_to_writable_reg (WritableVReg) WritableReg)
-(extern constructor writable_vreg_to_writable_reg writable_vreg_to_writable_reg)
-(convert WritableVReg WritableReg writable_vreg_to_writable_reg)
-
-;; Convert a `WritableVReg` to an `Reg`.
-(decl pure writable_vreg_to_reg (WritableVReg) Reg)
-(rule (writable_vreg_to_reg x) (writable_vreg_to_writable_reg x))
-(convert WritableVReg Reg writable_vreg_to_reg)
-
-;; Convert an `VReg` to a `Reg`.
-(decl pure vreg_to_reg (VReg) Reg)
-(extern constructor vreg_to_reg vreg_to_reg)
-(convert VReg Reg vreg_to_reg)
-
-;; Convert a `VReg` to a `ValueRegs`.
-(decl vreg_to_value_regs (VReg) ValueRegs)
-(rule (vreg_to_value_regs x) (value_reg x))
-(convert VReg ValueRegs xreg_to_reg)
-
-;; Convert a `WritableVReg` to a `ValueRegs`.
-(decl writable_vreg_to_value_regs (WritableVReg) ValueRegs)
-(rule (writable_vreg_to_value_regs x) (value_reg x))
-(convert WritableVReg ValueRegs writable_vreg_to_value_regs)
-
-;; Allocates a new `WritableVReg`.
-(decl temp_writable_vreg () WritableVReg)
-(rule (temp_writable_vreg) (temp_writable_reg $I8X16))
-
 
 ;; Converters
 
@@ -1196,9 +932,6 @@
 (rule (canonical_nan_u64 $F32) 0x7fc00000)
 (rule (canonical_nan_u64 $F64) 0x7ff8000000000000)
 
-(decl gen_default_frm () OptionFloatRoundingMode)
-(extern constructor gen_default_frm gen_default_frm)
-
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl alu_rrr (AluOPRRR Reg Reg) Reg)
 (rule (alu_rrr op src1 src2)
@@ -1206,9 +939,6 @@
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
-
-(decl pack_float_rounding_mode (FRM) OptionFloatRoundingMode)
-(extern constructor pack_float_rounding_mode pack_float_rounding_mode)
 
 (decl select_addi (Type) AluOPRRI)
 (rule 1 (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
@@ -1725,22 +1455,6 @@
 (decl load_ext_name (ExternalName i64) Reg)
 (extern constructor load_ext_name load_ext_name)
 
-(decl int_convert_2_float_op (Type bool Type) FpuOPRR)
-(extern constructor int_convert_2_float_op int_convert_2_float_op)
-
-;;; some float binary operation
-;;; 1. need move into x reister.
-;;; 2. do the operation.
-;;; 3. move back.
-(decl lower_float_binary (AluOPRRR FReg FReg Type) FReg)
-(rule
-  (lower_float_binary op rs1 rs2 ty)
-  (let ((x_rs1 XReg (move_f_to_x rs1 ty))
-        (x_rs2 XReg (move_f_to_x rs2 ty))
-        (tmp XReg (alu_rrr op x_rs1 x_rs2)))
-    (move_x_to_f tmp (float_int_of_same_size ty))))
-
-
 ;;; lower icmp
 (decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
 (rule 1 (lower_icmp cc x y ty)
@@ -1873,19 +1587,6 @@
 ;; Args are: src, src_ty, dst_ty
 (decl gen_bitcast (Reg Type Type) Reg)
 (rule (gen_bitcast r _ _) r)
-
-(decl move_f_to_x (FReg Type) XReg)
-(rule (move_f_to_x r $F32) (gen_bitcast r $F32 $I32))
-(rule (move_f_to_x r $F64) (gen_bitcast r $F64 $I64))
-
-(decl move_x_to_f (XReg Type) FReg)
-(rule (move_x_to_f r $I32) (gen_bitcast r $I32 $F32))
-(rule (move_x_to_f r $I64) (gen_bitcast r $I64 $F64))
-
-(decl float_int_of_same_size (Type) Type)
-(rule (float_int_of_same_size $F32) $I32)
-(rule (float_int_of_same_size $F64) $I64)
-
 
 ;; Negates x
 ;; Equivalent to 0 - x

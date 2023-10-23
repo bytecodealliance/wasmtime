@@ -45,7 +45,6 @@ pub(crate) type OptionReg = Option<Reg>;
 pub(crate) type OptionImm12 = Option<Imm12>;
 pub(crate) type VecBranchTarget = Vec<BranchTarget>;
 pub(crate) type OptionUimm5 = Option<UImm5>;
-pub(crate) type OptionFloatRoundingMode = Option<FRM>;
 pub(crate) type VecU8 = Vec<u8>;
 pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 //=============================================================================
@@ -53,8 +52,7 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 
 use crate::isa::zkasm::lower::isle::generated_code::MInst;
 pub use crate::isa::zkasm::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, FClassResult, FFlagsException, FloatRoundOP, FpuOPRR, FpuOPRRR, FpuOPRRRR,
-    IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
+    AluOPRRI, AluOPRRR, FFlagsException, IntSelectOP, LoadOP, MInst as Inst, StoreOP,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -310,7 +308,6 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             }
             collector.reg_use(src);
         }
-
         &Inst::Args { ref args } => {
             for arg in args {
                 collector.reg_fixed_def(arg.vreg, arg.preg);
@@ -321,7 +318,6 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
                 collector.reg_fixed_use(ret.vreg, ret.preg);
             }
         }
-
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_def(rd);
@@ -771,14 +767,6 @@ impl Inst {
             x.push_str("]");
             x
         };
-
-        fn format_frm(rounding_mode: Option<FRM>) -> String {
-            if let Some(r) = rounding_mode {
-                format!(",{}", r.to_static_str(),)
-            } else {
-                "".into()
-            }
-        }
 
         let mut empty_allocs = AllocationConsumer::default();
         match self {

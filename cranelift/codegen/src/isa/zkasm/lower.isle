@@ -175,9 +175,6 @@
 (rule 0 (lower (has_type (ty_int ty) (band x y)))
   (gen_and ty x y))
 
-(rule 3 (lower (has_type (ty_scalar_float ty) (band x y)))
-  (lower_float_binary (AluOPRRR.And) x y ty))
-
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
 ;; forms early on.
@@ -205,9 +202,6 @@
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int ty) (bor x y)))
   (gen_or ty x y))
-
-(rule 3 (lower (has_type (ty_scalar_float ty) (bor x y)))
-  (lower_float_binary (AluOPRRR.Or) x y ty))
 
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bor_not` instruction that is legalized into the simpler
@@ -239,9 +233,6 @@
 
 (rule 3 (lower (has_type $I128 (bxor x y)))
   (lower_b128_binary (AluOPRRR.Xor) x y))
-
-(rule 4 (lower (has_type (ty_scalar_float ty) (bxor x y)))
-  (lower_float_binary (AluOPRRR.Xor) x y ty))
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

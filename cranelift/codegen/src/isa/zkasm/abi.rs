@@ -67,15 +67,16 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
+        // FIXME(nagisa): this code needs to be rewritten for zkasm
+        //
         // All registers that can be used as parameters or rets.
         // both start and end are included.
-        let (x_start, x_end, f_start, f_end) = match (call_conv, args_or_rets) {
-            (isa::CallConv::Tail, _) => (10, 11, 0, 0),
-            (_, ArgsOrRets::Args) => (10, 11, 0, 0),
-            (_, ArgsOrRets::Rets) => (10, 11, 0, 0),
+        let (x_start, x_end) = match (call_conv, args_or_rets) {
+            (isa::CallConv::Tail, _) => (10, 11),
+            (_, ArgsOrRets::Args) => (10, 11),
+            (_, ArgsOrRets::Rets) => (10, 11),
         };
         let mut next_x_reg = x_start;
-        let mut next_f_reg = f_start;
         // Stack space.
         let mut next_stack: u32 = 0;
 
@@ -115,10 +116,6 @@ impl ABIMachineSpec for ZkAsmMachineDeps {
                 let next_reg = if (next_x_reg <= x_end) && *rc == RegClass::Int {
                     let x = Some(x_reg(next_x_reg));
                     next_x_reg += 1;
-                    x
-                } else if (next_f_reg <= f_end) && *rc == RegClass::Float {
-                    let x = Some(f_reg(next_f_reg));
-                    next_f_reg += 1;
                     x
                 } else {
                     None
