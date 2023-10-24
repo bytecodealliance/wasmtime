@@ -191,5 +191,10 @@ mod tests {
         counter,
         fibonacci,
         add_func,
+        lt_s,
+        lt_u,
+        xor,
+        and,
+        or,
     }
 }
