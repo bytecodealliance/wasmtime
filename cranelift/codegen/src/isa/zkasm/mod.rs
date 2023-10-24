@@ -167,7 +167,7 @@ impl fmt::Display for ZkAsmBackend {
 /// Create a new `isa::Builder`.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {
     match triple.architecture {
-        Architecture::Sparc => {}
+        Architecture::ZkAsm => {}
         _ => unreachable!(),
     }
     IsaBuilder {

@@ -21,7 +21,7 @@ cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-control = { workspace = true }
 hashbrown = { workspace = true, features = ["raw"] }
-target-lexicon = { workspace = true }
+target-lexicon = { workspace = true, features = [ "arch_zkasm" ] }
 log = { workspace = true }
 serde = { version = "1.0.188", optional = true }
 serde_derive = { version = "1.0.188", optional = true }
@@ -74,7 +74,7 @@ x86 = []
 arm64 = []
 s390x = []
 riscv64 = []
-zkasm = []
+zkasm = [ ]
 # Enable the ISA target for the host machine
 host-arch = []
 

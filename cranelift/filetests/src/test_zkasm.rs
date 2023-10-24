@@ -121,10 +121,8 @@ mod tests {
     }
 
     fn generate_zkasm(wasm_module: &[u8]) -> String {
-        // TODO: Replace "sparc" with "zkasm" when
-        // https://github.com/bytecodealliance/target-lexicon/pull/94 lands.
         let flag_builder = settings::builder();
-        let isa_builder = zkasm::isa_builder("sparc-unknown-unknown".parse().unwrap());
+        let isa_builder = zkasm::isa_builder("zkasm-unknown-unknown".parse().unwrap());
         let isa = isa_builder
             .finish(settings::Flags::new(flag_builder))
             .unwrap();
