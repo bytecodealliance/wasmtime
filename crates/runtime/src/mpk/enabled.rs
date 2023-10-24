@@ -9,29 +9,34 @@ pub fn is_supported() -> bool {
     cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") && pkru::has_cpuid_bit_set()
 }
 
-/// Allocate all protection keys available to this process.
+/// Allocate up to `max` protection keys.
 ///
 /// This asks the kernel for all available keys (we expect 1-15; 0 is
-/// kernel-reserved) in a thread-safe way. This avoids interference when
-/// multiple threads try to allocate keys at the same time (e.g., during
-/// testing). It also ensures that a single copy of the keys are reserved for
-/// the lifetime of the process.
+/// kernel-reserved) up to `max` in a thread-safe way. This avoids interference
+/// when multiple threads try to allocate keys at the same time (e.g., during
+/// testing). It also ensures that a single copy of the keys is reserved for the
+/// lifetime of the process. Because of this, `max` is only a hint: it only
+/// is effective on the first invocation of this function.
 ///
 /// TODO: this is not the best-possible design. This creates global state that
 /// would prevent any other code in the process from using protection keys; the
 /// `KEYS` are never deallocated from the system with `pkey_dealloc`.
-pub fn keys() -> &'static [ProtectionKey] {
+pub fn keys(max: usize) -> &'static [ProtectionKey] {
     let keys = KEYS.get_or_init(|| {
         let mut allocated = vec![];
         if is_supported() {
-            while let Ok(key_id) = sys::pkey_alloc(0, 0) {
-                debug_assert!(key_id < 16);
-                // UNSAFETY: here we unsafely assume that the system-allocated
-                // pkey will exist forever.
-                allocated.push(ProtectionKey {
-                    id: key_id,
-                    stripe: allocated.len().try_into().unwrap(),
-                });
+            while allocated.len() < max {
+                if let Ok(key_id) = sys::pkey_alloc(0, 0) {
+                    debug_assert!(key_id < 16);
+                    // UNSAFETY: here we unsafely assume that the system-allocated
+                    // pkey will exist forever.
+                    allocated.push(ProtectionKey {
+                        id: key_id,
+                        stripe: allocated.len().try_into().unwrap(),
+                    });
+                } else {
+                    break;
+                }
             }
         }
         allocated
@@ -152,14 +157,14 @@ mod tests {
     #[test]
     fn check_initialized_keys() {
         if is_supported() {
-            assert!(!keys().is_empty())
+            assert!(!keys(15).is_empty())
         }
     }
 
     #[test]
     fn check_invalid_mark() {
         skip_if_mpk_unavailable!();
-        let pkey = keys()[0];
+        let pkey = keys(15)[0];
         let unaligned_region = unsafe {
             let addr = 1 as *mut u8; // this is not page-aligned!
             let len = 1;
