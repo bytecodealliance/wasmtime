@@ -221,7 +221,7 @@ pub struct HostFutureTrailers {
 
 pub enum HostFutureTrailersState {
     Waiting(oneshot::Receiver<Result<hyper::HeaderMap, anyhow::Error>>),
-    Done(Result<FieldMap, types::Error>),
+    Done(Result<Option<FieldMap>, types::Error>),
 }
 
 #[async_trait::async_trait]
@@ -229,7 +229,13 @@ impl Subscribe for HostFutureTrailers {
     async fn ready(&mut self) {
         if let HostFutureTrailersState::Waiting(rx) = &mut self.state {
             let result = match rx.await {
-                Ok(Ok(headers)) => Ok(FieldMap::from(headers)),
+                Ok(Ok(headers)) => {
+                    if headers.is_empty() {
+                        Ok(None)
+                    } else {
+                        Ok(Some(headers))
+                    }
+                }
                 Ok(Err(e)) => Err(types::Error::ProtocolError(format!("hyper error: {e:?}"))),
                 Err(_) => Err(types::Error::ProtocolError(
                     "stream hung up before trailers were received".to_string(),
