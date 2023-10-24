@@ -219,25 +219,64 @@ $ ls -l ./target/aarch64-apple-darwin/release/wasmtime
 ## Minimizing further
 
 Above shows an example of taking the default `cargo build` result of 130M down
-to a 2.1M binary for the `wasmtime` executable. The remaining space in this
-binary is occupied by features which often aren't needed in all embeddings, for
-example:
+to a 2.1M binary for the `wasmtime` executable. Similar steps can be done to
+reduce the size of the C API binary artifact as well which currently produces a
+~2.8M dynamic library. This is currently the smallest that can be gained with
+the source-code as-is, but there's still possible size reductions which haven't
+been implemented yet.
 
-* Command-line argument parsing via the `clap` crate. Custom embeddings likely
-  won't use this at all and/or will have their own command line parsing
-  elsewhere. In the above 2.1M number this is about ~200k.
+This is a listing of some example sources of binary size. Some sources of binary
+size may not apply to custom embeddings since, for example, your custom
+embedding might already not use WASI and might already not be included.
 
-* WASI implementations may not all be needed or may be slimmed down. For example
-  the above binary contains two implementations of `wasi_snapshot_preview1` at
-  this time and removing one of them shaves off around 300k.
+* WASI in the Wasmtime CLI - currently the CLI includes all of WASI. This
+  includes two separate implementations of WASI - one for preview2 and one for
+  preview1. This accounts for 1M+ of space which is a significant chunk of the
+  remaining 2.1M.  While removing just preview2 or preview1 would be easy enough
+  with a Cargo feature, the resulting executable wouldn't be able to do
+  anything. Something like a [plugin feature for the
+  CLI](https://github.com/bytecodealliance/wasmtime/issues/7348), however, would
+  enable removing WASI while still being a usable executable.
 
-Most Wasmtime embeddings are unlikely to be the `wasmtime` CLI itself meaning
-that the above sources of size will be eliminated as well in a custom embedding
-of the `wasmtime` crate.
+* Argument parsing in the Wasmtime CLI - as a command line executable `wasmtime`
+  contains parsing of command line arguments which currently uses the `clap`
+  crate. This contributes ~200k of binary size to the final executable which
+  would likely not be present in a custom embedding of Wasmtime. While this
+  can't be removed from Wasmtime it's something to consider when evaluating the
+  size of CI artifacts.
 
-If, however, after applying the above optimizations, flags, etc, results in a
-binary too large for your use case we'd be quite interested to hear about it!
-Please feel free to [open an
-issue](https://github.com/bytecodealliance/wasmtime/issues/new) and let us know.
-There's still remaining fruit to be picked to minimize Wasmtime's footprint
-further and user feedback is helpful to prioritize this work.
+* Cranelift in the C API - one of the features of Wasmtime is the ability to
+  have a runtime without Cranelift that only supports precompiled (AOT) wasm
+  modules. It's [not possible to build the C API without
+  Cranelift](https://github.com/bytecodealliance/wasmtime/issues/7349) though
+  because defining host functions requires Cranelift at this time to emit some
+  stubs.  This means that the C API is significantly larger than a custom Rust
+  embedding which doesn't suffer from the same restriction. This means that
+  while it's still possible to build an embedding of Wasmtime which doesn't have
+  Cranelift it's not easy to see what it might look like size-wise from
+  looking at the C API artifacts.
+
+* Formatting strings in Wasmtime - Wasmtime makes extensive use of formatting
+  strings for error messages and other purposes throughout the implementation.
+  Most of this is intended for debugging and understanding more when something
+  goes wrong, but much of this is not necessary for a truly minimal embedding.
+  In theory much of this could be conditionally compiled out of the Wasmtime
+  project to produce a smaller executable. Just how much of the final binary
+  size is accounted for by formatting string is unknown, but it's well known in
+  Rust that `std::fmt` is not the slimmest of modules.
+
+* Cranelift vs Winch - the "min" builds on CI try to exclude Cranelift from
+  their binary footprint (e.g. the CLI excludes it) but this comes at a cost of
+  the final executable not supporting compilation of wasm modules. If this is
+  required then no effort has yet been put into minimizing the code size of
+  Cranelift itself. One possible tradeoff that can be made though is to choose
+  between the Winch baseline compiler vs Cranelift. Winch should be much smaller
+  from a compiled footprint point of view while not sacrificing everything in
+  terms of performance. Note though that Winch is still under development.
+
+Above is some future avenues to take in terms of reducing the binary size of
+Wasmtime and various tradeoffs that can be made. The Wasmtime project is eager
+to hear embedder use cases/profiles if Wasmtime is not suitable for binary size
+reasons today. Please feel free to [open an
+issue](https://github.com/bytecodealliance/wasmtime/issues/new) and let us know
+and we'd be happy to discuss more how best to handle a particular use case.
