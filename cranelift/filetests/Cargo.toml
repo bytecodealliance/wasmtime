@@ -35,4 +35,5 @@ serde_derive = { workspace = true }
 cranelift-wasm.workspace = true
 wasmparser.workspace = true
 cranelift.workspace = true
-expect-test = "1.4.1"
+env_logger = { workspace = true }
+expect-test = { workspace = true }

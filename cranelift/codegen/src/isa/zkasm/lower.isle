@@ -68,10 +68,10 @@
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (imul x y)))
-  (rv_mul x y))
+  (zk_mul x y))
 
 (rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (imul x y)))
-  (rv_mulw x y))
+  (zk_mul x y))
 
 ;; for I128
 (rule 2 (lower (has_type $I128 (imul x y)))

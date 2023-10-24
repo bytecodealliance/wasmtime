@@ -455,6 +455,32 @@ impl MachInstEmit for Inst {
                     sink,
                 );
             }
+            &Inst::MulArith { rd, rs1, rs2 } => {
+                let rs1 = allocs.next(rs1);
+                let rs2 = allocs.next(rs2);
+                debug_assert_eq!(rs1, a0());
+                debug_assert_eq!(rs2, b0());
+                let rd = allocs.next_writable(rd);
+                // Arith asserts that A * B + C = op + 2^256 * D.
+                // Now ZKVM is 256-bit and wasm max type is 64 bit, so it would never be
+                // 256 bit overflow. But in future we will need here something like:
+                // put_string(
+                //   &format!("${{_mulArith / (2 ** 64)}} => D :ARITH\n", reg_name(rd.to_reg())),
+                //    sink,
+                //);
+                // put_string(
+                //   &format!("${{_mulArith % (2 ** 64)}} => {} :ARITH\n", reg_name(rd.to_reg())),
+                //    sink,
+                //);
+                // For now we will just clear D in case it was something in it
+                put_string("0 => D\n", sink);
+                put_string("0 => C\n", sink);
+                put_string("$${var _mulArith = A * B}\n", sink);
+                put_string(
+                    &format!("${{_mulArith}} => {} :ARITH\n", reg_name(rd.to_reg())),
+                    sink,
+                );
+            }
             &Inst::AluRRR {
                 alu_op,
                 rd,
@@ -470,22 +496,6 @@ impl MachInstEmit for Inst {
                     &format!("$ => {} :{}\n", reg_name(rd.to_reg()), alu_op.op_name()),
                     sink,
                 );
-
-                /*
-                let (rs1, rs2) = if alu_op.reverse_rs() {
-                    (rs2, rs1)
-                } else {
-                    (rs1, rs2)
-                };
-
-                sink.put4(encode_r_type(
-                    alu_op.op_code(),
-                    rd,
-                    alu_op.funct3(),
-                    rs1,
-                    rs2,
-                    alu_op.funct7(),
-                )); */
             }
             &Inst::Load {
                 rd,

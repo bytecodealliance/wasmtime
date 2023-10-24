@@ -5,13 +5,22 @@ start:
 function_1:
   SP + 1 => SP
   RR :MSTORE(SP - 1)
-  SP + 2 => SP
-  B :MSTORE(SP - 1)
-  999999999 + 1000000000 => A
+  SP + 4 => SP
+  C :MSTORE(SP - 1)
+  D :MSTORE(SP - 2)
+  B :MSTORE(SP - 3)
+  31 => A
+  64516129 => B
+  0 => D
+  0 => C
+  $${var _mulArith = A * B}
+  ${_mulArith} => A :ARITH
   1999999999 => B
   B :ASSERT
-  $ => B :MLOAD(SP - 1)
-  SP - 2 => SP
+  $ => C :MLOAD(SP - 1)
+  $ => D :MLOAD(SP - 2)
+  $ => B :MLOAD(SP - 3)
+  SP - 4 => SP
   $ => RR :MLOAD(SP - 1)
   SP - 1 => SP
   :JMP(RR)

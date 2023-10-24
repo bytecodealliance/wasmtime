@@ -34,6 +34,12 @@
       (rs1 Reg)
       (rs2 Reg))
 
+    ;;Multiplication via Arith
+    (MulArith
+      (rd WritableReg)
+      (rs1 Reg)
+      (rs2 Reg))
+
     ;; An load
     (Load
       (rd WritableReg)
@@ -318,7 +324,6 @@
 
 
   ;;RV32M Standard Extension
-  (Mul)
   (Mulh)
   (Mulhsu)
   (Mulhu)
@@ -328,7 +333,6 @@
   (RemU)
 
   ;; RV64M Standard Extension (in addition to RV32M)
-  (Mulw)
   (Divw)
   (Divuw)
   (Remw)
@@ -673,9 +677,11 @@
 
 ;; Helper for emitting the `mul` instruction.
 ;; rd ← rs1 × rs2
-(decl rv_mul (XReg XReg) XReg)
-(rule (rv_mul rs1 rs2)
-  (alu_rrr (AluOPRRR.Mul) rs1 rs2))
+(decl zk_mul (XReg XReg) XReg)
+(rule (zk_mul rs1 rs2)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.MulArith dst rs1 rs2))))
+        dst))
 
 ;; Helper for emitting the `mulh` ("Multiply High Signed Signed") instruction.
 ;; rd ← (sext(rs1) × sext(rs2)) » xlen
@@ -718,11 +724,6 @@
 ;; RV64M Extension
 ;; TODO: Enable these instructions only when we have the M extension
 
-;; Helper for emitting the `mulw` ("Multiply Word") instruction.
-;; rd ← uext32(rs1) × uext32(rs2)
-(decl rv_mulw (XReg XReg) XReg)
-(rule (rv_mulw rs1 rs2)
-  (alu_rrr (AluOPRRR.Mulw) rs1 rs2))
 
 ;; Helper for emitting the `divw` ("Divide Word") instruction.
 ;; rd ← sext32(rs1) ÷ sext32(rs2)
@@ -1621,7 +1622,7 @@
 (rule
   (madd n m a)
   (let
-    ((t XReg (rv_mul n m)))
+    ((t XReg (zk_mul n m)))
     (rv_add t a)))
 
 ;;;; Helpers for bmask ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

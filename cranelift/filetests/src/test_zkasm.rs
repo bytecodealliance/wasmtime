@@ -9,6 +9,10 @@ mod tests {
     use cranelift_codegen::{settings, FinalizedMachReloc, FinalizedRelocTarget};
     use cranelift_wasm::{translate_module, DummyEnvironment};
 
+    fn setup() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     fn generate_preamble(start_func_index: usize) -> Vec<String> {
         let mut program: Vec<String> = Vec::new();
         program.push("start:".to_string());
@@ -178,6 +182,7 @@ mod tests {
           $(
             #[test]
             fn $name() {
+                setup();
                 test_module(stringify!($name));
             }
            )*
@@ -191,6 +196,8 @@ mod tests {
         counter,
         fibonacci,
         add_func,
+        mul,
+        i64_mul,
         lt_s,
         lt_u,
         xor,

@@ -21,15 +21,13 @@ pub fn b0() -> Reg {
     x_reg(11)
 }
 
-// second argument of function call
 #[inline]
-pub fn a1() -> Reg {
+pub fn c0() -> Reg {
     x_reg(5)
 }
 
-// third argument of function call
 #[inline]
-pub fn a2() -> Reg {
+pub fn d0() -> Reg {
     x_reg(6)
 }
 
@@ -38,12 +36,12 @@ pub fn writable_a0() -> Writable<Reg> {
     Writable::from_reg(a0())
 }
 #[inline]
-pub fn writable_a1() -> Writable<Reg> {
-    Writable::from_reg(a1())
+pub fn writable_c0() -> Writable<Reg> {
+    Writable::from_reg(c0())
 }
 #[inline]
-pub fn writable_a2() -> Writable<Reg> {
-    Writable::from_reg(a2())
+pub fn writable_d0() -> Writable<Reg> {
+    Writable::from_reg(d0())
 }
 
 /// Get a reference to the zero-register.

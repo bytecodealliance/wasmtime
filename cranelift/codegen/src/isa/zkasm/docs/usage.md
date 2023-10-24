@@ -94,5 +94,5 @@ If you wish to compile a `.wat` file with logging (without generating a `.zkasm`
    For example:
 
    ```bash
-   RUST_LOG=trace cargo run --features=all-arch -p -D cranelift-tools --bin=clif-util wasm --target=sparc cranelift/zkasm_data/add.wat
+   RUST_LOG=trace cargo run --features=all-arch -p cranelift-tools --bin=clif-util wasm --target=sparc cranelift/zkasm_data/add.wat 2>trace.txt
    ```

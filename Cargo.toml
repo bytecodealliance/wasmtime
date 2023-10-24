@@ -56,6 +56,7 @@ rustix = { workspace = true, features = ["mm", "param"] }
 wasmtime = { workspace = true, features = ['component-model', 'async', 'default', 'winch'] }
 env_logger = { workspace = true }
 log = { workspace = true }
+expect-test = { workspace = true }
 filecheck = { workspace = true }
 tempfile = { workspace = true }
 test-programs = { path = "crates/test-programs" }
@@ -226,6 +227,7 @@ gimli = { version = "0.28.0", default-features = false, features = ['read', 'std
 anyhow = "1.0.22"
 windows-sys = "0.48.0"
 env_logger = "0.10"
+expect-test = "1.4.1"
 log = { version = "0.4.8", default-features = false }
 clap = { version = "4.3.12", features = ["color", "suggestions", "derive"] }
 hashbrown = { version = "0.14", default-features = false }

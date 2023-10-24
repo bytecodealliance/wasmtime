@@ -33,6 +33,7 @@ pub mod emit;
 pub use self::emit::*;
 pub mod encode;
 pub use self::encode::*;
+use regalloc2::PReg;
 
 use crate::isa::zkasm::abi::ZkAsmMachineDeps;
 
@@ -267,6 +268,15 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_fixed_use(rs1, a0());
             collector.reg_fixed_use(rs2, b0());
+            collector.reg_def(rd);
+        }
+        &Inst::MulArith { rd, rs1, rs2, .. } => {
+            collector.reg_fixed_use(rs1, a0());
+            collector.reg_fixed_use(rs2, b0());
+            let mut clobbered = PRegSet::empty();
+            clobbered.add(c0().to_real_reg().unwrap().into());
+            clobbered.add(d0().to_real_reg().unwrap().into());
+            collector.reg_clobbers(clobbered);
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
@@ -955,7 +965,12 @@ impl Inst {
                     }
                 }
             }
-
+            &Inst::MulArith { rd, rs1, rs2 } => {
+                let rs1_s = format_reg(rs1, allocs);
+                let rs2_s = format_reg(rs2, allocs);
+                let rd_s = format_reg(rd.to_reg(), allocs);
+                format!("MulArith rd = {}, rs1 = {}, rs2 = {}", rd_s, rs1_s, rs2_s)
+            }
             Inst::AddImm32 { rd, src1, src2 } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{src1} + {src2} => {rd};")
