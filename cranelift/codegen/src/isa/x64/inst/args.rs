@@ -3,6 +3,7 @@
 use super::regs::{self};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
+use crate::ir::types::*;
 use crate::ir::{MemFlags, Type};
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::inst::Inst;
@@ -107,7 +108,7 @@ macro_rules! newtype_of_reg {
         $(
             /// A newtype wrapper around `RegMem` for general-purpose registers.
             #[derive(Clone, Debug)]
-            pub struct $newtype_reg_mem(RegMem);
+            pub struct $newtype_reg_mem(pub RegMem);
 
             impl From<$newtype_reg_mem> for RegMem {
                 fn from(rm: $newtype_reg_mem) -> Self {
@@ -168,7 +169,7 @@ macro_rules! newtype_of_reg {
         $(
             /// A newtype wrapper around `RegMemImm`.
             #[derive(Clone, Debug)]
-            pub struct $newtype_reg_mem_imm(RegMemImm);
+            pub struct $newtype_reg_mem_imm(pub RegMemImm);
 
             impl From<$newtype_reg_mem_imm> for RegMemImm {
                 fn from(rmi: $newtype_reg_mem_imm) -> RegMemImm {
@@ -232,7 +233,7 @@ macro_rules! newtype_of_reg {
         /// A newtype wrapper around `Imm8Reg`.
         #[derive(Clone, Debug)]
         #[allow(dead_code)] // Used by some newtypes and not others.
-        pub struct $newtype_imm8_reg(Imm8Reg);
+        pub struct $newtype_imm8_reg(pub Imm8Reg);
 
         impl From<$newtype_reg> for $newtype_imm8_reg {
             fn from(r: $newtype_reg) -> Self {
@@ -1930,6 +1931,15 @@ impl ExtMode {
             ExtMode::BQ | ExtMode::WQ | ExtMode::LQ => 8,
         }
     }
+
+    /// Source size, as an integer type.
+    pub(crate) fn src_type(&self) -> Type {
+        match self {
+            ExtMode::BL | ExtMode::BQ => I8,
+            ExtMode::WL | ExtMode::WQ => I16,
+            ExtMode::LQ => I32,
+        }
+    }
 }
 
 impl fmt::Debug for ExtMode {
@@ -2226,6 +2236,15 @@ impl OperandSize {
 
     pub(crate) fn to_bits(&self) -> u8 {
         self.to_bytes() * 8
+    }
+
+    pub(crate) fn to_type(&self) -> Type {
+        match self {
+            Self::Size8 => I8,
+            Self::Size16 => I16,
+            Self::Size32 => I32,
+            Self::Size64 => I64,
+        }
     }
 }
 

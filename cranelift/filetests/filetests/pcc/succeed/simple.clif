@@ -1,6 +1,7 @@
 test compile
 set enable_pcc=true
 target aarch64
+target x86_64
 
 function %simple1(i64 vmctx, i32) -> i8 {
     mt0 = memory 0x1_0000_0000

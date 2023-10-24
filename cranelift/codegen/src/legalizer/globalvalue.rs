@@ -4,7 +4,7 @@
 //! instruction into code that depends on the kind of global value referenced.
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::ir::{self, InstBuilder};
+use crate::ir::{self, pcc::Fact, InstBuilder};
 use crate::isa::TargetIsa;
 
 /// Expand a `global_value` instruction according to the definition of the global value.
@@ -90,8 +90,17 @@ fn iadd_imm_addr(
         pos.func.dfg.facts[lhs] = Some(fact.clone());
     }
 
+    // Generate the constant and attach a fact to the constant if
+    // there is a fact on the base.
+    let constant = pos.ins().iconst(global_type, offset);
+    if pos.func.global_value_facts[base].is_some() {
+        let bits = u16::try_from(global_type.bits()).unwrap();
+        let unsigned_offset = offset as u64; // Safety: reinterpret i64 bits as u64.
+        pos.func.dfg.facts[constant] = Some(Fact::constant(bits, unsigned_offset));
+    }
+
     // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
-    pos.func.dfg.replace(inst).iadd_imm(lhs, offset);
+    pos.func.dfg.replace(inst).iadd(lhs, constant);
 }
 
 /// Expand a `global_value` instruction for a load global.

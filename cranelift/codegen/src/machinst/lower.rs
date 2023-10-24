@@ -8,7 +8,7 @@
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
-use crate::ir::pcc::{FactContext, PccError, PccResult};
+use crate::ir::pcc::{Fact, FactContext, PccError, PccResult};
 use crate::ir::{
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
     GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, RelSourceLoc, Type,
@@ -19,6 +19,7 @@ use crate::machinst::{
     MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants,
     VCodeInst, ValueRegs, Writable,
 };
+use crate::settings::Flags;
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
@@ -219,6 +220,9 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// The register to use for GetPinnedReg, if any, on this architecture.
     pinned_reg: Option<Reg>,
+
+    /// Compilation flags.
+    flags: Flags,
 }
 
 /// How is a value used in the IR?
@@ -342,6 +346,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         sigs: SigSet,
+        flags: Flags,
     ) -> CodegenResult<Self> {
         let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
         let vcode = VCodeBuilder::new(
@@ -456,6 +461,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             cur_inst: None,
             ir_insts: vec![],
             pinned_reg: None,
+            flags,
         })
     }
 
@@ -1415,5 +1421,19 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn set_vreg_alias(&mut self, from: Reg, to: Reg) {
         trace!("set vreg alias: from {:?} to {:?}", from, to);
         self.vcode.set_vreg_alias(from, to);
+    }
+
+    /// Add a range fact to a register, if no other fact is present.
+    pub fn add_range_fact(&mut self, reg: Reg, bit_width: u16, min: u64, max: u64) {
+        if self.flags.enable_pcc() {
+            self.vregs.set_fact_if_missing(
+                reg.to_virtual_reg().unwrap(),
+                Fact::Range {
+                    bit_width,
+                    min,
+                    max,
+                },
+            );
+        }
     }
 }

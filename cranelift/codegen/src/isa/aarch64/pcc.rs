@@ -8,43 +8,10 @@ use crate::isa::aarch64::inst::args::{PairAMode, ShiftOp};
 use crate::isa::aarch64::inst::Inst;
 use crate::isa::aarch64::inst::{ALUOp, MoveWideOp};
 use crate::isa::aarch64::inst::{AMode, ExtendOp};
+use crate::machinst::pcc::*;
 use crate::machinst::Reg;
 use crate::machinst::{InsnIndex, VCode};
 use crate::trace;
-
-fn get_fact_or_default(vcode: &VCode<Inst>, reg: Reg) -> PccResult<&Fact> {
-    vcode
-        .vreg_fact(reg.into())
-        .or_else(|| Fact::infer_from_type(vcode.vreg_type(reg.into())))
-        .ok_or(PccError::MissingFact)
-}
-
-fn has_fact(vcode: &VCode<Inst>, reg: Reg) -> bool {
-    vcode.vreg_fact(reg.into()).is_some()
-}
-
-fn fail_if_missing(fact: Option<Fact>) -> PccResult<Fact> {
-    fact.ok_or(PccError::UnsupportedFact)
-}
-
-fn check_subsumes(ctx: &FactContext, subsumer: &Fact, subsumee: &Fact) -> PccResult<()> {
-    trace!(
-        "checking if derived fact {:?} subsumes stated fact {:?}",
-        subsumer,
-        subsumee
-    );
-
-    // For now, allow all `mem` facts to validate.
-    if matches!(subsumee, Fact::Mem { .. }) {
-        return Ok(());
-    }
-
-    if ctx.subsumes(subsumer, subsumee) {
-        Ok(())
-    } else {
-        Err(PccError::UnsupportedFact)
-    }
-}
 
 fn extend_fact(ctx: &FactContext, value: &Fact, mode: ExtendOp) -> Option<Fact> {
     match mode {
@@ -56,77 +23,6 @@ fn extend_fact(ctx: &FactContext, value: &Fact, mode: ExtendOp) -> Option<Fact> 
         ExtendOp::SXTH => ctx.sextend(value, 16, 64),
         ExtendOp::SXTW => ctx.sextend(value, 32, 64),
         ExtendOp::SXTX => None,
-    }
-}
-
-fn check_output<F: Fn(&VCode<Inst>) -> PccResult<Fact>>(
-    ctx: &FactContext,
-    vcode: &mut VCode<Inst>,
-    out: Reg,
-    ins: &[Reg],
-    f: F,
-) -> PccResult<()> {
-    if let Some(fact) = vcode.vreg_fact(out.into()) {
-        let result = f(vcode)?;
-        check_subsumes(ctx, &result, fact)
-    } else if ins.iter().any(|r| {
-        vcode
-            .vreg_fact(r.into())
-            .map(|fact| fact.propagates())
-            .unwrap_or(false)
-    }) {
-        if let Ok(fact) = f(vcode) {
-            trace!("setting vreg {:?} to {:?}", out, fact);
-            vcode.set_vreg_fact(out.into(), fact);
-        }
-        Ok(())
-    } else {
-        Ok(())
-    }
-}
-
-fn check_unop<F: Fn(&Fact) -> PccResult<Fact>>(
-    ctx: &FactContext,
-    vcode: &mut VCode<Inst>,
-    out: Reg,
-    ra: Reg,
-    f: F,
-) -> PccResult<()> {
-    check_output(ctx, vcode, out, &[ra], |vcode| {
-        let ra = get_fact_or_default(vcode, ra)?;
-        f(ra)
-    })
-}
-
-fn check_binop<F: Fn(&Fact, &Fact) -> PccResult<Fact>>(
-    ctx: &FactContext,
-    vcode: &mut VCode<Inst>,
-    out: Reg,
-    ra: Reg,
-    rb: Reg,
-    f: F,
-) -> PccResult<()> {
-    check_output(ctx, vcode, out, &[ra, rb], |vcode| {
-        let ra = get_fact_or_default(vcode, ra)?;
-        let rb = get_fact_or_default(vcode, rb)?;
-        f(ra, rb)
-    })
-}
-
-fn check_constant(
-    ctx: &FactContext,
-    vcode: &mut VCode<Inst>,
-    out: Reg,
-    bit_width: u16,
-    value: u64,
-) -> PccResult<()> {
-    let result = Fact::constant(bit_width, value);
-    if let Some(fact) = vcode.vreg_fact(out.into()) {
-        check_subsumes(ctx, &result, fact)
-    } else {
-        trace!("setting vreg {:?} to {:?}", out, result);
-        vcode.set_vreg_fact(out.into(), result);
-        Ok(())
     }
 }
 
@@ -145,51 +41,51 @@ pub(crate) fn check(
             Ok(())
         }
         Inst::ULoad8 { rd, ref mem, flags } | Inst::SLoad8 { rd, ref mem, flags } => {
-            check_load(&ctx, Some(rd.to_reg()), flags, mem, vcode, I8)
+            check_load(ctx, Some(rd.to_reg()), flags, mem, vcode, I8)
         }
         Inst::ULoad16 { rd, ref mem, flags } | Inst::SLoad16 { rd, ref mem, flags } => {
-            check_load(&ctx, Some(rd.to_reg()), flags, mem, vcode, I16)
+            check_load(ctx, Some(rd.to_reg()), flags, mem, vcode, I16)
         }
         Inst::ULoad32 { rd, ref mem, flags } | Inst::SLoad32 { rd, ref mem, flags } => {
-            check_load(&ctx, Some(rd.to_reg()), flags, mem, vcode, I32)
+            check_load(ctx, Some(rd.to_reg()), flags, mem, vcode, I32)
         }
         Inst::ULoad64 { rd, ref mem, flags } => {
-            check_load(&ctx, Some(rd.to_reg()), flags, mem, vcode, I64)
+            check_load(ctx, Some(rd.to_reg()), flags, mem, vcode, I64)
         }
-        Inst::FpuLoad32 { ref mem, flags, .. } => check_load(&ctx, None, flags, mem, vcode, F32),
-        Inst::FpuLoad64 { ref mem, flags, .. } => check_load(&ctx, None, flags, mem, vcode, F64),
-        Inst::FpuLoad128 { ref mem, flags, .. } => check_load(&ctx, None, flags, mem, vcode, I8X16),
-        Inst::LoadP64 { ref mem, flags, .. } => check_load_pair(&ctx, flags, mem, vcode, 16),
-        Inst::FpuLoadP64 { ref mem, flags, .. } => check_load_pair(&ctx, flags, mem, vcode, 16),
-        Inst::FpuLoadP128 { ref mem, flags, .. } => check_load_pair(&ctx, flags, mem, vcode, 32),
+        Inst::FpuLoad32 { ref mem, flags, .. } => check_load(ctx, None, flags, mem, vcode, F32),
+        Inst::FpuLoad64 { ref mem, flags, .. } => check_load(ctx, None, flags, mem, vcode, F64),
+        Inst::FpuLoad128 { ref mem, flags, .. } => check_load(ctx, None, flags, mem, vcode, I8X16),
+        Inst::LoadP64 { ref mem, flags, .. } => check_load_pair(ctx, flags, mem, vcode, 16),
+        Inst::FpuLoadP64 { ref mem, flags, .. } => check_load_pair(ctx, flags, mem, vcode, 16),
+        Inst::FpuLoadP128 { ref mem, flags, .. } => check_load_pair(ctx, flags, mem, vcode, 32),
         Inst::VecLoadReplicate {
             rn, flags, size, ..
-        } => check_load_addr(&ctx, flags, rn, vcode, size.lane_size().ty()),
+        } => check_load_addr(ctx, flags, rn, vcode, size.lane_size().ty()),
         Inst::LoadAcquire {
             access_ty,
             rn,
             flags,
             ..
-        } => check_load_addr(&ctx, flags, rn, vcode, access_ty),
+        } => check_load_addr(ctx, flags, rn, vcode, access_ty),
 
-        Inst::Store8 { rd, ref mem, flags } => check_store(&ctx, Some(rd), flags, mem, vcode, I8),
-        Inst::Store16 { rd, ref mem, flags } => check_store(&ctx, Some(rd), flags, mem, vcode, I16),
-        Inst::Store32 { rd, ref mem, flags } => check_store(&ctx, Some(rd), flags, mem, vcode, I32),
-        Inst::Store64 { rd, ref mem, flags } => check_store(&ctx, Some(rd), flags, mem, vcode, I64),
-        Inst::FpuStore32 { ref mem, flags, .. } => check_store(&ctx, None, flags, mem, vcode, F32),
-        Inst::FpuStore64 { ref mem, flags, .. } => check_store(&ctx, None, flags, mem, vcode, F64),
+        Inst::Store8 { rd, ref mem, flags } => check_store(ctx, Some(rd), flags, mem, vcode, I8),
+        Inst::Store16 { rd, ref mem, flags } => check_store(ctx, Some(rd), flags, mem, vcode, I16),
+        Inst::Store32 { rd, ref mem, flags } => check_store(ctx, Some(rd), flags, mem, vcode, I32),
+        Inst::Store64 { rd, ref mem, flags } => check_store(ctx, Some(rd), flags, mem, vcode, I64),
+        Inst::FpuStore32 { ref mem, flags, .. } => check_store(ctx, None, flags, mem, vcode, F32),
+        Inst::FpuStore64 { ref mem, flags, .. } => check_store(ctx, None, flags, mem, vcode, F64),
         Inst::FpuStore128 { ref mem, flags, .. } => {
-            check_store(&ctx, None, flags, mem, vcode, I8X16)
+            check_store(ctx, None, flags, mem, vcode, I8X16)
         }
-        Inst::StoreP64 { ref mem, flags, .. } => check_store_pair(&ctx, flags, mem, vcode, 16),
-        Inst::FpuStoreP64 { ref mem, flags, .. } => check_store_pair(&ctx, flags, mem, vcode, 16),
-        Inst::FpuStoreP128 { ref mem, flags, .. } => check_store_pair(&ctx, flags, mem, vcode, 32),
+        Inst::StoreP64 { ref mem, flags, .. } => check_store_pair(ctx, flags, mem, vcode, 16),
+        Inst::FpuStoreP64 { ref mem, flags, .. } => check_store_pair(ctx, flags, mem, vcode, 16),
+        Inst::FpuStoreP128 { ref mem, flags, .. } => check_store_pair(ctx, flags, mem, vcode, 32),
         Inst::StoreRelease {
             access_ty,
             rn,
             flags,
             ..
-        } => check_store_addr(&ctx, flags, rn, vcode, access_ty),
+        } => check_store_addr(ctx, flags, rn, vcode, access_ty),
 
         Inst::AluRRR {
             alu_op: ALUOp::Add,
@@ -197,8 +93,13 @@ pub(crate) fn check(
             rd,
             rn,
             rm,
-        } => check_binop(&ctx, vcode, rd.to_reg(), rn, rm, |rn, rm| {
-            fail_if_missing(ctx.add(rn, rm, size.bits().into()))
+        } => check_binop(ctx, vcode, 64, rd, rn, rm, |rn, rm| {
+            clamp_range(
+                ctx,
+                64,
+                size.bits().into(),
+                ctx.add(rn, rm, size.bits().into()),
+            )
         }),
         Inst::AluRRImm12 {
             alu_op: ALUOp::Add,
@@ -206,9 +107,29 @@ pub(crate) fn check(
             rd,
             rn,
             imm12,
-        } => check_unop(&ctx, vcode, rd.to_reg(), rn, |rn| {
-            let imm_fact = Fact::constant(size.bits().into(), imm12.value());
-            fail_if_missing(ctx.add(&rn, &imm_fact, size.bits().into()))
+        } => check_unop(ctx, vcode, 64, rd, rn, |rn| {
+            let imm12: i64 = imm12.value().into();
+            clamp_range(
+                ctx,
+                64,
+                size.bits().into(),
+                ctx.offset(&rn, size.bits().into(), imm12),
+            )
+        }),
+        Inst::AluRRImm12 {
+            alu_op: ALUOp::Sub,
+            size,
+            rd,
+            rn,
+            imm12,
+        } => check_unop(ctx, vcode, 64, rd, rn, |rn| {
+            let imm12: i64 = imm12.value().into();
+            clamp_range(
+                ctx,
+                64,
+                size.bits().into(),
+                ctx.offset(&rn, size.bits().into(), -imm12),
+            )
         }),
         Inst::AluRRRShift {
             alu_op: ALUOp::Add,
@@ -218,13 +139,18 @@ pub(crate) fn check(
             rm,
             shiftop,
         } if shiftop.op() == ShiftOp::LSL && has_fact(vcode, rn) && has_fact(vcode, rm) => {
-            check_binop(&ctx, vcode, rd.to_reg(), rn, rm, |rn, rm| {
+            check_binop(ctx, vcode, 64, rd, rn, rm, |rn, rm| {
                 let rm_shifted = fail_if_missing(ctx.shl(
                     &rm,
                     size.bits().into(),
                     shiftop.amt().value().into(),
                 ))?;
-                fail_if_missing(ctx.add(&rn, &rm_shifted, size.bits().into()))
+                clamp_range(
+                    ctx,
+                    64,
+                    size.bits().into(),
+                    ctx.add(&rn, &rm_shifted, size.bits().into()),
+                )
             })
         }
         Inst::AluRRRExtend {
@@ -235,9 +161,14 @@ pub(crate) fn check(
             rm,
             extendop,
         } if has_fact(vcode, rn) && has_fact(vcode, rm) => {
-            check_binop(&ctx, vcode, rd.to_reg(), rn, rm, |rn, rm| {
-                let rm_extended = fail_if_missing(extend_fact(&ctx, rm, extendop))?;
-                fail_if_missing(ctx.add(&rn, &rm_extended, size.bits().into()))
+            check_binop(ctx, vcode, 64, rd, rn, rm, |rn, rm| {
+                let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
+                clamp_range(
+                    ctx,
+                    64,
+                    size.bits().into(),
+                    ctx.add(&rn, &rm_extended, size.bits().into()),
+                )
             })
         }
         Inst::AluRRImmShift {
@@ -246,8 +177,13 @@ pub(crate) fn check(
             rd,
             rn,
             immshift,
-        } if has_fact(vcode, rn) => check_unop(&ctx, vcode, rd.to_reg(), rn, |rn| {
-            fail_if_missing(ctx.shl(&rn, size.bits().into(), immshift.value().into()))
+        } if has_fact(vcode, rn) => check_unop(ctx, vcode, 64, rd, rn, |rn| {
+            clamp_range(
+                ctx,
+                64,
+                size.bits().into(),
+                ctx.shl(&rn, size.bits().into(), immshift.value().into()),
+            )
         }),
         Inst::Extend {
             rd,
@@ -255,21 +191,32 @@ pub(crate) fn check(
             signed: false,
             from_bits,
             to_bits,
-        } if has_fact(vcode, rn) => check_unop(&ctx, vcode, rd.to_reg(), rn, |rn| {
-            fail_if_missing(ctx.uextend(&rn, from_bits.into(), to_bits.into()))
+        } if has_fact(vcode, rn) => check_unop(ctx, vcode, 64, rd, rn, |rn| {
+            clamp_range(
+                ctx,
+                64,
+                to_bits.into(),
+                ctx.uextend(&rn, from_bits.into(), to_bits.into()),
+            )
         }),
-        Inst::AluRRR { size, rd, .. }
+
+        Inst::AluRRR { rd, size, .. }
         | Inst::AluRRImm12 { rd, size, .. }
         | Inst::AluRRRShift { rd, size, .. }
         | Inst::AluRRRExtend { rd, size, .. }
         | Inst::AluRRImmLogic { rd, size, .. }
-        | Inst::AluRRImmShift { rd, size, .. } => {
-            // Any ALU op can validate a max-value fact where the
-            // value is the maximum for its bit-width.
-            check_output(&ctx, vcode, rd.to_reg(), &[], |_vcode| {
-                Ok(Fact::max_range_for_width(size.bits().into()))
-            })
-        }
+        | Inst::AluRRImmShift { rd, size, .. } => check_output(ctx, vcode, rd, &[], |_vcode| {
+            clamp_range(ctx, 64, size.bits().into(), None)
+        }),
+
+        Inst::Extend {
+            rd,
+            from_bits,
+            to_bits,
+            ..
+        } => check_output(ctx, vcode, rd, &[], |_vcode| {
+            clamp_range(ctx, to_bits.into(), from_bits.into(), None)
+        }),
 
         Inst::MovWide {
             op: MoveWideOp::MovZ,
@@ -278,7 +225,7 @@ pub(crate) fn check(
             rd,
         } => {
             let constant = u64::from(imm.bits) << (imm.shift * 16);
-            check_constant(&ctx, vcode, rd.to_reg(), 64, constant)
+            check_constant(ctx, vcode, rd, 64, constant)
         }
 
         Inst::MovWide {
@@ -288,20 +235,20 @@ pub(crate) fn check(
             rd,
         } => {
             let constant = !(u64::from(imm.bits) << (imm.shift * 16)) & size.max_value();
-            check_constant(&ctx, vcode, rd.to_reg(), 64, constant)
+            check_constant(ctx, vcode, rd, 64, constant)
         }
 
         Inst::MovK { rd, rn, imm, .. } => {
-            let input = get_fact_or_default(vcode, rn)?;
+            let input = get_fact_or_default(vcode, rn, 64);
             trace!("MovK: input = {:?}", input);
             if let Some(input_constant) = input.as_const(64) {
                 trace!(" -> input_constant: {}", input_constant);
                 let constant = u64::from(imm.bits) << (imm.shift * 16);
                 let constant = input_constant | constant;
                 trace!(" -> merged constant: {}", constant);
-                check_constant(&ctx, vcode, rd.to_reg(), 64, constant)
+                check_constant(ctx, vcode, rd, 64, constant)
             } else {
-                check_output(ctx, vcode, rd.to_reg(), &[], |_vcode| {
+                check_output(ctx, vcode, rd, &[], |_vcode| {
                     Ok(Fact::max_range_for_width(64))
                 })
             }
@@ -313,18 +260,6 @@ pub(crate) fn check(
     }
 }
 
-/// The operation we're checking against an amode: either
-///
-/// - a *load*, and we need to validate that the field's fact subsumes
-///   the load result's fact, OR
-///
-/// - a *store*, and we need to validate that the stored data's fact
-///   subsumes the field's fact.
-enum LoadOrStore<'a> {
-    Load { result_fact: Option<&'a Fact> },
-    Store { stored_fact: Option<&'a Fact> },
-}
-
 fn check_load(
     ctx: &FactContext,
     rd: Option<Reg>,
@@ -334,13 +269,18 @@ fn check_load(
     ty: Type,
 ) -> PccResult<()> {
     let result_fact = rd.and_then(|rd| vcode.vreg_fact(rd.into()));
+    let bits = u16::try_from(ty.bits()).unwrap();
     check_addr(
         ctx,
         flags,
         addr,
         vcode,
         ty,
-        LoadOrStore::Load { result_fact },
+        LoadOrStore::Load {
+            result_fact,
+            from_bits: bits,
+            to_bits: bits,
+        },
     )
 }
 
@@ -379,12 +319,17 @@ fn check_addr<'a>(
 
     let check = |addr: &Fact, ty: Type| -> PccResult<()> {
         match op {
-            LoadOrStore::Load { result_fact } => {
-                let loaded_fact = ctx.load(addr, ty)?;
+            LoadOrStore::Load {
+                result_fact,
+                from_bits,
+                to_bits,
+            } => {
+                let loaded_fact =
+                    clamp_range(ctx, to_bits, from_bits, ctx.load(addr, ty)?.cloned())?;
                 trace!(
                     "checking a load: loaded_fact = {loaded_fact:?} result_fact = {result_fact:?}"
                 );
-                if ctx.subsumes_fact_optionals(loaded_fact, result_fact) {
+                if ctx.subsumes_fact_optionals(Some(&loaded_fact), result_fact) {
                     Ok(())
                 } else {
                     Err(PccError::UnsupportedFact)
@@ -396,15 +341,15 @@ fn check_addr<'a>(
 
     match addr {
         &AMode::RegReg { rn, rm } => {
-            let rn = get_fact_or_default(vcode, rn)?;
-            let rm = get_fact_or_default(vcode, rm)?;
+            let rn = get_fact_or_default(vcode, rn, 64);
+            let rm = get_fact_or_default(vcode, rm, 64);
             let sum = fail_if_missing(ctx.add(&rn, &rm, 64))?;
             trace!("rn = {rn:?} rm = {rm:?} sum = {sum:?}");
             check(&sum, ty)
         }
         &AMode::RegScaled { rn, rm, ty } => {
-            let rn = get_fact_or_default(vcode, rn)?;
-            let rm = get_fact_or_default(vcode, rm)?;
+            let rn = get_fact_or_default(vcode, rn, 64);
+            let rm = get_fact_or_default(vcode, rm, 64);
             let rm_scaled = fail_if_missing(ctx.scale(&rm, 64, ty.bytes()))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_scaled, 64))?;
             check(&sum, ty)
@@ -415,28 +360,28 @@ fn check_addr<'a>(
             ty,
             extendop,
         } => {
-            let rn = get_fact_or_default(vcode, rn)?;
-            let rm = get_fact_or_default(vcode, rm)?;
-            let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
+            let rn = get_fact_or_default(vcode, rn, 64);
+            let rm = get_fact_or_default(vcode, rm, 64);
+            let rm_extended = fail_if_missing(extend_fact(ctx, &rm, extendop))?;
             let rm_scaled = fail_if_missing(ctx.scale(&rm_extended, 64, ty.bytes()))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_scaled, 64))?;
             check(&sum, ty)
         }
         &AMode::RegExtended { rn, rm, extendop } => {
-            let rn = get_fact_or_default(vcode, rn)?;
-            let rm = get_fact_or_default(vcode, rm)?;
-            let rm_extended = fail_if_missing(extend_fact(ctx, rm, extendop))?;
+            let rn = get_fact_or_default(vcode, rn, 64);
+            let rm = get_fact_or_default(vcode, rm, 64);
+            let rm_extended = fail_if_missing(extend_fact(ctx, &rm, extendop))?;
             let sum = fail_if_missing(ctx.add(&rn, &rm_extended, 64))?;
             check(&sum, ty)?;
             Ok(())
         }
         &AMode::Unscaled { rn, simm9 } => {
-            let rn = get_fact_or_default(vcode, rn)?;
+            let rn = get_fact_or_default(vcode, rn, 64);
             let sum = fail_if_missing(ctx.offset(&rn, 64, simm9.value.into()))?;
             check(&sum, ty)
         }
         &AMode::UnsignedOffset { rn, uimm12 } => {
-            let rn = get_fact_or_default(vcode, rn)?;
+            let rn = get_fact_or_default(vcode, rn, 64);
             // N.B.: the architecture scales the immediate in the
             // encoded instruction by the size of the loaded type, so
             // e.g. an offset field of 4095 can mean a load of offset
@@ -456,7 +401,7 @@ fn check_addr<'a>(
             Ok(())
         }
         &AMode::RegOffset { rn, off, .. } => {
-            let rn = get_fact_or_default(vcode, rn)?;
+            let rn = get_fact_or_default(vcode, rn, 64);
             let sum = fail_if_missing(ctx.offset(&rn, 64, off))?;
             check(&sum, ty)
         }
@@ -502,8 +447,8 @@ fn check_load_addr(
     if !flags.checked() {
         return Ok(());
     }
-    let fact = get_fact_or_default(vcode, reg)?;
-    let _output_fact = ctx.load(fact, ty)?;
+    let fact = get_fact_or_default(vcode, reg, 64);
+    let _output_fact = ctx.load(&fact, ty)?;
     Ok(())
 }
 
@@ -517,7 +462,7 @@ fn check_store_addr(
     if !flags.checked() {
         return Ok(());
     }
-    let fact = get_fact_or_default(vcode, reg)?;
-    let _output_fact = ctx.store(fact, ty, None)?;
+    let fact = get_fact_or_default(vcode, reg, 64);
+    let _output_fact = ctx.store(&fact, ty, None)?;
     Ok(())
 }
