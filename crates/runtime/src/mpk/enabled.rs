@@ -26,11 +26,12 @@ pub fn keys() -> &'static [ProtectionKey] {
         if is_supported() {
             while let Ok(key_id) = sys::pkey_alloc(0, 0) {
                 debug_assert!(key_id < 16);
-                // UNSAFETY: here we unsafely assume that the system-allocated pkey
-                // will exist forever.
-                let pkey = ProtectionKey(key_id);
-                debug_assert_eq!(pkey.as_stripe(), allocated.len());
-                allocated.push(pkey);
+                // UNSAFETY: here we unsafely assume that the system-allocated
+                // pkey will exist forever.
+                allocated.push(ProtectionKey {
+                    id: key_id,
+                    stripe: allocated.len().try_into().unwrap(),
+                });
             }
         }
         allocated
@@ -58,7 +59,10 @@ pub fn allow(mask: ProtectionMask) {
 ///   [`ProtectionMask`]; any accesses to unmarked pages result in a fault
 /// - drop the key
 #[derive(Clone, Copy, Debug)]
-pub struct ProtectionKey(u32);
+pub struct ProtectionKey {
+    id: u32,
+    stripe: u32,
+}
 
 impl ProtectionKey {
     /// Mark a page as protected by this [`ProtectionKey`].
@@ -75,7 +79,7 @@ impl ProtectionKey {
         let addr = region.as_mut_ptr() as usize;
         let len = region.len();
         let prot = sys::PROT_READ | sys::PROT_WRITE;
-        sys::pkey_mprotect(addr, len, prot, self.0).with_context(|| {
+        sys::pkey_mprotect(addr, len, prot, self.id).with_context(|| {
             format!(
                 "failed to mark region with pkey (addr = {addr:#x}, len = {len}, prot = {prot:#b})"
             )
@@ -87,8 +91,7 @@ impl ProtectionKey {
     ///
     /// This function assumes that the kernel has allocated key 0 for itself.
     pub fn as_stripe(&self) -> usize {
-        debug_assert!(self.0 != 0);
-        self.0 as usize - 1
+        self.stripe as usize
     }
 }
 
@@ -117,7 +120,7 @@ impl ProtectionMask {
     /// Include `pkey` as another allowed protection key in the mask.
     #[inline]
     pub fn or(self, pkey: ProtectionKey) -> Self {
-        let mask = pkru::DISABLE_ACCESS ^ 0b11 << (pkey.0 * 2);
+        let mask = pkru::DISABLE_ACCESS ^ 0b11 << (pkey.id * 2);
         Self(self.0 & mask)
     }
 }
@@ -178,13 +181,13 @@ mod tests {
         allow(ProtectionMask::all());
         assert_eq!(0, pkru::read());
 
-        allow(ProtectionMask::all().or(ProtectionKey(5)));
+        allow(ProtectionMask::all().or(ProtectionKey { id: 5, stripe: 0 }));
         assert_eq!(0, pkru::read());
 
         allow(ProtectionMask::zero());
         assert_eq!(0b11111111_11111111_11111111_11111100, pkru::read());
 
-        allow(ProtectionMask::zero().or(ProtectionKey(5)));
+        allow(ProtectionMask::zero().or(ProtectionKey { id: 5, stripe: 0 }));
         assert_eq!(0b11111111_11111111_11110011_11111100, pkru::read());
 
         // Reset the PKRU state to what we originally observed.
