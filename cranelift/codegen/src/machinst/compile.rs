@@ -76,11 +76,8 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             .expect("register allocation")
     };
 
-    // Run the regalloc checker, if requested. Also run the checker if
-    // PCC is enabled (PCC only validates up to pre-regalloc VCode, so
-    // for a full guarantee we need to ensure that regalloc did a
-    // faithful translation to allocated machine code.)
-    if b.flags().regalloc_checker() || b.flags().enable_pcc() {
+    // Run the regalloc checker, if requested.
+    if b.flags().regalloc_checker() {
         let _tt = timing::regalloc_checker();
         let mut checker = regalloc2::checker::Checker::new(&vcode, vcode.machine_env());
         checker.prepare(&regalloc_result);
