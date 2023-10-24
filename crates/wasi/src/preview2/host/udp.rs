@@ -392,7 +392,11 @@ impl<T: WasiView> udp::HostOutgoingDatagramStream for T {
             };
 
             // FIXME: check permission to send to `addr`.
-            stream.inner.try_send_to(&datagram.data, addr)?;
+            if stream.remote_address == Some(addr) {
+                stream.inner.try_send(&datagram.data)?;
+            } else {
+                stream.inner.try_send_to(&datagram.data, addr)?;
+            }
 
             Ok(())
         }
