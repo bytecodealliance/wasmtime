@@ -2374,7 +2374,8 @@ impl PoolingAllocationConfig {
     ///   supported
     /// - `disable`: never use MPK
     ///
-    /// By default this value is `disabled`, but may become `auto` in future releases.
+    /// By default this value is `disabled`, but may become `auto` in future
+    /// releases.
     ///
     /// __WARNING__: this configuration options is still experimental--use at
     /// your own risk! MPK uses kernel and CPU features to protect memory
