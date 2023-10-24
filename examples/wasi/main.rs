@@ -2,7 +2,7 @@
 
 /*
 You can execute this example with:
-    cmake example/
+    cmake examples/
     cargo run --example wasi
 */
 
