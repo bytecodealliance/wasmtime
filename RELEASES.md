@@ -10,6 +10,18 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 14.0.1
+
+Released 2023-10-23
+
+### Fixed
+
+* Cranelift: preserve uext and sext flags for parameters on x86\_64 and apple
+  aarch64.
+  [#7333](https://github.com/bytecodealliance/wasmtime/pull/7333)
+
+--------------------------------------------------------------------------------
+
 ## 14.0.0
 
 Released 2023-10-20
