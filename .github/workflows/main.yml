@@ -281,6 +281,9 @@ jobs:
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen
 
+    # Check that the bench-api compiles
+    - run: cargo check -p wasmtime-bench-api
+
     # Check some feature combinations of the `wasmtime-c-api` crate
     - run: cargo check -p wasmtime-c-api --no-default-features
     - run: cargo check -p wasmtime-c-api --no-default-features --features wat
