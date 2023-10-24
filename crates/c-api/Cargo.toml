@@ -1,5 +1,5 @@
 [package]
-name = "wasmtime-c-api"
+name = "wasmtime-c-api-impl"
 version.workspace = true
 authors.workspace = true
 description = "C API to expose the Wasmtime runtime"
@@ -10,8 +10,7 @@ edition.workspace = true
 publish = false
 
 [lib]
-name = "wasmtime"
-crate-type = ["staticlib", "cdylib", "rlib"]
+name = "wamstime_c_api"
 doc = false
 test = false
 doctest = false
@@ -38,16 +37,6 @@ wasi-common = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 
 [features]
-default = [
-  'profiling',
-  'wat',
-  'wasi',
-  'cache',
-  'parallel-compilation',
-  'async',
-  'coredump',
-  'addr2line',
-]
 async = ['wasmtime/async', 'futures']
 profiling = ["wasmtime/profiling"]
 cache = ["wasmtime/cache"]
