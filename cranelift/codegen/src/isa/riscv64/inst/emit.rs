@@ -482,7 +482,7 @@ impl Inst {
                 rd,
                 rs,
                 imm12,
-            } if rd.to_reg() != zero_reg() && rs == zero_reg() && imm12.as_i16() != 0 => {
+            } if rd.to_reg() != zero_reg() && rs == zero_reg() => {
                 let imm6 = Imm6::maybe_from_imm12(imm12)?;
                 sink.put2(encode_ci_type(CiOp::CLi, rd, imm6));
             }
