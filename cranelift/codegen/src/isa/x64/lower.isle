@@ -2082,7 +2082,7 @@
 ;; than one instruction for certain types (e.g., XMM-held, I128).
 
 (rule (lower (has_type ty (select (maybe_uextend (icmp cc a @ (value_type (fits_in_64 a_ty)) b)) x y)))
-      (lower_select_icmp ty (emit_cmp cc a b ) x y))
+      (lower_select_icmp ty (emit_cmp cc a b) x y))
 
 ;; Finally, we lower `select` from a condition value `c`. These rules are meant
 ;; to be the final, default lowerings if no other patterns matched above.
