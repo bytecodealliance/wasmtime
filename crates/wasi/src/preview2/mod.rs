@@ -161,6 +161,8 @@ pub mod bindings {
             "wasi:sockets/network/network": super::network::Network,
             "wasi:sockets/tcp/tcp-socket": super::tcp::TcpSocket,
             "wasi:sockets/udp/udp-socket": super::udp::UdpSocket,
+            "wasi:sockets/udp/incoming-datagram-stream": super::udp::IncomingDatagramStream,
+            "wasi:sockets/udp/outgoing-datagram-stream": super::udp::OutgoingDatagramStream,
             "wasi:sockets/ip-name-lookup/resolve-address-stream": super::ip_name_lookup::ResolveAddressStream,
             "wasi:filesystem/types/directory-entry-stream": super::filesystem::ReaddirIterator,
             "wasi:filesystem/types/descriptor": super::filesystem::Descriptor,

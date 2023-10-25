@@ -61,6 +61,13 @@ impl<T> TrappableError<T> {
     {
         self.err.downcast()
     }
+
+    pub fn downcast_ref(&self) -> Option<&T>
+    where
+        T: Error + Send + Sync + 'static,
+    {
+        self.err.downcast_ref()
+    }
 }
 
 impl<T> From<T> for TrappableError<T>
