@@ -74,6 +74,11 @@ pub struct HeapData {
     /// don't need bounds checking.
     pub min_size: u64,
 
+    /// The maximum heap size in bytes.
+    ///
+    /// Heap accesses larger than this will always trap.
+    pub max_size: Option<u64>,
+
     /// Size in bytes of the offset-guard pages following the heap.
     pub offset_guard_size: u64,
 
