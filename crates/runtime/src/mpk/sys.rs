@@ -13,13 +13,10 @@ use crate::page_size;
 use anyhow::Result;
 use std::io::Error;
 
-/// Protection mask allowing reads of pkey-protected memory (see `prot` in
-/// [`pkey_mprotect`]).
-pub const PROT_READ: u32 = libc::PROT_READ as u32; // == 0b0001.
-
-/// Protection mask allowing writes of pkey-protected memory (see `prot` in
-/// [`pkey_mprotect`]).
-pub const PROT_WRITE: u32 = libc::PROT_WRITE as u32; // == 0b0010;
+/// Protection mask disallowing reads and writes of pkey-protected memory (see
+/// `prot` in [`pkey_mprotect`]); in Wasmtime we expect all MPK-protected memory
+/// to start as `PROT_NONE`.
+pub const PROT_NONE: u32 = libc::PROT_NONE as u32; // == 0b0000;
 
 /// Allocate a new protection key in the Linux kernel ([docs]); returns the
 /// key ID.

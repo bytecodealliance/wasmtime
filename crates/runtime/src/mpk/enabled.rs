@@ -78,7 +78,7 @@ impl ProtectionKey {
     pub fn protect(&self, region: &mut [u8]) -> Result<()> {
         let addr = region.as_mut_ptr() as usize;
         let len = region.len();
-        let prot = sys::PROT_READ | sys::PROT_WRITE;
+        let prot = sys::PROT_NONE;
         sys::pkey_mprotect(addr, len, prot, self.id).with_context(|| {
             format!(
                 "failed to mark region with pkey (addr = {addr:#x}, len = {len}, prot = {prot:#b})"
@@ -169,7 +169,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "failed to mark region with pkey (addr = 0x1, len = 1, prot = 0b11)"
+            "failed to mark region with pkey (addr = 0x1, len = 1, prot = 0b0)"
         );
     }
 
