@@ -85,8 +85,8 @@ where
         //
         //            index + 1 > bound
         //        ==> index >= bound
-        HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 => {
-            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+        HeapStyle::Dynamic { .. } if offset_and_size == 1 => {
+            let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
@@ -127,8 +127,8 @@ where
         //    offset immediates -- which is a common code pattern when accessing
         //    multiple fields in the same struct that is in linear memory --
         //    will all emit the same `index > bound` check, which we can GVN.
-        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.offset_guard_size => {
-            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+        HeapStyle::Dynamic { .. } if offset_and_size <= heap.offset_guard_size => {
+            let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = builder.ins().icmp(IntCC::UnsignedGreaterThan, index, bound);
             Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
@@ -149,8 +149,8 @@ where
         //
         //            index + offset + access_size > bound
         //        ==> index > bound - (offset + access_size)
-        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.min_size.into() => {
-            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+        HeapStyle::Dynamic { .. } if offset_and_size <= heap.min_size.into() => {
+            let bound = get_dynamic_heap_bound(builder, env, heap);
             let adjusted_bound = builder.ins().iadd_imm(bound, -(offset_and_size as i64));
             let oob = builder
                 .ins()
@@ -172,7 +172,7 @@ where
         //        index + offset + access_size > bound
         //
         //    And we have to handle the overflow case in the left-hand side.
-        HeapStyle::Dynamic { bound_gv } => {
+        HeapStyle::Dynamic { .. } => {
             let access_size_val = builder
                 .ins()
                 .iconst(env.pointer_type(), offset_and_size as i64);
@@ -181,7 +181,7 @@ where
                 access_size_val,
                 ir::TrapCode::HeapOutOfBounds,
             );
-            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThan, adjusted_index, bound);
@@ -295,6 +295,30 @@ where
             ))
         }
     })
+}
+
+/// Get the bound of a dynamic heap as an `ir::Value`.
+fn get_dynamic_heap_bound<Env>(
+    builder: &mut FunctionBuilder,
+    env: &mut Env,
+    heap: &HeapData,
+) -> ir::Value
+where
+    Env: FuncEnvironment + ?Sized,
+{
+    match (heap.max_size, &heap.style) {
+        // The heap has a constant size, no need to actually load the bound.
+        (Some(max_size), _) if heap.min_size == max_size => {
+            builder.ins().iconst(env.pointer_type(), max_size as i64)
+        }
+
+        // Load the heap bound from its global variable.
+        (_, HeapStyle::Dynamic { bound_gv }) => {
+            builder.ins().global_value(env.pointer_type(), *bound_gv)
+        }
+
+        (_, HeapStyle::Static { .. }) => unreachable!("not a dynamic heap"),
+    }
 }
 
 fn cast_index_to_pointer_ty(
