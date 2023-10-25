@@ -156,14 +156,14 @@ impl MemoryPool {
         let pkeys = match config.memory_protection_keys {
             MpkEnabled::Auto => {
                 if mpk::is_supported() {
-                    mpk::keys()
+                    mpk::keys(config.max_memory_protection_keys)
                 } else {
                     &[]
                 }
             }
             MpkEnabled::Enable => {
                 if mpk::is_supported() {
-                    mpk::keys()
+                    mpk::keys(config.max_memory_protection_keys)
                 } else {
                     bail!("mpk is disabled on this system")
                 }

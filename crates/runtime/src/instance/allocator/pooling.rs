@@ -219,6 +219,8 @@ pub struct PoolingInstanceAllocatorConfig {
     pub table_keep_resident: usize,
     /// Whether to enable memory protection keys.
     pub memory_protection_keys: MpkEnabled,
+    /// How many memory protection keys to allocate.
+    pub max_memory_protection_keys: usize,
 }
 
 impl Default for PoolingInstanceAllocatorConfig {
@@ -232,6 +234,7 @@ impl Default for PoolingInstanceAllocatorConfig {
             linear_memory_keep_resident: 0,
             table_keep_resident: 0,
             memory_protection_keys: MpkEnabled::Disable,
+            max_memory_protection_keys: 16,
         }
     }
 }

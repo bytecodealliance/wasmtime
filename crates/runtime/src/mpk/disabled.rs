@@ -8,7 +8,7 @@ use anyhow::Result;
 pub fn is_supported() -> bool {
     false
 }
-pub fn keys() -> &'static [ProtectionKey] {
+pub fn keys(_: usize) -> &'static [ProtectionKey] {
     &[]
 }
 pub fn allow(_: ProtectionMask) {}
