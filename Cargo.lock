@@ -3383,6 +3383,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bstr",
+ "bytes",
  "clap",
  "component-macro-test",
  "component-test-util",
