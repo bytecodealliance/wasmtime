@@ -1716,8 +1716,10 @@ impl<'a> Parser<'a> {
     // memory-type-decl ::= MemoryType(mt) "=" memory-type-desc
     // memory-type-desc ::= "struct" size "{" memory-type-field,* "}"
     //                    | "memory" size
+    //                    | "dynamic_memory" GlobalValue "+" offset
     //                    | "empty"
     // size ::= uimm64
+    // offset ::= uimm64
     fn parse_memory_type_decl(&mut self) -> ParseResult<(MemoryType, MemoryTypeData)> {
         let mt = self.match_mt("expected memory type number: mt«n»")?;
         self.match_token(Token::Equal, "expected '=' in memory type declaration")?;
@@ -1747,6 +1749,18 @@ impl<'a> Parser<'a> {
                 self.consume();
                 let size: u64 = self.match_uimm64("expected u64 constant value for size in static-memory memory-type declaration")?.into();
                 MemoryTypeData::Memory { size }
+            }
+            Some(Token::Identifier("dynamic_memory")) => {
+                self.consume();
+                let gv = self.match_gv(
+                    "expected a global value for `dynamic_memory` memory-type declaration",
+                )?;
+                self.match_token(
+                    Token::Plus,
+                    "expected `+` after global value in `dynamic_memory` memory-type declaration",
+                )?;
+                let size: u64 = self.match_uimm64("expected u64 constant value for size offset in `dynamic_memory` memory-type declaration")?.into();
+                MemoryTypeData::DynamicMemory { gv, size }
             }
             Some(Token::Identifier("empty")) => {
                 self.consume();
@@ -2166,7 +2180,9 @@ impl<'a> Parser<'a> {
     // Parse a "fact" for proof-carrying code, attached to a value.
     //
     // fact ::= "range" "(" bit-width "," min-value "," max-value ")"
+    //        | "dynamic_range" "(" bit-width "," min-value "," GlobalValue ")"
     //        | "mem" "(" memory-type "," mt-offset "," mt-offset ")"
+    //        | "dynamic_mem" "(" memory-type "," mt-offset "," GlobalValue ")"
     //        | "conflict"
     // bit-width ::= uimm64
     // min-value ::= uimm64
@@ -2213,6 +2229,39 @@ impl<'a> Parser<'a> {
                     max: max.into(),
                 })
             }
+            Some(Token::Identifier("dynamic_range")) => {
+                self.consume();
+                self.match_token(Token::LPar, "`dynamic_range` fact needs an opening `(`")?;
+                let bit_width: u64 = self
+                    .match_uimm64("expected a bit-width value for `dynamic_range` fact")?
+                    .into();
+                self.match_token(Token::Comma, "expected a comma")?;
+                let offset: u64 = self
+                    .match_uimm64("expected an offset value for `dynamic_range` fact")?
+                    .into();
+                self.match_token(Token::Comma, "expected a comma")?;
+                let gv = self.match_gv("expected a global value for `dynamic_range` fact")?;
+                self.match_token(Token::RPar, "`dynamic_range` fact needs a closing `)`")?;
+                let bit_width_max = match bit_width {
+                    x if x > 64 => {
+                        return Err(
+                            self.error("bitwidth must be <= 64 bits on a `dynamic_range` fact")
+                        );
+                    }
+                    64 => u64::MAX,
+                    x => (1u64 << x) - 1,
+                };
+                if offset > bit_width_max {
+                    return Err(self.error(
+                        "offset value is out of range for bitwidth on a `dynamic_range` fact",
+                    ));
+                }
+                Ok(Fact::DynamicRange {
+                    bit_width: u16::try_from(bit_width).unwrap(),
+                    offset: offset.into(),
+                    gv,
+                })
+            }
             Some(Token::Identifier("mem")) => {
                 self.consume();
                 self.match_token(Token::LPar, "expected a `(`")?;
@@ -2224,10 +2273,7 @@ impl<'a> Parser<'a> {
                 let min_offset: u64 = self
                     .match_uimm64("expected a uimm64 minimum pointer offset for `mem` fact")?
                     .into();
-                self.match_token(
-                    Token::Comma,
-                    "expected a comma after memory type in `mem` fact",
-                )?;
+                self.match_token(Token::Comma, "expected a comma after offset in `mem` fact")?;
                 let max_offset: u64 = self
                     .match_uimm64("expected a uimm64 maximum pointer offset for `mem` fact")?
                     .into();
@@ -2238,11 +2284,32 @@ impl<'a> Parser<'a> {
                     max_offset,
                 })
             }
+            Some(Token::Identifier("dynamic_mem")) => {
+                self.consume();
+                self.match_token(Token::LPar, "expected a `(`")?;
+                let ty = self.match_mt("expected a memory type for `dynamic_mem` fact")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected a comma after memory type in `dynamic_mem` fact",
+                )?;
+                let offset: u64 = self
+                    .match_uimm64("expected a uimm64 pointer offset for `dynamic_mem` fact")?
+                    .into();
+                self.match_token(
+                    Token::Comma,
+                    "expected a comma after offset in `dynamic_mem` fact",
+                )?;
+                let gv = self.match_gv("expected a global value in `dynamic_mem` fact")?;
+                self.match_token(Token::RPar, "expected a `)`")?;
+                Ok(Fact::DynamicMem { ty, offset, gv })
+            }
             Some(Token::Identifier("conflict")) => {
                 self.consume();
                 Ok(Fact::Conflict)
             }
-            _ => Err(self.error("expected a `range`, `mem` or `conflict` fact")),
+            _ => Err(self.error(
+                "expected a `range`, 'dynamic_range', `mem`, `dynamic_mem` or `conflict` fact",
+            )),
         }
     }
 

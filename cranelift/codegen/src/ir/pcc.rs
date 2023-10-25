@@ -47,12 +47,6 @@
 //!
 //! TODO:
 //!
-//! Completeness:
-//! - Propagate facts through optimization (egraph layer).
-//! - Generate facts in cranelift-wasm frontend when lowering memory ops.
-//! - Support bounds-checking-type operations for dynamic memories and
-//!   tables.
-//!
 //! More checks:
 //! - Check that facts on `vmctx` GVs are subsumed by the actual facts
 //!   on the vmctx arg in block0 (function arg).
@@ -64,11 +58,6 @@
 //!
 //! Nicer errors:
 //! - attach instruction index or some other identifier to errors
-//!
-//! Refactoring:
-//! - avoid the "default fact" infra everywhere we fetch facts,
-//!   instead doing it in the subsume check (and take the type with
-//!   subsume)?
 //!
 //! Text format cleanup:
 //! - make the bitwidth on `max` facts optional in the CLIF text
@@ -155,6 +144,19 @@ pub enum Fact {
         max: u64,
     },
 
+    /// A value bounded by a global value.
+    ///
+    /// The range is in `0..(GV + offset)`, inclusive on the lower
+    /// bound and exclusive on the upper bound.
+    DynamicRange {
+        /// The bitwidth of bits we care about, from the LSB upward.
+        bit_width: u16,
+        /// The static part of the bound.
+        offset: u64,
+        /// The GlobalValue specifying the dynamic part of the bound.
+        gv: ir::GlobalValue,
+    },
+
     /// A pointer to a memory type.
     Mem {
         /// The memory type.
@@ -163,6 +165,19 @@ pub enum Fact {
         min_offset: u64,
         /// The maximum offset into the memory type, inclusive.
         max_offset: u64,
+    },
+
+    /// A pointer to a memory type, dynamically bounded. The pointer
+    /// is within `offset..(GV+offset)` (inclusive and exclusive
+    /// limits, respectively) in the memory type.
+    DynamicMem {
+        /// The memory type.
+        ty: ir::MemoryType,
+        /// The lower bound on offset into the memory type, inclusive.
+        offset: u64,
+        /// The GlobalValue specifying the size of the possible
+        /// addressed region.
+        gv: ir::GlobalValue,
     },
 
     /// A "conflict fact": this fact results from merging two other
@@ -179,11 +194,21 @@ impl fmt::Display for Fact {
                 min,
                 max,
             } => write!(f, "range({}, {:#x}, {:#x})", bit_width, min, max),
+            Fact::DynamicRange {
+                bit_width,
+                offset,
+                gv,
+            } => {
+                write!(f, "dynamic_range({}, {}, {:#x})", bit_width, gv, offset)
+            }
             Fact::Mem {
                 ty,
                 min_offset,
                 max_offset,
             } => write!(f, "mem({}, {:#x}, {:#x})", ty, min_offset, max_offset),
+            Fact::DynamicMem { ty, offset, gv } => {
+                write!(f, "dynamic_mem({}, {:#x}, {})", ty, offset, gv)
+            }
             Fact::Conflict => write!(f, "conflict"),
         }
     }
@@ -689,6 +714,7 @@ impl<'a> FactContext<'a> {
                     | ir::MemoryTypeData::Memory { size } => {
                         ensure!(end_offset <= *size, OutOfBounds)
                     }
+                    ir::MemoryTypeData::DynamicMemory { .. } => unimplemented!(),
                     ir::MemoryTypeData::Empty => bail!(OutOfBounds),
                 }
                 let specific_ty_and_offset = if min_offset == max_offset {
