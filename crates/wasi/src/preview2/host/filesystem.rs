@@ -728,26 +728,6 @@ impl<T: WasiView> HostDescriptor for T {
         todo!("filesystem change_directory_permissions_at is not implemented")
     }
 
-    async fn lock_shared(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
-        todo!("filesystem lock_shared is not implemented")
-    }
-
-    async fn lock_exclusive(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
-        todo!("filesystem lock_exclusive is not implemented")
-    }
-
-    async fn try_lock_shared(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
-        todo!("filesystem try_lock_shared is not implemented")
-    }
-
-    async fn try_lock_exclusive(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
-        todo!("filesystem try_lock_exclusive is not implemented")
-    }
-
-    async fn unlock(&mut self, _fd: Resource<types::Descriptor>) -> FsResult<()> {
-        todo!("filesystem unlock is not implemented")
-    }
-
     fn read_via_stream(
         &mut self,
         fd: Resource<types::Descriptor>,
