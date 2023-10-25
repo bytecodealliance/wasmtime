@@ -12,8 +12,10 @@ fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
         sock.ipv6_only().unwrap(); // Only verify that it has a default value at all, but either value is valid.
     }
 
-    sock.keep_alive().unwrap(); // Only verify that it has a default value at all, but either value is valid.
-    assert_eq!(sock.no_delay().unwrap(), false);
+    // Only verify that it has a default value at all, but either value is valid.
+    sock.keep_alive().unwrap();
+    sock.no_delay().unwrap();
+
     assert!(sock.unicast_hop_limit().unwrap() > 0);
     assert!(sock.receive_buffer_size().unwrap() > 0);
     assert!(sock.send_buffer_size().unwrap() > 0);
