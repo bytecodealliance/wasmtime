@@ -576,22 +576,43 @@ block0:
 ;   c.addi16sp sp, 0x10
 ;   c.jr ra
 
-function %c_li() -> i64 {
+function %c_li() -> i64, i64, i64, i64, i64 {
 block0:
-  v0 = iconst.i64 1
-  return v0
+  v0 = iconst.i64 0
+  v1 = iconst.i64 1
+  v2 = iconst.i64 -1
+  v3 = iconst.i64 -32
+  v4 = iconst.i64 31
+  return v0, v1, v2, v3, v4
 }
 
 ; VCode:
 ; block0:
-;   li a0,1
+;   li a1,0
+;   mv a5,a1
+;   li a1,1
+;   li a2,-1
+;   li a3,-32
+;   li a4,31
+;   sd a2,0(a0)
+;   sd a3,8(a0)
+;   sd a4,16(a0)
+;   mv a0,a5
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   c.li a0, 1
+;   c.li a1, 0
+;   c.mv a5, a1
+;   c.li a1, 1
+;   c.li a2, -1
+;   c.li a3, -0x20
+;   c.li a4, 0x1f
+;   c.sd a2, 0(a0)
+;   c.sd a3, 8(a0)
+;   c.sd a4, 0x10(a0)
+;   c.mv a0, a5
 ;   c.jr ra
-
 
 function %c_lui() -> i64, i64, i64 {
 block0:
