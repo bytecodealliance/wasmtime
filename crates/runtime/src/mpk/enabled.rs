@@ -11,12 +11,12 @@ pub fn is_supported() -> bool {
 
 /// Allocate up to `max` protection keys.
 ///
-/// This asks the kernel for all available keys (we expect 1-15; 0 is
-/// kernel-reserved) up to `max` in a thread-safe way. This avoids interference
-/// when multiple threads try to allocate keys at the same time (e.g., during
+/// This asks the kernel for all available keys up to `max` in a thread-safe way
+/// (we can expect 1-15; 0 is kernel-reserved). This avoids interference when
+/// multiple threads try to allocate keys at the same time (e.g., during
 /// testing). It also ensures that a single copy of the keys is reserved for the
-/// lifetime of the process. Because of this, `max` is only a hint: it only
-/// is effective on the first invocation of this function.
+/// lifetime of the process. Because of this, `max` is only a hint to
+/// allocation: it only is effective on the first invocation of this function.
 ///
 /// TODO: this is not the best-possible design. This creates global state that
 /// would prevent any other code in the process from using protection keys; the
@@ -28,8 +28,8 @@ pub fn keys(max: usize) -> &'static [ProtectionKey] {
             while allocated.len() < max {
                 if let Ok(key_id) = sys::pkey_alloc(0, 0) {
                     debug_assert!(key_id < 16);
-                    // UNSAFETY: here we unsafely assume that the system-allocated
-                    // pkey will exist forever.
+                    // UNSAFETY: here we unsafely assume that the
+                    // system-allocated pkey will exist forever.
                     allocated.push(ProtectionKey {
                         id: key_id,
                         stripe: allocated.len().try_into().unwrap(),
@@ -41,7 +41,7 @@ pub fn keys(max: usize) -> &'static [ProtectionKey] {
         }
         allocated
     });
-    &keys
+    &keys[..keys.len().min(max)]
 }
 static KEYS: OnceLock<Vec<ProtectionKey>> = OnceLock::new();
 

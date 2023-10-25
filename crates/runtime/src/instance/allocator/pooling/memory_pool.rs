@@ -170,7 +170,6 @@ impl MemoryPool {
             }
             MpkEnabled::Disable => &[],
         };
-        let pkeys = &pkeys[..pkeys.len().min(config.max_memory_protection_keys)];
 
         // This is a tricky bit of global state: when creating a memory pool
         // that uses memory protection keys, we ensure here that any host code
