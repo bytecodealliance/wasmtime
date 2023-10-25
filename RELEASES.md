@@ -19,6 +19,11 @@ Released 2023-10-26
 * Make the `wasmtime::unix` module accessible on macOS again.
   [#7360](https://github.com/bytecodealliance/wasmtime/pull/7360)
 
+* Inter-crate dependencies between `cranelift-*` crates now disable the
+  `default` feature meaning that it's possible for embedders to depend on
+  `cranelift-codegen` as well without the `default` feature.
+  [#7369](https://github.com/bytecodealliance/wasmtime/pull/7369)
+
 --------------------------------------------------------------------------------
 
 ## 14.0.1
