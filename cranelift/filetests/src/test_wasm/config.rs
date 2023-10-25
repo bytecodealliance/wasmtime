@@ -160,6 +160,9 @@ pub struct TestHeap {
     pub min_size: u64,
 
     #[serde(default)]
+    pub max_size: Option<u64>,
+
+    #[serde(default)]
     pub offset_guard_size: u64,
 
     pub style: TestHeapStyle,
@@ -174,7 +177,8 @@ impl TestHeap {
     ) -> cranelift_wasm::HeapData {
         cranelift_wasm::HeapData {
             base: name_to_ir_global[&self.base],
-            min_size: self.min_size.into(),
+            min_size: self.min_size,
+            max_size: self.max_size,
             offset_guard_size: self.offset_guard_size.into(),
             style: self.style.to_ir(name_to_ir_global),
             index_type: match self.index_type.as_str() {
