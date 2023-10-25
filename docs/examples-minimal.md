@@ -221,9 +221,8 @@ $ ls -l ./target/aarch64-apple-darwin/release/wasmtime
 Above shows an example of taking the default `cargo build` result of 130M down
 to a 2.1M binary for the `wasmtime` executable. Similar steps can be done to
 reduce the size of the C API binary artifact as well which currently produces a
-~2.8M dynamic library. This is currently the smallest that can be gained with
-the source-code as-is, but there's still possible size reductions which haven't
-been implemented yet.
+~2.8M dynamic library. This is currently the smallest size with the source code
+as-is, but there are more size reductions which haven't been implemented yet.
 
 This is a listing of some example sources of binary size. Some sources of binary
 size may not apply to custom embeddings since, for example, your custom
@@ -274,7 +273,7 @@ embedding might already not use WASI and might already not be included.
   from a compiled footprint point of view while not sacrificing everything in
   terms of performance. Note though that Winch is still under development.
 
-Above is some future avenues to take in terms of reducing the binary size of
+Above are some future avenues to take in terms of reducing the binary size of
 Wasmtime and various tradeoffs that can be made. The Wasmtime project is eager
 to hear embedder use cases/profiles if Wasmtime is not suitable for binary size
 reasons today. Please feel free to [open an
