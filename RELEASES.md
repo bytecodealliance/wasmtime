@@ -1,5 +1,16 @@
 --------------------------------------------------------------------------------
 
+## 14.0.2
+
+Released 2023-10-25
+
+### Fixed
+
+* Make the `wasmtime::unix` module accessible on macOS again.
+  [#7360](https://github.com/bytecodealliance/wasmtime/pull/7360)
+
+--------------------------------------------------------------------------------
+
 ## 14.0.1
 
 Released 2023-10-23
