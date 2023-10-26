@@ -108,11 +108,16 @@ macro_rules! newtype_of_reg {
         $(
             /// A newtype wrapper around `RegMem` for general-purpose registers.
             #[derive(Clone, Debug)]
-            pub struct $newtype_reg_mem(pub RegMem);
+            pub struct $newtype_reg_mem(RegMem);
 
             impl From<$newtype_reg_mem> for RegMem {
                 fn from(rm: $newtype_reg_mem) -> Self {
                     rm.0
+                }
+            }
+            impl<'a> From<&'a $newtype_reg_mem> for &'a RegMem {
+                fn from(rm: &'a $newtype_reg_mem) -> &'a RegMem {
+                    &rm.0
                 }
             }
 
@@ -169,11 +174,16 @@ macro_rules! newtype_of_reg {
         $(
             /// A newtype wrapper around `RegMemImm`.
             #[derive(Clone, Debug)]
-            pub struct $newtype_reg_mem_imm(pub RegMemImm);
+            pub struct $newtype_reg_mem_imm(RegMemImm);
 
             impl From<$newtype_reg_mem_imm> for RegMemImm {
                 fn from(rmi: $newtype_reg_mem_imm) -> RegMemImm {
                     rmi.0
+                }
+            }
+            impl<'a> From<&'a $newtype_reg_mem_imm> for &'a RegMemImm {
+                fn from(rmi: &'a $newtype_reg_mem_imm) -> &'a RegMemImm {
+                    &rmi.0
                 }
             }
 
@@ -233,7 +243,7 @@ macro_rules! newtype_of_reg {
         /// A newtype wrapper around `Imm8Reg`.
         #[derive(Clone, Debug)]
         #[allow(dead_code)] // Used by some newtypes and not others.
-        pub struct $newtype_imm8_reg(pub Imm8Reg);
+        pub struct $newtype_imm8_reg(Imm8Reg);
 
         impl From<$newtype_reg> for $newtype_imm8_reg {
             fn from(r: $newtype_reg) -> Self {

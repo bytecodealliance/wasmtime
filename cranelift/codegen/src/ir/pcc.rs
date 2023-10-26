@@ -781,7 +781,10 @@ pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
         let block = BlockIndex::new(block);
         for inst in vcode.block_insns(block).iter() {
             // Check any output facts on this inst.
-            backend.check_fact(&ctx, vcode, inst)?;
+            if let Err(e) = backend.check_fact(&ctx, vcode, inst) {
+                log::error!("Error checking instruction: {:?}", vcode[inst]);
+                return Err(e);
+            }
 
             // If this is a branch, check that all block arguments subsume
             // the assumed facts on the blockparams of successors.

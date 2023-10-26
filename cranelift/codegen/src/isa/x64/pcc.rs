@@ -4,14 +4,33 @@ use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::x64::inst::args::{
-    AluRmiROpcode, Amode, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind,
-    SyntheticAmode, ToWritableReg, XmmMem, XmmMemAligned, XmmMemAlignedImm, XmmMemImm,
+    AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SyntheticAmode, ToWritableReg,
 };
 use crate::isa::x64::inst::Inst;
 use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode};
 use crate::machinst::{Reg, Writable};
 use crate::trace;
+
+fn undefined_result(
+    ctx: &FactContext,
+    vcode: &mut VCode<Inst>,
+    dst: Writable<Gpr>,
+    reg_bits: u16,
+    result_bits: u16,
+) -> PccResult<()> {
+    check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+        clamp_range(ctx, reg_bits, result_bits, None)
+    })
+}
+
+fn ensure_no_fact(vcode: &VCode<Inst>, reg: Reg) -> PccResult<()> {
+    if vcode.vreg_fact(reg.into()).is_some() {
+        Err(PccError::UnsupportedFact)
+    } else {
+        Ok(())
+    }
+}
 
 pub(crate) fn check(
     ctx: &FactContext,
@@ -21,6 +40,8 @@ pub(crate) fn check(
     trace!("Checking facts on inst: {:?}", vcode[inst_idx]);
 
     match vcode[inst_idx] {
+        Inst::Nop { .. } => Ok(()),
+
         Inst::Args { .. } => {
             // Defs on the args have "axiomatic facts": we trust the
             // ABI code to pass through the values unharmed, so the
@@ -32,203 +53,96 @@ pub(crate) fn check(
             size,
             op: AluRmiROpcode::Add,
             src1,
-            src2: GprMemImm(RegMemImm::Reg { reg: src2 }),
+            ref src2,
             dst,
-        } => {
-            let bits = size.to_bits().into();
-            check_binop(
-                ctx,
-                vcode,
-                64,
-                dst.to_writable_reg(),
-                src1.to_reg(),
-                src2,
-                |src1, src2| clamp_range(ctx, 64, bits, ctx.add(src1, src2, bits)),
-            )
-        }
-
-        Inst::AluRmiR {
-            size,
-            op: AluRmiROpcode::Add,
-            src1,
-            src2: GprMemImm(RegMemImm::Imm { simm32 }),
-            dst,
-        } => {
-            let bits = size.to_bits().into();
-            check_unop(
-                ctx,
-                vcode,
-                64,
-                dst.to_writable_reg(),
-                src1.to_reg(),
-                |src1| {
-                    let simm32: i64 = simm32.into();
-                    clamp_range(ctx, 64, bits, ctx.offset(src1, bits, simm32))
-                },
-            )
-        }
-        Inst::AluRmiR {
-            size,
-            op: AluRmiROpcode::Add,
-            src1,
-            src2: GprMemImm(RegMemImm::Mem { ref addr }),
-            dst,
-        } => {
-            let bits: u16 = size.to_bits().into();
-            let loaded = check_load(ctx, None, addr, vcode, size.to_type(), bits)?;
-            check_unop(ctx, vcode, 64, dst.to_writable_reg(), src1.into(), |src1| {
-                let sum = loaded.and_then(|loaded| ctx.add(src1, &loaded, bits));
-                clamp_range(ctx, 64, bits, sum)
-            })
-        }
+        } => match *<&RegMemImm>::from(src2) {
+            RegMemImm::Reg { reg: src2 } => {
+                let bits = size.to_bits().into();
+                check_binop(
+                    ctx,
+                    vcode,
+                    64,
+                    dst.to_writable_reg(),
+                    src1.to_reg(),
+                    src2,
+                    |src1, src2| clamp_range(ctx, 64, bits, ctx.add(src1, src2, bits)),
+                )
+            }
+            RegMemImm::Imm { simm32 } => {
+                let bits = size.to_bits().into();
+                check_unop(
+                    ctx,
+                    vcode,
+                    64,
+                    dst.to_writable_reg(),
+                    src1.to_reg(),
+                    |src1| {
+                        let simm32: i64 = simm32.into();
+                        clamp_range(ctx, 64, bits, ctx.offset(src1, bits, simm32))
+                    },
+                )
+            }
+            RegMemImm::Mem { ref addr } => {
+                let bits: u16 = size.to_bits().into();
+                let loaded = check_load(ctx, None, addr, vcode, size.to_type(), bits)?;
+                check_unop(ctx, vcode, 64, dst.to_writable_reg(), src1.into(), |src1| {
+                    let sum = loaded.and_then(|loaded| ctx.add(src1, &loaded, bits));
+                    clamp_range(ctx, 64, bits, sum)
+                })
+            }
+        },
 
         Inst::AluRmiR {
             size,
             op: AluRmiROpcode::Sub,
             src1,
-            src2: GprMemImm(RegMemImm::Imm { simm32 }),
+            ref src2,
             dst,
-        } => {
-            let bits = size.to_bits().into();
-            check_unop(
-                ctx,
-                vcode,
-                64,
-                dst.to_writable_reg(),
-                src1.to_reg(),
-                |src1| {
-                    let simm32: i64 = simm32.into();
-                    clamp_range(ctx, 64, bits, ctx.offset(src1, bits, -simm32))
-                },
-            )
-        }
+        } => match *<&RegMemImm>::from(src2) {
+            RegMemImm::Imm { simm32 } => {
+                let bits = size.to_bits().into();
+                check_unop(
+                    ctx,
+                    vcode,
+                    64,
+                    dst.to_writable_reg(),
+                    src1.to_reg(),
+                    |src1| {
+                        let simm32: i64 = simm32.into();
+                        clamp_range(ctx, 64, bits, ctx.offset(src1, bits, -simm32))
+                    },
+                )
+            }
+            RegMemImm::Reg { .. } => {
+                let bits: u16 = size.to_bits().into();
+                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+                    clamp_range(ctx, 64, bits, None)
+                })
+            }
+            RegMemImm::Mem { ref addr } => {
+                let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+                    clamp_range(ctx, 64, size.to_bits().into(), loaded)
+                })
+            }
+        },
 
         Inst::AluRmiR {
             size,
-            src2: GprMemImm(RegMemImm::Mem { ref addr }),
+            ref src2,
             dst,
             ..
-        }
-        | Inst::AluRmRVex {
-            size,
-            src2: GprMem(RegMem::Mem { ref addr }),
-            dst,
-            ..
-        } => {
-            let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-            check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                clamp_range(ctx, 64, size.to_bits().into(), loaded)
-            })
-        }
-        Inst::CmpRmiR {
-            size,
-            src: GprMemImm(RegMemImm::Mem { ref addr }),
-            ..
-        } => {
-            check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-            Ok(())
-        }
-
-        Inst::Cmove {
-            size,
-            consequent: GprMem(RegMem::Mem { ref addr, .. }),
-            ..
-        } => {
-            check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-            Ok(())
-        }
-
-        Inst::Imm { simm64, dst, .. } => {
-            check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                Ok(Fact::constant(64, simm64))
-            })
-        }
-
-        Inst::AluConstOp {
-            op: AluRmiROpcode::Xor,
-            dst,
-            ..
-        } => check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-            Ok(Fact::constant(64, 0))
-        }),
-
-        Inst::AluRmiR {
-            size,
-            dst,
-            src2: GprMemImm(RegMemImm::Reg { .. } | RegMemImm::Imm { .. }),
-            ..
-        }
-        | Inst::AluConstOp { size, dst, .. }
-        | Inst::MovRR { size, dst, .. }
-        | Inst::AluRmRVex {
-            size,
-            src2: GprMem(RegMem::Reg { .. }),
-            dst,
-            ..
-        } => {
-            let bits: u16 = size.to_bits().into();
-            trace!("generic case: bits = {}", bits);
-            check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                clamp_range(ctx, 64, bits, None)
-            })
-        }
-
-        Inst::MovzxRmR {
-            ref ext_mode,
-            src: GprMem(RegMem::Reg { reg: src }),
-            dst,
-        } => {
-            let from_bytes: u16 = ext_mode.src_size().into();
-            let to_bytes: u16 = ext_mode.dst_size().into();
-            check_unop(ctx, vcode, 64, dst.to_writable_reg(), src, |src| {
-                let extended = ctx.uextend(src, from_bytes * 8, to_bytes * 8);
-                trace!("src = {:?} extended = {:?}", src, extended);
-                clamp_range(ctx, 64, from_bytes * 8, extended)
-            })
-        }
-
-        Inst::LoadEffectiveAddress {
-            ref addr,
-            dst,
-            size,
-        } => {
-            let addr = addr.clone();
-            let bits: u16 = size.to_bits().into();
-            check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
-                trace!("checking output: addr = {:?}", addr);
-                let clamped = clamp_range(ctx, 64, bits, compute_addr(ctx, vcode, &addr, bits));
-                trace!("clamped = {:?}", clamped);
-                clamped
-            })
-        }
-
-        Inst::MovRM { size, src, ref dst } => {
-            check_store(ctx, Some(src.to_reg()), dst, vcode, size.to_type())
-        }
-        Inst::MovImmM {
-            size,
-            simm32: _,
-            ref dst,
-        } => check_store(ctx, None, dst, vcode, size.to_type()),
-        Inst::Mov64MR { ref src, dst } => {
-            check_load(ctx, Some(dst.to_writable_reg()), src, vcode, I64, 64)?;
-            Ok(())
-        }
-        Inst::MovzxRmR {
-            ref ext_mode,
-            src: GprMem(RegMem::Mem { ref addr }),
-            dst,
-        } => {
-            check_load(
-                ctx,
-                Some(dst.to_writable_reg()),
-                addr,
-                vcode,
-                ext_mode.src_type(),
-                64,
-            )?;
-            Ok(())
-        }
+        } => match <&RegMemImm>::from(src2) {
+            RegMemImm::Mem { ref addr } => {
+                let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+                    clamp_range(ctx, 64, size.to_bits().into(), loaded)
+                })
+            }
+            RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => {
+                undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
+            }
+        },
 
         Inst::AluRM {
             size,
@@ -240,243 +154,545 @@ pub(crate) fn check(
             check_store(ctx, None, src1_dst, vcode, size.to_type())
         }
 
-        Inst::UnaryRmR {
+        Inst::AluRmRVex {
             size,
-            src: GprMem(RegMem::Mem { ref addr }),
+            ref src2,
             dst,
             ..
+        } => match <&RegMem>::from(src2) {
+            RegMem::Mem { ref addr } => {
+                let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+                    clamp_range(ctx, 64, size.to_bits().into(), loaded)
+                })
+            }
+            RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
+        },
+
+        Inst::AluConstOp {
+            op: AluRmiROpcode::Xor,
+            dst,
+            ..
+        } => check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+            Ok(Fact::constant(64, 0))
+        }),
+
+        Inst::AluConstOp { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
+
+        Inst::UnaryRmR {
+            size, ref src, dst, ..
         }
         | Inst::UnaryRmRVex {
-            size,
-            src: GprMem(RegMem::Mem { ref addr }),
-            dst,
-            ..
+            size, ref src, dst, ..
         }
         | Inst::UnaryRmRImmVex {
-            size,
-            src: GprMem(RegMem::Mem { ref addr }),
-            dst,
-            ..
-        } => {
-            check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-            check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                clamp_range(ctx, 64, size.to_bits().into(), None)
-            })
+            size, ref src, dst, ..
+        } => match <&RegMem>::from(src) {
+            RegMem::Mem { ref addr } => {
+                check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+                    clamp_range(ctx, 64, size.to_bits().into(), None)
+                })
+            }
+            RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
+        },
+
+        Inst::Not { size, dst, .. } | Inst::Neg { size, dst, .. } => {
+            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
         }
 
         Inst::Div {
-            divisor: GprMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::Div8 {
-            divisor: GprMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::MulHi {
-            src2: GprMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::UMulLo {
-            src2: GprMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::MovsxRmR {
-            src: GprMem(RegMem::Mem { ref addr }),
+            size,
+            ref divisor,
+            dst_quotient,
+            dst_remainder,
             ..
         } => {
-            // Round up on size: some of the above will take 32- or
-            // 8-bit mem args, but if we can validate assuming a
-            // 64-bit load, we're still (conservatively) safe.
-            check_load(ctx, None, addr, vcode, I64, 64)?;
+            match <&RegMem>::from(divisor) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            undefined_result(ctx, vcode, dst_quotient, 64, 64)?;
+            undefined_result(ctx, vcode, dst_remainder, 64, 64)?;
             Ok(())
+        }
+        Inst::Div8 {
+            dst, ref divisor, ..
+        } => {
+            match <&RegMem>::from(divisor) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8, 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            // 64-bit result width because result may be negative
+            // hence high bits set.
+            undefined_result(ctx, vcode, dst, 64, 64)?;
+            Ok(())
+        }
+        Inst::MulHi {
+            size,
+            dst_lo,
+            dst_hi,
+            ref src2,
+            ..
+        } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            undefined_result(ctx, vcode, dst_lo, 64, 64)?;
+            undefined_result(ctx, vcode, dst_hi, 64, 64)?;
+            Ok(())
+        }
+        Inst::UMulLo {
+            size,
+            dst,
+            ref src2,
+            ..
+        } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            undefined_result(ctx, vcode, dst, 64, 64)?;
+            Ok(())
+        }
+
+        Inst::CheckedSRemSeq {
+            dst_quotient,
+            dst_remainder,
+            ..
+        } => {
+            undefined_result(ctx, vcode, dst_quotient, 64, 64)?;
+            undefined_result(ctx, vcode, dst_remainder, 64, 64)?;
+            Ok(())
+        }
+
+        Inst::CheckedSRemSeq8 { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
+
+        Inst::SignExtendData { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
+
+        Inst::Imm { simm64, dst, .. } => {
+            check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+                Ok(Fact::constant(64, simm64))
+            })
+        }
+
+        Inst::MovRR { size, dst, .. } => {
+            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
+        }
+
+        Inst::MovFromPReg { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
+        Inst::MovToPReg { .. } => Ok(()),
+
+        Inst::MovzxRmR {
+            ref ext_mode,
+            ref src,
+            dst,
+        } => {
+            let from_bytes: u16 = ext_mode.src_size().into();
+            let to_bytes: u16 = ext_mode.dst_size().into();
+            match <&RegMem>::from(src) {
+                RegMem::Reg { reg } => {
+                    check_unop(ctx, vcode, 64, dst.to_writable_reg(), *reg, |src| {
+                        let extended = ctx.uextend(src, from_bytes * 8, to_bytes * 8);
+                        clamp_range(ctx, 64, from_bytes * 8, extended)
+                    })
+                }
+                RegMem::Mem { ref addr } => {
+                    let loaded = check_load(
+                        ctx,
+                        Some(dst.to_writable_reg()),
+                        addr,
+                        vcode,
+                        ext_mode.src_type(),
+                        64,
+                    )?;
+                    check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
+                        let extended = loaded
+                            .and_then(|loaded| ctx.uextend(&loaded, from_bytes * 8, to_bytes * 8));
+                        clamp_range(ctx, 64, from_bytes * 8, extended)
+                    })
+                }
+            }
+        }
+
+        Inst::Mov64MR { ref src, dst } => {
+            check_load(ctx, Some(dst.to_writable_reg()), src, vcode, I64, 64)?;
+            Ok(())
+        }
+
+        Inst::LoadEffectiveAddress {
+            ref addr,
+            dst,
+            size,
+        } => {
+            let addr = addr.clone();
+            let bits: u16 = size.to_bits().into();
+            check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
+                clamp_range(ctx, 64, bits, compute_addr(ctx, vcode, &addr, bits))
+            })
+        }
+
+        Inst::MovsxRmR {
+            ref ext_mode,
+            ref src,
+            dst,
+        } => {
+            match <&RegMem>::from(src) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, ext_mode.src_type(), 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            undefined_result(ctx, vcode, dst, 64, 64)
+        }
+
+        Inst::MovImmM { size, ref dst, .. } => check_store(ctx, None, dst, vcode, size.to_type()),
+
+        Inst::MovRM { size, src, ref dst } => {
+            check_store(ctx, Some(src.to_reg()), dst, vcode, size.to_type())
         }
 
         Inst::ShiftR {
             size,
             kind: ShiftKind::ShiftLeft,
             src,
-            num_bits: Imm8Gpr(Imm8Reg::Imm8 { imm }),
+            ref num_bits,
             dst,
-        } => check_unop(ctx, vcode, 64, dst.to_writable_reg(), src.to_reg(), |src| {
-            clamp_range(
-                ctx,
-                64,
-                size.to_bits().into(),
-                ctx.shl(src, size.to_bits().into(), imm.into()),
-            )
-        }),
+        } => match num_bits.clone().to_imm8_reg() {
+            Imm8Reg::Imm8 { imm } => {
+                check_unop(ctx, vcode, 64, dst.to_writable_reg(), src.to_reg(), |src| {
+                    clamp_range(
+                        ctx,
+                        64,
+                        size.to_bits().into(),
+                        ctx.shl(src, size.to_bits().into(), imm.into()),
+                    )
+                })
+            }
+            Imm8Reg::Reg { .. } => undefined_result(ctx, vcode, dst, 64, 64),
+        },
 
         Inst::ShiftR { size, dst, .. } => {
-            check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                clamp_range(ctx, 64, size.to_bits().into(), None)
-            })
+            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
         }
 
-        Inst::Push64 {
-            src: GprMemImm(RegMemImm::Mem { ref addr }),
+        Inst::XmmRmiReg { dst, ref src2, .. } => {
+            match <&RegMemImm>::from(src2) {
+                RegMemImm::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                _ => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::CmpRmiR { size, ref src, .. } => match <&RegMemImm>::from(src) {
+            RegMemImm::Mem { ref addr } => {
+                check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                Ok(())
+            }
+            RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => Ok(()),
+        },
+
+        Inst::Setcc { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
+
+        Inst::Bswap { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
+
+        Inst::Cmove {
+            size,
+            dst,
+            ref consequent,
+            ..
         } => {
-            check_load(ctx, None, addr, vcode, I64, 64)?;
-            Ok(())
+            match <&RegMem>::from(consequent) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            undefined_result(ctx, vcode, dst, 64, 64)
         }
 
-        Inst::XmmMovRMVex { ref dst, .. }
-        | Inst::XmmMovRMImmVex { ref dst, .. }
-        | Inst::XmmMovRM { ref dst, .. }
-        | Inst::XmmMovRMImm { ref dst, .. } => {
+        Inst::XmmCmove {
+            dst,
+            ref consequent,
+            ..
+        } => {
+            match <&RegMem>::from(consequent) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::Push64 { ref src } => match <&RegMemImm>::from(src) {
+            RegMemImm::Mem { ref addr } => {
+                check_load(ctx, None, addr, vcode, I64, 64)?;
+                Ok(())
+            }
+            RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => Ok(()),
+        },
+
+        Inst::Pop64 { dst } => undefined_result(ctx, vcode, dst, 64, 64),
+
+        Inst::StackProbeLoop { tmp, .. } => ensure_no_fact(vcode, tmp.to_reg()),
+
+        Inst::XmmRmR { dst, ref src2, .. }
+        | Inst::XmmRmRBlend { dst, ref src2, .. }
+        | Inst::XmmUnaryRmR {
+            dst, src: ref src2, ..
+        }
+        | Inst::XmmUnaryRmRImm {
+            dst, src: ref src2, ..
+        } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::XmmRmRUnaligned { dst, ref src2, .. }
+        | Inst::XmmRmRImmVex { dst, ref src2, .. }
+        | Inst::XmmRmRVex3 {
+            dst,
+            src3: ref src2,
+            ..
+        }
+        | Inst::XmmRmRBlendVex { dst, ref src2, .. }
+        | Inst::XmmUnaryRmRVex {
+            dst, src: ref src2, ..
+        }
+        | Inst::XmmUnaryRmRImmVex {
+            dst, src: ref src2, ..
+        }
+        | Inst::XmmRmREvex { dst, ref src2, .. }
+        | Inst::XmmUnaryRmRImmEvex {
+            dst, src: ref src2, ..
+        }
+        | Inst::XmmRmREvex3 {
+            dst,
+            src3: ref src2,
+            ..
+        }
+        | Inst::XmmUnaryRmRUnaligned {
+            dst, src: ref src2, ..
+        }
+        | Inst::XmmUnaryRmREvex {
+            dst, src: ref src2, ..
+        } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::XmmRmiRVex { dst, ref src2, .. } => {
+            match <&RegMemImm>::from(src2) {
+                RegMemImm::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::XmmVexPinsr { dst, ref src2, .. } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I64, 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::XmmMovRMVex { ref dst, .. } | Inst::XmmMovRMImmVex { ref dst, .. } => {
+            check_store(ctx, None, dst, vcode, I8X16)
+        }
+
+        Inst::XmmToGprImmVex { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
+
+        Inst::GprToXmmVex { dst, ref src, .. } | Inst::GprToXmm { dst, ref src, .. } => {
+            match <&RegMem>::from(src) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I64, 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::XmmToGprVex { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
+
+        Inst::XmmMovRM { ref dst, .. } | Inst::XmmMovRMImm { ref dst, .. } => {
             check_store(ctx, None, dst, vcode, I8X16)?;
             Ok(())
         }
 
-        Inst::XmmRmiReg {
-            src2: XmmMemAlignedImm(RegMemImm::Mem { ref addr }),
-            ..
+        Inst::XmmToGpr { dst, .. } | Inst::XmmToGprImm { dst, .. } => {
+            undefined_result(ctx, vcode, dst, 64, 64)
         }
-        | Inst::XmmRmiRVex {
-            src2: XmmMemImm(RegMemImm::Mem { ref addr }),
-            ..
+
+        Inst::CvtIntToFloat { dst, ref src2, .. }
+        | Inst::CvtIntToFloatVex { dst, ref src2, .. } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I64, 64)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
-        | Inst::XmmRmRImmVex {
-            src2: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmRmR {
-            src2: XmmMemAligned(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmRmRUnaligned {
-            src2: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmRmRBlend {
-            src2: XmmMemAligned(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmRmRVex3 {
-            src3: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmRmRBlendVex {
-            src2: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmUnaryRmR {
-            src: XmmMemAligned(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmUnaryRmRUnaligned {
-            src: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmUnaryRmRImm {
-            src: XmmMemAligned(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmUnaryRmREvex {
-            src: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmUnaryRmRVex {
-            src: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmUnaryRmRImmVex {
-            src: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmRmREvex {
-            src2: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmUnaryRmRImmEvex {
-            src: XmmMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmRmREvex3 {
-            src3: XmmMem(RegMem::Mem { ref addr }),
+
+        Inst::CvtUint64ToFloatSeq {
+            dst,
+            tmp_gpr1,
+            tmp_gpr2,
             ..
         } => {
-            check_load(ctx, None, addr, vcode, I8X16, 128)?;
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())?;
+            ensure_no_fact(vcode, tmp_gpr1.to_writable_reg().to_reg())?;
+            ensure_no_fact(vcode, tmp_gpr2.to_writable_reg().to_reg())?;
             Ok(())
         }
 
-        Inst::XmmVexPinsr {
-            src2: GprMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::GprToXmm {
-            src: GprMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::GprToXmmVex {
-            src: GprMem(RegMem::Mem { ref addr }),
+        Inst::CvtFloatToSintSeq {
+            dst,
+            tmp_gpr,
+            tmp_xmm,
             ..
         } => {
-            check_load(ctx, None, addr, vcode, I64, 64)?;
+            undefined_result(ctx, vcode, dst, 64, 64)?;
+            ensure_no_fact(vcode, tmp_gpr.to_writable_reg().to_reg())?;
+            ensure_no_fact(vcode, tmp_xmm.to_writable_reg().to_reg())?;
             Ok(())
         }
 
-        Inst::XmmCmove {
-            consequent: XmmMemAligned(RegMem::Mem { ref addr }),
+        Inst::CvtFloatToUintSeq {
+            dst,
+            tmp_gpr,
+            tmp_xmm,
+            tmp_xmm2,
             ..
         } => {
-            check_load(ctx, None, addr, vcode, I8X16, 128)?;
+            undefined_result(ctx, vcode, dst, 64, 64)?;
+            ensure_no_fact(vcode, tmp_gpr.to_writable_reg().to_reg())?;
+            ensure_no_fact(vcode, tmp_xmm.to_writable_reg().to_reg())?;
+            ensure_no_fact(vcode, tmp_xmm2.to_writable_reg().to_reg())?;
             Ok(())
         }
 
-        Inst::XmmCmpRmR {
-            src: XmmMemAligned(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::XmmRmRImm {
-            src2: RegMem::Mem { ref addr },
-            ..
-        } => {
-            check_load(ctx, None, addr, vcode, I8X16, 128)?;
-            Ok(())
+        Inst::XmmMinMaxSeq { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
+
+        Inst::XmmCmpRmR { ref src, .. } => match <&RegMem>::from(src) {
+            RegMem::Mem { ref addr } => {
+                check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                Ok(())
+            }
+            RegMem::Reg { .. } => Ok(()),
+        },
+
+        Inst::XmmRmRImm { dst, ref src2, .. } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_reg())
         }
 
-        Inst::CvtIntToFloat {
-            src2: GprMem(RegMem::Mem { ref addr }),
-            ..
-        }
-        | Inst::CvtIntToFloatVex {
-            src2: GprMem(RegMem::Mem { ref addr }),
-            ..
-        } => {
-            check_load(ctx, None, addr, vcode, I64, 64)?;
-            Ok(())
-        }
+        Inst::CallKnown { .. }
+        | Inst::ReturnCallKnown { .. }
+        | Inst::JmpKnown { .. }
+        | Inst::Ret { .. }
+        | Inst::JmpIf { .. }
+        | Inst::JmpCond { .. }
+        | Inst::TrapIf { .. }
+        | Inst::TrapIfAnd { .. }
+        | Inst::TrapIfOr { .. }
+        | Inst::Hlt {}
+        | Inst::Ud2 { .. } => Ok(()),
+        Inst::Rets { .. } => Ok(()),
 
-        Inst::LockCmpxchg { mem: ref dst, .. } | Inst::AtomicRmwSeq { mem: ref dst, .. } => {
-            check_store(ctx, None, dst, vcode, I64)?;
-            Ok(())
-        }
-
-        Inst::CallUnknown {
-            dest: RegMem::Mem { ref addr },
-            ..
-        }
+        Inst::CallUnknown { ref dest, .. }
         | Inst::ReturnCallUnknown {
-            callee: RegMem::Mem { ref addr },
-            ..
+            callee: ref dest, ..
         }
         | Inst::JmpUnknown {
-            target: RegMem::Mem { ref addr },
-            ..
-        } => {
-            check_load(ctx, None, addr, vcode, I64, 64)?;
+            target: ref dest, ..
+        } => match <&RegMem>::from(dest) {
+            RegMem::Mem { ref addr } => {
+                check_load(ctx, None, addr, vcode, I64, 64)?;
+                Ok(())
+            }
+            RegMem::Reg { .. } => Ok(()),
+        },
+
+        Inst::JmpTableSeq { tmp1, tmp2, .. } => {
+            ensure_no_fact(vcode, tmp1.to_reg())?;
+            ensure_no_fact(vcode, tmp2.to_reg())?;
             Ok(())
         }
 
-        _ if vcode.inst_defines_facts(inst_idx) => {
-            trace!(
-                "Unsupported inst during PCC validation: {:?}",
-                vcode[inst_idx]
-            );
-            Err(PccError::UnsupportedFact)
+        Inst::LoadExtName { dst, .. } => {
+            ensure_no_fact(vcode, dst.to_reg())?;
+            Ok(())
         }
 
-        _ => Ok(()),
+        Inst::LockCmpxchg {
+            ref mem, dst_old, ..
+        } => {
+            ensure_no_fact(vcode, dst_old.to_reg())?;
+            check_store(ctx, None, mem, vcode, I64)?;
+            Ok(())
+        }
+
+        Inst::AtomicRmwSeq {
+            ref mem,
+            temp,
+            dst_old,
+            ..
+        } => {
+            ensure_no_fact(vcode, dst_old.to_reg())?;
+            ensure_no_fact(vcode, temp.to_reg())?;
+            check_store(ctx, None, mem, vcode, I64)?;
+            Ok(())
+        }
+
+        Inst::Fence { .. } | Inst::VirtualSPOffsetAdj { .. } => Ok(()),
+
+        Inst::XmmUninitializedValue { dst } => {
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::ElfTlsGetAddr { dst, .. } | Inst::MachOTlsGetAddr { dst, .. } => {
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+        Inst::CoffTlsGetAddr { dst, tmp, .. } => {
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())?;
+            ensure_no_fact(vcode, tmp.to_writable_reg().to_reg())?;
+            Ok(())
+        }
+
+        Inst::Unwind { .. } | Inst::DummyUse { .. } => Ok(()),
     }
 }
 
