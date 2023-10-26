@@ -20,7 +20,8 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
         let resp = bindings::wasi::http::types::OutgoingResponse::new(200, hdrs);
         let body = resp.body().expect("outgoing response");
 
-        bindings::wasi::http::types::ResponseOutparam::set(outparam, Ok(resp));
+        bindings::wasi::http::types::ResponseOutparam::set(outparam, Ok(resp))
+            .expect("sending the response");
 
         let out = body.write().expect("outgoing stream");
         out.blocking_write_and_flush(b"hello, world!")

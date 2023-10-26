@@ -57,7 +57,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
             let mut body =
                 executor::outgoing_body(response.body().expect("response should be writable"));
 
-            ResponseOutparam::set(response_out, Ok(response));
+            ResponseOutparam::set(response_out, Ok(response)).expect("sending the response");
 
             while let Some((url, result)) = results.next().await {
                 let payload = match result {
@@ -86,7 +86,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
             let mut body =
                 executor::outgoing_body(response.body().expect("response should be writable"));
 
-            ResponseOutparam::set(response_out, Ok(response));
+            ResponseOutparam::set(response_out, Ok(response)).expect("sending the response");
 
             let mut stream =
                 executor::incoming_body(request.consume().expect("request should be readable"));
@@ -112,7 +112,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
 
             let body = response.body().expect("response should be writable");
 
-            ResponseOutparam::set(response_out, Ok(response));
+            ResponseOutparam::set(response_out, Ok(response)).expect("sending the response");
 
             OutgoingBody::finish(body, None);
         }

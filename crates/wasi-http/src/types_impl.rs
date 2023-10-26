@@ -56,6 +56,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         let mut map = hyper::HeaderMap::new();
 
         for (header, value) in entries {
+            // This will trap for an invalid header name, but there's no other way to communicate
+            // the error out from a constructor.
             let header = hyper::header::HeaderName::from_bytes(header.as_bytes())?;
             let value = hyper::header::HeaderValue::from_bytes(&value)?;
             map.append(header, value);
@@ -81,12 +83,18 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
     ) -> wasmtime::Result<Vec<Vec<u8>>> {
+        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => return Ok(vec![]),
+        };
+
         let res = get_fields_mut(self.table(), &fields)
             .context("[fields_get] getting fields")?
-            .get_all(hyper::header::HeaderName::from_bytes(name.as_bytes())?)
+            .get_all(header)
             .into_iter()
             .map(|val| val.as_bytes().to_owned())
             .collect();
+
         Ok(res)
     }
 
@@ -95,23 +103,33 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
         values: Vec<Vec<u8>>,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), Error>> {
+        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => {
+                return Ok(Err(Error::HeaderNameError(
+                    "invalid header name".to_owned(),
+                )))
+            }
+        };
+
         let m = get_fields_mut(self.table(), &fields)?;
-
-        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
-
         m.remove(&header);
         for value in values {
             let value = hyper::header::HeaderValue::from_bytes(&value)?;
             m.append(&header, value);
         }
 
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn delete(&mut self, fields: Resource<HostFields>, name: String) -> wasmtime::Result<()> {
+        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => return Ok(()),
+        };
+
         let m = get_fields_mut(self.table(), &fields)?;
-        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
         m.remove(header);
         Ok(())
     }
@@ -121,13 +139,21 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
         value: Vec<u8>,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), Error>> {
+        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => {
+                return Ok(Err(Error::HeaderNameError(
+                    "invalid header name".to_owned(),
+                )))
+            }
+        };
+
         let m = get_fields_mut(self.table(), &fields)
             .context("[fields_append] getting mutable fields")?;
-        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
         let value = hyper::header::HeaderValue::from_bytes(&value)?;
         m.append(header, value);
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn entries(
@@ -143,9 +169,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
     }
 
     fn clone(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<Resource<HostFields>> {
-        let fields = get_fields_mut(self.table(), &fields)
-            .context("[fields_clone] getting fields")?
-            .clone();
+        let fields =
+            get_fields_mut(self.table(), &fields).context("[fields_clone] getting fields")?;
+
+        let fields = fields.clone();
 
         let id = self
             .table()
@@ -394,9 +421,22 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostResponseOutparam for T {
         &mut self,
         id: Resource<HostResponseOutparam>,
         resp: Result<Resource<HostOutgoingResponse>, Error>,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), (Resource<HostResponseOutparam>, Error)>> {
         let val = match resp {
-            Ok(resp) => Ok(self.table().delete(resp)?.try_into()?),
+            Ok(resp) => {
+                let resp: hyper::Response<_> = self.table().delete(resp)?.try_into()?;
+
+                for name in resp.headers().keys() {
+                    if self.is_forbidden_response_header(name) {
+                        return Ok(Err((
+                            id,
+                            Error::HeaderNameError("forbidden header".to_owned()),
+                        )));
+                    }
+                }
+
+                Ok(resp)
+            }
             Err(e) => Err(e),
         };
 
@@ -404,7 +444,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostResponseOutparam for T {
             .delete(id)?
             .result
             .send(val)
-            .map_err(|_| anyhow::anyhow!("failed to initialize response"))
+            .map_err(|_| anyhow::anyhow!("failed to initialize response"))?;
+
+        Ok(Ok(()))
     }
 }
 

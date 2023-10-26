@@ -33,7 +33,8 @@ interface types {
     invalid-url(string),
     timeout-error(string),
     protocol-error(string),
-    unexpected-error(string)
+    unexpected-error(string),
+    header-name-error(string),
   }
 
   /// Field keys are always strings.
@@ -66,7 +67,7 @@ interface types {
 
     /// Set all of the values for a key. Clears any existing values for that
     /// key, if they have been set.
-    set: func(name: field-key, value: list<field-value>);
+    set: func(name: field-key, value: list<field-value>) -> result<_, error>;
 
     /// Delete all values for a key. Does nothing if no values for the key
     /// exist.
@@ -74,7 +75,7 @@ interface types {
 
     /// Append a value for a key. Does not change or delete any existing
     /// values for that key.
-    append: func(name: field-key, value: field-value);
+    append: func(name: field-key, value: field-value) -> result<_, error>;
 
 
     /// Retrieve the full set of keys and values in the Fields. Like the
