@@ -6,8 +6,8 @@ use super::{
 };
 
 use crate::masm::{
-    CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode,
-    ShiftKind, TrapCode,
+    DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, OperandSize, RegImm,
+    RemKind, RoundingMode, ShiftKind, TrapCode,
 };
 use crate::{abi::ABI, masm::StackSlot, stack::TypedReg};
 use crate::{
@@ -138,7 +138,7 @@ impl Masm for MacroAssembler {
         let bound_size = table_data.current_elements_size;
         self.asm.mov_mr(&bound_addr, bound, bound_size);
         self.asm.cmp_rr(bound, index, bound_size);
-        self.asm.trapif(CmpKind::GeU, TrapCode::TableOutOfBounds);
+        self.asm.trapif(IntCmpKind::GeU, TrapCode::TableOutOfBounds);
 
         // Move the index into the scratch register to calcualte the table
         // element address.
@@ -164,7 +164,7 @@ impl Masm for MacroAssembler {
             // Perform a bounds check and override the value of the
             // table element address in case the index is out of bounds.
             self.asm.cmp_rr(bound, index, OperandSize::S32);
-            self.asm.cmov(tmp, ptr_base, CmpKind::GeU, self.ptr_size);
+            self.asm.cmov(tmp, ptr_base, IntCmpKind::GeU, self.ptr_size);
         }
         context.free_reg(bound);
         context.free_reg(tmp);
@@ -304,7 +304,7 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize) {
+    fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize) {
         match (src.class(), dst.class()) {
             (RegClass::Int, RegClass::Int) => self.asm.cmov(src, dst, cc, size),
             (RegClass::Float, RegClass::Float) => self.asm.xmm_cmov(src, dst, cc, size),
@@ -666,9 +666,58 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: CmpKind, size: OperandSize) {
+    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize) {
         self.cmp(src, dst, size);
         self.asm.setcc(kind, dst);
+    }
+
+    fn float_cmp_with_set(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: Reg,
+        kind: FloatCmpKind,
+        size: OperandSize,
+    ) {
+        // Float comparisons needs to be ordered (that is, comparing with a NaN
+        // should return 0) except for not equal which needs to be unordered.
+        // We use ucomis{s, d} because comis{s, d} has an undefined result if
+        // either operand is NaN. Since ucomis{s, d} is unordered, we need to
+        // compensate to make the comparison ordered.  Ucomis{s, d} sets the
+        // ZF, PF, and CF flags if there is an unordered result.
+        let (src1, src2, set_kind) = match kind {
+            FloatCmpKind::Eq => (src1, src2, IntCmpKind::Eq),
+            FloatCmpKind::Ne => (src1, src2, IntCmpKind::Ne),
+            FloatCmpKind::Gt => (src1, src2, IntCmpKind::GtU),
+            FloatCmpKind::Ge => (src1, src2, IntCmpKind::GeU),
+            // Reversing the operands and using the complementary comparison
+            // avoids needing to perform an additional SETNP and AND
+            // instruction.
+            // SETNB and SETNBE check if the carry flag is unset (i.e., not
+            // less than and not unordered) so we get the intended result
+            // without having to look at the parity flag.
+            FloatCmpKind::Lt => (src2, src1, IntCmpKind::GtU),
+            FloatCmpKind::Le => (src2, src1, IntCmpKind::GeU),
+        };
+        self.asm.ucomis(src1, src2, size);
+        self.asm.setcc(set_kind, dst);
+        match kind {
+            FloatCmpKind::Eq | FloatCmpKind::Gt | FloatCmpKind::Ge => {
+                // Return false if either operand is NaN by ensuring PF is
+                // unset.
+                let scratch = regs::scratch();
+                self.asm.setnp(scratch);
+                self.asm.and_rr(scratch, dst, size);
+            }
+            FloatCmpKind::Ne => {
+                // Return true if either operand is NaN by checking if PF is
+                // set.
+                let scratch = regs::scratch();
+                self.asm.setp(scratch);
+                self.asm.or_rr(scratch, dst, size);
+            }
+            FloatCmpKind::Lt | FloatCmpKind::Le => (),
+        }
     }
 
     fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
@@ -681,7 +730,7 @@ impl Masm for MacroAssembler {
             // dst = size.num_bits() - bsr(src) - is_not_zero
             //     = size.num.bits() + -bsr(src) - is_not_zero.
             self.asm.bsr(src.into(), dst.into(), size);
-            self.asm.setcc(CmpKind::Ne, scratch.into());
+            self.asm.setcc(IntCmpKind::Ne, scratch.into());
             self.asm.neg(dst, dst, size);
             self.asm.add_ir(size.num_bits(), dst, size);
             self.asm.sub_rr(scratch, dst, size);
@@ -701,7 +750,7 @@ impl Masm for MacroAssembler {
             // When the value is 0, BSF outputs 0, correct output for ctz is
             // the number of bits.
             self.asm.bsf(src.into(), dst.into(), size);
-            self.asm.setcc(CmpKind::Eq, scratch.into());
+            self.asm.setcc(IntCmpKind::Eq, scratch.into());
             self.asm
                 .shift_ir(size.log2(), scratch, ShiftKind::Shl, size);
             self.asm.add_rr(scratch, dst, size);
@@ -720,13 +769,13 @@ impl Masm for MacroAssembler {
 
     fn branch(
         &mut self,
-        kind: CmpKind,
+        kind: IntCmpKind,
         lhs: RegImm,
         rhs: Reg,
         taken: MachLabel,
         size: OperandSize,
     ) {
-        use CmpKind::*;
+        use IntCmpKind::*;
 
         match &(lhs, rhs) {
             (RegImm::Reg(rlhs), rrhs) => {
@@ -818,13 +867,13 @@ impl Masm for MacroAssembler {
         self.asm.trap(TrapCode::UnreachableCodeReached)
     }
 
-    fn trapif(&mut self, cc: CmpKind, code: TrapCode) {
+    fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) {
         self.asm.trapif(cc, code);
     }
 
     fn trapz(&mut self, src: Reg, code: TrapCode) {
         self.asm.test_rr(src, src, self.ptr_size);
-        self.asm.trapif(CmpKind::Eq, code);
+        self.asm.trapif(IntCmpKind::Eq, code);
     }
 
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {
@@ -838,7 +887,7 @@ impl Masm for MacroAssembler {
         let size = OperandSize::S32;
         self.asm.mov_ir(max as u64, tmp, size);
         self.asm.cmp_rr(index, tmp, size);
-        self.asm.cmov(tmp, index, CmpKind::LtU, size);
+        self.asm.cmov(tmp, index, IntCmpKind::LtU, size);
 
         let default = targets[default_index];
         let rest = &targets[0..default_index];

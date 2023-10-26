@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{CmpKind, DivKind, OperandSize, RemKind, RoundingMode, ShiftKind},
+    masm::{DivKind, IntCmpKind, OperandSize, RemKind, RoundingMode, ShiftKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
@@ -103,19 +103,19 @@ impl From<DivKind> for DivSignedness {
     }
 }
 
-impl From<CmpKind> for CC {
-    fn from(value: CmpKind) -> Self {
+impl From<IntCmpKind> for CC {
+    fn from(value: IntCmpKind) -> Self {
         match value {
-            CmpKind::Eq => CC::Z,
-            CmpKind::Ne => CC::NZ,
-            CmpKind::LtS => CC::L,
-            CmpKind::LtU => CC::B,
-            CmpKind::GtS => CC::NLE,
-            CmpKind::GtU => CC::NBE,
-            CmpKind::LeS => CC::LE,
-            CmpKind::LeU => CC::BE,
-            CmpKind::GeS => CC::NL,
-            CmpKind::GeU => CC::NB,
+            IntCmpKind::Eq => CC::Z,
+            IntCmpKind::Ne => CC::NZ,
+            IntCmpKind::LtS => CC::L,
+            IntCmpKind::LtU => CC::B,
+            IntCmpKind::GtS => CC::NLE,
+            IntCmpKind::GtU => CC::NBE,
+            IntCmpKind::LeS => CC::LE,
+            IntCmpKind::LeU => CC::BE,
+            IntCmpKind::GeS => CC::NL,
+            IntCmpKind::GeU => CC::NB,
         }
     }
 }
@@ -296,7 +296,7 @@ impl Assembler {
     }
 
     /// Integer register conditional move.
-    pub fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize) {
+    pub fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize) {
         self.emit(Inst::Cmove {
             size: size.into(),
             cc: cc.into(),
@@ -366,7 +366,7 @@ impl Assembler {
     }
 
     /// Floating point register conditional move.
-    pub fn xmm_cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize) {
+    pub fn xmm_cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize) {
         let ty = match size {
             OperandSize::S32 => types::F32,
             OperandSize::S64 => types::F64,
@@ -756,6 +756,22 @@ impl Assembler {
         });
     }
 
+    /// Compares values in src and dst and sets ZF, PF, and CF flags in EFLAGS
+    /// register.
+    pub fn ucomis(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Ucomiss,
+            OperandSize::S64 => SseOpcode::Ucomisd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmCmpRmR {
+            op,
+            src: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
     pub fn popcnt(&mut self, src: Reg, size: OperandSize) {
         assert!(self.isa_flags.has_popcnt(), "Requires has_popcnt flag");
         self.emit(Inst::UnaryRmR {
@@ -778,7 +794,23 @@ impl Assembler {
 
     /// Set value in dst to `0` or `1` based on flags in status register and
     /// [`CmpKind`].
-    pub fn setcc(&mut self, kind: CmpKind, dst: Reg) {
+    pub fn setcc(&mut self, kind: IntCmpKind, dst: Reg) {
+        self.setcc_impl(kind.into(), dst);
+    }
+
+    /// Set value in dst to `1` if parity flag in status register is set, `0`
+    /// otherwise.
+    pub fn setp(&mut self, dst: Reg) {
+        self.setcc_impl(CC::P, dst);
+    }
+
+    /// Set value in dst to `1` if parity flag in status register is not set,
+    /// `0` otherwise.
+    pub fn setnp(&mut self, dst: Reg) {
+        self.setcc_impl(CC::NP, dst);
+    }
+
+    fn setcc_impl(&mut self, cc: CC, dst: Reg) {
         // Clear the dst register or bits 1 to 31 may be incorrectly set.
         // Don't use xor since it updates the status register.
         self.emit(Inst::Imm {
@@ -788,7 +820,7 @@ impl Assembler {
         });
         // Copy correct bit from status register into dst register.
         self.emit(Inst::Setcc {
-            cc: kind.into(),
+            cc,
             dst: dst.into(),
         });
     }
@@ -1056,7 +1088,7 @@ impl Assembler {
     }
 
     /// Conditional trap.
-    pub fn trapif(&mut self, cc: CmpKind, trap_code: TrapCode) {
+    pub fn trapif(&mut self, cc: IntCmpKind, trap_code: TrapCode) {
         self.emit(Inst::TrapIf {
             cc: cc.into(),
             trap_code,

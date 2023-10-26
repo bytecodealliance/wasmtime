@@ -1,7 +1,7 @@
 use crate::{
     abi::{ABISig, ABI},
     isa::reg::Reg,
-    masm::{CmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
+    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::{TypedReg, Val},
 };
 use anyhow::Result;
@@ -287,7 +287,7 @@ where
 
         // Typecheck.
         self.masm.cmp(callee_id.into(), caller_id, OperandSize::S32);
-        self.masm.trapif(CmpKind::Ne, TrapCode::BadSignature);
+        self.masm.trapif(IntCmpKind::Ne, TrapCode::BadSignature);
         self.context.free_reg(callee_id);
         self.context.free_reg(caller_id);
     }
@@ -379,7 +379,7 @@ where
         ]);
 
         self.masm.branch(
-            CmpKind::Ne,
+            IntCmpKind::Ne,
             elem_value.into(),
             elem_value,
             defined,

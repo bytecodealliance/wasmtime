@@ -391,6 +391,18 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | F64Neg { .. }
                         | F32Sqrt { .. }
                         | F64Sqrt { .. }
+                        | F32Eq { .. }
+                        | F64Eq { .. }
+                        | F32Ne { .. }
+                        | F64Ne { .. }
+                        | F32Lt { .. }
+                        | F64Lt { .. }
+                        | F32Gt { .. }
+                        | F64Gt { .. }
+                        | F32Le { .. }
+                        | F64Le { .. }
+                        | F32Ge { .. }
+                        | F64Ge { .. }
                         | CallIndirect { .. }
                         | ElemDrop { .. }
                         | TableCopy { .. }
