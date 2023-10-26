@@ -419,8 +419,7 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
                 collector.reg_early_def(d.clone());
             }
         }
-
-        &Inst::Icmp { rd, a, b, .. } => {
+        &Inst::Icmp { rd, a, b, cc, .. } => {
             // TODO(akashin): Why would Icmp have multiple input registers?
             // collector.reg_uses(a.regs());
             // collector.reg_uses(b.regs());
@@ -434,9 +433,15 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
                     .expect("Only support 1 register in comparison now"),
                 b0(),
             );
+            if cc == IntCC::NotEqual {
+                // zkasm don't have NEQ opcode so we need a bit more computation
+                let mut clobbered = PRegSet::empty();
+                clobbered.add(c0().to_real_reg().unwrap().into());
+                clobbered.add(d0().to_real_reg().unwrap().into());
+                collector.reg_clobbers(clobbered);
+            }
             collector.reg_def(rd);
         }
-
         &Inst::SelectReg {
             rd,
             rs1,

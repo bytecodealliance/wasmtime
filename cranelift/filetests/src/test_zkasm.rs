@@ -205,5 +205,7 @@ mod tests {
         or,
         div,
         i64_div,
+        eqz,
+        ne,
     }
 }
