@@ -3,195 +3,195 @@
 
 [[unpublished.cranelift]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-bforest]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-codegen]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-codegen-meta]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-codegen-shared]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-control]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-entity]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-frontend]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-interpreter]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-isle]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-jit]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-module]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-native]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-object]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-reader]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-serde]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.cranelift-wasm]]
 version = "0.102.0"
-audited_as = "0.100.0"
+audited_as = "0.101.1"
 
 [[unpublished.wasi-cap-std-sync]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasi-common]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasi-tokio]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-asm-macros]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-cache]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-cli]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-cli-flags]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-component-macro]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-component-util]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-cranelift]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-cranelift-shared]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-environ]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-explorer]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-fiber]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-jit]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-jit-debug]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-runtime]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-types]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-wasi]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-wasi-http]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-wasi-nn]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-wasi-threads]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-wast]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-winch]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-wit-bindgen]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wasmtime-wmemcheck]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wiggle]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wiggle-generate]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wiggle-macro]]
 version = "15.0.0"
-audited_as = "13.0.0"
+audited_as = "14.0.1"
 
 [[unpublished.wiggle-test]]
 version = "0.0.0"
@@ -199,7 +199,7 @@ audited_as = "0.1.0"
 
 [[unpublished.winch-codegen]]
 version = "0.13.0"
-audited_as = "0.11.0"
+audited_as = "0.12.1"
 
 [[publisher.aho-corasick]]
 version = "1.0.2"
@@ -370,104 +370,104 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.cranelift]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-bforest]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen-meta]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-codegen-shared]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-control]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-entity]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-frontend]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-interpreter]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-isle]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-jit]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-module]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-native]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-object]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-reader]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-serde]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.cranelift-wasm]]
-version = "0.100.0"
-when = "2023-09-20"
+version = "0.101.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -541,6 +541,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.is-terminal]]
+version = "0.4.9"
+when = "2023-07-06"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.itoa]]
 version = "1.0.1"
 when = "2021-12-12"
@@ -563,8 +570,8 @@ user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
 [[publisher.linux-raw-sys]]
-version = "0.4.3"
-when = "2023-06-14"
+version = "0.4.10"
+when = "2023-10-09"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -633,8 +640,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.rustix]]
-version = "0.38.8"
-when = "2023-08-10"
+version = "0.38.14"
+when = "2023-09-20"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -772,20 +779,20 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.wasi-cap-std-sync]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasi-common]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasi-tokio]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -867,152 +874,152 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasmtime]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-asm-macros]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cache]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cli]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cli-flags]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-component-macro]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-component-util]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cranelift]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-cranelift-shared]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-environ]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-explorer]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-fiber]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-jit]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-jit-debug]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-jit-icache-coherence]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-runtime]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-types]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-http]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-nn]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wasi-threads]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wast]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-winch]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wit-bindgen]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wmemcheck]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1031,20 +1038,20 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wiggle]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wiggle-generate]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wiggle-macro]]
-version = "13.0.0"
-when = "2023-09-20"
+version = "14.0.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1063,8 +1070,8 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.winch-codegen]]
-version = "0.11.0"
-when = "2023-09-20"
+version = "0.12.1"
+when = "2023-10-23"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1239,6 +1246,12 @@ criteria = "safe-to-deploy"
 version = "0.3.1"
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
+[[audits.google.audits.instant]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-run"
+version = "0.1.12"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
 [[audits.google.audits.libfuzzer-sys]]
 who = "ChromeOS"
 criteria = "safe-to-run"
@@ -1371,6 +1384,19 @@ criteria = "safe-to-deploy"
 delta = "2.2.1 -> 2.3.2"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.bitflags]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "2.3.3 -> 2.4.0"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.bitflags]]
+who = "Jan-Erik Rediger <jrediger@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "2.4.0 -> 2.4.1"
+notes = "Only allowing new clippy lints"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.bytes]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -1429,6 +1455,12 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Nicolas Silva <nical@fastmail.com>"
 criteria = "safe-to-deploy"
 delta = "0.9.3 -> 0.10.0"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.fastrand]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "1.9.0 -> 2.0.0"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.flagset]]
@@ -1506,6 +1538,19 @@ criteria = "safe-to-deploy"
 version = "1.4.0"
 notes = "I have read over the macros, and audited the unsafe code."
 aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.libc]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.2.147 -> 0.2.148"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.libc]]
+who = "Jan-Erik Rediger <jrediger@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.148 -> 0.2.149"
+notes = "New defintions for a new target we don't use"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.log]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
@@ -1625,6 +1670,18 @@ version = "1.9.3"
 notes = "All code written or reviewed by Josh Stone or Niko Matsakis."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.redox_syscall]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.2.13 -> 0.2.16"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.redox_syscall]]
+who = "Jan-Erik Rediger <jrediger@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.16 -> 0.3.5"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.rustc-hash]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -1646,6 +1703,12 @@ aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supp
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.4.6 -> 0.4.7"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.tempfile]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "3.6.0 -> 3.8.0"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.toml]]

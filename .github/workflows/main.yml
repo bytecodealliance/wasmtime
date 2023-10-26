@@ -387,7 +387,7 @@ jobs:
     env:
       QEMU_BUILD_VERSION: 8.1.1
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
     - uses: actions/checkout@v3
