@@ -146,15 +146,15 @@ pub enum Fact {
 
     /// A value bounded by a global value.
     ///
-    /// The range is in `0..(GV + offset)`, inclusive on the lower
-    /// bound and exclusive on the upper bound.
+    /// The range is in `(min_GV + min_offset)..(max_GV +
+    /// max_offset)`, inclusive on the lower and upper bound.
     DynamicRange {
         /// The bitwidth of bits we care about, from the LSB upward.
         bit_width: u16,
-        /// The static part of the bound.
-        offset: u64,
-        /// The GlobalValue specifying the dynamic part of the bound.
-        gv: ir::GlobalValue,
+        /// The lower bound, inclusive.
+        min: Expr,
+        /// The upper bound, inclusive.
+        max: Expr,
     },
 
     /// A pointer to a memory type.
@@ -168,22 +168,95 @@ pub enum Fact {
     },
 
     /// A pointer to a memory type, dynamically bounded. The pointer
-    /// is within `offset..(GV+offset)` (inclusive and exclusive
-    /// limits, respectively) in the memory type.
+    /// is within `(GV_min+offset_min)..(GV_max+offset_max)`
+    /// (inclusive on both ends) in the memory type.
     DynamicMem {
         /// The memory type.
         ty: ir::MemoryType,
-        /// The lower bound on offset into the memory type, inclusive.
-        offset: u64,
-        /// The GlobalValue specifying the size of the possible
-        /// addressed region.
-        gv: ir::GlobalValue,
+        /// The lower bound, inclusive.
+        min: Expr,
+        /// The upper bound, inclusive.
+        max: Expr,
+        /// This pointer can also be null.
+        nullable: bool,
+    },
+
+    /// A comparison result between two dynamic values with a
+    /// comparison of a certain kind.
+    Compare {
+        /// The kind of comparison.
+        kind: ir::condcodes::IntCC,
+        /// The left-hand side of the comparison.
+        lhs: BaseExpr,
+        /// The right-hand side of the comparison.
+        rhs: BaseExpr,
     },
 
     /// A "conflict fact": this fact results from merging two other
     /// facts, and it can never be satisfied -- checking any value
     /// against this fact will fail.
     Conflict,
+}
+
+/// A bound expression.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct Expr {
+    /// The dynamic (base) part.
+    pub base: BaseExpr,
+    /// The static (offset) part.
+    pub offset: i64,
+}
+
+/// The base part of a bound expression.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum BaseExpr {
+    /// No dynamic part (i.e., zero).
+    None,
+    /// A global value.
+    GlobalValue(ir::GlobalValue),
+    /// An SSA Value as a symbolic value. This can be referenced in
+    /// facts even after we've lowered out of SSA: it becomes simply
+    /// some symbolic value.
+    Value(ir::Value),
+}
+
+impl fmt::Display for BaseExpr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BaseExpr::None => Ok(()),
+            BaseExpr::GlobalValue(gv) => write!(f, "{gv}"),
+            BaseExpr::Value(value) => write!(f, "{value}"),
+        }
+    }
+}
+
+impl BaseExpr {
+    /// Is this dynamic_expression something other than `None` (zero)?
+    pub fn is_some(&self) -> bool {
+        match self {
+            BaseExpr::None => false,
+            _ => true,
+        }
+    }
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.base)?;
+        match self.offset {
+            offset if offset > 0 && self.base.is_some() => write!(f, "+{offset:#x}"),
+            offset if offset > 0 => write!(f, "{offset:#x}"),
+            offset if offset < 0 => {
+                let negative_offset = -i128::from(offset); // upcast to support i64::MIN.
+                write!(f, "-{negative_offset:#x}")
+            }
+            0 if self.base.is_some() => Ok(()),
+            0 => write!(f, "0"),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl fmt::Display for Fact {
@@ -193,21 +266,30 @@ impl fmt::Display for Fact {
                 bit_width,
                 min,
                 max,
-            } => write!(f, "range({}, {:#x}, {:#x})", bit_width, min, max),
+            } => write!(f, "range({bit_width}, {min:#x}, {max:#x})"),
             Fact::DynamicRange {
                 bit_width,
-                offset,
-                gv,
+                min,
+                max,
             } => {
-                write!(f, "dynamic_range({}, {}, {:#x})", bit_width, gv, offset)
+                write!(f, "dynamic_range({bit_width}, {min}, {max})")
             }
             Fact::Mem {
                 ty,
                 min_offset,
                 max_offset,
-            } => write!(f, "mem({}, {:#x}, {:#x})", ty, min_offset, max_offset),
-            Fact::DynamicMem { ty, offset, gv } => {
-                write!(f, "dynamic_mem({}, {:#x}, {})", ty, offset, gv)
+            } => write!(f, "mem({ty}, {min_offset:#x}, {max_offset:#x})"),
+            Fact::DynamicMem {
+                ty,
+                min,
+                max,
+                nullable,
+            } => {
+                let nullable_flag = if *nullable { ", nullable" } else { "" };
+                write!(f, "dynamic_mem({ty}, {min}, {max}{nullable_flag})")
+            }
+            Fact::Compare { kind, lhs, rhs } => {
+                write!(f, "compare({kind}, {lhs}, {rhs})")
             }
             Fact::Conflict => write!(f, "conflict"),
         }
