@@ -15,9 +15,9 @@
 ;;   14:	 4c893424             	mov	qword ptr [rsp], r14
 ;;   18:	 f20f10442408         	movsd	xmm0, qword ptr [rsp + 8]
 ;;   1e:	 f20f104c2410         	movsd	xmm1, qword ptr [rsp + 0x10]
-;;   24:	 660f2ec1             	ucomisd	xmm0, xmm1
+;;   24:	 660f2ec8             	ucomisd	xmm1, xmm0
 ;;   28:	 b800000000           	mov	eax, 0
-;;   2d:	 400f92c0             	setb	al
+;;   2d:	 400f97c0             	seta	al
 ;;   31:	 41bb00000000         	mov	r11d, 0
 ;;   37:	 410f9bc3             	setnp	r11b
 ;;   3b:	 4c21d8               	and	rax, r11

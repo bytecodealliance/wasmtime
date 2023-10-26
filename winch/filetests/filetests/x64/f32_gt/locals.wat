@@ -28,9 +28,9 @@
 ;;   2b:	 f30f11442408         	movss	dword ptr [rsp + 8], xmm0
 ;;   31:	 f30f10442408         	movss	xmm0, dword ptr [rsp + 8]
 ;;   37:	 f30f104c240c         	movss	xmm1, dword ptr [rsp + 0xc]
-;;   3d:	 0f2ec1               	ucomiss	xmm0, xmm1
+;;   3d:	 0f2ec8               	ucomiss	xmm1, xmm0
 ;;   40:	 b800000000           	mov	eax, 0
-;;   45:	 400f92c0             	setb	al
+;;   45:	 400f97c0             	seta	al
 ;;   49:	 41bb00000000         	mov	r11d, 0
 ;;   4f:	 410f9bc3             	setnp	r11b
 ;;   53:	 4421d8               	and	eax, r11d

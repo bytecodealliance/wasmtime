@@ -15,9 +15,9 @@
 ;;   14:	 4c893424             	mov	qword ptr [rsp], r14
 ;;   18:	 f30f10442408         	movss	xmm0, dword ptr [rsp + 8]
 ;;   1e:	 f30f104c240c         	movss	xmm1, dword ptr [rsp + 0xc]
-;;   24:	 0f2ec1               	ucomiss	xmm0, xmm1
+;;   24:	 0f2ec8               	ucomiss	xmm1, xmm0
 ;;   27:	 b800000000           	mov	eax, 0
-;;   2c:	 400f92c0             	setb	al
+;;   2c:	 400f97c0             	seta	al
 ;;   30:	 41bb00000000         	mov	r11d, 0
 ;;   36:	 410f9bc3             	setnp	r11b
 ;;   3a:	 4421d8               	and	eax, r11d

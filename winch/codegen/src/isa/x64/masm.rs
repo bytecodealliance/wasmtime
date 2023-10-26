@@ -679,23 +679,39 @@ impl Masm for MacroAssembler {
         kind: FloatCmpKind,
         size: OperandSize,
     ) {
+        // Float comparisons needs to be ordered (that is, comparing with a NaN
+        // should return 0) except for not equal which needs to be unordered.
+        // We use ucomis{s, d} because comis{s, d} has an undefined result if
+        // either operand is NaN. Since ucomis{s, d} is unordered, we need to
+        // compensate to make the comparison ordered.  Ucomis{s, d} sets the
+        // ZF, PF, and CF flags if there is an unordered result.
         let (src1, src2, set_kind) = match kind {
             FloatCmpKind::Eq => (src1, src2, IntCmpKind::Eq),
             FloatCmpKind::Ne => (src1, src2, IntCmpKind::Ne),
+            FloatCmpKind::Gt => (src1, src2, IntCmpKind::GtU),
+            FloatCmpKind::Ge => (src1, src2, IntCmpKind::GeU),
+            // Reversing the operands and using the complementary comparison
+            // avoids needing to perform an additional SETNP and AND
+            // instruction.
+            // SETNB and SETNBE check if the carry flag is unset (i.e., not
+            // less than and not unordered) so we get the intended result
+            // without having to look at the parity flag.
             FloatCmpKind::Lt => (src2, src1, IntCmpKind::GtU),
             FloatCmpKind::Le => (src2, src1, IntCmpKind::GeU),
-            FloatCmpKind::Gt => (src2, src1, IntCmpKind::LtU),
-            FloatCmpKind::Ge => (src2, src1, IntCmpKind::LeU),
         };
         self.asm.ucomis(src1, src2, size);
         self.asm.setcc(set_kind, dst);
         match kind {
             FloatCmpKind::Eq | FloatCmpKind::Gt | FloatCmpKind::Ge => {
+                // Return false if either operand is NaN by ensuring PF is
+                // unset.
                 let scratch = regs::scratch();
                 self.asm.setnp(scratch);
                 self.asm.and_rr(scratch, dst, size);
             }
             FloatCmpKind::Ne => {
+                // Return true if either operand is NaN by checking if PF is
+                // set.
                 let scratch = regs::scratch();
                 self.asm.setp(scratch);
                 self.asm.or_rr(scratch, dst, size);
