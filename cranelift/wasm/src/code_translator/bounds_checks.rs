@@ -53,6 +53,7 @@ where
         index,
         heap.index_type,
         env.pointer_type(),
+        heap.memory_type.is_some(),
         &mut builder.cursor(),
     );
     let offset_and_size = offset_plus_size(offset, access_size);
@@ -325,6 +326,7 @@ fn cast_index_to_pointer_ty(
     index: ir::Value,
     index_ty: ir::Type,
     pointer_ty: ir::Type,
+    pcc: bool,
     pos: &mut FuncCursor,
 ) -> ir::Value {
     if index_ty == pointer_ty {
@@ -338,6 +340,14 @@ fn cast_index_to_pointer_ty(
 
     // Convert `index` to `addr_ty`.
     let extended_index = pos.ins().uextend(pointer_ty, index);
+
+    // Add a range fact on the extended value.
+    if pcc {
+        pos.func.dfg.facts[extended_index] = Some(Fact::max_range_for_width_extended(
+            u16::try_from(index_ty.bits()).unwrap(),
+            u16::try_from(pointer_ty.bits()).unwrap(),
+        ));
+    }
 
     // Add debug value-label alias so that debuginfo can name the extended
     // value as the address

@@ -1,6 +1,7 @@
 test compile
 set enable_pcc=true
 target aarch64
+target x86_64
 
 function %f0(i64) -> i64 {
     mt0 = struct 8 { 0: i64 ! mem(mt1, 0, 0) }

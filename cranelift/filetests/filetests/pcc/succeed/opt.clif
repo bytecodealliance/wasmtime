@@ -2,6 +2,7 @@ test compile
 set enable_pcc=true
 set opt_level=speed
 target aarch64
+target x86_64
 
 ;; Equivalent to a Wasm `i64.load` from a static memory, but with some
 ;; redundant stuff that should be optimized away (x+0 -> x).

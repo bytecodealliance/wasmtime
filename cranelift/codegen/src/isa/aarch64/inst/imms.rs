@@ -309,8 +309,8 @@ impl Imm12 {
     }
 
     /// Get the actual value that this immediate corresponds to.
-    pub fn value(&self) -> u64 {
-        let base = self.bits as u64;
+    pub fn value(&self) -> u32 {
+        let base = self.bits as u32;
         if self.shift12 {
             base << 12
         } else {

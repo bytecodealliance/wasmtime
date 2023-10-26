@@ -3,6 +3,7 @@
 use super::regs::{self};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
+use crate::ir::types::*;
 use crate::ir::{MemFlags, Type};
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::inst::Inst;
@@ -114,6 +115,11 @@ macro_rules! newtype_of_reg {
                     rm.0
                 }
             }
+            impl<'a> From<&'a $newtype_reg_mem> for &'a RegMem {
+                fn from(rm: &'a $newtype_reg_mem) -> &'a RegMem {
+                    &rm.0
+                }
+            }
 
             impl From<$newtype_reg> for $newtype_reg_mem {
                 fn from(r: $newtype_reg) -> Self {
@@ -173,6 +179,11 @@ macro_rules! newtype_of_reg {
             impl From<$newtype_reg_mem_imm> for RegMemImm {
                 fn from(rmi: $newtype_reg_mem_imm) -> RegMemImm {
                     rmi.0
+                }
+            }
+            impl<'a> From<&'a $newtype_reg_mem_imm> for &'a RegMemImm {
+                fn from(rmi: &'a $newtype_reg_mem_imm) -> &'a RegMemImm {
+                    &rmi.0
                 }
             }
 
@@ -1930,6 +1941,15 @@ impl ExtMode {
             ExtMode::BQ | ExtMode::WQ | ExtMode::LQ => 8,
         }
     }
+
+    /// Source size, as an integer type.
+    pub(crate) fn src_type(&self) -> Type {
+        match self {
+            ExtMode::BL | ExtMode::BQ => I8,
+            ExtMode::WL | ExtMode::WQ => I16,
+            ExtMode::LQ => I32,
+        }
+    }
 }
 
 impl fmt::Debug for ExtMode {
@@ -2226,6 +2246,15 @@ impl OperandSize {
 
     pub(crate) fn to_bits(&self) -> u8 {
         self.to_bytes() * 8
+    }
+
+    pub(crate) fn to_type(&self) -> Type {
+        match self {
+            Self::Size8 => I8,
+            Self::Size16 => I16,
+            Self::Size32 => I32,
+            Self::Size64 => I64,
+        }
     }
 }
 
