@@ -251,8 +251,9 @@ interface types {
     ///
     /// The `result` represents that either the HTTP Request or Response body,
     /// as well as any trailers, were received successfully, or that an error
-    /// occured receiving them.
-    get: func() -> option<result<trailers, error>>;
+    /// occured receiving them. The optional `trailers` indicates whether or not
+    /// trailers were present in the body.
+    get: func() -> option<result<option<trailers>, error>>;
   }
 
   /// Represents an outgoing HTTP Response.

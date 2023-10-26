@@ -404,18 +404,19 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureTrailers for T {
     fn get(
         &mut self,
         id: Resource<HostFutureTrailers>,
-    ) -> wasmtime::Result<Option<Result<Resource<Trailers>, Error>>> {
+    ) -> wasmtime::Result<Option<Result<Option<Resource<Trailers>>, Error>>> {
         let trailers = self.table().get_mut(&id)?;
         match &trailers.state {
             HostFutureTrailersState::Waiting(_) => return Ok(None),
             HostFutureTrailersState::Done(Err(e)) => return Ok(Some(Err(e.clone()))),
-            HostFutureTrailersState::Done(Ok(_)) => {}
+            HostFutureTrailersState::Done(Ok(None)) => return Ok(Some(Ok(None))),
+            HostFutureTrailersState::Done(Ok(Some(_))) => {}
         }
 
         fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
             let trailers = elem.downcast_mut::<HostFutureTrailers>().unwrap();
             match &mut trailers.state {
-                HostFutureTrailersState::Done(Ok(e)) => e,
+                HostFutureTrailersState::Done(Ok(Some(e))) => e,
                 _ => unreachable!(),
             }
         }
@@ -428,7 +429,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureTrailers for T {
             &id,
         )?;
 
-        Ok(Some(Ok(hdrs)))
+        Ok(Some(Ok(Some(hdrs))))
     }
 }
 
