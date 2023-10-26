@@ -55,7 +55,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
     fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Resource<Pollable>> {
         let clock_now = self.ctx().monotonic_clock.now();
         let duration = if absolute {
-            Duration::from_nanos(when - clock_now)
+            Duration::from_nanos(when.saturating_sub(clock_now))
         } else {
             Duration::from_nanos(when)
         };
