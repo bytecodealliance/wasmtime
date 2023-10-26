@@ -1,0 +1,9 @@
+start:
+  zkPC + 2 => RR
+  :JMP(function_1)
+  :JMP(finalizeExecution)
+function_1:
+  UNREACHABLE: unreachable
+finalizeExecution:
+  ${beforeLast()}  :JMPN(finalizeExecution)
+                   :JMP(start)

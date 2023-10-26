@@ -1458,11 +1458,7 @@ impl MachInstEmit for Inst {
                         sink.bind_label(label_jump_over, &mut state.ctrl_plane); */
             }
             &Inst::Udf { trap_code } => {
-                todo!() /* sink.add_trap(trap_code);
-                        if let Some(s) = state.take_stack_map() {
-                            sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
-                        }
-                        sink.put_data(Inst::TRAP_OPCODE); */
+                put_string(&format!("UNREACHABLE: {}\n", trap_code), sink);
             }
 
             &Inst::Popcnt {

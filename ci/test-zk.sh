@@ -46,8 +46,38 @@ else
     cd ../zkevm-rom
 fi
 
-if [ "$ALL_FILES" = true ]; then
-    node tools/run-tests-zkasm.js $BASE_DIR/cranelift/zkasm_data/generated
-else
+if [ "$ALL_FILES" = false ]; then
     node tools/run-tests-zkasm.js "$BASE_DIR/$1"
+    exit 0
+fi
+
+FAIL_PREFIX="_should_fail_"
+all_passed=true
+
+for file in "$BASE_DIR/cranelift/zkasm_data/generated"/*; do
+  filename=$(basename -- "$file")
+  
+  if [[ $filename == $FAIL_PREFIX* ]]; then
+    # If the file name starts with "_should_fail_", we should expect a non-zero exit code
+    node tools/run-tests-zkasm.js "$file" > /dev/null 2>&1 || exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+      echo -e "\033[0;32m    --> fail\033[0m $BASE_DIR/cranelift/zkasm_data/generated/$filename"
+    else
+      echo -e "\033[0;31m    --> pass\033[0m $BASE_DIR/cranelift/zkasm_data/generated/$filename"
+      echo "    --> fail $filename"
+      all_passed=false
+    fi
+  else
+    # For all other files, just run the node command and show the output
+    if ! node tools/run-tests-zkasm.js "$file"; then
+      all_passed=false
+    fi
+  fi
+done
+
+# Exit with 0 if all tests passed, 1 otherwise
+if $all_passed; then
+  exit 0
+else
+  exit 1
 fi
