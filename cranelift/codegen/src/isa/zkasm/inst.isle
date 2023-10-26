@@ -40,6 +40,12 @@
       (rs1 Reg)
       (rs2 Reg))
 
+    ;;Division via Arith
+    (DivArith
+      (rd WritableReg)
+      (rs1 Reg)
+      (rs2 Reg))
+
     ;; An load
     (Load
       (rd WritableReg)
@@ -327,13 +333,11 @@
   (Mulh)
   (Mulhsu)
   (Mulhu)
-  (Div)
   (DivU)
   (Rem)
   (RemU)
 
   ;; RV64M Standard Extension (in addition to RV32M)
-  (Divw)
   (Divuw)
   (Remw)
   (Remuw)
@@ -697,9 +701,11 @@
 
 ;; Helper for emitting the `div` instruction.
 ;; rd ← rs1 ÷ rs2
-(decl rv_div (XReg XReg) XReg)
-(rule (rv_div rs1 rs2)
-  (alu_rrr (AluOPRRR.Div) rs1 rs2))
+(decl zk_div (XReg XReg) XReg)
+(rule (zk_div rs1 rs2)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.DivArith dst rs1 rs2))))
+        dst))
 
 ;; Helper for emitting the `divu` ("Divide Unsigned") instruction.
 ;; rd ← rs1 ÷ rs2
@@ -723,13 +729,6 @@
 
 ;; RV64M Extension
 ;; TODO: Enable these instructions only when we have the M extension
-
-
-;; Helper for emitting the `divw` ("Divide Word") instruction.
-;; rd ← sext32(rs1) ÷ sext32(rs2)
-(decl rv_divw (XReg XReg) XReg)
-(rule (rv_divw rs1 rs2)
-  (alu_rrr (AluOPRRR.Divw) rs1 rs2))
 
 ;; Helper for emitting the `divuw` ("Divide Unsigned Word") instruction.
 ;; rd ← uext32(rs1) ÷ uext32(rs2)

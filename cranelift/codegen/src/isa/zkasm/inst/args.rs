@@ -331,11 +331,9 @@ impl AluOPRRR {
             Self::Mulh => "mulh",
             Self::Mulhsu => "mulhsu",
             Self::Mulhu => "mulhu",
-            Self::Div => "div",
             Self::DivU => "divu",
             Self::Rem => "rem",
             Self::RemU => "remu",
-            Self::Divw => "divw",
             Self::Divuw => "divuw",
             Self::Remw => "remw",
             Self::Remuw => "remuw",
@@ -393,11 +391,9 @@ impl AluOPRRR {
             AluOPRRR::Mulh => 0b001,
             AluOPRRR::Mulhsu => 0b010,
             AluOPRRR::Mulhu => 0b011,
-            AluOPRRR::Div => 0b100,
             AluOPRRR::DivU => 0b101,
             AluOPRRR::Rem => 0b110,
             AluOPRRR::RemU => 0b111,
-            AluOPRRR::Divw => 0b100,
             AluOPRRR::Divuw => 0b101,
             AluOPRRR::Remw => 0b110,
             AluOPRRR::Remuw => 0b111,
@@ -463,12 +459,11 @@ impl AluOPRRR {
             AluOPRRR::Mulh
             | AluOPRRR::Mulhsu
             | AluOPRRR::Mulhu
-            | AluOPRRR::Div
             | AluOPRRR::DivU
             | AluOPRRR::Rem
             | AluOPRRR::RemU => 0b0110011,
 
-            AluOPRRR::Divw | AluOPRRR::Divuw | AluOPRRR::Remw | AluOPRRR::Remuw => 0b0111011,
+            AluOPRRR::Divuw | AluOPRRR::Remw | AluOPRRR::Remuw => 0b0111011,
 
             AluOPRRR::Adduw => 0b0111011,
             AluOPRRR::Andn
@@ -524,12 +519,10 @@ impl AluOPRRR {
             AluOPRRR::Mulh => 0b0000001,
             AluOPRRR::Mulhsu => 0b0000001,
             AluOPRRR::Mulhu => 0b0000001,
-            AluOPRRR::Div => 0b0000001,
             AluOPRRR::DivU => 0b0000001,
             AluOPRRR::Rem => 0b0000001,
             AluOPRRR::RemU => 0b0000001,
 
-            AluOPRRR::Divw => 0b0000001,
             AluOPRRR::Divuw => 0b0000001,
             AluOPRRR::Remw => 0b0000001,
             AluOPRRR::Remuw => 0b0000001,

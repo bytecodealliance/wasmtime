@@ -31,6 +31,10 @@ pub fn d0() -> Reg {
     x_reg(6)
 }
 
+pub fn e0() -> Reg {
+    x_reg(7)
+}
+
 #[inline]
 pub fn writable_a0() -> Writable<Reg> {
     Writable::from_reg(a0())

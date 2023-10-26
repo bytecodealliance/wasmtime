@@ -203,5 +203,7 @@ mod tests {
         xor,
         and,
         or,
+        div,
+        i64_div,
     }
 }

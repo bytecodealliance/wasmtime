@@ -116,19 +116,8 @@
       (_ InstOutput (gen_div_by_zero y2)))
     (rv_divuw (zext x ty $I64) y2)))
 
-; (rule -1 (lower (has_type (fits_in_32 ty) (sdiv x y)))
-;   (let
-;     ((a XReg (sext x ty $I64))
-;       (b XReg (sext y ty $I64))
-;       (_ InstOutput (gen_div_overflow a b ty))
-;       (_ InstOutput (gen_div_by_zero b)))
-;     (rv_divw a b)))
-;
-; (rule (lower (has_type $I64 (sdiv x y)))
-;   (let
-;     ((_ InstOutput (gen_div_overflow x y $I64))
-;       (_ InstOutput (gen_div_by_zero y))    )
-;     (rv_div x y)))
+(rule (lower (sdiv x y))
+     (zk_div x y))
 
 (rule (lower (has_type $I64 (udiv x y)))
   (let

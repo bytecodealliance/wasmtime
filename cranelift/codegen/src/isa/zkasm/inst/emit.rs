@@ -3,7 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, RelSourceLoc, TrapCode};
 use crate::isa::zkasm::inst::*;
-use crate::machinst::{AllocationConsumer, Reg, Writable};
+use crate::machinst::{reg, AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
 use cranelift_entity::EntityRef;
@@ -480,6 +480,19 @@ impl MachInstEmit for Inst {
                     &format!("${{_mulArith}} => {} :ARITH\n", reg_name(rd.to_reg())),
                     sink,
                 );
+            }
+            &Inst::DivArith { rd, rs1, rs2 } => {
+                let rs1 = allocs.next(rs1);
+                let rs2 = allocs.next(rs2);
+                debug_assert_eq!(rs1, e0());
+                debug_assert_eq!(rs2, b0());
+                let rd = allocs.next_writable(rd);
+                // Same as in MulArith about D register
+                put_string("0 => D\n", sink);
+                put_string("0 => C\n", sink);
+                put_string("$${var _divArith = E / B}\n", sink);
+                put_string("${_divArith} => A\n", sink);
+                put_string("E:ARITH\n", sink);
             }
             &Inst::AluRRR {
                 alu_op,
