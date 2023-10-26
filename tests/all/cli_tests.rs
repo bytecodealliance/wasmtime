@@ -1016,9 +1016,14 @@ fn old_cli_warn_if_ambiguous_flags() -> Result<()> {
         String::from_utf8_lossy(&output.stderr),
         "\
 warning: this CLI invocation of Wasmtime will be parsed differently in future
-         Wasmtime versions, see this online issue for more information:
+         Wasmtime versions, but its interpretation is not changing yet -- see
+         this online issue for more information:
          https://github.com/bytecodealliance/wasmtime/issues/7384
-         you can use `WASMTIME_NEW_CLI=0` to temporarily disable this warning
+
+         CLI parsing can be temporarily configured with an environment variable:
+
+         - WASMTIME_NEW_CLI=0 to silence this warning and not change behavior, or
+         - WASMTIME_NEW_CLI=1 to force using the new behavior
 warning: using `--invoke` with a function that returns values is experimental and may break in the future
 "
     );
@@ -1116,10 +1121,14 @@ warning: using `--invoke` with a function that returns values is experimental an
     assert_eq!(
         String::from_utf8_lossy(&output.stderr),
         "\
-warning: this CLI invocation of Wasmtime is going to break in the future, for
+warning: this CLI invocation of Wasmtime is going to break in the future -- for
          more information see this issue online:
          https://github.com/bytecodealliance/wasmtime/issues/7384
-         use `WASMTIME_NEW_CLI=0` to temporarily disable this warning
+
+         CLI parsing can be temporarily configured with an environment variable:
+
+         - WASMTIME_NEW_CLI=0 to silence this warning and not change behavior, or
+         - WASMTIME_NEW_CLI=1 to see how this command breaks with new syntax
 "
     );
 

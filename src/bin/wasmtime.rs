@@ -176,20 +176,34 @@ mod old_cli {
                     eprintln!(
                         "\
 warning: this CLI invocation of Wasmtime will be parsed differently in future
-         Wasmtime versions, see this online issue for more information:
+         Wasmtime versions, but its interpretation is not changing yet -- see
+         this online issue for more information:
          https://github.com/bytecodealliance/wasmtime/issues/7384
-         you can use `WASMTIME_NEW_CLI=0` to temporarily disable this warning\
+
+         CLI parsing can be temporarily configured with an environment variable:
+
+         - WASMTIME_NEW_CLI=0 to silence this warning and not change behavior, or
+         - WASMTIME_NEW_CLI=1 to force using the new behavior\
 "
                     );
                     old.execute()
                 } else {
+                    // this error message is not statically reachable due to
+                    // `DEFAULT_OLD_BEHAVIOR=true` at this time, but when that
+                    // changes this should be updated to have a more accurate
+                    // set of text.
+                    assert!(false);
                     eprintln!(
                         "\
 warning: this CLI invocation of Wasmtime is parsed differently now than it was
-         in Wasmtime 13 and prior, and the new semantics are going to be used
-         instead of the old semantics -- see this issue for more information:
+         prior, and the new semantics are going to be used instead of the old
+         semantics -- see this issue for more information:
          https://github.com/bytecodealliance/wasmtime/issues/7384
-         you can use `WASMTIME_NEW_CLI=1` to disable this warning\
+
+         CLI parsing can be temporarily configured with an environment variable:
+
+         - WASMTIME_NEW_CLI=0 to use the old CLI parsing behavior, or
+         - WASMTIME_NEW_CLI=1 to silence this warning and not change behavior\
 "
                     );
                     new.execute()
@@ -212,10 +226,14 @@ warning: this CLI invocation of Wasmtime is parsed differently now than it was
             (Err(_new), Ok(old)) => {
                 eprintln!(
                     "\
-warning: this CLI invocation of Wasmtime is going to break in the future, for
+warning: this CLI invocation of Wasmtime is going to break in the future -- for
          more information see this issue online:
          https://github.com/bytecodealliance/wasmtime/issues/7384
-         use `WASMTIME_NEW_CLI=0` to temporarily disable this warning\
+
+         CLI parsing can be temporarily configured with an environment variable:
+
+         - WASMTIME_NEW_CLI=0 to silence this warning and not change behavior, or
+         - WASMTIME_NEW_CLI=1 to see how this command breaks with new syntax\
 "
                 );
                 old.execute()
