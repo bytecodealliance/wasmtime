@@ -48,6 +48,7 @@ serde_json = { workspace = true }
 wasmparser = { workspace = true }
 tracing = { workspace = true }
 log = { workspace = true }
+humantime = { workspace = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }
@@ -266,6 +267,7 @@ syn = "2.0.25"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
+humantime = "2.0.0"
 
 # =============================================================================
 #
@@ -309,6 +311,10 @@ default = [
   # cost, so allow disabling this through disabling of our own `default`
   # feature.
   "clap/default",
+
+  # By default include compatibility with the "old" CLI from Wasmtime 13 and
+  # prior.
+  "old-cli",
 ]
 
 # ========================================
@@ -347,6 +353,9 @@ profiling = ["wasmtime/profiling"]
 coredump = ["wasmtime-cli-flags/coredump"]
 addr2line = ["wasmtime/addr2line"]
 debug-builtins = ["wasmtime/debug-builtins"]
+
+# Enables compatibility shims with Wasmtime 13 and prior's CLI.
+old-cli = []
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

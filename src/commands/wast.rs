@@ -8,7 +8,7 @@ use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::WastContext;
 
 /// Runs a WebAssembly test script file
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[clap(name = "wast", version)]
 pub struct WastCommand {
     #[clap(flatten)]

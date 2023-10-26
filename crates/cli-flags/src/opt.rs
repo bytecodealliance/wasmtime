@@ -15,6 +15,7 @@ use std::time::Duration;
 #[macro_export]
 macro_rules! wasmtime_option_group {
     (
+        $(#[$attr:meta])*
         pub struct $opts:ident {
             $(
                 $(#[doc = $doc:tt])*
@@ -32,6 +33,7 @@ macro_rules! wasmtime_option_group {
         }
     ) => {
         #[derive(Default, Debug)]
+        $(#[$attr])*
         pub struct $opts {
             $(
                 pub $opt: $container<$payload>,
@@ -41,7 +43,7 @@ macro_rules! wasmtime_option_group {
             )?
         }
 
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug,PartialEq)]
         #[allow(non_camel_case_types)]
         enum $option {
             $(
@@ -106,7 +108,7 @@ macro_rules! wasmtime_option_group {
 }
 
 /// Parser registered with clap which handles parsing the `...` in `-O ...`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CommaSeparated<T>(pub Vec<T>);
 
 impl<T> ValueParserFactory for CommaSeparated<T>
@@ -366,10 +368,7 @@ impl WasmtimeOptionValue for wasmtime::Strategy {
         match String::parse(val)?.as_str() {
             "cranelift" => Ok(wasmtime::Strategy::Cranelift),
             "winch" => Ok(wasmtime::Strategy::Winch),
-            other => bail!(
-                "unknown optimization level `{}`, only 0,1,2,s accepted",
-                other
-            ),
+            other => bail!("unknown compiler `{other}` only `cranelift` and `winch` accepted",),
         }
     }
 }
