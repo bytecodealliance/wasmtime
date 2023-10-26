@@ -1,5 +1,34 @@
 --------------------------------------------------------------------------------
 
+## 14.0.2
+
+Released 2023-10-26
+
+### Fixed
+
+* Make the `wasmtime::unix` module accessible on macOS again.
+  [#7360](https://github.com/bytecodealliance/wasmtime/pull/7360)
+
+* Inter-crate dependencies between `cranelift-*` crates now disable the
+  `default` feature meaning that it's possible for embedders to depend on
+  `cranelift-codegen` as well without the `default` feature.
+  [#7369](https://github.com/bytecodealliance/wasmtime/pull/7369)
+
+--------------------------------------------------------------------------------
+
+## 14.0.1
+
+Released 2023-10-23
+
+### Fixed
+
+* Cranelift: preserve uext and sext flags for parameters on x86\_64 and apple
+  aarch64. Note that this does not affect Wasmtime and is only intended for
+  Cranelift embedders such as `rustc_codegen_cranelift`.
+  [#7333](https://github.com/bytecodealliance/wasmtime/pull/7333)
+
+--------------------------------------------------------------------------------
+
 ## 14.0.0
 
 Released 2023-10-20.
