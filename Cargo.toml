@@ -282,6 +282,7 @@ default = [
   "wasi-threads",
   "wasi-http",
   "pooling-allocator",
+  "serve",
 ]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
