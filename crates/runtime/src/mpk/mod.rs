@@ -42,7 +42,7 @@ cfg_if::cfg_if! {
 }
 
 /// Describe the tri-state configuration of memory protection keys (MPK).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum MpkEnabled {
     /// Use MPK if supported by the current system; fall back to guard regions
     /// otherwise.
