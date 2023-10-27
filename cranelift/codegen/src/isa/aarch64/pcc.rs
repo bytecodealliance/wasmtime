@@ -4,7 +4,8 @@ use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
 use crate::ir::Type;
-use crate::isa::aarch64::inst::args::{PairAMode, ShiftOp};
+use crate::isa::aarch64::inst::args::{Cond, PairAMode, ShiftOp};
+use crate::isa::aarch64::inst::regs::zero_reg;
 use crate::isa::aarch64::inst::Inst;
 use crate::isa::aarch64::inst::{ALUOp, MoveWideOp};
 use crate::isa::aarch64::inst::{AMode, ExtendOp};
@@ -26,12 +27,25 @@ fn extend_fact(ctx: &FactContext, value: &Fact, mode: ExtendOp) -> Option<Fact> 
     }
 }
 
+/// Flow-state between facts.
+#[derive(Clone, Debug, Default)]
+pub struct FactFlowState {
+    cmp_flags: Option<(Fact, Fact)>,
+}
+
 pub(crate) fn check(
     ctx: &FactContext,
     vcode: &mut VCode<Inst>,
     inst_idx: InsnIndex,
+    state: &mut FactFlowState,
 ) -> PccResult<()> {
     trace!("Checking facts on inst: {:?}", vcode[inst_idx]);
+
+    // We only persist flag state for one instruction, because we
+    // can't exhaustively enumerate all flags-effecting ops; so take
+    // the `cmp_state` here and perhaps use it below but don't let it
+    // remain.
+    let cmp_flags = state.cmp_flags.take();
 
     match vcode[inst_idx] {
         Inst::Args { .. } => {
@@ -200,6 +214,20 @@ pub(crate) fn check(
             )
         }),
 
+        Inst::AluRRR {
+            alu_op: ALUOp::SubS,
+            size,
+            rd,
+            rn,
+            rm,
+        } if rd.to_reg() == zero_reg() => {
+            // Compare.
+            let rn = get_fact_or_default(vcode, rn, size.bits().into());
+            let rm = get_fact_or_default(vcode, rm, size.bits().into());
+            state.cmp_flags = Some((rn, rm));
+            Ok(())
+        }
+
         Inst::AluRRR { rd, size, .. }
         | Inst::AluRRImm12 { rd, size, .. }
         | Inst::AluRRRShift { rd, size, .. }
@@ -240,18 +268,53 @@ pub(crate) fn check(
 
         Inst::MovK { rd, rn, imm, .. } => {
             let input = get_fact_or_default(vcode, rn, 64);
-            trace!("MovK: input = {:?}", input);
             if let Some(input_constant) = input.as_const(64) {
-                trace!(" -> input_constant: {}", input_constant);
                 let constant = u64::from(imm.bits) << (imm.shift * 16);
                 let constant = input_constant | constant;
-                trace!(" -> merged constant: {}", constant);
                 check_constant(ctx, vcode, rd, 64, constant)
             } else {
                 check_output(ctx, vcode, rd, &[], |_vcode| {
                     Ok(Fact::max_range_for_width(64))
                 })
             }
+        }
+
+        Inst::CSel { rd, cond, rn, rm } if cond == Cond::Hs && cmp_flags.is_some() => {
+            let (cmp_lhs, cmp_rhs) = cmp_flags.unwrap();
+            trace!("CSel: cmp {cond:?} ({cmp_lhs:?}, {cmp_rhs:?})");
+
+            check_output(ctx, vcode, rd, &[], |vcode| {
+                // We support transitivity-based reasoning. If the
+                // comparison establishes that
+                //
+                //   (x+K1) <= (y+K2)
+                //
+                // then on the true-side of the select we can edit the maximum
+                // in a DynamicMem or DynamicRange by replacing x's with y's
+                // with appropriate offsets -- this widens the range.
+                //
+                // Likewise, on the false-side of the select we can
+                // replace y's with x's -- this also widens the range. On
+                // the false side we know the inequality is strict, so we
+                // can offset by one.
+
+                // True side: lhs <= rhs, not strict.
+                let rn = get_fact_or_default(vcode, rn, 64);
+                trace!("rn = {rn:?}");
+                let rn = ctx.apply_inequality(&rn, &cmp_lhs, &cmp_rhs, false);
+                trace!(" -> rn = {rn:?}");
+                // false side: rhs < lhs, strict.
+                let rm = get_fact_or_default(vcode, rm, 64);
+                trace!("rm = {rm:?}");
+                let rm = ctx.apply_inequality(&rm, &cmp_rhs, &cmp_lhs, true);
+                trace!(" -> rm = {rm:?}");
+
+                let union = Fact::union(&rn, &rm);
+                trace!("union = {union:?}");
+
+                // Union the two facts.
+                clamp_range(ctx, 64, 64, union)
+            })
         }
 
         _ if vcode.inst_defines_facts(inst_idx) => Err(PccError::UnsupportedFact),

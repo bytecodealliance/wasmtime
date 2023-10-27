@@ -2369,9 +2369,14 @@ impl<'a> Parser<'a> {
     //
     // base-expr ::= GlobalValue(base)
     //             | Value(base)
+    //             | "max"
     //             | (epsilon)
     fn parse_base_expr(&mut self) -> ParseResult<BaseExpr> {
         match self.token() {
+            Some(Token::Identifier("max")) => {
+                self.consume();
+                Ok(BaseExpr::Max)
+            }
             Some(Token::GlobalValue(..)) => {
                 let gv = self.match_gv("expected global value")?;
                 Ok(BaseExpr::GlobalValue(gv))

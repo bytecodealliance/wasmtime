@@ -4,7 +4,8 @@ use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::x64::inst::args::{
-    AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SyntheticAmode, ToWritableReg,
+    AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SyntheticAmode,
+    ToWritableReg, CC,
 };
 use crate::isa::x64::inst::Inst;
 use crate::machinst::pcc::*;
@@ -32,12 +33,25 @@ fn ensure_no_fact(vcode: &VCode<Inst>, reg: Reg) -> PccResult<()> {
     }
 }
 
+/// Flow-state between facts.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct FactFlowState {
+    cmp_flags: Option<(Fact, Fact)>,
+}
+
 pub(crate) fn check(
     ctx: &FactContext,
     vcode: &mut VCode<Inst>,
     inst_idx: InsnIndex,
+    state: &mut FactFlowState,
 ) -> PccResult<()> {
     trace!("Checking facts on inst: {:?}", vcode[inst_idx]);
+
+    // We only persist flag state for one instruction, because we
+    // can't exhaustively enumerate all flags-effecting ops; so take
+    // the `cmp_state` here and perhaps use it below but don't let it
+    // remain.
+    let cmp_flags = state.cmp_flags.take();
 
     match vcode[inst_idx] {
         Inst::Nop { .. } => Ok(()),
@@ -302,8 +316,7 @@ pub(crate) fn check(
             match <&RegMem>::from(src) {
                 RegMem::Reg { reg } => {
                     check_unop(ctx, vcode, 64, dst.to_writable_reg(), *reg, |src| {
-                        let extended = ctx.uextend(src, from_bytes * 8, to_bytes * 8);
-                        clamp_range(ctx, 64, from_bytes * 8, extended)
+                        clamp_range(ctx, 64, from_bytes * 8, Some(src.clone()))
                     })
                 }
                 RegMem::Mem { ref addr } => {
@@ -395,12 +408,23 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
-        Inst::CmpRmiR { size, ref src, .. } => match <&RegMemImm>::from(src) {
+        Inst::CmpRmiR {
+            size, dst, ref src, ..
+        } => match <&RegMemImm>::from(src) {
             RegMemImm::Mem { ref addr } => {
-                check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                if let Some(rhs) = check_load(ctx, None, addr, vcode, size.to_type(), 64)? {
+                    let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                    state.cmp_flags = Some((lhs, rhs));
+                }
                 Ok(())
             }
-            RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => Ok(()),
+            RegMemImm::Reg { reg } => {
+                let rhs = get_fact_or_default(vcode, *reg, 64);
+                let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                state.cmp_flags = Some((lhs, rhs));
+                Ok(())
+            }
+            RegMemImm::Imm { .. } => Ok(()),
         },
 
         Inst::Setcc { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
@@ -411,16 +435,35 @@ pub(crate) fn check(
             size,
             dst,
             ref consequent,
+            alternative,
+            cc,
             ..
-        } => {
-            match <&RegMem>::from(consequent) {
-                RegMem::Mem { ref addr } => {
-                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
+        } => match <&RegMem>::from(consequent) {
+            RegMem::Mem { ref addr } => {
+                check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
+                Ok(())
             }
-            undefined_result(ctx, vcode, dst, 64, 64)
-        }
+            RegMem::Reg { reg } if cc == CC::NB && cmp_flags.is_some() => {
+                let (cmp_lhs, cmp_rhs) = cmp_flags.unwrap();
+                trace!("lhs = {:?} rhs = {:?}", cmp_lhs, cmp_rhs);
+                let reg = *reg;
+                check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
+                    // See comments in aarch64::pcc CSel for more details on this.
+                    let in_true = get_fact_or_default(vcode, reg, 64);
+                    trace!("in_true = {:?}", in_true);
+                    let in_true = ctx.apply_inequality(&in_true, &cmp_lhs, &cmp_rhs, false);
+                    trace!("in_true = {:?}", in_true);
+                    let in_false = get_fact_or_default(vcode, alternative.to_reg(), 64);
+                    trace!("in_false = {:?}", in_false);
+                    let in_false = ctx.apply_inequality(&in_false, &cmp_rhs, &cmp_lhs, true);
+                    trace!("in_false = {:?}", in_false);
+                    let union = Fact::union(&in_true, &in_false);
+                    trace!("union = {:?}", union);
+                    clamp_range(ctx, 64, 64, union)
+                })
+            }
+            _ => undefined_result(ctx, vcode, dst, 64, 64),
+        },
 
         Inst::XmmCmove {
             dst,
