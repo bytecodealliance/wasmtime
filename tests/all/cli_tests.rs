@@ -1023,7 +1023,7 @@ warning: this CLI invocation of Wasmtime will be parsed differently in future
          however this behavior can also be temporarily configured with an
          environment variable:
 
-         - WASMTIME_NEW_CLI=0 to indicate old semantics are desired and silences this warning, or
+         - WASMTIME_NEW_CLI=0 to indicate old semantics are desired and silence this warning, or
          - WASMTIME_NEW_CLI=1 to indicate new semantics are desired and use the latest behavior
 warning: using `--invoke` with a function that returns values is experimental and may break in the future
 "
@@ -1130,7 +1130,7 @@ warning: this CLI invocation of Wasmtime is going to break in the future -- for
          however this behavior can also be temporarily configured with an
          environment variable:
 
-         - WASMTIME_NEW_CLI=0 to indicate old semantics are desired and silences this warning, or
+         - WASMTIME_NEW_CLI=0 to indicate old semantics are desired and silence this warning, or
          - WASMTIME_NEW_CLI=1 to indicate new semantics are desired and see the error
 "
     );
