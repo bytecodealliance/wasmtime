@@ -391,7 +391,7 @@ pub(crate) fn check(
                     )
                 })
             }
-            Imm8Reg::Reg { .. } => undefined_result(ctx, vcode, dst, 64, 64),
+            Imm8Reg::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
         },
 
         Inst::ShiftR { size, dst, .. } => {
