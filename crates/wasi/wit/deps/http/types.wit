@@ -33,7 +33,7 @@ interface types {
     invalid-url(string),
     timeout-error(string),
     protocol-error(string),
-    unexpected-error(string),
+    unexpected-error(string)
   }
 
   /// This tyep enumerates the different kinds of errors that may occur when
