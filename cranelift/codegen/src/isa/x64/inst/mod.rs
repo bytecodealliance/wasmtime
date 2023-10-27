@@ -178,7 +178,8 @@ impl Inst {
             | Inst::XmmToGprImm { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
             | Inst::XmmUnaryRmRUnaligned { op, .. }
-            | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
+            | Inst::XmmUnaryRmR { op, .. }
+            | Inst::CvtIntToFloat { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. }
             | Inst::XmmRmREvex { op, .. }
@@ -196,7 +197,8 @@ impl Inst {
             | Inst::XmmMovRMImmVex { op, .. }
             | Inst::XmmToGprImmVex { op, .. }
             | Inst::XmmToGprVex { op, .. }
-            | Inst::GprToXmmVex { op, .. } => op.available_from(),
+            | Inst::GprToXmmVex { op, .. }
+            | Inst::CvtIntToFloatVex { op, .. } => op.available_from(),
         }
     }
 }
@@ -1296,6 +1298,34 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
+            Inst::CvtIntToFloat {
+                op,
+                src1,
+                src2,
+                dst,
+                src2_size,
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(*dst.to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(src2_size.to_bytes(), allocs);
+                let op = ljustify(op.to_string());
+                format!("{op} {src1}, {src2}, {dst}")
+            }
+
+            Inst::CvtIntToFloatVex {
+                op,
+                src1,
+                src2,
+                dst,
+                src2_size,
+            } => {
+                let dst = pretty_print_reg(*dst.to_reg(), 8, allocs);
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(src2_size.to_bytes(), allocs);
+                let op = ljustify(op.to_string());
+                format!("{op} {src1}, {src2}, {dst}")
+            }
+
             Inst::CvtUint64ToFloatSeq {
                 src,
                 dst,
@@ -2164,6 +2194,20 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
+        Inst::CvtIntToFloat {
+            src1, src2, dst, ..
+        } => {
+            collector.reg_use(src1.to_reg());
+            collector.reg_reuse_def(dst.to_writable_reg(), 0);
+            src2.get_operands(collector);
+        }
+        Inst::CvtIntToFloatVex {
+            src1, src2, dst, ..
+        } => {
+            collector.reg_def(dst.to_writable_reg());
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
+        }
         Inst::CvtUint64ToFloatSeq {
             src,
             dst,
@@ -2538,6 +2582,10 @@ impl MachInst for Inst {
             // All other cases are boring.
             _ => MachTerminator::None,
         }
+    }
+
+    fn is_mem_access(&self) -> bool {
+        panic!("TODO FILL ME OUT")
     }
 
     fn gen_move(dst_reg: Writable<Reg>, src_reg: Reg, ty: Type) -> Inst {

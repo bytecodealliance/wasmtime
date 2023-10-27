@@ -1,0 +1,20 @@
+test compile
+set enable_pcc=true
+target aarch64
+target x86_64
+
+function %f0(i64) -> i64 {
+    mt0 = struct 8 { 0: i64 ! mem(mt1, 0, 0) }
+    mt1 = memory 0x1_0000_0000
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v1 ! mem(mt1, 0, 0) = load.i64 checked v0
+    return v1
+}
+
+function %f1(i64, i64) {
+    mt0 = struct 8 { 0: i64 ! mem(mt1, 0, 0) }
+    mt1 = memory 0x1_0000_0000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! mem(mt1, 0, 0): i64):
+    store.i64 checked v1, v0
+    return
+}

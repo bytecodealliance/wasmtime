@@ -21,6 +21,8 @@ wasi-tokio = { workspace = true, optional = true }
 wiggle = { workspace = true, optional = true }
 libc = { workspace = true }
 once_cell = { workspace = true }
+log = { workspace = true }
+url = { workspace = true }
 
 tokio = { workspace = true, optional = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net"] }
 bytes = { workspace = true }
@@ -33,7 +35,6 @@ cap-net-ext = { workspace = true, optional = true }
 cap-time-ext = { workspace = true, optional = true }
 io-lifetimes = { workspace = true, optional = true }
 fs-set-times = { workspace = true, optional = true }
-is-terminal = { workspace = true, optional = true }
 bitflags = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 system-interface = { workspace = true, optional = true}
@@ -43,6 +44,9 @@ futures = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt", "rt-multi-thread", "net", "macros"] }
 test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
+test-programs-artifacts = { workspace = true }
+tempfile = { workspace = true }
+wasmtime = { workspace = true, features = ['cranelift'] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["event", "fs", "net"], optional = true }
@@ -72,7 +76,6 @@ preview2 = [
     'dep:cap-time-ext',
     'dep:io-lifetimes',
     'dep:fs-set-times',
-    'dep:is-terminal',
     'dep:bitflags',
     'dep:async-trait',
     'dep:system-interface',

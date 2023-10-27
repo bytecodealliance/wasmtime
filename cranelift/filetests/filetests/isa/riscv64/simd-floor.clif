@@ -10,7 +10,7 @@ block0(v0: f32x4):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -31,7 +31,7 @@ block0(v0: f32x4):
 ;   vse8.v v9,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -71,28 +71,29 @@ block0(v0: f64x2):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
 ;   vle8.v v9,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vfabs.v v12,v9 #avl=2, #vtype=(e64, m1, ta, ma)
-;   ld a1,[const(0)]
-;   fmv.d.x fa2,a1
-;   vmflt.vf v0,v12,fa2 #avl=2, #vtype=(e64, m1, ta, ma)
-;   fsrmi a1,2
-;   vfcvt.x.f.v v14,v9 #avl=2, #vtype=(e64, m1, ta, ma)
-;   fsrm a1
-;   vfcvt.f.x.v v10,v14 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vfsgnj.vv v11,v10,v9 #avl=2, #vtype=(e64, m1, ta, ma)
-;   fmv.d.x fa3,zero
-;   vfadd.vf v15,v9,fa3 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vmerge.vvm v9,v15,v11,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v9,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   lui a1,1075
+;   slli a2,a1,40
+;   fmv.d.x fa4,a2
+;   vmflt.vf v0,v12,fa4 #avl=2, #vtype=(e64, m1, ta, ma)
+;   fsrmi a2,2
+;   vfcvt.x.f.v v8,v9 #avl=2, #vtype=(e64, m1, ta, ma)
+;   fsrm a2
+;   vfcvt.f.x.v v11,v8 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vfsgnj.vv v13,v11,v9 #avl=2, #vtype=(e64, m1, ta, ma)
+;   fmv.d.x fa5,zero
+;   vfadd.vf v9,v9,fa5 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v11,v9,v13,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -107,25 +108,22 @@ block0(v0: f64x2):
 ;   .byte 0x87, 0x84, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x81, 0xcd
 ;   .byte 0x57, 0x96, 0x94, 0x2a
-;   auipc a1, 0
-;   ld a1, 0x4c(a1)
-;   fmv.d.x fa2, a1
-;   .byte 0x57, 0x50, 0xc6, 0x6e
-;   fsrmi a1, 2
-;   .byte 0x57, 0x97, 0x90, 0x4a
-;   fsrm a1
-;   .byte 0x57, 0x95, 0xe1, 0x4a
-;   .byte 0xd7, 0x95, 0xa4, 0x22
-;   fmv.d.x fa3, zero
-;   .byte 0xd7, 0xd7, 0x96, 0x02
-;   .byte 0xd7, 0x84, 0xf5, 0x5c
+;   lui a1, 0x433
+;   slli a2, a1, 0x28
+;   fmv.d.x fa4, a2
+;   .byte 0x57, 0x50, 0xc7, 0x6e
+;   fsrmi a2, 2
+;   .byte 0x57, 0x94, 0x90, 0x4a
+;   fsrm a2
+;   .byte 0xd7, 0x95, 0x81, 0x4a
+;   .byte 0xd7, 0x96, 0xb4, 0x22
+;   fmv.d.x fa5, zero
+;   .byte 0xd7, 0xd4, 0x97, 0x02
+;   .byte 0xd7, 0x85, 0x96, 0x5c
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x04, 0x05, 0x02
+;   .byte 0xa7, 0x05, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x30, 0x43
 

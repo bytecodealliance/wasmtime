@@ -116,18 +116,16 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   add a1,a0,a1
-;   add a1,a1,a2
-;   addi a1,a1,48
-;   lw a0,0(a1)
+;   add a0,a0,a1
+;   add a0,a0,a2
+;   lw a0,48(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   add a1, a0, a1
-;   add a1, a1, a2
-;   addi a1, a1, 0x30
-;   lw a0, 0(a1)
+;   add a0, a0, a1
+;   add a0, a0, a2
+;   lw a0, 0x30(a0)
 ;   ret
 
 function %f10(i64, i64, i64) -> i32 {
@@ -142,22 +140,19 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   lui a3,1
-;   addi a4,a3,4
-;   add a3,a0,a1
-;   add a3,a3,a2
-;   add a3,a3,a4
-;   lw a0,0(a3)
+;   add a0,a0,a1
+;   add a0,a0,a2
+;   lw a0,4100(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a3, 1
-;   addi a4, a3, 4
-;   add a3, a0, a1
-;   add a3, a3, a2
-;   add a3, a3, a4
-;   lw a0, 0(a3)
+;   add a0, a0, a1
+;   add a0, a0, a2
+;   lui t6, 1
+;   addi t6, t6, 4
+;   add t6, t6, a0
+;   lw a0, 0(t6)
 ;   ret
 
 function %f10() -> i32 {
@@ -189,16 +184,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lui a4,2048
-;   add a4,a0,a4
-;   lw a0,0(a4)
+;   lw a0,8388608(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a4, 0x800
-;   add a4, a0, a4
-;   lw a0, 0(a4)
+;   lui t6, 0x800
+;   add t6, t6, a0
+;   lw a0, 0(t6)
 ;   ret
 
 function %f12(i64) -> i32 {
@@ -211,14 +204,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   addi a3,a0,-4
-;   lw a0,0(a3)
+;   lw a0,-4(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, a0, -4
-;   lw a0, 0(a3)
+;   lw a0, -4(a0)
 ;   ret
 
 function %f13(i64) -> i32 {
@@ -231,18 +222,15 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   lui a4,244141
-;   addi a1,a4,-1536
-;   add a5,a0,a1
-;   lw a0,0(a5)
+;   lw a0,1000000000(a0)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui a4, 0x3b9ad
-;   addi a1, a4, -0x600
-;   add a5, a0, a1
-;   lw a0, 0(a5)
+;   lui t6, 0x3b9ad
+;   addi t6, t6, -0x600
+;   add t6, t6, a0
+;   lw a0, 0(t6)
 ;   ret
 
 function %f14(i32) -> i32 {
@@ -507,20 +495,22 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   addi a4,a0,32
-;   ld a0,0(a4)
-;   ld a1,8(a4)
-;   sd a0,0(a4)
-;   sd a1,8(a4)
+;   ld a2,32(a0)
+;   mv a4,a2
+;   ld a1,40(a0)
+;   sd a2,32(a0)
+;   sd a1,40(a0)
+;   mv a0,a4
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, a0, 0x20
-;   ld a0, 0(a4)
-;   ld a1, 8(a4)
-;   sd a0, 0(a4)
-;   sd a1, 8(a4)
+;   ld a2, 0x20(a0)
+;   mv a4, a2
+;   ld a1, 0x28(a0)
+;   sd a2, 0x20(a0)
+;   sd a1, 0x28(a0)
+;   mv a0, a4
 ;   ret
 
 function %i128_32bit_sextend_simple(i32) -> i128 {
@@ -562,22 +552,41 @@ block0(v0: i64, v1: i32):
 ; VCode:
 ; block0:
 ;   sext.w a1,a1
-;   add a1,a0,a1
-;   addi a2,a1,24
-;   ld a0,0(a2)
-;   ld a1,8(a2)
-;   sd a0,0(a2)
-;   sd a1,8(a2)
+;   add a0,a0,a1
+;   ld a5,24(a0)
+;   mv a2,a5
+;   ld a1,32(a0)
+;   sd a5,24(a0)
+;   sd a1,32(a0)
+;   mv a0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a1, a1
-;   add a1, a0, a1
-;   addi a2, a1, 0x18
-;   ld a0, 0(a2)
-;   ld a1, 8(a2)
-;   sd a0, 0(a2)
-;   sd a1, 8(a2)
+;   add a0, a0, a1
+;   ld a5, 0x18(a0)
+;   mv a2, a5
+;   ld a1, 0x20(a0)
+;   sd a5, 0x18(a0)
+;   sd a1, 0x20(a0)
+;   mv a0, a2
+;   ret
+
+function %load_from_get_stack_pointer() -> i64 {
+block0:
+  v0 = get_stack_pointer.i64
+  v1 = load.i64 v0+8
+  return v1
+}
+
+; VCode:
+; block0:
+;   ld a0,8(sp)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld a0, 8(sp)
 ;   ret
 

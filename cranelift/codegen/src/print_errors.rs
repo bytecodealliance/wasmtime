@@ -4,6 +4,7 @@ use crate::entity::SecondaryMap;
 use crate::ir;
 use crate::ir::entities::{AnyEntity, Block, Inst, Value};
 use crate::ir::function::Function;
+use crate::ir::pcc::Fact;
 use crate::result::CodegenError;
 use crate::verifier::{VerifierError, VerifierErrors};
 use crate::write::{decorate_function, FuncWriter, PlainWriter};
@@ -71,8 +72,9 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         func: &Function,
         entity: AnyEntity,
         value: &dyn fmt::Display,
+        maybe_fact: Option<&Fact>,
     ) -> fmt::Result {
-        pretty_preamble_error(w, func, entity, value, &mut *self.0, self.1)
+        pretty_preamble_error(w, func, entity, value, maybe_fact, &mut *self.0, self.1)
     }
 }
 
@@ -156,11 +158,12 @@ fn pretty_preamble_error(
     func: &Function,
     entity: AnyEntity,
     value: &dyn fmt::Display,
+    maybe_fact: Option<&Fact>,
     func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
-    func_w.write_entity_definition(&mut s, func, entity, value)?;
+    func_w.write_entity_definition(&mut s, func, entity, value, maybe_fact)?;
     write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized

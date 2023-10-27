@@ -1,5 +1,4 @@
 use crate::isa::riscv64::inst::AllocationConsumer;
-use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::VecAluOpRRRR;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAvl,
@@ -1082,12 +1081,6 @@ impl VecAMode {
             VecAMode::UnitStride { base } => VecAMode::UnitStride {
                 base: base.with_allocs(allocs),
             },
-        }
-    }
-
-    pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
-        match self {
-            VecAMode::UnitStride { base, .. } => base.get_offset_with_state(state),
         }
     }
 

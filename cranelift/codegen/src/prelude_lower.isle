@@ -40,9 +40,17 @@
 (decl value_reg (Reg) ValueRegs)
 (extern constructor value_reg value_reg)
 
+;; Construct a `WritableValueRegs` of one register.
+(decl writable_value_reg (WritableReg) WritableValueRegs)
+(extern constructor writable_value_reg writable_value_reg)
+
 ;; Construct a `ValueRegs` of two registers.
 (decl value_regs (Reg Reg) ValueRegs)
 (extern constructor value_regs value_regs)
+
+;; Construct a `WritableValueRegs` of two registers.
+(decl writable_value_regs (WritableReg WritableReg) WritableValueRegs)
+(extern constructor writable_value_regs writable_value_regs)
 
 ;; Construct an empty `ValueRegs` containing only invalid register sentinels.
 (decl value_regs_invalid () ValueRegs)
@@ -130,7 +138,7 @@
 (extern constructor value_regs_get value_regs_get)
 
 ;; Get the number of registers in a `ValueRegs`.
-(decl value_regs_len (ValueRegs) usize)
+(decl pure value_regs_len (ValueRegs) usize)
 (extern constructor value_regs_len value_regs_len)
 
 ;; Get a range for the number of regs in a `ValueRegs`.
@@ -170,6 +178,11 @@
 (rule (multi_reg_to_single (MultiReg.One a))
       (value_reg a))
 
+;; Add a range fact to a register, when compiling with
+;; proof-carrying-code enabled.
+(decl add_range_fact (Reg u16 u64 u64) Reg)
+(extern constructor add_range_fact add_range_fact)
+
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))
@@ -181,6 +194,24 @@
 (type VecArgPair extern (enum))
 (type VecRetPair extern (enum))
 (type CallArgList extern (enum))
+(type MachLabelSlice extern (enum))
+(type BoxVecMachLabel extern (enum))
+
+;; Extract a the target from a MachLabelSlice with exactly one target.
+(decl single_target (MachLabel) MachLabelSlice)
+(extern extractor single_target single_target)
+
+;; Extract a the targets from a MachLabelSlice with exactly two targets.
+(decl two_targets (MachLabel MachLabel) MachLabelSlice)
+(extern extractor two_targets two_targets)
+
+;; Extract the default target and jump table from a MachLabelSlice.
+(decl jump_table_targets (MachLabel BoxVecMachLabel) MachLabelSlice)
+(extern extractor jump_table_targets jump_table_targets)
+
+;; The size of the jump table.
+(decl jump_table_size (BoxVecMachLabel) u32)
+(extern constructor jump_table_size jump_table_size)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1019,6 +1050,7 @@
 
 (convert Inst Value def_inst)
 (convert Reg ValueRegs value_reg)
+(convert WritableReg WritableValueRegs writable_value_reg)
 (convert Value Reg put_in_reg)
 (convert Value ValueRegs put_in_regs)
 (convert WritableReg Reg writable_reg_to_reg)

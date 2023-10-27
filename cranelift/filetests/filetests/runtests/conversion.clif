@@ -7,52 +7,248 @@ target x86_64 has_avx
 target riscv64 has_c has_zcb
 target riscv64
 
-function %fcvt_to_sint(f32) -> i32 {
+function %f32_to_i32(f32) -> i32 {
 block0(v0: f32):
     v1 = fcvt_to_sint.i32 v0
     return v1
 }
-; run: %fcvt_to_sint(0x0.0) == 0
-; run: %fcvt_to_sint(0x1.0) == 1
-; run: %fcvt_to_sint(0x1.d6f346p26) == 123456792
-; run: %fcvt_to_sint(0x8.1) == 8
+; run: %f32_to_i32(0x0.0) == 0
+; run: %f32_to_i32(0x1.0) == 1
+; run: %f32_to_i32(0x1.d6f346p26) == 123456792
+; run: %f32_to_i32(0x8.1) == 8
+; run: %f32_to_i32(-0x8.1) == -8
+; run: %f32_to_i32(-0x0.1) == 0
+; run: %f32_to_i32(-0x1.0p31) == 0x8000_0000
 
-function %fcvt_to_uint(f32) -> i32 {
+function %f64_to_i32(f64) -> i32 {
+block0(v0: f64):
+    v1 = fcvt_to_sint.i32 v0
+    return v1
+}
+; run: %f64_to_i32(0x0.0) == 0
+; run: %f64_to_i32(0x1.0) == 1
+; run: %f64_to_i32(0x1.d6f346p26) == 123456792
+; run: %f64_to_i32(0x8.1) == 8
+; run: %f64_to_i32(-0x8.1) == -8
+; run: %f64_to_i32(-0x0.1) == 0
+; run: %f64_to_i32(-0x1.0p31) == 0x8000_0000
+
+function %f32_to_i64(f32) -> i64 {
+block0(v0: f32):
+    v1 = fcvt_to_sint.i64 v0
+    return v1
+}
+; run: %f32_to_i64(0x0.0) == 0
+; run: %f32_to_i64(0x1.0) == 1
+; run: %f32_to_i64(0x1.d6f346p26) == 123456792
+; run: %f32_to_i64(0x8.1) == 8
+; run: %f32_to_i64(-0x8.1) == -8
+; run: %f32_to_i64(-0x0.1) == 0
+
+function %f64_to_i64(f64) -> i64 {
+block0(v0: f64):
+    v1 = fcvt_to_sint.i64 v0
+    return v1
+}
+; run: %f64_to_i64(0x0.0) == 0
+; run: %f64_to_i64(0x1.0) == 1
+; run: %f64_to_i64(0x1.d6f346p26) == 123456792
+; run: %f64_to_i64(0x8.1) == 8
+; run: %f64_to_i64(-0x8.1) == -8
+; run: %f64_to_i64(-0x0.1) == 0
+
+function %f32_to_u32(f32) -> i32 {
 block0(v0:f32):
     v1 = fcvt_to_uint.i32 v0
     return v1
 }
-; run: %fcvt_to_uint(0x0.0) == 0
-; run: %fcvt_to_uint(0x1.0) == 1
-; run: %fcvt_to_uint(0x4.2) == 4
-; run: %fcvt_to_uint(0x4.6) == 4
-; run: %fcvt_to_uint(0x1.d6f346p26) == 123456792
-; run: %fcvt_to_uint(0xB2D05E00.0) == 3000000000
+; run: %f32_to_u32(0x0.0) == 0
+; run: %f32_to_u32(0x1.0) == 1
+; run: %f32_to_u32(0x4.2) == 4
+; run: %f32_to_u32(0x4.6) == 4
+; run: %f32_to_u32(0x1.d6f346p26) == 123456792
+; run: %f32_to_u32(0xB2D05E00.0) == 3000000000
+; run: %f32_to_u32(-0x0.1) == 0
 
-function %fcvt_to_sint_sat(f32) -> i32 {
+function %f64_to_u32(f64) -> i32 {
+block0(v0:f64):
+    v1 = fcvt_to_uint.i32 v0
+    return v1
+}
+; run: %f64_to_u32(0x0.0) == 0
+; run: %f64_to_u32(0x1.0) == 1
+; run: %f64_to_u32(0x4.2) == 4
+; run: %f64_to_u32(0x4.6) == 4
+; run: %f64_to_u32(0x1.d6f346p26) == 123456792
+; run: %f64_to_u32(0xB2D05E00.0) == 3000000000
+; run: %f64_to_u32(-0x0.1) == 0
+
+function %f32_to_u64(f32) -> i64 {
+block0(v0:f32):
+    v1 = fcvt_to_uint.i64 v0
+    return v1
+}
+; run: %f32_to_u64(0x0.0) == 0
+; run: %f32_to_u64(0x1.0) == 1
+; run: %f32_to_u64(0x4.2) == 4
+; run: %f32_to_u64(0x4.6) == 4
+; run: %f32_to_u64(0x1.d6f346p26) == 123456792
+; run: %f32_to_u64(0xB2D05E00.0) == 3000000000
+; run: %f32_to_u64(-0x0.1) == 0
+
+function %f64_to_u64(f64) -> i64 {
+block0(v0:f64):
+    v1 = fcvt_to_uint.i64 v0
+    return v1
+}
+; run: %f64_to_u64(0x0.0) == 0
+; run: %f64_to_u64(0x1.0) == 1
+; run: %f64_to_u64(0x4.2) == 4
+; run: %f64_to_u64(0x4.6) == 4
+; run: %f64_to_u64(0x1.d6f346p26) == 123456792
+; run: %f64_to_u64(0xB2D05E00.0) == 3000000000
+; run: %f64_to_u64(-0x0.1) == 0
+
+function %f32_to_i32_sat(f32) -> i32 {
 block0(v0: f32):
     v1 = fcvt_to_sint_sat.i32 v0
     return v1
 }
-; run: %fcvt_to_sint_sat(0x0.0) == 0
-; run: %fcvt_to_sint_sat(0x1.0) == 1
-; run: %fcvt_to_sint_sat(0x1.d6f346p26) == 123456792
-; run: %fcvt_to_sint_sat(0x8.1) == 8
-; run: %fcvt_to_sint_sat(-0x1.0) == -1
-; run: %fcvt_to_sint_sat(0x1.fffffep127) == 2147483647
-; run: %fcvt_to_sint_sat(-0x1.fffffep127) == -2147483648
+; run: %f32_to_i32_sat(0x0.0) == 0
+; run: %f32_to_i32_sat(0x1.0) == 1
+; run: %f32_to_i32_sat(0x1.d6f346p26) == 123456792
+; run: %f32_to_i32_sat(0x8.1) == 8
+; run: %f32_to_i32_sat(-0x1.0) == -1
+; run: %f32_to_i32_sat(0x1.fffffep127) == 2147483647
+; run: %f32_to_i32_sat(-0x1.fffffep127) == -2147483648
+; run: %f32_to_i32_sat(+NaN) == 0
+; run: %f32_to_i32_sat(-NaN) == 0
+; run: %f32_to_i32_sat(+Inf) == 2147483647
+; run: %f32_to_i32_sat(-Inf) == -2147483648
 
-function %fcvt_to_uint_sat(f32) -> i32 {
+function %f64_to_i32_sat(f64) -> i32 {
+block0(v0: f64):
+    v1 = fcvt_to_sint_sat.i32 v0
+    return v1
+}
+; run: %f64_to_i32_sat(0x0.0) == 0
+; run: %f64_to_i32_sat(0x1.0) == 1
+; run: %f64_to_i32_sat(0x1.d6f346p26) == 123456792
+; run: %f64_to_i32_sat(0x8.1) == 8
+; run: %f64_to_i32_sat(-0x1.0) == -1
+; run: %f64_to_i32_sat(0x1.fffffep127) == 2147483647
+; run: %f64_to_i32_sat(-0x1.fffffep127) == -2147483648
+; run: %f64_to_i32_sat(+NaN) == 0
+; run: %f64_to_i32_sat(-NaN) == 0
+; run: %f64_to_i32_sat(+Inf) == 2147483647
+; run: %f64_to_i32_sat(-Inf) == -2147483648
+
+function %f32_to_i64_sat(f32) -> i64 {
+block0(v0: f32):
+    v1 = fcvt_to_sint_sat.i64 v0
+    return v1
+}
+; run: %f32_to_i64_sat(0x0.0) == 0
+; run: %f32_to_i64_sat(0x1.0) == 1
+; run: %f32_to_i64_sat(0x1.d6f346p26) == 123456792
+; run: %f32_to_i64_sat(0x8.1) == 8
+; run: %f32_to_i64_sat(-0x1.0) == -1
+; run: %f32_to_i64_sat(0x1.fffffep127) == 0x7fffffff_ffffffff
+; run: %f32_to_i64_sat(-0x1.fffffep127) == 0x80000000_00000000
+; run: %f32_to_i64_sat(+NaN) == 0
+; run: %f32_to_i64_sat(-NaN) == 0
+; run: %f32_to_i64_sat(+Inf) == 0x7fffffff_ffffffff
+; run: %f32_to_i64_sat(-Inf) == 0x80000000_00000000
+
+function %f64_to_i64_sat(f64) -> i64 {
+block0(v0: f64):
+    v1 = fcvt_to_sint_sat.i64 v0
+    return v1
+}
+; run: %f64_to_i64_sat(0x0.0) == 0
+; run: %f64_to_i64_sat(0x1.0) == 1
+; run: %f64_to_i64_sat(0x1.d6f346p26) == 123456792
+; run: %f64_to_i64_sat(0x8.1) == 8
+; run: %f64_to_i64_sat(-0x1.0) == -1
+; run: %f64_to_i64_sat(0x1.fffffep127) == 0x7fffffff_ffffffff
+; run: %f64_to_i64_sat(-0x1.fffffep127) == 0x80000000_00000000
+; run: %f64_to_i64_sat(+NaN) == 0
+; run: %f64_to_i64_sat(-NaN) == 0
+; run: %f64_to_i64_sat(+Inf) == 0x7fffffff_ffffffff
+; run: %f64_to_i64_sat(-Inf) == 0x80000000_00000000
+
+function %f32_to_u32_sat(f32) -> i32 {
 block0(v0:f32):
     v1 = fcvt_to_uint_sat.i32 v0
     return v1
 }
-; run: %fcvt_to_uint_sat(0x0.0) == 0
-; run: %fcvt_to_uint_sat(0x1.0) == 1
-; run: %fcvt_to_uint_sat(0x4.2) == 4
-; run: %fcvt_to_uint_sat(0x4.6) == 4
-; run: %fcvt_to_uint_sat(0x1.d6f346p26) == 123456792
-; run: %fcvt_to_uint_sat(0xB2D05E00.0) == 3000000000
-; run: %fcvt_to_uint_sat(-0x1.0) == 0
-; run: %fcvt_to_uint_sat(0x1.fffffep127) == 4294967295
-; run: %fcvt_to_uint_sat(-0x1.fffffep127) == 0
+; run: %f32_to_u32_sat(0x0.0) == 0
+; run: %f32_to_u32_sat(0x1.0) == 1
+; run: %f32_to_u32_sat(0x4.2) == 4
+; run: %f32_to_u32_sat(0x4.6) == 4
+; run: %f32_to_u32_sat(0x1.d6f346p26) == 123456792
+; run: %f32_to_u32_sat(0xB2D05E00.0) == 3000000000
+; run: %f32_to_u32_sat(-0x1.0) == 0
+; run: %f32_to_u32_sat(0x1.fffffep127) == 4294967295
+; run: %f32_to_u32_sat(-0x1.fffffep127) == 0
+; run: %f32_to_u32_sat(+NaN) == 0
+; run: %f32_to_u32_sat(-NaN) == 0
+; run: %f32_to_u32_sat(+Inf) == 0xffffffff
+; run: %f32_to_u32_sat(-Inf) == 0
+
+function %f64_to_u32_sat(f64) -> i32 {
+block0(v0:f64):
+    v1 = fcvt_to_uint_sat.i32 v0
+    return v1
+}
+; run: %f64_to_u32_sat(0x0.0) == 0
+; run: %f64_to_u32_sat(0x1.0) == 1
+; run: %f64_to_u32_sat(0x4.2) == 4
+; run: %f64_to_u32_sat(0x4.6) == 4
+; run: %f64_to_u32_sat(0x1.d6f346p26) == 123456792
+; run: %f64_to_u32_sat(0xB2D05E00.0) == 3000000000
+; run: %f64_to_u32_sat(-0x1.0) == 0
+; run: %f64_to_u32_sat(0x1.fffffep127) == 4294967295
+; run: %f64_to_u32_sat(-0x1.fffffep127) == 0
+; run: %f64_to_u32_sat(+NaN) == 0
+; run: %f64_to_u32_sat(-NaN) == 0
+; run: %f64_to_u32_sat(+Inf) == 0xffffffff
+; run: %f64_to_u32_sat(-Inf) == 0
+
+function %f32_to_u64_sat(f32) -> i64 {
+block0(v0:f32):
+    v1 = fcvt_to_uint_sat.i64 v0
+    return v1
+}
+; run: %f32_to_u64_sat(0x0.0) == 0
+; run: %f32_to_u64_sat(0x1.0) == 1
+; run: %f32_to_u64_sat(0x4.2) == 4
+; run: %f32_to_u64_sat(0x4.6) == 4
+; run: %f32_to_u64_sat(0x1.d6f346p26) == 123456792
+; run: %f32_to_u64_sat(0xB2D05E00.0) == 3000000000
+; run: %f32_to_u64_sat(-0x1.0) == 0
+; run: %f32_to_u64_sat(0x1.fffffep127) == 0xffffffff_ffffffff
+; run: %f32_to_u64_sat(-0x1.fffffep127) == 0
+; run: %f32_to_u64_sat(+NaN) == 0
+; run: %f32_to_u64_sat(-NaN) == 0
+; run: %f32_to_u64_sat(+Inf) == 0xffffffff_ffffffff
+; run: %f32_to_u64_sat(-Inf) == 0
+
+function %f64_to_u64_sat(f64) -> i64 {
+block0(v0:f64):
+    v1 = fcvt_to_uint_sat.i64 v0
+    return v1
+}
+; run: %f64_to_u64_sat(0x0.0) == 0
+; run: %f64_to_u64_sat(0x1.0) == 1
+; run: %f64_to_u64_sat(0x4.2) == 4
+; run: %f64_to_u64_sat(0x4.6) == 4
+; run: %f64_to_u64_sat(0x1.d6f346p26) == 123456792
+; run: %f64_to_u64_sat(0xB2D05E00.0) == 3000000000
+; run: %f64_to_u64_sat(-0x1.0) == 0
+; run: %f64_to_u64_sat(0x1.fffffep127) == 0xffffffff_ffffffff
+; run: %f64_to_u64_sat(-0x1.fffffep127) == 0
+; run: %f64_to_u64_sat(+NaN) == 0
+; run: %f64_to_u64_sat(-NaN) == 0
+; run: %f64_to_u64_sat(+Inf) == 0xffffffff_ffffffff
+; run: %f64_to_u64_sat(-Inf) == 0

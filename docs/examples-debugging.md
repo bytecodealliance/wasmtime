@@ -1,41 +1,11 @@
 # Debugging WebAssembly
 
-The following steps describe a common way to debug a WebAssembly module in
-Wasmtime:
+Wasmtime currently provides the following support for debugging misbehaving
+WebAssembly:
 
-1. Compile your WebAssembly with debug info enabled, usually `-g`; for
-   example:
+* We can [live debug and step through the guest Wasm and the host at the same
+  time with `gdb` or `lldb`.](./examples-debugging-native-debugger.md)
 
-    ```sh
-    clang foo.c -g -o foo.wasm
-    ```
-
-2. Run Wasmtime with the debug info enabled; this is `-g` from the CLI and
-   `Config::debug_info(true)` in an embedding (e.g. see [debugging in a Rust
-   embedding](./examples-rust-debugging.md))
-
-3. Use a supported debugger:
-
-    ```sh
-    lldb -- wasmtime run -D debug-info foo.wasm
-    ```
-    ```sh
-    gdb --args wasmtime run -D debug-info foo.wasm
-    ```
-
-If you run into trouble, the following discussions might help:
-
-- On MacOS with LLDB you may need to run: `settings set
-  plugin.jit-loader.gdb.enable on`
-  ([#1953](https://github.com/bytecodealliance/wasmtime/issues/1953))
-- With LLDB, call `__vmctx.set()` to set the current context before calling any
-  dereference operators
-  ([#1482](https://github.com/bytecodealliance/wasmtime/issues/1482)):
-  ```sh
-  (lldb) p __vmctx->set()
-  (lldb) p *foo
-  ```
-- The address of the start of instance memory can be found in `__vmctx->memory`
-- On Windows you may experience degraded WASM compilation throughput due to the
-  enablement of additional native heap checks when under the debugger by default.
-  You can set the environment variable `_NO_DEBUG_HEAP` to `1` to disable them.
+* When a Wasm guest traps, we can [generate Wasm core
+  dumps](./examples-debugging-core-dumps.md), that can be consumed by other
+  tools for post-mortem analysis.

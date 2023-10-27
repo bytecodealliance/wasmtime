@@ -2,7 +2,7 @@ use crate::linker::{Definition, DefinitionType};
 use crate::store::{InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
-    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory,
+    AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, SharedMemory, StoreContext,
     StoreContextMut, Table, TypedFunc,
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -40,6 +40,15 @@ pub(crate) struct InstanceData {
     /// exports here matches the order of the exports in the the original
     /// module.
     exports: Vec<Option<Extern>>,
+}
+
+impl InstanceData {
+    pub fn from_id(id: InstanceId) -> InstanceData {
+        InstanceData {
+            id,
+            exports: vec![],
+        }
+    }
 }
 
 impl Instance {
@@ -251,7 +260,7 @@ impl Instance {
 
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
-        store.modules_mut().register_module(module);
+        let module_id = store.modules_mut().register_module(module);
         store.fill_func_refs();
 
         // The first thing we do is issue an instance allocation request
@@ -275,6 +284,7 @@ impl Instance {
                     host_state: Box::new(Instance(instance_to_be)),
                     store: StorePtr::new(store.traitobj()),
                     wmemcheck: store.engine().config().wmemcheck,
+                    pkey: store.get_pkey(),
                 })?;
 
         // The instance still has lots of setup, for example
@@ -289,7 +299,7 @@ impl Instance {
         // conflicts with the borrow on `store.engine`) but this doesn't
         // matter in practice since initialization isn't even running any
         // code here anyway.
-        let id = store.add_instance(instance_handle.clone(), false);
+        let id = store.add_instance(instance_handle.clone(), module_id);
 
         // Additionally, before we start doing fallible instantiation, we
         // do one more step which is to insert an `InstanceData`
@@ -330,9 +340,6 @@ impl Instance {
 
         Ok((instance, compiled_module.module().start_func))
     }
-    pub(crate) fn from_stored(stored: Stored<InstanceData>) -> Instance {
-        Instance(stored)
-    }
 
     pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {
         Instance(store.store_data_mut().insert(handle))
@@ -355,6 +362,16 @@ impl Instance {
             })?;
         }
         Ok(())
+    }
+
+    /// Get this instance's module.
+    pub fn module<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a Module {
+        self._module(store.into().0)
+    }
+
+    fn _module<'a>(&self, store: &'a StoreOpaque) -> &'a Module {
+        let InstanceData { id, .. } = store[self.0];
+        store.module_for_instance(id).unwrap()
     }
 
     /// Returns the list of exported items from this [`Instance`].
@@ -529,6 +546,46 @@ impl Instance {
     #[cfg(feature = "component-model")]
     pub(crate) fn id(&self, store: &StoreOpaque) -> InstanceId {
         store[self.0].id
+    }
+
+    /// Get all globals within this instance.
+    ///
+    /// Returns both import and defined globals.
+    ///
+    /// Returns both exported and non-exported globals.
+    ///
+    /// Gives access to the full globals space.
+    pub(crate) fn all_globals<'a>(
+        &'a self,
+        store: &'a mut StoreOpaque,
+    ) -> impl ExactSizeIterator<Item = (GlobalIndex, Global)> + 'a {
+        let data = &store[self.0];
+        let instance = store.instance_mut(data.id);
+        instance
+            .all_globals()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|(i, g)| (i, unsafe { Global::from_wasmtime_global(g, store) }))
+    }
+
+    /// Get all memories within this instance.
+    ///
+    /// Returns both import and defined memories.
+    ///
+    /// Returns both exported and non-exported memories.
+    ///
+    /// Gives access to the full memories space.
+    pub(crate) fn all_memories<'a>(
+        &'a self,
+        store: &'a mut StoreOpaque,
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, Memory)> + 'a {
+        let data = &store[self.0];
+        let instance = store.instance_mut(data.id);
+        instance
+            .all_memories()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|(i, m)| (i, unsafe { Memory::from_wasmtime_memory(m, store) }))
     }
 }
 

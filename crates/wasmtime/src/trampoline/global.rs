@@ -5,8 +5,8 @@ use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 
 #[repr(C)]
 pub struct VMHostGlobalContext {
-    ty: GlobalType,
-    global: VMGlobalDefinition,
+    pub(crate) ty: GlobalType,
+    pub(crate) global: VMGlobalDefinition,
 }
 
 impl Drop for VMHostGlobalContext {
@@ -53,9 +53,8 @@ pub fn generate_global_export(
             Val::F64(x) => *global.as_f64_bits_mut() = x,
             Val::V128(x) => *global.as_u128_mut() = x.into(),
             Val::FuncRef(f) => {
-                *global.as_func_ref_mut() = f.map_or(ptr::null_mut(), |f| {
-                    f.caller_checked_func_ref(store).as_ptr()
-                })
+                *global.as_func_ref_mut() =
+                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(store).as_ptr())
             }
             Val::ExternRef(x) => *global.as_externref_mut() = x.map(|x| x.inner),
         }

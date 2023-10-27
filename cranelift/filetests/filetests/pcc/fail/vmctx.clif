@@ -1,0 +1,38 @@
+test compile expect-fail
+set enable_pcc=true
+target aarch64
+target x86_64
+
+;; Equivalent to a Wasm `i64.load` from a static memory.
+function %f0(i64, i32) -> i64 {
+    ;; mock vmctx struct:
+    mt0 = struct 8 { 0: i64 readonly ! mem(mt1, 0, 0) }
+    ;; mock static memory: 4GiB range, *but insufficient guard*
+    mt1 = memory 0x1_0000_0000
+
+block0(v0 ! mem(mt0, 0, 0): i64, v1: i32):
+    ;; Compute the address: base + offset. Guard region (2GiB) is
+    ;; sufficient for an 8-byte I64 load.
+    v2 ! mem(mt1, 0, 0) = load.i64 checked v0+0    ;; base pointer
+    v3 ! range(64, 0, 0xffff_ffff) = uextend.i64 v1  ;; offset
+    v4 ! mem(mt1, 0, 0xffff_ffff) = iadd.i64 v2, v3
+    v5 = load.i64 checked v4
+    return v5
+}
+
+;; Equivalent to a Wasm `i64.load` from a static memory.
+function %f1(i64, i32) -> i64 {
+    ;; mock vmctx struct:
+    mt0 = struct 16 { 0: i64 readonly ! mem(mt1, 0, 0), 8: i64 readonly }
+    ;; mock static memory: 4GiB range, *but insufficient guard*
+    mt1 = memory 0x1_8000_0000
+
+block0(v0 ! mem(mt0, 0, 0): i64, v1: i32):
+    ;; Compute the address: base + offset. Guard region (2GiB) is
+    ;; sufficient for an 8-byte I64 load.
+    v2 ! mem(mt1, 0, 0) = load.i64 checked v0+8    ;; base pointer, but the wrong one
+    v3 ! range(64, 0, 0xffff_ffff) = uextend.i64 v1  ;; offset
+    v4 ! mem(mt1, 0, 0xffff_ffff) = iadd.i64 v2, v3
+    v5 = load.i64 checked v4
+    return v5
+}

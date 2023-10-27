@@ -18,3 +18,5 @@ cargo vendor > .cargo/config.toml
 tar -czf /tmp/$pkgname.tar.gz --transform "s/^\./$pkgname/S" --exclude=.git .
 mkdir -p dist
 mv /tmp/$pkgname.tar.gz dist/
+
+rm .cargo/config.toml

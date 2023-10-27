@@ -2,6 +2,7 @@
 
 use regalloc2::checker::CheckerErrors;
 
+use crate::ir::pcc::PccError;
 use crate::{ir::Function, verifier::VerifierErrors};
 use std::string::String;
 
@@ -41,6 +42,9 @@ pub enum CodegenError {
 
     /// Register allocator internal error discovered by the symbolic checker.
     Regalloc(CheckerErrors),
+
+    /// Proof-carrying-code validation error.
+    Pcc(PccError),
 }
 
 /// A convenient alias for a `Result` that uses `CodegenError` as the error type.
@@ -58,6 +62,7 @@ impl std::error::Error for CodegenError {
             #[cfg(feature = "unwind")]
             CodegenError::RegisterMappingError { .. } => None,
             CodegenError::Regalloc(..) => None,
+            CodegenError::Pcc(..) => None,
         }
     }
 }
@@ -72,6 +77,7 @@ impl std::fmt::Display for CodegenError {
             #[cfg(feature = "unwind")]
             CodegenError::RegisterMappingError(_0) => write!(f, "Register mapping error"),
             CodegenError::Regalloc(errors) => write!(f, "Regalloc validation errors: {:?}", errors),
+            CodegenError::Pcc(e) => write!(f, "Proof-carrying-code validation error: {:?}", e),
         }
     }
 }

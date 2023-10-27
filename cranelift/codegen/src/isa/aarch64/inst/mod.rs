@@ -140,16 +140,6 @@ pub struct ReturnCallInfo {
     pub key: Option<APIKey>,
 }
 
-/// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct JTSequenceInfo {
-    /// Possible branch targets.
-    pub targets: Vec<BranchTarget>,
-    /// Default branch target.
-    pub default_target: BranchTarget,
-}
-
 fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
     let mut count = 0;
     for _ in 0..num_half_words {
@@ -949,11 +939,15 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::Bti { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
-        &Inst::ElfTlsGetAddr { rd, .. } => {
+        &Inst::ElfTlsGetAddr { rd, tmp, .. } => {
+            // TLSDESC has a very neat calling convention. It is required to preserve
+            // all registers except x0 and x30. X30 is non allocatable in cranelift since
+            // its the link register.
+            //
+            // Additionally we need a second register as a temporary register for the
+            // TLSDESC sequence. This register can be any register other than x0 (and x30).
             collector.reg_fixed_def(rd, regs::xreg(0));
-            let mut clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
-            clobbers.remove(regs::xreg_preg(0));
-            collector.reg_clobbers(clobbers);
+            collector.reg_early_def(tmp);
         }
         &Inst::MachOTlsGetAddr { rd, .. } => {
             collector.reg_fixed_def(rd, regs::xreg(0));
@@ -1052,6 +1046,34 @@ impl MachInst for Inst {
             &Inst::IndirectBr { .. } => MachTerminator::Indirect,
             &Inst::JTSequence { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
+        }
+    }
+
+    fn is_mem_access(&self) -> bool {
+        match self {
+            &Inst::ULoad8 { .. }
+            | &Inst::SLoad8 { .. }
+            | &Inst::ULoad16 { .. }
+            | &Inst::SLoad16 { .. }
+            | &Inst::ULoad32 { .. }
+            | &Inst::SLoad32 { .. }
+            | &Inst::ULoad64 { .. }
+            | &Inst::LoadP64 { .. }
+            | &Inst::FpuLoad32 { .. }
+            | &Inst::FpuLoad64 { .. }
+            | &Inst::FpuLoad128 { .. }
+            | &Inst::FpuLoadP64 { .. }
+            | &Inst::FpuLoadP128 { .. }
+            | &Inst::Store8 { .. }
+            | &Inst::Store16 { .. }
+            | &Inst::Store32 { .. }
+            | &Inst::Store64 { .. }
+            | &Inst::StoreP64 { .. }
+            | &Inst::FpuStore32 { .. }
+            | &Inst::FpuStore64 { .. }
+            | &Inst::FpuStore128 { .. } => true,
+            // TODO: verify this carefully
+            _ => false,
         }
     }
 
@@ -2678,7 +2700,8 @@ impl Inst {
             &Inst::Word4 { data } => format!("data.i32 {}", data),
             &Inst::Word8 { data } => format!("data.i64 {}", data),
             &Inst::JTSequence {
-                ref info,
+                default,
+                ref targets,
                 ridx,
                 rtmp1,
                 rtmp2,
@@ -2687,7 +2710,7 @@ impl Inst {
                 let ridx = pretty_print_reg(ridx, allocs);
                 let rtmp1 = pretty_print_reg(rtmp1.to_reg(), allocs);
                 let rtmp2 = pretty_print_reg(rtmp2.to_reg(), allocs);
-                let default_target = info.default_target.pretty_print(0, allocs);
+                let default_target = BranchTarget::Label(default).pretty_print(0, allocs);
                 format!(
                     concat!(
                         "b.hs {} ; ",
@@ -2710,7 +2733,7 @@ impl Inst {
                     rtmp1,
                     rtmp2,
                     rtmp1,
-                    info.targets
+                    targets
                 )
             }
             &Inst::LoadExtName {
@@ -2824,9 +2847,14 @@ impl Inst {
             }
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
 
-            &Inst::ElfTlsGetAddr { ref symbol, rd } => {
+            &Inst::ElfTlsGetAddr {
+                ref symbol,
+                rd,
+                tmp,
+            } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
-                format!("elf_tls_get_addr {}, {}", rd, symbol.display(None))
+                let tmp = pretty_print_reg(tmp.to_reg(), allocs);
+                format!("elf_tls_get_addr {}, {}, {}", rd, tmp, symbol.display(None))
             }
             &Inst::MachOTlsGetAddr { ref symbol, rd } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);

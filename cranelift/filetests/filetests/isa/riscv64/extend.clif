@@ -258,3 +258,21 @@ block0(v0: i8, v1: i64):
 ;   add a0, a0, a1
 ;   ret
 
+
+function %extend_fcmp(f64, f64) -> i64 {
+block0(v0: f64, v1: f64):
+  v3 = fcmp.f64 lt v0, v1
+  v4 = sextend.i64 v3
+  return v4
+}
+
+; VCode:
+; block0:
+;   flt.d a0,fa0,fa1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.d a0, fa0, fa1
+;   ret
+

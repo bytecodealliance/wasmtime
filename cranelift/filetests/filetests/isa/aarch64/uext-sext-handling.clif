@@ -1,0 +1,36 @@
+test compile
+target aarch64
+
+; The aapcs64 call conv ignores the uext and sext flags
+function u0:0(i8) system_v {
+    sig0 = (i8 uext) system_v
+    fn0 = u0:0 sig0
+
+block0(v0: i8):
+    call fn0(v0)
+    return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: block0:
+; check-not: uxtb w0, w0
+; nextln: load_ext_name x2, User(userextname0)+0
+; nextln: blr x2
+
+; The aaple aarch64 call conv respects the uext and sext flags
+function u0:0(i8) apple_aarch64 {
+    sig0 = (i8 uext) apple_aarch64
+    fn0 = u0:0 sig0
+
+block0(v0: i8):
+    call fn0(v0)
+    return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: block0:
+; nextln: uxtb w0, w0
+; nextln: load_ext_name x4, User(userextname0)+0
+; nextln: blr x4

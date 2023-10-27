@@ -1,0 +1,20 @@
+test compile
+set enable_pcc=true
+target aarch64
+target x86_64
+
+function %f0(i64, i32) -> i64 {
+block0(v0 ! range(64, 0, 0x100): i64, v1: i32):
+    v2 ! range(64, 0, 0x100) = iconst.i64 0x100
+    v3 ! range(64, 0, 0x200) = iadd v0, v2
+    brif v1, block1(v0), block2(v3)
+
+block1(v4 ! range(64, 0, 0x1000): i64):  ;; broaden the range -- always allowed
+    jump block3(v4)
+
+block2(v5 ! range(64, 0, 0x2000): i64):
+    jump block3(v5)
+
+block3(v6 ! range(64, 0, 0x2001): i64):
+    return v6
+}

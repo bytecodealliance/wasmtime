@@ -11,11 +11,11 @@ interface insecure {
     /// There are no requirements on the values of the returned bytes, however
     /// implementations are encouraged to return evenly distributed values with
     /// a long period.
-    get-insecure-random-bytes: func(len: u64) -> list<u8>
+    get-insecure-random-bytes: func(len: u64) -> list<u8>;
 
     /// Return an insecure pseudo-random `u64` value.
     ///
     /// This function returns the same type of pseudo-random data as
     /// `get-insecure-random-bytes`, represented as a `u64`.
-    get-insecure-random-u64: func() -> u64
+    get-insecure-random-u64: func() -> u64;
 }

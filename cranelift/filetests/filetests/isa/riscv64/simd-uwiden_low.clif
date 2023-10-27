@@ -10,7 +10,7 @@ block0(v0: i8x16):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -20,7 +20,7 @@ block0(v0: i8x16):
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -49,7 +49,7 @@ block0(v0: i16x8):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -59,7 +59,7 @@ block0(v0: i16x8):
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -88,7 +88,7 @@ block0(v0: i32x4):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -98,7 +98,7 @@ block0(v0: i32x4):
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -128,7 +128,7 @@ block0(v0: i8x16):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -138,7 +138,7 @@ block0(v0: i8x16):
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -168,7 +168,7 @@ block0(v0: i16x8):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -178,7 +178,7 @@ block0(v0: i16x8):
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -209,7 +209,7 @@ block0(v0: i8x16):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -219,7 +219,7 @@ block0(v0: i8x16):
 ;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

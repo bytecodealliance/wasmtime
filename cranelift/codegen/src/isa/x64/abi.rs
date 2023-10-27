@@ -809,9 +809,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_ext_mode(
         _call_conv: isa::CallConv,
-        _specified: ir::ArgumentExtension,
+        specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension {
-        ir::ArgumentExtension::None
+        specified
     }
 
     fn compute_frame_layout(
@@ -1243,7 +1243,8 @@ fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
                 preg(regs::r10()),
                 preg(regs::r11()),
             ],
-            // Preferred XMMs: all of them.
+            // Preferred XMMs: the first 8, which can have smaller encodings
+            // with AVX instructions.
             vec![
                 preg(regs::xmm0()),
                 preg(regs::xmm1()),
@@ -1253,14 +1254,6 @@ fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
                 preg(regs::xmm5()),
                 preg(regs::xmm6()),
                 preg(regs::xmm7()),
-                preg(regs::xmm8()),
-                preg(regs::xmm9()),
-                preg(regs::xmm10()),
-                preg(regs::xmm11()),
-                preg(regs::xmm12()),
-                preg(regs::xmm13()),
-                preg(regs::xmm14()),
-                preg(regs::xmm15()),
             ],
             // The Vector Regclass is unused
             vec![],
@@ -1273,8 +1266,18 @@ fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
                 preg(regs::r13()),
                 preg(regs::r14()),
             ],
-            // Non-preferred XMMs: none.
-            vec![],
+            // Non-preferred XMMs: the last 8 registers, which can have larger
+            // encodings with AVX instructions.
+            vec![
+                preg(regs::xmm8()),
+                preg(regs::xmm9()),
+                preg(regs::xmm10()),
+                preg(regs::xmm11()),
+                preg(regs::xmm12()),
+                preg(regs::xmm13()),
+                preg(regs::xmm14()),
+                preg(regs::xmm15()),
+            ],
             // The Vector Regclass is unused
             vec![],
         ],

@@ -565,6 +565,7 @@ impl SharedMemory {
     /// Implementation of `memory.atomic.notify` for this shared memory.
     pub fn atomic_notify(&self, addr_index: u64, count: u32) -> Result<u32, Trap> {
         validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
+        log::trace!("memory.atomic.notify(addr={addr_index:#x}, count={count})");
         Ok(self.0.spot.unpark(addr_index, count))
     }
 
@@ -576,13 +577,18 @@ impl SharedMemory {
         timeout: Option<Instant>,
     ) -> Result<WaitResult, Trap> {
         let addr = validate_atomic_addr(&self.0.def.0, addr_index, 4, 4)?;
+        log::trace!(
+            "memory.atomic.wait32(addr={addr_index:#x}, expected={expected}, timeout={timeout:?})"
+        );
+
         // SAFETY: `addr_index` was validated by `validate_atomic_addr` above.
         assert!(std::mem::size_of::<AtomicU32>() == 4);
         assert!(std::mem::align_of::<AtomicU32>() <= 4);
         let atomic = unsafe { &*(addr as *const AtomicU32) };
 
-        // We want the sequential consistency of `SeqCst` to ensure that the `load` sees the value that the `notify` will/would see.
-        // All WASM atomic operations are also `SeqCst`.
+        // We want the sequential consistency of `SeqCst` to ensure that the
+        // `load` sees the value that the `notify` will/would see. All WASM
+        // atomic operations are also `SeqCst`.
         let validate = || atomic.load(Ordering::SeqCst) == expected;
 
         Ok(self.0.spot.park(addr_index, validate, timeout))
@@ -596,6 +602,10 @@ impl SharedMemory {
         timeout: Option<Instant>,
     ) -> Result<WaitResult, Trap> {
         let addr = validate_atomic_addr(&self.0.def.0, addr_index, 8, 8)?;
+        log::trace!(
+            "memory.atomic.wait64(addr={addr_index:#x}, expected={expected}, timeout={timeout:?})"
+        );
+
         // SAFETY: `addr_index` was validated by `validate_atomic_addr` above.
         assert!(std::mem::size_of::<AtomicU64>() == 8);
         assert!(std::mem::align_of::<AtomicU64>() <= 8);

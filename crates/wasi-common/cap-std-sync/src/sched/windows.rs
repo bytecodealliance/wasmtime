@@ -9,7 +9,6 @@
 // taken the time to improve it. See bug #2880.
 
 use once_cell::sync::Lazy;
-use std::ops::Deref;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
@@ -50,7 +49,7 @@ pub async fn poll_oneoff_<'a>(
     for s in poll.rw_subscriptions() {
         match s {
             Subscription::Read(r) => {
-                if file_is_stdin(r.file.deref()) {
+                if file_is_stdin(r.file) {
                     stdin_read_subs.push(r);
                 } else if r.file.pollable().is_some() {
                     immediate_reads.push(r);

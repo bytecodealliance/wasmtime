@@ -51,6 +51,9 @@ pub trait TargetEnvironment: TypeConvert {
     /// Whether to enable Spectre mitigations for heap accesses.
     fn heap_access_spectre_mitigation(&self) -> bool;
 
+    /// Whether to add proof-carrying-code facts to verify memory accesses.
+    fn proof_carrying_code(&self) -> bool;
+
     /// Get the Cranelift integer type to use for native pointers.
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.

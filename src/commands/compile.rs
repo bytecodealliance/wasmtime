@@ -59,7 +59,7 @@ pub struct CompileCommand {
 impl CompileCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        self.common.init_logging();
+        self.common.init_logging()?;
 
         let mut config = self.common.config(self.target.as_deref())?;
 
@@ -87,7 +87,11 @@ impl CompileCommand {
             );
         }
 
+        #[cfg(feature = "wat")]
         let input = wat::parse_file(&self.module).with_context(|| "failed to read input file")?;
+        #[cfg(not(feature = "wat"))]
+        let input = std::fs::read(&self.module)
+            .with_context(|| format!("failed to read input file: {:?}", self.module))?;
 
         let output = self.output.take().unwrap_or_else(|| {
             let mut output: PathBuf = self.module.file_name().unwrap().into();

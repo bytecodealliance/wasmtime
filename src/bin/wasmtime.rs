@@ -5,9 +5,6 @@
 
 use anyhow::Result;
 use clap::Parser;
-use wasmtime_cli::commands::{
-    CompileCommand, ConfigCommand, ExploreCommand, RunCommand, SettingsCommand, WastCommand,
-};
 
 /// Wasmtime WebAssembly Runtime
 #[derive(Parser)]
@@ -40,23 +37,37 @@ struct Wasmtime {
     #[clap(subcommand)]
     subcommand: Option<Subcommand>,
     #[clap(flatten)]
-    run: RunCommand,
+    run: wasmtime_cli::commands::RunCommand,
 }
 
 #[derive(Parser)]
 enum Subcommand {
-    /// Controls Wasmtime configuration settings
-    Config(ConfigCommand),
-    /// Compiles a WebAssembly module.
-    Compile(CompileCommand),
-    /// Explore the compilation of a WebAssembly module to native code.
-    Explore(ExploreCommand),
     /// Runs a WebAssembly module
-    Run(RunCommand),
+    Run(wasmtime_cli::commands::RunCommand),
+
+    /// Controls Wasmtime configuration settings
+    #[cfg(feature = "cache")]
+    Config(wasmtime_cli::commands::ConfigCommand),
+
+    /// Compiles a WebAssembly module.
+    #[cfg(feature = "cranelift")]
+    Compile(wasmtime_cli::commands::CompileCommand),
+
+    /// Explore the compilation of a WebAssembly module to native code.
+    #[cfg(feature = "explore")]
+    Explore(wasmtime_cli::commands::ExploreCommand),
+
+    /// Serves requests from a wasi-http proxy component.
+    #[cfg(feature = "serve")]
+    Serve(wasmtime_cli::commands::ServeCommand),
+
     /// Displays available Cranelift settings for a target.
-    Settings(SettingsCommand),
+    #[cfg(feature = "cranelift")]
+    Settings(wasmtime_cli::commands::SettingsCommand),
+
     /// Runs a WebAssembly test script file
-    Wast(WastCommand),
+    #[cfg(feature = "wast")]
+    Wast(wasmtime_cli::commands::WastCommand),
 }
 
 impl Wasmtime {
@@ -64,11 +75,24 @@ impl Wasmtime {
     pub fn execute(self) -> Result<()> {
         let subcommand = self.subcommand.unwrap_or(Subcommand::Run(self.run));
         match subcommand {
-            Subcommand::Config(c) => c.execute(),
-            Subcommand::Compile(c) => c.execute(),
-            Subcommand::Explore(c) => c.execute(),
             Subcommand::Run(c) => c.execute(),
+
+            #[cfg(feature = "cache")]
+            Subcommand::Config(c) => c.execute(),
+
+            #[cfg(feature = "cranelift")]
+            Subcommand::Compile(c) => c.execute(),
+
+            #[cfg(feature = "explore")]
+            Subcommand::Explore(c) => c.execute(),
+
+            #[cfg(feature = "serve")]
+            Subcommand::Serve(c) => c.execute(),
+
+            #[cfg(feature = "cranelift")]
             Subcommand::Settings(c) => c.execute(),
+
+            #[cfg(feature = "wast")]
             Subcommand::Wast(c) => c.execute(),
         }
     }

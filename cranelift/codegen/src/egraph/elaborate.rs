@@ -5,9 +5,10 @@ use super::cost::{pure_op_cost, Cost};
 use super::domtree::DomTreeWithChildren;
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
-use crate::fx::FxHashSet;
+use crate::fx::{FxHashMap, FxHashSet};
+use crate::hash_map::Entry as HashEntry;
 use crate::ir::{Block, Function, Inst, Value, ValueDef};
-use crate::loop_analysis::{Loop, LoopAnalysis, LoopLevel};
+use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
 use crate::unionfind::UnionFind;
@@ -56,6 +57,8 @@ pub(crate) struct Elaborator<'a> {
     elab_result_stack: Vec<ElaboratedValue>,
     /// Explicitly-unrolled block elaboration stack.
     block_stack: Vec<BlockStackEntry>,
+    /// Copies of values that have been rematerialized.
+    remat_copies: FxHashMap<(Block, Value), Value>,
     /// Stats for various events during egraph processing, to help
     /// with optimization of this infrastructure.
     stats: &'a mut Stats,
@@ -95,7 +98,6 @@ enum ElabStackEntry {
         inst: Inst,
         result_idx: usize,
         num_args: usize,
-        remat: bool,
         before: Inst,
     },
 }
@@ -134,6 +136,7 @@ impl<'a> Elaborator<'a> {
             elab_stack: vec![],
             elab_result_stack: vec![],
             block_stack: vec![],
+            remat_copies: FxHashMap::default(),
             stats,
         }
     }
@@ -211,26 +214,24 @@ impl<'a> Elaborator<'a> {
                 // at this point, only the side-effecting skeleton),
                 // then it must be computed and thus we give it zero
                 // cost.
-                ValueDef::Result(inst, _) if self.func.layout.inst_block(inst).is_some() => {
-                    best[value] = (Cost::zero(), value);
-                }
                 ValueDef::Result(inst, _) => {
-                    trace!(" -> value {}: result, computing cost", value);
-                    let inst_data = &self.func.dfg.insts[inst];
-                    let loop_level = self
-                        .func
-                        .layout
-                        .inst_block(inst)
-                        .map(|block| self.loop_analysis.loop_level(block))
-                        .unwrap_or(LoopLevel::root());
-                    // N.B.: at this point we know that the opcode is
-                    // pure, so `pure_op_cost`'s precondition is
-                    // satisfied.
-                    let cost = self.func.dfg.inst_values(inst).fold(
-                        pure_op_cost(inst_data.opcode()).at_level(loop_level.level()),
-                        |cost, value| cost + best[value].0,
-                    );
-                    best[value] = (cost, value);
+                    if let Some(_) = self.func.layout.inst_block(inst) {
+                        best[value] = (Cost::zero(), value);
+                    } else {
+                        trace!(" -> value {}: result, computing cost", value);
+                        let inst_data = &self.func.dfg.insts[inst];
+                        // N.B.: at this point we know that the opcode is
+                        // pure, so `pure_op_cost`'s precondition is
+                        // satisfied.
+                        let cost = self
+                            .func
+                            .dfg
+                            .inst_values(inst)
+                            .fold(pure_op_cost(inst_data.opcode()), |cost, value| {
+                                cost + best[value].0
+                            });
+                        best[value] = (cost, value);
+                    }
                 }
             };
             debug_assert_ne!(best[value].0, Cost::infinity());
@@ -258,13 +259,49 @@ impl<'a> Elaborator<'a> {
         self.elab_result_stack.pop().unwrap()
     }
 
-    fn process_elab_stack(&mut self) {
-        while let Some(entry) = self.elab_stack.last() {
-            match entry {
-                &ElabStackEntry::Start { value, before } => {
-                    // We always replace the Start entry, so pop it now.
-                    self.elab_stack.pop();
+    /// Possibly rematerialize the instruction producing the value in
+    /// `arg` and rewrite `arg` to refer to it, if needed. Returns
+    /// `true` if a rewrite occurred.
+    fn maybe_remat_arg(
+        remat_values: &FxHashSet<Value>,
+        func: &mut Function,
+        remat_copies: &mut FxHashMap<(Block, Value), Value>,
+        insert_block: Block,
+        before: Inst,
+        arg: &mut ElaboratedValue,
+        stats: &mut Stats,
+    ) -> bool {
+        // TODO (#7313): we may want to consider recursive
+        // rematerialization as well. We could process the arguments of
+        // the rematerialized instruction up to a certain depth. This
+        // would affect, e.g., adds-with-one-constant-arg, which are
+        // currently rematerialized. Right now we don't do this, to
+        // avoid the need for another fixpoint loop here.
+        if arg.in_block != insert_block && remat_values.contains(&arg.value) {
+            let new_value = match remat_copies.entry((insert_block, arg.value)) {
+                HashEntry::Occupied(o) => *o.get(),
+                HashEntry::Vacant(v) => {
+                    let inst = func.dfg.value_def(arg.value).inst().unwrap();
+                    debug_assert_eq!(func.dfg.inst_results(inst).len(), 1);
+                    let new_inst = func.dfg.clone_inst(inst);
+                    func.layout.insert_inst(new_inst, before);
+                    let new_result = func.dfg.inst_results(new_inst)[0];
+                    *v.insert(new_result)
+                }
+            };
+            trace!("rematerialized {} as {}", arg.value, new_value);
+            arg.value = new_value;
+            stats.elaborate_remat += 1;
+            true
+        } else {
+            false
+        }
+    }
 
+    fn process_elab_stack(&mut self) {
+        while let Some(entry) = self.elab_stack.pop() {
+            match entry {
+                ElabStackEntry::Start { value, before } => {
                     debug_assert_ne!(value, Value::reserved_value());
                     let value = self.func.dfg.resolve_aliases(value);
 
@@ -283,39 +320,17 @@ impl<'a> Elaborator<'a> {
                     // eclass.
                     trace!("looking up best value for {}", value);
                     let (_, best_value) = self.value_to_best_value[value];
-                    debug_assert_ne!(best_value, Value::reserved_value());
                     trace!("elaborate: value {} -> best {}", value, best_value);
+                    debug_assert_ne!(best_value, Value::reserved_value());
 
-                    let remat = if let Some(elab_val) =
-                        self.value_to_elaborated_value.get(&canonical_value)
-                    {
-                        // Value is available. Look at the defined
-                        // block, and determine whether this node kind
-                        // allows rematerialization if the value comes
-                        // from another block. If so, ignore the hit
-                        // and recompute below.
-                        let remat = elab_val.in_block != self.cur_block
-                            && self.remat_values.contains(&best_value);
-                        if !remat {
-                            trace!("elaborate: value {} -> {:?}", value, elab_val);
-                            self.stats.elaborate_memoize_hit += 1;
-                            self.elab_result_stack.push(*elab_val);
-                            continue;
-                        }
-                        trace!("elaborate: value {} -> remat", canonical_value);
-                        self.stats.elaborate_memoize_miss_remat += 1;
-                        // The op is pure at this point, so it is always valid to
-                        // remove from this map.
-                        self.value_to_elaborated_value.remove(&canonical_value);
-                        true
-                    } else {
-                        // Value not available; but still look up
-                        // whether it's been flagged for remat because
-                        // this affects placement.
-                        let remat = self.remat_values.contains(&best_value);
-                        trace!(" -> not present in map; remat = {}", remat);
-                        remat
-                    };
+                    if let Some(elab_val) = self.value_to_elaborated_value.get(&canonical_value) {
+                        // Value is available; use it.
+                        trace!("elaborate: value {} -> {:?}", value, elab_val);
+                        self.stats.elaborate_memoize_hit += 1;
+                        self.elab_result_stack.push(*elab_val);
+                        continue;
+                    }
+
                     self.stats.elaborate_memoize_miss += 1;
 
                     // Now resolve the value to its definition to see
@@ -363,7 +378,6 @@ impl<'a> Elaborator<'a> {
                         inst,
                         result_idx,
                         num_args,
-                        remat,
                         before,
                     });
 
@@ -376,21 +390,17 @@ impl<'a> Elaborator<'a> {
                     }
                 }
 
-                &ElabStackEntry::PendingInst {
+                ElabStackEntry::PendingInst {
                     inst,
                     result_idx,
                     num_args,
-                    remat,
                     before,
                 } => {
-                    self.elab_stack.pop();
-
                     trace!(
-                        "PendingInst: {} result {} args {} remat {} before {}",
+                        "PendingInst: {} result {} args {} before {}",
                         inst,
                         result_idx,
                         num_args,
-                        remat,
                         before
                     );
 
@@ -398,7 +408,7 @@ impl<'a> Elaborator<'a> {
                     // point. Grab them and drain them out, removing
                     // them.
                     let arg_idx = self.elab_result_stack.len() - num_args;
-                    let arg_values = &self.elab_result_stack[arg_idx..];
+                    let arg_values = &mut self.elab_result_stack[arg_idx..];
 
                     // Compute max loop depth.
                     //
@@ -444,16 +454,15 @@ impl<'a> Elaborator<'a> {
 
                     // We know that this is a pure inst, because
                     // non-pure roots have already been placed in the
-                    // value-to-elab'd-value map and are never subject
-                    // to remat, so they will not reach this stage of
-                    // processing.
+                    // value-to-elab'd-value map, so they will not
+                    // reach this stage of processing.
                     //
                     // We now must determine the location at which we
                     // place the instruction. This is the current
                     // block *unless* we hoist above a loop when all
                     // args are loop-invariant (and this op is pure).
                     let (scope_depth, before, insert_block) =
-                        if loop_hoist_level == self.loop_stack.len() || remat {
+                        if loop_hoist_level == self.loop_stack.len() {
                             // Depends on some value at the current
                             // loop depth, or remat forces it here:
                             // place it at the current location.
@@ -486,16 +495,39 @@ impl<'a> Elaborator<'a> {
                         insert_block
                     );
 
-                    //  Now we need to place `inst` at the computed
-                    //  location (just before `before`). Note that
-                    //  `inst` may already have been placed somewhere
-                    //  else, because a pure node may be elaborated at
-                    //  more than one place. In this case, we need to
-                    //  duplicate the instruction (and return the
-                    //  `Value`s for that duplicated instance
-                    //  instead).
+                    // Now that we have the location for the
+                    // instruction, check if any of its args are remat
+                    // values. If so, and if we don't have a copy of
+                    // the rematerializing instruction for this block
+                    // yet, create one.
+                    let mut remat_arg = false;
+                    for arg_value in arg_values.iter_mut() {
+                        if Self::maybe_remat_arg(
+                            &self.remat_values,
+                            &mut self.func,
+                            &mut self.remat_copies,
+                            insert_block,
+                            before,
+                            arg_value,
+                            &mut self.stats,
+                        ) {
+                            remat_arg = true;
+                        }
+                    }
+
+                    // Now we need to place `inst` at the computed
+                    // location (just before `before`). Note that
+                    // `inst` may already have been placed somewhere
+                    // else, because a pure node may be elaborated at
+                    // more than one place. In this case, we need to
+                    // duplicate the instruction (and return the
+                    // `Value`s for that duplicated instance instead).
+                    //
+                    // Also clone if we rematerialized, because we
+                    // don't want to rewrite the args in the original
+                    // copy.
                     trace!("need inst {} before {}", inst, before);
-                    let inst = if self.func.layout.inst_block(inst).is_some() {
+                    let inst = if self.func.layout.inst_block(inst).is_some() || remat_arg {
                         // Clone the inst!
                         let new_inst = self.func.dfg.clone_inst(inst);
                         trace!(
@@ -612,7 +644,16 @@ impl<'a> Elaborator<'a> {
                 // Elaborate the arg, placing any newly-inserted insts
                 // before `before`. Get the updated value, which may
                 // be different than the original.
-                let new_arg = self.elaborate_eclass_use(*arg, before);
+                let mut new_arg = self.elaborate_eclass_use(*arg, before);
+                Self::maybe_remat_arg(
+                    &self.remat_values,
+                    &mut self.func,
+                    &mut self.remat_copies,
+                    block,
+                    inst,
+                    &mut new_arg,
+                    &mut self.stats,
+                );
                 trace!("   -> rewrote arg to {:?}", new_arg);
                 *arg = new_arg.value;
             }

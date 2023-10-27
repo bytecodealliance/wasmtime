@@ -63,6 +63,20 @@ pub(crate) fn define() -> SettingGroup {
         true,
     );
 
+    settings.add_bool(
+        "enable_pcc",
+        "Enable proof-carrying code translation validation.",
+        r#"
+            This adds a proof-carrying-code mode. Proof-carrying code (PCC) is a strategy to verify
+            that the compiler preserves certain properties or invariants in the compiled code.
+            For example, a frontend that translates WebAssembly to CLIF can embed PCC facts in
+            the CLIF, and Cranelift will verify that the final machine code satisfies the stated
+            facts at each intermediate computed value. Loads and stores can be marked as "checked"
+            and their memory effects can be verified as safe.
+        "#,
+        false,
+    );
+
     // Note that Cranelift doesn't currently need an is_pie flag, because PIE is
     // just PIC where symbols can't be pre-empted, which can be expressed with the
     // `colocated` flag on external functions and global values.

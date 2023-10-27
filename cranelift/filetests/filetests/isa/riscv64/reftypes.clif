@@ -86,46 +86,44 @@ block3(v7: r64, v8: r64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   sd s7,-8(sp)
-;   sd s11,-16(sp)
-;   add sp,-48
+;   sd s5,-8(sp)
+;   sd s9,-16(sp)
+;   addi sp,sp,-48
 ; block0:
+;   mv a3,a0
+;   mv s5,a2
 ;   sd a1,16(nominal_sp)
-;   mv s7,a2
-;   mv a1,a0
-;   mv a1,a0
-;   mv s11,a1
-;   load_sym a1,%f+0
-;   sd s11,8(nominal_sp)
-;   callind a1
-;   load_addr a2,0(nominal_sp)
-;   mv a1,s11
-;   sd a1,0(a2)
-;   andi a1,a0,255
-;   bne a1,zero,taken(label2),not_taken(label1)
+;   mv a3,a0
+;   mv s9,a3
+;   load_sym a5,%f+0
+;   sd s9,8(nominal_sp)
+;   callind a5
+;   mv a3,s9
+;   sd a3,0(nominal_sp)
+;   andi a5,a0,255
+;   bne a5,zero,taken(label2),not_taken(label1)
 ; block1:
-;   mv a1,s11
 ;   ld a0,16(nominal_sp)
+;   mv a1,s9
 ;   j label3
 ; block2:
-;   mv a0,s11
+;   mv a0,s9
 ;   ld a1,16(nominal_sp)
 ;   j label3
 ; block3:
-;   load_addr a4,0(nominal_sp)
-;   ld a4,0(a4)
-;   mv a2,s7
-;   sd a4,0(a2)
-;   add sp,+48
-;   ld s7,-8(sp)
-;   ld s11,-16(sp)
+;   ld a2,0(nominal_sp)
+;   mv a3,s5
+;   sd a2,0(a3)
+;   addi sp,sp,48
+;   ld s5,-8(sp)
+;   ld s9,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -134,42 +132,40 @@ block3(v7: r64, v8: r64):
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   sd s7, -8(sp)
-;   sd s11, -0x10(sp)
+;   sd s5, -8(sp)
+;   sd s9, -0x10(sp)
 ;   addi sp, sp, -0x30
 ; block1: ; offset 0x1c
+;   mv a3, a0
+;   mv s5, a2
 ;   sd a1, 0x10(sp)
-;   mv s7, a2
-;   mv a1, a0
-;   mv a0, a1
-;   mv s11, a1
-;   auipc a1, 0
-;   ld a1, 0xc(a1)
+;   mv a0, a3
+;   mv s9, a3
+;   auipc a5, 0
+;   ld a5, 0xc(a5)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   sd s11, 8(sp)
-;   jalr a1
-;   mv a2, sp
-;   mv a1, s11
-;   sd a1, 0(a2)
-;   andi a1, a0, 0xff
-;   bnez a1, 0x10
-; block2: ; offset 0x60
-;   mv a1, s11
+;   sd s9, 8(sp)
+;   jalr a5
+;   mv a3, s9
+;   sd a3, 0(sp)
+;   andi a5, a0, 0xff
+;   bnez a5, 0x10
+; block2: ; offset 0x5c
 ;   ld a0, 0x10(sp)
+;   mv a1, s9
 ;   j 0xc
-; block3: ; offset 0x6c
-;   mv a0, s11
+; block3: ; offset 0x68
+;   mv a0, s9
 ;   ld a1, 0x10(sp)
-; block4: ; offset 0x74
-;   mv a4, sp
-;   ld a4, 0(a4)
-;   mv a2, s7
-;   sd a4, 0(a2)
+; block4: ; offset 0x70
+;   ld a2, 0(sp)
+;   mv a3, s5
+;   sd a2, 0(a3)
 ;   addi sp, sp, 0x30
-;   ld s7, -8(sp)
-;   ld s11, -0x10(sp)
+;   ld s5, -8(sp)
+;   ld s9, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

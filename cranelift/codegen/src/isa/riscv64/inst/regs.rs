@@ -18,49 +18,52 @@ pub fn a0() -> Reg {
 
 // second argument of function call
 #[inline]
+#[allow(dead_code)]
 pub fn a1() -> Reg {
     x_reg(11)
 }
 
 // third argument of function call
 #[inline]
+#[allow(dead_code)]
 pub fn a2() -> Reg {
     x_reg(12)
 }
 
 #[inline]
+#[allow(dead_code)]
 pub fn writable_a0() -> Writable<Reg> {
     Writable::from_reg(a0())
 }
 #[inline]
+#[allow(dead_code)]
 pub fn writable_a1() -> Writable<Reg> {
     Writable::from_reg(a1())
 }
 #[inline]
+#[allow(dead_code)]
 pub fn writable_a2() -> Writable<Reg> {
     Writable::from_reg(a2())
 }
 
 #[inline]
+#[allow(dead_code)]
 pub fn fa0() -> Reg {
     f_reg(10)
 }
 #[inline]
+#[allow(dead_code)]
 pub fn writable_fa0() -> Writable<Reg> {
     Writable::from_reg(fa0())
 }
 #[inline]
+#[allow(dead_code)]
 pub fn writable_fa1() -> Writable<Reg> {
     Writable::from_reg(fa1())
 }
 #[inline]
 pub fn fa1() -> Reg {
     f_reg(11)
-}
-
-#[inline]
-pub fn fa7() -> Reg {
-    f_reg(17)
 }
 
 /// Get a reference to the zero-register.
@@ -167,12 +170,6 @@ pub(crate) fn x_reg_range(start: usize, end: usize) -> Vec<Writable<Reg>> {
     regs
 }
 
-#[inline]
-pub fn v_reg(enc: usize) -> Reg {
-    let p_reg = PReg::new(enc, RegClass::Vector);
-    let v_reg = VReg::new(p_reg.index(), p_reg.class());
-    Reg::from(v_reg)
-}
 pub const fn pv_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Vector)
 }

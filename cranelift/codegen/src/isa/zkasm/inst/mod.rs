@@ -664,6 +664,10 @@ impl MachInst for Inst {
             preferred: 4,
         }
     }
+
+    fn is_mem_access(&self) -> bool {
+        todo!("FILL ME OUT")
+    }
 }
 
 //=============================================================================

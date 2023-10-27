@@ -522,7 +522,7 @@ impl BenchState {
             store.set_epoch_deadline(1);
         }
         if let Some(fuel) = self.fuel {
-            store.add_fuel(fuel).unwrap();
+            store.set_fuel(fuel).unwrap();
         }
 
         let instance = self.linker.instantiate(&mut store, &module)?;

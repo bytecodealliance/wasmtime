@@ -13,14 +13,32 @@ directory][dir] of the repository.
 
 ## PRs and CI
 
-Currently the full CI test suite runs on every Pull Request. All PRs need to
-have that lovely green checkmark before being candidates for being merged. If a
-test is failing you'll want to check out the logs on CI and fix it before the PR
-can be merged.
+Currently on sample of the full CI test suite is run on every Pull Request. CI
+on PRs is intended to be relatively quick and catch the majority of mistakes and
+errors. By default the test suite is run on x86\_64 Linux but this may change
+depending on what files the PR is modifying. The intention is to run "mostly
+relevant" CI on a PR by default.
 
 PR authors are expected to fix CI failures in their PR, unless the CI failure is
 systemic and unrelated to the PR. In that case other maintainers should be
-alerted to ensure that the problem can be addressed.
+alerted to ensure that the problem can be addressed. Some reviewers may also
+wait to perform a review until CI is green on the PR as otherwise it may
+indicate changes are needed.
+
+The Wasmtime repository uses GitHub's Merge Queue feature to merge PRs which.
+Entry in to the merge queue requires green CI on the PR beforehand. Maintainers
+who have approved a PR will flag it for entry into the merge queue, and the PR
+will automatically enter the merge queue once CI is green.
+
+When entering the merge queue a PR will have the full test suite executed which
+may include tests that weren't previously run on the PR. This may surface new
+failures, and contributors are expected to fix these failures as well.
+
+To force PRs to execute the full test suite, which takes longer than the default
+test suite for PRs, then contributors can place the string "prtest:full"
+somewhere in any commit of the PR. From that point on the PR will automatically
+run the full test suite as-if it were in the merge queue. Note that when going
+through the merge queue this will rerun tests.
 
 ## Tests run on CI
 
@@ -64,22 +82,23 @@ documentation of Wasmtime and Cranelift. Currently this consists of:
   Linux build in a really old CentOS container to have a very low glibc
   requirement.
 
-* Tarballs of the Python extension - also produced on the main three platforms
-  these wheels are compiled on each commit.
+* Tarballs of the Wasmtime C API - produced for the same set of platforms as the
+  CLI above.
 
 * Book and API documentation - the book is rendered with `mdbook` and we also
   build all documentation with `cargo doc`.
 
-Artifacts are produced for every single commit and every single PR. You should
-be able to find a downloadable version of all artifacts produced on the "runs"
-page in GitHub Actions. For example [here's an example
-job](https://github.com/bytecodealliance/wasmtime/actions/runs/50372673), and if
-you're looking at [a specific
-builder](https://github.com/bytecodealliance/wasmtime/runs/488719677?check_suite_focus=true)
-you can see the artifacts link in the top right. Note that artifacts don't
-become available until the whole run finishes.
+* A source code tarball which is entirely self-contained. This source tarball
+  has all dependencies vendored so the network is not needed to build it.
 
-Commits merged into the `main` branch will rerun CI and will also produce
-artifacts as usual. On the `main` branch, however, documentation is pushed to
-the `gh-pages` branch as well, and binaries are pushed to the `dev` release on
-GitHub. Finally, tagged commits get a whole dedicated release to them too.
+* WebAssembly adapters for the component model to translate
+  `wasi_snapshot_preview1` to WASI Preview 2.
+
+Artifacts are produced as part of the full CI suite. This means that artifacts
+are not produced on a PR by default but can be requested via "prtest:full". All
+runs through the merge queue though, which means all merges to `main`, will
+produce a full suite of artifacts. The latest artifacts are available through
+Wasmtime's [`dev` release][dev] and downloads are also available for recent CI
+runs through the CI page in GitHub Actions.
+
+[dev]: https://github.com/bytecodealliance/wasmtime/releases/tag/dev

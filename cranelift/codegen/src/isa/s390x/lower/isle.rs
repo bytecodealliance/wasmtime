@@ -738,16 +738,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn vec_length_minus1(&mut self, vec: &VecMachLabel) -> u32 {
-        u32::try_from(vec.len()).unwrap() - 1
-    }
-
-    #[inline]
-    fn vec_element(&mut self, vec: &VecMachLabel, index: u8) -> MachLabel {
-        vec[usize::from(index)]
-    }
-
-    #[inline]
     fn zero_offset(&mut self) -> Offset32 {
         Offset32::new(0)
     }

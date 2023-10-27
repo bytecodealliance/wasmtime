@@ -1,10 +1,11 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::CodeGenContext;
+use crate::codegen::{CodeGenContext, TableData};
 use crate::isa::reg::Reg;
-use crate::regalloc::RegAlloc;
-use cranelift_codegen::{Final, MachBufferFinalized, MachLabel};
+use cranelift_codegen::{ir::LibCall, Final, MachBufferFinalized, MachLabel};
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
+
+pub(crate) use cranelift_codegen::ir::TrapCode;
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum DivKind {
@@ -31,11 +32,11 @@ pub struct StackSlot {
     pub size: u32,
 }
 
-/// Kinds of binary comparison in WebAssembly. The [`masm`] implementation for
-/// each ISA is responsible for emitting the correct sequence of instructions
-/// when lowering to machine code.
+/// Kinds of integer binary comparison in WebAssembly. The [`MacroAssembler`]
+/// implementation for each ISA is responsible for emitting the correct
+/// sequence of instructions when lowering to machine code.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum CmpKind {
+pub(crate) enum IntCmpKind {
     /// Equal.
     Eq,
     /// Not equal.
@@ -56,6 +57,25 @@ pub(crate) enum CmpKind {
     GeS,
     /// Unsigned greater than or equal.
     GeU,
+}
+
+/// Kinds of float binary comparison in WebAssembly. The [`MacroAssembler`]
+/// implementation for each ISA is responsible for emitting the correct
+/// sequence of instructions when lowering code.
+#[derive(Debug)]
+pub(crate) enum FloatCmpKind {
+    /// Equal.
+    Eq,
+    /// Not equal.
+    Ne,
+    /// Less than.
+    Lt,
+    /// Greater than.
+    Gt,
+    /// Less than or equal.
+    Le,
+    /// Greater than or equal.
+    Ge,
 }
 
 /// Kinds of shifts in WebAssembly.The [`masm`] implementation for each ISA is
@@ -110,6 +130,17 @@ impl OperandSize {
             OperandSize::S32 => 5,
             OperandSize::S64 => 6,
             OperandSize::S128 => 7,
+        }
+    }
+
+    /// Create an [`OperandSize`]  from the given number of bytes.
+    pub fn from_bytes(bytes: u8) -> Self {
+        use OperandSize::*;
+        match bytes {
+            4 => S32,
+            8 => S64,
+            16 => S128,
+            _ => panic!("Invalid bytes {} for OperandSize", bytes),
         }
     }
 }
@@ -171,12 +202,31 @@ impl Imm {
     }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum CalleeKind {
     /// A function call to a raw address.
     Indirect(Reg),
     /// A function call to a local function.
     Direct(u32),
+    /// Call to a well known LibCall.
+    Known(LibCall),
+}
+
+impl CalleeKind {
+    /// Creates a callee kind from a register.
+    pub fn indirect(reg: Reg) -> Self {
+        Self::Indirect(reg)
+    }
+
+    /// Creates a direct callee kind from a function index.
+    pub fn direct(index: u32) -> Self {
+        Self::Direct(index)
+    }
+
+    /// Creates a known callee kind from a libcall.
+    pub fn known(call: LibCall) -> Self {
+        Self::Known(call)
+    }
 }
 
 impl RegImm {
@@ -207,15 +257,6 @@ impl RegImm {
     #[allow(dead_code)]
     pub fn f64(bits: u64) -> Self {
         RegImm::Imm(Imm::f64(bits))
-    }
-
-    /// Get the underlying register of the operand,
-    /// if it is one.
-    pub fn get_reg(&self) -> Option<Reg> {
-        match self {
-            Self::Reg(r) => Some(*r),
-            _ => None,
-        }
     }
 }
 
@@ -281,6 +322,19 @@ pub(crate) trait MacroAssembler {
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
 
+    /// Loads the address of the table element at a given index. Returns the
+    /// address of the table element using the provided register as base.
+    fn table_elem_address(
+        &mut self,
+        index: Reg,
+        base: Reg,
+        table_data: &TableData,
+        context: &mut CodeGenContext,
+    ) -> Self::Address;
+
+    /// Retrieves the size of the table, pushing the result to the value stack.
+    fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext);
+
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
     /// offset)].
@@ -289,6 +343,11 @@ pub(crate) trait MacroAssembler {
     /// Constructs an address with an offset that is absolute to the
     /// current position of the stack pointer (e.g. [sp + offset].
     fn address_at_sp(&self, offset: u32) -> Self::Address;
+
+    /// Alias for [`Self::address_at_reg`] using the VMContext register as
+    /// a base. The VMContext register is derived from the ABI type that is
+    /// associated to the MacroAssembler.
+    fn address_at_vmctx(&self, offset: u32) -> Self::Address;
 
     /// Construct an address that is absolute to the current position
     /// of the given register.
@@ -306,6 +365,14 @@ pub(crate) trait MacroAssembler {
     /// Perform a stack load.
     fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
 
+    /// Alias for `MacroAssembler::load` with the operand size corresponding
+    /// to the pointer size of the target.
+    fn load_ptr(&mut self, src: Self::Address, dst: Reg);
+
+    /// Alias for `MacroAssembler::store` with the operand size corresponding
+    /// to the pointer size of the target.
+    fn store_ptr(&mut self, src: Reg, dst: Self::Address);
+
     /// Pop a value from the machine stack into the given register.
     fn pop(&mut self, dst: Reg, size: OperandSize);
 
@@ -313,7 +380,7 @@ pub(crate) trait MacroAssembler {
     fn mov(&mut self, src: RegImm, dst: Reg, size: OperandSize);
 
     /// Perform a conditional move.
-    fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize);
+    fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize);
 
     /// Perform add operation.
     fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
@@ -324,6 +391,30 @@ pub(crate) trait MacroAssembler {
     /// Perform multiplication operation.
     fn mul(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
 
+    /// Perform a floating point add operation.
+    fn float_add(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point subtraction operation.
+    fn float_sub(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point multiply operation.
+    fn float_mul(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point divide operation.
+    fn float_div(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point minimum operation. In x86, this will emit
+    /// multiple instructions.
+    fn float_min(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point maximum operation. In x86, this will emit
+    /// multiple instructions.
+    fn float_max(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
+    /// Perform a floating point copysign operation. In x86, this will emit
+    /// multiple instructions.
+    fn float_copysign(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize);
+
     /// Perform a floating point abs operation.
     fn float_abs(&mut self, dst: Reg, size: OperandSize);
 
@@ -331,7 +422,10 @@ pub(crate) trait MacroAssembler {
     fn float_neg(&mut self, dst: Reg, size: OperandSize);
 
     /// Perform a floating point floor operation.
-    fn float_round(&mut self, mode: RoundingMode, dst: Reg, src: RegImm, size: OperandSize);
+    fn float_round(&mut self, mode: RoundingMode, context: &mut CodeGenContext, size: OperandSize);
+
+    /// Perform a floating point square root operation.
+    fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize);
 
     /// Perform logical and operation.
     fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
@@ -371,7 +465,18 @@ pub(crate) trait MacroAssembler {
 
     /// Compare src and dst and put the result in dst.
     /// This function will potentially emit a series of instructions.
-    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: CmpKind, size: OperandSize);
+    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize);
+
+    /// Compare floats in src1 and src2 and put the result in dst.
+    /// In x86, this will emit multiple instructions.
+    fn float_cmp_with_set(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: Reg,
+        kind: FloatCmpKind,
+        size: OperandSize,
+    );
 
     /// Count the number of leading zeroes in src and put the result in dst.
     /// In x64, this will emit multiple instructions if the `has_lzcnt` flag is
@@ -406,7 +511,7 @@ pub(crate) trait MacroAssembler {
     /// The default implementation divides the given memory range
     /// into word-sized slots. Then it unrolls a series of store
     /// instructions, effectively assigning zero to each slot.
-    fn zero_mem_range(&mut self, mem: &Range<u32>, regalloc: &mut RegAlloc) {
+    fn zero_mem_range(&mut self, mem: &Range<u32>) {
         let word_size = <Self::ABI as abi::ABI>::word_bytes();
         if mem.is_empty() {
             return;
@@ -437,7 +542,7 @@ pub(crate) trait MacroAssembler {
             // Add an upper bound to this generation;
             // given a considerably large amount of slots
             // this will be inefficient.
-            let zero = regalloc.scratch;
+            let zero = <Self::ABI as abi::ABI>::scratch_reg();
             self.zero(zero);
             let zero = RegImm::reg(zero);
 
@@ -462,9 +567,9 @@ pub(crate) trait MacroAssembler {
     /// label destination if the condition is met.
     fn branch(
         &mut self,
-        kind: CmpKind,
+        kind: IntCmpKind,
         lhs: RegImm,
-        rhs: RegImm,
+        rhs: Reg,
         taken: MachLabel,
         size: OperandSize,
     );
@@ -478,4 +583,10 @@ pub(crate) trait MacroAssembler {
 
     /// Emit an unreachable code trap.
     fn unreachable(&mut self);
+
+    /// Traps if the condition code is met.
+    fn trapif(&mut self, cc: IntCmpKind, code: TrapCode);
+
+    /// Trap if the source register is zero.
+    fn trapz(&mut self, src: Reg, code: TrapCode);
 }

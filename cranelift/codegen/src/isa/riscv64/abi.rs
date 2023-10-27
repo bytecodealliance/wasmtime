@@ -318,12 +318,29 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
+
         if amount == 0 {
             return insts;
         }
-        insts.push(Inst::AdjustSp {
-            amount: amount as i64,
-        });
+
+        if let Some(imm) = Imm12::maybe_from_i64(amount as i64) {
+            insts.push(Inst::AluRRImm12 {
+                alu_op: AluOPRRI::Addi,
+                rd: writable_stack_reg(),
+                rs: stack_reg(),
+                imm12: imm,
+            })
+        } else {
+            let tmp = writable_spilltmp_reg();
+            insts.extend(Inst::load_constant_u64(tmp, amount as i64 as u64));
+            insts.push(Inst::AluRRR {
+                alu_op: AluOPRRR::Add,
+                rd: writable_stack_reg(),
+                rs1: tmp.to_reg(),
+                rs2: stack_reg(),
+            });
+        }
+
         insts
     }
 
@@ -346,7 +363,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             // sd   ra,8(sp)     ;; save ra.
             // sd   fp,0(sp)     ;; store old fp.
             // mv   fp,sp        ;; set fp to sp.
-            insts.push(Inst::AdjustSp { amount: -16 });
+            insts.extend(Self::gen_sp_reg_adjust(-16));
             insts.push(Self::gen_store_stack(
                 StackAMode::SPOffset(8, I64),
                 link_reg(),
@@ -394,7 +411,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 writable_fp_reg(),
                 I64,
             ));
-            insts.push(Inst::AdjustSp { amount: 16 });
+            insts.extend(Self::gen_sp_reg_adjust(16));
         }
 
         if call_conv == isa::CallConv::Tail && frame_layout.stack_args_size > 0 {
@@ -472,9 +489,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 ));
                 cur_offset += 8
             }
-            insts.push(Inst::AdjustSp {
-                amount: -(stack_size as i64),
-            });
+
+            insts.extend(Self::gen_sp_reg_adjust(-(stack_size as i32)));
         }
         insts
     }
@@ -487,9 +503,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut insts = SmallVec::new();
         let stack_size = frame_layout.fixed_frame_storage_size + frame_layout.clobber_size;
         if stack_size > 0 {
-            insts.push(Inst::AdjustSp {
-                amount: stack_size as i64,
-            });
+            insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
         }
         let mut cur_offset = 8;
         for reg in &frame_layout.clobbered_callee_saves {

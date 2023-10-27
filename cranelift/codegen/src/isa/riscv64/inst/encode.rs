@@ -9,8 +9,9 @@
 use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CiOp, CiwOp, CjOp, CrOp, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR,
-    VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth, VecOpCategory, VecOpMasking,
+    COpcodeSpace, CaOp, CbOp, CiOp, CiwOp, CjOp, ClOp, CrOp, CsOp, CssOp, CsznOp, VecAluOpRImm5,
+    VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR, VecElementWidth,
+    VecOpCategory, VecOpMasking, ZcbMemOp,
 };
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -407,6 +408,41 @@ pub fn encode_ci_type(op: CiOp, rd: WritableReg, imm: Imm6) -> u16 {
     bits.try_into().unwrap()
 }
 
+// Stack-Pointer relative loads are regular CI instructions, but, the immediate
+// is zero extended, and with a slightly different immediate field encoding.
+pub fn encode_ci_sp_load(op: CiOp, rd: WritableReg, imm: Uimm6) -> u16 {
+    let imm = imm.bits();
+
+    // These are the spec encoded offsets.
+    // LWSP:  [5|4:2|7:6]
+    // LDSP:  [5|4:3|8:6]
+    // FLDSP: [5|4:3|8:6]
+    //
+    // We don't recieve the entire offset in `imm`, just a multiple of the load-size.
+
+    // Number of bits in the lowest position of imm. 3 for lwsp, 2 for {f,}ldsp.
+    let low_bits = match op {
+        CiOp::CLwsp => 3,                // [4:2]
+        CiOp::CLdsp | CiOp::CFldsp => 2, // [4:3]
+        _ => unreachable!(),
+    };
+    let high_bits = 6 - 1 - low_bits;
+    let mut enc_imm = 0;
+
+    // Encode [7:6] at the bottom of imm
+    enc_imm |= imm >> (6 - high_bits);
+
+    // Next place [4:2] in the middle
+    enc_imm |= (imm & ((1 << low_bits) - 1)) << high_bits;
+
+    // Finally place [5] at the top
+    enc_imm |= ((imm >> low_bits) & 1) << 5;
+
+    let enc_imm = Imm6::maybe_from_i16((enc_imm as i16) << 10 >> 10).unwrap();
+
+    encode_ci_type(op, rd, enc_imm)
+}
+
 /// c.addi16sp is a regular CI op, but the immediate field is encoded in a weird way
 pub fn encode_c_addi16sp(imm: Imm6) -> u16 {
     let imm = imm.bits();
@@ -432,7 +468,7 @@ pub fn encode_ciw_type(op: CiwOp, rd: WritableReg, imm: u8) -> u16 {
     let mut imm_field = 0;
     imm_field |= ((imm >> 1) & 1) << 0;
     imm_field |= ((imm >> 0) & 1) << 1;
-    imm_field |= ((imm >> 4) & 7) << 2;
+    imm_field |= ((imm >> 4) & 15) << 2;
     imm_field |= ((imm >> 2) & 3) << 6;
 
     let mut bits = 0;
@@ -441,4 +477,181 @@ pub fn encode_ciw_type(op: CiwOp, rd: WritableReg, imm: u8) -> u16 {
     bits |= unsigned_field_width(imm_field as u32, 8) << 5;
     bits |= unsigned_field_width(op.funct3(), 3) << 13;
     bits.try_into().unwrap()
+}
+
+// Encode a CB type instruction.
+//
+// The imm field is a 6 bit signed immediate.
+//
+// 0--1-2-------6-7-------9-10-------11-12-------13--------15
+// |op | imm[4:0] |   dst  |  funct2   |  imm[5]  | funct3 |
+pub fn encode_cb_type(op: CbOp, rd: WritableReg, imm: Imm6) -> u16 {
+    let imm = imm.bits();
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= unsigned_field_width((imm & 0x1f) as u32, 5) << 2;
+    bits |= reg_to_compressed_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(op.funct2(), 2) << 10;
+    bits |= unsigned_field_width(((imm >> 5) & 1) as u32, 1) << 12;
+    bits |= unsigned_field_width(op.funct3(), 3) << 13;
+    bits.try_into().unwrap()
+}
+
+// Encode a CSS type instruction.
+//
+// The imm field is a 6 bit unsigned immediate.
+//
+// 0--1-2-------6-7--------12-13-------15
+// |op |   src   |    imm    |  funct3  |
+pub fn encode_css_type(op: CssOp, src: Reg, imm: Uimm6) -> u16 {
+    let imm = imm.bits();
+
+    // These are the spec encoded offsets.
+    // c.swsp:  [5:2|7:6]
+    // c.sdsp:  [5:3|8:6]
+    // c.fsdsp: [5:3|8:6]
+    //
+    // We don't recieve the entire offset in `imm`, just a multiple of the load-size.
+
+    // Number of bits in the lowest position of imm. 4 for c.swsp, 3 for c.{f,}sdsp.
+    let low_bits = match op {
+        CssOp::CSwsp => 4,                 // [5:2]
+        CssOp::CSdsp | CssOp::CFsdsp => 3, // [5:3]
+    };
+    let high_bits = 6 - low_bits;
+
+    let mut enc_imm = 0;
+    enc_imm |= (imm & ((1 << low_bits) - 1)) << high_bits;
+    enc_imm |= imm >> low_bits;
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= reg_to_gpr_num(src) << 2;
+    bits |= unsigned_field_width(enc_imm as u32, 6) << 7;
+    bits |= unsigned_field_width(op.funct3(), 3) << 13;
+    bits.try_into().unwrap()
+}
+
+// Encode a CS type instruction.
+//
+// The imm field is a 5 bit unsigned immediate.
+//
+// 0--1-2-----4-5----------6-7---------9-10----------12-13-----15
+// |op |  src  | imm(2-bit) |   base    |  imm(3-bit)  | funct3  |
+pub fn encode_cs_type(op: CsOp, src: Reg, base: Reg, imm: Uimm5) -> u16 {
+    let size = match op {
+        CsOp::CFsd | CsOp::CSd => 8,
+        CsOp::CSw => 4,
+    };
+
+    encode_cs_cl_type_bits(op.op(), op.funct3(), size, src, base, imm)
+}
+
+// Encode a CL type instruction.
+//
+// The imm field is a 5 bit unsigned immediate.
+//
+// 0--1-2------4-5----------6-7---------9-10----------12-13-----15
+// |op |  dest  | imm(2-bit) |   base    |  imm(3-bit)  | funct3  |
+pub fn encode_cl_type(op: ClOp, dest: WritableReg, base: Reg, imm: Uimm5) -> u16 {
+    let size = match op {
+        ClOp::CFld | ClOp::CLd => 8,
+        ClOp::CLw => 4,
+    };
+
+    encode_cs_cl_type_bits(op.op(), op.funct3(), size, dest.to_reg(), base, imm)
+}
+
+// CL and CS type instructions have the same physical layout.
+//
+// 0--1-2----------4-5----------6-7---------9-10----------12-13-----15
+// |op |  dest/src  | imm(2-bit) |   base    |  imm(3-bit)  | funct3  |
+fn encode_cs_cl_type_bits(
+    op: COpcodeSpace,
+    funct3: u32,
+    size: u32,
+    dest_src: Reg,
+    base: Reg,
+    imm: Uimm5,
+) -> u16 {
+    let imm = imm.bits();
+
+    // c.sw  / c.lw:  [2|6]
+    // c.sd  / c.ld:  [7:6]
+    // c.fsd / c.fld: [7:6]
+    //
+    // We differentiate these based on the operation size
+    let imm2 = match size {
+        4 => ((imm >> 4) & 1) | ((imm & 1) << 1),
+        8 => (imm >> 3) & 0b11,
+        _ => unreachable!(),
+    };
+
+    // [5:3] on all opcodes
+    let imm3 = match size {
+        4 => (imm >> 1) & 0b111,
+        8 => (imm >> 0) & 0b111,
+        _ => unreachable!(),
+    };
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.bits(), 2);
+    bits |= reg_to_compressed_gpr_num(dest_src) << 2;
+    bits |= unsigned_field_width(imm2 as u32, 2) << 5;
+    bits |= reg_to_compressed_gpr_num(base) << 7;
+    bits |= unsigned_field_width(imm3 as u32, 3) << 10;
+    bits |= unsigned_field_width(funct3, 3) << 13;
+    bits.try_into().unwrap()
+}
+
+// Encode a CSZN type instruction.
+//
+// This is an additional encoding format that is introduced in the Zcb extension.
+//
+// 0--1-2---------6-7--------9-10------15
+// |op |   funct5  |  rd/rs1  | funct6 |
+pub fn encode_cszn_type(op: CsznOp, rd: WritableReg) -> u16 {
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= unsigned_field_width(op.funct5(), 5) << 2;
+    bits |= reg_to_compressed_gpr_num(rd.to_reg()) << 7;
+    bits |= unsigned_field_width(op.funct6(), 6) << 10;
+    bits.try_into().unwrap()
+}
+
+// Encodes the various memory operations in the Zcb extension.
+//
+// 0--1-2----------4-5----------6-7---------9-10-------15
+// |op |  dest/src  | imm(2-bit) |   base    |  funct6  |
+fn encode_zcbmem_bits(op: ZcbMemOp, dest_src: Reg, base: Reg, imm: Uimm2) -> u16 {
+    let imm = imm.bits();
+
+    // For these ops, bit 6 is part of the opcode, and bit 5 encodes the imm offset.
+    let imm = match op {
+        ZcbMemOp::CLh | ZcbMemOp::CLhu | ZcbMemOp::CSh => {
+            debug_assert_eq!(imm & !1, 0);
+            // Only c.lh has this bit as 1
+            let opcode_bit = (op == ZcbMemOp::CLh) as u8;
+            imm | (opcode_bit << 1)
+        }
+        // In the rest of the ops the imm is reversed.
+        _ => ((imm & 1) << 1) | ((imm >> 1) & 1),
+    };
+
+    let mut bits = 0;
+    bits |= unsigned_field_width(op.op().bits(), 2);
+    bits |= reg_to_compressed_gpr_num(dest_src) << 2;
+    bits |= unsigned_field_width(imm as u32, 2) << 5;
+    bits |= reg_to_compressed_gpr_num(base) << 7;
+    bits |= unsigned_field_width(op.funct6(), 6) << 10;
+    bits.try_into().unwrap()
+}
+
+pub fn encode_zcbmem_load(op: ZcbMemOp, rd: WritableReg, base: Reg, imm: Uimm2) -> u16 {
+    encode_zcbmem_bits(op, rd.to_reg(), base, imm)
+}
+
+pub fn encode_zcbmem_store(op: ZcbMemOp, src: Reg, base: Reg, imm: Uimm2) -> u16 {
+    encode_zcbmem_bits(op, src, base, imm)
 }

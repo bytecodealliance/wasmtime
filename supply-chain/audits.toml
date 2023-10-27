@@ -497,6 +497,14 @@ start = "2023-01-20"
 end = "2024-06-26"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasmtime-wmemcheck]]
+who = "Pat Hickey <pat@moreproductive.org>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-11-27"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[wildcard-audits.wast]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1154,6 +1162,15 @@ this crate has to do with iterators and `Result` and such. No `unsafe` or
 anything like that, all looks good.
 """
 
+[[audits.fastrand]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.0.0 -> 2.0.1"
+notes = """
+This update had a few doc updates but no otherwise-substantial source code
+updates.
+"""
+
 [[audits.fd-lock]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1441,14 +1458,34 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[audits.ittapi]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
+version = "0.3.4"
+
+[[audits.ittapi]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
 delta = "0.3.1 -> 0.3.3"
 notes = "I am the author of this crate."
+
+[[audits.ittapi]]
+who = "rahulchaphalkar <rahul.s.chaphalkar@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.4 -> 0.4.0"
+
+[[audits.ittapi-sys]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+version = "0.3.4"
 
 [[audits.ittapi-sys]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.3.1 -> 0.3.3"
 notes = "Unsafe code is due to auto-generated bindings to a widely-deployed C library."
+
+[[audits.ittapi-sys]]
+who = "rahulchaphalkar <rahul.s.chaphalkar@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.4 -> 0.4.0"
 
 [[audits.leb128]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -1551,6 +1588,12 @@ criteria = "safe-to-deploy"
 delta = "0.6.2 -> 0.6.3"
 notes = "Just a dependency version bump and documentation update"
 
+[[audits.memfd]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.3 -> 0.6.4"
+notes = "This commit only updated the dependency `rustix`, so same as before."
+
 [[audits.memoffset]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1607,6 +1650,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.2.11"
 notes = "build is only looking for environment variables to set cfg. only two minor uses of unsafe,on macos, with ffi bindings to digest primitives and libc atexit. otherwise, this is an abstraction over three very complex systems (schannel, security-framework, and openssl) which may end up having subtle differences, but none of those are apparent from the implementation of this crate"
+
+[[audits.nu-ansi-term]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.46.0"
+notes = "one use of unsafe to call windows specific api to get console handle."
 
 [[audits.object]]
 who = "Chris Fallin <chris@cfallin.org>"
@@ -1688,6 +1737,12 @@ Only updates to tests to use new rust functions for mut pointers.
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.4.2 -> 0.5.0"
+
+[[audits.overload]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.1.1"
+notes = "small crate, only defines macro-rules!, nicely documented as well"
 
 [[audits.peeking_take_while]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -1886,6 +1941,17 @@ criteria = "safe-to-deploy"
 delta = "0.9.9 -> 0.10.2"
 notes = "This upgrade is mostly a code refactor, as far as I can tell. No new uses of unsafe nor any new ambient capabilities usage."
 
+[[audits.sharded-slab]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.1.4"
+notes = "I always really enjoy reading eliza's code, she left perfect comments at every use of unsafe."
+
+[[audits.signal-hook-registry]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "1.4.1"
+
 [[audits.slab]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1994,6 +2060,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.2.11"
 
+[[audits.thread_local]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "1.1.4"
+notes = "uses unsafe to implement thread local storage of objects"
+
 [[audits.tinyvec]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -2072,6 +2144,20 @@ notes = """
 This is a relatively minor set of releases with minor refactorings and bug
 fixes. Nothing fundamental was added in these changes.
 """
+
+[[audits.tracing-log]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.3"
+notes = """
+This is a standard adapter between the `log` ecosystem and the `tracing`
+ecosystem. There's one `unsafe` block in this crate and it's well-scoped.
+"""
+
+[[audits.tracing-subscriber]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.3.17"
 
 [[audits.tracing-subscriber]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3254,6 +3340,12 @@ user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
 end = "2024-07-14"
 
+[[trusted.wasmtime-wmemcheck]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-09-20"
+end = "2024-09-27"
+
 [[trusted.winapi-util]]
 criteria = "safe-to-deploy"
 user-id = 189 # Andrew Gallant (BurntSushi)
@@ -3319,3 +3411,9 @@ criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-08-20"
 end = "2024-07-14"
+
+[[trusted.wit-parser]]
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2023-10-12"
+end = "2024-10-17"

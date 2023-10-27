@@ -969,7 +969,7 @@
     ;; for rationale).
     (JTSequence
       (ridx Reg)
-      (targets VecMachLabel))
+      (targets BoxVecMachLabel))
 
     ;; Load an inline symbol reference with relocation.
     (LoadSymbolReloc
@@ -1539,11 +1539,6 @@
 (decl pure partial i64_nonequal (i64 i64) i64)
 (extern constructor i64_nonequal i64_nonequal)
 
-(decl pure partial i64_nonzero (i64) i64)
-(rule (i64_nonzero x)
-      (if (i64_nonequal x 0))
-      x)
-
 (decl pure partial i64_not_neg1 (i64) i64)
 (rule (i64_not_neg1 x)
       (if (i64_nonequal x -1))
@@ -1736,15 +1731,6 @@
 
 (decl unsigned () IntCC)
 (extern extractor unsigned unsigned)
-
-
-;; Helpers for machine label vectors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl vec_length_minus1 (VecMachLabel) u32)
-(extern constructor vec_length_minus1 vec_length_minus1)
-
-(decl vec_element (VecMachLabel u8) MachLabel)
-(extern constructor vec_element vec_element)
 
 
 ;; Helpers for memory arguments ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2717,7 +2703,7 @@
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.OneWayCondBr dest cond)))
 
 ;; Helper for emitting `MInst.JTSequence` instructions.
-(decl jt_sequence (Reg VecMachLabel) SideEffectNoResult)
+(decl jt_sequence (Reg BoxVecMachLabel) SideEffectNoResult)
 (rule (jt_sequence ridx targets)
       (SideEffectNoResult.Inst (MInst.JTSequence ridx targets)))
 

@@ -1,12 +1,210 @@
 --------------------------------------------------------------------------------
 
-## 14.0.0
+## 15.0.0
 
 Unreleased.
 
 ### Added
 
 ### Changed
+
+--------------------------------------------------------------------------------
+
+## 14.0.2
+
+Released 2023-10-26
+
+### Fixed
+
+* Make the `wasmtime::unix` module accessible on macOS again.
+  [#7360](https://github.com/bytecodealliance/wasmtime/pull/7360)
+
+* Inter-crate dependencies between `cranelift-*` crates now disable the
+  `default` feature meaning that it's possible for embedders to depend on
+  `cranelift-codegen` as well without the `default` feature.
+  [#7369](https://github.com/bytecodealliance/wasmtime/pull/7369)
+
+--------------------------------------------------------------------------------
+
+## 14.0.1
+
+Released 2023-10-23
+
+### Fixed
+
+* Cranelift: preserve uext and sext flags for parameters on x86\_64 and apple
+  aarch64. Note that this does not affect Wasmtime and is only intended for
+  Cranelift embedders such as `rustc_codegen_cranelift`.
+  [#7333](https://github.com/bytecodealliance/wasmtime/pull/7333)
+
+--------------------------------------------------------------------------------
+
+## 14.0.0
+
+Released 2023-10-20
+
+One of the larger changes in this release is a redesign of Wasmtime's CLI
+arguments and where arguments are passed. This means that previous invocations
+of the `wasmtime` CLI executable will need to be updated. No functionality was
+removed but most of it is behind new flags. One major change is that Wasmtime
+CLI flags are now grouped behind short options like `-O`. For example
+
+    wasmtime run --opt-level 2 foo.wasm
+
+is now:
+
+    wasmtime run -O opt-level=2 foo.wasm
+
+Additionally options prefixed with `--enable-*` or `--disable-*` now
+consistently are considered boolean setters. For example:
+
+    wasmtime run --disable-cache foo.wasm
+
+is now:
+
+    wasmtime run -C cache=n foo.wasm
+
+Options can be explored with `wasmtime -C help` for example, and `wasmtime -h`
+will show all option groups that can be expanded.
+
+Another major change in the CLI is that any CLI argument which positionally
+comes after the wasm file specified will be passed as an argument to the guest
+module. For example this invocations
+
+    wasmtime run foo.wasm --epoch-interruption
+
+was previously accepted as enabling epoch interruption for the `foo.wasm` file.
+This is now interpreted as if it were `./foo.wasm --epoch-interruption`,
+however, passing the flag to the wasm file itself. Flags to Wasmtime must now
+come after Wasmtime's subcommand (in this case `run`) and before the wasm file
+that's being run, for example:
+
+    wasmtime run -W epoch-interruption foo.wasm
+
+More information about this change can be found on
+[#6925](https://github.com/bytecodealliance/wasmtime/pull/6925) and
+[#6946](https://github.com/bytecodealliance/wasmtime/pull/6946).
+
+### Added
+
+* Added the `wasmtime::FrameInfo::module` method, which returns the
+  `wasmtime::Module` associated with the stack frame.
+
+* The `wasmtime::component::Linker` type now implements `Clone`.
+  [#7032](https://github.com/bytecodealliance/wasmtime/pull/7032)
+
+* Wasmtime's `TypedFunc` API now supports the `v128` WebAssembly type on x86\_64
+  and aarch64.
+  [#7010](https://github.com/bytecodealliance/wasmtime/pull/7010)
+
+* Support for resources exported from a WebAssembly guest has been added to the
+  component `bindgen!` macro.
+  [#7050](https://github.com/bytecodealliance/wasmtime/pull/7050)
+
+* The C API now supports learning about a module's `image_range`.
+  [#7064](https://github.com/bytecodealliance/wasmtime/pull/7064)
+
+* Passing values between components is now possible with a more complete
+  implementation of type-checking of values.
+  [#7065](https://github.com/bytecodealliance/wasmtime/pull/7065)
+
+* Types representing resources can now be customized with `bindgen!`.
+  [#7069](https://github.com/bytecodealliance/wasmtime/pull/7069)
+
+* Wasm-defined globals and memories are now included in core dumps, and the
+  `wasmtime::WasmCoreDump` type is now serializable.
+  [#6935](https://github.com/bytecodealliance/wasmtime/pull/6935)
+  [#7078](https://github.com/bytecodealliance/wasmtime/pull/7078)
+
+* Initial experimental support for Intel MPK has been added to support running
+  more instances concurrently.
+  [#7072](https://github.com/bytecodealliance/wasmtime/pull/7072)
+
+* The implementation of `wasi:http` now supports inbound requests in addition to
+  outbound requests. A new `wasmtime serve` command is an example way of
+  handling http requests with wasm files.
+  [#7091](https://github.com/bytecodealliance/wasmtime/pull/7091)
+
+* The C API now supports Wasmtime's "host memory creation" API to customize the
+  allocation of linear memories.
+  [#7115](https://github.com/bytecodealliance/wasmtime/pull/7115)
+
+* The C API now supports asynchronous invocation of WebAssembly programs.
+  [#7106](https://github.com/bytecodealliance/wasmtime/pull/7106)
+
+* The C API now supports Wasmtime's `InstancePre<T>` type.
+  [#7140](https://github.com/bytecodealliance/wasmtime/pull/7140)
+
+* The `wasi:sockets/ip-name-lookup` interface is now implemented by Wasmtime.
+  [#7109](https://github.com/bytecodealliance/wasmtime/pull/7109)
+
+### Changed
+
+* Wasmtime's CLI has been significantly overhauled. See the note above.
+  [#6925](https://github.com/bytecodealliance/wasmtime/pull/6925)
+  [#6946](https://github.com/bytecodealliance/wasmtime/pull/6946)
+
+* The `wasmtime::FrameInfo::module_name` has been removed, however you can now
+  get identical results by chaining `wasmtime::FrameInfo::module` and
+  `wasmtime::Module::name`: `my_frame.module().name()`.
+
+* WASI interfaces have seen significant work since the previous release. Streams
+  for example have a new backpressure and flushing design. Additionally WIT
+  `resource`s are now used ubiquitously throughout the specification and
+  implementation.
+  [#6877](https://github.com/bytecodealliance/wasmtime/pull/6877)
+  [#7029](https://github.com/bytecodealliance/wasmtime/pull/7029)
+  [#7090](https://github.com/bytecodealliance/wasmtime/pull/7090)
+
+* The implementation of `wasi:http` now uses `{input,output}-stream` from the
+  `wasi:io/streams` interface.
+  [#7056](https://github.com/bytecodealliance/wasmtime/pull/7056)
+
+* Lifting and lowering of the `list<u8>` component values has been significantly
+  optimized.
+  [#6971](https://github.com/bytecodealliance/wasmtime/pull/6971)
+
+* The `wasmtime-c-api` crate is now additionally built as an rlib as well as the
+  previous cdylib/staticlib combo.
+  [#6765](https://github.com/bytecodealliance/wasmtime/pull/6765)
+
+### Fixed
+
+* Support referencing stack slots in the DWARF debug info.
+  [#6960](https://github.com/bytecodealliance/wasmtime/pull/6960)
+
+* Printing unicode to stdio on Windows has been fixed.
+  [#6825](https://github.com/bytecodealliance/wasmtime/pull/6825)
+
+* Building for x86\_64-linux-android has been fixed.
+  [#7055](https://github.com/bytecodealliance/wasmtime/pull/7055)
+
+* Fixed stdout/stderr becoming nonblocking by accident with WASI preview2 on
+  macOS.
+  [#7058](https://github.com/bytecodealliance/wasmtime/pull/7058)
+
+* Fixed some character boundary-related panics in the preview2 implementation of
+  preview1.
+  [#7011](https://github.com/bytecodealliance/wasmtime/pull/7011)
+
+* Fixed an issue of guests sleeping for an incorrect amount of time with
+  preview2.
+  [#6993](https://github.com/bytecodealliance/wasmtime/pull/6993)
+
+* Cranelift will now return an error when running out of temporaries in a very
+  large function instead of panicking.
+  [#7114](https://github.com/bytecodealliance/wasmtime/pull/7114)
+
+--------------------------------------------------------------------------------
+
+## 13.0.1
+
+Released 2023-10-26
+
+### Fixed
+
+* Make the `wasmtime::unix` module accessible on macOS again.
+  [#7360](https://github.com/bytecodealliance/wasmtime/pull/7360)
 
 --------------------------------------------------------------------------------
 

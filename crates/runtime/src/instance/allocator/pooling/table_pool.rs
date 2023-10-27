@@ -3,9 +3,10 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2, TableAllocationIndex,
 };
-use crate::{InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, Table};
+use crate::{InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table};
 use anyhow::{anyhow, bail, Context, Result};
 use std::mem;
+use std::ptr::NonNull;
 use wasmtime_environ::{Module, TablePlan};
 
 /// Represents a pool of WebAssembly tables.
@@ -133,11 +134,14 @@ impl TablePool {
                 self.table_elements * mem::size_of::<*mut u8>(),
             )?;
 
-            Table::new_static(
-                table_plan,
-                unsafe { std::slice::from_raw_parts_mut(base.cast(), self.table_elements) },
-                unsafe { &mut *request.store.get().unwrap() },
-            )
+            let ptr = NonNull::new(std::ptr::slice_from_raw_parts_mut(
+                base.cast(),
+                self.table_elements,
+            ))
+            .unwrap();
+            Table::new_static(table_plan, SendSyncPtr::new(ptr), unsafe {
+                &mut *request.store.get().unwrap()
+            })
         })() {
             Ok(table) => Ok((allocation_index, table)),
             Err(e) => {

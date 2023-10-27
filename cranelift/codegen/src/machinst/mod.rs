@@ -85,6 +85,7 @@ pub use inst_common::*;
 pub mod valueregs;
 pub use reg::*;
 pub use valueregs::*;
+pub mod pcc;
 pub mod reg;
 
 /// A machine instruction.
@@ -111,6 +112,9 @@ pub trait MachInst: Clone + Debug {
 
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool;
+
+    /// Does this instruction access memory?
+    fn is_mem_access(&self) -> bool;
 
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;

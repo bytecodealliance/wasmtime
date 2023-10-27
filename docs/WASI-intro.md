@@ -40,7 +40,7 @@ Currently the options are [Wasmtime] and the [browser polyfill], though we
 intend WASI to be implementable in many wasm VMs.
 
 [Wasmtime]: https://github.com/bytecodealliance/wasmtime
-[browser polyfill]: https://wasi.dev/polyfill/
+[browser polyfill]: https://github.com/bjorn3/browser_wasi_shim
 
 ### Wasmtime
 
@@ -52,9 +52,7 @@ or `cargo run --bin wasmtime foo.wasm`.
 
 ### The browser polyfill
 
-The polyfill is online [here](https://wasi.dev/polyfill/).
-
-The source is [here](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi-c/js-polyfill).
+The source is [here](https://github.com/bjorn3/browser_wasi_shim).
 
 ## Where can I learn more?
 

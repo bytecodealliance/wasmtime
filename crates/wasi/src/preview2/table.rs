@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::collections::{BTreeSet, HashMap};
+use wasmtime::component::Resource;
 
 #[derive(thiserror::Error, Debug)]
 pub enum TableError {
@@ -63,32 +64,6 @@ impl TableEntry {
     }
 }
 
-/// Like [`std::collections::hash_map::OccupiedEntry`], with a subset of
-/// methods available in order to uphold [`Table`] invariants.
-pub struct OccupiedEntry<'a> {
-    table: &'a mut Table,
-    index: u32,
-}
-impl<'a> OccupiedEntry<'a> {
-    /// Get the dynamically-typed reference to the resource.
-    pub fn get(&self) -> &(dyn Any + Send + Sync + 'static) {
-        self.table.map.get(&self.index).unwrap().entry.as_ref()
-    }
-    /// Get the dynamically-typed mutable reference to the resource.
-    pub fn get_mut(&mut self) -> &mut (dyn Any + Send + Sync + 'static) {
-        self.table.map.get_mut(&self.index).unwrap().entry.as_mut()
-    }
-    /// Remove the resource from the table, returning the contents of the
-    /// resource.
-    /// May fail with [`TableError::HasChildren`] if the entry has any
-    /// children, see [`Table::push_child`].
-    /// If this method fails, the [`OccupiedEntry`] is consumed, but the
-    /// resource remains in the table.
-    pub fn remove_entry(self) -> Result<Box<dyn Any + Send + Sync>, TableError> {
-        self.table.delete_entry(self.index).map(|e| e.entry)
-    }
-}
-
 impl Table {
     /// Create an empty table
     pub fn new() -> Self {
@@ -102,44 +77,14 @@ impl Table {
         }
     }
 
-    /// Insert a resource at the next available index.
-    pub fn push(&mut self, entry: Box<dyn Any + Send + Sync>) -> Result<u32, TableError> {
-        self.push_(TableEntry::new(entry, None))
-    }
-
-    /// Insert a resource at the next available index, and track that it has a
-    /// parent resource.
-    ///
-    /// The parent must exist to create a child. All children resources must
-    /// be destroyed before a parent can be destroyed - otherwise [`Table::delete`]
-    /// or [`OccupiedEntry::remove_entry`] will fail with
-    /// [`TableError::HasChildren`].
-    ///
-    /// Parent-child relationships are tracked inside the table to ensure that
-    /// a parent resource is not deleted while it has live children. This
-    /// allows child resources to hold "references" to a parent by table
-    /// index, to avoid needing e.g. an `Arc<Mutex<parent>>` and the associated
-    /// locking overhead and design issues, such as child existence extending
-    /// lifetime of parent referent even after parent resource is destroyed,
-    /// possibility for deadlocks.
-    ///
-    /// Parent-child relationships may not be modified once created. There
-    /// is no way to observe these relationships through the [`Table`] methods
-    /// except for erroring on deletion, or the [`std::fmt::Debug`] impl.
-    pub fn push_child(
-        &mut self,
-        entry: Box<dyn Any + Send + Sync>,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        if !self.contains_key(parent) {
-            return Err(TableError::NotPresent);
-        }
-        let child = self.push_(TableEntry::new(entry, Some(parent)))?;
-        self.map
-            .get_mut(&parent)
-            .expect("parent existence assured above")
-            .add_child(child);
-        Ok(child)
+    /// Inserts a new value `T` into this table, returning a corresponding
+    /// `Resource<T>` which can be used to refer to it after it was inserted.
+    pub fn push<T>(&mut self, entry: T) -> Result<Resource<T>, TableError>
+    where
+        T: Send + Sync + 'static,
+    {
+        let idx = self.push_(TableEntry::new(Box::new(entry), None))?;
+        Ok(Resource::new_own(idx))
     }
 
     fn push_(&mut self, e: TableEntry) -> Result<u32, TableError> {
@@ -159,55 +104,92 @@ impl Table {
         }
     }
 
-    /// Check if the table has a resource at the given index.
-    pub fn contains_key(&self, key: u32) -> bool {
-        self.map.contains_key(&key)
+    /// Insert a resource at the next available index, and track that it has a
+    /// parent resource.
+    ///
+    /// The parent must exist to create a child. All children resources must
+    /// be destroyed before a parent can be destroyed - otherwise [`Table::delete`]
+    /// will fail with [`TableError::HasChildren`].
+    ///
+    /// Parent-child relationships are tracked inside the table to ensure that
+    /// a parent resource is not deleted while it has live children. This
+    /// allows child resources to hold "references" to a parent by table
+    /// index, to avoid needing e.g. an `Arc<Mutex<parent>>` and the associated
+    /// locking overhead and design issues, such as child existence extending
+    /// lifetime of parent referent even after parent resource is destroyed,
+    /// possibility for deadlocks.
+    ///
+    /// Parent-child relationships may not be modified once created. There
+    /// is no way to observe these relationships through the [`Table`] methods
+    /// except for erroring on deletion, or the [`std::fmt::Debug`] impl.
+    pub fn push_child<T, U>(
+        &mut self,
+        entry: T,
+        parent: &Resource<U>,
+    ) -> Result<Resource<T>, TableError>
+    where
+        T: Send + Sync + 'static,
+        U: 'static,
+    {
+        let idx = self.push_child_(Box::new(entry), parent.rep())?;
+        Ok(Resource::new_own(idx))
     }
 
-    /// Check if the resource at a given index can be downcast to a given type.
-    /// Note: this will always fail if the resource is already borrowed.
-    pub fn is<T: Any + Sized>(&self, key: u32) -> bool {
-        if let Some(r) = self.map.get(&key) {
-            r.entry.is::<T>()
-        } else {
-            false
+    fn push_child_(
+        &mut self,
+        entry: Box<dyn Any + Send + Sync>,
+        parent: u32,
+    ) -> Result<u32, TableError> {
+        if !self.map.contains_key(&parent) {
+            return Err(TableError::NotPresent);
         }
+        let child = self.push_(TableEntry::new(entry, Some(parent)))?;
+        self.map
+            .get_mut(&parent)
+            .expect("parent existence assured above")
+            .add_child(child);
+        Ok(child)
     }
 
-    /// Get an immutable reference to a resource of a given type at a given index. Multiple
-    /// immutable references can be borrowed at any given time. Borrow failure
-    /// results in a trapping error.
-    pub fn get<T: Any + Sized>(&self, key: u32) -> Result<&T, TableError> {
-        if let Some(r) = self.map.get(&key) {
-            r.entry
-                .downcast_ref::<T>()
-                .ok_or_else(|| TableError::WrongType)
-        } else {
-            Err(TableError::NotPresent)
-        }
+    /// Get an immutable reference to a resource of a given type at a given
+    /// index.
+    ///
+    /// Multiple shared references can be borrowed at any given time.
+    pub fn get<T: Any + Sized>(&self, key: &Resource<T>) -> Result<&T, TableError> {
+        self.get_(key.rep())?
+            .downcast_ref()
+            .ok_or(TableError::WrongType)
     }
 
-    /// Get a mutable reference to a resource of a given type at a given index. Only one mutable
-    /// reference can be borrowed at any given time. Borrow failure results in a trapping error.
-    pub fn get_mut<T: Any + Sized>(&mut self, key: u32) -> Result<&mut T, TableError> {
-        if let Some(r) = self.map.get_mut(&key) {
-            r.entry
-                .downcast_mut::<T>()
-                .ok_or_else(|| TableError::WrongType)
-        } else {
-            Err(TableError::NotPresent)
-        }
+    fn get_(&self, key: u32) -> Result<&dyn Any, TableError> {
+        let r = self.map.get(&key).ok_or(TableError::NotPresent)?;
+        Ok(&*r.entry)
     }
 
-    /// Get an [`OccupiedEntry`] corresponding to a table entry, if it exists. This allows you to
-    /// remove or replace the entry based on its contents. The methods available are a subset of
-    /// [`std::collections::hash_map::OccupiedEntry`] - it does not give access to the key, it
-    /// restricts replacing the entry to items of the same type, and it does not allow for deletion.
-    pub fn entry(&mut self, index: u32) -> Result<OccupiedEntry, TableError> {
-        if self.map.contains_key(&index) {
-            Ok(OccupiedEntry { table: self, index })
-        } else {
-            Err(TableError::NotPresent)
+    /// Get an mutable reference to a resource of a given type at a given
+    /// index.
+    pub fn get_mut<T: Any + Sized>(&mut self, key: &Resource<T>) -> Result<&mut T, TableError> {
+        self.get_any_mut(key.rep())?
+            .downcast_mut()
+            .ok_or(TableError::WrongType)
+    }
+
+    /// Returns the raw `Any` at the `key` index provided.
+    pub fn get_any_mut(&mut self, key: u32) -> Result<&mut dyn Any, TableError> {
+        let r = self.map.get_mut(&key).ok_or(TableError::NotPresent)?;
+        Ok(&mut *r.entry)
+    }
+
+    /// Same as `delete`, but typed
+    pub fn delete<T>(&mut self, resource: Resource<T>) -> Result<T, TableError>
+    where
+        T: Any,
+    {
+        debug_assert!(resource.owned());
+        let entry = self.delete_entry(resource.rep())?;
+        match entry.entry.downcast() {
+            Ok(t) => Ok(*t),
+            Err(_e) => Err(TableError::WrongType),
         }
     }
 
@@ -234,38 +216,6 @@ impl Table {
         Ok(e)
     }
 
-    /// Remove a resource at a given index from the table.
-    ///
-    /// If this method fails, the resource remains in the table.
-    ///
-    /// May fail with [`TableError::HasChildren`] if the resource has any live
-    /// children.
-    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<T, TableError> {
-        let e = self.delete_entry(key)?;
-        match e.entry.downcast::<T>() {
-            Ok(v) => Ok(*v),
-            Err(entry) => {
-                // Re-insert into parent list
-                if let Some(parent) = e.parent {
-                    self.map
-                        .get_mut(&parent)
-                        .expect("already checked parent exists")
-                        .add_child(key);
-                }
-                // Insert the value back
-                self.map.insert(
-                    key,
-                    TableEntry {
-                        entry,
-                        children: e.children,
-                        parent: e.parent,
-                    },
-                );
-                Err(TableError::WrongType)
-            }
-        }
-    }
-
     /// Zip the values of the map with mutable references to table entries corresponding to each
     /// key. As the keys in the [HashMap] are unique, this iterator can give mutable references
     /// with the same lifetime as the mutable reference to the [Table].
@@ -283,6 +233,21 @@ impl Table {
                 .ok_or(TableError::NotPresent);
             (item, v)
         })
+    }
+
+    /// Iterate over all children belonging to the provided parent
+    pub fn iter_children<T>(
+        &self,
+        parent: &Resource<T>,
+    ) -> Result<impl Iterator<Item = &(dyn Any + Send + Sync)>, TableError>
+    where
+        T: 'static,
+    {
+        let parent_entry = self.map.get(&parent.rep()).ok_or(TableError::NotPresent)?;
+        Ok(parent_entry.children.iter().map(|child_index| {
+            let child = self.map.get(child_index).expect("missing child");
+            child.entry.as_ref()
+        }))
     }
 }
 

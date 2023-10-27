@@ -36,14 +36,11 @@ use crate::{
 };
 use alloc::vec::Vec;
 use regalloc2::PReg;
-use smallvec::SmallVec;
 use std::boxed::Box;
 use std::convert::TryFrom;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
-type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
-type MachLabelSlice = [MachLabel];
 type VecArgPair = Vec<ArgPair>;
 
 pub struct SinkableLoad {
@@ -627,11 +624,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
-        x.without_equal()
-    }
-
-    #[inline]
     fn intcc_to_cc(&mut self, intcc: &IntCC) -> CC {
         CC::from_intcc(*intcc)
     }
@@ -754,43 +746,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         .expect("Failed to emit LibCall");
 
         output_reg.to_reg()
-    }
-
-    #[inline]
-    fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
-        if targets.len() == 1 {
-            Some(targets[0])
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn two_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, MachLabel)> {
-        if targets.len() == 2 {
-            Some((targets[0], targets[1]))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn jump_table_targets(
-        &mut self,
-        targets: &MachLabelSlice,
-    ) -> Option<(MachLabel, BoxVecMachLabel)> {
-        if targets.is_empty() {
-            return None;
-        }
-
-        let default_label = targets[0];
-        let jt_targets = Box::new(SmallVec::from(&targets[1..]));
-        Some((default_label, jt_targets))
-    }
-
-    #[inline]
-    fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
-        targets.len() as u32
     }
 
     #[inline]

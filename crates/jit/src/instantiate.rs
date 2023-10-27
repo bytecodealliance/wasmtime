@@ -509,6 +509,7 @@ impl CompiledModule {
     /// Returns the text section of the ELF image for this compiled module.
     ///
     /// This memory should have the read/execute permissions.
+    #[inline]
     pub fn text(&self) -> &[u8] {
         self.code_memory.text()
     }
@@ -575,6 +576,7 @@ impl CompiledModule {
     ///
     /// These trampolines are used for native callers (e.g. `Func::wrap`)
     /// calling Wasm callees.
+    #[inline]
     pub fn native_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
         let loc = self.funcs[index].native_to_wasm_trampoline?;
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
@@ -665,6 +667,7 @@ impl CompiledModule {
     ///
     /// Basically this makes a thing which parses debuginfo and can tell you
     /// what filename and line number a wasm pc comes from.
+    #[cfg(feature = "addr2line")]
     pub fn symbolize_context(&self) -> Result<Option<SymbolizeContext<'_>>> {
         use gimli::EndianSlice;
         if !self.meta.has_wasm_debuginfo {
@@ -719,15 +722,18 @@ impl CompiledModule {
     }
 }
 
+#[cfg(feature = "addr2line")]
 type Addr2LineContext<'a> = addr2line::Context<gimli::EndianSlice<'a, gimli::LittleEndian>>;
 
 /// A context which contains dwarf debug information to translate program
 /// counters back to filenames and line numbers.
+#[cfg(feature = "addr2line")]
 pub struct SymbolizeContext<'a> {
     inner: Addr2LineContext<'a>,
     code_section_offset: u64,
 }
 
+#[cfg(feature = "addr2line")]
 impl<'a> SymbolizeContext<'a> {
     /// Returns access to the [`addr2line::Context`] which can be used to query
     /// frame information with.
