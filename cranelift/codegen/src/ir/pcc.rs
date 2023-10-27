@@ -321,7 +321,10 @@ impl Expr {
                 offset: lhs.offset.checked_add(rhs.offset)?,
             })
         } else {
-            None
+            Some(Expr {
+                base: BaseExpr::Max,
+                offset: 0,
+            })
         }
     }
 
@@ -585,7 +588,7 @@ impl Fact {
                     ty: *ty_lhs,
                     min: Expr::max(min_lhs, min_rhs),
                     max: Expr::min(max_lhs, max_rhs),
-                    nullable: *null_lhs || *null_rhs,
+                    nullable: *null_lhs && *null_rhs,
                 }
             }
 
@@ -623,7 +626,7 @@ impl Fact {
     }
 
     /// Is this fact a single-value range with a symbolic Expr?
-    fn is_single_expr(&self) -> Option<&Expr> {
+    fn as_symbol(&self) -> Option<&Expr> {
         match self {
             Fact::DynamicRange { min, max, .. } if min == max => Some(min),
             _ => None,
@@ -643,6 +646,16 @@ macro_rules! bail {
     ( $err:tt ) => {{
         return Err(PccError::$err);
     }};
+}
+
+/// The two kinds of inequalities: "strict" (`<`, `>`) and "loose"
+/// (`<=`, `>=`), the latter of which admit equality.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InequalityKind {
+    /// Strict inequality: {less,greater}-than.
+    Strict,
+    /// Loose inequality: {less,greater}-than-or-equal.
+    Loose,
 }
 
 /// A "context" in which we can evaluate and derive facts. This
@@ -703,8 +716,12 @@ impl<'a> FactContext<'a> {
                     max: max_rhs,
                 },
             ) => {
-                // Same as above, but with dynamic-expression
-                // comparisons.
+                // Nearly same as above, but with dynamic-expression
+                // comparisons. Note that we require equal bitwidths
+                // here: unlike in the static case, we don't have
+                // fixed values for min and max, so we can't lean on
+                // the well-formedness requirements of the static
+                // ranges fitting within the bit-width max.
                 bw_lhs == bw_rhs && Expr::le(max_lhs, max_rhs) && Expr::le(min_rhs, min_lhs)
             }
 
@@ -749,11 +766,11 @@ impl<'a> FactContext<'a> {
             (
                 Fact::Range {
                     bit_width,
-                    min,
-                    max,
+                    min: 0,
+                    max: 0,
                 },
-                Fact::DynamicMem { nullable, .. },
-            ) if *bit_width == self.pointer_width && *min == 0 && *max == 0 && *nullable => true,
+                Fact::DynamicMem { nullable: true, .. },
+            ) if *bit_width == self.pointer_width => true,
 
             _ => false,
         }
@@ -1203,11 +1220,9 @@ impl<'a> FactContext<'a> {
                     let end_offset = max_offset
                         .checked_add(i64::from(size))
                         .ok_or(PccError::Overflow)?;
-                    ensure!(
-                        end_offset
-                            <= i64::try_from(*mem_static_size).map_err(|_| PccError::Overflow)?,
-                        OutOfBounds
-                    );
+                    let mem_static_size =
+                        i64::try_from(*mem_static_size).map_err(|_| PccError::Overflow)?;
+                    ensure!(end_offset <= mem_static_size, OutOfBounds);
                     Ok(None)
                 }
                 _ => bail!(OutOfBounds),
@@ -1272,15 +1287,16 @@ impl<'a> FactContext<'a> {
 
     /// Apply a known inequality to rewrite dynamic bounds using transitivity, if possible.
     ///
-    /// Given that `lhs >= rhs` (if not `strict`) or `lhs < rhs` (if
+    /// Given that `lhs >= rhs` (if not `strict`) or `lhs > rhs` (if
     /// `strict`), update `fact.
-    pub fn apply_inequality(&self, fact: &Fact, lhs: &Fact, rhs: &Fact, strict: bool) -> Fact {
-        trace!(
-            "lhs single expr = {:?} rhs single expr = {:?}",
-            lhs.is_single_expr(),
-            rhs.is_single_expr()
-        );
-        match (lhs.is_single_expr(), rhs.is_single_expr(), fact) {
+    pub fn apply_inequality(
+        &self,
+        fact: &Fact,
+        lhs: &Fact,
+        rhs: &Fact,
+        kind: InequalityKind,
+    ) -> Fact {
+        match (lhs.as_symbol(), rhs.as_symbol(), fact) {
             (
                 Some(lhs),
                 Some(rhs),
@@ -1291,12 +1307,15 @@ impl<'a> FactContext<'a> {
                     nullable,
                 },
             ) if rhs.base == max.base => {
-                trace!("bases match");
+                let strict_offset = match kind {
+                    InequalityKind::Strict => 1,
+                    InequalityKind::Loose => 0,
+                };
                 if let Some(offset) = max
                     .offset
                     .checked_add(lhs.offset)
                     .and_then(|x| x.checked_sub(rhs.offset))
-                    .and_then(|x| x.checked_sub(if strict { 1 } else { 0 }))
+                    .and_then(|x| x.checked_sub(strict_offset))
                 {
                     let new_max = Expr {
                         base: lhs.base.clone(),

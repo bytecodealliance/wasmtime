@@ -450,15 +450,12 @@ pub(crate) fn check(
                 check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
                     // See comments in aarch64::pcc CSel for more details on this.
                     let in_true = get_fact_or_default(vcode, reg, 64);
-                    trace!("in_true = {:?}", in_true);
-                    let in_true = ctx.apply_inequality(&in_true, &cmp_lhs, &cmp_rhs, false);
-                    trace!("in_true = {:?}", in_true);
+                    let in_true =
+                        ctx.apply_inequality(&in_true, &cmp_lhs, &cmp_rhs, InequalityKind::Loose);
                     let in_false = get_fact_or_default(vcode, alternative.to_reg(), 64);
-                    trace!("in_false = {:?}", in_false);
-                    let in_false = ctx.apply_inequality(&in_false, &cmp_rhs, &cmp_lhs, true);
-                    trace!("in_false = {:?}", in_false);
+                    let in_false =
+                        ctx.apply_inequality(&in_false, &cmp_rhs, &cmp_lhs, InequalityKind::Strict);
                     let union = Fact::union(&in_true, &in_false);
-                    trace!("union = {:?}", union);
                     clamp_range(ctx, 64, 64, union)
                 })
             }

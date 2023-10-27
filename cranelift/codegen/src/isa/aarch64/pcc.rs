@@ -300,18 +300,11 @@ pub(crate) fn check(
 
                 // True side: lhs <= rhs, not strict.
                 let rn = get_fact_or_default(vcode, rn, 64);
-                trace!("rn = {rn:?}");
-                let rn = ctx.apply_inequality(&rn, &cmp_lhs, &cmp_rhs, false);
-                trace!(" -> rn = {rn:?}");
+                let rn = ctx.apply_inequality(&rn, &cmp_lhs, &cmp_rhs, InequalityKind::Loose);
                 // false side: rhs < lhs, strict.
                 let rm = get_fact_or_default(vcode, rm, 64);
-                trace!("rm = {rm:?}");
-                let rm = ctx.apply_inequality(&rm, &cmp_rhs, &cmp_lhs, true);
-                trace!(" -> rm = {rm:?}");
-
+                let rm = ctx.apply_inequality(&rm, &cmp_rhs, &cmp_lhs, InequalityKind::Strict);
                 let union = Fact::union(&rn, &rm);
-                trace!("union = {union:?}");
-
                 // Union the two facts.
                 clamp_range(ctx, 64, 64, union)
             })
