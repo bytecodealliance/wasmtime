@@ -1288,7 +1288,7 @@ impl<'a> FactContext<'a> {
     /// Apply a known inequality to rewrite dynamic bounds using transitivity, if possible.
     ///
     /// Given that `lhs >= rhs` (if not `strict`) or `lhs > rhs` (if
-    /// `strict`), update `fact.
+    /// `strict`), update `fact`.
     pub fn apply_inequality(
         &self,
         fact: &Fact,
