@@ -34,7 +34,13 @@ interface types {
     timeout-error(string),
     protocol-error(string),
     unexpected-error(string),
-    header-name-error(string),
+  }
+
+  /// This tyep enumerates the different kinds of errors that may occur when
+  /// setting or appending to a `fields` resource.
+  variant header-error {
+    invalid-syntax,
+    forbidden,
   }
 
   /// Field keys are always strings.
@@ -67,7 +73,10 @@ interface types {
 
     /// Set all of the values for a key. Clears any existing values for that
     /// key, if they have been set.
-    set: func(name: field-key, value: list<field-value>) -> result<_, error>;
+    ///
+    /// The operation can fail if the name or value arguments are invalid, or if
+    /// the name is forbidden.
+    set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
 
     /// Delete all values for a key. Does nothing if no values for the key
     /// exist.
@@ -75,7 +84,10 @@ interface types {
 
     /// Append a value for a key. Does not change or delete any existing
     /// values for that key.
-    append: func(name: field-key, value: field-value) -> result<_, error>;
+    ///
+    /// The operation can fail if the name or value arguments are invalid, or if
+    /// the name is forbidden.
+    append: func(name: field-key, value: field-value) -> result<_, header-error>;
 
 
     /// Retrieve the full set of keys and values in the Fields. Like the

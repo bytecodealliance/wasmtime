@@ -67,12 +67,8 @@ pub trait WasiHttpView: Send {
         default_send_request(self, request)
     }
 
-    fn is_forbidden_request_header(&mut self, name: &HeaderName) -> bool {
-        default_is_forbidden_request_header(name)
-    }
-
-    fn is_forbidden_response_header(&mut self, name: &HeaderName) -> bool {
-        default_is_forbidden_response_header(name)
+    fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
+        false
     }
 }
 
@@ -174,22 +170,6 @@ pub fn default_send_request(
     let fut = view.table().push(HostFutureIncomingResponse::new(handle))?;
 
     Ok(fut)
-}
-
-pub fn default_is_forbidden_request_header(name: &HeaderName) -> bool {
-    use hyper::header;
-
-    const FORBIDDEN: &'static [HeaderName] = &[header::TRANSFER_ENCODING];
-
-    FORBIDDEN.contains(name)
-}
-
-pub fn default_is_forbidden_response_header(name: &HeaderName) -> bool {
-    use hyper::header;
-
-    const FORBIDDEN: &'static [HeaderName] = &[header::TRANSFER_ENCODING];
-
-    FORBIDDEN.contains(name)
 }
 
 pub fn timeout_error(kind: &str) -> anyhow::Error {

@@ -1,6 +1,6 @@
 use crate::bindings::http::{
     outgoing_handler,
-    types::{self as http_types, RequestOptions, Scheme},
+    types::{RequestOptions, Scheme},
 };
 use crate::types::{self, HostFutureIncomingResponse, OutgoingRequest};
 use crate::WasiHttpView;
@@ -84,12 +84,6 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .header(hyper::header::HOST, &authority);
 
         for (k, v) in req.headers.iter() {
-            if self.is_forbidden_request_header(k) {
-                return Ok(Err(http_types::Error::HeaderNameError(
-                    "forbidden header".to_owned(),
-                )));
-            }
-
             builder = builder.header(k, v);
         }
 

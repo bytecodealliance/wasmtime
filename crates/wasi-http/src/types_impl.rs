@@ -1,4 +1,6 @@
-use crate::bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers};
+use crate::bindings::http::types::{
+    self, Error, HeaderError, Headers, Method, Scheme, StatusCode, Trailers,
+};
 use crate::body::{FinishMessage, HostFutureTrailers, HostFutureTrailersState};
 use crate::types::{HostIncomingRequest, HostOutgoingResponse};
 use crate::WasiHttpView;
@@ -10,6 +12,7 @@ use crate::{
     },
 };
 use anyhow::Context;
+use hyper::header::HeaderName;
 use std::any::Any;
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
@@ -49,6 +52,22 @@ fn get_fields_mut<'a>(
         // refactor this to remove the `unreachable!` please do.
         HostFields::Ref { .. } => unreachable!(),
     }
+}
+
+fn is_forbidden_header<T: WasiHttpView>(view: &mut T, name: &HeaderName) -> bool {
+    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
+        hyper::header::CONNECTION,
+        HeaderName::from_static("keep-alive"),
+        hyper::header::PROXY_AUTHENTICATE,
+        hyper::header::PROXY_AUTHORIZATION,
+        HeaderName::from_static("proxy-connection"),
+        hyper::header::TE,
+        hyper::header::TRANSFER_ENCODING,
+        hyper::header::UPGRADE,
+        HeaderName::from_static("http2-settings"),
+    ];
+
+    FORBIDDEN_HEADERS.contains(name) || view.is_forbidden_header(name)
 }
 
 impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
@@ -94,7 +113,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             .into_iter()
             .map(|val| val.as_bytes().to_owned())
             .collect();
-
         Ok(res)
     }
 
@@ -102,21 +120,29 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         &mut self,
         fields: Resource<HostFields>,
         name: String,
-        values: Vec<Vec<u8>>,
-    ) -> wasmtime::Result<Result<(), Error>> {
+        byte_values: Vec<Vec<u8>>,
+    ) -> wasmtime::Result<Result<(), HeaderError>> {
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
-            Err(_) => {
-                return Ok(Err(Error::HeaderNameError(
-                    "invalid header name".to_owned(),
-                )))
-            }
+            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
         };
 
-        let m = get_fields_mut(self.table(), &fields)?;
+        if is_forbidden_header(self, &header) {
+            return Ok(Err(HeaderError::Forbidden));
+        }
+
+        let mut values = Vec::with_capacity(byte_values.len());
+        for value in byte_values {
+            match hyper::header::HeaderValue::from_bytes(&value) {
+                Ok(value) => values.push(value),
+                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            }
+        }
+
+        let m =
+            get_fields_mut(self.table(), &fields).context("[fields_set] getting mutable fields")?;
         m.remove(&header);
         for value in values {
-            let value = hyper::header::HeaderValue::from_bytes(&value)?;
             m.append(&header, value);
         }
 
@@ -139,19 +165,24 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
         value: Vec<u8>,
-    ) -> wasmtime::Result<Result<(), Error>> {
+    ) -> wasmtime::Result<Result<(), HeaderError>> {
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
-            Err(_) => {
-                return Ok(Err(Error::HeaderNameError(
-                    "invalid header name".to_owned(),
-                )))
-            }
+            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+        };
+
+        if is_forbidden_header(self, &header) {
+            return Ok(Err(HeaderError::Forbidden));
+        }
+
+        let value = match hyper::header::HeaderValue::from_bytes(&value) {
+            Ok(value) => value,
+            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
         };
 
         let m = get_fields_mut(self.table(), &fields)
             .context("[fields_append] getting mutable fields")?;
-        let value = hyper::header::HeaderValue::from_bytes(&value)?;
+
         m.append(header, value);
         Ok(Ok(()))
     }
@@ -169,10 +200,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
     }
 
     fn clone(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<Resource<HostFields>> {
-        let fields =
-            get_fields_mut(self.table(), &fields).context("[fields_clone] getting fields")?;
-
-        let fields = fields.clone();
+        let fields = get_fields_mut(self.table(), &fields)
+            .context("[fields_clone] getting fields")?
+            .clone();
 
         let id = self
             .table()
@@ -421,22 +451,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostResponseOutparam for T {
         &mut self,
         id: Resource<HostResponseOutparam>,
         resp: Result<Resource<HostOutgoingResponse>, Error>,
-    ) -> wasmtime::Result<Result<(), (Resource<HostResponseOutparam>, Error)>> {
+    ) -> wasmtime::Result<()> {
         let val = match resp {
-            Ok(resp) => {
-                let resp: hyper::Response<_> = self.table().delete(resp)?.try_into()?;
-
-                for name in resp.headers().keys() {
-                    if self.is_forbidden_response_header(name) {
-                        return Ok(Err((
-                            id,
-                            Error::HeaderNameError("forbidden header".to_owned()),
-                        )));
-                    }
-                }
-
-                Ok(resp)
-            }
+            Ok(resp) => Ok(self.table().delete(resp)?.try_into()?),
             Err(e) => Err(e),
         };
 
@@ -444,9 +461,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostResponseOutparam for T {
             .delete(id)?
             .result
             .send(val)
-            .map_err(|_| anyhow::anyhow!("failed to initialize response"))?;
-
-        Ok(Ok(()))
+            .map_err(|_| anyhow::anyhow!("failed to initialize response"))
     }
 }
 

@@ -1,24 +1,45 @@
-use test_programs::wasi::http::types::{Headers, Method, Scheme};
+use test_programs::wasi::http::types::{HeaderError, Headers};
 
 fn main() {
     let hdrs = Headers::new(&[]);
-    assert!(hdrs
-        .append(&"malformed header name".to_owned(), &b"bad".to_vec())
-        .is_err());
+    assert!(matches!(
+        hdrs.append(&"malformed header name".to_owned(), &b"ok value".to_vec()),
+        Err(HeaderError::InvalidSyntax)
+    ));
 
-    let addr = std::env::var("HTTP_SERVER").unwrap();
-    let err = test_programs::http::request(
-        Method::Get,
-        Scheme::Http,
-        &addr,
-        "/get?some=arg&goes=here",
-        None,
-        Some(&[("transfer-encoding".to_owned(), b"bad".to_vec())]),
-    )
-    .expect_err("invalid request");
+    assert!(matches!(
+        hdrs.append(&"ok-header-name".to_owned(), &b"ok value".to_vec()),
+        Ok(())
+    ));
 
-    assert_eq!(
-        err.to_string(),
-        "Error::HeaderNameError(\"forbidden header\")"
-    );
+    assert!(matches!(
+        hdrs.append(&"ok-header-name".to_owned(), &b"bad\nvalue".to_vec()),
+        Err(HeaderError::InvalidSyntax)
+    ));
+
+    assert!(matches!(
+        hdrs.append(&"Connection".to_owned(), &b"keep-alive".to_vec()),
+        Err(HeaderError::Forbidden)
+    ));
+
+    assert!(matches!(
+        hdrs.append(&"Keep-Alive".to_owned(), &b"stuff".to_vec()),
+        Err(HeaderError::Forbidden)
+    ));
+
+    assert!(matches!(
+        hdrs.append(
+            &"custom-forbidden-header".to_owned(),
+            &b"keep-alive".to_vec()
+        ),
+        Err(HeaderError::Forbidden)
+    ));
+
+    assert!(matches!(
+        hdrs.append(
+            &"Custom-Forbidden-Header".to_owned(),
+            &b"keep-alive".to_vec()
+        ),
+        Err(HeaderError::Forbidden)
+    ));
 }
