@@ -51,10 +51,6 @@
 //!
 //! Eventually we plan to also have:
 //!
-//! - A dynamic memory is an untyped blob of storage with a size given
-//!   by a global value (GV). This is otherwise just like the "static
-//!   memory" variant described above.
-//!
 //! - A dynamic array is a sequence of struct memory types, with a
 //!   length given by a global value (GV). This is useful to model,
 //!   e.g., tables.
@@ -67,7 +63,7 @@
 //!   field is not null (all zero bits).
 
 use crate::ir::pcc::Fact;
-use crate::ir::Type;
+use crate::ir::{GlobalValue, Type};
 use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
@@ -97,6 +93,15 @@ pub enum MemoryTypeData {
     Memory {
         /// Accessible size.
         size: u64,
+    },
+
+    /// A dynamically-sized untyped blob of memory, with bound given
+    /// by a global value plus some static amount.
+    DynamicMemory {
+        /// Static part of size.
+        size: u64,
+        /// Dynamic part of size.
+        gv: GlobalValue,
     },
 
     /// A type with no size.
@@ -134,6 +139,9 @@ impl std::fmt::Display for MemoryTypeData {
             }
             Self::Memory { size } => {
                 write!(f, "memory {size:#x}")
+            }
+            Self::DynamicMemory { size, gv } => {
+                write!(f, "dynamic_memory {}+{:#x}", gv, size)
             }
             Self::Empty => {
                 write!(f, "empty")
@@ -175,6 +183,7 @@ impl MemoryTypeData {
         match self {
             Self::Struct { size, .. } => Some(*size),
             Self::Memory { size } => Some(*size),
+            Self::DynamicMemory { .. } => None,
             Self::Empty => Some(0),
         }
     }

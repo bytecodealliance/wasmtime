@@ -12,7 +12,7 @@ use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType, MemoryType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cranelift_codegen::ir::pcc::Fact;
+use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact};
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -1716,8 +1716,10 @@ impl<'a> Parser<'a> {
     // memory-type-decl ::= MemoryType(mt) "=" memory-type-desc
     // memory-type-desc ::= "struct" size "{" memory-type-field,* "}"
     //                    | "memory" size
+    //                    | "dynamic_memory" GlobalValue "+" offset
     //                    | "empty"
     // size ::= uimm64
+    // offset ::= uimm64
     fn parse_memory_type_decl(&mut self) -> ParseResult<(MemoryType, MemoryTypeData)> {
         let mt = self.match_mt("expected memory type number: mt«n»")?;
         self.match_token(Token::Equal, "expected '=' in memory type declaration")?;
@@ -1747,6 +1749,18 @@ impl<'a> Parser<'a> {
                 self.consume();
                 let size: u64 = self.match_uimm64("expected u64 constant value for size in static-memory memory-type declaration")?.into();
                 MemoryTypeData::Memory { size }
+            }
+            Some(Token::Identifier("dynamic_memory")) => {
+                self.consume();
+                let gv = self.match_gv(
+                    "expected a global value for `dynamic_memory` memory-type declaration",
+                )?;
+                self.match_token(
+                    Token::Plus,
+                    "expected `+` after global value in `dynamic_memory` memory-type declaration",
+                )?;
+                let size: u64 = self.match_uimm64("expected u64 constant value for size offset in `dynamic_memory` memory-type declaration")?.into();
+                MemoryTypeData::DynamicMemory { gv, size }
             }
             Some(Token::Identifier("empty")) => {
                 self.consume();
@@ -2166,7 +2180,9 @@ impl<'a> Parser<'a> {
     // Parse a "fact" for proof-carrying code, attached to a value.
     //
     // fact ::= "range" "(" bit-width "," min-value "," max-value ")"
+    //        | "dynamic_range" "(" bit-width "," expr "," expr ")"
     //        | "mem" "(" memory-type "," mt-offset "," mt-offset ")"
+    //        | "dynamic_mem" "(" memory-type "," expr "," expr [ "," "nullable" ] ")"
     //        | "conflict"
     // bit-width ::= uimm64
     // min-value ::= uimm64
@@ -2213,6 +2229,23 @@ impl<'a> Parser<'a> {
                     max: max.into(),
                 })
             }
+            Some(Token::Identifier("dynamic_range")) => {
+                self.consume();
+                self.match_token(Token::LPar, "`dynamic_range` fact needs an opening `(`")?;
+                let bit_width: u64 = self
+                    .match_uimm64("expected a bit-width value for `dynamic_range` fact")?
+                    .into();
+                self.match_token(Token::Comma, "expected a comma")?;
+                let min = self.parse_expr()?;
+                self.match_token(Token::Comma, "expected a comma")?;
+                let max = self.parse_expr()?;
+                self.match_token(Token::RPar, "`dynamic_range` fact needs a closing `)`")?;
+                Ok(Fact::DynamicRange {
+                    bit_width: u16::try_from(bit_width).unwrap(),
+                    min,
+                    max,
+                })
+            }
             Some(Token::Identifier("mem")) => {
                 self.consume();
                 self.match_token(Token::LPar, "expected a `(`")?;
@@ -2224,10 +2257,7 @@ impl<'a> Parser<'a> {
                 let min_offset: u64 = self
                     .match_uimm64("expected a uimm64 minimum pointer offset for `mem` fact")?
                     .into();
-                self.match_token(
-                    Token::Comma,
-                    "expected a comma after memory type in `mem` fact",
-                )?;
+                self.match_token(Token::Comma, "expected a comma after offset in `mem` fact")?;
                 let max_offset: u64 = self
                     .match_uimm64("expected a uimm64 maximum pointer offset for `mem` fact")?
                     .into();
@@ -2238,11 +2268,124 @@ impl<'a> Parser<'a> {
                     max_offset,
                 })
             }
+            Some(Token::Identifier("dynamic_mem")) => {
+                self.consume();
+                self.match_token(Token::LPar, "expected a `(`")?;
+                let ty = self.match_mt("expected a memory type for `dynamic_mem` fact")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected a comma after memory type in `dynamic_mem` fact",
+                )?;
+                let min = self.parse_expr()?;
+                self.match_token(
+                    Token::Comma,
+                    "expected a comma after offset in `dynamic_mem` fact",
+                )?;
+                let max = self.parse_expr()?;
+                let nullable = if self.token() == Some(Token::Comma) {
+                    self.consume();
+                    self.match_token(
+                        Token::Identifier("nullable"),
+                        "expected `nullable` in last optional field of `dynamic_mem`",
+                    )?;
+                    true
+                } else {
+                    false
+                };
+                self.match_token(Token::RPar, "expected a `)`")?;
+                Ok(Fact::DynamicMem {
+                    ty,
+                    min,
+                    max,
+                    nullable,
+                })
+            }
+            Some(Token::Identifier("compare")) => {
+                self.consume();
+                self.match_token(Token::LPar, "expected a `(`")?;
+                let kind = self.match_enum("expected intcc condition code in `compare` fact")?;
+                self.match_token(
+                    Token::Comma,
+                    "expected comma in `compare` fact after condition code",
+                )?;
+                let lhs = self.parse_base_expr()?;
+                self.match_token(Token::Comma, "expected comma in `compare` fact after LHS")?;
+                let rhs = self.parse_base_expr()?;
+                self.match_token(Token::RPar, "expected a `)`")?;
+                Ok(Fact::Compare { kind, lhs, rhs })
+            }
             Some(Token::Identifier("conflict")) => {
                 self.consume();
                 Ok(Fact::Conflict)
             }
-            _ => Err(self.error("expected a `range`, `mem` or `conflict` fact")),
+            _ => Err(self.error(
+                "expected a `range`, 'dynamic_range', `mem`, `dynamic_mem` or `conflict` fact",
+            )),
+        }
+    }
+
+    // Parse a dynamic expression used in some kinds of PCC facts.
+    //
+    // expr ::= base-expr
+    //        | base-expr + uimm64  // but in-range for imm64
+    //        | base-expr - uimm64  // but in-range for imm64
+    //        | imm64
+    fn parse_expr(&mut self) -> ParseResult<Expr> {
+        if let Some(Token::Integer(_)) = self.token() {
+            let offset: i64 = self
+                .match_imm64("expected imm64 for dynamic expression")?
+                .into();
+            Ok(Expr {
+                base: BaseExpr::None,
+                offset,
+            })
+        } else {
+            let base = self.parse_base_expr()?;
+            match self.token() {
+                Some(Token::Plus) => {
+                    self.consume();
+                    let offset: u64 = self
+                        .match_uimm64(
+                            "expected uimm64 in imm64 range for offset in dynamic expression",
+                        )?
+                        .into();
+                    let offset: i64 = i64::try_from(offset).map_err(|_| {
+                        self.error("integer offset in dynamic expression is out of range")
+                    })?;
+                    Ok(Expr { base, offset })
+                }
+                Some(Token::Integer(x)) if x.starts_with("-") => {
+                    let offset: i64 = self
+                        .match_imm64("expected an imm64 range for offset in dynamic expression")?
+                        .into();
+                    Ok(Expr { base, offset })
+                }
+                _ => Ok(Expr { base, offset: 0 }),
+            }
+        }
+    }
+
+    // Parse the base part of a dynamic expression, used in some PCC facts.
+    //
+    // base-expr ::= GlobalValue(base)
+    //             | Value(base)
+    //             | "max"
+    //             | (epsilon)
+    fn parse_base_expr(&mut self) -> ParseResult<BaseExpr> {
+        match self.token() {
+            Some(Token::Identifier("max")) => {
+                self.consume();
+                Ok(BaseExpr::Max)
+            }
+            Some(Token::GlobalValue(..)) => {
+                let gv = self.match_gv("expected global value")?;
+                Ok(BaseExpr::GlobalValue(gv))
+            }
+            Some(Token::Value(..)) => {
+                let value = self.match_value("expected value")?;
+                Ok(BaseExpr::Value(value))
+            }
+            _ => Ok(BaseExpr::None),
         }
     }
 

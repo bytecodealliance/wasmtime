@@ -345,7 +345,10 @@ impl LowerBackend for X64Backend {
         ctx: &FactContext<'_>,
         vcode: &mut VCode<Self::MInst>,
         inst: InsnIndex,
+        state: &mut pcc::FactFlowState,
     ) -> PccResult<()> {
-        pcc::check(ctx, vcode, inst)
+        pcc::check(ctx, vcode, inst, state)
     }
+
+    type FactFlowState = pcc::FactFlowState;
 }
