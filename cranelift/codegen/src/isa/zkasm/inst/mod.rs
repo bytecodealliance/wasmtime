@@ -773,7 +773,7 @@ impl Inst {
                 format!("##fixed 4-size nop")
             }
             &Inst::Label { imm } => {
-                format!("##label=L{imm}")
+                format!("")
             }
             &Inst::StackProbeLoop {
                 guard_size,

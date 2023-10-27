@@ -629,6 +629,7 @@ name = "cranelift-filetests"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "capstone",
  "cranelift",
  "cranelift-codegen",
  "cranelift-control",

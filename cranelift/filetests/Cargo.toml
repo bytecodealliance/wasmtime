@@ -11,6 +11,7 @@ edition.workspace = true
 
 [dependencies]
 # TODO(nearcore/#9569): Add "zkasm" feature to top-level crate.
+capstone.workspace = true
 cranelift-codegen = { workspace = true, features = ["disas", "zkasm"] }
 cranelift-frontend = { workspace = true }
 cranelift-interpreter = { workspace = true }

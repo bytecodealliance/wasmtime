@@ -73,17 +73,23 @@ impl SubTest for TestCompile {
         info!("Generated {} bytes of code:\n{}", total_size, vcode);
 
         if self.precise_output {
-            let cs = isa
-                .to_capstone()
-                .map_err(|e| anyhow::format_err!("{}", e))?;
-            let dis = compiled_code.disassemble(Some(&params), &cs)?;
-
-            let actual = Vec::from_iter(
-                std::iter::once("VCode:")
-                    .chain(compiled_code.vcode.as_ref().unwrap().lines())
-                    .chain(["", "Disassembled:"])
-                    .chain(dis.lines()),
-            );
+            let cs = match isa.to_capstone() {
+                Ok(cs) => Some(cs),
+                Err(capstone::Error::UnsupportedArch) => None,
+                Err(e) => anyhow::bail!("{}", e),
+            };
+            let dis = cs
+                .as_ref()
+                .map(|cs| compiled_code.disassemble(Some(&params), cs))
+                .transpose()?;
+            let output_lines =
+                std::iter::once("VCode:").chain(compiled_code.vcode.as_ref().unwrap().lines());
+            let actual = match dis.as_ref() {
+                None => Vec::from_iter(output_lines),
+                Some(dis) => {
+                    Vec::from_iter(output_lines.chain(["", "Disassembled:"]).chain(dis.lines()))
+                }
+            };
             check_precise_output(&actual, context)
         } else {
             run_filecheck(&vcode, context)
