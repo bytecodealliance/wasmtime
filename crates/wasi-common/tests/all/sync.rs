@@ -273,3 +273,7 @@ fn preview1_path_open_preopen() {
 fn preview1_unicode_output() {
     run(PREVIEW1_UNICODE_OUTPUT, true).unwrap()
 }
+#[test_log::test]
+fn preview1_file_write() {
+    run(PREVIEW1_FILE_WRITE, true).unwrap()
+}

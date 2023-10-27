@@ -232,6 +232,10 @@ fn preview1_path_open_preopen() {
 fn preview1_unicode_output() {
     run(PREVIEW1_UNICODE_OUTPUT_COMPONENT, true).unwrap()
 }
+#[test_log::test]
+fn preview1_file_write() {
+    run(PREVIEW1_FILE_WRITE_COMPONENT, false).unwrap()
+}
 
 #[test_log::test]
 fn preview2_sleep() {
