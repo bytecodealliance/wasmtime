@@ -50,6 +50,7 @@ tracing = { workspace = true }
 log = { workspace = true }
 
 async-trait = { workspace = true }
+bytes = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
 hyper = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
@@ -166,7 +167,7 @@ wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=15.0.0" }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 
 cranelift-wasm = { path = "cranelift/wasm", version = "0.102.0" }
-cranelift-codegen = { path = "cranelift/codegen", version = "0.102.0" }
+cranelift-codegen = { path = "cranelift/codegen", version = "0.102.0", default-features = false, features = ["std", "unwind"] }
 cranelift-frontend = { path = "cranelift/frontend", version = "0.102.0" }
 cranelift-entity = { path = "cranelift/entity", version = "0.102.0" }
 cranelift-native = { path = "cranelift/native", version = "0.102.0" }

@@ -1,12 +1,11 @@
-use crate::preview2::bindings::sockets::network::IpSocketAddress;
 use crate::preview2::poll::Subscribe;
 use crate::preview2::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
 use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
+use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::Interest;
 
 /// The state of a UDP socket.
 ///
@@ -23,11 +22,8 @@ pub(crate) enum UdpState {
     /// is not yet listening for connections.
     Bound,
 
-    /// A connect call is in progress.
-    Connecting(IpSocketAddress),
-
     /// The socket is "connected" to a peer address.
-    Connected(IpSocketAddress),
+    Connected,
 }
 
 /// A host UDP socket, plus associated bookkeeping.
@@ -49,44 +45,60 @@ pub struct UdpSocket {
 #[async_trait]
 impl Subscribe for UdpSocket {
     async fn ready(&mut self) {
-        // Some states are ready immediately.
-        match self.udp_state {
-            UdpState::BindStarted => return,
-            _ => {}
-        }
-
-        // FIXME: Add `Interest::ERROR` when we update to tokio 1.32.
-        self.inner
-            .ready(Interest::READABLE | Interest::WRITABLE)
-            .await
-            .expect("failed to await UDP socket readiness");
+        // None of the socket-level operations block natively
     }
 }
 
 impl UdpSocket {
     /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {
-        // Create a new host socket and set it to non-blocking, which is needed
-        // by our async implementation.
-        let udp_socket = cap_std::net::UdpSocket::new(family, Blocking::No)?;
-        Self::from_udp_socket(udp_socket, family)
-    }
-
-    pub fn from_udp_socket(
-        udp_socket: cap_std::net::UdpSocket,
-        family: AddressFamily,
-    ) -> io::Result<Self> {
-        let fd = udp_socket.into_raw_socketlike();
-        let std_socket = unsafe { std::net::UdpSocket::from_raw_socketlike(fd) };
-        let socket = with_ambient_tokio_runtime(|| tokio::net::UdpSocket::try_from(std_socket))?;
-        Ok(Self {
-            inner: Arc::new(socket),
+        Ok(UdpSocket {
+            inner: Arc::new(Self::new_tokio_socket(family)?),
             udp_state: UdpState::Default,
             family,
         })
     }
 
+    fn new_tokio_socket(family: AddressFamily) -> io::Result<tokio::net::UdpSocket> {
+        // Create a new host socket and set it to non-blocking, which is needed
+        // by our async implementation.
+        let cap_std_socket = cap_std::net::UdpSocket::new(family, Blocking::No)?;
+        let fd = cap_std_socket.into_raw_socketlike();
+        let std_socket = unsafe { std::net::UdpSocket::from_raw_socketlike(fd) };
+        let tokio_socket =
+            with_ambient_tokio_runtime(|| tokio::net::UdpSocket::try_from(std_socket))?;
+
+        Ok(tokio_socket)
+    }
+
     pub fn udp_socket(&self) -> &tokio::net::UdpSocket {
         &self.inner
     }
+}
+
+pub struct IncomingDatagramStream {
+    pub(crate) inner: Arc<tokio::net::UdpSocket>,
+
+    /// If this has a value, the stream is "connected".
+    pub(crate) remote_address: Option<SocketAddr>,
+}
+
+pub struct OutgoingDatagramStream {
+    pub(crate) inner: Arc<tokio::net::UdpSocket>,
+
+    /// If this has a value, the stream is "connected".
+    pub(crate) remote_address: Option<SocketAddr>,
+
+    pub(crate) send_state: SendState,
+}
+
+pub(crate) enum SendState {
+    /// Waiting for the API consumer to call `check-send`.
+    Idle,
+
+    /// Ready to send up to x datagrams.
+    Permitted(usize),
+
+    /// Waiting for the OS.
+    Waiting,
 }

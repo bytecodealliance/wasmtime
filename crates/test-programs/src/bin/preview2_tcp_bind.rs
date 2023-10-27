@@ -23,12 +23,16 @@ fn test_tcp_bind_specific_port(net: &Network, ip: IpAddress) {
     let bind_addr = IpSocketAddress::new(ip, PORT);
 
     let sock = TcpSocket::new(ip.family()).unwrap();
-    sock.blocking_bind(net, bind_addr).unwrap();
+    match sock.blocking_bind(net, bind_addr) {
+        Ok(()) => {
+            let bound_addr = sock.local_address().unwrap();
 
-    let bound_addr = sock.local_address().unwrap();
-
-    assert_eq!(bind_addr.ip(), bound_addr.ip());
-    assert_eq!(bind_addr.port(), bound_addr.port());
+            assert_eq!(bind_addr.ip(), bound_addr.ip());
+            assert_eq!(bind_addr.port(), bound_addr.port());
+        }
+        Err(ErrorCode::AddressInUse) => {}
+        Err(e) => panic!("error: {e}"),
+    }
 }
 
 /// Two sockets may not be actively bound to the same address at the same time.

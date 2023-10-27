@@ -1,15 +1,27 @@
 use test_programs::wasi::{clocks::monotonic_clock, io::poll};
 
 fn main() {
-    // Sleep ten milliseconds.  Note that we call the relevant host functions directly rather than go through
-    // libstd, since we want to ensure we're calling `monotonic_clock::subscribe` with an `absolute` parameter of
-    // `true`, which libstd won't necessarily do (but which e.g. CPython _will_ do).
-    eprintln!("calling subscribe");
-    let p = monotonic_clock::subscribe(monotonic_clock::now() + 10_000_000, true);
-    dbg!(&p as *const _);
-    let list = &[&p];
-    dbg!(list.as_ptr());
-    eprintln!("calling poll");
-    poll::poll_list(list);
-    eprintln!("done");
+    sleep_10ms();
+    sleep_0ms();
+    sleep_backwards_in_time();
+}
+
+fn sleep_10ms() {
+    let dur = 10_000_000;
+    let p = monotonic_clock::subscribe(monotonic_clock::now() + dur, true);
+    poll::poll_one(&p);
+    let p = monotonic_clock::subscribe(dur, false);
+    poll::poll_one(&p);
+}
+
+fn sleep_0ms() {
+    let p = monotonic_clock::subscribe(monotonic_clock::now(), true);
+    poll::poll_one(&p);
+    let p = monotonic_clock::subscribe(0, false);
+    poll::poll_one(&p);
+}
+
+fn sleep_backwards_in_time() {
+    let p = monotonic_clock::subscribe(monotonic_clock::now() - 1, true);
+    poll::poll_one(&p);
 }

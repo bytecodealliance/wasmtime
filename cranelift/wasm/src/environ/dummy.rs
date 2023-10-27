@@ -307,6 +307,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         Ok(self.heaps.push(HeapData {
             base: gv,
             min_size: 0,
+            max_size: None,
             offset_guard_size: 0x8000_0000,
             style: HeapStyle::Static {
                 bound: 0x1_0000_0000,

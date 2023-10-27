@@ -31,7 +31,7 @@
 use super::{CodeGenContext, MacroAssembler, OperandSize};
 use crate::{
     abi::{ABIResult, ABI},
-    masm::CmpKind,
+    masm::IntCmpKind,
     CallingConvention,
 };
 use cranelift_codegen::MachLabel;
@@ -193,7 +193,7 @@ impl ControlStackFrame {
                 *original_stack_len = context.stack.len();
                 *original_sp_offset = masm.sp_offset();
                 masm.branch(
-                    CmpKind::Eq,
+                    IntCmpKind::Eq,
                     top.reg.into(),
                     top.reg.into(),
                     *cont,

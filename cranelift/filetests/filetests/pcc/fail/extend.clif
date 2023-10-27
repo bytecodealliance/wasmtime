@@ -1,20 +1,10 @@
 test compile expect-fail
 set enable_pcc=true
 target aarch64
+target x86_64
 
 function %f0(i32) -> i64 {
 block0(v0 ! range(32, 0, 0xffff_ffff): i32):
   v1 ! range(64, 0, 0xffff_0000) = uextend.i64 v0
-  return v1
-}
-
-;; This one is actually true, but we don't support the reasoning it
-;; would need: one needs to assume the "don't-care" bits in the upper
-;; half of the i32 are the worst case (all ones), so `0xffff_ffff` is
-;; possible. If the `i32` were taken through another 32-bit operation
-;; and we asserted its 32-bit range at that point, it would work.
-function %f1(i32) -> i64 {
-block0(v0 ! range(16, 0, 0xffff): i32):
-  v1 ! range(64, 0, 0xffff_ffff) = uextend.i64 v0
   return v1
 }

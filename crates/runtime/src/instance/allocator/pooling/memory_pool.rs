@@ -156,14 +156,14 @@ impl MemoryPool {
         let pkeys = match config.memory_protection_keys {
             MpkEnabled::Auto => {
                 if mpk::is_supported() {
-                    mpk::keys()
+                    mpk::keys(config.max_memory_protection_keys)
                 } else {
                     &[]
                 }
             }
             MpkEnabled::Enable => {
                 if mpk::is_supported() {
-                    mpk::keys()
+                    mpk::keys(config.max_memory_protection_keys)
                 } else {
                     bail!("mpk is disabled on this system")
                 }
@@ -341,8 +341,9 @@ impl MemoryPool {
             // but double-check here to be sure.
             match memory_plan.style {
                 MemoryStyle::Static { bound } => {
-                    let bound = bound * u64::from(WASM_PAGE_SIZE);
-                    assert!(bound <= u64::try_from(self.layout.slot_bytes).unwrap());
+                    let pages_to_next_stripe_slot =
+                        u64::try_from(self.layout.pages_to_next_stripe_slot()).unwrap();
+                    assert!(bound <= pages_to_next_stripe_slot);
                 }
                 MemoryStyle::Dynamic { .. } => {}
             }

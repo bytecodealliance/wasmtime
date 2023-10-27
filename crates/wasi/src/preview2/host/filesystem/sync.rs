@@ -301,26 +301,6 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
         })
     }
 
-    fn lock_shared(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::lock_shared(self, fd).await })
-    }
-
-    fn lock_exclusive(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::lock_exclusive(self, fd).await })
-    }
-
-    fn try_lock_shared(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::try_lock_shared(self, fd).await })
-    }
-
-    fn try_lock_exclusive(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::try_lock_exclusive(self, fd).await })
-    }
-
-    fn unlock(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::unlock(self, fd).await })
-    }
-
     fn read_via_stream(
         &mut self,
         fd: Resource<sync_filesystem::Descriptor>,

@@ -8,7 +8,7 @@ interface udp-create-socket {
     /// Similar to `socket(AF_INET or AF_INET6, SOCK_DGRAM, IPPROTO_UDP)` in POSIX.
     ///
     /// This function does not require a network capability handle. This is considered to be safe because
-    /// at time of creation, the socket is not bound to any `network` yet. Up to the moment `bind`/`connect` is called,
+    /// at time of creation, the socket is not bound to any `network` yet. Up to the moment `bind` is called,
     /// the socket is effectively an in-memory configuration object, unable to communicate with the outside world.
     ///
     /// All sockets are non-blocking. Use the wasi-poll interface to block on asynchronous operations.

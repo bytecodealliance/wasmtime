@@ -2386,6 +2386,23 @@ impl PoolingAllocationConfig {
         self
     }
 
+    /// Sets an upper limit on how many memory protection keys (MPK) Wasmtime
+    /// will use.
+    ///
+    /// This setting is only applicable when
+    /// [`PoolingAllocationConfig::memory_protection_keys`] is set to `enable`
+    /// or `auto`. Configuring this above the HW and OS limits (typically 15)
+    /// has no effect.
+    ///
+    /// If multiple Wasmtime engines are used in the same process, note that all
+    /// engines will share the same set of allocated keys; this setting will
+    /// limit how many keys are allocated initially and thus available to all
+    /// other engines.
+    pub fn max_memory_protection_keys(&mut self, max: usize) -> &mut Self {
+        self.config.max_memory_protection_keys = max;
+        self
+    }
+
     /// Check if memory protection keys (MPK) are available on the current host.
     ///
     /// This is a convenience method for determining MPK availability using the

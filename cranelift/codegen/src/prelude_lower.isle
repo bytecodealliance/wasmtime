@@ -178,6 +178,11 @@
 (rule (multi_reg_to_single (MultiReg.One a))
       (value_reg a))
 
+;; Add a range fact to a register, when compiling with
+;; proof-carrying-code enabled.
+(decl add_range_fact (Reg u16 u64 u64) Reg)
+(extern constructor add_range_fact add_range_fact)
+
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type MachLabel (primitive MachLabel))

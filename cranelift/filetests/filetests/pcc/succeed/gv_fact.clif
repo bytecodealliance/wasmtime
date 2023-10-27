@@ -1,6 +1,7 @@
 test compile
 set enable_pcc=true
 target aarch64
+target x86_64
 
 function %f0(i64 vmctx) -> i64 {
     mt0 = struct 16 { 8: i64 ! mem(mt1, 0, 0) }
@@ -26,7 +27,7 @@ block0(v0 ! mem(mt0, 0, 0): i64):
     return v1
 }
 
-function %f1(i64 vmctx) -> i64 {
+function %f2(i64 vmctx) -> i64 {
     mt0 = struct 16 { 8: i64 ! mem(mt1, 0, 0) }
     mt1 = struct 8 { 0: i64 ! mem(mt2, 0, 0) }
     mt2 = memory 0x1_0000_0000
@@ -40,7 +41,7 @@ block0(v0 ! mem(mt0, 0, 0): i64):
     return v1
 }
 
-function %f2(i64 vmctx) -> i64 {
+function %f3(i64 vmctx) -> i64 {
     mt0 = struct 16 { 8: i64 ! mem(mt1, 0, 0) }
     mt1 = struct 8 { 0: i64 ! mem(mt2, 0, 0) }
     mt2 = memory 0x1_0000_0000

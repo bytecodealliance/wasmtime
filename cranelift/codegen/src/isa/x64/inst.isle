@@ -2163,7 +2163,7 @@
 ;; even not generate a zero-extended move in this case.
 (rule 1 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
         (if-let $true (value32_zeros_upper32 src))
-        src)
+        (add_range_fact src 64 0 0xffff_ffff))
 
 (rule (extend_to_gpr (and val (value_type from_ty))
                      to_ty

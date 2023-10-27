@@ -220,6 +220,26 @@ impl Fact {
         }
     }
 
+    /// Create a range fact that specifies the maximum range for a
+    /// value of the given bit-width, zero-extended into a wider
+    /// width.
+    pub const fn max_range_for_width_extended(from_width: u16, to_width: u16) -> Self {
+        debug_assert!(from_width <= to_width);
+        match from_width {
+            from_width if from_width < 64 => Fact::Range {
+                bit_width: to_width,
+                min: 0,
+                max: (1u64 << from_width) - 1,
+            },
+            64 => Fact::Range {
+                bit_width: to_width,
+                min: 0,
+                max: u64::MAX,
+            },
+            _ => panic!("bit width too large!"),
+        }
+    }
+
     /// Try to infer a minimal fact for a value of the given IR type.
     pub fn infer_from_type(ty: ir::Type) -> Option<&'static Self> {
         static FACTS: [Fact; 4] = [
@@ -362,13 +382,14 @@ impl<'a> FactContext<'a> {
                 },
             ) => {
                 // If the bitwidths we're claiming facts about are the
-                // same, and if the right-hand-side range is larger
-                // than the left-hand-side range, than the LHS
+                // same, or the left-hand-side makes a claim about a
+                // wider bitwidth, and if the right-hand-side range is
+                // larger than the left-hand-side range, than the LHS
                 // subsumes the RHS.
                 //
                 // In other words, we can always expand the claimed
                 // possible value range.
-                bw_lhs == bw_rhs && max_lhs <= max_rhs && min_lhs >= min_rhs
+                bw_lhs >= bw_rhs && max_lhs <= max_rhs && min_lhs >= min_rhs
             }
 
             (
@@ -472,28 +493,38 @@ impl<'a> FactContext<'a> {
 
     /// Computes the `uextend` of a value with the given facts.
     pub fn uextend(&self, fact: &Fact, from_width: u16, to_width: u16) -> Option<Fact> {
+        trace!(
+            "uextend: fact {:?} from {} to {}",
+            fact,
+            from_width,
+            to_width
+        );
+        if from_width == to_width {
+            return Some(fact.clone());
+        }
+
         match fact {
-            // If we have a defined value in bits 0..bit_width, and we
-            // are filling zeroes into from_bits..to_bits, and
-            // bit_width and from_bits are exactly contiguous, then we
-            // have defined values in 0..to_bits (and because this is
-            // a zero-extend, the max value is the same).
+            // If the claim is already for a same-or-wider value and the min
+            // and max are within range of the narrower value, we can
+            // claim the same range.
             Fact::Range {
                 bit_width,
                 min,
                 max,
-            } if *bit_width == from_width => Some(Fact::Range {
-                bit_width: to_width,
-                min: *min,
-                max: *max,
-            }),
+            } if *bit_width >= from_width
+                && *min <= max_value_for_width(from_width)
+                && *max <= max_value_for_width(from_width) =>
+            {
+                Some(Fact::Range {
+                    bit_width: to_width,
+                    min: *min,
+                    max: *max,
+                })
+            }
             // Otherwise, we can at least claim that the value is
-            // within the range of `to_width`.
-            Fact::Range { .. } => Some(Fact::Range {
-                bit_width: to_width,
-                min: 0,
-                max: max_value_for_width(to_width),
-            }),
+            // within the range of `from_width`.
+            Fact::Range { .. } => Some(Fact::max_range_for_width_extended(from_width, to_width)),
+
             _ => None,
         }
     }
@@ -512,6 +543,44 @@ impl<'a> FactContext<'a> {
                 max,
             } if *bit_width == from_width && (*max & (1 << (*bit_width - 1)) == 0) => {
                 self.uextend(fact, from_width, to_width)
+            }
+            _ => None,
+        }
+    }
+
+    /// Computes the bit-truncation of a value with the given fact.
+    pub fn truncate(&self, fact: &Fact, from_width: u16, to_width: u16) -> Option<Fact> {
+        if from_width == to_width {
+            return Some(fact.clone());
+        }
+
+        trace!(
+            "truncate: fact {:?} from {} to {}",
+            fact,
+            from_width,
+            to_width
+        );
+
+        match fact {
+            Fact::Range {
+                bit_width,
+                min,
+                max,
+            } if *bit_width == from_width => {
+                let max_val = (1u64 << to_width) - 1;
+                if *min <= max_val && *max <= max_val {
+                    Some(Fact::Range {
+                        bit_width: to_width,
+                        min: *min,
+                        max: *max,
+                    })
+                } else {
+                    Some(Fact::Range {
+                        bit_width: to_width,
+                        min: 0,
+                        max: max_val,
+                    })
+                }
             }
             _ => None,
         }
@@ -551,11 +620,6 @@ impl<'a> FactContext<'a> {
 
     /// Offsets a value with a fact by a known amount.
     pub fn offset(&self, fact: &Fact, width: u16, offset: i64) -> Option<Fact> {
-        // Any negative offset could underflow, and removes
-        // all claims of constrained range, so for now we only
-        // support positive offsets.
-        let offset = u64::try_from(offset).ok()?;
-
         trace!(
             "FactContext::offset: {:?} + {} in width {}",
             fact,
@@ -563,14 +627,22 @@ impl<'a> FactContext<'a> {
             width
         );
 
+        let compute_offset = |base: u64| -> Option<u64> {
+            if offset >= 0 {
+                base.checked_add(u64::try_from(offset).unwrap())
+            } else {
+                base.checked_sub(u64::try_from(-offset).unwrap())
+            }
+        };
+
         match fact {
             Fact::Range {
                 bit_width,
                 min,
                 max,
             } if *bit_width == width => {
-                let min = min.checked_add(offset)?;
-                let max = max.checked_add(offset)?;
+                let min = compute_offset(*min)?;
+                let max = compute_offset(*max)?;
 
                 Some(Fact::Range {
                     bit_width: *bit_width,
@@ -583,8 +655,8 @@ impl<'a> FactContext<'a> {
                 min_offset: mem_min_offset,
                 max_offset: mem_max_offset,
             } => {
-                let min_offset = mem_min_offset.checked_add(offset)?;
-                let max_offset = mem_max_offset.checked_add(offset)?;
+                let min_offset = compute_offset(*mem_min_offset)?;
+                let max_offset = compute_offset(*mem_max_offset)?;
                 Some(Fact::Mem {
                     ty: *ty,
                     min_offset,
@@ -709,7 +781,10 @@ pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
         let block = BlockIndex::new(block);
         for inst in vcode.block_insns(block).iter() {
             // Check any output facts on this inst.
-            backend.check_fact(&ctx, vcode, inst)?;
+            if let Err(e) = backend.check_fact(&ctx, vcode, inst) {
+                log::error!("Error checking instruction: {:?}", vcode[inst]);
+                return Err(e);
+            }
 
             // If this is a branch, check that all block arguments subsume
             // the assumed facts on the blockparams of successors.

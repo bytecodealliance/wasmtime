@@ -1301,6 +1301,7 @@ impl<I: VCodeInst> VCode<I> {
     /// Set the fact for a given VReg.
     pub fn set_vreg_fact(&mut self, vreg: VReg, fact: Fact) {
         let vreg = self.resolve_vreg_alias(vreg);
+        trace!("set fact on {}: {:?}", vreg, fact);
         self.facts[vreg.vreg()] = Some(fact);
     }
 
@@ -1623,6 +1624,13 @@ impl<I: VCodeInst> VRegAllocator<I> {
     /// before we lowered its producer.
     pub fn take_fact(&mut self, vreg: VirtualReg) -> Option<Fact> {
         self.facts[vreg.index()].take()
+    }
+
+    /// Set a fact only if one doesn't already exist.
+    pub fn set_fact_if_missing(&mut self, vreg: VirtualReg, fact: Fact) {
+        if self.facts[vreg.index()].is_none() {
+            self.set_fact(vreg, fact);
+        }
     }
 
     /// Allocate a fresh ValueRegs, with a given fact to apply if

@@ -4,8 +4,8 @@ use crate::{
     codegen::{CodeGenContext, TableData},
     isa::reg::Reg,
     masm::{
-        CalleeKind, CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm,
-        RemKind, RoundingMode, ShiftKind, StackSlot, TrapCode,
+        CalleeKind, DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm,
+        OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, StackSlot, TrapCode,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -192,7 +192,7 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, _src: Reg, _dst: Reg, _cc: CmpKind, _size: OperandSize) {
+    fn cmov(&mut self, _src: Reg, _dst: Reg, _cc: IntCmpKind, _size: OperandSize) {
         todo!()
     }
 
@@ -347,11 +347,22 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn cmp_with_set(&mut self, _src: RegImm, _dst: Reg, _kind: CmpKind, _size: OperandSize) {
+    fn cmp_with_set(&mut self, _src: RegImm, _dst: Reg, _kind: IntCmpKind, _size: OperandSize) {
         todo!()
     }
 
     fn cmp(&mut self, _src: RegImm, _dest: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn float_cmp_with_set(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _dst: Reg,
+        _kind: FloatCmpKind,
+        _size: OperandSize,
+    ) {
         todo!()
     }
 
@@ -374,7 +385,7 @@ impl Masm for MacroAssembler {
 
     fn branch(
         &mut self,
-        _kind: CmpKind,
+        _kind: IntCmpKind,
         _lhs: RegImm,
         _rhs: Reg,
         _taken: MachLabel,
@@ -399,7 +410,7 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn trapif(&mut self, _cc: CmpKind, _code: TrapCode) {
+    fn trapif(&mut self, _cc: IntCmpKind, _code: TrapCode) {
         todo!()
     }
 }
