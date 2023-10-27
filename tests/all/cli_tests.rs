@@ -184,7 +184,7 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
-    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
+    let stdout = run_wasmtime(&["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -248,7 +248,10 @@ fn timeout_in_invoke() -> Result<()> {
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(
+        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
+        None,
+    )?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -266,7 +269,10 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(
+        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
+        None,
+    )?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 1);
     } else {
@@ -292,7 +298,10 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(
+        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
+        None,
+    )?;
     assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -439,7 +448,7 @@ fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
     let stdout = {
         let path = wasm.path();
-        let args: &[&str] = &["-Ccache=n", "-"];
+        let args: &[&str] = &["-Ccache=n", "-Spreview2=n", "-"];
         let output = run_wasmtime_for_output(args, Some(path))?;
         if !output.status.success() {
             bail!(

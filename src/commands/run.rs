@@ -584,14 +584,22 @@ impl RunCommand {
         if self.run.common.wasi.common != Some(false) {
             match linker {
                 CliLinker::Core(linker) => {
-                    if self.run.common.wasi.preview2 == Some(true) {
-                        preview2::preview1::add_to_linker_sync(linker)?;
-                        self.set_preview2_ctx(store)?;
-                    } else {
-                        wasmtime_wasi::add_to_linker(linker, |host| {
-                            host.preview1_ctx.as_mut().unwrap()
-                        })?;
-                        self.set_preview1_ctx(store)?;
+                    match (self.run.common.wasi.preview2, self.run.common.wasi.threads) {
+                        // If preview2 is explicitly disabled, or if threads
+                        // are enabled, then use the historical preview1
+                        // implementation.
+                        (Some(false), _) | (None, Some(true)) => {
+                            wasmtime_wasi::add_to_linker(linker, |host| {
+                                host.preview1_ctx.as_mut().unwrap()
+                            })?;
+                            self.set_preview1_ctx(store)?;
+                        }
+                        // If preview2 was explicitly requested, always use it.
+                        // Otherwise use it so long as threads are disabled.
+                        (Some(true), _) | (None, Some(false) | None) => {
+                            preview2::preview1::add_to_linker_sync(linker)?;
+                            self.set_preview2_ctx(store)?;
+                        }
                     }
                 }
                 #[cfg(feature = "component-model")]
