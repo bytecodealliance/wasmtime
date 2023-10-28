@@ -35,7 +35,7 @@ impl RunTarget {
 }
 
 /// Common command line arguments for run commands.
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 pub struct RunCommon {
     #[clap(flatten)]
     pub common: CommonOptions,
@@ -211,7 +211,7 @@ impl RunCommon {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Profile {
     Native(wasmtime::ProfilingStrategy),
     Guest { path: String, interval: Duration },

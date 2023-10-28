@@ -7,14 +7,14 @@ const CONFIG_NEW_AFTER_HELP: &str =
     "If no file path is specified, the system configuration file path will be used.";
 
 /// Controls Wasmtime configuration settings
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[clap(name = "config")]
 pub struct ConfigCommand {
     #[clap(subcommand)]
     subcommand: ConfigSubcommand,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(clap::Subcommand, PartialEq)]
 enum ConfigSubcommand {
     /// Creates a new Wasmtime configuration file
     #[clap(after_help = CONFIG_NEW_AFTER_HELP)]
@@ -31,7 +31,7 @@ impl ConfigCommand {
 }
 
 /// Creates a new Wasmtime configuration file
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[clap(name = "new", after_help = CONFIG_NEW_AFTER_HELP)]
 pub struct ConfigNewCommand {
     /// The path of the new configuration file

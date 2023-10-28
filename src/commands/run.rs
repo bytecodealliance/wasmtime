@@ -9,9 +9,10 @@ use crate::common::{Profile, RunCommon, RunTarget};
 
 use anyhow::{anyhow, bail, Context as _, Error, Result};
 use clap::Parser;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use wasmtime::{
@@ -58,11 +59,12 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 }
 
 /// Runs a WebAssembly module
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[structopt(name = "run")]
 pub struct RunCommand {
     #[clap(flatten)]
-    run: RunCommon,
+    #[allow(missing_docs)]
+    pub run: RunCommon,
 
     /// Grant access of a host directory to a guest.
     ///
@@ -71,7 +73,7 @@ pub struct RunCommand {
     /// then the `HOST` directory is opened and made available as the name
     /// `GUEST` in the guest.
     #[clap(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
-    dirs: Vec<(String, String)>,
+    pub dirs: Vec<(String, String)>,
 
     /// Pass an environment variable to the program.
     ///
@@ -81,11 +83,11 @@ pub struct RunCommand {
     /// has in the calling process for the guest, or in other words it will
     /// cause the environment variable `FOO` to be inherited.
     #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
-    vars: Vec<(String, Option<String>)>,
+    pub vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
     #[clap(long, value_name = "FUNCTION")]
-    invoke: Option<String>,
+    pub invoke: Option<String>,
 
     /// Load the given WebAssembly module before the main module
     #[clap(
@@ -94,7 +96,7 @@ pub struct RunCommand {
         value_name = "NAME=MODULE_PATH",
         value_parser = parse_preloads,
     )]
-    preloads: Vec<(String, PathBuf)>,
+    pub preloads: Vec<(String, PathBuf)>,
 
     /// The WebAssembly module to run and arguments to pass to it.
     ///
@@ -102,7 +104,7 @@ pub struct RunCommand {
     /// arguments unless the `--invoke` CLI argument is passed in which case
     /// arguments will be interpreted as arguments to the function specified.
     #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
-    module_and_args: Vec<PathBuf>,
+    pub module_and_args: Vec<OsString>,
 }
 
 enum CliLinker {
@@ -135,7 +137,9 @@ impl RunCommand {
         let engine = Engine::new(&config)?;
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
-        let main = self.run.load_module(&engine, &self.module_and_args[0])?;
+        let main = self
+            .run
+            .load_module(&engine, self.module_and_args[0].as_ref())?;
 
         // Validate coredump-on-trap argument
         if let Some(path) = &self.run.common.debug.coredump {
@@ -212,7 +216,7 @@ impl RunCommand {
             .with_context(|| {
                 format!(
                     "failed to run main module `{}`",
-                    self.module_and_args[0].display()
+                    Path::new(&self.module_and_args[0]).display()
                 )
             }) {
             Ok(()) => (),
@@ -262,7 +266,7 @@ impl RunCommand {
             // For argv[0], which is the program name. Only include the base
             // name of the main wasm module, to avoid leaking path information.
             let arg = if i == 0 {
-                arg.components().next_back().unwrap().as_os_str()
+                Path::new(arg).components().next_back().unwrap().as_os_str()
             } else {
                 arg.as_ref()
             };
