@@ -1826,7 +1826,7 @@ impl fmt::Debug for Config {
 ///
 /// This is used as an argument to the [`Config::strategy`] method.
 #[non_exhaustive]
-#[derive(Clone, Debug, Copy)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy)]
 pub enum Strategy {
     /// An indicator that the compilation strategy should be automatically
     /// selected.

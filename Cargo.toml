@@ -47,6 +47,7 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true }
+humantime = { workspace = true }
 
 async-trait = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
@@ -271,6 +272,7 @@ syn = "2.0.25"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter'] }
 url = "2.3.1"
+humantime = "2.0.0"
 
 [features]
 default = [
@@ -283,6 +285,10 @@ default = [
   "wasi-http",
   "pooling-allocator",
   "serve",
+
+  # By default include compatibility with the "old" CLI from Wasmtime 13 and
+  # prior.
+  "old-cli",
 ]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
@@ -301,6 +307,9 @@ wmemcheck = ["wasmtime/wmemcheck"]
 
 # Enable the `wasmtime serve` command
 serve = ["wasi-http", "component-model"]
+
+# Enables compatibility shims with Wasmtime 13 and prior's CLI.
+old-cli = []
 
 [[test]]
 name = "host_segfault"

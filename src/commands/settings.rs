@@ -8,7 +8,7 @@ use std::str::FromStr;
 use wasmtime_environ::{CompilerBuilder, FlagValue, Setting, SettingKind};
 
 /// Displays available Cranelift settings for a target.
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[clap(name = "run")]
 pub struct SettingsCommand {
     /// The target triple to get the settings for; defaults to the host triple.
