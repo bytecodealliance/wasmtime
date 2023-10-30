@@ -380,8 +380,11 @@ impl hyper::service::Service<Request> for ProxyHandler {
         });
 
         Box::pin(async move {
-            let resp = receiver.await.unwrap()?;
-            Ok(resp)
+            match receiver.await {
+                Ok(Ok(resp)) => Ok(resp),
+                Ok(Err(e)) => Err(e.into()),
+                Err(_) => bail!("guest never invoked `response-outparam::set` method"),
+            }
         })
     }
 }
