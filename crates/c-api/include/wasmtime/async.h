@@ -86,7 +86,7 @@ WASMTIME_CONFIG_PROP(void, async_stack_size, uint64_t)
  * \param interval the amount of fuel at which to yield. A value of 0 will
  *        disable yielding.
  */
-WASM_API_EXTERN void
+WASM_API_EXTERN wasmtime_error_t*
 wasmtime_context_fuel_async_yield_interval(wasmtime_context_t *context,
                                            uint64_t interval);
 
