@@ -186,13 +186,12 @@ impl ResourcesBuilder {
             // with the current path and that's inserted in to
             // `resource_id_to_resource_index` if the resource hasn't been seen
             // yet.
-            types::ComponentEntityType::Type { created, .. } => {
-                let id = match types[created] {
-                    types::Type::Resource(id) => id,
-                    _ => return,
-                };
+            types::ComponentEntityType::Type {
+                created: types::ComponentAnyTypeId::Resource(id),
+                ..
+            } => {
                 self.resource_id_to_resource_index
-                    .entry(id)
+                    .entry(id.resource())
                     .or_insert_with(|| register(path));
             }
 
@@ -200,7 +199,7 @@ impl ResourcesBuilder {
             // all instance exports are walked here. Note the management of
             // `path` which is used for the recursive invocation of this method.
             types::ComponentEntityType::Instance(id) => {
-                let ty = types[id].unwrap_component_instance();
+                let ty = &types[id];
                 for (name, ty) in ty.exports.iter() {
                     path.push(name);
                     self.register_component_entity_type(types, *ty, path, register);
@@ -211,6 +210,7 @@ impl ResourcesBuilder {
             // None of these items can introduce a new component type, so
             // there's no need to recurse over these.
             types::ComponentEntityType::Func(_)
+            | types::ComponentEntityType::Type { .. }
             | types::ComponentEntityType::Module(_)
             | types::ComponentEntityType::Component(_)
             | types::ComponentEntityType::Value(_) => {}
@@ -221,13 +221,7 @@ impl ResourcesBuilder {
     /// defined by the `ty` provided.
     ///
     /// This is used when a local resource is defined within a component for example.
-    pub fn register_resource(
-        &mut self,
-        types: types::TypesRef<'_>,
-        id: types::TypeId,
-        ty: ResourceIndex,
-    ) {
-        let id = types[id].unwrap_resource();
+    pub fn register_resource(&mut self, id: types::ResourceId, ty: ResourceIndex) {
         let prev = self.resource_id_to_resource_index.insert(id, ty);
         assert!(prev.is_none());
     }

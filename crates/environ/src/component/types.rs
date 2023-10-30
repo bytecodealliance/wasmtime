@@ -230,7 +230,7 @@ pub enum ComponentItem {
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),
-    Type(wasmparser::types::TypeId),
+    Type(types::ComponentAnyTypeId),
 }
 
 /// Runtime information about the type information contained within a component.
@@ -440,9 +440,9 @@ impl ComponentTypesBuilder {
     pub fn convert_component_func_type(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentFuncTypeId,
     ) -> Result<TypeFuncIndex> {
-        let ty = types[id].unwrap_component_func();
+        let ty = &types[id];
         let params = ty
             .params
             .iter()
@@ -480,9 +480,13 @@ impl ComponentTypesBuilder {
             types::ComponentEntityType::Func(id) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::ComponentEntityType::Type { created, .. } => match types[created] {
-                types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, created)?),
-                types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, created)),
+            types::ComponentEntityType::Type { created, .. } => match created {
+                types::ComponentAnyTypeId::Defined(id) => {
+                    TypeDef::Interface(self.defined_type(types, id)?)
+                }
+                types::ComponentAnyTypeId::Resource(id) => {
+                    TypeDef::Resource(self.resource_id(id.resource()))
+                }
                 _ => bail!("unsupported type export"),
             },
             types::ComponentEntityType::Value(_) => bail!("values not supported"),
@@ -493,31 +497,37 @@ impl ComponentTypesBuilder {
     pub fn convert_type(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentAnyTypeId,
     ) -> Result<TypeDef> {
-        Ok(match &types[id] {
-            types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, id)?),
-            types::Type::Module(_) => TypeDef::Module(self.convert_module(types, id)?),
-            types::Type::Component(_) => TypeDef::Component(self.convert_component(types, id)?),
-            types::Type::ComponentInstance(_) => {
+        Ok(match id {
+            types::ComponentAnyTypeId::Defined(id) => {
+                TypeDef::Interface(self.defined_type(types, id)?)
+            }
+            // TODO
+            // types::ComponentAnyTypeId::Module(_) => {
+            //     TypeDef::Module(self.convert_module(types, id)?)
+            // }
+            types::ComponentAnyTypeId::Component(id) => {
+                TypeDef::Component(self.convert_component(types, id)?)
+            }
+            types::ComponentAnyTypeId::Instance(id) => {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
-            types::Type::ComponentFunc(_) => {
+            types::ComponentAnyTypeId::Func(id) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::Type::Instance(_) | types::Type::Sub(_) => {
-                unreachable!()
+            types::ComponentAnyTypeId::Resource(id) => {
+                TypeDef::Resource(self.resource_id(id.resource()))
             }
-            types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, id)),
         })
     }
 
     fn convert_component(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentTypeId,
     ) -> Result<TypeComponentIndex> {
-        let ty = types[id].unwrap_component();
+        let ty = &types[id];
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
             result.imports.insert(
@@ -537,9 +547,9 @@ impl ComponentTypesBuilder {
     fn convert_instance(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentInstanceTypeId,
     ) -> Result<TypeComponentInstanceIndex> {
-        let ty = types[id].unwrap_component_instance();
+        let ty = &types[id];
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
             result.exports.insert(
@@ -553,9 +563,9 @@ impl ComponentTypesBuilder {
     fn convert_module(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentCoreModuleTypeId,
     ) -> Result<TypeModuleIndex> {
-        let ty = &types[id].unwrap_module();
+        let ty = &types[id];
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
@@ -592,9 +602,9 @@ impl ComponentTypesBuilder {
     fn defined_type(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentDefinedTypeId,
     ) -> Result<InterfaceType> {
-        let ret = match types[id].unwrap_defined() {
+        let ret = match &types[id] {
             types::ComponentDefinedType::Primitive(ty) => ty.into(),
             types::ComponentDefinedType::Record(e) => {
                 InterfaceType::Record(self.record_type(types, e)?)
@@ -614,9 +624,11 @@ impl ComponentTypesBuilder {
             types::ComponentDefinedType::Result { ok, err } => {
                 InterfaceType::Result(self.result_type(types, ok, err)?)
             }
-            types::ComponentDefinedType::Own(r) => InterfaceType::Own(self.resource_id(types, *r)),
+            types::ComponentDefinedType::Own(r) => {
+                InterfaceType::Own(self.resource_id(r.resource()))
+            }
             types::ComponentDefinedType::Borrow(r) => {
-                InterfaceType::Borrow(self.resource_id(types, *r))
+                InterfaceType::Borrow(self.resource_id(r.resource()))
             }
         };
         let info = self.type_information(&ret);
@@ -768,12 +780,7 @@ impl ComponentTypesBuilder {
 
     /// Converts a wasmparser `id`, which must point to a resource, to its
     /// corresponding `TypeResourceTableIndex`.
-    pub fn resource_id(
-        &mut self,
-        types: types::TypesRef<'_>,
-        id: types::TypeId,
-    ) -> TypeResourceTableIndex {
-        let id = types[id].unwrap_resource();
+    pub fn resource_id(&mut self, id: types::ResourceId) -> TypeResourceTableIndex {
         self.resources.convert(id, &mut self.component_types)
     }
 
