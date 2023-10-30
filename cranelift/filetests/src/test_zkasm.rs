@@ -205,6 +205,8 @@ mod tests {
         or,
         div,
         i64_div,
+        eqz,
+        ne,
         nop,
         _should_fail_unreachable,
     }

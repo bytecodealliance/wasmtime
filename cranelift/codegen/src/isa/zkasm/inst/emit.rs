@@ -1254,7 +1254,7 @@ impl MachInstEmit for Inst {
 
                 let opcode = match cc {
                     IntCC::Equal => "EQ",
-                    IntCC::NotEqual => "NEQ",
+                    IntCC::NotEqual => "EQ",
                     IntCC::SignedLessThan => "SLT",
                     IntCC::SignedGreaterThanOrEqual => todo!(),
                     IntCC::SignedGreaterThan => todo!(),
@@ -1266,6 +1266,11 @@ impl MachInstEmit for Inst {
                 };
 
                 put_string(&format!("$ => {} :{opcode}\n", reg_name(rd.to_reg())), sink);
+
+                if cc == IntCC::NotEqual {
+                    put_string("1 => B\n", sink);
+                    put_string(&format!("$ => {} :XOR\n", reg_name(rd.to_reg())), sink);
+                }
 
                 /*
                 let label_true = sink.get_label();
