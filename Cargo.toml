@@ -206,7 +206,7 @@ fs-set-times = "0.20.0"
 system-interface = { version = "0.26.0", features = ["cap_std_impls"] }
 io-lifetimes = { version = "2.0.2", default-features = false }
 io-extras = "0.18.0"
-rustix = "0.38.8"
+rustix = "0.38.21"
 is-terminal = "0.4.0"
 # wit-bindgen:
 wit-bindgen = { version = "0.13.1", default-features = false }
