@@ -250,6 +250,8 @@ impl ServeCommand {
 
         let listener = tokio::net::TcpListener::bind(self.addr).await?;
 
+        eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
+
         let _epoch_thread = if let Some(timeout) = self.run.common.wasm.timeout {
             Some(EpochThread::spawn(timeout, engine.clone()))
         } else {
