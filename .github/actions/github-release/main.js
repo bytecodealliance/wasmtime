@@ -101,7 +101,7 @@ async function runOnce() {
       prerelease: name === 'dev',
     };
     if (name !== 'dev') {
-      for (let x of releaseNotes.split(/^-+$/m)) {
+      for (let x of releaseNotes.split(/^---+$/m)) {
         if (x.indexOf(name.substring(1)) == -1)
           continue;
         opts.body = x;
