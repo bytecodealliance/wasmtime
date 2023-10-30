@@ -58,11 +58,11 @@ pub fn request(
         Some(path_with_query),
         Some(&scheme),
         Some(authority),
-        &headers,
+        headers,
     );
 
     let outgoing_body = request
-        .write()
+        .body()
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
     if let Some(mut buf) = body {

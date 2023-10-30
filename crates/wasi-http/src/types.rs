@@ -193,6 +193,51 @@ fn invalid_url(e: std::io::Error) -> anyhow::Error {
     ))
 }
 
+impl From<http::Method> for types::Method {
+    fn from(method: http::Method) -> Self {
+        if method == http::Method::GET {
+            types::Method::Get
+        } else if method == hyper::Method::HEAD {
+            types::Method::Head
+        } else if method == hyper::Method::POST {
+            types::Method::Post
+        } else if method == hyper::Method::PUT {
+            types::Method::Put
+        } else if method == hyper::Method::DELETE {
+            types::Method::Delete
+        } else if method == hyper::Method::CONNECT {
+            types::Method::Connect
+        } else if method == hyper::Method::OPTIONS {
+            types::Method::Options
+        } else if method == hyper::Method::TRACE {
+            types::Method::Trace
+        } else if method == hyper::Method::PATCH {
+            types::Method::Patch
+        } else {
+            types::Method::Other(method.to_string())
+        }
+    }
+}
+
+impl TryInto<http::Method> for types::Method {
+    type Error = http::method::InvalidMethod;
+
+    fn try_into(self) -> Result<http::Method, Self::Error> {
+        match self {
+            Method::Get => Ok(http::Method::GET),
+            Method::Head => Ok(http::Method::HEAD),
+            Method::Post => Ok(http::Method::POST),
+            Method::Put => Ok(http::Method::PUT),
+            Method::Delete => Ok(http::Method::DELETE),
+            Method::Connect => Ok(http::Method::CONNECT),
+            Method::Options => Ok(http::Method::OPTIONS),
+            Method::Trace => Ok(http::Method::TRACE),
+            Method::Patch => Ok(http::Method::PATCH),
+            Method::Other(s) => http::Method::from_bytes(s.as_bytes()),
+        }
+    }
+}
+
 pub struct HostIncomingRequest {
     pub parts: http::request::Parts,
     pub body: Option<HostIncomingBodyBuilder>,
@@ -206,8 +251,8 @@ pub struct HostResponseOutparam {
 pub struct HostOutgoingRequest {
     pub method: Method,
     pub scheme: Option<Scheme>,
-    pub path_with_query: String,
-    pub authority: String,
+    pub path_with_query: Option<String>,
+    pub authority: Option<String>,
     pub headers: FieldMap,
     pub body: Option<HyperOutgoingBody>,
 }

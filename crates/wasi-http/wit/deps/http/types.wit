@@ -127,17 +127,73 @@ interface types {
   resource outgoing-request {
 
     /// Construct a new `outgoing-request`.
+    ///
+    /// * `method` represents the HTTP Method for the Request.
+    /// * `path-with-query` is the combination of the HTTP Path and Query for
+    ///    the Request. When `none`, this represents an empty Path and empty
+    ///    Query.
+    /// * `scheme` is the HTTP Related Scheme for the Request. When `none`,
+    ///    the implementation may choose an appropriate default scheme.
+    /// * `authority` is the HTTP Authority for the Request. A value of `none`
+    ///    may be used with Related Schemes which do not require an Authority.
+    ///    The HTTP and HTTPS schemes always require an authority.
+    /// * `headers` is the HTTP Headers for the Request.
+    ///
+    /// It is possible to construct, or manipulate with the accessor functions
+    /// below, an `outgoing-request` with an invalid combination of `scheme`
+    /// and `authority`, or `headers` which are not permitted to be sent.
+    /// It is the obligation of the `outgoing-handler.handle` implementation
+    /// to reject invalid constructions of `outgoing-request`.
     constructor(
       method: method,
       path-with-query: option<string>,
       scheme: option<scheme>,
       authority: option<string>,
-      headers: borrow<headers>
+      headers: headers
     );
 
-    /// Will return the outgoing-body child at most once. If called more than
-    /// once, subsequent calls will return error.
-    write: func() -> result<outgoing-body>;
+    /// Returns the resource corresponding to the outgoing Body for this
+    /// Request.
+    ///
+    /// Returns success on the first call: the `outgoing-body` resource for
+    /// this `outgoing-response` can be retrieved at most once. Subsequent
+    /// calls will return error.
+    body: func() -> result<outgoing-body>;
+
+    /// Get the Method for the Request.
+    method: func() -> method;
+    /// Set the Method for the Request.
+    set-method: func(method: method);
+
+    /// Get the combination of the HTTP Path and Query for the Request.
+    /// When `none`, this represents an empty Path and empty Query.
+    path-with-query: func() -> option<string>;
+    /// Set the combination of the HTTP Path and Query for the Request.
+    /// When `none`, this represents an empty Path and empty Query.
+    set-path-with-query: func(path-with-query: option<string>);
+
+    /// Get the HTTP Related Scheme for the Request. When `none`, the
+    /// implementation may choose an appropriate default scheme.
+    scheme: func() -> option<scheme>;
+    /// Set the HTTP Related Scheme for the Request. When `none`, the
+    /// implementation may choose an appropriate default scheme.
+    set-scheme: func(scheme: option<scheme>);
+
+    /// Get the HTTP Authority for the Request. A value of `none` may be used
+    /// with Related Schemes which do not require an Authority. The HTTP and
+    /// HTTPS schemes always require an authority.
+    authority: func() -> option<string>;
+    /// Set the HTTP Authority for the Request. A value of `none` may be used
+    /// with Related Schemes which do not require an Authority. The HTTP and
+    /// HTTPS schemes always require an authority.
+    set-authority: func(authority: option<string>);
+
+    /// Get the headers associated with the Request.
+    ///
+    /// This headers resource is a child: it must be dropped before the parent
+    /// `outgoing-request` is dropped, or its ownership is transfered to
+    /// another component by e.g. `outgoing-handler.handle`.
+    headers: func() -> headers;
   }
 
   /// Parameters for making an HTTP Request. Each of these parameters is an
@@ -176,6 +232,9 @@ interface types {
     /// This method consumes the `response-outparam` to ensure that it is
     /// called at most once. If it is never called, the implementation
     /// will respond with an error.
+    ///
+    /// The user may provide an `error` to `response` to allow the
+    /// implementation determine how to respond with an HTTP error response.
     set: static func(
       param: response-outparam,
       response: result<outgoing-response, error>,
@@ -260,16 +319,29 @@ interface types {
   resource outgoing-response {
 
     /// Construct an `outgoing-response`.
-    constructor(status-code: status-code, headers: borrow<headers>);
+    ///
+    /// * `status-code` is the HTTP Status Code for the Response.
+    /// * `headers` is the HTTP Headers for the Response.
+    constructor(status-code: status-code, headers: headers);
+
+    /// Get the HTTP Status Code for the Response.
+    status-code: func() -> status-code;
+    /// Set the HTTP Status Code for the Response.
+    set-status-code: func(status-code: status-code);
+
+    /// Get the headers associated with the Request.
+    ///
+    /// This headers resource is a child: it must be dropped before the parent
+    /// `outgoing-request` is dropped, or its ownership is transfered to
+    /// another component by e.g. `outgoing-handler.handle`.
+    headers: func() -> headers;
 
     /// Returns the resource corresponding to the outgoing Body for this Response.
     ///
     /// Returns success on the first call: the `outgoing-body` resource for
-    /// this `outgoing-response` can be retrieved at most once. Sunsequent
+    /// this `outgoing-response` can be retrieved at most once. Subsequent
     /// calls will return error.
-    ///
-    /// FIXME: rename this method to `body`.
-    write: func() -> result<outgoing-body>;
+    body: func() -> result<outgoing-body>;
   }
 
   /// Represents an outgoing HTTP Request or Response's Body.
