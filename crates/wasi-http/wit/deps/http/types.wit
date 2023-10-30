@@ -230,22 +230,25 @@ interface types {
     /// The timeout for the initial connect to the HTTP Server.
     connect-timeout-ms: func() -> option<u32>;
 
-    /// Set the timeout for the initial connect to the HTTP Server.
-    set-connect-timeout-ms: func(ms: option<u32>);
+    /// Set the timeout for the initial connect to the HTTP Server. An error
+    /// return value indicates that this timeout is not supported.
+    set-connect-timeout-ms: func(ms: option<u32>) -> result;
 
     /// The timeout for receiving the first byte of the Response body.
     first-byte-timeout-ms: func() -> option<u32>;
 
-    /// Set the timeout for receiving the first byte of the Response body.
-    set-first-byte-timeout-ms: func(ms: option<u32>);
+    /// Set the timeout for receiving the first byte of the Response body. An
+    /// error return value indicates that this timeout is not supported.
+    set-first-byte-timeout-ms: func(ms: option<u32>) -> result;
 
     /// The timeout for receiving subsequent chunks of bytes in the Response
     /// body stream.
     between-bytes-timeout-ms: func() -> option<u32>;
 
     /// Set the timeout for receiving subsequent chunks of bytes in the Response
-    /// body stream.
-    set-between-bytes-timeout-ms: func(ms: option<u32>);
+    /// body stream. An error return value indicates that this timeout is not
+    /// supported.
+    set-between-bytes-timeout-ms: func(ms: option<u32>) -> result;
   }
 
   /// Represents the ability to send an HTTP Response.

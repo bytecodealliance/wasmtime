@@ -829,9 +829,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
         ms: Option<u32>,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.connect_timeout = ms;
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn first_byte_timeout_ms(
@@ -845,9 +845,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
         ms: Option<u32>,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.first_byte_timeout = ms;
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn between_bytes_timeout_ms(
@@ -861,9 +861,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
         ms: Option<u32>,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.between_bytes_timeout = ms;
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn drop(&mut self, rep: Resource<types::RequestOptions>) -> wasmtime::Result<()> {
