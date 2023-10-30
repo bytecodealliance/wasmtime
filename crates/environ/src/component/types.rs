@@ -503,10 +503,6 @@ impl ComponentTypesBuilder {
             types::ComponentAnyTypeId::Defined(id) => {
                 TypeDef::Interface(self.defined_type(types, id)?)
             }
-            // TODO
-            // types::ComponentAnyTypeId::Module(_) => {
-            //     TypeDef::Module(self.convert_module(types, id)?)
-            // }
             types::ComponentAnyTypeId::Component(id) => {
                 TypeDef::Component(self.convert_component(types, id)?)
             }
