@@ -234,7 +234,8 @@ pub struct RunCommand {
 fn parse_module(s: OsString) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
-        Some("help") | Some("run") | Some("compile") => {
+        Some("help") | Some("run") | Some("compile") | Some("serve") | Some("explore")
+        | Some("settings") | Some("wast") | Some("config") => {
             bail!("module name cannot be the same as a subcommand")
         }
         _ => Ok(s.into()),
