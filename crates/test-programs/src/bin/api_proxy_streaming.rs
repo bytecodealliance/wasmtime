@@ -51,11 +51,11 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
 
             let response = OutgoingResponse::new(
                 200,
-                &Fields::new(&[("content-type".to_string(), b"text/plain".to_vec())]),
+                Fields::new(&[("content-type".to_string(), b"text/plain".to_vec())]),
             );
 
             let mut body =
-                executor::outgoing_body(response.write().expect("response should be writable"));
+                executor::outgoing_body(response.body().expect("response should be writable"));
 
             ResponseOutparam::set(response_out, Ok(response));
 
@@ -75,7 +75,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
         (Method::Post, Some("/echo")) => {
             let response = OutgoingResponse::new(
                 200,
-                &Fields::new(
+                Fields::new(
                     &headers
                         .into_iter()
                         .filter_map(|(k, v)| (k == "content-type").then_some((k, v)))
@@ -84,7 +84,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
             );
 
             let mut body =
-                executor::outgoing_body(response.write().expect("response should be writable"));
+                executor::outgoing_body(response.body().expect("response should be writable"));
 
             ResponseOutparam::set(response_out, Ok(response));
 
@@ -108,9 +108,9 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
         }
 
         _ => {
-            let response = OutgoingResponse::new(405, &Fields::new(&[]));
+            let response = OutgoingResponse::new(405, Fields::new(&[]));
 
-            let body = response.write().expect("response should be writable");
+            let body = response.body().expect("response should be writable");
 
             ResponseOutparam::set(response_out, Ok(response));
 
@@ -137,7 +137,7 @@ async fn hash(url: &Url) -> Result<String> {
                 String::new()
             }
         )),
-        &Fields::new(&[]),
+        Fields::new(&[]),
     );
 
     let response = executor::outgoing_request_send(request).await?;

@@ -65,15 +65,22 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             }
         };
 
-        let authority = if req.authority.find(':').is_some() {
-            req.authority.clone()
+        let authority = if let Some(authority) = req.authority {
+            if authority.find(':').is_some() {
+                authority
+            } else {
+                format!("{}:{port}", authority)
+            }
         } else {
-            format!("{}:{port}", req.authority)
+            String::new()
         };
 
         let mut builder = hyper::Request::builder()
             .method(method)
-            .uri(format!("{scheme}{authority}{}", req.path_with_query))
+            .uri(format!(
+                "{scheme}{authority}{}",
+                req.path_with_query.as_ref().map_or("", String::as_ref)
+            ))
             .header(hyper::header::HOST, &authority);
 
         for (k, v) in req.headers.iter() {
