@@ -1748,12 +1748,15 @@ pub unsafe extern "C" fn poll_oneoff(
                                 clock.timeout
                             };
 
-                            monotonic_clock::subscribe(timeout, false)
+                            monotonic_clock::subscribe_duration(timeout)
                         }
 
                         CLOCKID_MONOTONIC => {
-                            let s = monotonic_clock::subscribe(clock.timeout, absolute);
-                            s
+                            if absolute {
+                                monotonic_clock::subscribe_instant(clock.timeout)
+                            } else {
+                                monotonic_clock::subscribe_duration(clock.timeout)
+                            }
                         }
 
                         _ => return Err(ERRNO_INVAL),

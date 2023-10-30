@@ -11,8 +11,13 @@
 interface monotonic-clock {
     use wasi:io/poll@0.2.0-rc-2023-11-05.{pollable};
 
-    /// A timestamp in nanoseconds.
+    /// An instant in time, in nanoseconds. An instant is relative to an
+    /// unspecified initial value, and can only be compared to instances from
+    /// the same monotonic-clock.
     type instant = u64;
+
+    /// A duration of time, in nanoseconds.
+    type duration = u64;
 
     /// Read the current value of the clock.
     ///
@@ -20,13 +25,20 @@ interface monotonic-clock {
     /// produce a sequence of non-decreasing values.
     now: func() -> instant;
 
-    /// Query the resolution of the clock.
-    resolution: func() -> instant;
+    /// Query the resolution of the clock. Returns the duration of time
+    /// corresponding to a clock tick.
+    resolution: func() -> duration;
 
-    /// Create a `pollable` which will resolve once the specified time has been
-    /// reached.
-    subscribe: func(
+    /// Create a `pollable` which will resolve once the specified instant
+    /// occured.
+    subscribe-instant: func(
         when: instant,
-        absolute: bool
+    ) -> pollable;
+
+    /// Create a `pollable` which will resolve once the given duration has
+    /// elapsed, starting at the time at which this function was called.
+    /// occured.
+    subscribe-duration: func(
+        when: duration,
     ) -> pollable;
 }

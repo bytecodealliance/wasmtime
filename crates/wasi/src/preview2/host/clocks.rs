@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 
 use crate::preview2::bindings::{
-    clocks::monotonic_clock::{self, Instant},
+    clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::timezone::{self, TimezoneDisplay},
     clocks::wall_clock::{self, Datetime},
 };
@@ -43,6 +43,23 @@ impl<T: WasiView> wall_clock::Host for T {
     }
 }
 
+fn subscribe_to_duration(
+    table: &mut crate::preview2::Table,
+    duration: tokio::time::Duration,
+) -> anyhow::Result<Resource<Pollable>> {
+    let sleep = if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
+        // NB: this resource created here is not actually exposed to wasm, it's
+        // only an internal implementation detail used to match the signature
+        // expected by `subscribe`.
+        table.push(Deadline::Instant(deadline))?
+    } else {
+        // If the user specifies a time so far in the future we can't
+        // represent it, wait forever rather than trap.
+        table.push(Deadline::Never)?
+    };
+    subscribe(table, sleep)
+}
+
 impl<T: WasiView> monotonic_clock::Host for T {
     fn now(&mut self) -> anyhow::Result<Instant> {
         Ok(self.ctx().monotonic_clock.now())
@@ -52,30 +69,33 @@ impl<T: WasiView> monotonic_clock::Host for T {
         Ok(self.ctx().monotonic_clock.resolution())
     }
 
-    fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<Pollable>> {
         let clock_now = self.ctx().monotonic_clock.now();
-        let duration = if absolute {
-            Duration::from_nanos(when.saturating_sub(clock_now))
+        let duration = if when > clock_now {
+            Duration::from_nanos(when - clock_now)
         } else {
-            Duration::from_nanos(when)
+            Duration::from_nanos(0)
         };
-        let deadline = tokio::time::Instant::now()
-            .checked_add(duration)
-            .ok_or_else(|| anyhow::anyhow!("time overflow: duration {duration:?}"))?;
-        // NB: this resource created here is not actually exposed to wasm, it's
-        // only an internal implementation detail used to match the signature
-        // expected by `subscribe`.
-        let sleep = self.table_mut().push(Sleep(deadline))?;
-        subscribe(self.table_mut(), sleep)
+        subscribe_to_duration(&mut self.table_mut(), duration)
+    }
+
+    fn subscribe_duration(&mut self, duration: WasiDuration) -> anyhow::Result<Resource<Pollable>> {
+        subscribe_to_duration(&mut self.table_mut(), Duration::from_nanos(duration))
     }
 }
 
-struct Sleep(tokio::time::Instant);
+enum Deadline {
+    Instant(tokio::time::Instant),
+    Never,
+}
 
 #[async_trait::async_trait]
-impl Subscribe for Sleep {
+impl Subscribe for Deadline {
     async fn ready(&mut self) {
-        tokio::time::sleep_until(self.0).await;
+        match self {
+            Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
+            Deadline::Never => std::future::pending().await,
+        }
     }
 }
 

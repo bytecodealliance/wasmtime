@@ -84,7 +84,7 @@ unsafe fn test_timeout() {
     );
     assert!(
         after - before >= timeout,
-        "poll_oneoff should sleep for the specified interval"
+        "poll_oneoff should sleep for the specified interval of {timeout}. before: {before}, after: {after}"
     );
 }
 
@@ -122,7 +122,7 @@ unsafe fn test_sleep() {
     );
     assert!(
         after - before >= timeout,
-        "poll_oneoff should sleep for the specified interval"
+        "poll_oneoff should sleep for the specified interval of {timeout}. before: {before}, after: {after}"
     );
 }
 
