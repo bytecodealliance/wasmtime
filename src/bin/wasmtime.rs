@@ -24,7 +24,7 @@ use clap::Parser;
                   \n\
                   Invoking a specific function (e.g. `add`) in a WebAssembly module:\n\
                   \n  \
-                  wasmtime example.wasm --invoke add 1 2\n",
+                  wasmtime --invoke add example.wasm 1 2\n",
 
     // This option enables the pattern below where we ask clap to parse twice
     // sorta: once where it's trying to find a subcommand and once assuming
