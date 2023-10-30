@@ -821,7 +821,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
     fn connect_timeout_ms(
         &mut self,
         opts: Resource<types::RequestOptions>,
-    ) -> wasmtime::Result<Option<u32>> {
+    ) -> wasmtime::Result<Option<types::Duration>> {
         let millis = self
             .table()
             .get(&opts)?
@@ -838,7 +838,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
     fn set_connect_timeout_ms(
         &mut self,
         opts: Resource<types::RequestOptions>,
-        ms: Option<u32>,
+        ms: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.connect_timeout =
             ms.map(|ms| std::time::Duration::from_millis(ms as u64));
@@ -848,7 +848,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
     fn first_byte_timeout_ms(
         &mut self,
         opts: Resource<types::RequestOptions>,
-    ) -> wasmtime::Result<Option<u32>> {
+    ) -> wasmtime::Result<Option<types::Duration>> {
         let millis = self
             .table()
             .get(&opts)?
@@ -865,7 +865,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
     fn set_first_byte_timeout_ms(
         &mut self,
         opts: Resource<types::RequestOptions>,
-        ms: Option<u32>,
+        ms: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.first_byte_timeout =
             ms.map(|ms| std::time::Duration::from_millis(ms as u64));
@@ -875,7 +875,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
     fn between_bytes_timeout_ms(
         &mut self,
         opts: Resource<types::RequestOptions>,
-    ) -> wasmtime::Result<Option<u32>> {
+    ) -> wasmtime::Result<Option<types::Duration>> {
         let millis = self
             .table()
             .get(&opts)?
@@ -892,7 +892,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
     fn set_between_bytes_timeout_ms(
         &mut self,
         opts: Resource<types::RequestOptions>,
-        ms: Option<u32>,
+        ms: Option<types::Duration>,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.table().get_mut(&opts)?.between_bytes_timeout =
             ms.map(|ms| std::time::Duration::from_millis(ms as u64));
