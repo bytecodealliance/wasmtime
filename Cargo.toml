@@ -48,6 +48,7 @@ serde_json = { workspace = true }
 wasmparser = { workspace = true }
 tracing = { workspace = true }
 log = { workspace = true }
+humantime = { workspace = true }
 
 async-trait = { workspace = true }
 bytes = { workspace = true }
@@ -208,18 +209,18 @@ io-extras = "0.18.0"
 rustix = "0.38.8"
 is-terminal = "0.4.0"
 # wit-bindgen:
-wit-bindgen = { version = "0.13.0", default-features = false }
+wit-bindgen = { version = "0.13.1", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.115.0"
-wat = "1.0.77"
-wast = "66.0.2"
-wasmprinter = "0.2.70"
-wasm-encoder = "0.35.0"
-wasm-smith = "0.12.21"
-wasm-mutate = "0.2.38"
-wit-parser = "0.12.1"
-wit-component = "0.16.0"
+wasmparser = "0.116.0"
+wat = "1.0.78"
+wast = "67.0.0"
+wasmprinter = "0.2.71"
+wasm-encoder = "0.36.1"
+wasm-smith = "0.12.22"
+wasm-mutate = "0.2.39"
+wit-parser = "0.12.2"
+wit-component = "0.17.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -266,6 +267,7 @@ syn = "2.0.25"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
+humantime = "2.0.0"
 
 # =============================================================================
 #
@@ -309,6 +311,10 @@ default = [
   # cost, so allow disabling this through disabling of our own `default`
   # feature.
   "clap/default",
+
+  # By default include compatibility with the "old" CLI from Wasmtime 13 and
+  # prior.
+  "old-cli",
 ]
 
 # ========================================
@@ -347,6 +353,9 @@ profiling = ["wasmtime/profiling"]
 coredump = ["wasmtime-cli-flags/coredump"]
 addr2line = ["wasmtime/addr2line"]
 debug-builtins = ["wasmtime/debug-builtins"]
+
+# Enables compatibility shims with Wasmtime 13 and prior's CLI.
+old-cli = []
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

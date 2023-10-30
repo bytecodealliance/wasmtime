@@ -54,11 +54,12 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 }
 
 /// Runs a WebAssembly module
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[structopt(name = "run")]
 pub struct RunCommand {
     #[clap(flatten)]
-    run: RunCommon,
+    #[allow(missing_docs)]
+    pub run: RunCommon,
 
     /// Grant access of a host directory to a guest.
     ///
@@ -67,7 +68,7 @@ pub struct RunCommand {
     /// then the `HOST` directory is opened and made available as the name
     /// `GUEST` in the guest.
     #[clap(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
-    dirs: Vec<(String, String)>,
+    pub dirs: Vec<(String, String)>,
 
     /// Pass an environment variable to the program.
     ///
@@ -77,11 +78,11 @@ pub struct RunCommand {
     /// has in the calling process for the guest, or in other words it will
     /// cause the environment variable `FOO` to be inherited.
     #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
-    vars: Vec<(String, Option<String>)>,
+    pub vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
     #[clap(long, value_name = "FUNCTION")]
-    invoke: Option<String>,
+    pub invoke: Option<String>,
 
     /// Load the given WebAssembly module before the main module
     #[clap(
@@ -90,7 +91,7 @@ pub struct RunCommand {
         value_name = "NAME=MODULE_PATH",
         value_parser = parse_preloads,
     )]
-    preloads: Vec<(String, PathBuf)>,
+    pub preloads: Vec<(String, PathBuf)>,
 
     /// The WebAssembly module to run and arguments to pass to it.
     ///
@@ -98,7 +99,7 @@ pub struct RunCommand {
     /// arguments unless the `--invoke` CLI argument is passed in which case
     /// arguments will be interpreted as arguments to the function specified.
     #[clap(value_name = "WASM", trailing_var_arg = true, required = true)]
-    module_and_args: Vec<OsString>,
+    pub module_and_args: Vec<OsString>,
 }
 
 enum CliLinker {
@@ -584,14 +585,22 @@ impl RunCommand {
         if self.run.common.wasi.common != Some(false) {
             match linker {
                 CliLinker::Core(linker) => {
-                    if self.run.common.wasi.preview2 == Some(true) {
-                        preview2::preview1::add_to_linker_sync(linker)?;
-                        self.set_preview2_ctx(store)?;
-                    } else {
-                        wasmtime_wasi::add_to_linker(linker, |host| {
-                            host.preview1_ctx.as_mut().unwrap()
-                        })?;
-                        self.set_preview1_ctx(store)?;
+                    match (self.run.common.wasi.preview2, self.run.common.wasi.threads) {
+                        // If preview2 is explicitly disabled, or if threads
+                        // are enabled, then use the historical preview1
+                        // implementation.
+                        (Some(false), _) | (None, Some(true)) => {
+                            wasmtime_wasi::add_to_linker(linker, |host| {
+                                host.preview1_ctx.as_mut().unwrap()
+                            })?;
+                            self.set_preview1_ctx(store)?;
+                        }
+                        // If preview2 was explicitly requested, always use it.
+                        // Otherwise use it so long as threads are disabled.
+                        (Some(true), _) | (None, Some(false) | None) => {
+                            preview2::preview1::add_to_linker_sync(linker)?;
+                            self.set_preview2_ctx(store)?;
+                        }
                     }
                 }
                 #[cfg(feature = "component-model")]

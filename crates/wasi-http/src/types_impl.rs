@@ -1,4 +1,4 @@
-use crate::bindings::http::types::{Error, Headers, Method, Scheme, StatusCode, Trailers};
+use crate::bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers};
 use crate::body::{FinishMessage, HostFutureTrailers, HostFutureTrailersState};
 use crate::types::{HostIncomingRequest, HostOutgoingResponse};
 use crate::WasiHttpView;
@@ -18,6 +18,19 @@ use wasmtime_wasi::preview2::{
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {}
+
+/// Take ownership of the underlying [`FieldMap`] associated with this fields resource. If the
+/// fields resource references another fields, the returned [`FieldMap`] will be cloned.
+fn move_fields(table: &mut Table, id: Resource<HostFields>) -> wasmtime::Result<FieldMap> {
+    match table.delete(id)? {
+        HostFields::Ref { parent, get_fields } => {
+            let entry = table.get_any_mut(parent)?;
+            Ok(get_fields(entry).clone())
+        }
+
+        HostFields::Owned { fields } => Ok(fields),
+    }
+}
 
 fn get_fields_mut<'a>(
     table: &'a mut Table,
@@ -145,29 +158,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
 
 impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingRequest for T {
     fn method(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<Method> {
-        let method = self.table().get(&id)?.parts.method.as_ref();
-
-        if method == hyper::Method::GET {
-            Ok(Method::Get)
-        } else if method == hyper::Method::HEAD {
-            Ok(Method::Head)
-        } else if method == hyper::Method::POST {
-            Ok(Method::Post)
-        } else if method == hyper::Method::PUT {
-            Ok(Method::Put)
-        } else if method == hyper::Method::DELETE {
-            Ok(Method::Delete)
-        } else if method == hyper::Method::CONNECT {
-            Ok(Method::Connect)
-        } else if method == hyper::Method::OPTIONS {
-            Ok(Method::Options)
-        } else if method == hyper::Method::TRACE {
-            Ok(Method::Trace)
-        } else if method == hyper::Method::PATCH {
-            Ok(Method::Patch)
-        } else {
-            Ok(Method::Other(method.to_owned()))
-        }
+        let method = self.table().get(&id)?.parts.method.clone();
+        Ok(method.into())
     }
     fn path_with_query(
         &mut self,
@@ -258,11 +250,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         authority: Option<String>,
         headers: Resource<Headers>,
     ) -> wasmtime::Result<Resource<HostOutgoingRequest>> {
-        let headers = get_fields_mut(self.table(), &headers)?.clone();
+        let headers = move_fields(self.table(), headers)?;
+
         self.table()
             .push(HostOutgoingRequest {
-                path_with_query: path_with_query.unwrap_or("".to_string()),
-                authority: authority.unwrap_or("".to_string()),
+                path_with_query,
+                authority,
                 method,
                 headers,
                 scheme,
@@ -271,7 +264,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
             .context("[new_outgoing_request] pushing request")
     }
 
-    fn write(
+    fn body(
         &mut self,
         request: Resource<HostOutgoingRequest>,
     ) -> wasmtime::Result<Result<Resource<HostOutgoingBody>, ()>> {
@@ -298,6 +291,97 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
     fn drop(&mut self, request: Resource<HostOutgoingRequest>) -> wasmtime::Result<()> {
         let _ = self.table().delete(request)?;
         Ok(())
+    }
+
+    fn method(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+    ) -> wasmtime::Result<Method> {
+        Ok(self.table().get(&request)?.method.clone().try_into()?)
+    }
+
+    fn set_method(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+        method: Method,
+    ) -> wasmtime::Result<()> {
+        self.table().get_mut(&request)?.method = method.into();
+        Ok(())
+    }
+
+    fn path_with_query(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+    ) -> wasmtime::Result<Option<String>> {
+        Ok(self.table().get(&request)?.path_with_query.clone())
+    }
+
+    fn set_path_with_query(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+        path_with_query: Option<String>,
+    ) -> wasmtime::Result<()> {
+        self.table().get_mut(&request)?.path_with_query = path_with_query;
+        Ok(())
+    }
+
+    fn scheme(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+    ) -> wasmtime::Result<Option<Scheme>> {
+        Ok(self.table().get(&request)?.scheme.clone())
+    }
+
+    fn set_scheme(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+        scheme: Option<Scheme>,
+    ) -> wasmtime::Result<()> {
+        self.table().get_mut(&request)?.scheme = scheme;
+        Ok(())
+    }
+
+    fn authority(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+    ) -> wasmtime::Result<Option<String>> {
+        Ok(self.table().get(&request)?.authority.clone())
+    }
+
+    fn set_authority(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+        authority: Option<String>,
+    ) -> wasmtime::Result<()> {
+        self.table().get_mut(&request)?.authority = authority;
+        Ok(())
+    }
+
+    fn headers(
+        &mut self,
+        request: wasmtime::component::Resource<types::OutgoingRequest>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<Headers>> {
+        let _ = self
+            .table()
+            .get(&request)
+            .context("[outgoing_request_headers] getting request")?;
+
+        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
+            &mut elem
+                .downcast_mut::<types::OutgoingRequest>()
+                .unwrap()
+                .headers
+        }
+
+        let id = self.table().push_child(
+            HostFields::Ref {
+                parent: request.rep(),
+                get_fields,
+            },
+            &request,
+        )?;
+
+        Ok(id)
     }
 }
 
@@ -470,7 +554,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
         status: StatusCode,
         headers: Resource<Headers>,
     ) -> wasmtime::Result<Resource<HostOutgoingResponse>> {
-        let fields = get_fields_mut(self.table(), &headers)?.clone();
+        let fields = move_fields(self.table(), headers)?;
 
         let id = self.table().push(HostOutgoingResponse {
             status,
@@ -481,7 +565,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
         Ok(id)
     }
 
-    fn write(
+    fn body(
         &mut self,
         id: Resource<HostOutgoingResponse>,
     ) -> wasmtime::Result<Result<Resource<HostOutgoingBody>, ()>> {
@@ -498,6 +582,43 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
         let id = self.table().push(host)?;
 
         Ok(Ok(id))
+    }
+
+    fn status_code(
+        &mut self,
+        id: Resource<HostOutgoingResponse>,
+    ) -> wasmtime::Result<types::StatusCode> {
+        Ok(self.table().get(&id)?.status)
+    }
+
+    fn set_status_code(
+        &mut self,
+        id: Resource<HostOutgoingResponse>,
+        status: types::StatusCode,
+    ) -> wasmtime::Result<()> {
+        self.table().get_mut(&id)?.status = status;
+        Ok(())
+    }
+
+    fn headers(
+        &mut self,
+        id: Resource<HostOutgoingResponse>,
+    ) -> wasmtime::Result<Resource<types::Headers>> {
+        // Trap if the outgoing-response doesn't exist.
+        let _ = self.table().get(&id)?;
+
+        fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
+            let resp = elem.downcast_mut::<HostOutgoingResponse>().unwrap();
+            &mut resp.headers
+        }
+
+        Ok(self.table().push_child(
+            HostFields::Ref {
+                parent: id.rep(),
+                get_fields,
+            },
+            &id,
+        )?)
     }
 
     fn drop(&mut self, id: Resource<HostOutgoingResponse>) -> wasmtime::Result<()> {

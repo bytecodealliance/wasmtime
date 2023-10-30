@@ -1515,6 +1515,12 @@ criteria = "safe-to-deploy"
 delta = "0.2.146 -> 0.2.147"
 notes = "Only new type definitions and updating others for some platforms, no major changes"
 
+[[audits.libc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.148 -> 0.2.149"
+notes = "Lots of new functions and constants for new platforms and nothing out of the ordinary for what one would expect of the `libc` crate."
+
 [[audits.libfuzzer-sys]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-run"

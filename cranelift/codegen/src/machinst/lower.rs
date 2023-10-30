@@ -148,6 +148,9 @@ pub trait LowerBackend {
         None
     }
 
+    /// The type of state carried between `check_fact` invocations.
+    type FactFlowState: Default + Clone + Debug;
+
     /// Check any facts about an instruction, given VCode with facts
     /// on VRegs. Takes mutable `VCode` so that it can propagate some
     /// kinds of facts automatically.
@@ -156,6 +159,7 @@ pub trait LowerBackend {
         _ctx: &FactContext<'_>,
         _vcode: &mut VCode<Self::MInst>,
         _inst: InsnIndex,
+        _state: &mut Self::FactFlowState,
     ) -> PccResult<()> {
         Err(PccError::UnimplementedBackend)
     }

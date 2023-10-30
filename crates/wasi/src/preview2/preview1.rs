@@ -9,7 +9,7 @@ use crate::preview2::bindings::{
     io::{poll, streams},
 };
 use crate::preview2::{FsError, IsATTY, StreamError, StreamResult, TableError, WasiView};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{bail, Context};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashSet};
 use std::mem::{self, size_of, size_of_val};
@@ -1131,6 +1131,9 @@ impl<
             .map_err(types::Error::trap)?;
         let mut fs_flags = types::Fdflags::empty();
         let mut fs_rights_base = types::Rights::all();
+        if let types::Filetype::Directory = fs_filetype {
+            fs_rights_base &= !types::Rights::FD_SEEK;
+        }
         if !flags.contains(filesystem::DescriptorFlags::READ) {
             fs_rights_base &= !types::Rights::FD_READ;
         }
@@ -2264,14 +2267,11 @@ impl<
 
     #[instrument(skip(self))]
     fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
-        let status = match status {
-            0 => Ok(()),
-            _ => Err(()),
-        };
-        match self.exit(status) {
-            Err(e) => e,
-            Ok(()) => anyhow!("`exit` did not return an error"),
+        // Check that the status is within WASI's range.
+        if status >= 126 {
+            return anyhow::Error::msg("exit with invalid exit status outside of [0..126)");
         }
+        crate::preview2::I32Exit(status as i32).into()
     }
 
     #[instrument(skip(self))]

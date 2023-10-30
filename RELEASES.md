@@ -10,6 +10,25 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 14.0.3
+
+Released 2023-10-29
+
+### Fixed
+
+* The `wasmtime` executable will now attempt to more gracefully handle the
+  transition from the 13.0.0 CLI arguments and parsing to the changes in 14.0.0.
+  CLI commands should now warn if they no longer work with the new parser, but
+  still execute as they previously did. This behavior can be controlled via a
+  new `WASMTIME_NEW_CLI` environment variable if necessary.
+  [#7385](https://github.com/bytecodealliance/wasmtime/pull/7385)
+
+* The `serve` subcommand of the `wasmtime` CLI is now enabled by default for the
+  `wasmtime` executable.
+  [#7392](https://github.com/bytecodealliance/wasmtime/pull/7392)
+
+--------------------------------------------------------------------------------
+
 ## 14.0.2
 
 Released 2023-10-26

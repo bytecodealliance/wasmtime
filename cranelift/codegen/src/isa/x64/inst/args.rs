@@ -2007,7 +2007,7 @@ impl fmt::Display for ShiftKind {
 
 /// These indicate condition code tests.  Not all are represented since not all are useful in
 /// compiler-generated code.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CC {
     ///  overflow

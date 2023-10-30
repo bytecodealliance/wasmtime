@@ -107,7 +107,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     /// Resolves a function [`Callee`] from an index.
     pub fn callee_from_index(&self, idx: FuncIndex) -> Callee {
         let types = &self.translation.get_types();
-        let ty = types[types.function_at(idx.as_u32())].unwrap_func();
+        let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
         let ty = self.translation.module.convert_func_type(ty);
         let import = self.translation.module.is_imported_function(idx);
 

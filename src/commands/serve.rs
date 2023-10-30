@@ -64,7 +64,7 @@ const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
 );
 
 /// Runs a WebAssembly module
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[structopt(name = "serve")]
 pub struct ServeCommand {
     #[clap(flatten)]
@@ -250,6 +250,8 @@ impl ServeCommand {
 
         let listener = tokio::net::TcpListener::bind(self.addr).await?;
 
+        eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
+
         let _epoch_thread = if let Some(timeout) = self.run.common.wasm.timeout {
             Some(EpochThread::spawn(timeout, engine.clone()))
         } else {
@@ -380,8 +382,11 @@ impl hyper::service::Service<Request> for ProxyHandler {
         });
 
         Box::pin(async move {
-            let resp = receiver.await.unwrap()?;
-            Ok(resp)
+            match receiver.await {
+                Ok(Ok(resp)) => Ok(resp),
+                Ok(Err(e)) => Err(e.into()),
+                Err(_) => bail!("guest never invoked `response-outparam::set` method"),
+            }
         })
     }
 }

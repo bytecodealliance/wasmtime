@@ -12,9 +12,9 @@ fn main() {
             None,
             Some(&http_types::Scheme::Https),
             Some("www.example.com"),
-            &headers,
+            headers,
         );
-        let outgoing_body = request.write().unwrap();
+        let outgoing_body = request.body().unwrap();
         let request_body = outgoing_body.write().unwrap();
         request_body
             .blocking_write_and_flush("request-body".as_bytes())
@@ -25,8 +25,8 @@ fn main() {
             "Content-Type".to_string(),
             "application/text".to_string().into_bytes(),
         )]);
-        let response = http_types::OutgoingResponse::new(200, &headers);
-        let outgoing_body = response.write().unwrap();
+        let response = http_types::OutgoingResponse::new(200, headers);
+        let outgoing_body = response.body().unwrap();
         let response_body = outgoing_body.write().unwrap();
         response_body
             .blocking_write_and_flush("response-body".as_bytes())

@@ -39,6 +39,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct OptimizeOptions {
         /// Optimization level of generated code (0-2, s; default: 0)
         pub opt_level: Option<wasmtime::OptLevel>,
@@ -74,6 +75,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct CodegenOptions {
         /// Either `cranelift` or `winch`.
         ///
@@ -103,6 +105,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
@@ -122,6 +125,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct WasmOptions {
         /// Enable canonicalization of all NaN values.
         pub nan_canonicalization: Option<bool>,
@@ -212,6 +216,7 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
+    #[derive(PartialEq, Clone)]
     pub struct WasiOptions {
         /// Enable support for WASI common APIs
         pub common: Option<bool>,
@@ -256,14 +261,14 @@ wasmtime_option_group! {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WasiNnGraph {
     pub format: String,
     pub dir: String,
 }
 
 /// Common options for commands that translate WebAssembly modules
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 pub struct CommonOptions {
     // These options groups are used to parse `-O` and such options but aren't
     // the raw form consumed by the CLI. Instead they're pushed into the `pub`
@@ -560,5 +565,33 @@ impl CommonOptions {
             }
         }
         Ok(())
+    }
+}
+
+impl PartialEq for CommonOptions {
+    fn eq(&self, other: &CommonOptions) -> bool {
+        let mut me = self.clone();
+        me.configure();
+        let mut other = other.clone();
+        other.configure();
+        let CommonOptions {
+            opts_raw: _,
+            codegen_raw: _,
+            debug_raw: _,
+            wasm_raw: _,
+            wasi_raw: _,
+            configured: _,
+
+            opts,
+            codegen,
+            debug,
+            wasm,
+            wasi,
+        } = me;
+        opts == other.opts
+            && codegen == other.codegen
+            && debug == other.debug
+            && wasm == other.wasm
+            && wasi == other.wasi
     }
 }

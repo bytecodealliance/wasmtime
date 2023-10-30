@@ -32,7 +32,7 @@ pub fn get_wasmtime_command() -> Result<Command> {
     // If we're running tests with a "runner" then we might be doing something
     // like cross-emulation, so spin up the emulator rather than the tests
     // itself, which may not be natively executable.
-    let cmd = if let Some((_, runner)) = runner {
+    let mut cmd = if let Some((_, runner)) = runner {
         let mut parts = runner.split_whitespace();
         let mut cmd = Command::new(parts.next().unwrap());
         for arg in parts {
@@ -43,6 +43,10 @@ pub fn get_wasmtime_command() -> Result<Command> {
     } else {
         Command::new(&me)
     };
+
+    // Ignore this if it's specified in the environment to allow tests to run in
+    // "default mode" by default.
+    cmd.env_remove("WASMTIME_NEW_CLI");
 
     Ok(cmd)
 }
@@ -184,7 +188,7 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
-    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
+    let stdout = run_wasmtime(&["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
 }
@@ -248,7 +252,10 @@ fn timeout_in_invoke() -> Result<()> {
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(
+        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
+        None,
+    )?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
 }
@@ -266,7 +273,10 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(
+        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
+        None,
+    )?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 1);
     } else {
@@ -292,7 +302,10 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
-    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    let output = run_wasmtime_for_output(
+        &["-Ccache=n", "-Spreview2=n", wasm.path().to_str().unwrap()],
+        None,
+    )?;
     assert_eq!(output.status.code().unwrap(), 1);
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -439,7 +452,7 @@ fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
     let stdout = {
         let path = wasm.path();
-        let args: &[&str] = &["-Ccache=n", "-"];
+        let args: &[&str] = &["-Ccache=n", "-Spreview2=n", "-"];
         let output = run_wasmtime_for_output(args, Some(path))?;
         if !output.status.success() {
             bail!(
@@ -589,6 +602,7 @@ fn wasm_flags() -> Result<()> {
     // command itself
     let stdout = run_wasmtime(&[
         "run",
+        "--",
         "tests/all/cli_tests/print-arguments.wat",
         "--argument",
         "-for",
@@ -605,7 +619,7 @@ fn wasm_flags() -> Result<()> {
             command\n\
         "
     );
-    let stdout = run_wasmtime(&["run", "tests/all/cli_tests/print-arguments.wat", "-"])?;
+    let stdout = run_wasmtime(&["run", "--", "tests/all/cli_tests/print-arguments.wat", "-"])?;
     assert_eq!(
         stdout,
         "\
@@ -613,7 +627,7 @@ fn wasm_flags() -> Result<()> {
             -\n\
         "
     );
-    let stdout = run_wasmtime(&["run", "tests/all/cli_tests/print-arguments.wat", "--"])?;
+    let stdout = run_wasmtime(&["run", "--", "tests/all/cli_tests/print-arguments.wat", "--"])?;
     assert_eq!(
         stdout,
         "\
@@ -623,6 +637,7 @@ fn wasm_flags() -> Result<()> {
     );
     let stdout = run_wasmtime(&[
         "run",
+        "--",
         "tests/all/cli_tests/print-arguments.wat",
         "--",
         "--",
@@ -995,6 +1010,156 @@ fn preview2_stdin() -> Result<()> {
         let written = count_up_to(amt)?;
         assert!(written < slop + amt, "wrote too much {written}");
     }
+    Ok(())
+}
+
+#[test]
+fn old_cli_warn_if_ambiguous_flags() -> Result<()> {
+    // This is accepted in the old CLI parser and the new but it's interpreted
+    // differently so a warning should be printed.
+    let output = get_wasmtime_command()?
+        .args(&["tests/all/cli_tests/simple.wat", "--invoke", "get_f32"])
+        .output()?;
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "100\n");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "\
+warning: this CLI invocation of Wasmtime will be parsed differently in future
+         Wasmtime versions -- see this online issue for more information:
+         https://github.com/bytecodealliance/wasmtime/issues/7384
+
+         Wasmtime will now execute with the old (<= Wasmtime 13) CLI parsing,
+         however this behavior can also be temporarily configured with an
+         environment variable:
+
+         - WASMTIME_NEW_CLI=0 to indicate old semantics are desired and silence this warning, or
+         - WASMTIME_NEW_CLI=1 to indicate new semantics are desired and use the latest behavior
+warning: using `--invoke` with a function that returns values is experimental and may break in the future
+"
+    );
+
+    // Test disabling the warning
+    let output = get_wasmtime_command()?
+        .args(&["tests/all/cli_tests/simple.wat", "--invoke", "get_f32"])
+        .env("WASMTIME_NEW_CLI", "0")
+        .output()?;
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "100\n");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "\
+warning: using `--invoke` with a function that returns values is experimental and may break in the future
+"
+    );
+
+    // Test forcing the new behavior where nothing happens because the file is
+    // invoked with `--invoke` as its own argument.
+    let output = get_wasmtime_command()?
+        .args(&["tests/all/cli_tests/simple.wat", "--invoke", "get_f32"])
+        .env("WASMTIME_NEW_CLI", "1")
+        .output()?;
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+
+    // This is unambiguous
+    let output = get_wasmtime_command()?
+        .args(&["--invoke", "get_f32", "tests/all/cli_tests/simple.wat"])
+        .output()?;
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "100\n");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "\
+warning: using `--invoke` with a function that returns values is experimental and may break in the future
+"
+    );
+
+    // This fails to parse in the old but succeeds in the new, so it should run
+    // under the new semantics with no warning.
+    let output = get_wasmtime_command()?
+        .args(&["run", "tests/all/cli_tests/print-arguments.wat", "--arg"])
+        .output()?;
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "print-arguments.wat\n--arg\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+
+    // Old behavior can be forced however
+    let output = get_wasmtime_command()?
+        .args(&["run", "tests/all/cli_tests/print-arguments.wat", "--arg"])
+        .env("WASMTIME_NEW_CLI", "0")
+        .output()?;
+    assert!(!output.status.success());
+
+    // This works in both the old and the new, so no warnings
+    let output = get_wasmtime_command()?
+        .args(&["run", "tests/all/cli_tests/print-arguments.wat", "arg"])
+        .output()?;
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "print-arguments.wat\narg\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+
+    // This works in both the old and the new, so no warnings
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--",
+            "tests/all/cli_tests/print-arguments.wat",
+            "--arg",
+        ])
+        .output()?;
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "print-arguments.wat\n--arg\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+
+    // Old flags still work, but with a warning
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--max-wasm-stack",
+            "1000000",
+            "tests/all/cli_tests/print-arguments.wat",
+        ])
+        .output()?;
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "print-arguments.wat\n"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr),
+        "\
+warning: this CLI invocation of Wasmtime is going to break in the future -- for
+         more information see this issue online:
+         https://github.com/bytecodealliance/wasmtime/issues/7384
+
+         Wasmtime will now execute with the old (<= Wasmtime 13) CLI parsing,
+         however this behavior can also be temporarily configured with an
+         environment variable:
+
+         - WASMTIME_NEW_CLI=0 to indicate old semantics are desired and silence this warning, or
+         - WASMTIME_NEW_CLI=1 to indicate new semantics are desired and see the error
+"
+    );
+
+    // Old flags warning is suppressible.
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--max-wasm-stack",
+            "1000000",
+            "tests/all/cli_tests/print-arguments.wat",
+        ])
+        .env("WASMTIME_NEW_CLI", "0")
+        .output()?;
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "print-arguments.wat\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+
     Ok(())
 }
 
