@@ -189,7 +189,7 @@ enum OutputState {
     Ready,
     /// Allows join future to be awaited in a cancellable manner. Gone variant indicates
     /// no task is currently outstanding.
-    Waiting(AbortOnDropJoinHandle<io::Result<()>>),
+    Waiting(AbortOnDropJoinHandle<io::Result<usize>>),
     /// The last I/O operation failed with this error.
     Error(io::Error),
     Closed,
@@ -233,22 +233,26 @@ impl HostOutputStream for FileOutputStream {
         let m = self.mode;
         let task = spawn_blocking(move || match m {
             FileOutputMode::Position(mut p) => {
+                let mut total = 0;
                 let mut buf = buf;
                 while !buf.is_empty() {
                     let nwritten = f.write_at(buf.as_ref(), p)?;
                     // afterwards buf contains [nwritten, len):
                     let _ = buf.split_to(nwritten);
                     p += nwritten as u64;
+                    total += nwritten;
                 }
-                Ok(())
+                Ok(total)
             }
             FileOutputMode::Append => {
+                let mut total = 0;
                 let mut buf = buf;
                 while !buf.is_empty() {
                     let nwritten = f.append(buf.as_ref())?;
                     let _ = buf.split_to(nwritten);
+                    total += nwritten;
                 }
-                Ok(())
+                Ok(total)
             }
         });
         self.state = OutputState::Waiting(task);
@@ -285,7 +289,12 @@ impl Subscribe for FileOutputStream {
     async fn ready(&mut self) {
         if let OutputState::Waiting(task) = &mut self.state {
             self.state = match task.await {
-                Ok(()) => OutputState::Ready,
+                Ok(nwritten) => {
+                    if let FileOutputMode::Position(ref mut p) = &mut self.mode {
+                        *p += nwritten as u64;
+                    }
+                    OutputState::Ready
+                }
                 Err(e) => OutputState::Error(e),
             };
         }
