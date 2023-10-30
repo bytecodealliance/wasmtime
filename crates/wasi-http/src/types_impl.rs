@@ -71,14 +71,38 @@ fn is_forbidden_header<T: WasiHttpView>(view: &mut T, name: &HeaderName) -> bool
 }
 
 impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
-    fn new(&mut self, entries: Vec<(String, Vec<u8>)>) -> wasmtime::Result<Resource<HostFields>> {
+    fn new(&mut self) -> wasmtime::Result<Resource<HostFields>> {
+        let id = self
+            .table()
+            .push(HostFields::Owned {
+                fields: hyper::HeaderMap::new(),
+            })
+            .context("[new_fields] pushing fields")?;
+
+        Ok(id)
+    }
+
+    fn from_list(
+        &mut self,
+        entries: Vec<(String, Vec<u8>)>,
+    ) -> wasmtime::Result<Result<Resource<HostFields>, HeaderError>> {
         let mut map = hyper::HeaderMap::new();
 
         for (header, value) in entries {
-            // This will trap for an invalid header name, but there's no other way to communicate
-            // the error out from a constructor.
-            let header = hyper::header::HeaderName::from_bytes(header.as_bytes())?;
-            let value = hyper::header::HeaderValue::from_bytes(&value)?;
+            let header = match hyper::header::HeaderName::from_bytes(header.as_bytes()) {
+                Ok(header) => header,
+                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            };
+
+            if is_forbidden_header(self, &header) {
+                return Ok(Err(HeaderError::Forbidden));
+            }
+
+            let value = match hyper::header::HeaderValue::from_bytes(&value) {
+                Ok(value) => value,
+                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            };
+
             map.append(header, value);
         }
 
@@ -87,7 +111,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             .push(HostFields::Owned { fields: map })
             .context("[new_fields] pushing fields")?;
 
-        Ok(id)
+        Ok(Ok(id))
     }
 
     fn drop(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<()> {

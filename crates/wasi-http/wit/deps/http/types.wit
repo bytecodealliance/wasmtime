@@ -56,6 +56,9 @@ interface types {
   /// Headers and Trailers.
   resource fields {
 
+    /// Construct an empty HTTP Fields.
+    constructor();
+
     /// Construct an HTTP Fields.
     ///
     /// The list represents each key-value pair in the Fields. Keys
@@ -66,7 +69,12 @@ interface types {
     /// Value, represented as a list of bytes. In a valid Fields, all keys
     /// and values are valid UTF-8 strings. However, values are not always
     /// well-formed, so they are represented as a raw list of bytes.
-    constructor(entries: list<tuple<field-key,field-value>>);
+    ///
+    /// An error result will be returned if any header or value was
+    /// syntactically invalid, or if a header was forbidden.
+    from-list: static func(
+      entries: list<tuple<field-key,field-value>>
+    ) -> result<fields, header-error>;
 
     /// Get all of the values corresponding to a key.
     get: func(name: field-key) -> list<field-value>;

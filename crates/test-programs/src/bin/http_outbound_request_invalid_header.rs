@@ -1,7 +1,7 @@
 use test_programs::wasi::http::types::{HeaderError, Headers};
 
 fn main() {
-    let hdrs = Headers::new(&[]);
+    let hdrs = Headers::new();
     assert!(matches!(
         hdrs.append(&"malformed header name".to_owned(), &b"ok value".to_vec()),
         Err(HeaderError::InvalidSyntax)
@@ -41,5 +41,20 @@ fn main() {
             &b"keep-alive".to_vec()
         ),
         Err(HeaderError::Forbidden)
+    ));
+
+    assert!(matches!(
+        Headers::from_list(&[("bad header".to_owned(), b"value".to_vec())]),
+        Err(HeaderError::InvalidSyntax)
+    ));
+
+    assert!(matches!(
+        Headers::from_list(&[("custom-forbidden-header".to_owned(), b"value".to_vec())]),
+        Err(HeaderError::Forbidden)
+    ));
+
+    assert!(matches!(
+        Headers::from_list(&[("ok-header-name".to_owned(), b"bad\nvalue".to_vec())]),
+        Err(HeaderError::InvalidSyntax)
     ));
 }

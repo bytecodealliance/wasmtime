@@ -51,7 +51,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
 
             let response = OutgoingResponse::new(
                 200,
-                Fields::new(&[("content-type".to_string(), b"text/plain".to_vec())]),
+                Fields::from_list(&[("content-type".to_string(), b"text/plain".to_vec())]).unwrap(),
             );
 
             let mut body =
@@ -75,12 +75,13 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
         (Method::Post, Some("/echo")) => {
             let response = OutgoingResponse::new(
                 200,
-                Fields::new(
+                Fields::from_list(
                     &headers
                         .into_iter()
                         .filter_map(|(k, v)| (k == "content-type").then_some((k, v)))
                         .collect::<Vec<_>>(),
-                ),
+                )
+                .unwrap(),
             );
 
             let mut body =
@@ -108,7 +109,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
         }
 
         _ => {
-            let response = OutgoingResponse::new(405, Fields::new(&[]));
+            let response = OutgoingResponse::new(405, Fields::new());
 
             let body = response.body().expect("response should be writable");
 
@@ -137,7 +138,7 @@ async fn hash(url: &Url) -> Result<String> {
                 String::new()
             }
         )),
-        Fields::new(&[]),
+        Fields::new(),
     );
 
     let response = executor::outgoing_request_send(request).await?;
