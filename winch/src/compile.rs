@@ -54,7 +54,7 @@ fn compile(
 ) -> Result<()> {
     let index = translation.module.func_index(f.0);
     let types = &translation.get_types();
-    let sig = types[types.function_at(index.as_u32())].unwrap_func();
+    let sig = types[types.core_function_at(index.as_u32())].unwrap_func();
     let sig = translation.module.convert_func_type(sig);
     let FunctionBodyData { body, validator } = f.1;
     let vmoffsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);

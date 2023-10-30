@@ -156,7 +156,7 @@ mod test {
         let types = &translation.get_types();
 
         let index = module.func_index(f.0);
-        let sig = types[types.function_at(index.as_u32())].unwrap_func();
+        let sig = types[types.core_function_at(index.as_u32())].unwrap_func();
         let sig = translation.module.convert_func_type(&sig);
 
         let vmoffsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
