@@ -10,7 +10,7 @@ Released 2023-10-29
   transition from the 13.0.0 CLI arguments and parsing to the changes in 14.0.0.
   CLI commands should now warn if they no longer work with the new parser, but
   still execute as they previously did. This behavior can be controlled via a
-  new `WASMTIME_NEW_CLI` env var if necessary.
+  new `WASMTIME_NEW_CLI` environment variable if necessary.
   [#7385](https://github.com/bytecodealliance/wasmtime/pull/7385)
 
 * The `serve` subcommand of the `wasmtime` CLI is now enabled by default for the
