@@ -811,3 +811,63 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         Ok(())
     }
 }
+
+impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
+    fn new(&mut self) -> wasmtime::Result<Resource<types::RequestOptions>> {
+        let id = self.table().push(types::RequestOptions::default())?;
+        Ok(id)
+    }
+
+    fn connect_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+    ) -> wasmtime::Result<Option<u32>> {
+        Ok(self.table().get(&opts)?.connect_timeout)
+    }
+
+    fn set_connect_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+        ms: Option<u32>,
+    ) -> wasmtime::Result<()> {
+        self.table().get_mut(&opts)?.connect_timeout = ms;
+        Ok(())
+    }
+
+    fn first_byte_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+    ) -> wasmtime::Result<Option<u32>> {
+        Ok(self.table().get(&opts)?.first_byte_timeout)
+    }
+
+    fn set_first_byte_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+        ms: Option<u32>,
+    ) -> wasmtime::Result<()> {
+        self.table().get_mut(&opts)?.first_byte_timeout = ms;
+        Ok(())
+    }
+
+    fn between_bytes_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+    ) -> wasmtime::Result<Option<u32>> {
+        Ok(self.table().get(&opts)?.between_bytes_timeout)
+    }
+
+    fn set_between_bytes_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+        ms: Option<u32>,
+    ) -> wasmtime::Result<()> {
+        self.table().get_mut(&opts)?.between_bytes_timeout = ms;
+        Ok(())
+    }
+
+    fn drop(&mut self, rep: Resource<types::RequestOptions>) -> wasmtime::Result<()> {
+        let _ = self.table().delete(rep)?;
+        Ok(())
+    }
+}

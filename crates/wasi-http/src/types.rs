@@ -262,6 +262,13 @@ pub struct HostOutgoingRequest {
     pub body: Option<HyperOutgoingBody>,
 }
 
+#[derive(Default)]
+pub struct HostRequestOptions {
+    pub connect_timeout: Option<u32>,
+    pub first_byte_timeout: Option<u32>,
+    pub between_bytes_timeout: Option<u32>,
+}
+
 pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: FieldMap,

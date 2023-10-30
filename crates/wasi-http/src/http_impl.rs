@@ -1,6 +1,6 @@
 use crate::bindings::http::{
     outgoing_handler,
-    types::{RequestOptions, Scheme},
+    types::{self as http_types, Scheme},
 };
 use crate::types::{self, HostFutureIncomingResponse, OutgoingRequest};
 use crate::WasiHttpView;
@@ -15,24 +15,23 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
     fn handle(
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
-        options: Option<RequestOptions>,
+        options: Option<Resource<http_types::RequestOptions>>,
     ) -> wasmtime::Result<Result<Resource<HostFutureIncomingResponse>, outgoing_handler::Error>>
     {
+        let opts = options.and_then(|opts| self.table().get(&opts).ok());
+
         let connect_timeout = Duration::from_millis(
-            options
-                .and_then(|opts| opts.connect_timeout_ms)
+            opts.and_then(|opts| opts.connect_timeout)
                 .unwrap_or(600 * 1000) as u64,
         );
 
         let first_byte_timeout = Duration::from_millis(
-            options
-                .and_then(|opts| opts.first_byte_timeout_ms)
+            opts.and_then(|opts| opts.first_byte_timeout)
                 .unwrap_or(600 * 1000) as u64,
         );
 
         let between_bytes_timeout = Duration::from_millis(
-            options
-                .and_then(|opts| opts.between_bytes_timeout_ms)
+            opts.and_then(|opts| opts.between_bytes_timeout)
                 .unwrap_or(600 * 1000) as u64,
         );
 
