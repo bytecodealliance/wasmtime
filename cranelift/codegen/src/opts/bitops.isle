@@ -129,7 +129,7 @@
 ;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
 (rule (simplify (ne cty v (iconst _ (u64_from_imm64 0))))
       (if-let c (truthy v))
-      (if-let (value_type ty) c)
+      (if-let (value_type (ty_int_ref_scalar_64 ty)) c)
       (ne cty c (iconst ty (imm64 0))))
 
 
