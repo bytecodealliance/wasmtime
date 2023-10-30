@@ -72,6 +72,10 @@ impl WasiHttpView for Ctx {
             types::default_send_request(self, request)
         }
     }
+
+    fn is_forbidden_header(&mut self, name: &hyper::header::HeaderName) -> bool {
+        name.as_str() == "custom-forbidden-header"
+    }
 }
 
 fn store(engine: &Engine, server: &Server) -> Store<Ctx> {

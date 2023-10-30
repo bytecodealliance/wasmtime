@@ -49,6 +49,12 @@ fn http_outbound_request_invalid_version() -> Result<()> {
 }
 
 #[test_log::test]
+fn http_outbound_request_invalid_header() -> Result<()> {
+    let server = Server::http2()?;
+    run(HTTP_OUTBOUND_REQUEST_INVALID_HEADER_COMPONENT, &server)
+}
+
+#[test_log::test]
 fn http_outbound_request_unknown_method() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_UNKNOWN_METHOD_COMPONENT, &server)

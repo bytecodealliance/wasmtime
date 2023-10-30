@@ -42,7 +42,7 @@ pub fn request(
     fn header_val(v: &str) -> Vec<u8> {
         v.to_string().into_bytes()
     }
-    let headers = http_types::Headers::new(
+    let headers = http_types::Headers::from_list(
         &[
             &[
                 ("User-agent".to_string(), header_val("WASI-HTTP/0.0.1")),
@@ -51,7 +51,7 @@ pub fn request(
             additional_headers.unwrap_or(&[]),
         ]
         .concat(),
-    );
+    )?;
 
     let request = http_types::OutgoingRequest::new(
         &method,

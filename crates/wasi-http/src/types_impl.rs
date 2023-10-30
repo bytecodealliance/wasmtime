@@ -1,4 +1,6 @@
-use crate::bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers};
+use crate::bindings::http::types::{
+    self, Error, HeaderError, Headers, Method, Scheme, StatusCode, Trailers,
+};
 use crate::body::{FinishMessage, HostFutureTrailers, HostFutureTrailersState};
 use crate::types::{HostIncomingRequest, HostOutgoingResponse};
 use crate::WasiHttpView;
@@ -10,6 +12,7 @@ use crate::{
     },
 };
 use anyhow::Context;
+use hyper::header::HeaderName;
 use std::any::Any;
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
@@ -51,13 +54,55 @@ fn get_fields_mut<'a>(
     }
 }
 
+fn is_forbidden_header<T: WasiHttpView>(view: &mut T, name: &HeaderName) -> bool {
+    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
+        hyper::header::CONNECTION,
+        HeaderName::from_static("keep-alive"),
+        hyper::header::PROXY_AUTHENTICATE,
+        hyper::header::PROXY_AUTHORIZATION,
+        HeaderName::from_static("proxy-connection"),
+        hyper::header::TE,
+        hyper::header::TRANSFER_ENCODING,
+        hyper::header::UPGRADE,
+        HeaderName::from_static("http2-settings"),
+    ];
+
+    FORBIDDEN_HEADERS.contains(name) || view.is_forbidden_header(name)
+}
+
 impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
-    fn new(&mut self, entries: Vec<(String, Vec<u8>)>) -> wasmtime::Result<Resource<HostFields>> {
+    fn new(&mut self) -> wasmtime::Result<Resource<HostFields>> {
+        let id = self
+            .table()
+            .push(HostFields::Owned {
+                fields: hyper::HeaderMap::new(),
+            })
+            .context("[new_fields] pushing fields")?;
+
+        Ok(id)
+    }
+
+    fn from_list(
+        &mut self,
+        entries: Vec<(String, Vec<u8>)>,
+    ) -> wasmtime::Result<Result<Resource<HostFields>, HeaderError>> {
         let mut map = hyper::HeaderMap::new();
 
         for (header, value) in entries {
-            let header = hyper::header::HeaderName::from_bytes(header.as_bytes())?;
-            let value = hyper::header::HeaderValue::from_bytes(&value)?;
+            let header = match hyper::header::HeaderName::from_bytes(header.as_bytes()) {
+                Ok(header) => header,
+                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            };
+
+            if is_forbidden_header(self, &header) {
+                return Ok(Err(HeaderError::Forbidden));
+            }
+
+            let value = match hyper::header::HeaderValue::from_bytes(&value) {
+                Ok(value) => value,
+                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            };
+
             map.append(header, value);
         }
 
@@ -66,7 +111,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             .push(HostFields::Owned { fields: map })
             .context("[new_fields] pushing fields")?;
 
-        Ok(id)
+        Ok(Ok(id))
     }
 
     fn drop(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<()> {
@@ -81,9 +126,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
     ) -> wasmtime::Result<Vec<Vec<u8>>> {
+        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => return Ok(vec![]),
+        };
+
         let res = get_fields_mut(self.table(), &fields)
             .context("[fields_get] getting fields")?
-            .get_all(hyper::header::HeaderName::from_bytes(name.as_bytes())?)
+            .get_all(header)
             .into_iter()
             .map(|val| val.as_bytes().to_owned())
             .collect();
@@ -94,24 +144,42 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         &mut self,
         fields: Resource<HostFields>,
         name: String,
-        values: Vec<Vec<u8>>,
-    ) -> wasmtime::Result<()> {
-        let m = get_fields_mut(self.table(), &fields)?;
+        byte_values: Vec<Vec<u8>>,
+    ) -> wasmtime::Result<Result<(), HeaderError>> {
+        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+        };
 
-        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
+        if is_forbidden_header(self, &header) {
+            return Ok(Err(HeaderError::Forbidden));
+        }
 
+        let mut values = Vec::with_capacity(byte_values.len());
+        for value in byte_values {
+            match hyper::header::HeaderValue::from_bytes(&value) {
+                Ok(value) => values.push(value),
+                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            }
+        }
+
+        let m =
+            get_fields_mut(self.table(), &fields).context("[fields_set] getting mutable fields")?;
         m.remove(&header);
         for value in values {
-            let value = hyper::header::HeaderValue::from_bytes(&value)?;
             m.append(&header, value);
         }
 
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn delete(&mut self, fields: Resource<HostFields>, name: String) -> wasmtime::Result<()> {
+        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => return Ok(()),
+        };
+
         let m = get_fields_mut(self.table(), &fields)?;
-        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
         m.remove(header);
         Ok(())
     }
@@ -121,13 +189,26 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
         value: Vec<u8>,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), HeaderError>> {
+        let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
+            Ok(header) => header,
+            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+        };
+
+        if is_forbidden_header(self, &header) {
+            return Ok(Err(HeaderError::Forbidden));
+        }
+
+        let value = match hyper::header::HeaderValue::from_bytes(&value) {
+            Ok(value) => value,
+            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+        };
+
         let m = get_fields_mut(self.table(), &fields)
             .context("[fields_append] getting mutable fields")?;
-        let header = hyper::header::HeaderName::from_bytes(name.as_bytes())?;
-        let value = hyper::header::HeaderValue::from_bytes(&value)?;
+
         m.append(header, value);
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn entries(

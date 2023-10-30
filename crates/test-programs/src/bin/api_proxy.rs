@@ -16,7 +16,7 @@ struct T;
 
 impl bindings::exports::wasi::http::incoming_handler::Guest for T {
     fn handle(_request: IncomingRequest, outparam: ResponseOutparam) {
-        let hdrs = bindings::wasi::http::types::Headers::new(&[]);
+        let hdrs = bindings::wasi::http::types::Headers::new();
         let resp = bindings::wasi::http::types::OutgoingResponse::new(200, hdrs);
         let body = resp.body().expect("outgoing response");
 

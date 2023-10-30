@@ -3,10 +3,11 @@ use test_programs::wasi::http::types as http_types;
 fn main() {
     println!("Called _start");
     {
-        let headers = http_types::Headers::new(&[(
+        let headers = http_types::Headers::from_list(&[(
             "Content-Type".to_string(),
             "application/json".to_string().into_bytes(),
-        )]);
+        )])
+        .unwrap();
         let request = http_types::OutgoingRequest::new(
             &http_types::Method::Get,
             None,
@@ -21,10 +22,11 @@ fn main() {
             .unwrap();
     }
     {
-        let headers = http_types::Headers::new(&[(
+        let headers = http_types::Headers::from_list(&[(
             "Content-Type".to_string(),
             "application/text".to_string().into_bytes(),
-        )]);
+        )])
+        .unwrap();
         let response = http_types::OutgoingResponse::new(200, headers);
         let outgoing_body = response.body().unwrap();
         let response_body = outgoing_body.write().unwrap();

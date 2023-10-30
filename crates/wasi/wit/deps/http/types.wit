@@ -36,6 +36,13 @@ interface types {
     unexpected-error(string)
   }
 
+  /// This tyep enumerates the different kinds of errors that may occur when
+  /// setting or appending to a `fields` resource.
+  variant header-error {
+    invalid-syntax,
+    forbidden,
+  }
+
   /// Field keys are always strings.
   type field-key = string;
 
@@ -49,6 +56,9 @@ interface types {
   /// Headers and Trailers.
   resource fields {
 
+    /// Construct an empty HTTP Fields.
+    constructor();
+
     /// Construct an HTTP Fields.
     ///
     /// The list represents each key-value pair in the Fields. Keys
@@ -59,14 +69,22 @@ interface types {
     /// Value, represented as a list of bytes. In a valid Fields, all keys
     /// and values are valid UTF-8 strings. However, values are not always
     /// well-formed, so they are represented as a raw list of bytes.
-    constructor(entries: list<tuple<field-key,field-value>>);
+    ///
+    /// An error result will be returned if any header or value was
+    /// syntactically invalid, or if a header was forbidden.
+    from-list: static func(
+      entries: list<tuple<field-key,field-value>>
+    ) -> result<fields, header-error>;
 
     /// Get all of the values corresponding to a key.
     get: func(name: field-key) -> list<field-value>;
 
     /// Set all of the values for a key. Clears any existing values for that
     /// key, if they have been set.
-    set: func(name: field-key, value: list<field-value>);
+    ///
+    /// The operation can fail if the name or value arguments are invalid, or if
+    /// the name is forbidden.
+    set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
 
     /// Delete all values for a key. Does nothing if no values for the key
     /// exist.
@@ -74,7 +92,10 @@ interface types {
 
     /// Append a value for a key. Does not change or delete any existing
     /// values for that key.
-    append: func(name: field-key, value: field-value);
+    ///
+    /// The operation can fail if the name or value arguments are invalid, or if
+    /// the name is forbidden.
+    append: func(name: field-key, value: field-value) -> result<_, header-error>;
 
 
     /// Retrieve the full set of keys and values in the Fields. Like the

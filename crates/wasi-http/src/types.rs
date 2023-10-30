@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::Context;
 use http_body_util::BodyExt;
+use hyper::header::HeaderName;
 use std::any::Any;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -64,6 +65,10 @@ pub trait WasiHttpView: Send {
         Self: Sized,
     {
         default_send_request(self, request)
+    }
+
+    fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
+        false
     }
 }
 
