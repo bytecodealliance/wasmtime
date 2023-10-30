@@ -71,7 +71,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
 
     fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<Pollable>> {
         let clock_now = self.ctx().monotonic_clock.now();
-        let duration = if when <= clock_now {
+        let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
         } else {
             Duration::from_nanos(0)
