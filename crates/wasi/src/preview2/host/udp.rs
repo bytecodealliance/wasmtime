@@ -97,13 +97,19 @@ impl<T: WasiView> udp::HostUdpSocket for T {
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
+        // We disconnect & (re)connect in two distinct steps for two reasons:
+        // - To leave our socket instance in a consistent state in case the
+        //   connect fails.
+        // - When reconnecting to a different address, Linux sometimes fails
+        //   if there isn't a disconnect in between.
+
+        // Step #1: Disconnect
         if let UdpState::Connected = socket.udp_state {
-            // FIXME: Allow multiple (dis)connects. This needs to be supported by rustix first.
-            // rustix::net::disconnect(socket.udp_socket())?;
-            // socket.udp_state = UdpState::Bound;
-            return Err(ErrorCode::NotSupported.into());
+            disconnect(socket.udp_socket())?;
+            socket.udp_state = UdpState::Bound;
         }
 
+        // Step #2: (Re)connect
         if let Some(connect_addr) = remote_address {
             rustix::net::connect(socket.udp_socket(), &connect_addr)?;
             socket.udp_state = UdpState::Connected;
@@ -479,5 +485,14 @@ impl Subscribe for OutgoingDatagramStream {
                 self.send_state = SendState::Idle;
             }
         }
+    }
+}
+
+fn disconnect<Fd: rustix::fd::AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
+    match rustix::net::connect_unspec(sockfd) {
+        // BSD platforms return an error even if the socket was disconnected successfully.
+        #[cfg(target_os = "macos")]
+        Err(rustix::io::Errno::INVAL | rustix::io::Errno::AFNOSUPPORT) => Ok(()),
+        r => r,
     }
 }
