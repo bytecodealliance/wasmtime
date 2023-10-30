@@ -1160,6 +1160,19 @@ warning: this CLI invocation of Wasmtime is going to break in the future -- for
     );
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
 
+    // the `--dir` flag prints no warning when used with `::`
+    let dir = tempfile::tempdir()?;
+    std::fs::write(dir.path().join("bar.txt"), b"And stood awhile in thought")?;
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
+            test_programs_artifacts::CLI_FILE_READ,
+        ])
+        .output()?;
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+
     Ok(())
 }
 
