@@ -100,7 +100,7 @@
 
 ;; ineg(ushr(x, k)) == sshr(x, k) when k == ty_bits - 1.
 (rule (simplify (ineg ty (ushr ty x sconst @ (iconst ty (u64_from_imm64 shift_amt)))))
-      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
       (sshr ty x sconst))
 
 ;; Shifts and rotates allow a different type for the shift amount, so we
