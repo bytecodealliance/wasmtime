@@ -264,9 +264,9 @@ pub struct HostOutgoingRequest {
 
 #[derive(Default)]
 pub struct HostRequestOptions {
-    pub connect_timeout: Option<u32>,
-    pub first_byte_timeout: Option<u32>,
-    pub between_bytes_timeout: Option<u32>,
+    pub connect_timeout: Option<std::time::Duration>,
+    pub first_byte_timeout: Option<std::time::Duration>,
+    pub between_bytes_timeout: Option<std::time::Duration>,
 }
 
 pub struct HostIncomingResponse {

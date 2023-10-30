@@ -7,7 +7,6 @@ use crate::WasiHttpView;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::Method;
-use std::time::Duration;
 use types::HostOutgoingRequest;
 use wasmtime::component::Resource;
 
@@ -20,20 +19,17 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
     {
         let opts = options.and_then(|opts| self.table().get(&opts).ok());
 
-        let connect_timeout = Duration::from_millis(
-            opts.and_then(|opts| opts.connect_timeout)
-                .unwrap_or(600 * 1000) as u64,
-        );
+        let connect_timeout = opts
+            .and_then(|opts| opts.connect_timeout)
+            .unwrap_or(std::time::Duration::from_millis(600 * 1000));
 
-        let first_byte_timeout = Duration::from_millis(
-            opts.and_then(|opts| opts.first_byte_timeout)
-                .unwrap_or(600 * 1000) as u64,
-        );
+        let first_byte_timeout = opts
+            .and_then(|opts| opts.first_byte_timeout)
+            .unwrap_or(std::time::Duration::from_millis(600 * 1000));
 
-        let between_bytes_timeout = Duration::from_millis(
-            opts.and_then(|opts| opts.between_bytes_timeout)
-                .unwrap_or(600 * 1000) as u64,
-        );
+        let between_bytes_timeout = opts
+            .and_then(|opts| opts.between_bytes_timeout)
+            .unwrap_or(std::time::Duration::from_millis(600 * 1000));
 
         let req = self.table().delete(request_id)?;
 

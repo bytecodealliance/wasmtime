@@ -822,7 +822,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<u32>> {
-        Ok(self.table().get(&opts)?.connect_timeout)
+        Ok(self
+            .table()
+            .get(&opts)?
+            .connect_timeout
+            .and_then(|d| d.as_millis().try_into().ok()))
     }
 
     fn set_connect_timeout_ms(
@@ -830,7 +834,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         opts: Resource<types::RequestOptions>,
         ms: Option<u32>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        self.table().get_mut(&opts)?.connect_timeout = ms;
+        self.table().get_mut(&opts)?.connect_timeout =
+            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
         Ok(Ok(()))
     }
 
@@ -838,7 +843,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<u32>> {
-        Ok(self.table().get(&opts)?.first_byte_timeout)
+        Ok(self
+            .table()
+            .get(&opts)?
+            .first_byte_timeout
+            .and_then(|d| d.as_millis().try_into().ok()))
     }
 
     fn set_first_byte_timeout_ms(
@@ -846,7 +855,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         opts: Resource<types::RequestOptions>,
         ms: Option<u32>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        self.table().get_mut(&opts)?.first_byte_timeout = ms;
+        self.table().get_mut(&opts)?.first_byte_timeout =
+            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
         Ok(Ok(()))
     }
 
@@ -854,7 +864,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         &mut self,
         opts: Resource<types::RequestOptions>,
     ) -> wasmtime::Result<Option<u32>> {
-        Ok(self.table().get(&opts)?.between_bytes_timeout)
+        Ok(self
+            .table()
+            .get(&opts)?
+            .between_bytes_timeout
+            .and_then(|d| d.as_millis().try_into().ok()))
     }
 
     fn set_between_bytes_timeout_ms(
@@ -862,7 +876,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
         opts: Resource<types::RequestOptions>,
         ms: Option<u32>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        self.table().get_mut(&opts)?.between_bytes_timeout = ms;
+        self.table().get_mut(&opts)?.between_bytes_timeout =
+            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
         Ok(Ok(()))
     }
 
