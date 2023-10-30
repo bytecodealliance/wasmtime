@@ -115,7 +115,6 @@ pub const ALL_ARCHITECTURES: &[&str] = &["x86_64", "aarch64", "s390x", "riscv64"
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
-    use alloc::str::FromStr;
     lookup(triple!(name))
 }
 
