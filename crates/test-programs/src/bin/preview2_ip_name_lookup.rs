@@ -19,7 +19,7 @@ fn main() {
     // the resolution and allows errors.
     let addresses = ip_name_lookup::resolve_addresses(&network, "github.com", None, false).unwrap();
     let lookup = addresses.subscribe();
-    let timeout = monotonic_clock::subscribe(1_000_000_000, false);
+    let timeout = monotonic_clock::subscribe_duration(1_000_000_000);
     let ready = poll::poll_list(&[&lookup, &timeout]);
     assert!(ready.len() > 0);
     match ready[0] {

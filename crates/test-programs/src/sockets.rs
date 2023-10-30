@@ -159,7 +159,7 @@ impl OutgoingDatagramStream {
     }
 
     pub fn blocking_send(&self, mut datagrams: &[OutgoingDatagram]) -> Result<(), ErrorCode> {
-        let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
 
         while !datagrams.is_empty() {
             let permit = self.blocking_check_send(&timeout)?;
@@ -180,7 +180,7 @@ impl OutgoingDatagramStream {
 
 impl IncomingDatagramStream {
     pub fn blocking_receive(&self, count: Range<u64>) -> Result<Vec<IncomingDatagram>, ErrorCode> {
-        let timeout = monotonic_clock::subscribe(TIMEOUT_NS, false);
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let pollable = self.subscribe();
         let mut datagrams = vec![];
 
