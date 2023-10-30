@@ -469,3 +469,58 @@ block0(v0: i8, v1: i16):
 
 ; check: v4 = rotl v0, v1
 ; check: return v4
+
+
+function %ishl_amt_type_iconcat(i8, i16, i16) -> i8 {
+block0(v0: i8, v1: i16, v2: i16):
+    v3 = iconcat.i16 v1, v2
+    v4 = ishl.i8 v0, v3
+    return v4
+}
+
+; check: v5 = ishl v0, v1
+; check: return v5
+
+
+function %ushr_amt_type_iconcat(i8, i16, i16) -> i8 {
+block0(v0: i8, v1: i16, v2: i16):
+    v3 = iconcat.i16 v1, v2
+    v4 = ushr.i8 v0, v3
+    return v4
+}
+
+; check: v5 = ushr v0, v1
+; check: return v5
+
+
+function %sshr_amt_type_iconcat(i8, i16, i16) -> i8 {
+block0(v0: i8, v1: i16, v2: i16):
+    v3 = iconcat.i16 v1, v2
+    v4 = sshr.i8 v0, v3
+    return v4
+}
+
+; check: v5 = sshr v0, v1
+; check: return v5
+
+
+function %rotr_amt_type_iconcat(i8, i16, i16) -> i8 {
+block0(v0: i8, v1: i16, v2: i16):
+    v3 = iconcat.i16 v1, v2
+    v4 = rotr.i8 v0, v3
+    return v4
+}
+
+; check: v5 = rotr v0, v1
+; check: return v5
+
+
+function %rotl_amt_type_iconcat(i8, i16, i16) -> i8 {
+block0(v0: i8, v1: i16, v2: i16):
+    v3 = iconcat.i16 v1, v2
+    v4 = rotl.i8 v0, v3
+    return v4
+}
+
+; check: v5 = rotl v0, v1
+; check: return v5
