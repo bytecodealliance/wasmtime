@@ -144,6 +144,13 @@ impl UdpSocket {
             }
         }
     }
+
+    pub fn blocking_bind_unspecified(&self, network: &Network) -> Result<(), ErrorCode> {
+        let ip = IpAddress::new_unspecified(self.address_family());
+        let port = 0;
+
+        self.blocking_bind(network, IpSocketAddress::new(ip, port))
+    }
 }
 
 impl OutgoingDatagramStream {

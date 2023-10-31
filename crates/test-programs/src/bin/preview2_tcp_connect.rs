@@ -27,7 +27,7 @@ fn test_tcp_connect_port_0(net: &Network, family: IpAddressFamily) {
     ));
 }
 
-/// Bind should validate the address family.
+/// Connect should validate the address family.
 fn test_tcp_connect_wrong_family(net: &Network, family: IpAddressFamily) {
     let wrong_ip = match family {
         IpAddressFamily::Ipv4 => IpAddress::IPV6_LOOPBACK,

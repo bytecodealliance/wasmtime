@@ -227,8 +227,8 @@ pub(crate) mod util {
     use crate::preview2::bindings::sockets::network::ErrorCode;
     use crate::preview2::network::SocketAddressFamily;
     use crate::preview2::SocketResult;
-    use cap_net_ext::{Blocking, TcpBinder, TcpConnecter, TcpListenerExt};
-    use cap_std::net::{TcpListener, TcpStream};
+    use cap_net_ext::{Blocking, TcpBinder, TcpConnecter, TcpListenerExt, UdpBinder};
+    use cap_std::net::{TcpListener, TcpStream, UdpSocket};
     use rustix::fd::AsFd;
     use rustix::io::Errno;
     use rustix::net::sockopt;
@@ -319,6 +319,16 @@ pub(crate) mod util {
                 Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
                 _ => error,
             })
+    }
+
+    pub fn udp_bind(socket: &UdpSocket, binder: &UdpBinder) -> std::io::Result<()> {
+        binder.bind_existing_udp_socket(socket).map_err(|error| {
+            match Errno::from_io_error(&error) {
+                #[cfg(windows)]
+                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                _ => error,
+            }
+        })
     }
 
     pub fn tcp_connect(listener: &TcpListener, connecter: &TcpConnecter) -> std::io::Result<()> {

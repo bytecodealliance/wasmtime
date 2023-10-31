@@ -81,7 +81,7 @@ interface tcp {
         /// - `connection-refused`:        The connection was forcefully rejected. (ECONNREFUSED)
         /// - `connection-reset`:          The connection was reset. (ECONNRESET)
         /// - `connection-aborted`:        The connection was aborted. (ECONNABORTED)
-        /// - `remote-unreachable`:        The remote address is not reachable. (EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
+        /// - `remote-unreachable`:        The remote address is not reachable. (EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN, ENONET)
         /// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
         /// - `not-in-progress`:           A `connect` operation is not in progress.
         /// - `would-block`:               Can't finish the operation, it is still in progress. (EWOULDBLOCK, EAGAIN)

@@ -262,16 +262,28 @@ fn preview2_tcp_bind() {
     run(PREVIEW2_TCP_BIND_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-fn preview2_udp_connect() {
-    run(PREVIEW2_UDP_CONNECT_COMPONENT, false).unwrap()
+fn preview2_tcp_connect() {
+    run(PREVIEW2_TCP_CONNECT_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_udp_sockopts() {
+    run(PREVIEW2_UDP_SOCKOPTS_COMPONENT, false).unwrap()
 }
 #[test_log::test]
 fn preview2_udp_sample_application() {
     run(PREVIEW2_UDP_SAMPLE_APPLICATION_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-fn preview2_tcp_connect() {
-    run(PREVIEW2_TCP_CONNECT_COMPONENT, false).unwrap()
+fn preview2_udp_states() {
+    run(PREVIEW2_UDP_STATES_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_udp_bind() {
+    run(PREVIEW2_UDP_BIND_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_udp_connect() {
+    run(PREVIEW2_UDP_CONNECT_COMPONENT, false).unwrap()
 }
 #[test_log::test]
 fn preview2_stream_pollable_correct() {
