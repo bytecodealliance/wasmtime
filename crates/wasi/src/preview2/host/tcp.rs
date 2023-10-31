@@ -331,6 +331,9 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         match socket.tcp_state {
             TcpState::Connected => {}
+            TcpState::Connecting | TcpState::ConnectReady => {
+                return Err(ErrorCode::ConcurrencyConflict.into())
+            }
             _ => return Err(ErrorCode::InvalidState.into()),
         }
 
