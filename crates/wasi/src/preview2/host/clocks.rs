@@ -47,7 +47,9 @@ fn subscribe_to_duration(
     table: &mut crate::preview2::Table,
     duration: tokio::time::Duration,
 ) -> anyhow::Result<Resource<Pollable>> {
-    let sleep = if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
+    let sleep = if duration.is_zero() {
+        table.push(Deadline::Past)?
+    } else if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
         // NB: this resource created here is not actually exposed to wasm, it's
         // only an internal implementation detail used to match the signature
         // expected by `subscribe`.
@@ -85,6 +87,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
 }
 
 enum Deadline {
+    Past,
     Instant(tokio::time::Instant),
     Never,
 }
@@ -93,6 +96,7 @@ enum Deadline {
 impl Subscribe for Deadline {
     async fn ready(&mut self) {
         match self {
+            Deadline::Past => {}
             Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
             Deadline::Never => std::future::pending().await,
         }

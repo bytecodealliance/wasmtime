@@ -7,7 +7,6 @@ wit_bindgen::generate!({
 });
 
 struct T;
-use crate::wasi::io::poll;
 
 static mut STATE: Vec<String> = Vec::new();
 
@@ -34,7 +33,7 @@ impl Guest for T {
             for s in STATE.iter() {
                 let mut out = s.as_bytes();
                 while !out.is_empty() {
-                    poll::poll_list(&[&pollable]);
+                    pollable.block();
                     let n = match o.check_write() {
                         Ok(n) => n,
                         Err(_) => return Err(()),
@@ -52,8 +51,7 @@ impl Guest for T {
                 Ok(_) => {}
                 Err(_) => return Err(()),
             }
-
-            poll::poll_list(&[&pollable]);
+            pollable.block();
             match o.check_write() {
                 Ok(_) => {}
                 Err(_) => return Err(()),

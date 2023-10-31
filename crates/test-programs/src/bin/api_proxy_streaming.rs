@@ -350,7 +350,7 @@ mod executor {
 
                     let mut ready = vec![false; wakers.len()];
 
-                    for index in io::poll::poll_list(&pollables) {
+                    for index in io::poll::poll(&pollables) {
                         ready[usize::try_from(index).unwrap()] = true;
                     }
 
