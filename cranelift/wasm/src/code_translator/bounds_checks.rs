@@ -307,19 +307,45 @@ fn get_dynamic_heap_bound<Env>(
 where
     Env: FuncEnvironment + ?Sized,
 {
-    match (heap.max_size, &heap.style) {
-        // The heap has a constant size, no need to actually load the bound.
-        (Some(max_size), _) if heap.min_size == max_size => {
-            builder.ins().iconst(env.pointer_type(), max_size as i64)
+    let enable_pcc = heap.memory_type.is_some();
+
+    let (value, gv) = match (heap.max_size, &heap.style) {
+        // The heap has a constant size, no need to actually load the
+        // bound.  TODO: this is currently disabled for PCC because we
+        // can't easily prove that the GV load indeed results in a
+        // constant (that information is lost in the CLIF). We'll want
+        // to create an `iconst` GV expression kind to reify this fact
+        // in the GV, then re-enable this opt. (Or, alternately,
+        // compile such memories with a static-bound memtype and
+        // facts.)
+        (Some(max_size), HeapStyle::Dynamic { bound_gv })
+            if heap.min_size == max_size && !enable_pcc =>
+        {
+            (
+                builder.ins().iconst(env.pointer_type(), max_size as i64),
+                *bound_gv,
+            )
         }
 
         // Load the heap bound from its global variable.
-        (_, HeapStyle::Dynamic { bound_gv }) => {
-            builder.ins().global_value(env.pointer_type(), *bound_gv)
-        }
+        (_, HeapStyle::Dynamic { bound_gv }) => (
+            builder.ins().global_value(env.pointer_type(), *bound_gv),
+            *bound_gv,
+        ),
 
         (_, HeapStyle::Static { .. }) => unreachable!("not a dynamic heap"),
+    };
+
+    // If proof-carrying code is enabled, apply a fact to the range to
+    // tie it to the GV.
+    if enable_pcc {
+        builder.func.dfg.facts[value] = Some(Fact::global_value(
+            u16::try_from(env.pointer_type().bits()).unwrap(),
+            gv,
+        ));
     }
+
+    value
 }
 
 fn cast_index_to_pointer_ty(
