@@ -13,7 +13,7 @@ use crate::{
 };
 use anyhow::Context;
 use hyper::header::HeaderName;
-use std::any::Any;
+use std::{any::Any, sync::Arc};
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
@@ -744,6 +744,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
             headers: FieldMap::from(parts.headers),
             body: Some(HostIncomingBodyBuilder {
                 body,
+                worker: Some(Arc::clone(&resp.worker)),
                 between_bytes_timeout: resp.between_bytes_timeout,
             }),
             worker: resp.worker,
