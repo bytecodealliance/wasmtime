@@ -20,6 +20,7 @@ pub type HyperIncomingBody = BoxBody<Bytes, anyhow::Error>;
 /// want to do that unless the user asks to consume the body.
 pub struct HostIncomingBodyBuilder {
     pub body: HyperIncomingBody,
+    pub worker: Option<Arc<AbortOnDropJoinHandle<anyhow::Result<()>>>>,
     pub between_bytes_timeout: Duration,
 }
 
@@ -100,6 +101,10 @@ impl HostIncomingBodyBuilder {
                 // loop running to relieve backpressure, so we get to the trailers.
                 let _ = body_writer.send(Ok(data)).await;
             }
+
+            // Force the builder's worker to be owned by this task, ensuring that it's kept around
+            // until this task exits.
+            drop(self.worker);
         });
 
         HostIncomingBody {

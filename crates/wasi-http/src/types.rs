@@ -9,6 +9,7 @@ use anyhow::Context;
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
 use std::any::Any;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
@@ -38,6 +39,7 @@ pub trait WasiHttpView: Send {
         let (parts, body) = req.into_parts();
         let body = HostIncomingBodyBuilder {
             body,
+            worker: None,
             // TODO: this needs to be plumbed through
             between_bytes_timeout: std::time::Duration::from_millis(600 * 1000),
         };
@@ -162,7 +164,7 @@ pub fn default_send_request(
 
         Ok(IncomingResponseInternal {
             resp,
-            worker,
+            worker: Arc::new(worker),
             between_bytes_timeout,
         })
     });
@@ -273,7 +275,7 @@ pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: FieldMap,
     pub body: Option<HostIncomingBodyBuilder>,
-    pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
+    pub worker: Arc<AbortOnDropJoinHandle<anyhow::Result<()>>>,
 }
 
 pub struct HostOutgoingResponse {
@@ -324,7 +326,7 @@ pub enum HostFields {
 
 pub struct IncomingResponseInternal {
     pub resp: hyper::Response<HyperIncomingBody>,
-    pub worker: AbortOnDropJoinHandle<anyhow::Result<()>>,
+    pub worker: Arc<AbortOnDropJoinHandle<anyhow::Result<()>>>,
     pub between_bytes_timeout: std::time::Duration,
 }
 
