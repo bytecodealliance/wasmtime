@@ -223,7 +223,7 @@ interface types {
   /// transport layer of the HTTP protocol.
   ///
   /// These timeouts are separate from any the user may use to bound a
-  /// blocking call to `wasi:io/poll.poll-list`.
+  /// blocking call to `wasi:io/poll.poll`.
   resource request-options {
     /// Construct a default `request-options` value.
     constructor();
