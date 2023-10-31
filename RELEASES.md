@@ -10,6 +10,21 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 14.0.4
+
+Released 2023-11-01
+
+### Fixed
+
+* Using the `--dir` argument combined with a `::`-remapped path no longer prints
+  a warning about compatibility with the old CLI and works with remapping.
+  [#7416](https://github.com/bytecodealliance/wasmtime/pull/7416)
+
+* Consecutive file writes in preview2 have been fixed.
+  [#7394](https://github.com/bytecodealliance/wasmtime/pull/7394)
+
+--------------------------------------------------------------------------------
+
 ## 14.0.3
 
 Released 2023-10-29
