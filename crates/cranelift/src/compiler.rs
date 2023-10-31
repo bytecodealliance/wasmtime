@@ -23,6 +23,7 @@ use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationKind, SectionKind};
 use std::any::Any;
 use std::cmp;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
@@ -196,7 +197,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
-            flags: MemFlags::trusted().with_readonly(),
+            readonly: true,
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
@@ -204,7 +205,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
-            flags: MemFlags::trusted(),
+            readonly: false,
         });
         context.func.stack_limit = Some(stack_limit);
         let FunctionBodyData { validator, body } = input;
@@ -521,11 +522,11 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.triple()
     }
 
-    fn flags(&self) -> Vec<(&'static str, FlagValue<'static>)> {
+    fn flags(&self) -> BTreeMap<String, FlagValue> {
         wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.flags().iter())
     }
 
-    fn isa_flags(&self) -> Vec<(&'static str, FlagValue<'static>)> {
+    fn isa_flags(&self) -> BTreeMap<String, FlagValue> {
         wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.isa_flags())
     }
 

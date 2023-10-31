@@ -1,12 +1,9 @@
-use crate::{
-    abi::{align_to, ty_size, ABIArg, ABISig, LocalSlot, ABI},
-    masm::MacroAssembler,
-};
+use crate::abi::{align_to, ty_size, ABIArg, ABISig, LocalSlot, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::Range;
 use wasmparser::{BinaryReader, FuncValidator, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, TypeConvert, WasmType};
+use wasmtime_environ::{ModuleTranslation, TypeConvert};
 
 // TODO:
 // SpiderMonkey's implementation uses 16;
@@ -116,20 +113,6 @@ impl Frame {
     /// Get a local slot.
     pub fn get_local(&self, index: u32) -> Option<&LocalSlot> {
         self.locals.get(index as usize)
-    }
-
-    /// Returns the address of the local at the given index.
-    ///
-    /// # Panics
-    /// This function panics if the the index is not associated to a local.
-    pub fn get_local_address<M: MacroAssembler>(
-        &self,
-        index: u32,
-        masm: &mut M,
-    ) -> (WasmType, M::Address) {
-        self.get_local(index)
-            .map(|slot| (slot.ty, masm.local_address(slot)))
-            .unwrap_or_else(|| panic!("Invalid local slot: {}", index))
     }
 
     fn compute_arg_slots<A: ABI>(sig: &ABISig) -> Result<(Locals, u32)> {

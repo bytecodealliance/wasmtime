@@ -10,8 +10,8 @@ use super::{
     fp_reg, lower_condcode, lower_fp_condcode, stack_reg, writable_link_reg, writable_zero_reg,
     zero_reg, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind,
     ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC,
-    MachLabel, MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg, SImm9, ScalarSize,
-    ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
+    JTSequenceInfo, MachLabel, MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg,
+    SImm9, ScalarSize, ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::ir::condcodes;
 use crate::isa;
@@ -43,6 +43,7 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type VecMachLabel = Vec<MachLabel>;
+type BoxJTSequenceInfo = Box<JTSequenceInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecArgPair = Vec<ArgPair>;
 
@@ -595,15 +596,32 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         super::regs::pinned_reg().to_real_reg().unwrap().into()
     }
 
-    fn branch_target(&mut self, label: MachLabel) -> BranchTarget {
-        BranchTarget::Label(label)
+    fn branch_target(&mut self, elements: &VecMachLabel, idx: u8) -> BranchTarget {
+        BranchTarget::Label(elements[idx as usize])
     }
 
-    fn targets_jt_space(&mut self, elements: &BoxVecMachLabel) -> CodeOffset {
+    fn targets_jt_size(&mut self, elements: &VecMachLabel) -> u32 {
+        (elements.len() - 1) as u32
+    }
+
+    fn targets_jt_space(&mut self, elements: &VecMachLabel) -> CodeOffset {
         // calculate the number of bytes needed for the jumptable sequence:
         // 4 bytes per instruction, with 8 instructions base + the size of
         // the jumptable more.
-        (4 * (8 + elements.len())).try_into().unwrap()
+        4 * (8 + self.targets_jt_size(elements))
+    }
+
+    fn targets_jt_info(&mut self, elements: &VecMachLabel) -> BoxJTSequenceInfo {
+        let targets: Vec<BranchTarget> = elements
+            .iter()
+            .skip(1)
+            .map(|bix| BranchTarget::Label(*bix))
+            .collect();
+        let default_target = BranchTarget::Label(elements[0]);
+        Box::new(JTSequenceInfo {
+            targets,
+            default_target,
+        })
     }
 
     fn min_fp_value(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
@@ -792,6 +810,44 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn u64_low32_bits_unset(&mut self, val: u64) -> Option<u64> {
         if val & 0xffffffff == 0 {
             Some(val)
+        } else {
+            None
+        }
+    }
+
+    fn u128_replicated_u64(&mut self, val: u128) -> Option<u64> {
+        let low64 = val as u64 as u128;
+        if (low64 | (low64 << 64)) == val {
+            Some(low64 as u64)
+        } else {
+            None
+        }
+    }
+
+    fn u64_replicated_u32(&mut self, val: u64) -> Option<u64> {
+        let low32 = val as u32 as u64;
+        if (low32 | (low32 << 32)) == val {
+            Some(low32)
+        } else {
+            None
+        }
+    }
+
+    fn u32_replicated_u16(&mut self, val: u64) -> Option<u64> {
+        let val = val as u32;
+        let low16 = val as u16 as u32;
+        if (low16 | (low16 << 16)) == val {
+            Some(low16.into())
+        } else {
+            None
+        }
+    }
+
+    fn u16_replicated_u8(&mut self, val: u64) -> Option<u64> {
+        let val = val as u16;
+        let low8 = val as u8 as u16;
+        if (low8 | (low8 << 8)) == val {
+            Some(low8.into())
         } else {
             None
         }

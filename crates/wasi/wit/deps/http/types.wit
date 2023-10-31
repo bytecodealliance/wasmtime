@@ -1,11 +1,11 @@
-/// This interface defines all of the types and methods for implementing
-/// HTTP Requests and Responses, both incoming and outgoing, as well as
-/// their headers, trailers, and bodies.
+// The `wasi:http/types` interface is meant to be imported by components to
+// define the HTTP resource types and operations used by the component's
+// imported and exported interfaces.
 interface types {
-  use wasi:io/streams@0.2.0-rc-2023-11-05.{input-stream, output-stream};
-  use wasi:io/poll@0.2.0-rc-2023-11-05.{pollable};
+  use wasi:io/streams.{input-stream, output-stream}
+  use wasi:poll/poll.{pollable}
 
-  /// This type corresponds to HTTP standard Methods.
+  // This type corresponds to HTTP standard Methods.
   variant method {
     get,
     head,
@@ -19,321 +19,137 @@ interface types {
     other(string)
   }
 
-  /// This type corresponds to HTTP standard Related Schemes.
+  // This type corresponds to HTTP standard Related Schemes.
   variant scheme {
     HTTP,
     HTTPS,
     other(string)
   }
 
-  /// TODO: perhaps better align with HTTP semantics?
-  /// This type enumerates the different kinds of errors that may occur when
-  /// initially returning a response.
+  // TODO: perhaps better align with HTTP semantics?
+  // This type enumerates the different kinds of errors that may occur when
+  // initially returning a response.
   variant error {
-    invalid-url(string),
-    timeout-error(string),
-    protocol-error(string),
-    unexpected-error(string)
+      invalid-url(string),
+      timeout-error(string),
+      protocol-error(string),
+      unexpected-error(string)
   }
 
-  /// Field keys are always strings.
-  type field-key = string;
+  // This following block defines the `fields` resource which corresponds to
+  // HTTP standard Fields. Soon, when resource types are added, the `type
+  // fields = u32` type alias can be replaced by a proper `resource fields`
+  // definition containing all the functions using the method syntactic sugar.
+  type fields = u32
+  drop-fields: func(fields: fields)
+  new-fields: func(entries: list<tuple<string,string>>) -> fields
+  fields-get: func(fields: fields, name: string) -> list<list<u8>>
+  fields-set: func(fields: fields, name: string, value: list<list<u8>>)
+  fields-delete: func(fields: fields, name: string)
+  fields-append: func(fields: fields, name: string, value: list<u8>)
+  fields-entries: func(fields: fields) -> list<tuple<string,list<u8>>>
+  fields-clone: func(fields: fields) -> fields
 
-  /// Field values should always be ASCII strings. However, in
-  /// reality, HTTP implementations often have to interpret malformed values,
-  /// so they are provided as a list of bytes.
-  type field-value = list<u8>;
+  type headers = fields
+  type trailers = fields
 
-  /// This following block defines the `fields` resource which corresponds to
-  /// HTTP standard Fields. Fields are a common representation used for both
-  /// Headers and Trailers.
-  resource fields {
+  // The following block defines stream types which corresponds to the HTTP
+  // standard Contents and Trailers. With Preview3, all of these fields can be
+  // replaced by a stream<u8, option<trailers>>. In the interim, we need to
+  // build on separate resource types defined by `wasi:io/streams`. The
+  // `finish-` functions emulate the stream's result value and MUST be called
+  // exactly once after the final read/write from/to the stream before dropping
+  // the stream.
+  type incoming-stream = input-stream
+  type outgoing-stream = output-stream
+  finish-incoming-stream: func(s: incoming-stream) -> option<trailers>
+  finish-outgoing-stream: func(s: outgoing-stream, trailers: option<trailers>)
 
-    /// Construct an HTTP Fields.
-    ///
-    /// The list represents each key-value pair in the Fields. Keys
-    /// which have multiple values are represented by multiple entries in this
-    /// list with the same key.
-    ///
-    /// The tuple is a pair of the field key, represented as a string, and
-    /// Value, represented as a list of bytes. In a valid Fields, all keys
-    /// and values are valid UTF-8 strings. However, values are not always
-    /// well-formed, so they are represented as a raw list of bytes.
-    constructor(entries: list<tuple<field-key,field-value>>);
+  // The following block defines the `incoming-request` and `outgoing-request`
+  // resource types that correspond to HTTP standard Requests. Soon, when
+  // resource types are added, the `u32` type aliases can be replaced by
+  // proper `resource` type definitions containing all the functions as
+  // methods. Later, Preview2 will allow both types to be merged together into
+  // a single `request` type (that uses the single `stream` type mentioned
+  // above). The `consume` and `write` methods may only be called once (and
+  // return failure thereafter).
+  type incoming-request = u32
+  type outgoing-request = u32
+  drop-incoming-request: func(request: incoming-request)
+  drop-outgoing-request: func(request: outgoing-request)
+  incoming-request-method: func(request: incoming-request) -> method
+  incoming-request-path-with-query: func(request: incoming-request) -> option<string>
+  incoming-request-scheme: func(request: incoming-request) -> option<scheme>
+  incoming-request-authority: func(request: incoming-request) -> option<string>
+  incoming-request-headers: func(request: incoming-request) -> headers
+  incoming-request-consume: func(request: incoming-request) -> result<incoming-stream>
+  new-outgoing-request: func(
+    method: method,
+    path-with-query: option<string>,
+    scheme: option<scheme>,
+    authority: option<string>,
+    headers: headers
+  ) -> outgoing-request
+  outgoing-request-write: func(request: outgoing-request) -> result<outgoing-stream>
 
-    /// Get all of the values corresponding to a key.
-    get: func(name: field-key) -> list<field-value>;
-
-    /// Set all of the values for a key. Clears any existing values for that
-    /// key, if they have been set.
-    set: func(name: field-key, value: list<field-value>);
-
-    /// Delete all values for a key. Does nothing if no values for the key
-    /// exist.
-    delete: func(name: field-key);
-
-    /// Append a value for a key. Does not change or delete any existing
-    /// values for that key.
-    append: func(name: field-key, value: field-value);
-
-
-    /// Retrieve the full set of keys and values in the Fields. Like the
-    /// constructor, the list represents each key-value pair. 
-    ///
-    /// The outer list represents each key-value pair in the Fields. Keys
-    /// which have multiple values are represented by multiple entries in this
-    /// list with the same key.
-    entries: func() -> list<tuple<field-key,field-value>>;
-
-    /// Make a deep copy of the Fields. Equivelant in behavior to calling the
-    /// `fields` constructor on the return value of `entries` 
-    clone: func() -> fields;
-  }
-
-  /// Headers is an alias for Fields.
-  type headers = fields;
-
-  /// Trailers is an alias for Fields.
-  type trailers = fields;
-
-  /// Represents an incoming HTTP Request.
-  resource incoming-request {
-
-    /// Returns the method of the incoming request.
-    method: func() -> method;
-
-    /// Returns the path with query parameters from the request, as a string.
-    path-with-query: func() -> option<string>;
-
-    /// Returns the protocol scheme from the request.
-    scheme: func() -> option<scheme>;
-
-    /// Returns the authority from the request, if it was present.
-    authority: func() -> option<string>;
-
-    /// Returns the `headers` from the request.
-    ///
-    /// The `headers` returned are a child resource: it must be dropped before
-    /// the parent `incoming-request` is dropped. Dropping this
-    /// `incoming-request` before all children are dropped will trap.
-    headers: func() -> headers;
-
-    /// Gives the `incoming-body` associated with this request. Will only
-    /// return success at most once, and subsequent calls will return error.
-    consume: func() -> result<incoming-body>;
-  }
-
-  /// Represents an outgoing HTTP Request.
-  resource outgoing-request {
-
-    /// Construct a new `outgoing-request`.
-    constructor(
-      method: method,
-      path-with-query: option<string>,
-      scheme: option<scheme>,
-      authority: option<string>,
-      headers: borrow<headers>
-    );
-
-    /// Will return the outgoing-body child at most once. If called more than
-    /// once, subsequent calls will return error.
-    write: func() -> result<outgoing-body>;
-  }
-
-  /// Parameters for making an HTTP Request. Each of these parameters is an
-  /// optional timeout, with the unit in milliseconds, applicable to the
-  /// transport layer of the HTTP protocol.
-  ///
-  /// These timeouts are separate from any the user may use to bound a
-  /// blocking call to `wasi:io/poll.poll-list`.
-  ///
-  /// FIXME: Make this a resource to allow it to be optionally extended by
-  /// future evolution of the standard and/or other interfaces at some later
-  /// date?
+  // Additional optional parameters that can be set when making a request.
   record request-options {
+    // The following timeouts are specific to the HTTP protocol and work
+    // independently of the overall timeouts passed to `io.poll.poll-oneoff`.
 
-    /// The timeout for the initial connect to the HTTP Server.
+    // The timeout for the initial connect.
     connect-timeout-ms: option<u32>,
 
-    /// The timeout for receiving the first byte of the Response body.
+    // The timeout for receiving the first byte of the response body.
     first-byte-timeout-ms: option<u32>,
 
-    /// The timeout for receiving subsequent chunks of bytes in the Response
-    /// body stream.
+    // The timeout for receiving the next chunk of bytes in the response body
+    // stream.
     between-bytes-timeout-ms: option<u32>
   }
 
-  /// Represents the ability to send an HTTP Response.
-  ///
-  /// This resource is used by the `wasi:http/incoming-handler` interface to
-  /// allow a Response to be sent corresponding to the Request provided as the
-  /// other argument to `incoming-handler.handle`.
-  resource response-outparam {
+  // The following block defines a special resource type used by the
+  // `wasi:http/incoming-handler` interface. When resource types are added, this
+  // block can be replaced by a proper `resource response-outparam { ... }`
+  // definition. Later, with Preview3, the need for an outparam goes away entirely
+  // (the `wasi:http/handler` interface used for both incoming and outgoing can
+  // simply return a `stream`).
+  type response-outparam = u32
+  drop-response-outparam: func(response: response-outparam)
+  set-response-outparam: func(param: response-outparam, response: result<outgoing-response, error>) -> result
 
-    /// Set the value of the `response-outparam` to either send a response,
-    /// or indicate an error.
-    ///
-    /// This method consumes the `response-outparam` to ensure that it is
-    /// called at most once. If it is never called, the implementation
-    /// will respond with an error.
-    set: static func(
-      param: response-outparam,
-      response: result<outgoing-response, error>,
-    );
-  }
+  // This type corresponds to the HTTP standard Status Code.
+  type status-code = u16
 
-  /// This type corresponds to the HTTP standard Status Code.
-  type status-code = u16;
+  // The following block defines the `incoming-response` and `outgoing-response`
+  // resource types that correspond to HTTP standard Responses. Soon, when
+  // resource types are added, the `u32` type aliases can be replaced by proper
+  // `resource` type definitions containing all the functions as methods. Later,
+  // Preview2 will allow both types to be merged together into a single `response`
+  // type (that uses the single `stream` type mentioned above). The `consume` and
+  // `write` methods may only be called once (and return failure thereafter).
+  type incoming-response = u32
+  type outgoing-response = u32
+  drop-incoming-response: func(response: incoming-response)
+  drop-outgoing-response: func(response: outgoing-response)
+  incoming-response-status: func(response: incoming-response) -> status-code
+  incoming-response-headers: func(response: incoming-response) -> headers
+  incoming-response-consume: func(response: incoming-response) -> result<incoming-stream>
+  new-outgoing-response: func(
+    status-code: status-code,
+    headers: headers
+  ) -> outgoing-response
+  outgoing-response-write: func(response: outgoing-response) -> result<outgoing-stream>
 
-  /// Represents an incoming HTTP Response.
-  resource incoming-response {
-
-    /// Returns the status code from the incoming response.
-    status: func() -> status-code;
-
-    /// Returns the headers from the incoming response.
-    headers: func() -> headers;
-
-    /// Returns the incoming body. May be called at most once. Returns error
-    /// if called additional times.
-    consume: func() -> result<incoming-body>;
-  }
-
-  /// Represents an incoming HTTP Request or Response's Body.
-  ///
-  /// A body has both its contents - a stream of bytes - and a (possibly
-  /// empty) set of trailers, indicating that the full contents of the
-  /// body have been received. This resource represents the contents as
-  /// an `input-stream` and the delivery of trailers as a `future-trailers`,
-  /// and ensures that the user of this interface may only be consuming either
-  /// the body contents or waiting on trailers at any given time.
-  resource incoming-body {
-
-    /// Returns the contents of the body, as a stream of bytes.
-    ///
-    /// Returns success on first call: the stream representing the contents
-    /// can be retrieved at most once. Subsequent calls will return error.
-    ///
-    /// The returned `input-stream` resource is a child: it must be dropped
-    /// before the parent `incoming-body` is dropped, or consumed by
-    /// `incoming-body.finish`.
-    ///
-    /// This invariant ensures that the implementation can determine whether
-    /// the user is consuming the contents of the body, waiting on the
-    /// `future-trailers` to be ready, or neither. This allows for network
-    /// backpressure is to be applied when the user is consuming the body,
-    /// and for that backpressure to not inhibit delivery of the trailers if
-    /// the user does not read the entire body.
-    %stream: func() -> result<input-stream>;
-
-    /// Takes ownership of `incoming-body`, and returns a `future-trailers`.
-    /// This function will trap if the `input-stream` child is still alive.
-    finish: static func(this: incoming-body) -> future-trailers;
-  }
-
-  /// Represents a future which may eventaully return trailers, or an error.
-  ///
-  /// In the case that the incoming HTTP Request or Response did not have any
-  /// trailers, this future will resolve to the empty set of trailers once the
-  /// complete Request or Response body has been received.
-  resource future-trailers {
-
-    /// Returns a pollable which becomes ready when either the trailers have
-    /// been received, or an error has occured. When this pollable is ready,
-    /// the `get` method will return `some`.
-    subscribe: func() -> pollable;
-
-    /// Returns the contents of the trailers, or an error which occured,
-    /// once the future is ready.
-    ///
-    /// The outer `option` represents future readiness. Users can wait on this
-    /// `option` to become `some` using the `subscribe` method.
-    ///
-    /// The `result` represents that either the HTTP Request or Response body,
-    /// as well as any trailers, were received successfully, or that an error
-    /// occured receiving them. The optional `trailers` indicates whether or not
-    /// trailers were present in the body.
-    get: func() -> option<result<option<trailers>, error>>;
-  }
-
-  /// Represents an outgoing HTTP Response.
-  resource outgoing-response {
-
-    /// Construct an `outgoing-response`.
-    constructor(status-code: status-code, headers: borrow<headers>);
-
-    /// Returns the resource corresponding to the outgoing Body for this Response.
-    ///
-    /// Returns success on the first call: the `outgoing-body` resource for
-    /// this `outgoing-response` can be retrieved at most once. Sunsequent
-    /// calls will return error.
-    ///
-    /// FIXME: rename this method to `body`.
-    write: func() -> result<outgoing-body>;
-  }
-
-  /// Represents an outgoing HTTP Request or Response's Body.
-  ///
-  /// A body has both its contents - a stream of bytes - and a (possibly
-  /// empty) set of trailers, inducating the full contents of the body
-  /// have been sent. This resource represents the contents as an
-  /// `output-stream` child resource, and the completion of the body (with
-  /// optional trailers) with a static function that consumes the
-  /// `outgoing-body` resource, and ensures that the user of this interface
-  /// may not write to the body contents after the body has been finished.
-  ///
-  /// If the user code drops this resource, as opposed to calling the static
-  /// method `finish`, the implementation should treat the body as incomplete,
-  /// and that an error has occured. The implementation should propogate this
-  /// error to the HTTP protocol by whatever means it has available,
-  /// including: corrupting the body on the wire, aborting the associated
-  /// Request, or sending a late status code for the Response.
-  resource outgoing-body {
-
-    /// Returns a stream for writing the body contents.
-    ///
-    /// The returned `output-stream` is a child resource: it must be dropped
-    /// before the parent `outgoing-body` resource is dropped (or finished),
-    /// otherwise the `outgoing-body` drop or `finish` will trap.
-    ///
-    /// Returns success on the first call: the `output-stream` resource for
-    /// this `outgoing-body` may be retrieved at most once. Subsequent calls
-    /// will return error.
-    write: func() -> result<output-stream>;
-
-    /// Finalize an outgoing body, optionally providing trailers. This must be
-    /// called to signal that the response is complete. If the `outgoing-body`
-    /// is dropped without calling `outgoing-body.finalize`, the implementation
-    /// should treat the body as corrupted.
-    finish: static func(this: outgoing-body, trailers: option<trailers>);
-  }
-
-  /// Represents a future which may eventaully return an incoming HTTP
-  /// Response, or an error.
-  ///
-  /// This resource is returned by the `wasi:http/outgoing-handler` interface to
-  /// provide the HTTP Response corresponding to the sent Request.
-  resource future-incoming-response {
-    /// Returns a pollable which becomes ready when either the Response has
-    /// been received, or an error has occured. When this pollable is ready,
-    /// the `get` method will return `some`.
-    subscribe: func() -> pollable;
-
-    /// Returns the incoming HTTP Response, or an error, once one is ready.
-    ///
-    /// The outer `option` represents future readiness. Users can wait on this
-    /// `option` to become `some` using the `subscribe` method.
-    ///
-    /// The outer `result` is used to retrieve the response or error at most
-    /// once. It will be success on the first call in which the outer option
-    /// is `some`, and error on subsequent calls.
-    ///
-    /// The inner `result` represents that either the incoming HTTP Response
-    /// status and headers have recieved successfully, or that an error
-    /// occured. Errors may also occur while consuming the response body,
-    /// but those will be reported by the `incoming-body` and its
-    /// `output-stream` child.
-    get: func() -> option<result<result<incoming-response, error>>>;
-
-  }
+  // The following block defines a special resource type used by the
+  // `wasi:http/outgoing-handler` interface to emulate
+  // `future<result<response, error>>` in advance of Preview3. Given a
+  // `future-incoming-response`, the client can call the non-blocking `get`
+  // method to get the result if it is available. If the result is not available,
+  // the client can call `listen` to get a `pollable` that can be passed to
+  // `io.poll.poll-oneoff`.
+  type future-incoming-response = u32
+  drop-future-incoming-response: func(f: future-incoming-response)
+  future-incoming-response-get: func(f: future-incoming-response) -> option<result<incoming-response, error>>
+  listen-to-future-incoming-response: func(f: future-incoming-response) -> pollable
 }

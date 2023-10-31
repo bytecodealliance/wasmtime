@@ -158,7 +158,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_module_deserialize_file(
  * For more details see: https://docs.wasmtime.dev/api/wasmtime/struct.Module.html#method.image_range
  */
 WASM_API_EXTERN void wasmtime_module_image_range(
-    const wasmtime_module_t *module,
+    const wasm_module_t *module,
     size_t *start,
     size_t *end
 );

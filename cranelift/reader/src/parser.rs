@@ -9,10 +9,9 @@ use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
-use cranelift_codegen::ir::entities::{AnyEntity, DynamicType, MemoryType};
+use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64};
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
-use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::types::INVALID;
 use cranelift_codegen::ir::types::*;
@@ -20,9 +19,8 @@ use cranelift_codegen::ir::{self, UserExternalNameRef};
 use cranelift_codegen::ir::{
     AbiParam, ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, DynamicStackSlot,
     DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef, Function,
-    GlobalValue, GlobalValueData, JumpTableData, MemFlags, MemoryTypeData, MemoryTypeField, Opcode,
-    SigRef, Signature, StackSlot, StackSlotData, StackSlotKind, Table, TableData, Type,
-    UserFuncName, Value,
+    GlobalValue, GlobalValueData, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot,
+    StackSlotData, StackSlotKind, Table, TableData, Type, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -305,13 +303,7 @@ impl Context {
     }
 
     // Allocate a global value slot.
-    fn add_gv(
-        &mut self,
-        gv: GlobalValue,
-        data: GlobalValueData,
-        maybe_fact: Option<Fact>,
-        loc: Location,
-    ) -> ParseResult<()> {
+    fn add_gv(&mut self, gv: GlobalValue, data: GlobalValueData, loc: Location) -> ParseResult<()> {
         self.map.def_gv(gv, loc)?;
         while self.function.global_values.next_key().index() <= gv.index() {
             self.function.create_global_value(GlobalValueData::Symbol {
@@ -322,19 +314,6 @@ impl Context {
             });
         }
         self.function.global_values[gv] = data;
-        if let Some(fact) = maybe_fact {
-            self.function.global_value_facts[gv] = Some(fact);
-        }
-        Ok(())
-    }
-
-    // Allocate a memory-type slot.
-    fn add_mt(&mut self, mt: MemoryType, data: MemoryTypeData, loc: Location) -> ParseResult<()> {
-        self.map.def_mt(mt, loc)?;
-        while self.function.memory_types.next_key().index() <= mt.index() {
-            self.function.create_memory_type(MemoryTypeData::default());
-        }
-        self.function.memory_types[mt] = data;
         Ok(())
     }
 
@@ -671,17 +650,6 @@ impl<'a> Parser<'a> {
             self.consume();
             if let Some(table) = Table::with_number(table) {
                 return Ok(table);
-            }
-        }
-        err!(self.loc, err_msg)
-    }
-
-    // Match and consume a memory-type reference.
-    fn match_mt(&mut self, err_msg: &str) -> ParseResult<MemoryType> {
-        if let Some(Token::MemoryType(mt)) = self.token() {
-            self.consume();
-            if let Some(mt) = MemoryType::with_number(mt) {
-                return Ok(mt);
             }
         }
         err!(self.loc, err_msg)
@@ -1167,7 +1135,7 @@ impl<'a> Parser<'a> {
         let mut list = Vec::new();
         while self.token() == Some(Token::Identifier("feature")) {
             self.consume();
-            let has = !self.optional(Token::Bang);
+            let has = !self.optional(Token::Not);
             match (self.token(), has) {
                 (Some(Token::String(flag)), true) => list.push(Feature::With(flag)),
                 (Some(Token::String(flag)), false) => list.push(Feature::Without(flag)),
@@ -1477,12 +1445,7 @@ impl<'a> Parser<'a> {
                 Some(Token::GlobalValue(..)) => {
                     self.start_gathering_comments();
                     self.parse_global_value_decl()
-                        .and_then(|(gv, dat, maybe_fact)| ctx.add_gv(gv, dat, maybe_fact, self.loc))
-                }
-                Some(Token::MemoryType(..)) => {
-                    self.start_gathering_comments();
-                    self.parse_memory_type_decl()
-                        .and_then(|(mt, dat)| ctx.add_mt(mt, dat, self.loc))
+                        .and_then(|(gv, dat)| ctx.add_gv(gv, dat, self.loc))
                 }
                 Some(Token::Table(..)) => {
                     self.start_gathering_comments();
@@ -1583,24 +1546,15 @@ impl<'a> Parser<'a> {
 
     // Parse a global value decl.
     //
-    // global-val-decl ::= * GlobalValue(gv) [ "!" fact ] "=" global-val-desc
+    // global-val-decl ::= * GlobalValue(gv) "=" global-val-desc
     // global-val-desc ::= "vmctx"
     //                   | "load" "." type "notrap" "aligned" GlobalValue(base) [offset]
     //                   | "iadd_imm" "(" GlobalValue(base) ")" imm64
     //                   | "symbol" ["colocated"] name + imm64
     //                   | "dyn_scale_target_const" "." type
     //
-    fn parse_global_value_decl(
-        &mut self,
-    ) -> ParseResult<(GlobalValue, GlobalValueData, Option<Fact>)> {
+    fn parse_global_value_decl(&mut self) -> ParseResult<(GlobalValue, GlobalValueData)> {
         let gv = self.match_gv("expected global value number: gv«n»")?;
-
-        let fact = if self.token() == Some(Token::Bang) {
-            self.consume();
-            Some(self.parse_fact()?)
-        } else {
-            None
-        };
 
         self.match_token(Token::Equal, "expected '=' in global value declaration")?;
 
@@ -1623,7 +1577,7 @@ impl<'a> Parser<'a> {
                     base,
                     offset,
                     global_type,
-                    flags,
+                    readonly: flags.readonly(),
                 }
             }
             "iadd_imm" => {
@@ -1672,100 +1626,7 @@ impl<'a> Parser<'a> {
         self.token();
         self.claim_gathered_comments(gv);
 
-        Ok((gv, data, fact))
-    }
-
-    // Parse one field definition in a memory-type struct decl.
-    //
-    // memory-type-field ::=  offset ":" type ["readonly"] [ "!" fact ]
-    // offset ::= uimm64
-    fn parse_memory_type_field(&mut self) -> ParseResult<MemoryTypeField> {
-        let offset: u64 = self
-            .match_uimm64(
-                "expected u64 constant value for field offset in struct memory-type declaration",
-            )?
-            .into();
-        self.match_token(
-            Token::Colon,
-            "expected colon after field offset in struct memory-type declaration",
-        )?;
-        let ty = self.match_type("expected type for field in struct memory-type declaration")?;
-        let readonly = if self.token() == Some(Token::Identifier("readonly")) {
-            self.consume();
-            true
-        } else {
-            false
-        };
-        let fact = if self.token() == Some(Token::Bang) {
-            self.consume();
-            let fact = self.parse_fact()?;
-            Some(fact)
-        } else {
-            None
-        };
-        Ok(MemoryTypeField {
-            offset,
-            ty,
-            readonly,
-            fact,
-        })
-    }
-
-    // Parse a memory-type decl.
-    //
-    // memory-type-decl ::= MemoryType(mt) "=" memory-type-desc
-    // memory-type-desc ::= "struct" size "{" memory-type-field,* "}"
-    //                    | "memory" size
-    //                    | "empty"
-    // size ::= uimm64
-    fn parse_memory_type_decl(&mut self) -> ParseResult<(MemoryType, MemoryTypeData)> {
-        let mt = self.match_mt("expected memory type number: mt«n»")?;
-        self.match_token(Token::Equal, "expected '=' in memory type declaration")?;
-
-        let data = match self.token() {
-            Some(Token::Identifier("struct")) => {
-                self.consume();
-                let size: u64 = self.match_uimm64("expected u64 constant value for struct size in struct memory-type declaration")?.into();
-                self.match_token(Token::LBrace, "expected opening brace to start struct fields in struct memory-type declaration")?;
-                let mut fields = vec![];
-                while self.token() != Some(Token::RBrace) {
-                    let field = self.parse_memory_type_field()?;
-                    fields.push(field);
-                    if self.token() == Some(Token::Comma) {
-                        self.consume();
-                    } else {
-                        break;
-                    }
-                }
-                self.match_token(
-                    Token::RBrace,
-                    "expected closing brace after struct fields in struct memory-type declaration",
-                )?;
-                MemoryTypeData::Struct { size, fields }
-            }
-            Some(Token::Identifier("memory")) => {
-                self.consume();
-                let size: u64 = self.match_uimm64("expected u64 constant value for size in static-memory memory-type declaration")?.into();
-                MemoryTypeData::Memory { size }
-            }
-            Some(Token::Identifier("empty")) => {
-                self.consume();
-                MemoryTypeData::Empty
-            }
-            other => {
-                return err!(
-                    self.loc,
-                    "Unknown memory type declaration kind '{:?}'",
-                    other
-                )
-            }
-        };
-
-        // Collect any trailing comments.
-        self.token();
-        self.claim_gathered_comments(mt);
-
-        Ok((mt, data))
+        Ok((gv, data))
     }
 
     // Parse a table decl.
@@ -2082,7 +1943,7 @@ impl<'a> Parser<'a> {
             // between the parsing of value aliases and the parsing of instructions.
             //
             // inst-results ::= Value(v) { "," Value(v) }
-            let results = self.parse_inst_results(ctx)?;
+            let results = self.parse_inst_results()?;
 
             for result in &results {
                 while ctx.function.dfg.num_values() <= result.index() {
@@ -2132,23 +1993,16 @@ impl<'a> Parser<'a> {
 
     // Parse a single block parameter declaration, and append it to `block`.
     //
-    // block-param ::= * Value(v) [ "!" fact ]  ":" Type(t) arg-loc?
+    // block-param ::= * Value(v) ":" Type(t) arg-loc?
     // arg-loc ::= "[" value-location "]"
     //
     fn parse_block_param(&mut self, ctx: &mut Context, block: Block) -> ParseResult<()> {
-        // block-param ::= * Value(v) [ "!" fact ] ":" Type(t) arg-loc?
+        // block-param ::= * Value(v) ":" Type(t) arg-loc?
         let v = self.match_value("block argument must be a value")?;
         let v_location = self.loc;
-        // block-param ::= Value(v) * [ "!" fact ]  ":" Type(t) arg-loc?
-        let fact = if self.token() == Some(Token::Bang) {
-            self.consume();
-            // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
-            Some(self.parse_fact()?)
-        } else {
-            None
-        };
+        // block-param ::= Value(v) * ":" Type(t) arg-loc?
         self.match_token(Token::Colon, "expected ':' after block argument")?;
-        // block-param ::= Value(v) [ "!" fact ] ":" * Type(t) arg-loc?
+        // block-param ::= Value(v) ":" * Type(t) arg-loc?
 
         while ctx.function.dfg.num_values() <= v.index() {
             ctx.function.dfg.make_invalid_value_for_parser();
@@ -2158,99 +2012,15 @@ impl<'a> Parser<'a> {
         // Allocate the block argument.
         ctx.function.dfg.append_block_param_for_parser(block, t, v);
         ctx.map.def_value(v, v_location)?;
-        ctx.function.dfg.facts[v] = fact;
 
         Ok(())
-    }
-
-    // Parse a "fact" for proof-carrying code, attached to a value.
-    //
-    // fact ::= "range" "(" bit-width "," min-value "," max-value ")"
-    //        | "mem" "(" memory-type "," mt-offset "," mt-offset ")"
-    //        | "conflict"
-    // bit-width ::= uimm64
-    // min-value ::= uimm64
-    // max-value ::= uimm64
-    // valid-range ::= uimm64
-    // mt-offset ::= uimm64
-    fn parse_fact(&mut self) -> ParseResult<Fact> {
-        match self.token() {
-            Some(Token::Identifier("range")) => {
-                self.consume();
-                self.match_token(Token::LPar, "`range` fact needs an opening `(`")?;
-                let bit_width: u64 = self
-                    .match_uimm64("expected a bit-width value for `range` fact")?
-                    .into();
-                self.match_token(Token::Comma, "expected a comma")?;
-                let min: u64 = self
-                    .match_uimm64("expected a min value for `range` fact")?
-                    .into();
-                self.match_token(Token::Comma, "expected a comma")?;
-                let max: u64 = self
-                    .match_uimm64("expected a max value for `range` fact")?
-                    .into();
-                self.match_token(Token::RPar, "`range` fact needs a closing `)`")?;
-                let bit_width_max = match bit_width {
-                    x if x > 64 => {
-                        return Err(self.error("bitwidth must be <= 64 bits on a `range` fact"));
-                    }
-                    64 => u64::MAX,
-                    x => (1u64 << x) - 1,
-                };
-                if min > max {
-                    return Err(self.error(
-                        "min value must be less than or equal to max value on a `range` fact",
-                    ));
-                }
-                if max > bit_width_max {
-                    return Err(
-                        self.error("max value is out of range for bitwidth on a `range` fact")
-                    );
-                }
-                Ok(Fact::Range {
-                    bit_width: u16::try_from(bit_width).unwrap(),
-                    min: min.into(),
-                    max: max.into(),
-                })
-            }
-            Some(Token::Identifier("mem")) => {
-                self.consume();
-                self.match_token(Token::LPar, "expected a `(`")?;
-                let ty = self.match_mt("expected a memory type for `mem` fact")?;
-                self.match_token(
-                    Token::Comma,
-                    "expected a comma after memory type in `mem` fact",
-                )?;
-                let min_offset: u64 = self
-                    .match_uimm64("expected a uimm64 minimum pointer offset for `mem` fact")?
-                    .into();
-                self.match_token(
-                    Token::Comma,
-                    "expected a comma after memory type in `mem` fact",
-                )?;
-                let max_offset: u64 = self
-                    .match_uimm64("expected a uimm64 maximum pointer offset for `mem` fact")?
-                    .into();
-                self.match_token(Token::RPar, "expected a `)`")?;
-                Ok(Fact::Mem {
-                    ty,
-                    min_offset,
-                    max_offset,
-                })
-            }
-            Some(Token::Identifier("conflict")) => {
-                self.consume();
-                Ok(Fact::Conflict)
-            }
-            _ => Err(self.error("expected a `range`, `mem` or `conflict` fact")),
-        }
     }
 
     // Parse instruction results and return them.
     //
     // inst-results ::= Value(v) { "," Value(v) }
     //
-    fn parse_inst_results(&mut self, ctx: &mut Context) -> ParseResult<SmallVec<[Value; 1]>> {
+    fn parse_inst_results(&mut self) -> ParseResult<SmallVec<[Value; 1]>> {
         // Result value numbers.
         let mut results = SmallVec::new();
 
@@ -2261,29 +2031,10 @@ impl<'a> Parser<'a> {
 
             results.push(v);
 
-            let fact = if self.token() == Some(Token::Bang) {
-                self.consume();
-                // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
-                Some(self.parse_fact()?)
-            } else {
-                None
-            };
-            ctx.function.dfg.facts[v] = fact;
-
             // inst-results ::= Value(v) * { "," Value(v) }
             while self.optional(Token::Comma) {
                 // inst-results ::= Value(v) { "," * Value(v) }
-                let v = self.match_value("expected result value")?;
-                results.push(v);
-
-                let fact = if self.token() == Some(Token::Bang) {
-                    self.consume();
-                    // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
-                    Some(self.parse_fact()?)
-                } else {
-                    None
-                };
-                ctx.function.dfg.facts[v] = fact;
+                results.push(self.match_value("expected result value")?);
             }
         }
 
@@ -2617,7 +2368,7 @@ impl<'a> Parser<'a> {
         if self.optional(Token::Equal) {
             self.match_token(Token::Equal, "expected another =")?;
             Ok(Comparison::Equals)
-        } else if self.optional(Token::Bang) {
+        } else if self.optional(Token::Not) {
             self.match_token(Token::Equal, "expected a =")?;
             Ok(Comparison::NotEquals)
         } else {

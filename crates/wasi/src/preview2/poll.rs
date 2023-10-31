@@ -1,165 +1,148 @@
-use crate::preview2::{bindings::io::poll, Table, WasiView};
+use crate::preview2::{
+    bindings::poll::poll::{self, Pollable},
+    Table, TableError, WasiView,
+};
 use anyhow::Result;
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use wasmtime::component::Resource;
 
-pub type PollableFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+pub type PollableFuture<'a> = Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
 pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> PollableFuture<'a>;
 pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + Sync + 'static>;
 
-/// A host representation of the `wasi:io/poll.pollable` resource.
+/// A host representation of the `wasi:poll/poll.pollable` resource.
 ///
 /// A pollable is not the same thing as a Rust Future: the same pollable may be used to
 /// repeatedly check for readiness of a given condition, e.g. if a stream is readable
 /// or writable. So, rather than containing a Future, which can only become Ready once, a
-/// Pollable contains a way to create a Future in each call to `poll_list`.
-pub struct Pollable {
-    index: u32,
-    make_future: MakeFuture,
-    remove_index_on_delete: Option<fn(&mut Table, u32) -> Result<()>>,
+/// HostPollable contains a way to create a Future in each call to poll_oneoff.
+pub enum HostPollable {
+    /// Create a Future by calling a fn on another resource in the table. This
+    /// indirection means the created Future can use a mut borrow of another
+    /// resource in the Table (e.g. a stream)
+    TableEntry { index: u32, make_future: MakeFuture },
+    /// Create a future by calling an owned, static closure. This is used for
+    /// pollables which do not share state with another resource in the Table
+    /// (e.g. a timer)
+    Closure(ClosureFuture),
 }
 
-#[async_trait::async_trait]
-pub trait Subscribe: Send + Sync + 'static {
-    async fn ready(&mut self);
+pub trait TablePollableExt {
+    fn push_host_pollable(&mut self, p: HostPollable) -> Result<u32, TableError>;
+    fn get_host_pollable_mut(&mut self, fd: u32) -> Result<&mut HostPollable, TableError>;
+    fn delete_host_pollable(&mut self, fd: u32) -> Result<HostPollable, TableError>;
 }
 
-/// Creates a `pollable` resource which is susbcribed to the provided
-/// `resource`.
-///
-/// If `resource` is an owned resource then it will be deleted when the returned
-/// resource is deleted. Otherwise the returned resource is considered a "child"
-/// of the given `resource` which means that the given resource cannot be
-/// deleted while the `pollable` is still alive.
-pub fn subscribe<T>(table: &mut Table, resource: Resource<T>) -> Result<Resource<Pollable>>
-where
-    T: Subscribe,
-{
-    fn make_future<'a, T>(stream: &'a mut dyn Any) -> PollableFuture<'a>
-    where
-        T: Subscribe,
-    {
-        stream.downcast_mut::<T>().unwrap().ready()
+impl TablePollableExt for Table {
+    fn push_host_pollable(&mut self, p: HostPollable) -> Result<u32, TableError> {
+        match p {
+            HostPollable::TableEntry { index, .. } => self.push_child(Box::new(p), index),
+            HostPollable::Closure { .. } => self.push(Box::new(p)),
+        }
     }
-
-    let pollable = Pollable {
-        index: resource.rep(),
-        remove_index_on_delete: if resource.owned() {
-            Some(|table, idx| {
-                let resource = Resource::<T>::new_own(idx);
-                table.delete(resource)?;
-                Ok(())
-            })
-        } else {
-            None
-        },
-        make_future: make_future::<T>,
-    };
-
-    Ok(table.push_child(pollable, &resource)?)
+    fn get_host_pollable_mut(&mut self, fd: u32) -> Result<&mut HostPollable, TableError> {
+        self.get_mut::<HostPollable>(fd)
+    }
+    fn delete_host_pollable(&mut self, fd: u32) -> Result<HostPollable, TableError> {
+        self.delete::<HostPollable>(fd)
+    }
 }
 
 #[async_trait::async_trait]
 impl<T: WasiView> poll::Host for T {
-    async fn poll_list(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
-        type ReadylistIndex = u32;
+    fn drop_pollable(&mut self, pollable: Pollable) -> Result<()> {
+        self.table_mut().delete_host_pollable(pollable)?;
+        Ok(())
+    }
+
+    async fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<bool>> {
+        type ReadylistIndex = usize;
 
         let table = self.table_mut();
 
         let mut table_futures: HashMap<u32, (MakeFuture, Vec<ReadylistIndex>)> = HashMap::new();
+        let mut closure_futures: Vec<(PollableFuture<'_>, Vec<ReadylistIndex>)> = Vec::new();
 
         for (ix, p) in pollables.iter().enumerate() {
-            let ix: u32 = ix.try_into()?;
-
-            let pollable = table.get(p)?;
-            let (_, list) = table_futures
-                .entry(pollable.index)
-                .or_insert((pollable.make_future, Vec::new()));
-            list.push(ix);
+            match table.get_host_pollable_mut(*p)? {
+                HostPollable::Closure(f) => closure_futures.push((f(), vec![ix])),
+                HostPollable::TableEntry { index, make_future } => {
+                    match table_futures.entry(*index) {
+                        Entry::Vacant(v) => {
+                            v.insert((*make_future, vec![ix]));
+                        }
+                        Entry::Occupied(mut o) => {
+                            let (_, v) = o.get_mut();
+                            v.push(ix);
+                        }
+                    }
+                }
+            }
         }
 
-        let mut futures: Vec<(PollableFuture<'_>, Vec<ReadylistIndex>)> = Vec::new();
         for (entry, (make_future, readylist_indices)) in table.iter_entries(table_futures) {
             let entry = entry?;
-            futures.push((make_future(entry), readylist_indices));
+            closure_futures.push((make_future(entry), readylist_indices));
         }
 
-        struct PollList<'a> {
-            futures: Vec<(PollableFuture<'a>, Vec<ReadylistIndex>)>,
+        struct PollOneoff<'a> {
+            elems: Vec<(PollableFuture<'a>, Vec<ReadylistIndex>)>,
         }
-        impl<'a> Future for PollList<'a> {
-            type Output = Vec<u32>;
+        impl<'a> Future for PollOneoff<'a> {
+            type Output = Result<Vec<bool>>;
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 let mut any_ready = false;
-                let mut results = Vec::new();
-                for (fut, readylist_indicies) in self.futures.iter_mut() {
+                let mut results = vec![false; self.elems.len()];
+                for (fut, readylist_indicies) in self.elems.iter_mut() {
                     match fut.as_mut().poll(cx) {
-                        Poll::Ready(()) => {
-                            results.extend_from_slice(readylist_indicies);
+                        Poll::Ready(Ok(())) => {
+                            for r in readylist_indicies {
+                                results[*r] = true;
+                            }
                             any_ready = true;
+                        }
+                        Poll::Ready(Err(e)) => {
+                            return Poll::Ready(Err(
+                                e.context(format!("poll_oneoff {readylist_indicies:?}"))
+                            ));
                         }
                         Poll::Pending => {}
                     }
                 }
                 if any_ready {
-                    Poll::Ready(results)
+                    Poll::Ready(Ok(results))
                 } else {
                     Poll::Pending
                 }
             }
         }
 
-        Ok(PollList { futures }.await)
-    }
-
-    async fn poll_one(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-        let table = self.table_mut();
-
-        let pollable = table.get(&pollable)?;
-        let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
-        ready.await;
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
-    fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-        let pollable = self.table_mut().delete(pollable)?;
-        if let Some(delete) = pollable.remove_index_on_delete {
-            delete(self.table_mut(), pollable.index)?;
+        Ok(PollOneoff {
+            elems: closure_futures,
         }
-        Ok(())
+        .await?)
     }
 }
 
 pub mod sync {
     use crate::preview2::{
-        bindings::io::poll as async_poll,
-        bindings::sync_io::io::poll::{self, Pollable},
+        bindings::poll::poll::Host as AsyncHost,
+        bindings::sync_io::poll::poll::{self, Pollable},
         in_tokio, WasiView,
     };
     use anyhow::Result;
-    use wasmtime::component::Resource;
 
     impl<T: WasiView> poll::Host for T {
-        fn poll_list(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
-            in_tokio(async { async_poll::Host::poll_list(self, pollables).await })
+        fn drop_pollable(&mut self, pollable: Pollable) -> Result<()> {
+            AsyncHost::drop_pollable(self, pollable)
         }
 
-        fn poll_one(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-            in_tokio(async { async_poll::Host::poll_one(self, pollable).await })
-        }
-    }
-
-    impl<T: WasiView> crate::preview2::bindings::sync_io::io::poll::HostPollable for T {
-        fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-            async_poll::HostPollable::drop(self, pollable)
+        fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<bool>> {
+            in_tokio(async { AsyncHost::poll_oneoff(self, pollables).await })
         }
     }
 }

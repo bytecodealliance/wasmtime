@@ -17,9 +17,7 @@ macro_rules! wasm_to_libcall_trampoline {
                     sd ra, 32(t0)
 
                     // Tail call to the actual implementation of this libcall.
-                .Lhi_{0}:
-                    auipc t0, %pcrel_hi({0})
-                    jalr x0, %pcrel_lo(.Lhi_{0})(t0)
+                    j {}
 
                     .cfi_endproc
                 ",

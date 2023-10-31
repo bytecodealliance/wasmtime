@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-control"
-version = "0.102.0"
+version = "0.101.0"
 description = "White-box fuzz testing framework"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -10,7 +10,7 @@ keywords = ["fuzz", "test"]
 edition.workspace = true
 
 [dependencies]
-arbitrary = { workspace = true }
+arbitrary = { version = "1.3.0" }
 
 [features]
 

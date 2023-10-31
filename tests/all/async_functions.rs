@@ -311,8 +311,7 @@ async fn cancel_during_run() {
 async fn iloop_with_fuel() {
     let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
     let mut store = Store::new(&engine, ());
-    store.set_fuel(10_000).unwrap();
-    store.fuel_async_yield_interval(Some(100)).unwrap();
+    store.out_of_fuel_async_yield(1_000, 10);
     let module = Module::new(
         &engine,
         "
@@ -327,15 +326,14 @@ async fn iloop_with_fuel() {
 
     // This should yield a bunch of times but eventually finish
     let (_, pending) = CountPending::new(Box::pin(instance)).await;
-    assert_eq!(pending, 99);
+    assert!(pending > 100);
 }
 
 #[tokio::test]
 async fn fuel_eventually_finishes() {
     let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
     let mut store = Store::new(&engine, ());
-    store.set_fuel(u64::MAX).unwrap();
-    store.fuel_async_yield_interval(Some(10)).unwrap();
+    store.out_of_fuel_async_yield(u64::max_value(), 10);
     let module = Module::new(
         &engine,
         "

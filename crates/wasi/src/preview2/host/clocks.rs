@@ -2,14 +2,12 @@
 
 use crate::preview2::bindings::{
     clocks::monotonic_clock::{self, Instant},
-    clocks::timezone::{self, TimezoneDisplay},
+    clocks::timezone::{self, Timezone, TimezoneDisplay},
     clocks::wall_clock::{self, Datetime},
+    poll::poll::Pollable,
 };
-use crate::preview2::poll::{subscribe, Subscribe};
-use crate::preview2::{Pollable, WasiView};
+use crate::preview2::{HostPollable, TablePollableExt, WasiView};
 use cap_std::time::SystemTime;
-use std::time::Duration;
-use wasmtime::component::Resource;
 
 impl TryFrom<SystemTime> for Datetime {
     type Error = anyhow::Error;
@@ -52,39 +50,58 @@ impl<T: WasiView> monotonic_clock::Host for T {
         Ok(self.ctx().monotonic_clock.resolution())
     }
 
-    fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Pollable> {
+        use std::time::Duration;
+        // Calculate time relative to clock object, which may not have the same zero
+        // point as tokio Inst::now()
         let clock_now = self.ctx().monotonic_clock.now();
-        let duration = if absolute {
-            Duration::from_nanos(when.saturating_sub(clock_now))
+        if absolute && when < clock_now {
+            // Deadline is in the past, so pollable is always ready:
+            Ok(self
+                .table_mut()
+                .push_host_pollable(HostPollable::Closure(Box::new(|| {
+                    Box::pin(async { Ok(()) })
+                })))?)
         } else {
-            Duration::from_nanos(when)
-        };
-        let deadline = tokio::time::Instant::now()
-            .checked_add(duration)
-            .ok_or_else(|| anyhow::anyhow!("time overflow: duration {duration:?}"))?;
-        // NB: this resource created here is not actually exposed to wasm, it's
-        // only an internal implementation detail used to match the signature
-        // expected by `subscribe`.
-        let sleep = self.table_mut().push(Sleep(deadline))?;
-        subscribe(self.table_mut(), sleep)
-    }
-}
-
-struct Sleep(tokio::time::Instant);
-
-#[async_trait::async_trait]
-impl Subscribe for Sleep {
-    async fn ready(&mut self) {
-        tokio::time::sleep_until(self.0).await;
+            let duration = if absolute {
+                Duration::from_nanos(when - clock_now)
+            } else {
+                Duration::from_nanos(when)
+            };
+            let deadline = tokio::time::Instant::now()
+                .checked_add(duration)
+                .ok_or_else(|| anyhow::anyhow!("time overflow: duration {duration:?}"))?;
+            tracing::trace!(
+                "deadline = {:?}, now = {:?}",
+                deadline,
+                tokio::time::Instant::now()
+            );
+            Ok(self
+                .table_mut()
+                .push_host_pollable(HostPollable::Closure(Box::new(move || {
+                    Box::pin(async move {
+                        tracing::trace!(
+                            "mkf: deadline = {:?}, now = {:?}",
+                            deadline,
+                            tokio::time::Instant::now()
+                        );
+                        Ok(tokio::time::sleep_until(deadline).await)
+                    })
+                })))?)
+        }
     }
 }
 
 impl<T: WasiView> timezone::Host for T {
-    fn display(&mut self, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
+    fn display(&mut self, timezone: Timezone, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
         todo!("timezone display is not implemented")
     }
 
-    fn utc_offset(&mut self, when: Datetime) -> anyhow::Result<i32> {
+    fn utc_offset(&mut self, timezone: Timezone, when: Datetime) -> anyhow::Result<i32> {
         todo!("timezone utc_offset is not implemented")
+    }
+
+    fn drop_timezone(&mut self, timezone: Timezone) -> anyhow::Result<()> {
+        todo!("timezone drop is not implemented")
     }
 }

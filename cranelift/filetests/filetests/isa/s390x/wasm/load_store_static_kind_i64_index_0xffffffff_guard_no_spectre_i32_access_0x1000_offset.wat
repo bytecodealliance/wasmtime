@@ -44,9 +44,10 @@
 ;;   clgfi %r2, 268431356
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   ag %r2, 0(%r4)
-;;   lghi %r5, 4096
-;;   strv %r3, 0(%r5,%r2)
+;;   lgr %r5, %r2
+;;   ag %r5, 0(%r4)
+;;   lghi %r2, 4096
+;;   strv %r3, 0(%r2,%r5)
 ;;   jg label2
 ;; block2:
 ;;   br %r14
@@ -60,9 +61,10 @@
 ;;   clgfi %r2, 268431356
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   ag %r2, 0(%r3)
-;;   lghi %r5, 4096
-;;   lrv %r2, 0(%r5,%r2)
+;;   lgr %r5, %r2
+;;   ag %r5, 0(%r3)
+;;   lghi %r2, 4096
+;;   lrv %r2, 0(%r2,%r5)
 ;;   jg label2
 ;; block2:
 ;;   br %r14

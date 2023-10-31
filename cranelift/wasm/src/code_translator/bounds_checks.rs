@@ -23,7 +23,6 @@ use super::Reachability;
 use crate::{FuncEnvironment, HeapData, HeapStyle};
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    ir::pcc::Fact,
     ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
 };
 use cranelift_frontend::FunctionBuilder;
@@ -53,12 +52,10 @@ where
         index,
         heap.index_type,
         env.pointer_type(),
-        heap.memory_type.is_some(),
         &mut builder.cursor(),
     );
     let offset_and_size = offset_plus_size(offset, access_size);
     let spectre_mitigations_enabled = env.heap_access_spectre_mitigation();
-    let pcc = env.proof_carrying_code();
 
     // We need to emit code that will trap (or compute an address that will trap
     // when accessed) if
@@ -86,8 +83,8 @@ where
         //
         //            index + 1 > bound
         //        ==> index >= bound
-        HeapStyle::Dynamic { .. } if offset_and_size == 1 => {
-            let bound = get_dynamic_heap_bound(builder, env, heap);
+        HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 => {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
@@ -98,7 +95,6 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
-                pcc,
                 oob,
             ))
         }
@@ -128,8 +124,8 @@ where
         //    offset immediates -- which is a common code pattern when accessing
         //    multiple fields in the same struct that is in linear memory --
         //    will all emit the same `index > bound` check, which we can GVN.
-        HeapStyle::Dynamic { .. } if offset_and_size <= heap.offset_guard_size => {
-            let bound = get_dynamic_heap_bound(builder, env, heap);
+        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.offset_guard_size => {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             let oob = builder.ins().icmp(IntCC::UnsignedGreaterThan, index, bound);
             Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
@@ -138,7 +134,6 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
-                pcc,
                 oob,
             ))
         }
@@ -150,8 +145,8 @@ where
         //
         //            index + offset + access_size > bound
         //        ==> index > bound - (offset + access_size)
-        HeapStyle::Dynamic { .. } if offset_and_size <= heap.min_size.into() => {
-            let bound = get_dynamic_heap_bound(builder, env, heap);
+        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.min_size.into() => {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             let adjusted_bound = builder.ins().iadd_imm(bound, -(offset_and_size as i64));
             let oob = builder
                 .ins()
@@ -163,7 +158,6 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
-                pcc,
                 oob,
             ))
         }
@@ -173,7 +167,7 @@ where
         //        index + offset + access_size > bound
         //
         //    And we have to handle the overflow case in the left-hand side.
-        HeapStyle::Dynamic { .. } => {
+        HeapStyle::Dynamic { bound_gv } => {
             let access_size_val = builder
                 .ins()
                 .iconst(env.pointer_type(), offset_and_size as i64);
@@ -182,7 +176,7 @@ where
                 access_size_val,
                 ir::TrapCode::HeapOutOfBounds,
             );
-            let bound = get_dynamic_heap_bound(builder, env, heap);
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThan, adjusted_index, bound);
@@ -193,7 +187,6 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
-                pcc,
                 oob,
             ))
         }
@@ -261,7 +254,6 @@ where
                 env.pointer_type(),
                 index,
                 offset,
-                pcc,
             ))
         }
 
@@ -291,42 +283,16 @@ where
                 index,
                 offset,
                 spectre_mitigations_enabled,
-                pcc,
                 oob,
             ))
         }
     })
 }
 
-/// Get the bound of a dynamic heap as an `ir::Value`.
-fn get_dynamic_heap_bound<Env>(
-    builder: &mut FunctionBuilder,
-    env: &mut Env,
-    heap: &HeapData,
-) -> ir::Value
-where
-    Env: FuncEnvironment + ?Sized,
-{
-    match (heap.max_size, &heap.style) {
-        // The heap has a constant size, no need to actually load the bound.
-        (Some(max_size), _) if heap.min_size == max_size => {
-            builder.ins().iconst(env.pointer_type(), max_size as i64)
-        }
-
-        // Load the heap bound from its global variable.
-        (_, HeapStyle::Dynamic { bound_gv }) => {
-            builder.ins().global_value(env.pointer_type(), *bound_gv)
-        }
-
-        (_, HeapStyle::Static { .. }) => unreachable!("not a dynamic heap"),
-    }
-}
-
 fn cast_index_to_pointer_ty(
     index: ir::Value,
     index_ty: ir::Type,
     pointer_ty: ir::Type,
-    pcc: bool,
     pos: &mut FuncCursor,
 ) -> ir::Value {
     if index_ty == pointer_ty {
@@ -340,14 +306,6 @@ fn cast_index_to_pointer_ty(
 
     // Convert `index` to `addr_ty`.
     let extended_index = pos.ins().uextend(pointer_ty, index);
-
-    // Add a range fact on the extended value.
-    if pcc {
-        pos.func.dfg.facts[extended_index] = Some(Fact::max_range_for_width_extended(
-            u16::try_from(index_ty.bits()).unwrap(),
-            u16::try_from(pointer_ty.bits()).unwrap(),
-        ));
-    }
 
     // Add debug value-label alias so that debuginfo can name the extended
     // value as the address
@@ -374,8 +332,6 @@ fn explicit_check_oob_condition_and_compute_addr(
     offset: u32,
     // Whether Spectre mitigations are enabled for heap accesses.
     spectre_mitigations_enabled: bool,
-    // Whether we're emitting PCC facts.
-    pcc: bool,
     // The `i8` boolean value that is non-zero when the heap access is out of
     // bounds (and therefore we should trap) and is zero when the heap access is
     // in bounds (and therefore we can proceed).
@@ -386,7 +342,7 @@ fn explicit_check_oob_condition_and_compute_addr(
             .trapnz(oob_condition, ir::TrapCode::HeapOutOfBounds);
     }
 
-    let mut addr = compute_addr(pos, heap, addr_ty, index, offset, pcc);
+    let mut addr = compute_addr(pos, heap, addr_ty, index, offset);
 
     if spectre_mitigations_enabled {
         let null = pos.ins().iconst(addr_ty, 0);
@@ -394,21 +350,6 @@ fn explicit_check_oob_condition_and_compute_addr(
     }
 
     addr
-}
-
-fn add_fact<F: Fn(ir::MemoryType) -> Fact>(
-    pos: &mut FuncCursor,
-    pcc_memtype: Option<ir::MemoryType>,
-    value: ir::Value,
-    make_fact: F,
-) {
-    if let Some(ty) = pcc_memtype {
-        assert!(
-            pos.func.dfg.facts[value].is_none(),
-            "Overwriting a fact is invalid"
-        );
-        pos.func.dfg.facts[value] = Some(make_fact(ty));
-    }
 }
 
 /// Emit code for the native address computation of a Wasm address,
@@ -423,40 +364,11 @@ fn compute_addr(
     addr_ty: ir::Type,
     index: ir::Value,
     offset: u32,
-    pcc: bool,
 ) -> ir::Value {
     debug_assert_eq!(pos.func.dfg.value_type(index), addr_ty);
 
     let heap_base = pos.ins().global_value(addr_ty, heap.base);
-
-    let pcc_memtype = if pcc {
-        Some(
-            heap.memory_type
-                .expect("A memory type is required when PCC is enabled"),
-        )
-    } else {
-        None
-    };
-
-    add_fact(pos, pcc_memtype, heap_base, |ty| Fact::Mem {
-        ty,
-        min_offset: 0,
-        max_offset: 0,
-    });
-
     let base_and_index = pos.ins().iadd(heap_base, index);
-
-    add_fact(pos, pcc_memtype, base_and_index, |ty| {
-        // TODO: handle memory64 as well. For now we assert that we
-        // have a 32-bit `heap.index_type`.
-        assert_eq!(heap.index_type, ir::types::I32);
-        Fact::Mem {
-            ty,
-            min_offset: 0,
-            max_offset: u64::from(u32::MAX),
-        }
-    });
-
     if offset == 0 {
         base_and_index
     } else {
@@ -464,21 +376,7 @@ fn compute_addr(
         // `select_spectre_guard`, if any. If it happens after, then we
         // potentially are letting speculative execution read the whole first
         // 4GiB of memory.
-        let offset_val = pos.ins().iconst(addr_ty, i64::from(offset));
-        add_fact(pos, pcc_memtype, offset_val, |_| {
-            Fact::constant(u16::try_from(addr_ty.bits()).unwrap(), u64::from(offset))
-        });
-        let result = pos.ins().iadd(base_and_index, offset_val);
-        add_fact(pos, pcc_memtype, result, |ty| Fact::Mem {
-            ty,
-            min_offset: u64::from(offset),
-            // Safety: can't overflow -- two u32s summed in a
-            // 64-bit add. TODO: when memory64 is supported here,
-            // `u32::MAX` is no longer true, and we'll need to
-            // handle overflow here.
-            max_offset: u64::from(u32::MAX) + u64::from(offset),
-        });
-        result
+        pos.ins().iadd_imm(base_and_index, offset as i64)
     }
 }
 

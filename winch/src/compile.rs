@@ -5,10 +5,10 @@ use std::{fs, path::PathBuf, str::FromStr};
 use target_lexicon::Triple;
 use wasmtime_environ::{
     wasmparser::{Parser as WasmParser, Validator},
-    DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, ModuleTypes,
-    Tunables, TypeConvert, VMOffsets,
+    DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, Tunables,
+    TypeConvert,
 };
-use winch_codegen::{lookup, BuiltinFunctions, TargetIsa};
+use winch_codegen::{lookup, TargetIsa};
 use winch_filetests::disasm::disasm;
 
 #[derive(Parser, Debug)]
@@ -36,12 +36,12 @@ pub fn run(opt: &Options) -> Result<()> {
     let mut translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
         .translate(parser, &bytes)
         .context("Failed to translate WebAssembly module")?;
-    let types = types.finish();
+    let _ = types.finish();
     let body_inputs = std::mem::take(&mut translation.function_body_inputs);
 
     body_inputs
         .into_iter()
-        .try_for_each(|func| compile(&isa, &translation, &types, func))?;
+        .try_for_each(|func| compile(&isa, &translation, func))?;
 
     Ok(())
 }
@@ -49,7 +49,6 @@ pub fn run(opt: &Options) -> Result<()> {
 fn compile(
     isa: &Box<dyn TargetIsa>,
     translation: &ModuleTranslation,
-    module_types: &ModuleTypes,
     f: (DefinedFuncIndex, FunctionBodyData<'_>),
 ) -> Result<()> {
     let index = translation.module.func_index(f.0);
@@ -57,18 +56,9 @@ fn compile(
     let sig = types[types.function_at(index.as_u32())].unwrap_func();
     let sig = translation.module.convert_func_type(sig);
     let FunctionBodyData { body, validator } = f.1;
-    let vmoffsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
-    let mut builtins = BuiltinFunctions::new(&vmoffsets, isa.wasmtime_call_conv());
     let mut validator = validator.into_validator(Default::default());
     let buffer = isa
-        .compile_function(
-            &sig,
-            &body,
-            translation,
-            module_types,
-            &mut builtins,
-            &mut validator,
-        )
+        .compile_function(&sig, &body, &translation, &mut validator)
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());

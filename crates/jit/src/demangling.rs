@@ -4,14 +4,13 @@
 ///
 /// Currently supported: Rust/C/C++ function names.
 pub fn demangle_function_name(writer: &mut impl std::fmt::Write, name: &str) -> std::fmt::Result {
-    #[cfg(feature = "demangle")]
     if let Ok(demangled) = rustc_demangle::try_demangle(name) {
-        return write!(writer, "{}", demangled);
+        write!(writer, "{}", demangled)
     } else if let Ok(demangled) = cpp_demangle::Symbol::new(name) {
-        return write!(writer, "{}", demangled);
+        write!(writer, "{}", demangled)
+    } else {
+        write!(writer, "{}", name)
     }
-
-    write!(writer, "{}", name)
 }
 
 /// Demangles a function name if it's provided, or returns a unified representation based on the

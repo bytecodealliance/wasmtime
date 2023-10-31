@@ -9,7 +9,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
 anyhow = { workspace = true }
-arbitrary = { workspace = true, features = ["derive"] }
+arbitrary = { version = "1.1.0", features = ["derive"] }
 component-test-util = { workspace = true }
 component-fuzz-util = { workspace = true }
 env_logger = { workspace = true }

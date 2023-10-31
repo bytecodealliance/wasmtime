@@ -21,7 +21,6 @@ use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple}
 mod abi;
 pub mod inst;
 mod lower;
-mod pcc;
 pub mod settings;
 
 use self::inst::EmitInfo;

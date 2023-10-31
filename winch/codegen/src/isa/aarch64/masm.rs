@@ -1,11 +1,11 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{CodeGenContext, TableData},
+    codegen::CodeGenContext,
     isa::reg::Reg,
     masm::{
-        CalleeKind, DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm,
-        OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, StackSlot, TrapCode,
+        CalleeKind, CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm,
+        RemKind, RoundingMode, ShiftKind, StackSlot,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
@@ -97,33 +97,11 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn table_elem_address(
-        &mut self,
-        _index: Reg,
-        _base: Reg,
-        _table_data: &TableData,
-        _context: &mut CodeGenContext,
-    ) -> Self::Address {
-        todo!()
-    }
-
-    fn table_size(&mut self, _table_data: &TableData, _context: &mut CodeGenContext) {
-        todo!()
-    }
-
     fn address_from_sp(&self, _offset: u32) -> Self::Address {
         todo!()
     }
 
     fn address_at_sp(&self, _offset: u32) -> Self::Address {
-        todo!()
-    }
-
-    fn address_at_vmctx(&self, _offset: u32) -> Self::Address {
-        todo!()
-    }
-
-    fn store_ptr(&mut self, _src: Reg, _dst: Self::Address) {
         todo!()
     }
 
@@ -157,10 +135,6 @@ impl Masm for MacroAssembler {
         self.asm.ldr(src, dst, size);
     }
 
-    fn load_ptr(&mut self, _src: Self::Address, _dst: Reg) {
-        todo!()
-    }
-
     fn pop(&mut self, _dst: Reg, _size: OperandSize) {
         todo!()
     }
@@ -192,7 +166,7 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, _src: Reg, _dst: Reg, _cc: IntCmpKind, _size: OperandSize) {
+    fn cmov(&mut self, _src: Reg, _dst: Reg, _cc: CmpKind, _size: OperandSize) {
         todo!()
     }
 
@@ -250,34 +224,6 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn float_add(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
-    }
-
-    fn float_sub(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
-    }
-
-    fn float_mul(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
-    }
-
-    fn float_div(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
-    }
-
-    fn float_min(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
-    }
-
-    fn float_max(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
-    }
-
-    fn float_copysign(&mut self, _dst: Reg, _lhs: Reg, _rhs: Reg, _size: OperandSize) {
-        todo!()
-    }
-
     fn float_neg(&mut self, _dst: Reg, _size: OperandSize) {
         todo!()
     }
@@ -286,17 +232,8 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn float_round(
-        &mut self,
-        _mode: RoundingMode,
-        _context: &mut CodeGenContext,
-        _size: OperandSize,
-    ) {
+    fn float_round(&mut self, _mode: RoundingMode, _dst: Reg, _src: RegImm, _size: OperandSize) {
         todo!();
-    }
-
-    fn float_sqrt(&mut self, _dst: Reg, _src: Reg, _size: OperandSize) {
-        todo!()
     }
 
     fn and(&mut self, _dst: Reg, _lhs: Reg, _rhs: RegImm, _size: OperandSize) {
@@ -347,22 +284,11 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn cmp_with_set(&mut self, _src: RegImm, _dst: Reg, _kind: IntCmpKind, _size: OperandSize) {
+    fn cmp_with_set(&mut self, _src: RegImm, _dst: Reg, _kind: CmpKind, _size: OperandSize) {
         todo!()
     }
 
     fn cmp(&mut self, _src: RegImm, _dest: Reg, _size: OperandSize) {
-        todo!()
-    }
-
-    fn float_cmp_with_set(
-        &mut self,
-        _src1: Reg,
-        _src2: Reg,
-        _dst: Reg,
-        _kind: FloatCmpKind,
-        _size: OperandSize,
-    ) {
         todo!()
     }
 
@@ -385,9 +311,9 @@ impl Masm for MacroAssembler {
 
     fn branch(
         &mut self,
-        _kind: IntCmpKind,
+        _kind: CmpKind,
         _lhs: RegImm,
-        _rhs: Reg,
+        _rhs: RegImm,
         _taken: MachLabel,
         _size: OperandSize,
     ) {
@@ -403,14 +329,6 @@ impl Masm for MacroAssembler {
     }
 
     fn jmp_table(&mut self, _targets: &[MachLabel], _index: Reg, _tmp: Reg) {
-        todo!()
-    }
-
-    fn trapz(&mut self, _src: Reg, _code: TrapCode) {
-        todo!()
-    }
-
-    fn trapif(&mut self, _cc: IntCmpKind, _code: TrapCode) {
         todo!()
     }
 }

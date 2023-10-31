@@ -1,30 +1,32 @@
-use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
-use crate::preview2::{TableError, TrappableError};
+use crate::preview2::{Table, TableError};
 use cap_std::net::Pool;
 
-pub struct Network {
-    pub pool: Pool,
-    pub allow_ip_name_lookup: bool,
-}
+pub(crate) struct HostNetwork(pub(crate) Pool);
 
-pub type SocketResult<T> = Result<T, SocketError>;
-
-pub type SocketError = TrappableError<ErrorCode>;
-
-impl From<TableError> for SocketError {
-    fn from(error: TableError) -> Self {
-        Self::trap(error)
+impl HostNetwork {
+    pub fn new(pool: Pool) -> Self {
+        Self(pool)
     }
 }
 
-impl From<std::io::Error> for SocketError {
-    fn from(error: std::io::Error) -> Self {
-        ErrorCode::from(error).into()
-    }
+pub(crate) trait TableNetworkExt {
+    fn push_network(&mut self, network: HostNetwork) -> Result<u32, TableError>;
+    fn delete_network(&mut self, fd: u32) -> Result<HostNetwork, TableError>;
+    fn is_network(&self, fd: u32) -> bool;
+    fn get_network(&self, fd: u32) -> Result<&HostNetwork, TableError>;
 }
 
-impl From<rustix::io::Errno> for SocketError {
-    fn from(error: rustix::io::Errno) -> Self {
-        ErrorCode::from(error).into()
+impl TableNetworkExt for Table {
+    fn push_network(&mut self, network: HostNetwork) -> Result<u32, TableError> {
+        self.push(Box::new(network))
+    }
+    fn delete_network(&mut self, fd: u32) -> Result<HostNetwork, TableError> {
+        self.delete(fd)
+    }
+    fn is_network(&self, fd: u32) -> bool {
+        self.is::<HostNetwork>(fd)
+    }
+    fn get_network(&self, fd: u32) -> Result<&HostNetwork, TableError> {
+        self.get(fd)
     }
 }

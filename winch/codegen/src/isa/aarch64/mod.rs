@@ -1,4 +1,4 @@
-use self::regs::{ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_GPR};
+use self::regs::{scratch, ALL_GPR};
 use crate::{
     abi::ABI,
     codegen::{CodeGen, CodeGenContext, FuncEnv},
@@ -6,9 +6,9 @@ use crate::{
     isa::{Builder, CallingConvention, TargetIsa},
     masm::MacroAssembler,
     regalloc::RegAlloc,
-    regset::RegBitSet,
+    regset::RegSet,
     stack::Stack,
-    BuiltinFunctions, TrampolineKind,
+    TrampolineKind,
 };
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
@@ -17,7 +17,7 @@ use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, ModuleTypes, VMOffsets, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, WasmFuncType};
 
 mod abi;
 mod address;
@@ -87,11 +87,8 @@ impl TargetIsa for Aarch64 {
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
-        types: &ModuleTypes,
-        builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
-        let vmoffsets = VMOffsets::new(self.pointer_bytes(), &translation.module);
         let mut body = body.get_binary_reader();
         let mut masm = Aarch64Masm::new(self.shared_flags.clone());
         let stack = Stack::new();
@@ -99,16 +96,10 @@ impl TargetIsa for Aarch64 {
 
         let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
-        let gpr = RegBitSet::int(
-            ALL_GPR.into(),
-            NON_ALLOCATABLE_GPR.into(),
-            usize::try_from(MAX_GPR).unwrap(),
-        );
         // TODO: Add floating point bitmask
-        let fpr = RegBitSet::float(0, 0, usize::try_from(MAX_FPR).unwrap());
-        let regalloc = RegAlloc::from(gpr, fpr);
-        let codegen_context = CodeGenContext::new(regalloc, stack, frame, builtins, &vmoffsets);
-        let env = FuncEnv::new(&vmoffsets, translation, types);
+        let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
+        let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
+        let env = FuncEnv::new(self.pointer_bytes(), translation);
         let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;

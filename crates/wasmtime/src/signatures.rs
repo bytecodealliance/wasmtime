@@ -45,7 +45,6 @@ impl SignatureCollection {
     }
 
     /// Gets the shared signature index given a module signature index.
-    #[inline]
     pub fn shared_signature(&self, index: SignatureIndex) -> Option<VMSharedSignatureIndex> {
         self.signatures.get(index).copied()
     }

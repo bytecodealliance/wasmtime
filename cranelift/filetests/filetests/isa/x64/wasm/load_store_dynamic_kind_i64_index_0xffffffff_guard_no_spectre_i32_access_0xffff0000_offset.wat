@@ -49,9 +49,10 @@
 ;;   cmpq    %r9, %rdi
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   addq    %rdi, 0(%rdx), %rdi
-;;   movl    $-65536, %r11d
-;;   movl    %esi, 0(%rdi,%r11,1)
+;;   movq    %rdi, %r11
+;;   addq    %r11, 0(%rdx), %r11
+;;   movl    $-65536, %edi
+;;   movl    %esi, 0(%r11,%rdi,1)
 ;;   jmp     label2
 ;; block2:
 ;;   movq    %rbp, %rsp
@@ -70,9 +71,10 @@
 ;;   cmpq    %r9, %rdi
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   addq    %rdi, 0(%rsi), %rdi
-;;   movl    $-65536, %r11d
-;;   movl    0(%rdi,%r11,1), %eax
+;;   movq    %rdi, %r11
+;;   addq    %r11, 0(%rsi), %r11
+;;   movl    $-65536, %esi
+;;   movl    0(%r11,%rsi,1), %eax
 ;;   jmp     label2
 ;; block2:
 ;;   movq    %rbp, %rsp

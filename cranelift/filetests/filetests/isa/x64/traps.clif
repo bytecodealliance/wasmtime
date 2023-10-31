@@ -29,7 +29,8 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addq    %rdi, %rsi, %rdi
+;   movq    %rdi, %rcx
+;   addq    %rcx, %rsi, %rcx
 ;   jb #trap=user0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -40,8 +41,9 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   addq %rsi, %rdi
-;   jb 0x12
+;   movq %rdi, %rcx
+;   addq %rsi, %rcx
+;   jb 0x15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

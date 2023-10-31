@@ -1,140 +1,155 @@
 use crate::preview2::bindings::filesystem::types as async_filesystem;
 use crate::preview2::bindings::sync_io::filesystem::types as sync_filesystem;
 use crate::preview2::bindings::sync_io::io::streams;
-use crate::preview2::{in_tokio, FsError, FsResult};
-use wasmtime::component::Resource;
+use crate::preview2::in_tokio;
 
 impl<T: async_filesystem::Host> sync_filesystem::Host for T {
-    fn convert_error_code(&mut self, err: FsError) -> anyhow::Result<sync_filesystem::ErrorCode> {
-        Ok(async_filesystem::Host::convert_error_code(self, err)?.into())
-    }
-
-    fn filesystem_error_code(
-        &mut self,
-        err: Resource<streams::Error>,
-    ) -> anyhow::Result<Option<sync_filesystem::ErrorCode>> {
-        Ok(async_filesystem::Host::filesystem_error_code(self, err)?.map(|e| e.into()))
-    }
-}
-
-impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T {
     fn advise(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         offset: sync_filesystem::Filesize,
         len: sync_filesystem::Filesize,
         advice: sync_filesystem::Advice,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::advise(self, fd, offset, len, advice.into()).await
-        })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::advise(self, fd, offset, len, advice.into()).await
+        })?)
     }
 
-    fn sync_data(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::sync_data(self, fd).await })
+    fn sync_data(&mut self, fd: sync_filesystem::Descriptor) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::sync_data(self, fd).await
+        })?)
     }
 
     fn get_flags(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-    ) -> FsResult<sync_filesystem::DescriptorFlags> {
-        Ok(in_tokio(async { async_filesystem::HostDescriptor::get_flags(self, fd).await })?.into())
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<sync_filesystem::DescriptorFlags, sync_filesystem::Error> {
+        Ok(in_tokio(async { async_filesystem::Host::get_flags(self, fd).await })?.into())
     }
 
     fn get_type(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-    ) -> FsResult<sync_filesystem::DescriptorType> {
-        Ok(in_tokio(async { async_filesystem::HostDescriptor::get_type(self, fd).await })?.into())
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<sync_filesystem::DescriptorType, sync_filesystem::Error> {
+        Ok(in_tokio(async { async_filesystem::Host::get_type(self, fd).await })?.into())
     }
 
     fn set_size(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         size: sync_filesystem::Filesize,
-    ) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::set_size(self, fd, size).await })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::set_size(self, fd, size).await
+        })?)
     }
 
     fn set_times(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         atim: sync_filesystem::NewTimestamp,
         mtim: sync_filesystem::NewTimestamp,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::set_times(self, fd, atim.into(), mtim.into()).await
-        })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::set_times(self, fd, atim.into(), mtim.into()).await
+        })?)
     }
 
     fn read(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         len: sync_filesystem::Filesize,
         offset: sync_filesystem::Filesize,
-    ) -> FsResult<(Vec<u8>, bool)> {
-        in_tokio(async { async_filesystem::HostDescriptor::read(self, fd, len, offset).await })
+    ) -> Result<(Vec<u8>, bool), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::read(self, fd, len, offset).await
+        })?)
     }
 
     fn write(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         buf: Vec<u8>,
         offset: sync_filesystem::Filesize,
-    ) -> FsResult<sync_filesystem::Filesize> {
-        in_tokio(async { async_filesystem::HostDescriptor::write(self, fd, buf, offset).await })
+    ) -> Result<sync_filesystem::Filesize, sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::write(self, fd, buf, offset).await
+        })?)
     }
 
     fn read_directory(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-    ) -> FsResult<Resource<sync_filesystem::DirectoryEntryStream>> {
-        in_tokio(async { async_filesystem::HostDescriptor::read_directory(self, fd).await })
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<sync_filesystem::DirectoryEntryStream, sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::read_directory(self, fd).await
+        })?)
     }
 
-    fn sync(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::sync(self, fd).await })
+    fn read_directory_entry(
+        &mut self,
+        stream: sync_filesystem::DirectoryEntryStream,
+    ) -> Result<Option<sync_filesystem::DirectoryEntry>, sync_filesystem::Error> {
+        Ok(
+            in_tokio(async { async_filesystem::Host::read_directory_entry(self, stream).await })?
+                .map(|e| e.into()),
+        )
+    }
+
+    fn drop_directory_entry_stream(
+        &mut self,
+        stream: sync_filesystem::DirectoryEntryStream,
+    ) -> anyhow::Result<()> {
+        async_filesystem::Host::drop_directory_entry_stream(self, stream)
+    }
+
+    fn sync(&mut self, fd: sync_filesystem::Descriptor) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::sync(self, fd).await
+        })?)
     }
 
     fn create_directory_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path: String,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::create_directory_at(self, fd, path).await
-        })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::create_directory_at(self, fd, path).await
+        })?)
     }
 
     fn stat(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-    ) -> FsResult<sync_filesystem::DescriptorStat> {
-        Ok(in_tokio(async { async_filesystem::HostDescriptor::stat(self, fd).await })?.into())
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<sync_filesystem::DescriptorStat, sync_filesystem::Error> {
+        Ok(in_tokio(async { async_filesystem::Host::stat(self, fd).await })?.into())
     }
 
     fn stat_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path_flags: sync_filesystem::PathFlags,
         path: String,
-    ) -> FsResult<sync_filesystem::DescriptorStat> {
+    ) -> Result<sync_filesystem::DescriptorStat, sync_filesystem::Error> {
         Ok(in_tokio(async {
-            async_filesystem::HostDescriptor::stat_at(self, fd, path_flags.into(), path).await
+            async_filesystem::Host::stat_at(self, fd, path_flags.into(), path).await
         })?
         .into())
     }
 
     fn set_times_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path_flags: sync_filesystem::PathFlags,
         path: String,
         atim: sync_filesystem::NewTimestamp,
         mtim: sync_filesystem::NewTimestamp,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::set_times_at(
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::set_times_at(
                 self,
                 fd,
                 path_flags.into(),
@@ -143,20 +158,20 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
                 mtim.into(),
             )
             .await
-        })
+        })?)
     }
 
     fn link_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         // TODO delete the path flags from this function
         old_path_flags: sync_filesystem::PathFlags,
         old_path: String,
-        new_descriptor: Resource<sync_filesystem::Descriptor>,
+        new_descriptor: sync_filesystem::Descriptor,
         new_path: String,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::link_at(
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::link_at(
                 self,
                 fd,
                 old_path_flags.into(),
@@ -165,20 +180,20 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
                 new_path,
             )
             .await
-        })
+        })?)
     }
 
     fn open_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path_flags: sync_filesystem::PathFlags,
         path: String,
         oflags: sync_filesystem::OpenFlags,
         flags: sync_filesystem::DescriptorFlags,
         mode: sync_filesystem::Modes,
-    ) -> FsResult<Resource<sync_filesystem::Descriptor>> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::open_at(
+    ) -> Result<sync_filesystem::Descriptor, sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::open_at(
                 self,
                 fd,
                 path_flags.into(),
@@ -188,90 +203,88 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
                 mode.into(),
             )
             .await
-        })
+        })?)
     }
 
-    fn drop(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> anyhow::Result<()> {
-        async_filesystem::HostDescriptor::drop(self, fd)
+    fn drop_descriptor(&mut self, fd: sync_filesystem::Descriptor) -> anyhow::Result<()> {
+        async_filesystem::Host::drop_descriptor(self, fd)
     }
 
     fn readlink_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path: String,
-    ) -> FsResult<String> {
-        in_tokio(async { async_filesystem::HostDescriptor::readlink_at(self, fd, path).await })
+    ) -> Result<String, sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::readlink_at(self, fd, path).await
+        })?)
     }
 
     fn remove_directory_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path: String,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::remove_directory_at(self, fd, path).await
-        })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::remove_directory_at(self, fd, path).await
+        })?)
     }
 
     fn rename_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         old_path: String,
-        new_fd: Resource<sync_filesystem::Descriptor>,
+        new_fd: sync_filesystem::Descriptor,
         new_path: String,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::rename_at(self, fd, old_path, new_fd, new_path).await
-        })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::rename_at(self, fd, old_path, new_fd, new_path).await
+        })?)
     }
 
     fn symlink_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         src_path: String,
         dest_path: String,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::symlink_at(self, fd, src_path, dest_path).await
-        })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::symlink_at(self, fd, src_path, dest_path).await
+        })?)
     }
 
     fn unlink_file_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path: String,
-    ) -> FsResult<()> {
-        in_tokio(async { async_filesystem::HostDescriptor::unlink_file_at(self, fd, path).await })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::unlink_file_at(self, fd, path).await
+        })?)
     }
 
     fn access_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path_flags: sync_filesystem::PathFlags,
         path: String,
         access: sync_filesystem::AccessType,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::access_at(
-                self,
-                fd,
-                path_flags.into(),
-                path,
-                access.into(),
-            )
-            .await
-        })
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::access_at(self, fd, path_flags.into(), path, access.into())
+                .await
+        })?)
     }
 
     fn change_file_permissions_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path_flags: sync_filesystem::PathFlags,
         path: String,
         mode: sync_filesystem::Modes,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::change_file_permissions_at(
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::change_file_permissions_at(
                 self,
                 fd,
                 path_flags.into(),
@@ -279,18 +292,18 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
                 mode.into(),
             )
             .await
-        })
+        })?)
     }
 
     fn change_directory_permissions_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path_flags: sync_filesystem::PathFlags,
         path: String,
         mode: sync_filesystem::Modes,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::change_directory_permissions_at(
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::change_directory_permissions_at(
                 self,
                 fd,
                 path_flags.into(),
@@ -298,86 +311,99 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
                 mode.into(),
             )
             .await
-        })
+        })?)
+    }
+
+    fn lock_shared(
+        &mut self,
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::lock_shared(self, fd).await
+        })?)
+    }
+
+    fn lock_exclusive(
+        &mut self,
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::lock_exclusive(self, fd).await
+        })?)
+    }
+
+    fn try_lock_shared(
+        &mut self,
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::try_lock_shared(self, fd).await
+        })?)
+    }
+
+    fn try_lock_exclusive(
+        &mut self,
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::try_lock_exclusive(self, fd).await
+        })?)
+    }
+
+    fn unlock(&mut self, fd: sync_filesystem::Descriptor) -> Result<(), sync_filesystem::Error> {
+        Ok(in_tokio(async {
+            async_filesystem::Host::unlock(self, fd).await
+        })?)
     }
 
     fn read_via_stream(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         offset: sync_filesystem::Filesize,
-    ) -> FsResult<Resource<streams::InputStream>> {
-        Ok(async_filesystem::HostDescriptor::read_via_stream(
-            self, fd, offset,
-        )?)
+    ) -> Result<streams::InputStream, sync_filesystem::Error> {
+        Ok(async_filesystem::Host::read_via_stream(self, fd, offset)?)
     }
 
     fn write_via_stream(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         offset: sync_filesystem::Filesize,
-    ) -> FsResult<Resource<streams::OutputStream>> {
-        Ok(async_filesystem::HostDescriptor::write_via_stream(
-            self, fd, offset,
-        )?)
+    ) -> Result<streams::OutputStream, sync_filesystem::Error> {
+        Ok(async_filesystem::Host::write_via_stream(self, fd, offset)?)
     }
 
     fn append_via_stream(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-    ) -> FsResult<Resource<streams::OutputStream>> {
-        Ok(async_filesystem::HostDescriptor::append_via_stream(
-            self, fd,
-        )?)
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<streams::OutputStream, sync_filesystem::Error> {
+        Ok(async_filesystem::Host::append_via_stream(self, fd)?)
     }
 
     fn is_same_object(
         &mut self,
-        a: Resource<sync_filesystem::Descriptor>,
-        b: Resource<sync_filesystem::Descriptor>,
+        a: sync_filesystem::Descriptor,
+        b: sync_filesystem::Descriptor,
     ) -> anyhow::Result<bool> {
-        in_tokio(async { async_filesystem::HostDescriptor::is_same_object(self, a, b).await })
+        Ok(in_tokio(async {
+            async_filesystem::Host::is_same_object(self, a, b).await
+        })?)
     }
     fn metadata_hash(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-    ) -> FsResult<sync_filesystem::MetadataHashValue> {
-        Ok(
-            in_tokio(async { async_filesystem::HostDescriptor::metadata_hash(self, fd).await })?
-                .into(),
-        )
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<sync_filesystem::MetadataHashValue, sync_filesystem::Error> {
+        Ok(in_tokio(async { async_filesystem::Host::metadata_hash(self, fd).await })?.into())
     }
     fn metadata_hash_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
+        fd: sync_filesystem::Descriptor,
         path_flags: sync_filesystem::PathFlags,
         path: String,
-    ) -> FsResult<sync_filesystem::MetadataHashValue> {
+    ) -> Result<sync_filesystem::MetadataHashValue, sync_filesystem::Error> {
         Ok(in_tokio(async {
-            async_filesystem::HostDescriptor::metadata_hash_at(self, fd, path_flags.into(), path)
-                .await
+            async_filesystem::Host::metadata_hash_at(self, fd, path_flags.into(), path).await
         })?
         .into())
-    }
-}
-
-impl<T: async_filesystem::HostDirectoryEntryStream> sync_filesystem::HostDirectoryEntryStream
-    for T
-{
-    fn read_directory_entry(
-        &mut self,
-        stream: Resource<sync_filesystem::DirectoryEntryStream>,
-    ) -> FsResult<Option<sync_filesystem::DirectoryEntry>> {
-        Ok(in_tokio(async {
-            async_filesystem::HostDirectoryEntryStream::read_directory_entry(self, stream).await
-        })?
-        .map(|e| e.into()))
-    }
-
-    fn drop(
-        &mut self,
-        stream: Resource<sync_filesystem::DirectoryEntryStream>,
-    ) -> anyhow::Result<()> {
-        async_filesystem::HostDirectoryEntryStream::drop(self, stream)
     }
 }
 
@@ -422,6 +448,15 @@ impl From<async_filesystem::ErrorCode> for sync_filesystem::ErrorCode {
             ErrorCode::InvalidSeek => Self::InvalidSeek,
             ErrorCode::TextFileBusy => Self::TextFileBusy,
             ErrorCode::CrossDevice => Self::CrossDevice,
+        }
+    }
+}
+
+impl From<async_filesystem::Error> for sync_filesystem::Error {
+    fn from(other: async_filesystem::Error) -> Self {
+        match other.downcast() {
+            Ok(errorcode) => Self::from(sync_filesystem::ErrorCode::from(errorcode)),
+            Err(other) => Self::trap(other),
         }
     }
 }

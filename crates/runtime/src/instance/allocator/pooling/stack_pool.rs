@@ -213,7 +213,7 @@ mod tests {
 
         assert_eq!(pool.index_allocator.testing_freelist(), []);
 
-        assert!(pool.allocate().is_err(), "allocation should fail");
+        pool.allocate().unwrap_err();
 
         for stack in stacks {
             unsafe {

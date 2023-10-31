@@ -84,6 +84,8 @@ fn build_raw_intrinsics() -> Vec<u8> {
     funcs.function(1);
     funcs.function(0);
     funcs.function(1);
+    funcs.function(0);
+    funcs.function(1);
     module.section(&funcs);
 
     // Declare the globals.
@@ -104,6 +106,14 @@ fn build_raw_intrinsics() -> Vec<u8> {
         },
         &ConstExpr::i32_const(0),
     );
+    // stderr_stream
+    globals.global(
+        GlobalType {
+            val_type: ValType::I32,
+            mutable: true,
+        },
+        &ConstExpr::i32_const(123),
+    );
     module.section(&globals);
 
     // Here the `code` section is defined. This is tricky because an offset is
@@ -115,7 +125,7 @@ fn build_raw_intrinsics() -> Vec<u8> {
     // code section.
 
     let mut code = Vec::new();
-    4u32.encode(&mut code); // number of functions
+    6u32.encode(&mut code); // number of functions
 
     let global_get = 0x23;
     let global_set = 0x24;
@@ -142,6 +152,8 @@ fn build_raw_intrinsics() -> Vec<u8> {
     let internal_state_ptr_ref2 = encode(&mut code, 0, global_set); // set_state_ptr
     let allocation_state_ref1 = encode(&mut code, 1, global_get); // get_allocation_state
     let allocation_state_ref2 = encode(&mut code, 1, global_set); // set_allocation_state
+    let stderr_stream_ref1 = encode(&mut code, 2, global_get); // get_stderr_stream
+    let stderr_stream_ref2 = encode(&mut code, 2, global_set); // set_stderr_stream
 
     module.section(&RawSection {
         id: SectionId::Code as u8,
@@ -159,7 +171,7 @@ fn build_raw_intrinsics() -> Vec<u8> {
 
         linking.push(0x08); // `WASM_SYMBOL_TABLE`
         let mut subsection = Vec::new();
-        6u32.encode(&mut subsection); // 6 symbols (4 functions + 2 globals)
+        9u32.encode(&mut subsection); // 9 symbols (6 functions + 3 globals)
 
         subsection.push(0x00); // SYMTAB_FUNCTION
         0x00.encode(&mut subsection); // flags
@@ -181,6 +193,16 @@ fn build_raw_intrinsics() -> Vec<u8> {
         3u32.encode(&mut subsection); // function index
         "set_allocation_state".encode(&mut subsection); // symbol name
 
+        subsection.push(0x00); // SYMTAB_FUNCTION
+        0x00.encode(&mut subsection); // flags
+        4u32.encode(&mut subsection); // function index
+        "get_stderr_stream".encode(&mut subsection); // symbol name
+
+        subsection.push(0x00); // SYMTAB_FUNCTION
+        0x00.encode(&mut subsection); // flags
+        5u32.encode(&mut subsection); // function index
+        "set_stderr_stream".encode(&mut subsection); // symbol name
+
         subsection.push(0x02); // SYMTAB_GLOBAL
         0x02.encode(&mut subsection); // flags (WASM_SYM_BINDING_LOCAL)
         0u32.encode(&mut subsection); // global index
@@ -190,6 +212,11 @@ fn build_raw_intrinsics() -> Vec<u8> {
         0x00.encode(&mut subsection); // flags
         1u32.encode(&mut subsection); // global index
         "allocation_state".encode(&mut subsection); // symbol name
+
+        subsection.push(0x02); // SYMTAB_GLOBAL
+        0x00.encode(&mut subsection); // flags
+        2u32.encode(&mut subsection); // global index
+        "stderr_stream".encode(&mut subsection); // symbol name
 
         subsection.encode(&mut linking);
         module.section(&CustomSection {
@@ -203,23 +230,31 @@ fn build_raw_intrinsics() -> Vec<u8> {
     {
         let mut reloc = Vec::new();
         3u32.encode(&mut reloc); // target section (code is the 4th section, 3 when 0-indexed)
-        4u32.encode(&mut reloc); // 4 relocations
+        6u32.encode(&mut reloc); // 6 relocations
 
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
         internal_state_ptr_ref1.encode(&mut reloc); // offset
-        4u32.encode(&mut reloc); // symbol index
+        6u32.encode(&mut reloc); // symbol index
 
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
         internal_state_ptr_ref2.encode(&mut reloc); // offset
-        4u32.encode(&mut reloc); // symbol index
+        6u32.encode(&mut reloc); // symbol index
 
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
         allocation_state_ref1.encode(&mut reloc); // offset
-        5u32.encode(&mut reloc); // symbol index
+        7u32.encode(&mut reloc); // symbol index
 
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
         allocation_state_ref2.encode(&mut reloc); // offset
-        5u32.encode(&mut reloc); // symbol index
+        7u32.encode(&mut reloc); // symbol index
+
+        reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
+        stderr_stream_ref1.encode(&mut reloc); // offset
+        8u32.encode(&mut reloc); // symbol index
+
+        reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
+        stderr_stream_ref2.encode(&mut reloc); // offset
+        8u32.encode(&mut reloc); // symbol index
 
         module.section(&CustomSection {
             name: "reloc.CODE".into(),

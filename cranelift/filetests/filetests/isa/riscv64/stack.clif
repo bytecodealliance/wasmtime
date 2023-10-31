@@ -12,17 +12,17 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-16
+;   add sp,-16
 ; block0:
 ;   load_addr a0,0(nominal_sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -50,24 +50,20 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   lui a0,24
 ;   addi a0,a0,1712
 ;   call %Probestack
-;   lui t6,-24
-;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,-100016
 ; block0:
 ;   load_addr a0,0(nominal_sp)
-;   lui t6,24
-;   addi t6,t6,1712
-;   add sp,t6,sp
+;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -78,12 +74,16 @@ block0:
 ;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
-;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
-;   jalr ra
+;   auipc t5, 0
+;   ld t5, 0xc(t5)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %Probestack 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr t5
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block1: ; offset 0x2c
+; block1: ; offset 0x3c
 ;   mv a0, sp
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
@@ -102,17 +102,18 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-16
+;   add sp,-16
 ; block0:
-;   ld a0,0(nominal_sp)
-;   addi sp,sp,16
+;   load_addr a1,0(nominal_sp)
+;   ld a0,0(a1)
+;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -123,7 +124,8 @@ block0:
 ;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   ld a0, 0(sp)
+;   mv a1, sp
+;   ld a0, 0(a1)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -140,24 +142,21 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   lui a0,24
 ;   addi a0,a0,1712
 ;   call %Probestack
-;   lui t6,-24
-;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,-100016
 ; block0:
-;   ld a0,0(nominal_sp)
-;   lui t6,24
-;   addi t6,t6,1712
-;   add sp,t6,sp
+;   load_addr a1,0(nominal_sp)
+;   ld a0,0(a1)
+;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -168,13 +167,18 @@ block0:
 ;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
-;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
-;   jalr ra
+;   auipc t5, 0
+;   ld t5, 0xc(t5)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %Probestack 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr t5
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block1: ; offset 0x2c
-;   ld a0, 0(sp)
+; block1: ; offset 0x3c
+;   mv a1, sp
+;   ld a0, 0(a1)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
 ;   add sp, t6, sp
@@ -192,17 +196,18 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-16
+;   add sp,-16
 ; block0:
-;   sd a0,0(nominal_sp)
-;   addi sp,sp,16
+;   load_addr a2,0(nominal_sp)
+;   sd a0,0(a2)
+;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -213,7 +218,8 @@ block0(v0: i64):
 ;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   sd a0, 0(sp)
+;   mv a2, sp
+;   sd a0, 0(a2)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -230,24 +236,21 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   lui a0,24
 ;   addi a0,a0,1712
 ;   call %Probestack
-;   lui t6,-24
-;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,-100016
 ; block0:
-;   sd a0,0(nominal_sp)
-;   lui t6,24
-;   addi t6,t6,1712
-;   add sp,t6,sp
+;   load_addr a2,0(nominal_sp)
+;   sd a0,0(a2)
+;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -258,13 +261,18 @@ block0(v0: i64):
 ;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
-;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
-;   jalr ra
+;   auipc t5, 0
+;   ld t5, 0xc(t5)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %Probestack 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr t5
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block1: ; offset 0x2c
-;   sd a0, 0(sp)
+; block1: ; offset 0x3c
+;   mv a2, sp
+;   sd a0, 0(a2)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
 ;   add sp, t6, sp
@@ -425,7 +433,7 @@ block0(v0: i8):
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -440,7 +448,7 @@ block0(v0: i8):
 ;   sd s9,-72(sp)
 ;   sd s10,-80(sp)
 ;   sd s11,-88(sp)
-;   addi sp,sp,-1360
+;   add sp,-1360
 ; block0:
 ;   sd a0,1000(nominal_sp)
 ;   li a2,2
@@ -560,11 +568,11 @@ block0(v0: i8):
 ;   ld t1,1160(nominal_sp)
 ;   ld t2,1168(nominal_sp)
 ;   add t1,t2,t1
-;   ld a7,1152(nominal_sp)
 ;   ld t4,1144(nominal_sp)
+;   ld a7,1152(nominal_sp)
 ;   add t2,a7,t4
-;   ld s3,1136(nominal_sp)
 ;   ld s5,1128(nominal_sp)
+;   ld s3,1136(nominal_sp)
 ;   add a6,s3,s5
 ;   ld a7,1112(nominal_sp)
 ;   ld t3,1120(nominal_sp)
@@ -584,8 +592,8 @@ block0(v0: i8):
 ;   ld s3,1032(nominal_sp)
 ;   ld s4,1040(nominal_sp)
 ;   add s3,s4,s3
-;   ld s4,1024(nominal_sp)
 ;   ld s5,1016(nominal_sp)
+;   ld s4,1024(nominal_sp)
 ;   add s4,s4,s5
 ;   ld s5,1008(nominal_sp)
 ;   add s5,s5,s6
@@ -612,7 +620,7 @@ block0(v0: i8):
 ;   add a1,a1,a2
 ;   add a1,a3,a1
 ;   ld a0,1000(nominal_sp)
-;   addi sp,sp,1360
+;   add sp,+1360
 ;   ld s1,-8(sp)
 ;   ld s2,-16(sp)
 ;   ld s3,-24(sp)
@@ -626,7 +634,7 @@ block0(v0: i8):
 ;   ld s11,-88(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -766,11 +774,11 @@ block0(v0: i8):
 ;   ld t1, 0x488(sp)
 ;   ld t2, 0x490(sp)
 ;   add t1, t2, t1
-;   ld a7, 0x480(sp)
 ;   ld t4, 0x478(sp)
+;   ld a7, 0x480(sp)
 ;   add t2, a7, t4
-;   ld s3, 0x470(sp)
 ;   ld s5, 0x468(sp)
+;   ld s3, 0x470(sp)
 ;   add a6, s3, s5
 ;   ld a7, 0x458(sp)
 ;   ld t3, 0x460(sp)
@@ -790,8 +798,8 @@ block0(v0: i8):
 ;   ld s3, 0x408(sp)
 ;   ld s4, 0x410(sp)
 ;   add s3, s4, s3
-;   ld s4, 0x400(sp)
 ;   ld s5, 0x3f8(sp)
+;   ld s4, 0x400(sp)
 ;   add s4, s4, s5
 ;   ld s5, 0x3f0(sp)
 ;   add s5, s5, s6
@@ -844,18 +852,19 @@ block0(v0: i128):
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-16
+;   add sp,-16
 ; block0:
-;   sd a0,0(nominal_sp)
-;   sd a1,8(nominal_sp)
-;   addi sp,sp,16
+;   load_addr a3,0(nominal_sp)
+;   sd a0,0(a3)
+;   sd a1,8(a3)
+;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -866,8 +875,9 @@ block0(v0: i128):
 ;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   sd a0, 0(sp)
-;   sd a1, 8(sp)
+;   mv a3, sp
+;   sd a0, 0(a3)
+;   sd a1, 8(a3)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -884,18 +894,19 @@ block0(v0: i128):
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-32
+;   add sp,-32
 ; block0:
-;   sd a0,32(nominal_sp)
-;   sd a1,40(nominal_sp)
-;   addi sp,sp,32
+;   load_addr a3,32(nominal_sp)
+;   sd a0,0(a3)
+;   sd a1,8(a3)
+;   add sp,+32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -906,8 +917,9 @@ block0(v0: i128):
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
-;   sd a0, 0x20(sp)
-;   sd a1, 0x28(sp)
+;   addi a3, sp, 0x20
+;   sd a0, 0(a3)
+;   sd a1, 8(a3)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -924,25 +936,22 @@ block0(v0: i128):
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   lui a0,24
 ;   addi a0,a0,1712
 ;   call %Probestack
-;   lui t6,-24
-;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,-100016
 ; block0:
-;   sd a0,0(nominal_sp)
-;   sd a1,8(nominal_sp)
-;   lui t6,24
-;   addi t6,t6,1712
-;   add sp,t6,sp
+;   load_addr a3,0(nominal_sp)
+;   sd a0,0(a3)
+;   sd a1,8(a3)
+;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -953,14 +962,19 @@ block0(v0: i128):
 ;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
-;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
-;   jalr ra
+;   auipc t5, 0
+;   ld t5, 0xc(t5)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %Probestack 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr t5
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block1: ; offset 0x2c
-;   sd a0, 0(sp)
-;   sd a1, 8(sp)
+; block1: ; offset 0x3c
+;   mv a3, sp
+;   sd a0, 0(a3)
+;   sd a1, 8(a3)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
 ;   add sp, t6, sp
@@ -978,18 +992,19 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-16
+;   add sp,-16
 ; block0:
-;   ld a0,0(nominal_sp)
-;   ld a1,8(nominal_sp)
-;   addi sp,sp,16
+;   load_addr a2,0(nominal_sp)
+;   ld a0,0(a2)
+;   ld a1,8(a2)
+;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -1000,8 +1015,9 @@ block0:
 ;   mv s0, sp
 ;   addi sp, sp, -0x10
 ; block1: ; offset 0x14
-;   ld a0, 0(sp)
-;   ld a1, 8(sp)
+;   mv a2, sp
+;   ld a0, 0(a2)
+;   ld a1, 8(a2)
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -1018,18 +1034,19 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   addi sp,sp,-32
+;   add sp,-32
 ; block0:
-;   ld a0,32(nominal_sp)
-;   ld a1,40(nominal_sp)
-;   addi sp,sp,32
+;   load_addr a2,32(nominal_sp)
+;   ld a0,0(a2)
+;   ld a1,8(a2)
+;   add sp,+32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -1040,8 +1057,9 @@ block0:
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ; block1: ; offset 0x14
-;   ld a0, 0x20(sp)
-;   ld a1, 0x28(sp)
+;   addi a2, sp, 0x20
+;   ld a0, 0(a2)
+;   ld a1, 8(a2)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -1058,25 +1076,22 @@ block0:
 }
 
 ; VCode:
-;   addi sp,sp,-16
+;   add sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   lui a0,24
 ;   addi a0,a0,1712
 ;   call %Probestack
-;   lui t6,-24
-;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,-100016
 ; block0:
-;   ld a0,0(nominal_sp)
-;   ld a1,8(nominal_sp)
-;   lui t6,24
-;   addi t6,t6,1712
-;   add sp,t6,sp
+;   load_addr a2,0(nominal_sp)
+;   ld a0,0(a2)
+;   ld a1,8(a2)
+;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   addi sp,sp,16
+;   add sp,+16
 ;   ret
 ;
 ; Disassembled:
@@ -1087,14 +1102,19 @@ block0:
 ;   mv s0, sp
 ;   lui a0, 0x18
 ;   addi a0, a0, 0x6b0
-;   auipc ra, 0 ; reloc_external RiscvCallPlt %Probestack 0
-;   jalr ra
+;   auipc t5, 0
+;   ld t5, 0xc(t5)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %Probestack 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr t5
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
 ;   add sp, t6, sp
-; block1: ; offset 0x2c
-;   ld a0, 0(sp)
-;   ld a1, 8(sp)
+; block1: ; offset 0x3c
+;   mv a2, sp
+;   ld a0, 0(a2)
+;   ld a1, 8(a2)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
 ;   add sp, t6, sp

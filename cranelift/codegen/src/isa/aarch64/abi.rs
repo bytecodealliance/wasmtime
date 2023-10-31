@@ -1148,14 +1148,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn get_ext_mode(
-        call_conv: isa::CallConv,
-        specified: ir::ArgumentExtension,
+        _call_conv: isa::CallConv,
+        _specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension {
-        if call_conv == isa::CallConv::AppleAarch64 {
-            specified
-        } else {
-            ir::ArgumentExtension::None
-        }
+        ir::ArgumentExtension::None
     }
 
     fn compute_frame_layout(

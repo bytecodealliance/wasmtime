@@ -23,11 +23,10 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
-use crate::preview2::poll::Subscribe;
-use crate::preview2::stdio::StdinStream;
-use crate::preview2::{HostInputStream, StreamError};
+use crate::preview2::{HostInputStream, StreamState};
+use anyhow::Error;
 use bytes::{Bytes, BytesMut};
-use std::io::{IsTerminal, Read};
+use std::io::Read;
 use std::mem;
 use std::sync::{Condvar, Mutex, OnceLock};
 use tokio::sync::Notify;
@@ -104,27 +103,23 @@ pub fn stdin() -> Stdin {
     Stdin
 }
 
-impl StdinStream for Stdin {
-    fn stream(&self) -> Box<dyn HostInputStream> {
-        Box::new(Stdin)
-    }
-
-    fn isatty(&self) -> bool {
+impl is_terminal::IsTerminal for Stdin {
+    fn is_terminal(&self) -> bool {
         std::io::stdin().is_terminal()
     }
 }
 
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
-    fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         let g = GlobalStdin::get();
         let mut locked = g.state.lock().unwrap();
         match mem::replace(&mut *locked, StdinState::ReadRequested) {
             StdinState::ReadNotRequested => {
                 g.read_requested.notify_one();
-                Ok(Bytes::new())
+                Ok((Bytes::new(), StreamState::Open))
             }
-            StdinState::ReadRequested => Ok(Bytes::new()),
+            StdinState::ReadRequested => Ok((Bytes::new(), StreamState::Open)),
             StdinState::Data(mut data) => {
                 let size = data.len().min(size);
                 let bytes = data.split_to(size);
@@ -133,23 +128,20 @@ impl HostInputStream for Stdin {
                 } else {
                     StdinState::Data(data)
                 };
-                Ok(bytes.freeze())
+                Ok((bytes.freeze(), StreamState::Open))
             }
             StdinState::Error(e) => {
                 *locked = StdinState::Closed;
-                Err(StreamError::LastOperationFailed(e.into()))
+                return Err(e.into());
             }
             StdinState::Closed => {
                 *locked = StdinState::Closed;
-                Err(StreamError::Closed)
+                Ok((Bytes::new(), StreamState::Closed))
             }
         }
     }
-}
 
-#[async_trait::async_trait]
-impl Subscribe for Stdin {
-    async fn ready(&mut self) {
+    async fn ready(&mut self) -> Result<(), Error> {
         let g = GlobalStdin::get();
 
         // Scope the synchronous `state.lock()` to this block which does not
@@ -164,10 +156,12 @@ impl Subscribe for Stdin {
                     g.read_completed.notified()
                 }
                 StdinState::ReadRequested => g.read_completed.notified(),
-                StdinState::Data(_) | StdinState::Closed | StdinState::Error(_) => return,
+                StdinState::Data(_) | StdinState::Closed | StdinState::Error(_) => return Ok(()),
             }
         };
 
         notified.await;
+
+        Ok(())
     }
 }

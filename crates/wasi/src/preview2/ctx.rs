@@ -1,10 +1,11 @@
 use super::clocks::host::{monotonic_clock, wall_clock};
 use crate::preview2::{
     clocks::{self, HostMonotonicClock, HostWallClock},
-    filesystem::Dir,
+    filesystem::{Dir, TableFsExt},
     pipe, random, stdio,
-    stdio::{StdinStream, StdoutStream},
-    DirPerms, FilePerms, Table,
+    stdio::{StdioInput, StdioOutput},
+    stream::{HostInputStream, HostOutputStream, TableStreamExt},
+    DirPerms, FilePerms, IsATTY, Table,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
 use cap_std::ipnet::{self, IpNet};
@@ -14,9 +15,9 @@ use std::mem;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 pub struct WasiCtxBuilder {
-    stdin: Box<dyn StdinStream>,
-    stdout: Box<dyn StdoutStream>,
-    stderr: Box<dyn StdoutStream>,
+    stdin: (Box<dyn HostInputStream>, IsATTY),
+    stdout: (Box<dyn HostOutputStream>, IsATTY),
+    stderr: (Box<dyn HostOutputStream>, IsATTY),
     env: Vec<(String, String)>,
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
@@ -27,7 +28,6 @@ pub struct WasiCtxBuilder {
     insecure_random_seed: u128,
     wall_clock: Box<dyn HostWallClock + Send + Sync>,
     monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
-    allow_ip_name_lookup: bool,
     built: bool,
 }
 
@@ -54,10 +54,7 @@ impl WasiCtxBuilder {
     pub fn new() -> Self {
         // For the insecure random API, use `SmallRng`, which is fast. It's
         // also insecure, but that's the deal here.
-        let insecure_random = Box::new(
-            cap_rand::rngs::SmallRng::from_rng(cap_rand::thread_rng(cap_rand::ambient_authority()))
-                .unwrap(),
-        );
+        let insecure_random = Box::new(cap_rand::rngs::SmallRng::from_entropy());
 
         // For the insecure random seed, use a `u128` generated from
         // `thread_rng()`, so that it's not guessable from the insecure_random
@@ -65,9 +62,9 @@ impl WasiCtxBuilder {
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
         Self {
-            stdin: Box::new(pipe::ClosedInputStream),
-            stdout: Box::new(pipe::SinkOutputStream),
-            stderr: Box::new(pipe::SinkOutputStream),
+            stdin: (Box::new(pipe::ClosedInputStream), IsATTY::No),
+            stdout: (Box::new(pipe::SinkOutputStream), IsATTY::No),
+            stderr: (Box::new(pipe::SinkOutputStream), IsATTY::No),
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
@@ -77,36 +74,56 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
-            allow_ip_name_lookup: false,
             built: false,
         }
     }
 
-    pub fn stdin(&mut self, stdin: impl StdinStream + 'static) -> &mut Self {
-        self.stdin = Box::new(stdin);
+    pub fn stdin(&mut self, stdin: impl HostInputStream + 'static, isatty: IsATTY) -> &mut Self {
+        self.stdin = (Box::new(stdin), isatty);
         self
     }
 
-    pub fn stdout(&mut self, stdout: impl StdoutStream + 'static) -> &mut Self {
-        self.stdout = Box::new(stdout);
+    pub fn stdout(&mut self, stdout: impl HostOutputStream + 'static, isatty: IsATTY) -> &mut Self {
+        self.stdout = (Box::new(stdout), isatty);
         self
     }
 
-    pub fn stderr(&mut self, stderr: impl StdoutStream + 'static) -> &mut Self {
-        self.stderr = Box::new(stderr);
+    pub fn stderr(&mut self, stderr: impl HostOutputStream + 'static, isatty: IsATTY) -> &mut Self {
+        self.stderr = (Box::new(stderr), isatty);
         self
     }
 
     pub fn inherit_stdin(&mut self) -> &mut Self {
-        self.stdin(stdio::stdin())
+        use is_terminal::IsTerminal;
+        let inherited = stdio::stdin();
+        let isatty = if inherited.is_terminal() {
+            IsATTY::Yes
+        } else {
+            IsATTY::No
+        };
+        self.stdin(inherited, isatty)
     }
 
     pub fn inherit_stdout(&mut self) -> &mut Self {
-        self.stdout(stdio::stdout())
+        use is_terminal::IsTerminal;
+        let inherited = stdio::stdout();
+        let isatty = if inherited.is_terminal() {
+            IsATTY::Yes
+        } else {
+            IsATTY::No
+        };
+        self.stdout(inherited, isatty)
     }
 
     pub fn inherit_stderr(&mut self) -> &mut Self {
-        self.stderr(stdio::stderr())
+        use is_terminal::IsTerminal;
+        let inherited = stdio::stderr();
+        let isatty = if inherited.is_terminal() {
+            IsATTY::Yes
+        } else {
+            IsATTY::No
+        };
+        self.stderr(inherited, isatty)
     }
 
     pub fn inherit_stdio(&mut self) -> &mut Self {
@@ -203,27 +220,21 @@ impl WasiCtxBuilder {
     }
 
     /// Add network addresses to the pool.
-    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(
-        &mut self,
-        addrs: A,
-    ) -> std::io::Result<&mut Self> {
-        self.pool.insert(addrs, ambient_authority())?;
-        Ok(self)
+    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(&mut self, addrs: A) -> std::io::Result<()> {
+        self.pool.insert(addrs, ambient_authority())
     }
 
     /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
-    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) -> &mut Self {
+    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) {
         self.pool.insert_socket_addr(addr, ambient_authority());
-        self
     }
 
     /// Add a range of network addresses, accepting any port, to the pool.
     ///
     /// Unlike `insert_ip_net`, this function grants access to any requested port.
-    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) -> &mut Self {
+    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) {
         self.pool
-            .insert_ip_net_port_any(ip_net, ambient_authority());
-        self
+            .insert_ip_net_port_any(ip_net, ambient_authority())
     }
 
     /// Add a range of network addresses, accepting a range of ports, to
@@ -236,25 +247,19 @@ impl WasiCtxBuilder {
         ip_net: ipnet::IpNet,
         ports_start: u16,
         ports_end: Option<u16>,
-    ) -> &mut Self {
+    ) {
         self.pool
-            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority());
-        self
+            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority())
     }
 
     /// Add a range of network addresses with a specific port to the pool.
-    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) -> &mut Self {
-        self.pool.insert_ip_net(ip_net, port, ambient_authority());
-        self
-    }
-
-    /// Allow usage of `wasi:sockets/ip-name-lookup`
-    pub fn allow_ip_name_lookup(&mut self, enable: bool) -> &mut Self {
-        self.allow_ip_name_lookup = enable;
-        self
+    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) {
+        self.pool.insert_ip_net(ip_net, port, ambient_authority())
     }
 
     /// Uses the configured context so far to construct the final `WasiCtx`.
+    ///
+    /// This will insert resources into the provided `table`.
     ///
     /// Note that each `WasiCtxBuilder` can only be used to "build" once, and
     /// calling this method twice will panic.
@@ -262,9 +267,10 @@ impl WasiCtxBuilder {
     /// # Panics
     ///
     /// Panics if this method is called twice.
-    pub fn build(&mut self) -> WasiCtx {
+    pub fn build(&mut self, table: &mut Table) -> Result<WasiCtx, anyhow::Error> {
         assert!(!self.built);
 
+        use anyhow::Context;
         let Self {
             stdin,
             stdout,
@@ -278,15 +284,37 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
-            allow_ip_name_lookup,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
 
-        WasiCtx {
-            stdin,
-            stdout,
-            stderr,
+        let stdin_ix = table.push_input_stream(stdin.0).context("stdin")?;
+        let stdout_ix = table.push_output_stream(stdout.0).context("stdout")?;
+        let stderr_ix = table.push_output_stream(stderr.0).context("stderr")?;
+
+        let preopens = preopens
+            .into_iter()
+            .map(|(dir, path)| {
+                let dirfd = table
+                    .push_dir(dir)
+                    .with_context(|| format!("preopen {path:?}"))?;
+                Ok((dirfd, path))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        Ok(WasiCtx {
+            stdin: StdioInput {
+                input_stream: stdin_ix,
+                isatty: stdin.1,
+            },
+            stdout: StdioOutput {
+                output_stream: stdout_ix,
+                isatty: stdout.1,
+            },
+            stderr: StdioOutput {
+                output_stream: stderr_ix,
+                isatty: stderr.1,
+            },
             env,
             args,
             preopens,
@@ -296,8 +324,7 @@ impl WasiCtxBuilder {
             insecure_random_seed,
             wall_clock,
             monotonic_clock,
-            allow_ip_name_lookup,
-        }
+        })
     }
 }
 
@@ -316,10 +343,9 @@ pub struct WasiCtx {
     pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send + Sync>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
-    pub(crate) preopens: Vec<(Dir, String)>,
-    pub(crate) stdin: Box<dyn StdinStream>,
-    pub(crate) stdout: Box<dyn StdoutStream>,
-    pub(crate) stderr: Box<dyn StdoutStream>,
+    pub(crate) preopens: Vec<(u32, String)>,
+    pub(crate) stdin: StdioInput,
+    pub(crate) stdout: StdioOutput,
+    pub(crate) stderr: StdioOutput,
     pub(crate) pool: Pool,
-    pub(crate) allow_ip_name_lookup: bool,
 }

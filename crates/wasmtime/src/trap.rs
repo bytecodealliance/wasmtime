@@ -1,4 +1,3 @@
-#[cfg(feature = "coredump")]
 use crate::coredump::WasmCoreDump;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
@@ -78,7 +77,7 @@ pub(crate) unsafe fn raise(error: anyhow::Error) -> ! {
 
 #[cold] // traps are exceptional, this helps move handling off the main path
 pub(crate) fn from_runtime_box(
-    store: &mut StoreOpaque,
+    store: &StoreOpaque,
     runtime_trap: Box<wasmtime_runtime::Trap>,
 ) -> Error {
     let wasmtime_runtime::Trap {
@@ -135,14 +134,11 @@ pub(crate) fn from_runtime_box(
         }
     }
 
-    let _ = &coredumpstack;
-    #[cfg(feature = "coredump")]
     if let Some(coredump) = coredumpstack {
         let bt = WasmBacktrace::from_captured(store, coredump.bt, pc);
         let cd = WasmCoreDump::new(store, bt);
         error = error.context(cd);
     }
-
     error
 }
 
@@ -377,7 +373,7 @@ impl fmt::Display for WasmBacktrace {
             } else {
                 needs_newline = true;
             }
-            let name = frame.module().name().unwrap_or("<unknown>");
+            let name = frame.module_name().unwrap_or("<unknown>");
             write!(f, "  {:>3}: ", i)?;
 
             if let Some(offset) = frame.module_offset() {
@@ -429,7 +425,7 @@ impl fmt::Display for WasmBacktrace {
 /// to acquire this `FrameInfo`. For more information see [`WasmBacktrace`].
 #[derive(Debug)]
 pub struct FrameInfo {
-    module: Module,
+    module_name: Option<String>,
     func_index: u32,
     func_name: Option<String>,
     func_start: FilePos,
@@ -442,18 +438,12 @@ impl FrameInfo {
     ///
     /// Returns an object if this `pc` is known to this module, or returns `None`
     /// if no information can be found.
-    pub(crate) fn new(module: Module, text_offset: usize) -> Option<FrameInfo> {
-        let compiled_module = module.compiled_module();
-        let (index, _func_offset) = compiled_module.func_by_text_offset(text_offset)?;
-        let info = compiled_module.wasm_func_info(index);
-        let func_start = info.start_srcloc;
-        let instr = wasmtime_environ::lookup_file_pos(
-            compiled_module.code_memory().address_map_data(),
-            text_offset,
-        );
-        let index = compiled_module.module().func_index(index);
-        let func_index = index.index() as u32;
-        let func_name = compiled_module.func_name(index).map(|s| s.to_string());
+    pub(crate) fn new(module: &Module, text_offset: usize) -> Option<FrameInfo> {
+        let module = module.compiled_module();
+        let (index, _func_offset) = module.func_by_text_offset(text_offset)?;
+        let info = module.wasm_func_info(index);
+        let instr =
+            wasmtime_environ::lookup_file_pos(module.code_memory().address_map_data(), text_offset);
 
         // In debug mode for now assert that we found a mapping for `pc` within
         // the function, because otherwise something is buggy along the way and
@@ -463,7 +453,7 @@ impl FrameInfo {
         // Note that if the module doesn't even have an address map due to
         // compilation settings then it's expected that `instr` is `None`.
         debug_assert!(
-            instr.is_some() || !compiled_module.has_address_map(),
+            instr.is_some() || !module.has_address_map(),
             "failed to find instruction for {:#x}",
             text_offset
         );
@@ -478,9 +468,7 @@ impl FrameInfo {
         // custom section contents.
         let mut symbols = Vec::new();
 
-        let _ = &mut symbols;
-        #[cfg(feature = "addr2line")]
-        if let Some(s) = &compiled_module.symbolize_context().ok().and_then(|c| c) {
+        if let Some(s) = &module.symbolize_context().ok().and_then(|c| c) {
             if let Some(offset) = instr.and_then(|i| i.file_offset()) {
                 let to_lookup = u64::from(offset) - s.code_section_offset();
                 if let Ok(mut frames) = s.addr2line().find_frames(to_lookup).skip_all_loads() {
@@ -504,12 +492,14 @@ impl FrameInfo {
             }
         }
 
+        let index = module.module().func_index(index);
+
         Some(FrameInfo {
-            module,
-            func_index,
-            func_name,
+            module_name: module.module().name.clone(),
+            func_index: index.index() as u32,
+            func_name: module.func_name(index).map(|s| s.to_string()),
             instr,
-            func_start,
+            func_start: info.start_srcloc,
             symbols,
         })
     }
@@ -522,11 +512,17 @@ impl FrameInfo {
         self.func_index
     }
 
-    /// Returns the module for this frame.
+    /// Returns the identifer of the module that this frame is for.
     ///
-    /// This is the module who's code was being run in this frame.
-    pub fn module(&self) -> &Module {
-        &self.module
+    /// Module identifiers are present in the `name` section of a WebAssembly
+    /// binary, but this may not return the exact item in the `name` section.
+    /// Module names can be overwritten at construction time or perhaps inferred
+    /// from file names. The primary purpose of this function is to assist in
+    /// debugging and therefore may be tweaked over time.
+    ///
+    /// This function returns `None` when no name can be found or inferred.
+    pub fn module_name(&self) -> Option<&str> {
+        self.module_name.as_deref()
     }
 
     /// Returns a descriptive name of the function for this frame, if one is

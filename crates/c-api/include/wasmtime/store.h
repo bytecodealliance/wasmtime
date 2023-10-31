@@ -148,7 +148,7 @@ WASM_API_EXTERN void wasmtime_context_set_data(wasmtime_context_t* context, void
 WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t* context);
 
 /**
- * \brief Set fuel to this context's store for wasm to consume while executing.
+ * \brief Adds fuel to this context's store for wasm to consume while executing.
  *
  * For this method to work fuel consumption must be enabled via
  * #wasmtime_config_consume_fuel_set. By default a store starts with 0 fuel
@@ -156,24 +156,53 @@ WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t* context);
  * This function must be called for the store to have
  * some fuel to allow WebAssembly to execute.
  *
- * Note that when fuel is entirely consumed it will cause wasm to trap.
+ * Note that at this time when fuel is entirely consumed it will cause
+ * wasm to trap. More usages of fuel are planned for the future.
  *
  * If fuel is not enabled within this store then an error is returned. If fuel
  * is successfully added then NULL is returned.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_fuel(wasmtime_context_t *store, uint64_t fuel);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *store, uint64_t fuel);
 
 /**
- * \brief Returns the amount of fuel remaining in this context's store.
+ * \brief Returns the amount of fuel consumed by this context's store execution
+ * so far.
  *
  * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set
- * then this function will return an error. Otherwise `NULL` is returned and the
+ * then this function will return false. Otherwise true is returned and the
  * fuel parameter is filled in with fuel consumed so far.
  *
  * Also note that fuel, if enabled, must be originally configured via
- * #wasmtime_context_set_fuel.
+ * #wasmtime_context_add_fuel.
  */
-WASM_API_EXTERN wasmtime_error_t* wasmtime_context_get_fuel(const wasmtime_context_t *context, uint64_t *fuel);
+WASM_API_EXTERN bool wasmtime_context_fuel_consumed(const wasmtime_context_t *context, uint64_t *fuel);
+
+/**
+ * \brief Returns the amount of fuel remaining in this context's store execution
+ * before engine traps execution.
+ *
+ * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set
+ * then this function will return false. Otherwise true is returned and the
+ * fuel parameter is filled in with remaining fuel.
+ *
+ * Also note that fuel, if enabled, must be originally configured via
+ * #wasmtime_context_add_fuel.
+ */
+WASM_API_EXTERN bool wasmtime_context_fuel_remaining(const wasmtime_context_t *context, uint64_t *fuel);
+
+/**
+ * \brief Attempt to manually consume fuel from the store.
+ *
+ * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set then
+ * this function will return an error. Otherwise this will attempt to consume
+ * the specified amount of `fuel` from the store. If successful the remaining
+ * amount of fuel is stored into `remaining`. If `fuel` couldn't be consumed
+ * then an error is returned.
+ *
+ * Also note that fuel, if enabled, must be originally configured via
+ * #wasmtime_context_add_fuel.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_consume_fuel(wasmtime_context_t *context, uint64_t fuel, uint64_t *remaining);
 
 /**
  * \brief Configures WASI state within the specified store.

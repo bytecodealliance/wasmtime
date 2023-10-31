@@ -7,7 +7,7 @@
 #![cfg_attr(not(feature = "all-arch"), allow(dead_code))]
 
 mod abi;
-pub use codegen::{BuiltinFunctions, FuncEnv};
+pub use codegen::FuncEnv;
 mod codegen;
 mod frame;
 pub mod isa;

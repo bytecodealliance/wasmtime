@@ -3,9 +3,7 @@
 use crate::binemit::StackMap;
 use crate::ir::{self, LibCall, RelSourceLoc, TrapCode};
 use crate::isa::riscv64::inst::*;
-use crate::isa::riscv64::lower::isle::generated_code::{
-    CaOp, CbOp, CiOp, CiwOp, ClOp, CrOp, CsOp, CssOp, CsznOp, ZcbMemOp,
-};
+use crate::isa::riscv64::lower::isle::generated_code::{CaOp, CiOp, CiwOp, CrOp};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use crate::trace;
 use cranelift_control::ControlPlane;
@@ -66,6 +64,10 @@ pub struct EmitState {
 impl EmitState {
     fn take_stack_map(&mut self) -> Option<StackMap> {
         self.stack_map.take()
+    }
+
+    fn clear_post_insn(&mut self) {
+        self.stack_map = None;
     }
 
     fn cur_srcloc(&self) -> RelSourceLoc {
@@ -155,7 +157,7 @@ impl Inst {
             } else {
                 FpuOPRRR::FeqD
             },
-            frm: FRM::RDN,
+            frm: None,
             rd: rd,
             rs1: rs,
             rs2: rs,
@@ -169,11 +171,146 @@ impl Inst {
             } else {
                 FpuOPRRR::FsgnjxD
             },
-            frm: FRM::RDN,
+            frm: None,
             rd: rd,
             rs1: rs,
             rs2: rs,
         }
+    }
+    /// If a float is zero.
+    pub(crate) fn emit_if_float_not_zero(
+        tmp: Writable<Reg>,
+        rs: Reg,
+        ty: Type,
+        taken: CondBrTarget,
+        not_taken: CondBrTarget,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        let class_op = if ty == F32 {
+            FpuOPRR::FclassS
+        } else {
+            FpuOPRR::FclassD
+        };
+        insts.push(Inst::FpuRR {
+            alu_op: class_op,
+            frm: None,
+            rd: tmp,
+            rs: rs,
+        });
+        insts.push(Inst::AluRRImm12 {
+            alu_op: AluOPRRI::Andi,
+            rd: tmp,
+            rs: tmp.to_reg(),
+            imm12: Imm12::from_i16(FClassResult::is_zero_bits() as i16),
+        });
+        insts.push(Inst::CondBr {
+            taken,
+            not_taken,
+            kind: IntegerCompare {
+                kind: IntCC::Equal,
+                rs1: tmp.to_reg(),
+                rs2: zero_reg(),
+            },
+        });
+        insts
+    }
+
+    pub(crate) fn lower_br_icmp(
+        cc: IntCC,
+        a: ValueRegs<Reg>,
+        b: ValueRegs<Reg>,
+        taken: CondBrTarget,
+        not_taken: CondBrTarget,
+        ty: Type,
+    ) -> SmallInstVec<Inst> {
+        let mut insts = SmallInstVec::new();
+        if ty.bits() <= 64 {
+            let rs1 = a.only_reg().unwrap();
+            let rs2 = b.only_reg().unwrap();
+            let inst = Inst::CondBr {
+                taken,
+                not_taken,
+                kind: IntegerCompare { kind: cc, rs1, rs2 },
+            };
+            insts.push(inst);
+            return insts;
+        }
+        // compare i128
+        let low = |cc: IntCC| -> IntegerCompare {
+            IntegerCompare {
+                rs1: a.regs()[0],
+                rs2: b.regs()[0],
+                kind: cc,
+            }
+        };
+        let high = |cc: IntCC| -> IntegerCompare {
+            IntegerCompare {
+                rs1: a.regs()[1],
+                rs2: b.regs()[1],
+                kind: cc,
+            }
+        };
+        match cc {
+            IntCC::Equal => {
+                // if high part not equal,
+                // then we can go to not_taken otherwise fallthrough.
+                insts.push(Inst::CondBr {
+                    taken: not_taken,
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: high(IntCC::NotEqual),
+                });
+                // the rest part.
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low(IntCC::Equal),
+                });
+            }
+
+            IntCC::NotEqual => {
+                // if the high part not equal ,
+                // we know the whole must be not equal,
+                // we can goto the taken part , otherwise fallthrought.
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken: CondBrTarget::Fallthrough, //  no branch
+                    kind: high(IntCC::NotEqual),
+                });
+
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low(IntCC::NotEqual),
+                });
+            }
+            IntCC::SignedGreaterThanOrEqual
+            | IntCC::SignedLessThanOrEqual
+            | IntCC::UnsignedGreaterThanOrEqual
+            | IntCC::UnsignedLessThanOrEqual
+            | IntCC::SignedGreaterThan
+            | IntCC::SignedLessThan
+            | IntCC::UnsignedLessThan
+            | IntCC::UnsignedGreaterThan => {
+                //
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: high(cc.without_equal()),
+                });
+                //
+                insts.push(Inst::CondBr {
+                    taken: not_taken,
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: high(IntCC::NotEqual),
+                });
+                insts.push(Inst::CondBr {
+                    taken,
+                    not_taken,
+                    kind: low(cc.unsigned()),
+                });
+            }
+        }
+        insts
     }
 
     /// Returns Some(VState) if this insturction is expecting a specific vector state
@@ -197,6 +334,7 @@ impl Inst {
             | Inst::Rets { .. }
             | Inst::Ret { .. }
             | Inst::Extend { .. }
+            | Inst::AdjustSp { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
             | Inst::ReturnCall { .. }
@@ -218,6 +356,10 @@ impl Inst {
             | Inst::Atomic { .. }
             | Inst::Select { .. }
             | Inst::AtomicCas { .. }
+            | Inst::IntSelect { .. }
+            | Inst::Icmp { .. }
+            | Inst::SelectReg { .. }
+            | Inst::FcvtToInt { .. }
             | Inst::RawData { .. }
             | Inst::AtomicStore { .. }
             | Inst::AtomicLoad { .. }
@@ -226,7 +368,9 @@ impl Inst {
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. }
             | Inst::FloatRound { .. }
+            | Inst::FloatSelect { .. }
             | Inst::Popcnt { .. }
+            | Inst::Rev8 { .. }
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
             | Inst::StackProbeLoop { .. } => None,
@@ -288,8 +432,8 @@ impl MachInstEmit for Inst {
         let mut start_off = sink.cur_offset();
 
         // First try to emit this as a compressed instruction
-        let res = inst.try_emit_compressed(sink, emit_info, state, &mut start_off);
-        if res.is_none() {
+        let success = inst.try_emit_compressed(sink, emit_info, state, &mut start_off);
+        if !success {
             // If we can't lets emit it as a normal instruction
             inst.emit_uncompressed(sink, emit_info, state, &mut start_off);
         }
@@ -318,18 +462,13 @@ impl Inst {
         emit_info: &EmitInfo,
         state: &mut EmitState,
         start_off: &mut u32,
-    ) -> Option<()> {
-        let has_m = emit_info.isa_flags.has_m();
-        let has_zba = emit_info.isa_flags.has_zba();
-        let has_zbb = emit_info.isa_flags.has_zbb();
+    ) -> bool {
         let has_zca = emit_info.isa_flags.has_zca();
-        let has_zcb = emit_info.isa_flags.has_zcb();
-        let has_zcd = emit_info.isa_flags.has_zcd();
 
         // Currently all compressed extensions (Zcb, Zcd, Zcmp, Zcmt, etc..) require Zca
         // to be enabled, so check it early.
         if !has_zca {
-            return None;
+            return false;
         }
 
         fn reg_is_compressible(r: Reg) -> bool {
@@ -371,8 +510,7 @@ impl Inst {
                     | AluOPRRR::Xor
                     | AluOPRRR::Sub
                     | AluOPRRR::Addw
-                    | AluOPRRR::Subw
-                    | AluOPRRR::Mul),
+                    | AluOPRRR::Subw),
                 rd,
                 rs1,
                 rs2,
@@ -384,8 +522,7 @@ impl Inst {
                     AluOPRRR::Sub => CaOp::CSub,
                     AluOPRRR::Addw => CaOp::CAddw,
                     AluOPRRR::Subw => CaOp::CSubw,
-                    AluOPRRR::Mul if has_zcb && has_m => CaOp::CMul,
-                    _ => return None,
+                    _ => unreachable!(),
                 };
 
                 sink.put2(encode_ca_type(op, rd, rs2));
@@ -476,17 +613,6 @@ impl Inst {
                 sink.put2(encode_ciw_type(CiwOp::CAddi4spn, rd, imm));
             }
 
-            // c.li
-            Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Addi,
-                rd,
-                rs,
-                imm12,
-            } if rd.to_reg() != zero_reg() && rs == zero_reg() => {
-                let imm6 = Imm6::maybe_from_imm12(imm12)?;
-                sink.put2(encode_ci_type(CiOp::CLi, rd, imm6));
-            }
-
             // c.addi
             Inst::AluRRImm12 {
                 alu_op: AluOPRRI::Addi,
@@ -494,7 +620,11 @@ impl Inst {
                 rs,
                 imm12,
             } if rd.to_reg() == rs && rs != zero_reg() && imm12.as_i16() != 0 => {
-                let imm6 = Imm6::maybe_from_imm12(imm12)?;
+                let imm6 = match Imm6::maybe_from_imm12(imm12) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
+
                 sink.put2(encode_ci_type(CiOp::CAddi, rd, imm6));
             }
 
@@ -505,27 +635,11 @@ impl Inst {
                 rs,
                 imm12,
             } if rd.to_reg() == rs && rs != zero_reg() => {
-                let imm6 = Imm6::maybe_from_imm12(imm12)?;
+                let imm6 = match Imm6::maybe_from_imm12(imm12) {
+                    Some(imm6) => imm6,
+                    None => return false,
+                };
                 sink.put2(encode_ci_type(CiOp::CAddiw, rd, imm6));
-            }
-
-            // c.lui
-            //
-            // c.lui loads the non-zero 6-bit immediate field into bits 17–12
-            // of the destination register, clears the bottom 12 bits, and
-            // sign-extends bit 17 into all higher bits of the destination.
-            Inst::Lui { rd, imm: imm20 }
-                if rd.to_reg() != zero_reg()
-                    && rd.to_reg() != stack_reg()
-                    && imm20.as_i32() != 0 =>
-            {
-                // Check that the top bits are sign extended
-                let imm = imm20.as_i32() << 14 >> 14;
-                if imm != imm20.as_i32() {
-                    return None;
-                }
-                let imm6 = Imm6::maybe_from_i32(imm)?;
-                sink.put2(encode_ci_type(CiOp::CLui, rd, imm6));
             }
 
             // c.slli
@@ -540,324 +654,10 @@ impl Inst {
                 let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
                 sink.put2(encode_ci_type(CiOp::CSlli, rd, imm6));
             }
-
-            // c.srli / c.srai
-            Inst::AluRRImm12 {
-                alu_op: op @ (AluOPRRI::Srli | AluOPRRI::Srai),
-                rd,
-                rs,
-                imm12,
-            } if rd.to_reg() == rs && reg_is_compressible(rs) && imm12.as_i16() != 0 => {
-                let op = match op {
-                    AluOPRRI::Srli => CbOp::CSrli,
-                    AluOPRRI::Srai => CbOp::CSrai,
-                    _ => unreachable!(),
-                };
-
-                // The shift amount is unsigned, but we encode it as signed.
-                let shift = imm12.as_i16() & 0x3f;
-                let imm6 = Imm6::maybe_from_i16(shift << 10 >> 10).unwrap();
-                sink.put2(encode_cb_type(op, rd, imm6));
-            }
-
-            // c.zextb
-            //
-            // This is an alias for `andi rd, rd, 0xff`
-            Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Andi,
-                rd,
-                rs,
-                imm12,
-            } if has_zcb
-                && rd.to_reg() == rs
-                && reg_is_compressible(rs)
-                && imm12.as_i16() == 0xff =>
-            {
-                sink.put2(encode_cszn_type(CsznOp::CZextb, rd));
-            }
-
-            // c.andi
-            Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Andi,
-                rd,
-                rs,
-                imm12,
-            } if rd.to_reg() == rs && reg_is_compressible(rs) => {
-                let imm6 = Imm6::maybe_from_imm12(imm12)?;
-                sink.put2(encode_cb_type(CbOp::CAndi, rd, imm6));
-            }
-
-            // Stack Based Loads
-            Inst::Load {
-                rd,
-                op: op @ (LoadOP::Lw | LoadOP::Ld | LoadOP::Fld),
-                from,
-                flags,
-            } if from.get_base_register() == Some(stack_reg())
-                && (from.get_offset_with_state(state) % op.size()) == 0 =>
-            {
-                // We encode the offset in multiples of the load size.
-                let offset = from.get_offset_with_state(state);
-                let imm6 = u8::try_from(offset / op.size())
-                    .ok()
-                    .and_then(Uimm6::maybe_from_u8)?;
-
-                // Some additional constraints on these instructions.
-                //
-                // Integer loads are not allowed to target x0, but floating point loads
-                // are, since f0 is not a special register.
-                //
-                // Floating point loads are not included in the base Zca extension
-                // but in a separate Zcd extension. Both of these are part of the C Extension.
-                let rd_is_zero = rd.to_reg() == zero_reg();
-                let op = match op {
-                    LoadOP::Lw if !rd_is_zero => CiOp::CLwsp,
-                    LoadOP::Ld if !rd_is_zero => CiOp::CLdsp,
-                    LoadOP::Fld if has_zcd => CiOp::CFldsp,
-                    _ => return None,
-                };
-
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
-                    // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
-                sink.put2(encode_ci_sp_load(op, rd, imm6));
-            }
-
-            // Regular Loads
-            Inst::Load {
-                rd,
-                op:
-                    op
-                    @ (LoadOP::Lw | LoadOP::Ld | LoadOP::Fld | LoadOP::Lbu | LoadOP::Lhu | LoadOP::Lh),
-                from,
-                flags,
-            } if reg_is_compressible(rd.to_reg())
-                && from
-                    .get_base_register()
-                    .map(reg_is_compressible)
-                    .unwrap_or(false)
-                && (from.get_offset_with_state(state) % op.size()) == 0 =>
-            {
-                let base = from.get_base_register().unwrap();
-
-                // We encode the offset in multiples of the store size.
-                let offset = from.get_offset_with_state(state);
-                let offset = u8::try_from(offset / op.size()).ok()?;
-
-                // We mix two different formats here.
-                //
-                // c.lw / c.ld / c.fld instructions are available in the standard Zca
-                // extension using the CL format.
-                //
-                // c.lbu / c.lhu / c.lh are only available in the Zcb extension and
-                // are also encoded differently. Technically they each have a different
-                // format, but they are similar enough that we can group them.
-                let is_zcb_load = matches!(op, LoadOP::Lbu | LoadOP::Lhu | LoadOP::Lh);
-                let encoded = if is_zcb_load {
-                    if !has_zcb {
-                        return None;
-                    }
-
-                    let op = match op {
-                        LoadOP::Lbu => ZcbMemOp::CLbu,
-                        LoadOP::Lhu => ZcbMemOp::CLhu,
-                        LoadOP::Lh => ZcbMemOp::CLh,
-                        _ => unreachable!(),
-                    };
-
-                    // Byte stores & loads have 2 bits of immediate offset. Halfword stores
-                    // and loads only have 1 bit.
-                    let imm2 = Uimm2::maybe_from_u8(offset)?;
-                    if (offset & !((1 << op.imm_bits()) - 1)) != 0 {
-                        return None;
-                    }
-
-                    encode_zcbmem_load(op, rd, base, imm2)
-                } else {
-                    // Floating point loads are not included in the base Zca extension
-                    // but in a separate Zcd extension. Both of these are part of the C Extension.
-                    let op = match op {
-                        LoadOP::Lw => ClOp::CLw,
-                        LoadOP::Ld => ClOp::CLd,
-                        LoadOP::Fld if has_zcd => ClOp::CFld,
-                        _ => return None,
-                    };
-                    let imm5 = Uimm5::maybe_from_u8(offset)?;
-
-                    encode_cl_type(op, rd, base, imm5)
-                };
-
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
-                    // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
-                sink.put2(encoded);
-            }
-
-            // Stack Based Stores
-            Inst::Store {
-                src,
-                op: op @ (StoreOP::Sw | StoreOP::Sd | StoreOP::Fsd),
-                to,
-                flags,
-            } if to.get_base_register() == Some(stack_reg())
-                && (to.get_offset_with_state(state) % op.size()) == 0 =>
-            {
-                // We encode the offset in multiples of the store size.
-                let offset = to.get_offset_with_state(state);
-                let imm6 = u8::try_from(offset / op.size())
-                    .ok()
-                    .and_then(Uimm6::maybe_from_u8)?;
-
-                // Floating point stores are not included in the base Zca extension
-                // but in a separate Zcd extension. Both of these are part of the C Extension.
-                let op = match op {
-                    StoreOP::Sw => CssOp::CSwsp,
-                    StoreOP::Sd => CssOp::CSdsp,
-                    StoreOP::Fsd if has_zcd => CssOp::CFsdsp,
-                    _ => return None,
-                };
-
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
-                    // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
-                sink.put2(encode_css_type(op, src, imm6));
-            }
-
-            // Regular Stores
-            Inst::Store {
-                src,
-                op: op @ (StoreOP::Sw | StoreOP::Sd | StoreOP::Fsd | StoreOP::Sh | StoreOP::Sb),
-                to,
-                flags,
-            } if reg_is_compressible(src)
-                && to
-                    .get_base_register()
-                    .map(reg_is_compressible)
-                    .unwrap_or(false)
-                && (to.get_offset_with_state(state) % op.size()) == 0 =>
-            {
-                let base = to.get_base_register().unwrap();
-
-                // We encode the offset in multiples of the store size.
-                let offset = to.get_offset_with_state(state);
-                let offset = u8::try_from(offset / op.size()).ok()?;
-
-                // We mix two different formats here.
-                //
-                // c.sw / c.sd / c.fsd instructions are available in the standard Zca
-                // extension using the CL format.
-                //
-                // c.sb / c.sh are only available in the Zcb extension and are also
-                // encoded differently.
-                let is_zcb_store = matches!(op, StoreOP::Sh | StoreOP::Sb);
-                let encoded = if is_zcb_store {
-                    if !has_zcb {
-                        return None;
-                    }
-
-                    let op = match op {
-                        StoreOP::Sh => ZcbMemOp::CSh,
-                        StoreOP::Sb => ZcbMemOp::CSb,
-                        _ => unreachable!(),
-                    };
-
-                    // Byte stores & loads have 2 bits of immediate offset. Halfword stores
-                    // and loads only have 1 bit.
-                    let imm2 = Uimm2::maybe_from_u8(offset)?;
-                    if (offset & !((1 << op.imm_bits()) - 1)) != 0 {
-                        return None;
-                    }
-
-                    encode_zcbmem_store(op, src, base, imm2)
-                } else {
-                    // Floating point stores are not included in the base Zca extension
-                    // but in a separate Zcd extension. Both of these are part of the C Extension.
-                    let op = match op {
-                        StoreOP::Sw => CsOp::CSw,
-                        StoreOP::Sd => CsOp::CSd,
-                        StoreOP::Fsd if has_zcd => CsOp::CFsd,
-                        _ => return None,
-                    };
-                    let imm5 = Uimm5::maybe_from_u8(offset)?;
-
-                    encode_cs_type(op, src, base, imm5)
-                };
-
-                let srcloc = state.cur_srcloc();
-                if !srcloc.is_default() && !flags.notrap() {
-                    // Register the offset at which the actual load instruction starts.
-                    sink.add_trap(TrapCode::HeapOutOfBounds);
-                }
-                sink.put2(encoded);
-            }
-
-            // c.not
-            //
-            // This is an alias for `xori rd, rd, -1`
-            Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Xori,
-                rd,
-                rs,
-                imm12,
-            } if has_zcb
-                && rd.to_reg() == rs
-                && reg_is_compressible(rs)
-                && imm12.as_i16() == -1 =>
-            {
-                sink.put2(encode_cszn_type(CsznOp::CNot, rd));
-            }
-
-            // c.sext.b / c.sext.h / c.zext.h
-            //
-            // These are all the extend instructions present in `Zcb`, they
-            // also require `Zbb` since they aren't available in the base ISA.
-            Inst::AluRRImm12 {
-                alu_op: alu_op @ (AluOPRRI::Sextb | AluOPRRI::Sexth | AluOPRRI::Zexth),
-                rd,
-                rs,
-                imm12,
-            } if has_zcb
-                && has_zbb
-                && rd.to_reg() == rs
-                && reg_is_compressible(rs)
-                && imm12.as_i16() == 0 =>
-            {
-                let op = match alu_op {
-                    AluOPRRI::Sextb => CsznOp::CSextb,
-                    AluOPRRI::Sexth => CsznOp::CSexth,
-                    AluOPRRI::Zexth => CsznOp::CZexth,
-                    _ => unreachable!(),
-                };
-                sink.put2(encode_cszn_type(op, rd));
-            }
-
-            // c.zext.w
-            //
-            // This is an alias for `add.uw rd, rd, zero`
-            Inst::AluRRR {
-                alu_op: AluOPRRR::Adduw,
-                rd,
-                rs1,
-                rs2,
-            } if has_zcb
-                && has_zba
-                && rd.to_reg() == rs1
-                && reg_is_compressible(rs1)
-                && rs2 == zero_reg() =>
-            {
-                sink.put2(encode_cszn_type(CsznOp::CZextw, rd));
-            }
-
-            _ => return None,
+            _ => return false,
         }
 
-        return Some(());
+        return true;
     }
 
     fn emit_uncompressed(
@@ -926,7 +726,7 @@ impl Inst {
             } => {
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
+                    | alu_op.funct3(frm) << 12
                     | reg_to_gpr_num(rs) << 15
                     | alu_op.rs2_funct5() << 20
                     | alu_op.funct7() << 25;
@@ -946,7 +746,7 @@ impl Inst {
             } => {
                 let x = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
+                    | alu_op.funct3(frm) << 12
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct2() << 25
@@ -963,7 +763,7 @@ impl Inst {
             } => {
                 let x: u32 = alu_op.op_code()
                     | reg_to_gpr_num(rd.to_reg()) << 7
-                    | frm.as_u32() << 12
+                    | (alu_op.funct3(frm)) << 12
                     | reg_to_gpr_num(rs1) << 15
                     | reg_to_gpr_num(rs2) << 20
                     | alu_op.funct7() << 25;
@@ -1156,18 +956,79 @@ impl Inst {
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
-
+            &Inst::AdjustSp { amount } => {
+                if let Some(imm) = Imm12::maybe_from_i64(amount) {
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd: writable_stack_reg(),
+                        rs: stack_reg(),
+                        imm12: imm,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                } else {
+                    let tmp = writable_spilltmp_reg();
+                    let mut insts = Inst::load_constant_u64(tmp, amount as u64);
+                    insts.push(Inst::AluRRR {
+                        alu_op: AluOPRRR::Add,
+                        rd: writable_stack_reg(),
+                        rs1: tmp.to_reg(),
+                        rs2: stack_reg(),
+                    });
+                    insts
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                }
+            }
             &Inst::Call { ref info } => {
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
+                // call
+                match info.dest {
+                    ExternalName::User { .. } => {
+                        if info.opcode.is_call() {
+                            sink.add_call_site(info.opcode);
+                        }
+                        sink.add_reloc(Reloc::RiscvCall, &info.dest, 0);
+                        if let Some(s) = state.take_stack_map() {
+                            sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
+                        }
+                        Inst::construct_auipc_and_jalr(
+                            Some(writable_link_reg()),
+                            writable_link_reg(),
+                            0,
+                        )
+                        .into_iter()
+                        .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
+                    }
+                    ExternalName::LibCall(..)
+                    | ExternalName::TestCase { .. }
+                    | ExternalName::KnownSymbol(..) => {
+                        // use indirect call. it is more simple.
+                        // load ext name.
+                        Inst::LoadExtName {
+                            rd: writable_spilltmp_reg2(),
+                            name: Box::new(info.dest.clone()),
+                            offset: 0,
+                        }
+                        .emit(&[], sink, emit_info, state);
+
+                        // call
+                        Inst::CallInd {
+                            info: Box::new(CallIndInfo {
+                                rn: spilltmp_reg2(),
+                                // This doesen't really matter but we might as well send
+                                // the correct info.
+                                uses: info.uses.clone(),
+                                defs: info.defs.clone(),
+                                clobbers: info.clobbers,
+                                opcode: Opcode::CallIndirect,
+                                caller_callconv: info.caller_callconv,
+                                callee_callconv: info.callee_callconv,
+                                // Send this as 0 to avoid updating the pop size twice.
+                                callee_pop_size: 0,
+                            }),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
                 }
-                sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
-                if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(8), s);
-                }
-                Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
-                    .into_iter()
-                    .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
 
                 let callee_pop_size = i64::from(info.callee_pop_size);
                 state.virtual_sp_offset -= callee_pop_size;
@@ -1215,7 +1076,7 @@ impl Inst {
                 );
 
                 sink.add_call_site(ir::Opcode::ReturnCall);
-                sink.add_reloc(Reloc::RiscvCallPlt, &**callee, 0);
+                sink.add_reloc(Reloc::RiscvCall, &**callee, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
                     .for_each(|i| i.emit_uncompressed(sink, emit_info, state, start_off));
@@ -1295,7 +1156,7 @@ impl Inst {
                         } else {
                             FpuOPRRR::FsgnjD
                         },
-                        frm: FRM::RNE,
+                        frm: None,
                         rd: rd,
                         rs1: rm,
                         rs2: rm,
@@ -1580,36 +1441,64 @@ impl Inst {
                 condition,
                 ref x,
                 ref y,
+                ty: _ty,
             } => {
-                let label_true = sink.get_label();
+                let mut insts = SmallInstVec::new();
                 let label_false = sink.get_label();
-                let label_end = sink.get_label();
-                Inst::CondBr {
-                    taken: CondBrTarget::Label(label_true),
-                    not_taken: CondBrTarget::Label(label_false),
-                    kind: condition,
-                }
-                .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_true, &mut state.ctrl_plane);
+                insts.push(Inst::CondBr {
+                    taken: CondBrTarget::Label(label_false),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: IntegerCompare {
+                        kind: IntCC::Equal,
+                        rs1: condition,
+                        rs2: zero_reg(),
+                    },
+                });
                 // here is the true
                 // select the first value
-                for i in gen_moves(dst.regs(), x.regs()) {
-                    i.emit(&[], sink, emit_info, state);
-                }
-                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
-
+                insts.extend(gen_moves(&dst[..], x.regs()));
+                let label_jump_over = sink.get_label();
+                insts.push(Inst::gen_jump(label_jump_over));
+                // here is false
+                insts
+                    .drain(..)
+                    .for_each(|i: Inst| i.emit(&[], sink, emit_info, state));
                 sink.bind_label(label_false, &mut state.ctrl_plane);
-                for i in gen_moves(dst.regs(), y.regs()) {
-                    i.emit(&[], sink, emit_info, state);
-                }
-
-                sink.bind_label(label_end, &mut state.ctrl_plane);
+                // select second value1
+                insts.extend(gen_moves(&dst[..], y.regs()));
+                insts
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::Jalr { rd, base, offset } => {
                 sink.put4(enc_jalr(rd, base, offset));
             }
             &Inst::EBreak => {
                 sink.put4(0x00100073);
+            }
+            &Inst::Icmp { cc, rd, a, b, ty } => {
+                let label_true = sink.get_label();
+                let label_false = sink.get_label();
+                let label_end = sink.get_label();
+
+                Inst::lower_br_icmp(
+                    cc,
+                    a,
+                    b,
+                    CondBrTarget::Label(label_true),
+                    CondBrTarget::Label(label_false),
+                    ty,
+                )
+                .into_iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                sink.bind_label(label_true, &mut state.ctrl_plane);
+                Inst::load_imm12(rd, Imm12::ONE).emit(&[], sink, emit_info, state);
+                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_false, &mut state.ctrl_plane);
+                Inst::load_imm12(rd, Imm12::ZERO).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::AtomicCas {
                 offset,
@@ -1820,23 +1709,22 @@ impl Inst {
                         }
                         .iter()
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
-
-                        Inst::CondBr {
-                            taken: CondBrTarget::Label(label_select_dst),
-                            not_taken: CondBrTarget::Fallthrough,
-                            kind: IntegerCompare {
-                                kind: match op {
-                                    crate::ir::AtomicRmwOp::Umin => IntCC::UnsignedLessThan,
-                                    crate::ir::AtomicRmwOp::Umax => IntCC::UnsignedGreaterThan,
-                                    crate::ir::AtomicRmwOp::Smin => IntCC::SignedLessThan,
-                                    crate::ir::AtomicRmwOp::Smax => IntCC::SignedGreaterThan,
-                                    _ => unreachable!(),
-                                },
-                                rs1: dst.to_reg(),
-                                rs2: x,
+                        Inst::lower_br_icmp(
+                            match op {
+                                crate::ir::AtomicRmwOp::Umin => IntCC::UnsignedLessThan,
+                                crate::ir::AtomicRmwOp::Umax => IntCC::UnsignedGreaterThan,
+                                crate::ir::AtomicRmwOp::Smin => IntCC::SignedLessThan,
+                                crate::ir::AtomicRmwOp::Smax => IntCC::SignedGreaterThan,
+                                _ => unreachable!(),
                             },
-                        }
-                        .emit(&[], sink, emit_info, state);
+                            ValueRegs::one(dst.to_reg()),
+                            ValueRegs::one(x),
+                            CondBrTarget::Label(label_select_dst),
+                            CondBrTarget::Fallthrough,
+                            ty,
+                        )
+                        .iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
                         // here we select x.
                         Inst::gen_move(t0, x, I64).emit(&[], sink, emit_info, state);
                         Inst::gen_jump(label_select_done).emit(&[], sink, emit_info, state);
@@ -1909,76 +1797,274 @@ impl Inst {
                 .emit(&[], sink, emit_info, state);
             }
 
+            &Inst::IntSelect {
+                op,
+                ref dst,
+                x,
+                y,
+                ty,
+            } => {
+                let label_true = sink.get_label();
+                let label_false = sink.get_label();
+                let label_done = sink.get_label();
+                Inst::lower_br_icmp(
+                    op.to_int_cc(),
+                    x,
+                    y,
+                    CondBrTarget::Label(label_true),
+                    CondBrTarget::Label(label_false),
+                    ty,
+                )
+                .into_iter()
+                .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                let gen_move = |dst: &Vec<Writable<Reg>>,
+                                val: &ValueRegs<Reg>,
+                                sink: &mut MachBuffer<Inst>,
+                                state: &mut EmitState| {
+                    let mut insts = SmallInstVec::new();
+                    insts.push(Inst::Mov {
+                        rd: dst[0],
+                        rm: val.regs()[0],
+                        ty: I64,
+                    });
+                    if ty.bits() == 128 {
+                        insts.push(Inst::Mov {
+                            rd: dst[1],
+                            rm: val.regs()[1],
+                            ty,
+                        });
+                    }
+                    insts
+                        .into_iter()
+                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                };
+                //here is true , use x.
+                sink.bind_label(label_true, &mut state.ctrl_plane);
+                gen_move(dst, &x, sink, state);
+                Inst::gen_jump(label_done).emit(&[], sink, emit_info, state);
+                // here is false use y
+                sink.bind_label(label_false, &mut state.ctrl_plane);
+                gen_move(dst, &y, sink, state);
+                sink.bind_label(label_done, &mut state.ctrl_plane);
+            }
+
+            &Inst::SelectReg {
+                condition,
+                rd,
+                rs1,
+                rs2,
+            } => {
+                let label_true = sink.get_label();
+                let label_jump_over = sink.get_label();
+                let ty = Inst::canonical_type_for_rc(rs1.class());
+
+                sink.use_label_at_offset(sink.cur_offset(), label_true, LabelUse::B12);
+                let x = condition.emit();
+                sink.put4(x);
+                // here is false , use rs2
+                Inst::gen_move(rd, rs2, ty).emit(&[], sink, emit_info, state);
+                // and jump over
+                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
+                // here condition is true , use rs1
+                sink.bind_label(label_true, &mut state.ctrl_plane);
+                Inst::gen_move(rd, rs1, ty).emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
+            }
+            &Inst::FcvtToInt {
+                is_sat,
+                rd,
+                rs,
+                is_signed,
+                in_type,
+                out_type,
+                tmp,
+            } => {
+                let label_nan = sink.get_label();
+                let label_jump_over = sink.get_label();
+                // get if nan.
+                Inst::emit_not_nan(rd, rs, in_type).emit(&[], sink, emit_info, state);
+                // jump to nan.
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(label_nan),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: IntegerCompare {
+                        kind: IntCC::Equal,
+                        rs2: zero_reg(),
+                        rs1: rd.to_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+
+                if !is_sat {
+                    let f32_bounds = f32_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
+                    let f64_bounds = f64_cvt_to_int_bounds(is_signed, out_type.bits() as u8);
+                    if in_type == F32 {
+                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.0), |_| {
+                            writable_spilltmp_reg()
+                        })
+                    } else {
+                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.0), |_| {
+                            writable_spilltmp_reg()
+                        })
+                    }
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                    let le_op = if in_type == F32 {
+                        FpuOPRRR::FleS
+                    } else {
+                        FpuOPRRR::FleD
+                    };
+
+                    // rd := rs <= tmp
+                    Inst::FpuRRR {
+                        alu_op: le_op,
+                        frm: None,
+                        rd,
+                        rs1: rs,
+                        rs2: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::TrapIf {
+                        cc: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                        trap_code: TrapCode::IntegerOverflow,
+                    }
+                    .emit(&[], sink, emit_info, state);
+
+                    if in_type == F32 {
+                        Inst::load_fp_constant32(tmp, f32_bits(f32_bounds.1), |_| {
+                            writable_spilltmp_reg()
+                        })
+                    } else {
+                        Inst::load_fp_constant64(tmp, f64_bits(f64_bounds.1), |_| {
+                            writable_spilltmp_reg()
+                        })
+                    }
+                    .iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                    // rd := rs >= tmp
+                    Inst::FpuRRR {
+                        alu_op: le_op,
+                        frm: None,
+                        rd,
+                        rs1: tmp.to_reg(),
+                        rs2: rs,
+                    }
+                    .emit(&[], sink, emit_info, state);
+
+                    Inst::TrapIf {
+                        cc: IntCC::NotEqual,
+                        rs1: rd.to_reg(),
+                        rs2: zero_reg(),
+                        trap_code: TrapCode::IntegerOverflow,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+                // convert to int normally.
+                Inst::FpuRR {
+                    frm: Some(FRM::RTZ),
+                    alu_op: FpuOPRR::float_convert_2_int_op(in_type, is_signed, out_type),
+                    rd,
+                    rs,
+                }
+                .emit(&[], sink, emit_info, state);
+                if out_type.bits() < 32 && is_signed {
+                    // load value part mask.
+                    Inst::load_constant_u32(
+                        writable_spilltmp_reg(),
+                        if 16 == out_type.bits() {
+                            (u16::MAX >> 1) as u64
+                        } else {
+                            // I8
+                            (u8::MAX >> 1) as u64
+                        },
+                    )
+                    .into_iter()
+                    .for_each(|x| x.emit(&[], sink, emit_info, state));
+                    // keep value part.
+                    Inst::AluRRR {
+                        alu_op: AluOPRRR::And,
+                        rd: writable_spilltmp_reg(),
+                        rs1: rd.to_reg(),
+                        rs2: spilltmp_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // extact sign bit.
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd: rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_i16(31),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Slli,
+                        rd: rd,
+                        rs: rd.to_reg(),
+                        imm12: Imm12::from_i16(if 16 == out_type.bits() {
+                            15
+                        } else {
+                            // I8
+                            7
+                        }),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // make result,sign bit and value part.
+                    Inst::AluRRR {
+                        alu_op: AluOPRRR::Or,
+                        rd: rd,
+                        rs1: rd.to_reg(),
+                        rs2: spilltmp_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+
+                // I already have the result,jump over.
+                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
+                // here is nan , move 0 into rd register
+                sink.bind_label(label_nan, &mut state.ctrl_plane);
+                if is_sat {
+                    Inst::load_imm12(rd, Imm12::ZERO).emit(&[], sink, emit_info, state);
+                } else {
+                    // here is ud2.
+                    Inst::Udf {
+                        trap_code: TrapCode::BadConversionToInteger,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
+                // bind jump_over
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
+            }
+
             &Inst::LoadExtName {
                 rd,
                 ref name,
                 offset,
             } => {
-                if emit_info.shared_flag.is_pic() {
-                    // Load a PC-relative address into a register.
-                    // RISC-V does this slightly differently from other arches. We emit a relocation
-                    // with a label, instead of the symbol itself.
-                    //
-                    // See: https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
-                    //
-                    // Emit the following code:
-                    // label:
-                    //   auipc rd, 0              # R_RISCV_GOT_HI20 (symbol_name)
-                    //   ld    rd, rd, 0          # R_RISCV_PCREL_LO12_I (label)
+                let label_data = sink.get_label();
+                let label_end = sink.get_label();
 
-                    // Create the lable that is going to be published to the final binary object.
-                    let auipc_label = sink.get_label();
-                    sink.bind_label(auipc_label, &mut state.ctrl_plane);
-
-                    // Get the current PC.
-                    sink.add_reloc(Reloc::RiscvGotHi20, &**name, 0);
-                    Inst::Auipc {
-                        rd: rd,
-                        imm: Imm20::from_i32(0),
-                    }
-                    .emit_uncompressed(sink, emit_info, state, start_off);
-
-                    // The `ld` here, points to the `auipc` label instead of directly to the symbol.
-                    sink.add_reloc(Reloc::RiscvPCRelLo12I, &auipc_label, 0);
-                    Inst::Load {
-                        rd,
-                        op: LoadOP::Ld,
-                        flags: MemFlags::trusted(),
-                        from: AMode::RegOffset(rd.to_reg(), 0, I64),
-                    }
-                    .emit_uncompressed(sink, emit_info, state, start_off);
-                } else {
-                    // In the non PIC sequence we relocate the absolute address into
-                    // a prealocatted space, load it into a register and jump over it.
-                    //
-                    // Emit the following code:
-                    //   ld rd, label_data
-                    //   j label_end
-                    // label_data:
-                    //   <8 byte space>           # ABS8
-                    // label_end:
-
-                    let label_data = sink.get_label();
-                    let label_end = sink.get_label();
-
-                    // Load the value from a label
-                    Inst::Load {
-                        rd,
-                        op: LoadOP::Ld,
-                        flags: MemFlags::trusted(),
-                        from: AMode::Label(label_data),
-                    }
-                    .emit(&[], sink, emit_info, state);
-
-                    // Jump over the data
-                    Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
-
-                    sink.bind_label(label_data, &mut state.ctrl_plane);
-                    sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
-                    sink.put8(0);
-
-                    sink.bind_label(label_end, &mut state.ctrl_plane);
+                // Load the value from a label
+                Inst::Load {
+                    rd,
+                    op: LoadOP::Ld,
+                    flags: MemFlags::trusted(),
+                    from: AMode::Label(label_data),
                 }
+                .emit(&[], sink, emit_info, state);
+
+                // Jump over the data
+                Inst::gen_jump(label_end).emit(&[], sink, emit_info, state);
+
+                sink.bind_label(label_data, &mut state.ctrl_plane);
+                sink.add_reloc(Reloc::Abs8, name.as_ref(), offset);
+                sink.put8(0);
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
 
             &Inst::ElfTlsGetAddr { rd, ref name } => {
@@ -2157,7 +2243,7 @@ impl Inst {
 
                 // branch if f_tmp < rd
                 Inst::FpuRRR {
-                    frm: FRM::RTZ,
+                    frm: None,
                     alu_op: if ty == F32 {
                         FpuOPRRR::FltS
                     } else {
@@ -2183,19 +2269,15 @@ impl Inst {
                 //convert to int.
                 Inst::FpuRR {
                     alu_op: FpuOPRR::float_convert_2_int_op(ty, true, I64),
-                    frm: op.to_frm(),
+                    frm: Some(op.to_frm()),
                     rd: int_tmp,
                     rs: rs,
                 }
                 .emit(&[], sink, emit_info, state);
                 //convert back.
                 Inst::FpuRR {
-                    alu_op: if ty == F32 {
-                        FpuOPRR::FcvtSL
-                    } else {
-                        FpuOPRR::FcvtDL
-                    },
-                    frm: op.to_frm(),
+                    alu_op: FpuOPRR::int_convert_2_float_op(I64, true, ty),
+                    frm: Some(op.to_frm()),
                     rd,
                     rs: int_tmp.to_reg(),
                 }
@@ -2207,7 +2289,7 @@ impl Inst {
                     } else {
                         FpuOPRRR::FsgnjD
                     },
-                    frm: FRM::RNE,
+                    frm: None,
                     rd,
                     rs1: rd.to_reg(),
                     rs2: rs,
@@ -2223,7 +2305,7 @@ impl Inst {
                     } else {
                         FpuOPRRR::FaddD
                     },
-                    frm: FRM::RNE,
+                    frm: None,
                     rd: rd,
                     rs1: rs,
                     rs2: rs,
@@ -2236,6 +2318,126 @@ impl Inst {
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
 
+            &Inst::FloatSelect {
+                op,
+                rd,
+                tmp,
+                rs1,
+                rs2,
+                ty,
+            } => {
+                let label_nan = sink.get_label();
+                let label_jump_over = sink.get_label();
+                // check if rs1 is nan.
+                Inst::emit_not_nan(tmp, rs1, ty).emit(&[], sink, emit_info, state);
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(label_nan),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: IntegerCompare {
+                        kind: IntCC::Equal,
+                        rs1: tmp.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                // check if rs2 is nan.
+                Inst::emit_not_nan(tmp, rs2, ty).emit(&[], sink, emit_info, state);
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(label_nan),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: IntegerCompare {
+                        kind: IntCC::Equal,
+                        rs1: tmp.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                // here rs1 and rs2 is not nan.
+                Inst::FpuRRR {
+                    alu_op: op.to_fpuoprrr(ty),
+                    frm: None,
+                    rd: rd,
+                    rs1: rs1,
+                    rs2: rs2,
+                }
+                .emit(&[], sink, emit_info, state);
+                // special handle for +0 or -0.
+                {
+                    // check is rs1 and rs2 all equal to zero.
+                    let label_done = sink.get_label();
+                    {
+                        // if rs1 == 0
+                        let mut insts = Inst::emit_if_float_not_zero(
+                            tmp,
+                            rs1,
+                            ty,
+                            CondBrTarget::Label(label_done),
+                            CondBrTarget::Fallthrough,
+                        );
+                        insts.extend(Inst::emit_if_float_not_zero(
+                            tmp,
+                            rs2,
+                            ty,
+                            CondBrTarget::Label(label_done),
+                            CondBrTarget::Fallthrough,
+                        ));
+                        insts
+                            .iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    }
+                    Inst::FpuRR {
+                        alu_op: FpuOPRR::move_f_to_x_op(ty),
+                        frm: None,
+                        rd: tmp,
+                        rs: rs1,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::FpuRR {
+                        alu_op: FpuOPRR::move_f_to_x_op(ty),
+                        frm: None,
+                        rd: writable_spilltmp_reg(),
+                        rs: rs2,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    Inst::AluRRR {
+                        alu_op: if op == FloatSelectOP::Max {
+                            AluOPRRR::And
+                        } else {
+                            AluOPRRR::Or
+                        },
+                        rd: tmp,
+                        rs1: tmp.to_reg(),
+                        rs2: spilltmp_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // move back to rd.
+                    Inst::FpuRR {
+                        alu_op: FpuOPRR::move_x_to_f_op(ty),
+                        frm: None,
+                        rd,
+                        rs: tmp.to_reg(),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    //
+                    sink.bind_label(label_done, &mut state.ctrl_plane);
+                }
+                // we have the reuslt,jump over.
+                Inst::gen_jump(label_jump_over).emit(&[], sink, emit_info, state);
+                // here is nan.
+                sink.bind_label(label_nan, &mut state.ctrl_plane);
+                op.snan_bits(tmp, ty)
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+                // move to rd.
+                Inst::FpuRR {
+                    alu_op: FpuOPRR::move_x_to_f_op(ty),
+                    frm: None,
+                    rd,
+                    rs: tmp.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
+            }
             &Inst::Popcnt {
                 sum,
                 tmp,
@@ -2321,6 +2523,71 @@ impl Inst {
                     .emit(&[], sink, emit_info, state);
                     Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
                 }
+                sink.bind_label(label_done, &mut state.ctrl_plane);
+            }
+            &Inst::Rev8 { rs, rd, tmp, step } => {
+                // init.
+                Inst::gen_move(rd, zero_reg(), I64).emit(&[], sink, emit_info, state);
+                Inst::gen_move(tmp, rs, I64).emit(&[], sink, emit_info, state);
+                // load 56 to step.
+                Inst::load_imm12(step, Imm12::from_i16(56)).emit(&[], sink, emit_info, state);
+                let label_done = sink.get_label();
+                let label_loop = sink.get_label();
+                sink.bind_label(label_loop, &mut state.ctrl_plane);
+                Inst::CondBr {
+                    taken: CondBrTarget::Label(label_done),
+                    not_taken: CondBrTarget::Fallthrough,
+                    kind: IntegerCompare {
+                        kind: IntCC::SignedLessThan,
+                        rs1: step.to_reg(),
+                        rs2: zero_reg(),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::AluRRImm12 {
+                    alu_op: AluOPRRI::Andi,
+                    rd: writable_spilltmp_reg(),
+                    rs: tmp.to_reg(),
+                    imm12: Imm12::from_i16(255),
+                }
+                .emit(&[], sink, emit_info, state);
+                Inst::AluRRR {
+                    alu_op: AluOPRRR::Sll,
+                    rd: writable_spilltmp_reg(),
+                    rs1: spilltmp_reg(),
+                    rs2: step.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                Inst::AluRRR {
+                    alu_op: AluOPRRR::Or,
+                    rd: rd,
+                    rs1: rd.to_reg(),
+                    rs2: spilltmp_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                {
+                    // reset step
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Addi,
+                        rd: step,
+                        rs: step.to_reg(),
+                        imm12: Imm12::from_i16(-8),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    //reset tmp.
+                    Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Srli,
+                        rd: tmp,
+                        rs: tmp.to_reg(),
+                        imm12: Imm12::from_i16(8),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                    // loop.
+                    Inst::gen_jump(label_loop).emit(&[], sink, emit_info, state);
+                }
+
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::Cltz {
@@ -2795,13 +3062,6 @@ impl Inst {
             }
         }
 
-        fn alloc_writable_value_regs(
-            origin: &ValueRegs<Writable<Reg>>,
-            alloc: &mut AllocationConsumer,
-        ) -> ValueRegs<Writable<Reg>> {
-            alloc_value_regs(&origin.map(|r| r.to_reg()), alloc).map(Writable::from_reg)
-        }
-
         match self {
             Inst::Nop0 => self,
             Inst::Nop4 => self,
@@ -2927,6 +3187,7 @@ impl Inst {
                 from_bits,
                 to_bits,
             },
+            Inst::AdjustSp { .. } => self,
 
             Inst::Call { .. } => self,
             Inst::CallInd { mut info } => {
@@ -3022,19 +3283,23 @@ impl Inst {
                 condition,
                 ref x,
                 ref y,
+                ty,
             } => {
-                let mut condition: IntegerCompare = condition.clone();
-                condition.rs1 = allocs.next(condition.rs1);
-                condition.rs2 = allocs.next(condition.rs2);
+                let condition = allocs.next(condition);
                 let x = alloc_value_regs(x, allocs);
                 let y = alloc_value_regs(y, allocs);
-                let dst = alloc_writable_value_regs(dst, allocs);
+                let dst: Vec<_> = dst
+                    .clone()
+                    .into_iter()
+                    .map(|r| allocs.next_writable(r))
+                    .collect();
 
                 Inst::Select {
                     dst,
                     condition,
                     x,
                     y,
+                    ty,
                 }
             }
             Inst::Jalr { rd, base, offset } => {
@@ -3048,6 +3313,20 @@ impl Inst {
             }
 
             Inst::EBreak => self,
+
+            Inst::Icmp {
+                cc,
+                rd,
+                ref a,
+                ref b,
+                ty,
+            } => Inst::Icmp {
+                cc,
+                a: alloc_value_regs(a, allocs),
+                b: alloc_value_regs(b, allocs),
+                rd: allocs.next_writable(rd),
+                ty,
+            },
 
             Inst::AtomicCas {
                 offset,
@@ -3083,6 +3362,54 @@ impl Inst {
                 x: allocs.next(x),
                 t0: allocs.next_writable(t0),
                 dst: allocs.next_writable(dst),
+            },
+
+            Inst::IntSelect {
+                op,
+                dst,
+                ref x,
+                ref y,
+                ty,
+            } => {
+                let x = alloc_value_regs(x, allocs);
+                let y = alloc_value_regs(y, allocs);
+                let dst: Vec<_> = dst.iter().map(|r| allocs.next_writable(*r)).collect();
+                Inst::IntSelect { op, ty, dst, x, y }
+            }
+
+            Inst::SelectReg {
+                condition,
+                rd,
+                rs1,
+                rs2,
+            } => {
+                let mut condition: IntegerCompare = condition.clone();
+                condition.rs1 = allocs.next(condition.rs1);
+                condition.rs2 = allocs.next(condition.rs2);
+                Inst::SelectReg {
+                    condition,
+                    rs1: allocs.next(rs1),
+                    rs2: allocs.next(rs2),
+                    rd: allocs.next_writable(rd),
+                }
+            }
+
+            Inst::FcvtToInt {
+                is_sat,
+                rd,
+                rs,
+                is_signed,
+                in_type,
+                out_type,
+                tmp,
+            } => Inst::FcvtToInt {
+                is_sat,
+                is_signed,
+                in_type,
+                out_type,
+                rs: allocs.next(rs),
+                tmp: allocs.next_writable(tmp),
+                rd: allocs.next_writable(rd),
             },
 
             Inst::LoadExtName { rd, name, offset } => Inst::LoadExtName {
@@ -3139,6 +3466,22 @@ impl Inst {
                 rd: allocs.next_writable(rd),
             },
 
+            Inst::FloatSelect {
+                op,
+                rd,
+                tmp,
+                rs1,
+                rs2,
+                ty,
+            } => Inst::FloatSelect {
+                op,
+                ty,
+                rs1: allocs.next(rs1),
+                rs2: allocs.next(rs2),
+                tmp: allocs.next_writable(tmp),
+                rd: allocs.next_writable(rd),
+            },
+
             Inst::Popcnt {
                 sum,
                 tmp,
@@ -3152,6 +3495,14 @@ impl Inst {
                 sum: allocs.next_writable(sum),
                 ty,
             },
+
+            Inst::Rev8 { rs, rd, tmp, step } => Inst::Rev8 {
+                rs: allocs.next(rs),
+                tmp: allocs.next_writable(tmp),
+                step: allocs.next_writable(step),
+                rd: allocs.next_writable(rd),
+            },
+
             Inst::Cltz {
                 sum,
                 tmp,

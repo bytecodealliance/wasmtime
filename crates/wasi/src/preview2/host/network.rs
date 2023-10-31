@@ -2,105 +2,78 @@ use crate::preview2::bindings::sockets::network::{
     self, ErrorCode, IpAddressFamily, IpSocketAddress, Ipv4Address, Ipv4SocketAddress, Ipv6Address,
     Ipv6SocketAddress,
 };
-use crate::preview2::{SocketError, WasiView};
-use rustix::io::Errno;
+use crate::preview2::network::TableNetworkExt;
+use crate::preview2::{TableError, WasiView};
 use std::io;
-use wasmtime::component::Resource;
 
 impl<T: WasiView> network::Host for T {
-    fn convert_error_code(&mut self, error: SocketError) -> anyhow::Result<ErrorCode> {
-        error.downcast()
-    }
-}
-
-impl<T: WasiView> crate::preview2::bindings::sockets::network::HostNetwork for T {
-    fn drop(&mut self, this: Resource<network::Network>) -> Result<(), anyhow::Error> {
+    fn drop_network(&mut self, this: network::Network) -> Result<(), anyhow::Error> {
         let table = self.table_mut();
 
-        table.delete(this)?;
+        table.delete_network(this)?;
 
         Ok(())
     }
 }
 
-impl From<io::Error> for ErrorCode {
-    fn from(value: io::Error) -> Self {
-        // Attempt the more detailed native error code first:
-        if let Some(errno) = Errno::from_io_error(&value) {
-            return errno.into();
-        }
-
-        match value.kind() {
-            std::io::ErrorKind::AddrInUse => ErrorCode::AddressInUse,
-            std::io::ErrorKind::AddrNotAvailable => ErrorCode::AddressNotBindable,
-            std::io::ErrorKind::ConnectionAborted => ErrorCode::ConnectionAborted,
-            std::io::ErrorKind::ConnectionRefused => ErrorCode::ConnectionRefused,
-            std::io::ErrorKind::ConnectionReset => ErrorCode::ConnectionReset,
-            std::io::ErrorKind::Interrupted => ErrorCode::WouldBlock,
-            std::io::ErrorKind::InvalidInput => ErrorCode::InvalidArgument,
-            std::io::ErrorKind::NotConnected => ErrorCode::InvalidState,
-            std::io::ErrorKind::OutOfMemory => ErrorCode::OutOfMemory,
-            std::io::ErrorKind::PermissionDenied => ErrorCode::AccessDenied,
-            std::io::ErrorKind::TimedOut => ErrorCode::Timeout,
-            std::io::ErrorKind::Unsupported => ErrorCode::NotSupported,
-            std::io::ErrorKind::WouldBlock => ErrorCode::WouldBlock,
-
-            _ => {
-                log::debug!("unknown I/O error: {value}");
-                ErrorCode::Unknown
-            }
-        }
+impl From<TableError> for network::Error {
+    fn from(error: TableError) -> Self {
+        Self::trap(error.into())
     }
 }
 
-impl From<Errno> for ErrorCode {
-    fn from(value: Errno) -> Self {
-        match value {
-            Errno::WOULDBLOCK => ErrorCode::WouldBlock,
-            #[allow(unreachable_patterns)] // EWOULDBLOCK and EAGAIN can have the same value.
-            Errno::AGAIN => ErrorCode::WouldBlock,
-            Errno::INTR => ErrorCode::WouldBlock,
-            #[cfg(not(windows))]
-            Errno::PERM => ErrorCode::AccessDenied,
-            Errno::ACCESS => ErrorCode::AccessDenied,
-            Errno::ADDRINUSE => ErrorCode::AddressInUse,
-            Errno::ADDRNOTAVAIL => ErrorCode::AddressNotBindable,
-            Errno::ALREADY => ErrorCode::ConcurrencyConflict,
-            Errno::TIMEDOUT => ErrorCode::Timeout,
-            Errno::CONNREFUSED => ErrorCode::ConnectionRefused,
-            Errno::CONNRESET => ErrorCode::ConnectionReset,
-            Errno::CONNABORTED => ErrorCode::ConnectionAborted,
-            Errno::INVAL => ErrorCode::InvalidArgument,
-            Errno::HOSTUNREACH => ErrorCode::RemoteUnreachable,
-            Errno::HOSTDOWN => ErrorCode::RemoteUnreachable,
-            Errno::NETDOWN => ErrorCode::RemoteUnreachable,
-            Errno::NETUNREACH => ErrorCode::RemoteUnreachable,
-            #[cfg(target_os = "linux")]
-            Errno::NONET => ErrorCode::RemoteUnreachable,
-            Errno::ISCONN => ErrorCode::InvalidState,
-            Errno::NOTCONN => ErrorCode::InvalidState,
-            Errno::DESTADDRREQ => ErrorCode::InvalidState,
-            #[cfg(not(windows))]
-            Errno::NFILE => ErrorCode::NewSocketLimit,
-            Errno::MFILE => ErrorCode::NewSocketLimit,
-            Errno::MSGSIZE => ErrorCode::DatagramTooLarge,
-            #[cfg(not(windows))]
-            Errno::NOMEM => ErrorCode::OutOfMemory,
-            Errno::NOBUFS => ErrorCode::OutOfMemory,
-            Errno::OPNOTSUPP => ErrorCode::NotSupported,
-            Errno::NOPROTOOPT => ErrorCode::NotSupported,
-            Errno::PFNOSUPPORT => ErrorCode::NotSupported,
-            Errno::PROTONOSUPPORT => ErrorCode::NotSupported,
-            Errno::PROTOTYPE => ErrorCode::NotSupported,
-            Errno::SOCKTNOSUPPORT => ErrorCode::NotSupported,
-            Errno::AFNOSUPPORT => ErrorCode::NotSupported,
+impl From<io::Error> for network::Error {
+    fn from(error: io::Error) -> Self {
+        match error.kind() {
+            // Errors that we can directly map.
+            io::ErrorKind::PermissionDenied => ErrorCode::AccessDenied,
+            io::ErrorKind::ConnectionRefused => ErrorCode::ConnectionRefused,
+            io::ErrorKind::ConnectionReset => ErrorCode::ConnectionReset,
+            io::ErrorKind::NotConnected => ErrorCode::NotConnected,
+            io::ErrorKind::AddrInUse => ErrorCode::AddressInUse,
+            io::ErrorKind::AddrNotAvailable => ErrorCode::AddressNotBindable,
+            io::ErrorKind::WouldBlock => ErrorCode::WouldBlock,
+            io::ErrorKind::TimedOut => ErrorCode::Timeout,
+            io::ErrorKind::Unsupported => ErrorCode::NotSupported,
+            io::ErrorKind::OutOfMemory => ErrorCode::OutOfMemory,
 
-            // FYI, EINPROGRESS should have already been handled by connect.
-            _ => {
-                log::debug!("unknown I/O error: {value}");
-                ErrorCode::Unknown
+            // Errors we don't expect to see here.
+            io::ErrorKind::Interrupted | io::ErrorKind::ConnectionAborted => {
+                // Transient errors should be skipped.
+                return Self::trap(error.into());
             }
+
+            // Errors not expected from network APIs.
+            io::ErrorKind::WriteZero
+            | io::ErrorKind::InvalidInput
+            | io::ErrorKind::InvalidData
+            | io::ErrorKind::BrokenPipe
+            | io::ErrorKind::NotFound
+            | io::ErrorKind::UnexpectedEof
+            | io::ErrorKind::AlreadyExists => return Self::trap(error.into()),
+
+            // Errors that don't correspond to a Rust `io::ErrorKind`.
+            io::ErrorKind::Other => match error.raw_os_error() {
+                None => return Self::trap(error.into()),
+                Some(libc::ENOBUFS) | Some(libc::ENOMEM) => ErrorCode::OutOfMemory,
+                Some(libc::EOPNOTSUPP) => ErrorCode::NotSupported,
+                Some(libc::ENETUNREACH) | Some(libc::EHOSTUNREACH) | Some(libc::ENETDOWN) => {
+                    ErrorCode::RemoteUnreachable
+                }
+                Some(libc::ECONNRESET) => ErrorCode::ConnectionReset,
+                Some(libc::ECONNREFUSED) => ErrorCode::ConnectionRefused,
+                Some(libc::EADDRINUSE) => ErrorCode::AddressInUse,
+                Some(_) => return Self::trap(error.into()),
+            },
+            _ => return Self::trap(error.into()),
         }
+        .into()
+    }
+}
+
+impl From<rustix::io::Errno> for network::Error {
+    fn from(error: rustix::io::Errno) -> Self {
+        std::io::Error::from(error).into()
     }
 }
 
@@ -208,15 +181,6 @@ impl From<IpAddressFamily> for cap_net_ext::AddressFamily {
         match family {
             IpAddressFamily::Ipv4 => cap_net_ext::AddressFamily::Ipv4,
             IpAddressFamily::Ipv6 => cap_net_ext::AddressFamily::Ipv6,
-        }
-    }
-}
-
-impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
-    fn from(family: cap_net_ext::AddressFamily) -> Self {
-        match family {
-            cap_net_ext::AddressFamily::Ipv4 => IpAddressFamily::Ipv4,
-            cap_net_ext::AddressFamily::Ipv6 => IpAddressFamily::Ipv6,
         }
     }
 }

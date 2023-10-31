@@ -14,7 +14,7 @@ use wasmtime_cache::CacheConfig;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind};
 use wasmtime_jit::{profiling::ProfilingAgent, CodeMemory};
-use wasmtime_runtime::{CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
+use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
 
 mod serialization;
 
@@ -78,8 +78,7 @@ impl Engine {
         // is the per-program initialization required for handling traps, such
         // as configuring signals, vectored exception handlers, etc.
         wasmtime_runtime::init_traps(crate::module::is_wasm_trap_pc, config.macos_use_mach_ports);
-        #[cfg(feature = "debug-builtins")]
-        wasmtime_runtime::debug_builtins::ensure_exported();
+        debug_builtins::ensure_exported();
 
         let registry = SignatureRegistry::new();
         let config = config.clone();
@@ -417,7 +416,6 @@ impl Engine {
             | "enable_jump_tables"
             | "enable_float"
             | "enable_verifier"
-            | "enable_pcc"
             | "regalloc_checker"
             | "regalloc_verbose_logs"
             | "is_pic"

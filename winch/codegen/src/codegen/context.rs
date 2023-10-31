@@ -1,9 +1,8 @@
-use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
+use wasmtime_environ::WasmType;
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{ABIResult, ABI},
-    codegen::BuiltinFunctions,
+    abi::ABIResult,
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm},
@@ -28,37 +27,25 @@ use std::ops::RangeBounds;
 /// generation process. The code generation context should
 /// be generally used as the single entry point to access
 /// the compound functionality provided by its elements.
-pub(crate) struct CodeGenContext<'a, 'builtins: 'a> {
+pub(crate) struct CodeGenContext<'a> {
     /// The register allocator.
     pub regalloc: RegAlloc,
     /// The value stack.
     pub stack: Stack,
     /// The current function's frame.
-    pub frame: Frame,
+    pub frame: &'a Frame,
     /// Reachability state.
     pub reachable: bool,
-    /// The built-in functions available to the JIT code.
-    pub builtins: &'builtins mut BuiltinFunctions,
-    /// A reference to the VMOffsets.
-    pub vmoffsets: &'a VMOffsets<u8>,
 }
 
-impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
+impl<'a> CodeGenContext<'a> {
     /// Create a new code generation context.
-    pub fn new(
-        regalloc: RegAlloc,
-        stack: Stack,
-        frame: Frame,
-        builtins: &'builtins mut BuiltinFunctions,
-        vmoffsets: &'a VMOffsets<u8>,
-    ) -> Self {
+    pub fn new(regalloc: RegAlloc, stack: Stack, frame: &'a Frame) -> Self {
         Self {
             regalloc,
             stack,
             frame,
             reachable: true,
-            builtins,
-            vmoffsets,
         }
     }
 
@@ -76,11 +63,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         match ty {
             I32 | I64 => self.reg_for_class(RegClass::Int, masm),
             F32 | F64 => self.reg_for_class(RegClass::Float, masm),
-            Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func => self.reg_for_class(RegClass::Int, masm),
-                ht => unimplemented!("Support for WasmHeapType: {ht}"),
-            },
-            t => unimplemented!("Support for WasmType: {t}"),
+            t => panic!("unsupported type {:?}", t),
         }
     }
 
@@ -98,45 +81,25 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         self.reg_for_class(RegClass::Int, masm)
     }
 
-    /// Executes the provided function, guaranteeing that the specified set of
-    /// registers, if any, remain unallocatable throughout the function's
-    /// execution. Only the registers in the `free` iterator will be freed. The
-    /// caller must guarantee that in case the iterators are different, the free
-    /// iterator must be a subset of the alloc iterator.
-    pub fn without<'r, T, M, F>(
-        &mut self,
-        regs: impl IntoIterator<Item = &'r Reg> + Copy,
-        masm: &mut M,
-        mut f: F,
-    ) -> T
+    /// Executes the provided function, guaranteeing that the
+    /// specified register, if any, remains unallocatable throughout
+    /// the function's execution.
+    pub fn without<T, M, F>(&mut self, reg: Option<Reg>, masm: &mut M, mut f: F) -> T
     where
         M: MacroAssembler,
         F: FnMut(&mut Self, &mut M) -> T,
     {
-        for r in regs {
-            self.reg(*r, masm);
+        if let Some(reg) = reg {
+            self.reg(reg, masm);
         }
 
         let result = f(self, masm);
 
-        for r in regs {
-            self.free_reg(*r);
+        if let Some(reg) = reg {
+            self.free_reg(reg);
         }
 
         result
-    }
-
-    /// Similar to [`Self::without`] but takes an optional, single register
-    /// as a paramter.
-    pub fn maybe_without1<T, M, F>(&mut self, reg: Option<Reg>, masm: &mut M, mut f: F) -> T
-    where
-        M: MacroAssembler,
-        F: FnMut(&mut Self, &mut M) -> T,
-    {
-        match reg {
-            Some(r) => self.without(&[r], masm, f),
-            None => f(self, masm),
-        }
     }
 
     /// Free the given register.
@@ -218,40 +181,6 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         self.stack.push(typed_reg.into());
     }
 
-    /// Prepares arguments for emitting a binary operation.
-    pub fn binop<F, M>(&mut self, masm: &mut M, size: OperandSize, mut emit: F)
-    where
-        F: FnMut(&mut M, Reg, Reg, OperandSize),
-        M: MacroAssembler,
-    {
-        let src = self.pop_to_reg(masm, None);
-        let dst = self.pop_to_reg(masm, None);
-        emit(masm, dst.reg, src.reg.into(), size);
-        self.free_reg(src);
-        self.stack.push(dst.into());
-    }
-
-    /// Prepares arguments for emitting an f32 or f64 comparison operation.
-    pub fn float_cmp_op<F, M>(&mut self, masm: &mut M, size: OperandSize, mut emit: F)
-    where
-        F: FnMut(&mut M, Reg, Reg, Reg, OperandSize),
-        M: MacroAssembler,
-    {
-        let src1 = self.pop_to_reg(masm, None);
-        let src2 = self.pop_to_reg(masm, None);
-        let dst = self.any_gpr(masm);
-        emit(masm, dst, src1.reg, src2.reg, size);
-        self.free_reg(src1);
-        self.free_reg(src2);
-
-        let dst = match size {
-            OperandSize::S32 => TypedReg::i32(dst),
-            OperandSize::S64 => TypedReg::i64(dst),
-            OperandSize::S128 => unreachable!(),
-        };
-        self.stack.push(dst.into());
-    }
-
     /// Prepares arguments for emitting an i32 binary operation.
     pub fn i32_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
     where
@@ -269,9 +198,11 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32);
             self.stack.push(typed_reg.into());
         } else {
-            self.binop(masm, OperandSize::S32, |masm, dst, src, size| {
-                emit(masm, dst, src.into(), size)
-            });
+            let src = self.pop_to_reg(masm, None);
+            let dst = self.pop_to_reg(masm, None);
+            emit(masm, dst.reg, src.reg.into(), OperandSize::S32);
+            self.free_reg(src);
+            self.stack.push(dst.into());
         }
     }
 
@@ -291,9 +222,11 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64);
             self.stack.push(typed_reg.into());
         } else {
-            self.binop(masm, OperandSize::S64, |masm, dst, src, size| {
-                emit(masm, dst, src.into(), size)
-            });
+            let src = self.pop_to_reg(masm, None);
+            let dst = self.pop_to_reg(masm, None);
+            emit(masm, dst.reg, src.reg.into(), OperandSize::S64);
+            self.free_reg(src);
+            self.stack.push(dst.into());
         }
     }
 
@@ -431,6 +364,22 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         }
     }
 
+    /// Pops the value at the stack top and assigns it to the local at
+    /// the given index, returning the typed register holding the
+    /// source value.
+    pub fn set_local<M: MacroAssembler>(&mut self, masm: &mut M, index: u32) -> TypedReg {
+        let slot = self
+            .frame
+            .get_local(index)
+            .unwrap_or_else(|| panic!("invalid local slot = {}", index));
+        let size: OperandSize = slot.ty.into();
+        let src = self.pop_to_reg(masm, None);
+        let addr = masm.local_address(&slot);
+        masm.store(RegImm::reg(src.reg), addr, size);
+
+        src
+    }
+
     /// Spill locals and registers to memory.
     // TODO optimize the spill range;
     //
@@ -454,9 +403,8 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             Val::Local(local) => {
                 let slot = frame.get_local(local.index).expect("valid local at slot");
                 let addr = masm.local_address(&slot);
-                let scratch = <M::ABI as ABI>::scratch_reg();
-                masm.load(addr, scratch, slot.ty.into());
-                let stack_slot = masm.push(scratch, slot.ty.into());
+                masm.load(addr, regalloc.scratch, slot.ty.into());
+                let stack_slot = masm.push(regalloc.scratch, slot.ty.into());
                 *v = Val::mem(slot.ty, stack_slot);
             }
             _ => {}

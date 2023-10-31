@@ -281,7 +281,7 @@ impl<'a, 'data> Translator<'a, 'data> {
     /// `component` does not have to be valid and it will be validated during
     /// compilation.
     ///
-    /// The result of this function is a tuple of the final component's
+    /// THe result of this function is a tuple of the final component's
     /// description plus a list of core wasm modules found within the
     /// component. The component's description actually erases internal
     /// components, instances, etc, as much as it can. Instead `Component`

@@ -34,7 +34,7 @@ if (process.env.CENTOS !== undefined) {
   return;
 }
 
-const name = process.env.INPUT_NAME.replace(/-min$/, '');
+const name = process.env.INPUT_NAME;
 
 child_process.execFileSync('docker', [
   'build',

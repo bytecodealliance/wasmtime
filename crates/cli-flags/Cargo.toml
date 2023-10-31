@@ -11,17 +11,19 @@ edition.workspace = true
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
-file-per-thread-logger = { workspace = true, optional = true }
-tracing-subscriber = { workspace = true, optional = true }
-rayon = { version = "1.5.0", optional = true }
+file-per-thread-logger = { workspace = true }
+pretty_env_logger = { workspace = true }
+rayon = "1.5.0"
 wasmtime = { workspace = true }
 humantime = "2.0.0"
 
 [features]
+default = [
+    "wasmtime/cache",
+    "wasmtime/cranelift",
+    "wasmtime/jitdump",
+    "wasmtime/vtune",
+    "wasmtime/parallel-compilation",
+]
 pooling-allocator = []
 component-model = ["wasmtime/component-model"]
-cache = ["wasmtime/cache"]
-parallel-compilation = ["wasmtime/parallel-compilation", "dep:rayon"]
-logging = ["dep:file-per-thread-logger", "dep:tracing-subscriber"]
-cranelift = ["wasmtime/cranelift"]
-coredump = ["wasmtime/coredump"]

@@ -8,7 +8,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
 [dependencies]
-anyhow = { workspace = true }
 cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
 

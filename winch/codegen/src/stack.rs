@@ -14,23 +14,15 @@ pub struct TypedReg {
 }
 
 impl TypedReg {
-    /// Create a new [`TypedReg`].
+    /// Create a new TypedReg.
     pub fn new(ty: WasmType, reg: Reg) -> Self {
         Self { ty, reg }
     }
 
-    /// Create an i64 [`TypedReg`].
+    /// Create an i64 TypedReg.
     pub fn i64(reg: Reg) -> Self {
         Self {
             ty: WasmType::I64,
-            reg,
-        }
-    }
-
-    /// Create an i64 [`TypedReg`].
-    pub fn i32(reg: Reg) -> Self {
-        Self {
-            ty: WasmType::I32,
             reg,
         }
     }
@@ -94,13 +86,6 @@ impl From<Local> for Val {
 impl From<Memory> for Val {
     fn from(mem: Memory) -> Self {
         Val::Memory(mem)
-    }
-}
-
-impl TryFrom<u32> for Val {
-    type Error = anyhow::Error;
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        i32::try_from(value).map(Val::i32).map_err(Into::into)
     }
 }
 
@@ -232,22 +217,9 @@ impl Stack {
         }
     }
 
-    /// Extend the stack with the given elements.
-    pub fn extend(&mut self, values: impl IntoIterator<Item = Val>) {
-        self.inner.extend(values);
-    }
-
-    /// Inserts many values at the given index.
-    pub fn insert_many(&mut self, at: usize, values: impl IntoIterator<Item = Val>) {
-        debug_assert!(at <= self.len());
-        // If last, simply extend.
-        if at == self.inner.len() {
-            self.inner.extend(values);
-        } else {
-            let mut tail = self.inner.split_off(at);
-            self.inner.extend(values);
-            self.inner.append(&mut tail);
-        }
+    /// Insert a new value at the specified index.
+    pub fn insert(&mut self, at: usize, val: Val) {
+        self.inner.insert(at, val);
     }
 
     /// Get the length of the stack.

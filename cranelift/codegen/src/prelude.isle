@@ -77,9 +77,6 @@
 
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl pure u8_as_i8 (u8) i8)
-(extern constructor u8_as_i8 u8_as_i8)
-
 (decl pure u8_as_u32 (u8) u32)
 (extern constructor u8_as_u32 u8_as_u32)
 (convert u8 u32 u8_as_u32)
@@ -191,12 +188,6 @@
 (decl pure u64_lt (u64 u64) bool)
 (extern constructor u64_lt u64_lt)
 
-(decl pure i64_shr (i64 i64) i64)
-(extern constructor i64_shr i64_shr)
-
-(decl pure i64_ctz (i64) i64)
-(extern constructor i64_ctz i64_ctz)
-
 ;; Sign extends a u64 from ty bits up to 64bits
 (decl pure i64_sextend_u64 (Type u64) i64)
 (extern constructor i64_sextend_u64 i64_sextend_u64)
@@ -213,31 +204,14 @@
 (decl u64_is_zero (bool) u64)
 (extern extractor infallible u64_is_zero u64_is_zero)
 
-(decl i64_is_zero (bool) i64)
-(extern extractor infallible i64_is_zero i64_is_zero)
-
 (decl u64_zero () u64)
 (extractor (u64_zero) (u64_is_zero $true))
 
 (decl u64_nonzero (u64) u64)
 (extractor (u64_nonzero x) (and (u64_is_zero $false) x))
 
-(decl i64_nonzero (i64) i64)
-(extractor (i64_nonzero x) (and (i64_is_zero $false) x))
-
 (decl pure u64_is_odd (u64) bool)
 (extern constructor u64_is_odd u64_is_odd)
-
-;; Each of these extractors tests whether the upper half of the input equals the
-;; lower half of the input
-(decl u128_replicated_u64 (u64) u128)
-(extern extractor u128_replicated_u64 u128_replicated_u64)
-(decl u64_replicated_u32 (u64) u64)
-(extern extractor u64_replicated_u32 u64_replicated_u32)
-(decl u32_replicated_u16 (u64) u64)
-(extern extractor u32_replicated_u16 u32_replicated_u16)
-(decl u16_replicated_u8 (u8) u64)
-(extern extractor u16_replicated_u8 u16_replicated_u8)
 
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -343,12 +317,6 @@
 (decl intcc_complement (IntCC) IntCC)
 (extern constructor intcc_complement intcc_complement)
 
-;; This is a direct import of `IntCC::without_equal`.
-;; Get the corresponding IntCC with the equal component removed.
-;; For conditions without a zero component, this is a no-op.
-(decl pure intcc_without_eq (IntCC) IntCC)
-(extern constructor intcc_without_eq intcc_without_eq)
-
 ;; Swap args of a FloatCC flag.
 (decl floatcc_swap_args (FloatCC) FloatCC)
 (extern constructor floatcc_swap_args floatcc_swap_args)
@@ -430,10 +398,6 @@
 ;; An extractor that matches 8- and 16-bit types only.
 (decl ty_8_or_16 (Type) Type)
 (extern extractor ty_8_or_16 ty_8_or_16)
-
-;; An extractor that matches 16- and 32-bit types only.
-(decl ty_16_or_32 (Type) Type)
-(extern extractor ty_16_or_32 ty_16_or_32)
 
 ;; An extractor that matches int types that fit in 32 bits.
 (decl int_fits_in_32 (Type) Type)

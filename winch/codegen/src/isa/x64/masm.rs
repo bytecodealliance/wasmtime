@@ -6,13 +6,13 @@ use super::{
 };
 
 use crate::masm::{
-    DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, OperandSize, RegImm,
-    RemKind, RoundingMode, ShiftKind, TrapCode,
+    CmpKind, DivKind, Imm as I, MacroAssembler as Masm, OperandSize, RegImm, RemKind, RoundingMode,
+    ShiftKind,
 };
-use crate::{abi::ABI, masm::StackSlot, stack::TypedReg};
+use crate::{abi::ABI, masm::StackSlot};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
-    codegen::{ptr_type_from_ptr_size, Callee, CodeGenContext, FnCall, TableData},
+    codegen::CodeGenContext,
     stack::Val,
 };
 use crate::{
@@ -20,10 +20,9 @@ use crate::{
     masm::CalleeKind,
 };
 use cranelift_codegen::{
-    isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized, MachLabel,
+    ir::TrapCode, isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized,
+    MachLabel,
 };
-
-use wasmtime_environ::PtrSize;
 
 /// x64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -33,10 +32,6 @@ pub(crate) struct MacroAssembler {
     asm: Assembler,
     /// ISA flags.
     flags: x64_settings::Flags,
-    /// Shared flags.
-    shared_flags: settings::Flags,
-    /// The target pointer size.
-    ptr_size: OperandSize,
 }
 
 impl Masm for MacroAssembler {
@@ -109,101 +104,12 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset)
     }
 
-    fn table_elem_address(
-        &mut self,
-        index: Reg,
-        ptr_base: Reg,
-        table_data: &TableData,
-        context: &mut CodeGenContext,
-    ) -> Self::Address {
-        let vmctx = <Self::ABI as ABI>::vmctx_reg();
-        let scratch = regs::scratch();
-        let bound = context.any_gpr(self);
-        let tmp = context.any_gpr(self);
-
-        if let Some(offset) = table_data.base {
-            // If the table data declares a particular offset base,
-            // load the address into a register to further use it as
-            // the table address.
-            self.asm
-                .mov_mr(&self.address_at_vmctx(offset), ptr_base, self.ptr_size);
-        } else {
-            // Else, simply move the vmctx register into the addr register as
-            // the base to calculate the table address.
-            self.asm.mov_rr(vmctx, ptr_base, self.ptr_size);
-        };
-
-        // OOB check.
-        let bound_addr = self.address_at_reg(ptr_base, table_data.current_elems_offset);
-        let bound_size = table_data.current_elements_size;
-        self.asm.mov_mr(&bound_addr, bound, bound_size);
-        self.asm.cmp_rr(bound, index, bound_size);
-        self.asm.trapif(IntCmpKind::GeU, TrapCode::TableOutOfBounds);
-
-        // Move the index into the scratch register to calcualte the table
-        // element address.
-        // Moving the value of the index register to the scratch register
-        // also avoids overwriting the context of the index register.
-        self.asm.mov_rr(index, scratch, bound_size);
-        self.asm.mul_ir(
-            table_data.element_size.bytes() as i32,
-            scratch,
-            table_data.element_size,
-        );
-        self.asm.mov_mr(
-            &self.address_at_reg(ptr_base, table_data.offset),
-            ptr_base,
-            self.ptr_size,
-        );
-        // Copy the value of the table base into a temporary register
-        // so that we can use it later in case of a misspeculation.
-        self.asm.mov_rr(ptr_base, tmp, self.ptr_size);
-        // Calculate the address of the table element.
-        self.asm.add_rr(scratch, ptr_base, self.ptr_size);
-        if self.shared_flags.enable_table_access_spectre_mitigation() {
-            // Perform a bounds check and override the value of the
-            // table element address in case the index is out of bounds.
-            self.asm.cmp_rr(bound, index, OperandSize::S32);
-            self.asm.cmov(tmp, ptr_base, IntCmpKind::GeU, self.ptr_size);
-        }
-        context.free_reg(bound);
-        context.free_reg(tmp);
-        self.address_at_reg(ptr_base, 0)
-    }
-
-    fn table_size(&mut self, table_data: &TableData, context: &mut CodeGenContext) {
-        let vmctx = <Self::ABI as ABI>::vmctx_reg();
-        let scratch = regs::scratch();
-        let size = context.any_gpr(self);
-
-        if let Some(offset) = table_data.base {
-            self.asm
-                .mov_mr(&self.address_at_vmctx(offset), scratch, self.ptr_size);
-        } else {
-            self.asm.mov_rr(vmctx, scratch, self.ptr_size);
-        };
-
-        let size_addr = Address::offset(scratch, table_data.current_elems_offset);
-        self.asm
-            .mov_mr(&size_addr, size, table_data.current_elements_size);
-
-        context.stack.push(TypedReg::i32(size).into());
-    }
-
     fn address_from_sp(&self, offset: u32) -> Self::Address {
         Address::offset(regs::rsp(), self.sp_offset - offset)
     }
 
     fn address_at_sp(&self, offset: u32) -> Self::Address {
         Address::offset(regs::rsp(), offset)
-    }
-
-    fn address_at_vmctx(&self, offset: u32) -> Self::Address {
-        Address::offset(<Self::ABI as ABI>::vmctx_reg(), offset)
-    }
-
-    fn store_ptr(&mut self, src: Reg, dst: Self::Address) {
-        self.store(src.into(), dst, self.ptr_size);
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
@@ -236,7 +142,7 @@ impl Masm for MacroAssembler {
             self.asm.pop_r(dst);
             self.decrement_sp(<Self::ABI as abi::ABI>::word_bytes());
         } else {
-            let addr = self.address_from_sp(self.sp_offset);
+            let addr = self.address_at_sp(self.sp_offset);
             self.asm.xmm_mov_mr(&addr, dst, size);
             self.free_stack(size.bytes());
         }
@@ -254,16 +160,8 @@ impl Masm for MacroAssembler {
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack);
         let callee = load_callee(self);
-        match callee {
-            CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg),
-            CalleeKind::Direct(idx) => self.asm.call_with_index(idx),
-            CalleeKind::Known(lib) => self.asm.call_with_lib(lib),
-        };
+        self.asm.call(callee);
         total_stack
-    }
-
-    fn load_ptr(&mut self, src: Self::Address, dst: Reg) {
-        self.load(src, dst, self.ptr_size);
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
@@ -304,7 +202,7 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize) {
+    fn cmov(&mut self, src: Reg, dst: Reg, cc: CmpKind, size: OperandSize) {
         match (src.class(), dst.class()) {
             (RegClass::Int, RegClass::Int) => self.asm.cmov(src, dst, cc, size),
             (RegClass::Float, RegClass::Float) => self.asm.xmm_cmov(src, dst, cc, size),
@@ -369,60 +267,6 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn float_add(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
-        self.asm.xmm_add_rr(rhs, dst, size);
-    }
-
-    fn float_sub(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
-        self.asm.xmm_sub_rr(rhs, dst, size);
-    }
-
-    fn float_mul(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
-        self.asm.xmm_mul_rr(rhs, dst, size);
-    }
-
-    fn float_div(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
-        self.asm.xmm_div_rr(rhs, dst, size);
-    }
-
-    fn float_min(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
-        self.asm.xmm_min_seq(rhs, dst, size);
-    }
-
-    fn float_max(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
-        self.asm.xmm_max_seq(rhs, dst, size);
-    }
-
-    fn float_copysign(&mut self, dst: Reg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        Self::ensure_two_argument_form(&dst, &lhs);
-        let scratch_gpr = regs::scratch();
-        let scratch_xmm = regs::scratch_xmm();
-        let sign_mask = match size {
-            OperandSize::S32 => I::I32(0x80000000),
-            OperandSize::S64 => I::I64(0x8000000000000000),
-            OperandSize::S128 => unreachable!(),
-        };
-        self.load_constant(&sign_mask, scratch_gpr, size);
-        self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
-
-        // Clear everything except sign bit in src.
-        self.asm.xmm_and_rr(scratch_xmm, rhs, size);
-
-        // Clear sign bit in dst using scratch to store result. Then copy the
-        // result back to dst.
-        self.asm.xmm_andn_rr(dst, scratch_xmm, size);
-        self.asm.xmm_mov_rr(scratch_xmm, dst, size);
-
-        // Copy sign bit from src to dst.
-        self.asm.xmm_or_rr(rhs, dst, size);
-    }
-
     fn float_neg(&mut self, dst: Reg, size: OperandSize) {
         assert_eq!(dst.class(), RegClass::Float);
         let mask = match size {
@@ -434,7 +278,7 @@ impl Masm for MacroAssembler {
         self.load_constant(&mask, scratch_gpr, size);
         let scratch_xmm = regs::scratch_xmm();
         self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
-        self.asm.xmm_xor_rr(scratch_xmm, dst, size);
+        self.asm.xor_rr(scratch_xmm, dst, size);
     }
 
     fn float_abs(&mut self, dst: Reg, size: OperandSize) {
@@ -448,50 +292,15 @@ impl Masm for MacroAssembler {
         self.load_constant(&mask, scratch_gpr, size);
         let scratch_xmm = regs::scratch_xmm();
         self.asm.gpr_to_xmm(scratch_gpr, scratch_xmm, size);
-        self.asm.xmm_and_rr(scratch_xmm, dst, size);
+        self.asm.and_rr(scratch_xmm, dst, size);
     }
 
-    fn float_round(&mut self, mode: RoundingMode, context: &mut CodeGenContext, size: OperandSize) {
+    fn float_round(&mut self, mode: RoundingMode, dst: Reg, src: RegImm, size: OperandSize) {
         if self.flags.has_sse41() {
-            let src = context.pop_to_reg(self, None);
-            self.asm.xmm_rounds_rr(src.into(), src.into(), mode, size);
-            context.stack.push(src.into());
+            self.asm.rounds(src.get_reg().unwrap(), dst, mode, size);
         } else {
-            FnCall::emit::<Self, Self::Ptr, _>(self, context, |context| {
-                let b = match (&mode, size) {
-                    (RoundingMode::Up, OperandSize::S32) => {
-                        context.builtins.ceil_f32::<<Self as Masm>::ABI>()
-                    }
-                    (RoundingMode::Up, OperandSize::S64) => {
-                        context.builtins.ceil_f64::<<Self as Masm>::ABI>()
-                    }
-                    (RoundingMode::Down, OperandSize::S32) => {
-                        context.builtins.floor_f32::<<Self as Masm>::ABI>()
-                    }
-                    (RoundingMode::Down, OperandSize::S64) => {
-                        context.builtins.floor_f64::<<Self as Masm>::ABI>()
-                    }
-                    (RoundingMode::Nearest, OperandSize::S32) => {
-                        context.builtins.nearest_f32::<<Self as Masm>::ABI>()
-                    }
-                    (RoundingMode::Nearest, OperandSize::S64) => {
-                        context.builtins.nearest_f64::<<Self as Masm>::ABI>()
-                    }
-                    (RoundingMode::Zero, OperandSize::S32) => {
-                        context.builtins.trunc_f32::<<Self as Masm>::ABI>()
-                    }
-                    (RoundingMode::Zero, OperandSize::S64) => {
-                        context.builtins.trunc_f64::<<Self as Masm>::ABI>()
-                    }
-                    (_, _) => unreachable!(),
-                };
-                Callee::Builtin(b)
-            })
+            todo!("libcall fallback for rounding is not implemented")
         }
-    }
-
-    fn float_sqrt(&mut self, dst: Reg, src: Reg, size: OperandSize) {
-        self.asm.sqrt(src, dst, size);
     }
 
     fn and(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize) {
@@ -666,58 +475,9 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: IntCmpKind, size: OperandSize) {
+    fn cmp_with_set(&mut self, src: RegImm, dst: Reg, kind: CmpKind, size: OperandSize) {
         self.cmp(src, dst, size);
         self.asm.setcc(kind, dst);
-    }
-
-    fn float_cmp_with_set(
-        &mut self,
-        src1: Reg,
-        src2: Reg,
-        dst: Reg,
-        kind: FloatCmpKind,
-        size: OperandSize,
-    ) {
-        // Float comparisons needs to be ordered (that is, comparing with a NaN
-        // should return 0) except for not equal which needs to be unordered.
-        // We use ucomis{s, d} because comis{s, d} has an undefined result if
-        // either operand is NaN. Since ucomis{s, d} is unordered, we need to
-        // compensate to make the comparison ordered.  Ucomis{s, d} sets the
-        // ZF, PF, and CF flags if there is an unordered result.
-        let (src1, src2, set_kind) = match kind {
-            FloatCmpKind::Eq => (src1, src2, IntCmpKind::Eq),
-            FloatCmpKind::Ne => (src1, src2, IntCmpKind::Ne),
-            FloatCmpKind::Gt => (src1, src2, IntCmpKind::GtU),
-            FloatCmpKind::Ge => (src1, src2, IntCmpKind::GeU),
-            // Reversing the operands and using the complementary comparison
-            // avoids needing to perform an additional SETNP and AND
-            // instruction.
-            // SETNB and SETNBE check if the carry flag is unset (i.e., not
-            // less than and not unordered) so we get the intended result
-            // without having to look at the parity flag.
-            FloatCmpKind::Lt => (src2, src1, IntCmpKind::GtU),
-            FloatCmpKind::Le => (src2, src1, IntCmpKind::GeU),
-        };
-        self.asm.ucomis(src1, src2, size);
-        self.asm.setcc(set_kind, dst);
-        match kind {
-            FloatCmpKind::Eq | FloatCmpKind::Gt | FloatCmpKind::Ge => {
-                // Return false if either operand is NaN by ensuring PF is
-                // unset.
-                let scratch = regs::scratch();
-                self.asm.setnp(scratch);
-                self.asm.and_rr(scratch, dst, size);
-            }
-            FloatCmpKind::Ne => {
-                // Return true if either operand is NaN by checking if PF is
-                // set.
-                let scratch = regs::scratch();
-                self.asm.setp(scratch);
-                self.asm.or_rr(scratch, dst, size);
-            }
-            FloatCmpKind::Lt | FloatCmpKind::Le => (),
-        }
     }
 
     fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
@@ -730,7 +490,7 @@ impl Masm for MacroAssembler {
             // dst = size.num_bits() - bsr(src) - is_not_zero
             //     = size.num.bits() + -bsr(src) - is_not_zero.
             self.asm.bsr(src.into(), dst.into(), size);
-            self.asm.setcc(IntCmpKind::Ne, scratch.into());
+            self.asm.setcc(CmpKind::Ne, scratch.into());
             self.asm.neg(dst, dst, size);
             self.asm.add_ir(size.num_bits(), dst, size);
             self.asm.sub_rr(scratch, dst, size);
@@ -750,7 +510,7 @@ impl Masm for MacroAssembler {
             // When the value is 0, BSF outputs 0, correct output for ctz is
             // the number of bits.
             self.asm.bsf(src.into(), dst.into(), size);
-            self.asm.setcc(IntCmpKind::Eq, scratch.into());
+            self.asm.setcc(CmpKind::Eq, scratch.into());
             self.asm
                 .shift_ir(size.log2(), scratch, ShiftKind::Shl, size);
             self.asm.add_rr(scratch, dst, size);
@@ -769,26 +529,26 @@ impl Masm for MacroAssembler {
 
     fn branch(
         &mut self,
-        kind: IntCmpKind,
+        kind: CmpKind,
         lhs: RegImm,
-        rhs: Reg,
+        rhs: RegImm,
         taken: MachLabel,
         size: OperandSize,
     ) {
-        use IntCmpKind::*;
+        use CmpKind::*;
 
         match &(lhs, rhs) {
-            (RegImm::Reg(rlhs), rrhs) => {
+            (RegImm::Reg(rlhs), RegImm::Reg(rrhs)) => {
                 // If the comparision kind is zero or not zero and both operands
                 // are the same register, emit a test instruction. Else we emit
                 // a normal comparison.
                 if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
                     self.asm.test_rr(*rrhs, *rlhs, size);
                 } else {
-                    self.cmp(lhs, rhs, size);
+                    self.cmp(lhs, rhs.get_reg().unwrap(), size);
                 }
             }
-            _ => self.cmp(lhs, rhs, size),
+            _ => self.cmp(lhs, rhs.get_reg().unwrap(), size),
         }
         self.asm.jmp_if(kind, taken);
     }
@@ -867,15 +627,6 @@ impl Masm for MacroAssembler {
         self.asm.trap(TrapCode::UnreachableCodeReached)
     }
 
-    fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) {
-        self.asm.trapif(cc, code);
-    }
-
-    fn trapz(&mut self, src: Reg, code: TrapCode) {
-        self.asm.test_rr(src, src, self.ptr_size);
-        self.asm.trapif(IntCmpKind::Eq, code);
-    }
-
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {
         // At least one default target.
         assert!(targets.len() >= 1);
@@ -887,7 +638,7 @@ impl Masm for MacroAssembler {
         let size = OperandSize::S32;
         self.asm.mov_ir(max as u64, tmp, size);
         self.asm.cmp_rr(index, tmp, size);
-        self.asm.cmov(tmp, index, IntCmpKind::LtU, size);
+        self.asm.cmov(tmp, index, CmpKind::LtU, size);
 
         let default = targets[default_index];
         let rest = &targets[0..default_index];
@@ -898,17 +649,11 @@ impl Masm for MacroAssembler {
 
 impl MacroAssembler {
     /// Create an x64 MacroAssembler.
-    pub fn new(
-        ptr_size: impl PtrSize,
-        shared_flags: settings::Flags,
-        isa_flags: x64_settings::Flags,
-    ) -> Self {
+    pub fn new(shared_flags: settings::Flags, isa_flags: x64_settings::Flags) -> Self {
         Self {
             sp_offset: 0,
-            asm: Assembler::new(shared_flags.clone(), isa_flags.clone()),
+            asm: Assembler::new(shared_flags, isa_flags.clone()),
             flags: isa_flags,
-            shared_flags,
-            ptr_size: ptr_type_from_ptr_size(ptr_size.size()).into(),
         }
     }
 

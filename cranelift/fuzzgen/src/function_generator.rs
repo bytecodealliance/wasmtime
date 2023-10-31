@@ -131,14 +131,7 @@ fn insert_stack_load(
 ) -> Result<()> {
     let typevar = rets[0];
     let type_size = typevar.bytes();
-    let (slot, slot_size, category) = fgen.stack_slot_with_size(type_size)?;
-
-    // `stack_load` doesen't support setting MemFlags, and it does not set any
-    // alias analysis bits, so we can only emit it for `Other` slots.
-    if category != AACategory::Other {
-        return Err(arbitrary::Error::IncorrectFormat.into());
-    }
-
+    let (slot, slot_size) = fgen.stack_slot_with_size(type_size)?;
     let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
 
     let val = builder.ins().stack_load(typevar, slot, offset);
@@ -157,15 +150,7 @@ fn insert_stack_store(
 ) -> Result<()> {
     let typevar = args[0];
     let type_size = typevar.bytes();
-
-    let (slot, slot_size, category) = fgen.stack_slot_with_size(type_size)?;
-
-    // `stack_store` doesen't support setting MemFlags, and it does not set any
-    // alias analysis bits, so we can only emit it for `Other` slots.
-    if category != AACategory::Other {
-        return Err(arbitrary::Error::IncorrectFormat.into());
-    }
-
+    let (slot, slot_size) = fgen.stack_slot_with_size(type_size)?;
     let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
 
     let arg0 = fgen.get_variable_of_type(typevar)?;
@@ -528,6 +513,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5474
                 (Opcode::Urem | Opcode::Srem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5466
+                (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/3370
                 (
                     Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
@@ -627,6 +614,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5472
                 (Opcode::Urem | Opcode::Srem, &[I128, I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/5467
+                (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4313
                 (
                     Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
@@ -651,8 +640,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                         | Opcode::FcvtToUintSat
                         | Opcode::FcvtToSint
                         | Opcode::FcvtToSintSat,
-                    &[F32 | F64],
-                    &[I128]
+                    &[F32 | F64]
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4933
                 (
@@ -757,7 +745,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (
                     Opcode::FcvtToUintSat | Opcode::FcvtToSintSat,
                     &[F32 | F64],
-                    &[I128]
+                    &[I8 | I16 | I128]
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
                 (
@@ -1133,45 +1121,6 @@ enum BlockTerminatorKind {
     TailCallIndirect,
 }
 
-/// Alias Analysis Category
-///
-/// Our alias analysis pass supports 4 categories of accesses to distinguish
-/// different regions. The "Other" region is the general case, and is the default
-/// Although they have highly suggestive names there is no difference between any
-/// of the categories.
-///
-/// We assign each stack slot a category when we first generate them, and then
-/// ensure that all accesses to that stack slot are correctly tagged. We already
-/// ensure that memory accesses never cross stack slots, so there is no risk
-/// of a memory access being tagged with the wrong category.
-#[derive(Debug, PartialEq, Clone, Copy)]
-enum AACategory {
-    Other,
-    Heap,
-    Table,
-    VmCtx,
-}
-
-impl AACategory {
-    pub fn all() -> &'static [Self] {
-        &[
-            AACategory::Other,
-            AACategory::Heap,
-            AACategory::Table,
-            AACategory::VmCtx,
-        ]
-    }
-
-    pub fn update_memflags(&self, flags: &mut MemFlags) {
-        match self {
-            AACategory::Other => {}
-            AACategory::Heap => flags.set_heap(),
-            AACategory::Table => flags.set_table(),
-            AACategory::VmCtx => flags.set_vmctx(),
-        }
-    }
-}
-
 #[derive(Default)]
 struct Resources {
     vars: HashMap<Type, Vec<Variable>>,
@@ -1179,10 +1128,7 @@ struct Resources {
     blocks_without_params: Vec<Block>,
     block_terminators: Vec<BlockTerminator>,
     func_refs: Vec<(Signature, SigRef, FuncRef)>,
-    /// This field is required to be sorted by stack slot size at all times.
-    /// We use this invariant when searching for stack slots with a given size.
-    /// See [FunctionGenerator::stack_slot_with_size]
-    stack_slots: Vec<(StackSlot, StackSize, AACategory)>,
+    stack_slots: Vec<(StackSlot, StackSize)>,
     usercalls: Vec<(UserExternalName, Signature)>,
     libcalls: Vec<LibCall>,
 }
@@ -1265,11 +1211,11 @@ where
     }
 
     /// Finds a stack slot with size of at least n bytes
-    fn stack_slot_with_size(&mut self, n: u32) -> Result<(StackSlot, StackSize, AACategory)> {
+    fn stack_slot_with_size(&mut self, n: u32) -> Result<(StackSlot, StackSize)> {
         let first = self
             .resources
             .stack_slots
-            .partition_point(|&(_slot, size, _category)| size < n);
+            .partition_point(|&(_slot, size)| size < n);
         Ok(*self.u.choose(&self.resources.stack_slots[first..])?)
     }
 
@@ -1290,11 +1236,11 @@ where
         builder: &mut FunctionBuilder,
         min_size: u32,
         aligned: bool,
-    ) -> Result<(Value, u32, AACategory)> {
+    ) -> Result<(Value, u32)> {
         // TODO: Currently our only source of addresses is stack_addr, but we
         // should add global_value, symbol_value eventually
-        let (addr, available_size, category) = {
-            let (ss, slot_size, category) = self.stack_slot_with_size(min_size)?;
+        let (addr, available_size) = {
+            let (ss, slot_size) = self.stack_slot_with_size(min_size)?;
 
             // stack_slot_with_size guarantees that slot_size >= min_size
             let max_offset = slot_size - min_size;
@@ -1306,7 +1252,7 @@ where
 
             let base_addr = builder.ins().stack_addr(I64, ss, offset as i32);
             let available_size = slot_size.saturating_sub(offset);
-            (base_addr, available_size, category)
+            (base_addr, available_size)
         };
 
         // TODO: Insert a bunch of amode opcodes here to modify the address!
@@ -1314,7 +1260,7 @@ where
         // Now that we have an address and a size, we just choose a random offset to return to the
         // caller. Preserving min_size bytes.
         let max_offset = available_size.saturating_sub(min_size);
-        Ok((addr, max_offset, category))
+        Ok((addr, max_offset))
     }
 
     // Generates an address and memflags for a load or store.
@@ -1354,11 +1300,7 @@ where
             flags.set_notrap();
         }
 
-        let (address, max_offset, category) =
-            self.generate_load_store_address(builder, min_size, aligned)?;
-
-        // Set the Alias Analysis bits on the memflags
-        category.update_memflags(&mut flags);
+        let (address, max_offset) = self.generate_load_store_address(builder, min_size, aligned)?;
 
         // Pick an offset to pass into the load/store.
         let offset = if aligned {
@@ -1594,16 +1536,12 @@ where
             let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
             let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes);
             let slot = builder.create_sized_stack_slot(ss_data);
-
-            // Generate one Alias Analysis Category for each slot
-            let category = *self.u.choose(AACategory::all())?;
-
-            self.resources.stack_slots.push((slot, bytes, category));
+            self.resources.stack_slots.push((slot, bytes));
         }
 
         self.resources
             .stack_slots
-            .sort_unstable_by_key(|&(_slot, bytes, _category)| bytes);
+            .sort_unstable_by_key(|&(_slot, bytes)| bytes);
 
         Ok(())
     }
@@ -1616,7 +1554,7 @@ where
         let i64_zero = builder.ins().iconst(I64, 0);
         let i128_zero = builder.ins().uextend(I128, i64_zero);
 
-        for &(slot, init_size, category) in self.resources.stack_slots.iter() {
+        for &(slot, init_size) in self.resources.stack_slots.iter() {
             let mut size = init_size;
 
             // Insert the largest available store for the remaining size.
@@ -1629,16 +1567,7 @@ where
                     sz if sz / 2 > 0 => (i16_zero, 2),
                     _ => (i8_zero, 1),
                 };
-                let addr = builder.ins().stack_addr(I64, slot, offset);
-
-                // Each stack slot has an associated category, that means we have to set the
-                // correct memflags for it. So we can't use `stack_store` directly.
-                let mut flags = MemFlags::new();
-                flags.set_notrap();
-                category.update_memflags(&mut flags);
-
-                builder.ins().store(flags, val, addr, 0);
-
+                builder.ins().stack_store(val, slot, offset);
                 size -= filled;
             }
         }

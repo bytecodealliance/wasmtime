@@ -1,0 +1,11 @@
+[package]
+name = "reactor-tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type=["cdylib"]
+
+[dependencies]
+wit-bindgen = { workspace = true, features = ["macros", "realloc"] }

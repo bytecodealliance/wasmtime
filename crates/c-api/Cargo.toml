@@ -1,5 +1,5 @@
 [package]
-name = "wasmtime-c-api-impl"
+name = "wasmtime-c-api"
 version.workspace = true
 authors.workspace = true
 description = "C API to expose the Wasmtime runtime"
@@ -10,19 +10,18 @@ edition.workspace = true
 publish = false
 
 [lib]
-name = "wamstime_c_api"
+name = "wasmtime"
+crate-type = ["staticlib", "cdylib"]
 doc = false
 test = false
 doctest = false
 
 [dependencies]
-env_logger = { workspace = true, optional = true }
+env_logger = { workspace = true }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
 wasmtime = { workspace = true, features = ['cranelift'] }
 wasmtime-c-api-macros = { path = "macros" }
-log = { workspace = true }
-tracing = { workspace = true }
 
 # Optional dependency for the `wat2wasm` API
 wat = { workspace = true, optional = true }
@@ -33,16 +32,9 @@ wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 cap-std = { workspace = true, optional = true }
 wasi-common = { workspace = true, optional = true }
 
-# Optional dependencies for the `async` feature
-futures = { workspace = true, optional = true }
-
 [features]
-async = ['wasmtime/async', 'futures']
-profiling = ["wasmtime/profiling"]
+default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation']
+jitdump = ["wasmtime/jitdump"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']
 wasi = ['wasi-cap-std-sync', 'wasmtime-wasi', 'cap-std', 'wasi-common']
-logging = ['dep:env_logger']
-disable-logging = ["log/max_level_off", "tracing/max_level_off"]
-coredump = ["wasmtime/coredump"]
-addr2line = ["wasmtime/addr2line"]

@@ -712,7 +712,7 @@ impl Module for JITModule {
             .buffer
             .relocs()
             .iter()
-            .map(|reloc| ModuleReloc::from_mach_reloc(reloc, &ctx.func, id))
+            .map(|reloc| ModuleReloc::from_mach_reloc(reloc, &ctx.func))
             .collect();
 
         self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
@@ -797,7 +797,7 @@ impl Module for JITModule {
             size,
             relocs: relocs
                 .iter()
-                .map(|reloc| ModuleReloc::from_mach_reloc(reloc, func, id))
+                .map(|reloc| ModuleReloc::from_mach_reloc(reloc, func))
                 .collect(),
         });
 
