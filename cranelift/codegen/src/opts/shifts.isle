@@ -144,3 +144,72 @@
 (rule (simplify (sshr ty x (iconcat _ y _))) (sshr ty x y))
 (rule (simplify (rotr ty x (iconcat _ y _))) (rotr ty x y))
 (rule (simplify (rotl ty x (iconcat _ y _))) (rotl ty x y))
+
+;; Try to combine the shift amount from multiple consecutive shifts
+;; This only works if the shift amount remains smaller than the bit
+;; width of the type.
+;;
+;; (ishl (ishl x k1) k2) == (ishl x (add k1 k2)) if k1 + k2 < ty_bits
+;; (ushr (ushr x k1) k2) == (ushr x (add k1 k2)) if k1 + k2 < ty_bits
+;; (sshr (sshr x k1) k2) == (sshr x (add k1 k2)) if k1 + k2 < ty_bits
+(rule (simplify (ishl ty
+                      (ishl ty x (iconst kty (u64_from_imm64 k1)))
+                      (iconst _ (u64_from_imm64 k2))))
+      (if-let shift_amt (u64_add
+                              (u64_and k1 (ty_shift_mask ty))
+                              (u64_and k2 (ty_shift_mask ty))))
+      (if-let $true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
+      (ishl ty x (iconst kty (imm64_masked kty shift_amt))))
+
+(rule (simplify (ushr ty
+                      (ushr ty x (iconst kty (u64_from_imm64 k1)))
+                      (iconst _ (u64_from_imm64 k2))))
+      (if-let shift_amt (u64_add
+                              (u64_and k1 (ty_shift_mask ty))
+                              (u64_and k2 (ty_shift_mask ty))))
+      (if-let $true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
+      (ushr ty x (iconst kty (imm64_masked kty shift_amt))))
+
+(rule (simplify (sshr ty
+                      (sshr ty x (iconst kty (u64_from_imm64 k1)))
+                      (iconst _ (u64_from_imm64 k2))))
+      (if-let shift_amt (u64_add
+                              (u64_and k1 (ty_shift_mask ty))
+                              (u64_and k2 (ty_shift_mask ty))))
+      (if-let $true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
+      (sshr ty x (iconst kty (imm64_masked kty shift_amt))))
+
+;; Simliarly, if the shift amount overflows the type, then we can turn
+;; it into a 0
+;;
+;; (ishl (ishl x k1) k2) == 0 if k1 + k2 >= ty_bits
+;; (ushr (ushr x k1) k2) == 0 if k1 + k2 >= ty_bits
+(rule (simplify (ishl (ty_int_ref_scalar_64 ty)
+                      (ishl ty x (iconst _ (u64_from_imm64 k1)))
+                      (iconst _ (u64_from_imm64 k2))))
+      (if-let shift_amt (u64_add
+                              (u64_and k1 (ty_shift_mask ty))
+                              (u64_and k2 (ty_shift_mask ty))))
+      (if-let $true (u64_le (ty_bits_u64 ty) shift_amt))
+      (subsume (iconst ty (imm64 0))))
+
+(rule (simplify (ushr (ty_int_ref_scalar_64 ty)
+                      (ushr ty x (iconst _ (u64_from_imm64 k1)))
+                      (iconst _ (u64_from_imm64 k2))))
+      (if-let shift_amt (u64_add
+                              (u64_and k1 (ty_shift_mask ty))
+                              (u64_and k2 (ty_shift_mask ty))))
+      (if-let $true (u64_le (ty_bits_u64 ty) shift_amt))
+      (subsume (iconst ty (imm64 0))))
+
+;; (rotr (rotr x k1) k2) == (rotr x (add k1 k2))
+;; (rotl (rotl x k1) k2) == (rotl x (add k1 k2))
+(rule (simplify (rotl ty
+                      (rotl ty x (iconst kty (u64_from_imm64 k1)))
+                      (iconst _ (u64_from_imm64 k2))))
+      (rotl ty x (iconst kty (imm64_masked kty (u64_add k1 k2)))))
+
+(rule (simplify (rotr ty
+                      (rotr ty x (iconst kty (u64_from_imm64 k1)))
+                      (iconst _ (u64_from_imm64 k2))))
+      (rotr ty x (iconst kty (imm64_masked kty (u64_add k1 k2)))))
