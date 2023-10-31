@@ -109,6 +109,10 @@ impl StdoutStream for pipe::ClosedOutputStream {
     }
 }
 
+/// This implementation will yield output streams that block on writes, as they
+/// inherit the implementation directly from the rust std library. A different
+/// implementation of [`StdoutStream`] will be necessary if truly async output
+/// streams are required.
 pub struct Stdout;
 
 pub fn stdout() -> Stdout {
@@ -125,6 +129,10 @@ impl StdoutStream for Stdout {
     }
 }
 
+/// This implementation will yield output streams that block on writes, as they
+/// inherit the implementation directly from the rust std library. A different
+/// implementation of [`StdoutStream`] will be necessary if truly async output
+/// streams are required.
 pub struct Stderr;
 
 pub fn stderr() -> Stderr {
