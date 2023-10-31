@@ -11,6 +11,7 @@ pub mod isle;
 
 impl LowerBackend for ZkAsmBackend {
     type MInst = Inst;
+    type FactFlowState = ();
 
     fn lower(&self, ctx: &mut Lower<Inst>, ir_inst: IRInst) -> Option<InstOutput> {
         isle::lower(ctx, self, ir_inst)
