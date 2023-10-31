@@ -14,7 +14,7 @@ interface poll {
       /// `block` returns immediately if the pollable is ready, and otherwise
       /// blocks until ready.
       ///
-      /// This function is equivalent to calling `poll-list` on a list
+      /// This function is equivalent to calling `poll.poll` on a list
       /// containing only this pollable.
       block: func();
     }
