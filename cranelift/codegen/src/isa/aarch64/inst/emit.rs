@@ -4,7 +4,7 @@ use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
 use crate::binemit::{Reloc, StackMap};
-use crate::ir::{self, types::*, LibCall, MemFlags, RelSourceLoc, TrapCode};
+use crate::ir::{self, types::*, MemFlags, RelSourceLoc, TrapCode};
 use crate::isa::aarch64::inst::*;
 use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use crate::trace;
@@ -3275,7 +3275,8 @@ impl MachInstEmit for Inst {
                 ridx,
                 rtmp1,
                 rtmp2,
-                ref info,
+                default,
+                ref targets,
                 ..
             } => {
                 let ridx = allocs.next(ridx);
@@ -3287,7 +3288,7 @@ impl MachInstEmit for Inst {
 
                 // Branch to default when condition code from prior comparison indicates.
                 let br = enc_conditional_br(
-                    info.default_target,
+                    BranchTarget::Label(default),
                     CondBrKind::Cond(Cond::Hs),
                     &mut AllocationConsumer::default(),
                 );
@@ -3296,9 +3297,7 @@ impl MachInstEmit for Inst {
                 // will not be merged with any other branch, flipped, or elided (it is not preceded
                 // or succeeded by any other branch). Just emit it with the label use.
                 let default_br_offset = sink.cur_offset();
-                if let BranchTarget::Label(l) = info.default_target {
-                    sink.use_label_at_offset(default_br_offset, l, LabelUse::Branch19);
-                }
+                sink.use_label_at_offset(default_br_offset, default, LabelUse::Branch19);
                 sink.put4(br);
 
                 // Overwrite the index with a zero when the above
@@ -3347,18 +3346,14 @@ impl MachInstEmit for Inst {
                 inst.emit(&[], sink, emit_info, state);
                 // Emit jump table (table of 32-bit offsets).
                 let jt_off = sink.cur_offset();
-                for &target in info.targets.iter() {
+                for &target in targets.iter() {
                     let word_off = sink.cur_offset();
                     // off_into_table is an addend here embedded in the label to be later patched
                     // at the end of codegen. The offset is initially relative to this jump table
                     // entry; with the extra addend, it'll be relative to the jump table's start,
                     // after patching.
                     let off_into_table = word_off - jt_off;
-                    sink.use_label_at_offset(
-                        word_off,
-                        target.as_label().unwrap(),
-                        LabelUse::PCRel32,
-                    );
+                    sink.use_label_at_offset(word_off, target, LabelUse::PCRel32);
                     sink.put4(off_into_table);
                 }
 
@@ -3542,32 +3537,81 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::ElfTlsGetAddr { ref symbol, rd } => {
+            &Inst::ElfTlsGetAddr {
+                ref symbol,
+                rd,
+                tmp,
+            } => {
                 let rd = allocs.next_writable(rd);
+                let tmp = allocs.next_writable(tmp);
                 assert_eq!(xreg(0), rd.to_reg());
 
+                // See the original proposal for TLSDESC.
+                // http://www.fsfla.org/~lxoliva/writeups/TLS/paper-lk2006.pdf
+                //
+                // Implement the TLSDESC instruction sequence:
+                //   adrp x0, :tlsdesc:tlsvar
+                //   ldr  tmp, [x0, :tlsdesc_lo12:tlsvar]
+                //   add  x0, x0, :tlsdesc_lo12:tlsvar
+                //   blr  tmp
+                //   mrs  tmp, tpidr_el0
+                //   add  x0, x0, tmp
+                //
                 // This is the instruction sequence that GCC emits for ELF GD TLS Relocations in aarch64
-                // See: https://gcc.godbolt.org/z/KhMh5Gvra
+                // See: https://gcc.godbolt.org/z/e4j7MdErh
 
-                // adrp x0, <label>
-                sink.add_reloc(Reloc::Aarch64TlsGdAdrPage21, symbol, 0);
-                let inst = Inst::Adrp { rd, off: 0 };
-                inst.emit(&[], sink, emit_info, state);
+                // adrp x0, :tlsdesc:tlsvar
+                sink.add_reloc(Reloc::Aarch64TlsDescAdrPage21, &**symbol, 0);
+                Inst::Adrp { rd, off: 0 }.emit(&[], sink, emit_info, state);
 
-                // add x0, x0, <label>
-                sink.add_reloc(Reloc::Aarch64TlsGdAddLo12Nc, symbol, 0);
-                sink.put4(0x91000000);
+                // ldr  tmp, [x0, :tlsdesc_lo12:tlsvar]
+                sink.add_reloc(Reloc::Aarch64TlsDescLd64Lo12, &**symbol, 0);
+                Inst::ULoad64 {
+                    rd: tmp,
+                    mem: AMode::reg(rd.to_reg()),
+                    flags: MemFlags::trusted(),
+                }
+                .emit(&[], sink, emit_info, state);
 
-                // bl __tls_get_addr
-                sink.add_reloc(
-                    Reloc::Arm64Call,
-                    &ExternalName::LibCall(LibCall::ElfTlsGetAddr),
-                    0,
-                );
-                sink.put4(0x94000000);
+                // add x0, x0, :tlsdesc_lo12:tlsvar
+                sink.add_reloc(Reloc::Aarch64TlsDescAddLo12, &**symbol, 0);
+                Inst::AluRRImm12 {
+                    alu_op: ALUOp::Add,
+                    size: OperandSize::Size64,
+                    rd,
+                    rn: rd.to_reg(),
+                    imm12: Imm12::maybe_from_u64(0).unwrap(),
+                }
+                .emit(&[], sink, emit_info, state);
 
-                // nop
-                sink.put4(0xd503201f);
+                // blr tmp
+                sink.add_reloc(Reloc::Aarch64TlsDescCall, &**symbol, 0);
+                Inst::CallInd {
+                    info: crate::isa::Box::new(CallIndInfo {
+                        rn: tmp.to_reg(),
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        clobbers: PRegSet::empty(),
+                        opcode: Opcode::CallIndirect,
+                        caller_callconv: CallConv::SystemV,
+                        callee_callconv: CallConv::SystemV,
+                        callee_pop_size: 0,
+                    }),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // mrs tmp, tpidr_el0
+                sink.put4(0xd53bd040 | machreg_to_gpr(tmp.to_reg()));
+
+                // add x0, x0, tmp
+                Inst::AluRRR {
+                    alu_op: ALUOp::Add,
+                    size: OperandSize::Size64,
+                    rd,
+                    rn: rd.to_reg(),
+                    rm: tmp.to_reg(),
+                }
+                .emit(&[], sink, emit_info, state);
             }
 
             &Inst::MachOTlsGetAddr { ref symbol, rd } => {

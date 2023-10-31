@@ -29,7 +29,7 @@ static AFTER_HELP: Lazy<String> = Lazy::new(|| {
 });
 
 /// Compiles a WebAssembly module.
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[structopt(
     name = "compile",
     version,
@@ -37,29 +37,30 @@ static AFTER_HELP: Lazy<String> = Lazy::new(|| {
 )]
 pub struct CompileCommand {
     #[clap(flatten)]
-    common: CommonOptions,
+    #[allow(missing_docs)]
+    pub common: CommonOptions,
 
     /// The target triple; default is the host triple
     #[clap(long, value_name = "TARGET")]
-    target: Option<String>,
+    pub target: Option<String>,
 
     /// The path of the output compiled module; defaults to <MODULE>.cwasm
     #[clap(short = 'o', long, value_name = "OUTPUT")]
-    output: Option<PathBuf>,
+    pub output: Option<PathBuf>,
 
     /// The directory path to write clif files into, one clif file per wasm function.
     #[clap(long = "emit-clif", value_name = "PATH")]
-    emit_clif: Option<PathBuf>,
+    pub emit_clif: Option<PathBuf>,
 
     /// The path of the WebAssembly to compile
     #[clap(index = 1, value_name = "MODULE")]
-    module: PathBuf,
+    pub module: PathBuf,
 }
 
 impl CompileCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        self.common.init_logging();
+        self.common.init_logging()?;
 
         let mut config = self.common.config(self.target.as_deref())?;
 
@@ -87,7 +88,11 @@ impl CompileCommand {
             );
         }
 
+        #[cfg(feature = "wat")]
         let input = wat::parse_file(&self.module).with_context(|| "failed to read input file")?;
+        #[cfg(not(feature = "wat"))]
+        let input = std::fs::read(&self.module)
+            .with_context(|| format!("failed to read input file: {:?}", self.module))?;
 
         let output = self.output.take().unwrap_or_else(|| {
             let mut output: PathBuf = self.module.file_name().unwrap().into();

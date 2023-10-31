@@ -1,6 +1,6 @@
-package wasi:filesystem
+package wasi:filesystem@0.2.0-rc-2023-11-05;
 
-world example-world {
-    import types
-    import preopens
+world imports {
+    import types;
+    import preopens;
 }

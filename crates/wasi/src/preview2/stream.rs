@@ -1,347 +1,182 @@
 use crate::preview2::filesystem::FileInputStream;
-use crate::preview2::{Table, TableError};
-use anyhow::Error;
+use crate::preview2::poll::Subscribe;
+use crate::preview2::TableError;
+use anyhow::Result;
 use bytes::Bytes;
-use std::fmt;
-
-/// An error which should be reported to Wasm as a runtime error, rather than
-/// an error which should trap Wasm execution. The definition for runtime
-/// stream errors is the empty type, so the contents of this error will only
-/// be available via a `tracing`::event` at `Level::DEBUG`.
-pub struct StreamRuntimeError(anyhow::Error);
-impl From<anyhow::Error> for StreamRuntimeError {
-    fn from(e: anyhow::Error) -> Self {
-        StreamRuntimeError(e)
-    }
-}
-impl fmt::Debug for StreamRuntimeError {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(fmt, "Stream runtime error: {:?}", self.0)
-    }
-}
-impl fmt::Display for StreamRuntimeError {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(fmt, "Stream runtime error")
-    }
-}
-impl std::error::Error for StreamRuntimeError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.0.source()
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum StreamState {
-    Open,
-    Closed,
-}
-
-impl StreamState {
-    pub fn is_closed(&self) -> bool {
-        *self == Self::Closed
-    }
-}
 
 /// Host trait for implementing the `wasi:io/streams.input-stream` resource: A
 /// bytestream which can be read from.
 #[async_trait::async_trait]
-pub trait HostInputStream: Send + Sync {
-    /// Read bytes. On success, returns a pair holding the number of bytes
-    /// read and a flag indicating whether the end of the stream was reached.
-    /// Important: this read must be non-blocking!
-    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
-    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error>;
+pub trait HostInputStream: Subscribe {
+    /// Reads up to `size` bytes, returning a buffer holding these bytes on
+    /// success.
+    ///
+    /// This function does not block the current thread and is the equivalent of
+    /// a non-blocking read. On success all bytes read are returned through
+    /// `Bytes`, which is no larger than the `size` provided. If the returned
+    /// list of `Bytes` is empty then no data is ready to be read at this time.
+    ///
+    /// # Errors
+    ///
+    /// The [`StreamError`] return value communicates when this stream is
+    /// closed, when a read fails, or when a trap should be generated.
+    fn read(&mut self, size: usize) -> StreamResult<Bytes>;
 
-    /// Read bytes from a stream and discard them. Important: this method must
-    /// be non-blocking!
-    /// Returning an Error which downcasts to a StreamRuntimeError will be
-    /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn skip(&mut self, nelem: usize) -> Result<(usize, StreamState), Error> {
-        let mut nread = 0;
-        let mut state = StreamState::Open;
-
-        let (bs, read_state) = self.read(nelem)?;
-        // TODO: handle the case where `bs.len()` is less than `nelem`
-        nread += bs.len();
-        if read_state.is_closed() {
-            state = read_state;
-        }
-
-        Ok((nread, state))
+    /// Same as the `read` method except that bytes are skipped.
+    ///
+    /// Note that this method is non-blocking like `read` and returns the same
+    /// errors.
+    fn skip(&mut self, nelem: usize) -> StreamResult<usize> {
+        let bs = self.read(nelem)?;
+        Ok(bs.len())
     }
-
-    /// Check for read readiness: this method blocks until the stream is ready
-    /// for reading.
-    /// Returning an error will trap execution.
-    async fn ready(&mut self) -> Result<(), Error>;
 }
 
+/// Representation of the `error` resource type in the `wasi:io/streams`
+/// interface.
+///
+/// This is currently `anyhow::Error` to retain full type information for
+/// errors.
+pub type Error = anyhow::Error;
+
+pub type StreamResult<T> = Result<T, StreamError>;
+
 #[derive(Debug)]
-pub enum OutputStreamError {
+pub enum StreamError {
     Closed,
     LastOperationFailed(anyhow::Error),
     Trap(anyhow::Error),
 }
-impl std::fmt::Display for OutputStreamError {
+
+impl StreamError {
+    pub fn trap(msg: &str) -> StreamError {
+        StreamError::Trap(anyhow::anyhow!("{msg}"))
+    }
+}
+
+impl std::fmt::Display for StreamError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OutputStreamError::Closed => write!(f, "closed"),
-            OutputStreamError::LastOperationFailed(e) => write!(f, "last operation failed: {e}"),
-            OutputStreamError::Trap(e) => write!(f, "trap: {e}"),
+            StreamError::Closed => write!(f, "closed"),
+            StreamError::LastOperationFailed(e) => write!(f, "last operation failed: {e}"),
+            StreamError::Trap(e) => write!(f, "trap: {e}"),
         }
     }
 }
-impl std::error::Error for OutputStreamError {
+
+impl std::error::Error for StreamError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            OutputStreamError::Closed => None,
-            OutputStreamError::LastOperationFailed(e) | OutputStreamError::Trap(e) => e.source(),
+            StreamError::Closed => None,
+            StreamError::LastOperationFailed(e) | StreamError::Trap(e) => e.source(),
         }
+    }
+}
+
+impl From<TableError> for StreamError {
+    fn from(error: TableError) -> Self {
+        Self::Trap(error.into())
     }
 }
 
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
-pub trait HostOutputStream: Send + Sync {
+pub trait HostOutputStream: Subscribe {
     /// Write bytes after obtaining a permit to write those bytes
-    /// Prior to calling [`write`](Self::write)
-    /// the caller must call [`write_ready`](Self::write_ready),
-    /// which resolves to a non-zero permit
     ///
-    /// This method must never block.
-    /// [`write_ready`](Self::write_ready) permit indicates the maximum amount of bytes that are
-    /// permitted to be written in a single [`write`](Self::write) following the
-    /// [`write_ready`](Self::write_ready) resolution
+    /// Prior to calling [`write`](Self::write) the caller must call
+    /// [`check_write`](Self::check_write), which resolves to a non-zero permit
+    ///
+    /// This method must never block.  The [`check_write`](Self::check_write)
+    /// permit indicates the maximum amount of bytes that are permitted to be
+    /// written in a single [`write`](Self::write) following the
+    /// [`check_write`](Self::check_write) resolution.
     ///
     /// # Errors
     ///
-    /// Returns an [OutputStreamError] if:
+    /// Returns a [`StreamError`] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
-    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError>;
+    fn write(&mut self, bytes: Bytes) -> StreamResult<()>;
 
     /// Trigger a flush of any bytes buffered in this stream implementation.
     ///
     /// This method may be called at any time and must never block.
     ///
-    /// After this method is called, [`write_ready`](Self::write_ready) must pend until flush is
-    /// complete.
-    /// When [`write_ready`](Self::write_ready) becomes ready after a flush, that guarantees that
-    /// all prior writes have been flushed from the implementation successfully, or that any error
-    /// associated with those writes is reported in the return value of [`flush`](Self::flush) or
-    /// [`write_ready`](Self::write_ready)
+    /// After this method is called, [`check_write`](Self::check_write) must
+    /// pend until flush is complete.
+    ///
+    /// When [`check_write`](Self::check_write) becomes ready after a flush,
+    /// that guarantees that all prior writes have been flushed from the
+    /// implementation successfully, or that any error associated with those
+    /// writes is reported in the return value of [`flush`](Self::flush) or
+    /// [`check_write`](Self::check_write)
     ///
     /// # Errors
     ///
-    /// Returns an [OutputStreamError] if:
+    /// Returns a [`StreamError`] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
     /// - caller performed an illegal operation (e.g. wrote more bytes than were permitted)
-    fn flush(&mut self) -> Result<(), OutputStreamError>;
+    fn flush(&mut self) -> StreamResult<()>;
 
-    /// Returns a future, which:
-    /// - when pending, indicates 0 bytes are permitted for writing
-    /// - when ready, returns a non-zero number of bytes permitted to write
+    /// Returns the number of bytes that are ready to be written to this stream.
+    ///
+    /// Zero bytes indicates that this stream is not currently ready for writing
+    /// and `ready()` must be awaited first.
+    ///
+    /// Note that this method does not block.
     ///
     /// # Errors
     ///
-    /// Returns an [OutputStreamError] if:
+    /// Returns an [`StreamError`] if:
     /// - stream is closed
     /// - prior operation ([`write`](Self::write) or [`flush`](Self::flush)) failed
-    async fn write_ready(&mut self) -> Result<usize, OutputStreamError>;
+    fn check_write(&mut self) -> StreamResult<usize>;
 
     /// Repeatedly write a byte to a stream.
     /// Important: this write must be non-blocking!
-    /// Returning an Err which downcasts to a [`StreamRuntimeError`] will be
+    /// Returning an Err which downcasts to a [`StreamError`] will be
     /// reported to Wasm as the empty error result. Otherwise, errors will trap.
-    fn write_zeroes(&mut self, nelem: usize) -> Result<(), OutputStreamError> {
+    fn write_zeroes(&mut self, nelem: usize) -> StreamResult<()> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
         self.write(bs)?;
         Ok(())
     }
+
+    /// Simultaneously waits for this stream to be writable and then returns how
+    /// much may be written or the last error that happened.
+    async fn write_ready(&mut self) -> StreamResult<usize> {
+        self.ready().await;
+        self.check_write()
+    }
 }
 
-pub(crate) enum InternalInputStream {
+#[async_trait::async_trait]
+impl Subscribe for Box<dyn HostOutputStream> {
+    async fn ready(&mut self) {
+        (**self).ready().await
+    }
+}
+
+pub enum InputStream {
     Host(Box<dyn HostInputStream>),
     File(FileInputStream),
 }
 
-pub(crate) trait InternalTableStreamExt {
-    fn push_internal_input_stream(
-        &mut self,
-        istream: InternalInputStream,
-    ) -> Result<u32, TableError>;
-    fn push_internal_input_stream_child(
-        &mut self,
-        istream: InternalInputStream,
-        parent: u32,
-    ) -> Result<u32, TableError>;
-    fn get_internal_input_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut InternalInputStream, TableError>;
-    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError>;
-}
-impl InternalTableStreamExt for Table {
-    fn push_internal_input_stream(
-        &mut self,
-        istream: InternalInputStream,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(istream))
-    }
-    fn push_internal_input_stream_child(
-        &mut self,
-        istream: InternalInputStream,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        self.push_child(Box::new(istream), parent)
-    }
-    fn get_internal_input_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut InternalInputStream, TableError> {
-        self.get_mut(fd)
-    }
-    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError> {
-        self.delete(fd)
-    }
-}
-
-/// Extension trait for managing [`HostInputStream`]s and [`HostOutputStream`]s in the [`Table`].
-pub trait TableStreamExt {
-    /// Push a [`HostInputStream`] into a [`Table`], returning the table index.
-    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
-    /// Same as [`push_input_stream`](Self::push_output_stream) except assigns a parent resource to
-    /// the input-stream created.
-    fn push_input_stream_child(
-        &mut self,
-        istream: Box<dyn HostInputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError>;
-    /// Get a mutable reference to a [`HostInputStream`] in a [`Table`].
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError>;
-    /// Remove [`HostInputStream`] from table:
-    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError>;
-
-    /// Push a [`HostOutputStream`] into a [`Table`], returning the table index.
-    fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
-        -> Result<u32, TableError>;
-    /// Same as [`push_output_stream`](Self::push_output_stream) except assigns a parent resource
-    /// to the output-stream created.
-    fn push_output_stream_child(
-        &mut self,
-        ostream: Box<dyn HostOutputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError>;
-    /// Get a mutable reference to a [`HostOutputStream`] in a [`Table`].
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError>;
-
-    /// Remove [`HostOutputStream`] from table:
-    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError>;
-}
-impl TableStreamExt for Table {
-    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
-        self.push_internal_input_stream(InternalInputStream::Host(istream))
-    }
-    fn push_input_stream_child(
-        &mut self,
-        istream: Box<dyn HostInputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        self.push_internal_input_stream_child(InternalInputStream::Host(istream), parent)
-    }
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError> {
-        match self.get_internal_input_stream_mut(fd)? {
-            InternalInputStream::Host(ref mut h) => Ok(h.as_mut()),
-            _ => Err(TableError::WrongType),
+#[async_trait::async_trait]
+impl Subscribe for InputStream {
+    async fn ready(&mut self) {
+        match self {
+            InputStream::Host(stream) => stream.ready().await,
+            // Files are always ready
+            InputStream::File(_) => {}
         }
     }
-    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError> {
-        let occ = self.entry(fd)?;
-        match occ.get().downcast_ref::<InternalInputStream>() {
-            Some(InternalInputStream::Host(_)) => {
-                let any = occ.remove_entry()?;
-                match *any.downcast().expect("downcast checked above") {
-                    InternalInputStream::Host(h) => Ok(h),
-                    _ => unreachable!("variant checked above"),
-                }
-            }
-            _ => Err(TableError::WrongType),
-        }
-    }
-
-    fn push_output_stream(
-        &mut self,
-        ostream: Box<dyn HostOutputStream>,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(ostream))
-    }
-    fn push_output_stream_child(
-        &mut self,
-        ostream: Box<dyn HostOutputStream>,
-        parent: u32,
-    ) -> Result<u32, TableError> {
-        self.push_child(Box::new(ostream), parent)
-    }
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError> {
-        let boxed: &mut Box<dyn HostOutputStream> = self.get_mut(fd)?;
-        Ok(boxed.as_mut())
-    }
-    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError> {
-        self.delete(fd)
-    }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn input_stream_in_table() {
-        let dummy = crate::preview2::pipe::ClosedInputStream;
-        let mut table = Table::new();
-        // Put it into the table:
-        let ix = table.push_input_stream(Box::new(dummy)).unwrap();
-        // Get a mut ref to it:
-        let _ = table.get_input_stream_mut(ix).unwrap();
-        // Fails at wrong type:
-        assert!(matches!(
-            table.get_output_stream_mut(ix),
-            Err(TableError::WrongType)
-        ));
-        // Delete it:
-        let _ = table.delete_input_stream(ix).unwrap();
-        // Now absent from table:
-        assert!(matches!(
-            table.get_input_stream_mut(ix),
-            Err(TableError::NotPresent)
-        ));
-    }
-
-    #[test]
-    fn output_stream_in_table() {
-        let dummy = crate::preview2::pipe::SinkOutputStream;
-        let mut table = Table::new();
-        // Put it in the table:
-        let ix = table.push_output_stream(Box::new(dummy)).unwrap();
-        // Get a mut ref to it:
-        let _ = table.get_output_stream_mut(ix).unwrap();
-        // Fails at wrong type:
-        assert!(matches!(
-            table.get_input_stream_mut(ix),
-            Err(TableError::WrongType)
-        ));
-        // Delete it:
-        let _ = table.delete_output_stream(ix).unwrap();
-        // Now absent:
-        assert!(matches!(
-            table.get_output_stream_mut(ix),
-            Err(TableError::NotPresent)
-        ));
-    }
-}
+pub type OutputStream = Box<dyn HostOutputStream>;

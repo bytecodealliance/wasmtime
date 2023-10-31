@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use wasmtime_cli_flags::CommonOptions;
 
 /// Explore the compilation of a WebAssembly module to native code.
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[clap(name = "explore")]
 pub struct ExploreCommand {
     #[clap(flatten)]
@@ -29,7 +29,7 @@ pub struct ExploreCommand {
 impl ExploreCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        self.common.init_logging();
+        self.common.init_logging()?;
 
         let config = self.common.config(self.target.as_deref())?;
 

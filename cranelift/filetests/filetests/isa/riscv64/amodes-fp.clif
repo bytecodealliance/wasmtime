@@ -1,0 +1,37 @@
+test compile precise-output
+set unwind_info=false
+set preserve_frame_pointers=true
+target riscv64
+
+function %load_from_get_frame_pointer() -> i64 {
+block0:
+  v0 = get_frame_pointer.i64
+  v1 = load.i64 v0+24
+  return v1
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   ld a0,24(fp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   ld a0, 0x18(s0)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

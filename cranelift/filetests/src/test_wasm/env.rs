@@ -20,6 +20,7 @@ pub struct ModuleEnv {
     pub inner: DummyEnvironment,
     pub config: TestConfig,
     pub heap_access_spectre_mitigation: bool,
+    pub proof_carrying_code: bool,
 }
 
 impl ModuleEnv {
@@ -31,6 +32,7 @@ impl ModuleEnv {
             heap_access_spectre_mitigation: target_isa
                 .flags()
                 .enable_heap_access_spectre_mitigation(),
+            proof_carrying_code: target_isa.flags().enable_pcc(),
         }
     }
 }
@@ -51,6 +53,7 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
                 self.inner.expected_reachability.clone(),
                 self.config.clone(),
                 self.heap_access_spectre_mitigation,
+                self.proof_carrying_code,
             );
             let func_index = FuncIndex::new(
                 self.inner.get_num_func_imports() + self.inner.info.function_bodies.len(),
@@ -244,6 +247,7 @@ pub struct FuncEnv<'a> {
     pub name_to_ir_global: BTreeMap<String, ir::GlobalValue>,
     pub next_heap: usize,
     pub heap_access_spectre_mitigation: bool,
+    pub proof_carrying_code: bool,
 }
 
 impl<'a> FuncEnv<'a> {
@@ -252,6 +256,7 @@ impl<'a> FuncEnv<'a> {
         expected_reachability: Option<cranelift_wasm::ExpectedReachability>,
         config: TestConfig,
         heap_access_spectre_mitigation: bool,
+        proof_carrying_code: bool,
     ) -> Self {
         let inner = cranelift_wasm::DummyFuncEnvironment::new(mod_info, expected_reachability);
         Self {
@@ -260,6 +265,7 @@ impl<'a> FuncEnv<'a> {
             name_to_ir_global: Default::default(),
             next_heap: 0,
             heap_access_spectre_mitigation,
+            proof_carrying_code,
         }
     }
 }
@@ -277,6 +283,10 @@ impl<'a> TargetEnvironment for FuncEnv<'a> {
 
     fn heap_access_spectre_mitigation(&self) -> bool {
         self.heap_access_spectre_mitigation
+    }
+
+    fn proof_carrying_code(&self) -> bool {
+        self.proof_carrying_code
     }
 }
 

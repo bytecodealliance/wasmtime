@@ -110,7 +110,7 @@ fn build_command<P: AsRef<Path>>(module: P, extra_flags: &[&str], spec: &Spec) -
     if let Some(dirs) = &spec.dirs {
         for dir in dirs {
             cmd.arg("--dir");
-            cmd.arg(format!("{}::{}", dir, parent_dir.join(dir).display()));
+            cmd.arg(format!("{}::{}", parent_dir.join(dir).display(), dir));
         }
     }
     // Add environment variables as CLI arguments.

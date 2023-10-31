@@ -118,10 +118,10 @@ fn component() -> String {
 fn owning() -> Result<()> {
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         world test {
             export lists: interface {
-                foo: func(a: list<list<string>>) -> list<list<string>>
+                foo: func(a: list<list<string>>) -> list<list<string>>;
             }
 
             export thing-in: interface {
@@ -130,7 +130,7 @@ fn owning() -> Result<()> {
                     value: list<string>
                 }
 
-                bar: func(a: thing)
+                bar: func(a: thing);
             }
 
             export thing-in-and-out: interface {
@@ -139,7 +139,7 @@ fn owning() -> Result<()> {
                     value: list<string>
                 }
 
-                baz: func(a: thing) -> thing
+                baz: func(a: thing) -> thing;
             }
         }",
         ownership: Owning
@@ -186,10 +186,10 @@ fn owning() -> Result<()> {
 fn borrowing_no_duplication() -> Result<()> {
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         world test {
             export lists: interface {
-                foo: func(a: list<list<string>>) -> list<list<string>>
+                foo: func(a: list<list<string>>) -> list<list<string>>;
             }
 
             export thing-in: interface {
@@ -198,7 +198,7 @@ fn borrowing_no_duplication() -> Result<()> {
                     value: list<string>
                 }
 
-                bar: func(a: thing)
+                bar: func(a: thing);
             }
 
             export thing-in-and-out: interface {
@@ -207,7 +207,7 @@ fn borrowing_no_duplication() -> Result<()> {
                     value: list<string>
                 }
 
-                baz: func(a: thing) -> thing
+                baz: func(a: thing) -> thing;
             }
         }",
         ownership: Borrowing {
@@ -256,10 +256,10 @@ fn borrowing_no_duplication() -> Result<()> {
 fn borrowing_with_duplication() -> Result<()> {
     wasmtime::component::bindgen!({
         inline: "
-        package inline:inline
+        package inline:inline;
         world test {
             export lists: interface {
-                foo: func(a: list<list<string>>) -> list<list<string>>
+                foo: func(a: list<list<string>>) -> list<list<string>>;
             }
 
             export thing-in: interface {
@@ -268,7 +268,7 @@ fn borrowing_with_duplication() -> Result<()> {
                     value: list<string>
                 }
 
-                bar: func(a: thing)
+                bar: func(a: thing);
             }
 
             export thing-in-and-out: interface {
@@ -277,7 +277,7 @@ fn borrowing_with_duplication() -> Result<()> {
                     value: list<string>
                 }
 
-                baz: func(a: thing) -> thing
+                baz: func(a: thing) -> thing;
             }
         }",
         ownership: Borrowing {

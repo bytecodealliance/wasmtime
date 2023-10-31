@@ -3,6 +3,7 @@
 use super::regs::{self};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
+use crate::ir::types::*;
 use crate::ir::{MemFlags, Type};
 use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::inst::Inst;
@@ -114,6 +115,11 @@ macro_rules! newtype_of_reg {
                     rm.0
                 }
             }
+            impl<'a> From<&'a $newtype_reg_mem> for &'a RegMem {
+                fn from(rm: &'a $newtype_reg_mem) -> &'a RegMem {
+                    &rm.0
+                }
+            }
 
             impl From<$newtype_reg> for $newtype_reg_mem {
                 fn from(r: $newtype_reg) -> Self {
@@ -173,6 +179,11 @@ macro_rules! newtype_of_reg {
             impl From<$newtype_reg_mem_imm> for RegMemImm {
                 fn from(rmi: $newtype_reg_mem_imm) -> RegMemImm {
                     rmi.0
+                }
+            }
+            impl<'a> From<&'a $newtype_reg_mem_imm> for &'a RegMemImm {
+                fn from(rmi: &'a $newtype_reg_mem_imm) -> &'a RegMemImm {
+                    &rmi.0
                 }
             }
 
@@ -666,6 +677,12 @@ impl From<RegMem> for RegMemImm {
             RegMem::Reg { reg } => RegMemImm::Reg { reg },
             RegMem::Mem { addr } => RegMemImm::Mem { addr },
         }
+    }
+}
+
+impl From<Reg> for RegMemImm {
+    fn from(reg: Reg) -> Self {
+        RegMemImm::Reg { reg }
     }
 }
 
@@ -1761,6 +1778,47 @@ impl AvxOpcode {
             }
         }
     }
+
+    /// Is the opcode known to be commutative?
+    ///
+    /// Note that this method is not exhaustive, and there may be commutative
+    /// opcodes that we don't recognize as commutative.
+    pub(crate) fn is_commutative(&self) -> bool {
+        match *self {
+            AvxOpcode::Vpaddb
+            | AvxOpcode::Vpaddw
+            | AvxOpcode::Vpaddd
+            | AvxOpcode::Vpaddq
+            | AvxOpcode::Vpaddsb
+            | AvxOpcode::Vpaddsw
+            | AvxOpcode::Vpaddusb
+            | AvxOpcode::Vpaddusw
+            | AvxOpcode::Vpand
+            | AvxOpcode::Vandps
+            | AvxOpcode::Vandpd
+            | AvxOpcode::Vpor
+            | AvxOpcode::Vorps
+            | AvxOpcode::Vorpd
+            | AvxOpcode::Vpxor
+            | AvxOpcode::Vxorps
+            | AvxOpcode::Vxorpd
+            | AvxOpcode::Vpmuldq
+            | AvxOpcode::Vpmuludq
+            | AvxOpcode::Vaddps
+            | AvxOpcode::Vaddpd
+            | AvxOpcode::Vmulps
+            | AvxOpcode::Vmulpd
+            | AvxOpcode::Vpcmpeqb
+            | AvxOpcode::Vpcmpeqw
+            | AvxOpcode::Vpcmpeqd
+            | AvxOpcode::Vpcmpeqq
+            | AvxOpcode::Vaddss
+            | AvxOpcode::Vaddsd
+            | AvxOpcode::Vmulss
+            | AvxOpcode::Vmulsd => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for AvxOpcode {
@@ -1883,6 +1941,15 @@ impl ExtMode {
             ExtMode::BQ | ExtMode::WQ | ExtMode::LQ => 8,
         }
     }
+
+    /// Source size, as an integer type.
+    pub(crate) fn src_type(&self) -> Type {
+        match self {
+            ExtMode::BL | ExtMode::BQ => I8,
+            ExtMode::WL | ExtMode::WQ => I16,
+            ExtMode::LQ => I32,
+        }
+    }
 }
 
 impl fmt::Debug for ExtMode {
@@ -1940,7 +2007,7 @@ impl fmt::Display for ShiftKind {
 
 /// These indicate condition code tests.  Not all are represented since not all are useful in
 /// compiler-generated code.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CC {
     ///  overflow
@@ -2179,6 +2246,15 @@ impl OperandSize {
 
     pub(crate) fn to_bits(&self) -> u8 {
         self.to_bytes() * 8
+    }
+
+    pub(crate) fn to_type(&self) -> Type {
+        match self {
+            Self::Size8 => I8,
+            Self::Size16 => I16,
+            Self::Size32 => I32,
+            Self::Size64 => I64,
+        }
     }
 }
 

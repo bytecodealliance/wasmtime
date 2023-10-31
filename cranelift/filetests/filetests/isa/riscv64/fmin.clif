@@ -1,0 +1,62 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %fmin_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+    v2 = fmin v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   feq.s a3,fa0,fa0
+;   feq.s a5,fa1,fa1
+;   and a1,a3,a5
+;   fadd.s fa3,fa0,fa1,rne
+;   fmin.s fa5,fa0,fa1
+;   select fa0,fa5,fa3##condition=(a1 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a3, fa0, fa0
+;   feq.s a5, fa1, fa1
+;   and a1, a3, a5
+;   fadd.s fa3, fa0, fa1, rne
+;   fmin.s fa5, fa0, fa1
+;   beqz a1, 0xc
+;   fmv.d fa0, fa5
+;   j 8
+;   fmv.d fa0, fa3
+;   ret
+
+function %fmin_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+    v2 = fmin v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   feq.d a3,fa0,fa0
+;   feq.d a5,fa1,fa1
+;   and a1,a3,a5
+;   fadd.d fa3,fa0,fa1,rne
+;   fmin.d fa5,fa0,fa1
+;   select fa0,fa5,fa3##condition=(a1 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.d a3, fa0, fa0
+;   feq.d a5, fa1, fa1
+;   and a1, a3, a5
+;   fadd.d fa3, fa0, fa1, rne
+;   fmin.d fa5, fa0, fa1
+;   beqz a1, 0xc
+;   fmv.d fa0, fa5
+;   j 8
+;   fmv.d fa0, fa3
+;   ret
+

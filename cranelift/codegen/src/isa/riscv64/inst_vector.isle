@@ -1585,11 +1585,13 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) (splat x) y)
   (rv_vmseq_vx y x (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) x (replicated_imm5 y))
-  (rv_vmseq_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmseq_vi x y_imm (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) (replicated_imm5 x) y)
-  (rv_vmseq_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmseq_vi y x_imm (unmasked) ty))
 
 ;; IntCC.NotEqual
 
@@ -1602,11 +1604,13 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) (splat x) y)
   (rv_vmsne_vx y x (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) x (replicated_imm5 y))
-  (rv_vmsne_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsne_vi x y_imm (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) (replicated_imm5 x) y)
-  (rv_vmsne_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsne_vi y x_imm (unmasked) ty))
 
 ;; IntCC.UnsignedLessThan
 
@@ -1619,8 +1623,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) (splat x) y)
   (rv_vmsgtu_vx y x (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) (replicated_imm5 x) y)
-  (rv_vmsgtu_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsgtu_vi y x_imm (unmasked) ty))
 
 ;; IntCC.SignedLessThan
 
@@ -1633,8 +1638,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) (splat x) y)
   (rv_vmsgt_vx y x (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) (replicated_imm5 x) y)
-  (rv_vmsgt_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsgt_vi y x_imm (unmasked) ty))
 
 ;; IntCC.UnsignedLessThanOrEqual
 
@@ -1644,8 +1650,9 @@
 (rule 1 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThanOrEqual) x (splat y))
   (rv_vmsleu_vx x y (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThanOrEqual) x (replicated_imm5 y))
-  (rv_vmsleu_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThanOrEqual) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsleu_vi x y_imm (unmasked) ty))
 
 ;; IntCC.SignedLessThanOrEqual
 
@@ -1655,8 +1662,9 @@
 (rule 1 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThanOrEqual) x (splat y))
   (rv_vmsle_vx x y (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThanOrEqual) x (replicated_imm5 y))
-  (rv_vmsle_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThanOrEqual) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsle_vi x y_imm (unmasked) ty))
 
 ;; IntCC.UnsignedGreaterThan
 
@@ -1669,8 +1677,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) (splat x) y)
   (rv_vmsltu_vx y x (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) x (replicated_imm5 y))
-  (rv_vmsgtu_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsgtu_vi x y_imm (unmasked) ty))
 
 ;; IntCC.SignedGreaterThan
 
@@ -1683,8 +1692,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) (splat x) y)
   (rv_vmslt_vx y x (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) x (replicated_imm5 y))
-  (rv_vmsgt_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsgt_vi x y_imm (unmasked) ty))
 
 ;; IntCC.UnsignedGreaterThanOrEqual
 
@@ -1694,8 +1704,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) (splat x) y)
   (rv_vmsleu_vx y x (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) (replicated_imm5 x) y)
-  (rv_vmsleu_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsleu_vi y x_imm (unmasked) ty))
 
 ;; IntCC.SignedGreaterThanOrEqual
 
@@ -1705,8 +1716,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) (splat x) y)
   (rv_vmsle_vx y x (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) (replicated_imm5 x) y)
-  (rv_vmsle_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsle_vi y x_imm (unmasked) ty))
 
 
 

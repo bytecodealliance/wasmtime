@@ -1064,6 +1064,10 @@ impl MachInst for Inst {
         }
     }
 
+    fn is_mem_access(&self) -> bool {
+        panic!("TODO FILL ME OUT")
+    }
+
     fn is_safepoint(&self) -> bool {
         match self {
             &Inst::Call { .. }

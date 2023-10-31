@@ -1,299 +1,65 @@
 use crate::preview2::{
     bindings::io::streams::{self, InputStream, OutputStream},
-    bindings::poll::poll::Pollable,
-    filesystem::FileInputStream,
-    poll::PollableFuture,
-    stream::{
-        HostInputStream, HostOutputStream, InternalInputStream, InternalTableStreamExt,
-        OutputStreamError, StreamRuntimeError, StreamState, TableStreamExt,
-    },
-    HostPollable, TableError, TablePollableExt, WasiView,
+    poll::subscribe,
+    Pollable, StreamError, StreamResult, WasiView,
 };
-use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use wasmtime::component::Resource;
 
-impl From<StreamState> for streams::StreamStatus {
-    fn from(state: StreamState) -> Self {
-        match state {
-            StreamState::Open => Self::Open,
-            StreamState::Closed => Self::Ended,
+impl<T: WasiView> streams::Host for T {
+    fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
+        match err {
+            StreamError::Closed => Ok(streams::StreamError::Closed),
+            StreamError::LastOperationFailed(e) => Ok(streams::StreamError::LastOperationFailed(
+                self.table_mut().push(e)?,
+            )),
+            StreamError::Trap(e) => Err(e),
         }
     }
 }
 
-impl From<TableError> for streams::Error {
-    fn from(e: TableError) -> streams::Error {
-        streams::Error::trap(e.into())
+impl<T: WasiView> streams::HostError for T {
+    fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
+        self.table_mut().delete(err)?;
+        Ok(())
     }
-}
-impl From<OutputStreamError> for streams::Error {
-    fn from(e: OutputStreamError) -> streams::Error {
-        match e {
-            OutputStreamError::Closed => streams::WriteError::Closed.into(),
-            OutputStreamError::LastOperationFailed(e) => {
-                tracing::debug!("streams::WriteError::LastOperationFailed: {e:?}");
-                streams::WriteError::LastOperationFailed.into()
-            }
-            OutputStreamError::Trap(e) => streams::Error::trap(e),
-        }
+
+    fn to_debug_string(&mut self, err: Resource<streams::Error>) -> anyhow::Result<String> {
+        Ok(format!("{:?}", self.table_mut().get(&err)?))
     }
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> streams::Host for T {
-    fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
-        self.table_mut().delete_internal_input_stream(stream)?;
+impl<T: WasiView> streams::HostOutputStream for T {
+    fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
+        self.table_mut().delete(stream)?;
         Ok(())
     }
 
-    fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
-        self.table_mut().delete_output_stream(stream)?;
+    fn check_write(&mut self, stream: Resource<OutputStream>) -> StreamResult<u64> {
+        let bytes = self.table_mut().get_mut(&stream)?.check_write()?;
+        Ok(bytes as u64)
+    }
+
+    fn write(&mut self, stream: Resource<OutputStream>, bytes: Vec<u8>) -> StreamResult<()> {
+        self.table_mut().get_mut(&stream)?.write(bytes.into())?;
         Ok(())
     }
 
-    async fn read(
-        &mut self,
-        stream: InputStream,
-        len: u64,
-    ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_input_stream_mut(stream)? {
-            InternalInputStream::Host(s) => {
-                let (bytes, state) = match HostInputStream::read(s.as_mut(), len as usize) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                debug_assert!(bytes.len() <= len as usize);
-
-                Ok(Ok((bytes.into(), state.into())))
-            }
-            InternalInputStream::File(s) => {
-                let (bytes, state) = match FileInputStream::read(s, len as usize).await {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                Ok(Ok((bytes.into(), state.into())))
-            }
-        }
-    }
-
-    async fn blocking_read(
-        &mut self,
-        stream: InputStream,
-        len: u64,
-    ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_input_stream_mut(stream)? {
-            InternalInputStream::Host(s) => {
-                s.ready().await?;
-                let (bytes, state) = match HostInputStream::read(s.as_mut(), len as usize) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                debug_assert!(bytes.len() <= len as usize);
-                Ok(Ok((bytes.into(), state.into())))
-            }
-            InternalInputStream::File(s) => {
-                let (bytes, state) = match FileInputStream::read(s, len as usize).await {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                Ok(Ok((bytes.into(), state.into())))
-            }
-        }
-    }
-
-    async fn skip(
-        &mut self,
-        stream: InputStream,
-        len: u64,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_input_stream_mut(stream)? {
-            InternalInputStream::Host(s) => {
-                // TODO: the cast to usize should be fallible, use `.try_into()?`
-                let (bytes_skipped, state) = match HostInputStream::skip(s.as_mut(), len as usize) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-
-                Ok(Ok((bytes_skipped as u64, state.into())))
-            }
-            InternalInputStream::File(s) => {
-                let (bytes_skipped, state) = match FileInputStream::skip(s, len as usize).await {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                Ok(Ok((bytes_skipped as u64, state.into())))
-            }
-        }
-    }
-
-    async fn blocking_skip(
-        &mut self,
-        stream: InputStream,
-        len: u64,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        match self.table_mut().get_internal_input_stream_mut(stream)? {
-            InternalInputStream::Host(s) => {
-                s.ready().await?;
-                // TODO: the cast to usize should be fallible, use `.try_into()?`
-                let (bytes_skipped, state) = match HostInputStream::skip(s.as_mut(), len as usize) {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-
-                Ok(Ok((bytes_skipped as u64, state.into())))
-            }
-            InternalInputStream::File(s) => {
-                let (bytes_skipped, state) = match FileInputStream::skip(s, len as usize).await {
-                    Ok(a) => a,
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<StreamRuntimeError>() {
-                            tracing::debug!("stream runtime error: {e:?}");
-                            return Ok(Err(()));
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                };
-                Ok(Ok((bytes_skipped as u64, state.into())))
-            }
-        }
-    }
-
-    fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-        // Ensure that table element is an input-stream:
-        let pollable = match self.table_mut().get_internal_input_stream_mut(stream)? {
-            InternalInputStream::Host(_) => {
-                fn input_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-                    let stream = stream
-                        .downcast_mut::<InternalInputStream>()
-                        .expect("downcast to InternalInputStream failed");
-                    match *stream {
-                        InternalInputStream::Host(ref mut hs) => hs.ready(),
-                        _ => unreachable!(),
-                    }
-                }
-
-                HostPollable::TableEntry {
-                    index: stream,
-                    make_future: input_stream_ready,
-                }
-            }
-            // Files are always "ready" immediately (because we have no way to actually wait on
-            // readiness in epoll)
-            InternalInputStream::File(_) => {
-                HostPollable::Closure(Box::new(|| Box::pin(futures::future::ready(Ok(())))))
-            }
-        };
-        Ok(self.table_mut().push_host_pollable(pollable)?)
-    }
-
-    /* --------------------------------------------------------------
-     *
-     * OutputStream methods
-     *
-     * -------------------------------------------------------------- */
-
-    fn check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
-        let mut ready = s.write_ready();
-        let mut task = Context::from_waker(futures::task::noop_waker_ref());
-        match Pin::new(&mut ready).poll(&mut task) {
-            Poll::Ready(Ok(permit)) => Ok(permit as u64),
-            Poll::Ready(Err(e)) => Err(e.into()),
-            Poll::Pending => Ok(0),
-        }
-    }
-
-    async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
-        HostOutputStream::write(s, bytes.into())?;
-        Ok(())
-    }
-
-    fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-        // Ensure that table element is an output-stream:
-        let _ = self.table_mut().get_output_stream_mut(stream)?;
-
-        fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
-            let stream = stream
-                .downcast_mut::<Box<dyn HostOutputStream>>()
-                .expect("downcast to HostOutputStream failed");
-            Box::pin(async move {
-                let _ = stream.write_ready().await?;
-                Ok(())
-            })
-        }
-
-        Ok(self
-            .table_mut()
-            .push_host_pollable(HostPollable::TableEntry {
-                index: stream,
-                make_future: output_stream_ready,
-            })?)
+    fn subscribe(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<Resource<Pollable>> {
+        subscribe(self.table_mut(), stream)
     }
 
     async fn blocking_write_and_flush(
         &mut self,
-        stream: OutputStream,
+        stream: Resource<OutputStream>,
         bytes: Vec<u8>,
-    ) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
+    ) -> StreamResult<()> {
+        let s = self.table_mut().get_mut(&stream)?;
 
         if bytes.len() > 4096 {
-            return Err(streams::Error::trap(anyhow::anyhow!(
-                "Buffer too large for blocking-write-and-flush (expected at most 4096)"
-            )));
+            return Err(StreamError::trap(
+                "Buffer too large for blocking-write-and-flush (expected at most 4096)",
+            ));
         }
 
         let mut bytes = bytes::Bytes::from(bytes);
@@ -301,252 +67,309 @@ impl<T: WasiView> streams::Host for T {
             let permit = s.write_ready().await?;
             let len = bytes.len().min(permit);
             let chunk = bytes.split_to(len);
-            HostOutputStream::write(s, chunk)?;
+            s.write(chunk)?;
         }
 
-        HostOutputStream::flush(s)?;
-        let _ = s.write_ready().await?;
+        s.flush()?;
+        s.write_ready().await?;
 
         Ok(())
     }
 
-    fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
-        HostOutputStream::write_zeroes(s, len as usize)?;
+    async fn blocking_write_zeroes_and_flush(
+        &mut self,
+        stream: Resource<OutputStream>,
+        len: u64,
+    ) -> StreamResult<()> {
+        let s = self.table_mut().get_mut(&stream)?;
+
+        if len > 4096 {
+            return Err(StreamError::trap(
+                "Buffer too large for blocking-write-zeroes-and-flush (expected at most 4096)",
+            ));
+        }
+
+        let mut len = len;
+        while len > 0 {
+            let permit = s.write_ready().await?;
+            let this_len = len.min(permit as u64);
+            s.write_zeroes(this_len as usize)?;
+            len -= this_len;
+        }
+
+        s.flush()?;
+        s.write_ready().await?;
+
         Ok(())
     }
 
-    fn flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
-        HostOutputStream::flush(s)?;
-        Ok(())
-    }
-    async fn blocking_flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
-        HostOutputStream::flush(s)?;
-        let _ = s.write_ready().await?;
+    fn write_zeroes(&mut self, stream: Resource<OutputStream>, len: u64) -> StreamResult<()> {
+        self.table_mut()
+            .get_mut(&stream)?
+            .write_zeroes(len as usize)?;
         Ok(())
     }
 
-    /* --------------------------------------------------------------
-     *
-     * Aspirational methods
-     *
-     * -------------------------------------------------------------- */
+    fn flush(&mut self, stream: Resource<OutputStream>) -> StreamResult<()> {
+        self.table_mut().get_mut(&stream)?.flush()?;
+        Ok(())
+    }
+
+    async fn blocking_flush(&mut self, stream: Resource<OutputStream>) -> StreamResult<()> {
+        let s = self.table_mut().get_mut(&stream)?;
+        s.flush()?;
+        s.write_ready().await?;
+        Ok(())
+    }
+
     async fn splice(
         &mut self,
-        _src: InputStream,
-        _dst: OutputStream,
-        _len: u64,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        // TODO: We can't get two streams at the same time because they both
-        // carry the exclusive lifetime of `ctx`. When [`get_many_mut`] is
-        // stabilized, that could allow us to add a `get_many_stream_mut` or
-        // so which lets us do this.
-        //
-        // [`get_many_mut`]: https://doc.rust-lang.org/stable/std/collections/hash_map/struct.HashMap.html#method.get_many_mut
-        /*
-        let s: &mut Box<dyn crate::InputStream> = ctx
-            .table_mut()
-            .get_input_stream_mut(src)
-            ?;
-        let d: &mut Box<dyn crate::OutputStream> = ctx
-            .table_mut()
-            .get_output_stream_mut(dst)
-            ?;
+        dest: Resource<OutputStream>,
+        src: Resource<InputStream>,
+        len: u64,
+    ) -> StreamResult<u64> {
+        let len = len.try_into().unwrap_or(usize::MAX);
 
-        let bytes_spliced: u64 = s.splice(&mut **d, len).await?;
+        let permit = {
+            let output = self.table_mut().get_mut(&dest)?;
+            output.check_write()?
+        };
+        let len = len.min(permit);
+        if len == 0 {
+            return Ok(0);
+        }
 
-        Ok(bytes_spliced)
-        */
-        todo!("stream splice is not implemented")
+        let contents = match self.table_mut().get_mut(&src)? {
+            InputStream::Host(h) => h.read(len)?,
+            InputStream::File(f) => f.read(len).await?,
+        };
+
+        let len = contents.len();
+        if len == 0 {
+            return Ok(0);
+        }
+
+        let output = self.table_mut().get_mut(&dest)?;
+        output.write(contents)?;
+        Ok(len.try_into().expect("usize can fit in u64"))
     }
 
     async fn blocking_splice(
         &mut self,
-        _src: InputStream,
-        _dst: OutputStream,
-        _len: u64,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        // TODO: once splice is implemented, figure out what the blocking semantics are for waiting
-        // on src and dest here.
-        todo!("stream splice is not implemented")
+        dest: Resource<OutputStream>,
+        src: Resource<InputStream>,
+        len: u64,
+    ) -> StreamResult<u64> {
+        use crate::preview2::Subscribe;
+
+        self.table_mut().get_mut(&dest)?.ready().await;
+
+        self.table_mut().get_mut(&src)?.ready().await;
+
+        self.splice(dest, src, len).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: WasiView> streams::HostInputStream for T {
+    fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
+        self.table_mut().delete(stream)?;
+        Ok(())
     }
 
-    async fn forward(
+    async fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
+        let len = len.try_into().unwrap_or(usize::MAX);
+        let bytes = match self.table_mut().get_mut(&stream)? {
+            InputStream::Host(s) => s.read(len)?,
+            InputStream::File(s) => s.read(len).await?,
+        };
+        debug_assert!(bytes.len() <= len as usize);
+        Ok(bytes.into())
+    }
+
+    async fn blocking_read(
         &mut self,
-        _src: InputStream,
-        _dst: OutputStream,
-    ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-        // TODO: We can't get two streams at the same time because they both
-        // carry the exclusive lifetime of `ctx`. When [`get_many_mut`] is
-        // stabilized, that could allow us to add a `get_many_stream_mut` or
-        // so which lets us do this.
-        //
-        // [`get_many_mut`]: https://doc.rust-lang.org/stable/std/collections/hash_map/struct.HashMap.html#method.get_many_mut
-        /*
-        let s: &mut Box<dyn crate::InputStream> = ctx
-            .table_mut()
-            .get_input_stream_mut(src)
-            ?;
-        let d: &mut Box<dyn crate::OutputStream> = ctx
-            .table_mut()
-            .get_output_stream_mut(dst)
-            ?;
+        stream: Resource<InputStream>,
+        len: u64,
+    ) -> StreamResult<Vec<u8>> {
+        if let InputStream::Host(s) = self.table_mut().get_mut(&stream)? {
+            s.ready().await;
+        }
+        self.read(stream, len).await
+    }
 
-        let bytes_spliced: u64 = s.splice(&mut **d, len).await?;
+    async fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
+        let len = len.try_into().unwrap_or(usize::MAX);
+        let written = match self.table_mut().get_mut(&stream)? {
+            InputStream::Host(s) => s.skip(len)?,
+            InputStream::File(s) => s.skip(len).await?,
+        };
+        Ok(written.try_into().expect("usize always fits in u64"))
+    }
 
-        Ok(bytes_spliced)
-        */
+    async fn blocking_skip(
+        &mut self,
+        stream: Resource<InputStream>,
+        len: u64,
+    ) -> StreamResult<u64> {
+        if let InputStream::Host(s) = self.table_mut().get_mut(&stream)? {
+            s.ready().await;
+        }
+        self.skip(stream, len).await
+    }
 
-        todo!("stream forward is not implemented")
+    fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
+        crate::preview2::poll::subscribe(self.table_mut(), stream)
     }
 }
 
 pub mod sync {
     use crate::preview2::{
-        bindings::io::streams::{self as async_streams, Host as AsyncHost},
+        bindings::io::streams::{
+            self as async_streams, Host as AsyncHost, HostError as AsyncHostError,
+            HostInputStream as AsyncHostInputStream, HostOutputStream as AsyncHostOutputStream,
+        },
+        bindings::sync_io::io::poll::Pollable,
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
-        bindings::sync_io::poll::poll::Pollable,
-        in_tokio, WasiView,
+        in_tokio, StreamError, StreamResult, WasiView,
     };
+    use wasmtime::component::Resource;
 
-    // same boilerplate everywhere, converting between two identical types with different
-    // definition sites. one day wasmtime-wit-bindgen will make all this unnecessary
-    fn xform<A>(
-        r: Result<(A, async_streams::StreamStatus), ()>,
-    ) -> Result<(A, streams::StreamStatus), ()> {
-        r.map(|(a, b)| (a, b.into()))
-    }
-
-    impl From<async_streams::StreamStatus> for streams::StreamStatus {
-        fn from(other: async_streams::StreamStatus) -> Self {
+    impl From<async_streams::StreamError> for streams::StreamError {
+        fn from(other: async_streams::StreamError) -> Self {
             match other {
-                async_streams::StreamStatus::Open => Self::Open,
-                async_streams::StreamStatus::Ended => Self::Ended,
-            }
-        }
-    }
-
-    impl From<async_streams::WriteError> for streams::WriteError {
-        fn from(other: async_streams::WriteError) -> Self {
-            match other {
-                async_streams::WriteError::LastOperationFailed => Self::LastOperationFailed,
-                async_streams::WriteError::Closed => Self::Closed,
-            }
-        }
-    }
-    impl From<async_streams::Error> for streams::Error {
-        fn from(other: async_streams::Error) -> Self {
-            match other.downcast() {
-                Ok(write_error) => streams::Error::from(streams::WriteError::from(write_error)),
-                Err(e) => streams::Error::trap(e),
+                async_streams::StreamError::LastOperationFailed(e) => Self::LastOperationFailed(e),
+                async_streams::StreamError::Closed => Self::Closed,
             }
         }
     }
 
     impl<T: WasiView> streams::Host for T {
-        fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
-            AsyncHost::drop_input_stream(self, stream)
-        }
-
-        fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
-            AsyncHost::drop_output_stream(self, stream)
-        }
-
-        fn read(
+        fn convert_stream_error(
             &mut self,
-            stream: InputStream,
-            len: u64,
-        ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::read(self, stream, len).await }).map(xform)
+            err: StreamError,
+        ) -> anyhow::Result<streams::StreamError> {
+            Ok(AsyncHost::convert_stream_error(self, err)?.into())
+        }
+    }
+
+    impl<T: WasiView> streams::HostError for T {
+        fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
+            AsyncHostError::drop(self, err)
         }
 
-        fn blocking_read(
-            &mut self,
-            stream: InputStream,
-            len: u64,
-        ) -> anyhow::Result<Result<(Vec<u8>, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::blocking_read(self, stream, len).await }).map(xform)
+        fn to_debug_string(&mut self, err: Resource<streams::Error>) -> anyhow::Result<String> {
+            AsyncHostError::to_debug_string(self, err)
+        }
+    }
+
+    impl<T: WasiView> streams::HostOutputStream for T {
+        fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
+            AsyncHostOutputStream::drop(self, stream)
         }
 
-        fn check_write(&mut self, stream: OutputStream) -> Result<u64, streams::Error> {
-            Ok(AsyncHost::check_write(self, stream)?)
+        fn check_write(&mut self, stream: Resource<OutputStream>) -> StreamResult<u64> {
+            Ok(AsyncHostOutputStream::check_write(self, stream)?)
         }
-        fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<(), streams::Error> {
-            Ok(in_tokio(async {
-                AsyncHost::write(self, stream, bytes).await
-            })?)
+
+        fn write(&mut self, stream: Resource<OutputStream>, bytes: Vec<u8>) -> StreamResult<()> {
+            Ok(AsyncHostOutputStream::write(self, stream, bytes)?)
         }
+
         fn blocking_write_and_flush(
             &mut self,
-            stream: OutputStream,
+            stream: Resource<OutputStream>,
             bytes: Vec<u8>,
-        ) -> Result<(), streams::Error> {
-            Ok(in_tokio(async {
-                AsyncHost::blocking_write_and_flush(self, stream, bytes).await
-            })?)
-        }
-        fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-            AsyncHost::subscribe_to_output_stream(self, stream)
-        }
-        fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<(), streams::Error> {
-            Ok(AsyncHost::write_zeroes(self, stream, len)?)
+        ) -> StreamResult<()> {
+            in_tokio(async {
+                AsyncHostOutputStream::blocking_write_and_flush(self, stream, bytes).await
+            })
         }
 
-        fn flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
-            Ok(AsyncHost::flush(self, stream)?)
-        }
-        fn blocking_flush(&mut self, stream: OutputStream) -> Result<(), streams::Error> {
-            Ok(in_tokio(async {
-                AsyncHost::blocking_flush(self, stream).await
-            })?)
-        }
-
-        fn skip(
+        fn blocking_write_zeroes_and_flush(
             &mut self,
-            stream: InputStream,
+            stream: Resource<OutputStream>,
             len: u64,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::skip(self, stream, len).await }).map(xform)
+        ) -> StreamResult<()> {
+            in_tokio(async {
+                AsyncHostOutputStream::blocking_write_zeroes_and_flush(self, stream, len).await
+            })
         }
 
-        fn blocking_skip(
+        fn subscribe(
             &mut self,
-            stream: InputStream,
-            len: u64,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::blocking_skip(self, stream, len).await }).map(xform)
+            stream: Resource<OutputStream>,
+        ) -> anyhow::Result<Resource<Pollable>> {
+            Ok(AsyncHostOutputStream::subscribe(self, stream)?)
+        }
+
+        fn write_zeroes(&mut self, stream: Resource<OutputStream>, len: u64) -> StreamResult<()> {
+            Ok(AsyncHostOutputStream::write_zeroes(self, stream, len)?)
+        }
+
+        fn flush(&mut self, stream: Resource<OutputStream>) -> StreamResult<()> {
+            Ok(AsyncHostOutputStream::flush(
+                self,
+                Resource::new_borrow(stream.rep()),
+            )?)
+        }
+
+        fn blocking_flush(&mut self, stream: Resource<OutputStream>) -> StreamResult<()> {
+            in_tokio(async {
+                AsyncHostOutputStream::blocking_flush(self, Resource::new_borrow(stream.rep()))
+                    .await
+            })
         }
 
         fn splice(
             &mut self,
-            src: InputStream,
-            dst: OutputStream,
+            dst: Resource<OutputStream>,
+            src: Resource<InputStream>,
             len: u64,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::splice(self, src, dst, len).await }).map(xform)
+        ) -> StreamResult<u64> {
+            in_tokio(async { AsyncHostOutputStream::splice(self, dst, src, len).await })
         }
 
         fn blocking_splice(
             &mut self,
-            src: InputStream,
-            dst: OutputStream,
+            dst: Resource<OutputStream>,
+            src: Resource<InputStream>,
             len: u64,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::blocking_splice(self, src, dst, len).await }).map(xform)
+        ) -> StreamResult<u64> {
+            in_tokio(async { AsyncHostOutputStream::blocking_splice(self, dst, src, len).await })
+        }
+    }
+
+    impl<T: WasiView> streams::HostInputStream for T {
+        fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
+            AsyncHostInputStream::drop(self, stream)
         }
 
-        fn forward(
+        fn read(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<Vec<u8>> {
+            in_tokio(async { AsyncHostInputStream::read(self, stream, len).await })
+        }
+
+        fn blocking_read(
             &mut self,
-            src: InputStream,
-            dst: OutputStream,
-        ) -> anyhow::Result<Result<(u64, streams::StreamStatus), ()>> {
-            in_tokio(async { AsyncHost::forward(self, src, dst).await }).map(xform)
+            stream: Resource<InputStream>,
+            len: u64,
+        ) -> StreamResult<Vec<u8>> {
+            in_tokio(async { AsyncHostInputStream::blocking_read(self, stream, len).await })
         }
 
-        fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-            AsyncHost::subscribe_to_input_stream(self, stream)
+        fn skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
+            in_tokio(async { AsyncHostInputStream::skip(self, stream, len).await })
+        }
+
+        fn blocking_skip(&mut self, stream: Resource<InputStream>, len: u64) -> StreamResult<u64> {
+            in_tokio(async { AsyncHostInputStream::blocking_skip(self, stream, len).await })
+        }
+
+        fn subscribe(
+            &mut self,
+            stream: Resource<InputStream>,
+        ) -> anyhow::Result<Resource<Pollable>> {
+            AsyncHostInputStream::subscribe(self, stream)
         }
     }
 }

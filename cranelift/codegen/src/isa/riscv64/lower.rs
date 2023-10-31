@@ -30,4 +30,6 @@ impl LowerBackend for Riscv64Backend {
         // right now riscv64 not support this feature.
         None
     }
+
+    type FactFlowState = ();
 }

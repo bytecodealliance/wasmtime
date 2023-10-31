@@ -123,7 +123,7 @@ have any problems, please don't hesitate to [file an issue]!
 If the jitdump profile doesn't give you enough information by default, you can
 also enable dwarf debug information to be generated for JIT code which should
 give the `perf` profiler more information about what's being profiled. This can
-include information like more desriptive function names, filenames, and line
+include information like more descriptive function names, filenames, and line
 numbers.
 
 Enabling dwarf debug information for JIT code depends on how you're using
@@ -170,7 +170,7 @@ fib(42) = 267914296
 $ perf inject --jit --input perf.data --output perf.jit.data
 ```
 
-And we should have all out information now! We can execute `perf report` for
+And we should have all our information now! We can execute `perf report` for
 example to see that 99% of our runtime (as expected) is spent in our `fib`
 function. Note that the symbol has been demangled to `fib::fib` which is what
 the Rust symbol is:

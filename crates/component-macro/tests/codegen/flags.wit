@@ -1,4 +1,4 @@
-package foo:foo
+package foo:foo;
 
 interface flegs {
   flags flag1 {
@@ -40,16 +40,16 @@ interface flegs {
     b56, b57, b58, b59, b60, b61, b62, b63,
   }
 
-  roundtrip-flag1: func(x: flag1) -> flag1
-  roundtrip-flag2: func(x: flag2) -> flag2
-  roundtrip-flag4: func(x: flag4) -> flag4
-  roundtrip-flag8: func(x: flag8) -> flag8
-  roundtrip-flag16: func(x: flag16) -> flag16
-  roundtrip-flag32: func(x: flag32) -> flag32
-  roundtrip-flag64: func(x: flag64) -> flag64
+  roundtrip-flag1: func(x: flag1) -> flag1;
+  roundtrip-flag2: func(x: flag2) -> flag2;
+  roundtrip-flag4: func(x: flag4) -> flag4;
+  roundtrip-flag8: func(x: flag8) -> flag8;
+  roundtrip-flag16: func(x: flag16) -> flag16;
+  roundtrip-flag32: func(x: flag32) -> flag32;
+  roundtrip-flag64: func(x: flag64) -> flag64;
 }
 
 world the-flags {
-  import flegs
-  export flegs
+  import flegs;
+  export flegs;
 }

@@ -367,6 +367,115 @@ WASM_API_EXTERN void wasmtime_config_cranelift_flag_enable(wasm_config_t*, const
  */
 WASM_API_EXTERN void wasmtime_config_cranelift_flag_set(wasm_config_t*, const char *key, const char *value);
 
+
+/**
+ * Return the data from a LinearMemory instance.
+ *
+ * The size in bytes as well as the maximum number of bytes that can be allocated should be
+ * returned as well.
+ *
+ * For more information about see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
+ */
+typedef uint8_t *(*wasmtime_memory_get_callback_t)(
+    void *env,
+    size_t *byte_size,
+    size_t *maximum_byte_size);
+
+/**
+ * Grow the memory to the `new_size` in bytes.
+ *
+ * For more information about the parameters see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html#tymethod.grow_to
+ */
+typedef wasmtime_error_t *(*wasmtime_memory_grow_callback_t)(
+    void *env,
+    size_t new_size);
+
+/**
+ * A LinearMemory instance created from a #wasmtime_new_memory_callback_t.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
+ */
+typedef struct wasmtime_linear_memory {
+  /// User provided value to be passed to get_memory and grow_memory
+  void *env;
+  /// Callback to get the memory and size of this LinearMemory
+  wasmtime_memory_get_callback_t get_memory;
+  /// Callback to request growing the memory
+  wasmtime_memory_grow_callback_t grow_memory;
+  /// An optional finalizer for env
+  void (*finalizer)(void*);
+} wasmtime_linear_memory_t;
+
+/**
+ * A callback to create a new LinearMemory from the specified parameters.
+ *
+ * The result should be written to `memory_ret` and wasmtime will own the values written
+ * into that struct.
+ *
+ * This callback must be thread-safe.
+ *
+ * For more information about the parameters see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html#tymethod.new_memory
+ */
+typedef wasmtime_error_t *(*wasmtime_new_memory_callback_t)(
+    void *env,
+    const wasm_memorytype_t *ty,
+    size_t minimum,
+    size_t maximum,
+    size_t reserved_size_in_bytes,
+    size_t guard_size_in_bytes,
+    wasmtime_linear_memory_t *memory_ret);
+
+/**
+ * A representation of custom memory creator and methods for an instance of LinearMemory.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/trait.MemoryCreator.html
+ */
+typedef struct wasmtime_memory_creator {
+  /// User provided value to be passed to new_memory
+  void* env;
+  /// The callback to create new memory, must be thread safe
+  wasmtime_new_memory_callback_t new_memory;
+  /// An optional finalizer for env.
+  void (*finalizer)(void*);
+} wasmtime_memory_creator_t;
+
+/**
+ * Sets a custom memory creator.
+ *
+ * Custom memory creators are used when creating host Memory objects or when creating instance
+ * linear memories for the on-demand instance allocation strategy.
+ *
+ * The config does **not** take ownership of the #wasmtime_memory_creator_t passed in, but
+ * instead copies all the values in the struct.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.with_host_memory
+ */
+WASM_API_EXTERN void wasmtime_config_host_memory_creator_set(
+    wasm_config_t*,
+    wasmtime_memory_creator_t*);
+
+/**
+ * \brief Configures whether copy-on-write memory-mapped data is used to initialize a linear memory.
+ *
+ * Initializing linear memory via a copy-on-write mapping can drastically improve instantiation costs
+ * of a WebAssembly module because copying memory is deferred. Additionally if a page of memory is
+ * only ever read from WebAssembly and never written too then the same underlying page of data will
+ * be reused between all instantiations of a module meaning that if a module is instantiated many
+ * times this can lower the overall memory required needed to run that module.
+ *
+ * This option defaults to true.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_init_cow
+ */
+WASMTIME_CONFIG_PROP(void, memory_init_cow, bool)
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

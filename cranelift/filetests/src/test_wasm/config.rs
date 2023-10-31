@@ -113,6 +113,10 @@ impl TestGlobal {
         if self.vmctx {
             ir::GlobalValueData::VMContext
         } else if let Some(load) = &self.load {
+            let mut flags = ir::MemFlags::trusted();
+            if load.readonly {
+                flags.set_readonly();
+            }
             ir::GlobalValueData::Load {
                 base: name_to_ir_global[&load.base],
                 offset: i32::try_from(load.offset).unwrap().into(),
@@ -121,7 +125,7 @@ impl TestGlobal {
                     "i64" => ir::types::I64,
                     other => panic!("test globals cannot be of type '{other}'"),
                 },
-                readonly: load.readonly,
+                flags,
             }
         } else {
             unreachable!()
@@ -156,6 +160,9 @@ pub struct TestHeap {
     pub min_size: u64,
 
     #[serde(default)]
+    pub max_size: Option<u64>,
+
+    #[serde(default)]
     pub offset_guard_size: u64,
 
     pub style: TestHeapStyle,
@@ -170,7 +177,8 @@ impl TestHeap {
     ) -> cranelift_wasm::HeapData {
         cranelift_wasm::HeapData {
             base: name_to_ir_global[&self.base],
-            min_size: self.min_size.into(),
+            min_size: self.min_size,
+            max_size: self.max_size,
             offset_guard_size: self.offset_guard_size.into(),
             style: self.style.to_ir(name_to_ir_global),
             index_type: match self.index_type.as_str() {
@@ -178,6 +186,7 @@ impl TestHeap {
                 "i64" => ir::types::I64,
                 other => panic!("heap indices may only be i32 or i64, found '{other}'"),
             },
+            memory_type: None,
         }
     }
 

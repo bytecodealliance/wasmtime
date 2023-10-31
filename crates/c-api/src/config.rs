@@ -2,10 +2,14 @@
 // them with the default set of features enabled.
 #![cfg_attr(not(feature = "cache"), allow(unused_imports))]
 
-use crate::{handle_result, wasmtime_error_t};
-use std::ffi::CStr;
+use crate::{handle_result, wasm_memorytype_t, wasmtime_error_t};
+use std::ops::Range;
 use std::os::raw::c_char;
-use wasmtime::{Config, OptLevel, ProfilingStrategy, Strategy};
+use std::ptr;
+use std::{ffi::CStr, sync::Arc};
+use wasmtime::{
+    Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, Result, Strategy,
+};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -254,4 +258,174 @@ pub unsafe extern "C" fn wasmtime_config_cranelift_flag_set(
     let flag = CStr::from_ptr(flag).to_str().expect("not valid utf-8");
     let value = CStr::from_ptr(value).to_str().expect("not valid utf-8");
     c.config.cranelift_flag_set(flag, value);
+}
+
+pub type wasmtime_memory_get_callback_t = extern "C" fn(
+    env: *mut std::ffi::c_void,
+    byte_size: &mut usize,
+    maximum_byte_size: &mut usize,
+) -> *mut u8;
+
+pub type wasmtime_memory_grow_callback_t =
+    extern "C" fn(env: *mut std::ffi::c_void, new_size: usize) -> Option<Box<wasmtime_error_t>>;
+
+#[repr(C)]
+pub struct wasmtime_linear_memory_t {
+    env: *mut std::ffi::c_void,
+    get_memory: wasmtime_memory_get_callback_t,
+    grow_memory: wasmtime_memory_grow_callback_t,
+    finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
+}
+
+pub type wasmtime_new_memory_callback_t = extern "C" fn(
+    env: *mut std::ffi::c_void,
+    ty: &wasm_memorytype_t,
+    minimum: usize,
+    maximum: usize,
+    reserved_size_in_bytes: usize,
+    guard_size_in_bytes: usize,
+    memory_ret: *mut wasmtime_linear_memory_t,
+) -> Option<Box<wasmtime_error_t>>;
+
+struct CHostLinearMemory {
+    foreign: crate::ForeignData,
+    get_memory: wasmtime_memory_get_callback_t,
+    grow_memory: wasmtime_memory_grow_callback_t,
+}
+
+unsafe impl LinearMemory for CHostLinearMemory {
+    fn byte_size(&self) -> usize {
+        let mut byte_size = 0;
+        let mut maximum_byte_size = 0;
+        let cb = self.get_memory;
+        cb(self.foreign.data, &mut byte_size, &mut maximum_byte_size);
+        return byte_size;
+    }
+    fn maximum_byte_size(&self) -> Option<usize> {
+        let mut byte_size = 0;
+        let mut maximum_byte_size = 0;
+        let cb = self.get_memory;
+        cb(self.foreign.data, &mut byte_size, &mut maximum_byte_size);
+        if maximum_byte_size == 0 {
+            None
+        } else {
+            Some(maximum_byte_size)
+        }
+    }
+    fn as_ptr(&self) -> *mut u8 {
+        let mut byte_size = 0;
+        let mut maximum_byte_size = 0;
+        let cb = self.get_memory;
+        cb(self.foreign.data, &mut byte_size, &mut maximum_byte_size)
+    }
+    fn wasm_accessible(&self) -> Range<usize> {
+        let mut byte_size = 0;
+        let mut maximum_byte_size = 0;
+        let cb = self.get_memory;
+        let ptr = cb(self.foreign.data, &mut byte_size, &mut maximum_byte_size);
+        Range {
+            start: ptr as usize,
+            end: ptr as usize + byte_size,
+        }
+    }
+    fn grow_to(&mut self, new_size: usize) -> Result<()> {
+        let cb = self.grow_memory;
+        let error = cb(self.foreign.data, new_size);
+        if let Some(err) = error {
+            Err((*err).into())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[repr(C)]
+pub struct wasmtime_memory_creator_t {
+    env: *mut std::ffi::c_void,
+    new_memory: wasmtime_new_memory_callback_t,
+    finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
+}
+
+struct CHostMemoryCreator {
+    foreign: crate::ForeignData,
+    new_memory: wasmtime_new_memory_callback_t,
+}
+unsafe impl Send for CHostMemoryCreator {}
+unsafe impl Sync for CHostMemoryCreator {}
+
+unsafe impl MemoryCreator for CHostMemoryCreator {
+    fn new_memory(
+        &self,
+        ty: wasmtime::MemoryType,
+        minimum: usize,
+        maximum: Option<usize>,
+        reserved_size_in_bytes: Option<usize>,
+        guard_size_in_bytes: usize,
+    ) -> Result<Box<dyn wasmtime::LinearMemory>, String> {
+        extern "C" fn panic_get_callback(
+            _env: *mut std::ffi::c_void,
+            _byte_size: &mut usize,
+            _maximum_byte_size: &mut usize,
+        ) -> *mut u8 {
+            panic!("a callback must be set");
+        }
+        extern "C" fn panic_grow_callback(
+            _env: *mut std::ffi::c_void,
+            _size: usize,
+        ) -> Option<Box<wasmtime_error_t>> {
+            panic!("a callback must be set");
+        }
+        let mut memory = wasmtime_linear_memory_t {
+            env: ptr::null_mut(),
+            get_memory: panic_get_callback,
+            grow_memory: panic_grow_callback,
+            finalizer: None,
+        };
+        let cb = self.new_memory;
+        let error = cb(
+            self.foreign.data,
+            &wasm_memorytype_t::new(ty),
+            minimum,
+            maximum.unwrap_or(usize::MAX),
+            reserved_size_in_bytes.unwrap_or(0),
+            guard_size_in_bytes,
+            &mut memory,
+        );
+        match error {
+            None => {
+                let foreign = crate::ForeignData {
+                    data: memory.env,
+                    finalizer: memory.finalizer,
+                };
+                Ok(Box::new(CHostLinearMemory {
+                    foreign,
+                    get_memory: memory.get_memory,
+                    grow_memory: memory.grow_memory,
+                }))
+            }
+            Some(err) => {
+                let err: anyhow::Error = (*err).into();
+                Err(format!("{}", err))
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_config_host_memory_creator_set(
+    c: &mut wasm_config_t,
+    creator: &wasmtime_memory_creator_t,
+) {
+    c.config.with_host_memory(Arc::new(CHostMemoryCreator {
+        foreign: crate::ForeignData {
+            data: creator.env,
+            finalizer: creator.finalizer,
+        },
+        new_memory: creator.new_memory,
+    }));
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_memory_init_cow_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.memory_init_cow(enable);
 }

@@ -7,7 +7,7 @@
 ;; A variant of the main lowering constructor term, used for branches.
 ;; The only difference is that it gets an extra argument holding a vector
 ;; of branch targets to be used.
-(decl partial lower_branch (Inst VecMachLabel) Unit)
+(decl partial lower_branch (Inst MachLabelSlice) Unit)
 
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3734,25 +3734,24 @@
 
 ;; Unconditional branch.  The target is found as first (and only) element in
 ;; the list of the current block's branch targets passed as `targets`.
-(rule (lower_branch (jump _) targets)
-      (emit_side_effect (jump_impl (vec_element targets 0))))
+(rule (lower_branch (jump _) (single_target label))
+      (emit_side_effect (jump_impl label)))
 
 
 ;;;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Jump table.  `targets` contains the default target followed by the
 ;; list of branch targets per index value.
-(rule (lower_branch (br_table val_idx _) targets)
+(rule (lower_branch (br_table val_idx _) (jump_table_targets default targets))
       (let ((idx Reg (put_in_reg_zext64 val_idx))
             ;; Bounds-check the index and branch to default.
             ;; This is an internal branch that is not a terminator insn.
             ;; Instead, the default target is listed a potential target
             ;; in the final JTSequence, which is the block terminator.
             (cond ProducesBool
-              (bool (icmpu_uimm32 $I64 idx (vec_length_minus1 targets))
+              (bool (icmpu_uimm32 $I64 idx (jump_table_size targets))
                     (intcc_as_cond (IntCC.UnsignedGreaterThanOrEqual))))
-            (_ Unit (emit_side_effect (oneway_cond_br_bool cond
-                                        (vec_element targets 0)))))
+            (_ Unit (emit_side_effect (oneway_cond_br_bool cond default))))
         ;; Scale the index by the element size, and then emit the
         ;; compound instruction that does:
         ;;
@@ -3775,10 +3774,8 @@
 ;; Two-way conditional branch on nonzero.  `targets` contains:
 ;; - element 0: target if the condition is true (i.e. value is nonzero)
 ;; - element 1: target if the condition is false (i.e. value is zero)
-(rule (lower_branch (brif val_cond _ _) targets)
-      (emit_side_effect (cond_br_bool (value_nonzero val_cond)
-                                      (vec_element targets 0)
-                                      (vec_element targets 1))))
+(rule (lower_branch (brif val_cond _ _) (two_targets then else))
+      (emit_side_effect (cond_br_bool (value_nonzero val_cond) then else)))
 
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

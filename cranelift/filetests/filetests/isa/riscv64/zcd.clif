@@ -1,0 +1,113 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zca has_zcd
+
+function %c_fldsp() -> f64 {
+  ss0 = explicit_slot 16
+
+block0:
+  v0 = stack_load.f64 ss0+8
+  return v0
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+; block0:
+;   fld fa0,8(nominal_sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x10
+; block1: ; offset 0xa
+;   c.fldsp fa0, 8(sp)
+;   c.addi16sp sp, 0x10
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+function %c_fsdsp(f64) {
+  ss0 = explicit_slot 128
+
+block0(v0: f64):
+  stack_store.f64 v0, ss0+64
+  return
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-128
+; block0:
+;   fsd fa0,64(nominal_sp)
+;   addi sp,sp,128
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   c.addi16sp sp, -0x80
+; block1: ; offset 0xa
+;   c.fsdsp fa0, 0x40(sp)
+;   c.addi16sp sp, 0x80
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+function %c_fsd(i64, f64) {
+block0(v0: i64, v1: f64):
+  store.i32 v1, v0+16
+  store.i32 v1, v0-16
+  return
+}
+
+; VCode:
+; block0:
+;   fsd fa0,16(a0)
+;   fsd fa0,-16(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.fsd fa0, 0x10(a0)
+;   fsd fa0, -0x10(a0)
+;   c.jr ra
+
+function %c_fld(i64) -> f64 {
+block0(v0: i64):
+  v1 = load.f64 v0+64
+  return v1
+}
+
+; VCode:
+; block0:
+;   fld fa0,64(a0)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.fld fa0, 0x40(a0)
+;   c.jr ra
+

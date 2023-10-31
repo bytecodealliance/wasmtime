@@ -6,10 +6,19 @@ use core::fmt;
 use serde_derive::{Deserialize, Serialize};
 
 enum FlagBit {
+    /// Guaranteed not to trap. This may enable additional
+    /// optimizations to be performed.
     Notrap,
+    /// Guaranteed to use "natural alignment" for the given type. This
+    /// may enable better instruction selection.
     Aligned,
+    /// A load that reads data in memory that does not change for the
+    /// duration of the function's execution. This may enable
+    /// additional optimizations to be performed.
     Readonly,
+    /// Load multi-byte values from memory in a little-endian format.
     LittleEndian,
+    /// Load multi-byte values from memory in a big-endian format.
     BigEndian,
     /// Accesses only the "heap" part of abstract state. Used for
     /// alias analysis. Mutually exclusive with "table" and "vmctx".
@@ -20,10 +29,15 @@ enum FlagBit {
     /// Accesses only the "vmctx" part of abstract state. Used for
     /// alias analysis. Mutually exclusive with "heap" and "table".
     Vmctx,
+    /// Check this load or store for safety when using the
+    /// proof-carrying-code framework. The address must have a
+    /// `PointsTo` fact attached with a sufficiently large valid range
+    /// for the accessed size.
+    Checked,
 }
 
-const NAMES: [&str; 8] = [
-    "notrap", "aligned", "readonly", "little", "big", "heap", "table", "vmctx",
+const NAMES: [&str; 9] = [
+    "notrap", "aligned", "readonly", "little", "big", "heap", "table", "vmctx", "checked",
 ];
 
 /// Endianness of a memory access.
@@ -48,7 +62,7 @@ pub enum Endianness {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct MemFlags {
-    bits: u8,
+    bits: u16,
 }
 
 impl MemFlags {
@@ -263,6 +277,32 @@ impl MemFlags {
     /// Set the `vmctx` bit, returning new flags.
     pub fn with_vmctx(mut self) -> Self {
         self.set_vmctx();
+        self
+    }
+
+    /// Test if the `checked` bit is set.
+    ///
+    /// Loads and stores with this flag are verified to access
+    /// pointers only with a validated `PointsTo` fact attached, and
+    /// with that fact validated, when using the proof-carrying-code
+    /// framework. If initial facts on program inputs are correct
+    /// (i.e., correctly denote the shape and types of data structures
+    /// in memory), and if PCC validates the compiled output, then all
+    /// `checked`-marked memory accesses are guaranteed (up to the
+    /// checker's correctness) to access valid memory. This can be
+    /// used to ensure memory safety and sandboxing.
+    pub fn checked(self) -> bool {
+        self.read(FlagBit::Checked)
+    }
+
+    /// Set the `checked` bit.
+    pub fn set_checked(&mut self) {
+        self.set(FlagBit::Checked);
+    }
+
+    /// Set the `checked` bit, returning new flags.
+    pub fn with_checked(mut self) -> Self {
+        self.set_checked();
         self
     }
 }

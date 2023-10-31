@@ -3,10 +3,55 @@ use crate::preview2::bindings::cli::{
     terminal_stdout,
 };
 use crate::preview2::bindings::io::streams;
-use crate::preview2::pipe::AsyncWriteStream;
-use crate::preview2::{HostOutputStream, OutputStreamError, WasiView};
-use bytes::Bytes;
-use is_terminal::IsTerminal;
+use crate::preview2::pipe::{self, AsyncWriteStream};
+use crate::preview2::{HostInputStream, HostOutputStream, WasiView};
+use std::io::IsTerminal;
+use wasmtime::component::Resource;
+
+/// A trait used to represent the standard input to a guest program.
+///
+/// This is used to implement various WASI APIs via the method implementations
+/// below.
+///
+/// Built-in implementations are provided for [`Stdin`],
+/// [`pipe::MemoryInputPipe`], and [`pipe::ClosedInputStream`].
+pub trait StdinStream: Send + Sync {
+    /// Creates a fresh stream which is reading stdin.
+    ///
+    /// Note that the returned stream must share state with all other streams
+    /// previously created. Guests may create multiple handles to the same stdin
+    /// and they should all be synchronized in their progress through the
+    /// program's input.
+    ///
+    /// Note that this means that if one handle becomes ready for reading they
+    /// all become ready for reading. Subsequently if one is read from it may
+    /// mean that all the others are no longer ready for reading. This is
+    /// basically a consequence of the way the WIT APIs are designed today.
+    fn stream(&self) -> Box<dyn HostInputStream>;
+
+    /// Returns whether this stream is backed by a TTY.
+    fn isatty(&self) -> bool;
+}
+
+impl StdinStream for pipe::MemoryInputPipe {
+    fn stream(&self) -> Box<dyn HostInputStream> {
+        Box::new(self.clone())
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
+
+impl StdinStream for pipe::ClosedInputStream {
+    fn stream(&self) -> Box<dyn HostInputStream> {
+        Box::new(self.clone())
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
 
 mod worker_thread_stdin;
 pub use self::worker_thread_stdin::{stdin, Stdin};
@@ -17,55 +62,91 @@ pub use self::worker_thread_stdin::{stdin, Stdin};
 // and tokio's stdout/err.
 const STDIO_BUFFER_SIZE: usize = 4096;
 
-pub struct Stdout(AsyncWriteStream);
+/// Similar to [`StdinStream`], except for output.
+pub trait StdoutStream: Send + Sync {
+    /// Returns a fresh new stream which can write to this output stream.
+    ///
+    /// Note that all output streams should output to the same logical source.
+    /// This means that it's possible for each independent stream to acquire a
+    /// separate "permit" to write and then act on that permit. Note that
+    /// additionally at this time once a permit is "acquired" there's no way to
+    /// release it, for example you can wait for readiness and then never
+    /// actually write in WASI. This means that acquisition of a permit for one
+    /// stream cannot discount the size of a permit another stream could
+    /// obtain.
+    ///
+    /// Implementations must be able to handle this
+    fn stream(&self) -> Box<dyn HostOutputStream>;
+
+    /// Returns whether this stream is backed by a TTY.
+    fn isatty(&self) -> bool;
+}
+
+impl StdoutStream for pipe::MemoryOutputPipe {
+    fn stream(&self) -> Box<dyn HostOutputStream> {
+        Box::new(self.clone())
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
+
+impl StdoutStream for pipe::SinkOutputStream {
+    fn stream(&self) -> Box<dyn HostOutputStream> {
+        Box::new(self.clone())
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
+
+impl StdoutStream for pipe::ClosedOutputStream {
+    fn stream(&self) -> Box<dyn HostOutputStream> {
+        Box::new(self.clone())
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
+
+pub struct Stdout;
 
 pub fn stdout() -> Stdout {
-    Stdout(AsyncWriteStream::new(
-        STDIO_BUFFER_SIZE,
-        tokio::io::stdout(),
-    ))
+    Stdout
 }
-impl IsTerminal for Stdout {
-    fn is_terminal(&self) -> bool {
+
+impl StdoutStream for Stdout {
+    fn stream(&self) -> Box<dyn HostOutputStream> {
+        Box::new(AsyncWriteStream::new(
+            STDIO_BUFFER_SIZE,
+            tokio::io::stdout(),
+        ))
+    }
+
+    fn isatty(&self) -> bool {
         std::io::stdout().is_terminal()
     }
 }
-#[async_trait::async_trait]
-impl HostOutputStream for Stdout {
-    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
-        self.0.write(bytes)
-    }
-    fn flush(&mut self) -> Result<(), OutputStreamError> {
-        self.0.flush()
-    }
-    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
-        self.0.write_ready().await
-    }
-}
 
-pub struct Stderr(AsyncWriteStream);
+pub struct Stderr;
 
 pub fn stderr() -> Stderr {
-    Stderr(AsyncWriteStream::new(
-        STDIO_BUFFER_SIZE,
-        tokio::io::stderr(),
-    ))
+    Stderr
 }
-impl IsTerminal for Stderr {
-    fn is_terminal(&self) -> bool {
+
+impl StdoutStream for Stderr {
+    fn stream(&self) -> Box<dyn HostOutputStream> {
+        Box::new(AsyncWriteStream::new(
+            STDIO_BUFFER_SIZE,
+            tokio::io::stderr(),
+        ))
+    }
+
+    fn isatty(&self) -> bool {
         std::io::stderr().is_terminal()
-    }
-}
-#[async_trait::async_trait]
-impl HostOutputStream for Stderr {
-    fn write(&mut self, bytes: Bytes) -> Result<(), OutputStreamError> {
-        self.0.write(bytes)
-    }
-    fn flush(&mut self) -> Result<(), OutputStreamError> {
-        self.0.flush()
-    }
-    async fn write_ready(&mut self) -> Result<usize, OutputStreamError> {
-        self.0.write_ready().await
     }
 }
 
@@ -75,71 +156,69 @@ pub enum IsATTY {
     No,
 }
 
-pub(crate) struct StdioInput {
-    pub input_stream: streams::InputStream,
-    pub isatty: IsATTY,
-}
-
-pub(crate) struct StdioOutput {
-    pub output_stream: streams::OutputStream,
-    pub isatty: IsATTY,
-}
-
 impl<T: WasiView> stdin::Host for T {
-    fn get_stdin(&mut self) -> Result<streams::InputStream, anyhow::Error> {
-        Ok(self.ctx().stdin.input_stream)
+    fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
+        let stream = self.ctx_mut().stdin.stream();
+        Ok(self.table_mut().push(streams::InputStream::Host(stream))?)
     }
 }
 
 impl<T: WasiView> stdout::Host for T {
-    fn get_stdout(&mut self) -> Result<streams::OutputStream, anyhow::Error> {
-        Ok(self.ctx().stdout.output_stream)
+    fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
+        let stream = self.ctx_mut().stdout.stream();
+        Ok(self.table_mut().push(stream)?)
     }
 }
 
 impl<T: WasiView> stderr::Host for T {
-    fn get_stderr(&mut self) -> Result<streams::OutputStream, anyhow::Error> {
-        Ok(self.ctx().stderr.output_stream)
+    fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
+        let stream = self.ctx_mut().stderr.stream();
+        Ok(self.table_mut().push(stream)?)
     }
 }
 
-struct HostTerminalInput;
-struct HostTerminalOutput;
+pub struct TerminalInput;
+pub struct TerminalOutput;
 
-impl<T: WasiView> terminal_input::Host for T {
-    fn drop_terminal_input(&mut self, r: terminal_input::TerminalInput) -> anyhow::Result<()> {
-        self.table_mut().delete::<HostTerminalInput>(r)?;
+impl<T: WasiView> terminal_input::Host for T {}
+impl<T: WasiView> terminal_input::HostTerminalInput for T {
+    fn drop(&mut self, r: Resource<TerminalInput>) -> anyhow::Result<()> {
+        self.table_mut().delete(r)?;
         Ok(())
     }
 }
-impl<T: WasiView> terminal_output::Host for T {
-    fn drop_terminal_output(&mut self, r: terminal_output::TerminalOutput) -> anyhow::Result<()> {
-        self.table_mut().delete::<HostTerminalOutput>(r)?;
+impl<T: WasiView> terminal_output::Host for T {}
+impl<T: WasiView> terminal_output::HostTerminalOutput for T {
+    fn drop(&mut self, r: Resource<TerminalOutput>) -> anyhow::Result<()> {
+        self.table_mut().delete(r)?;
         Ok(())
     }
 }
 impl<T: WasiView> terminal_stdin::Host for T {
-    fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<terminal_input::TerminalInput>> {
-        if let IsATTY::Yes = self.ctx().stdin.isatty {
-            Ok(Some(self.table_mut().push(Box::new(HostTerminalInput))?))
+    fn get_terminal_stdin(&mut self) -> anyhow::Result<Option<Resource<TerminalInput>>> {
+        if self.ctx().stdin.isatty() {
+            let fd = self.table_mut().push(TerminalInput)?;
+            Ok(Some(fd))
         } else {
             Ok(None)
         }
     }
 }
 impl<T: WasiView> terminal_stdout::Host for T {
-    fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<terminal_output::TerminalOutput>> {
-        if let IsATTY::Yes = self.ctx().stdout.isatty {
-            Ok(Some(self.table_mut().push(Box::new(HostTerminalOutput))?))
+    fn get_terminal_stdout(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
+        if self.ctx().stdout.isatty() {
+            let fd = self.table_mut().push(TerminalOutput)?;
+            Ok(Some(fd))
         } else {
             Ok(None)
         }
     }
 }
 impl<T: WasiView> terminal_stderr::Host for T {
-    fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<terminal_output::TerminalOutput>> {
-        if let IsATTY::Yes = self.ctx().stderr.isatty {
-            Ok(Some(self.table_mut().push(Box::new(HostTerminalOutput))?))
+    fn get_terminal_stderr(&mut self) -> anyhow::Result<Option<Resource<TerminalOutput>>> {
+        if self.ctx().stderr.isatty() {
+            let fd = self.table_mut().push(TerminalOutput)?;
+            Ok(Some(fd))
         } else {
             Ok(None)
         }
@@ -148,7 +227,7 @@ impl<T: WasiView> terminal_stderr::Host for T {
 
 #[cfg(all(unix, test))]
 mod test {
-    use crate::preview2::{HostInputStream, StreamState};
+    use crate::preview2::HostInputStream;
     use libc;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Write};
@@ -237,15 +316,13 @@ mod test {
                                 let mut buffer = String::new();
                                 loop {
                                     println!("child: waiting for stdin to be ready");
-                                    stdin.ready().await.unwrap();
+                                    stdin.ready().await;
 
                                     println!("child: reading input");
-                                    let (bytes, status) = stdin.read(1024).unwrap();
+                                    // We can't effectively test for the case where stdin was closed, so panic if it is...
+                                    let bytes = stdin.read(1024).unwrap();
 
-                                    println!("child: {:?}, {:?}", bytes, status);
-
-                                    // We can't effectively test for the case where stdin was closed.
-                                    assert_eq!(status, StreamState::Open);
+                                    println!("child got: {:?}", bytes);
 
                                     buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
                                     if let Some((line, rest)) = buffer.split_once('\n') {
@@ -333,14 +410,7 @@ mod test {
 
     // This test doesn't work under qemu because of the use of fork in the test helper.
     #[test]
-    #[cfg_attr(not(target = "x86_64"), ignore)]
-    fn test_async_fd_stdin() {
-        test_stdin_by_forking(super::stdin);
-    }
-
-    // This test doesn't work under qemu because of the use of fork in the test helper.
-    #[test]
-    #[cfg_attr(not(target = "x86_64"), ignore)]
+    #[cfg_attr(not(target_arch = "x86_64"), ignore)]
     fn test_worker_thread_stdin() {
         test_stdin_by_forking(super::worker_thread_stdin::stdin);
     }

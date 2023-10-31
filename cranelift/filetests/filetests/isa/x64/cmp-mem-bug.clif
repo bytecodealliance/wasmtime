@@ -54,13 +54,13 @@ block0(v0: f64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsd   0(%rdi), %xmm9
-;   ucomisd %xmm9, %xmm0
+;   movsd   0(%rdi), %xmm1
+;   ucomisd %xmm1, %xmm0
 ;   setnp   %dil
 ;   setz    %al
 ;   andl    %edi, %eax, %edi
 ;   movzbq  %dil, %rax
-;   ucomisd %xmm9, %xmm0
+;   ucomisd %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm2
 ;   movsd %xmm0, %xmm0; jnp $next; movsd %xmm2, %xmm0; $next:
 ;   movsd %xmm0, %xmm0; jz $next; movsd %xmm2, %xmm0; $next:
@@ -73,17 +73,17 @@ block0(v0: f64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movsd (%rdi), %xmm9 ; trap: heap_oob
-;   ucomisd %xmm9, %xmm0
+;   movsd (%rdi), %xmm1 ; trap: heap_oob
+;   ucomisd %xmm1, %xmm0
 ;   setnp %dil
 ;   sete %al
 ;   andl %eax, %edi
 ;   movzbq %dil, %rax
-;   ucomisd %xmm9, %xmm0
+;   ucomisd %xmm1, %xmm0
 ;   movdqa %xmm0, %xmm2
-;   jnp 0x2f
+;   jnp 0x2c
 ;   movsd %xmm2, %xmm0
-;   je 0x39
+;   je 0x36
 ;   movsd %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

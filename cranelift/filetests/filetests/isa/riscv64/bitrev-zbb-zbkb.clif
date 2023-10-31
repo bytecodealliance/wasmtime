@@ -1,0 +1,104 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbkb has_zbb
+
+function %bitrev_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = bitrev v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   brev8 a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x55, 0x75, 0x68
+;   ret
+
+function %bitrev_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = bitrev v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   rev8 a2,a0
+;   brev8 a4,a2
+;   srli a0,a4,48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x56, 0x85, 0x6b
+;   .byte 0x13, 0x57, 0x76, 0x68
+;   srli a0, a4, 0x30
+;   ret
+
+function %bitrev_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bitrev v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   rev8 a2,a0
+;   brev8 a4,a2
+;   srli a0,a4,32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x56, 0x85, 0x6b
+;   .byte 0x13, 0x57, 0x76, 0x68
+;   srli a0, a4, 0x20
+;   ret
+
+function %bitrev_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bitrev v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   rev8 a2,a0
+;   brev8 a0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x56, 0x85, 0x6b
+;   .byte 0x13, 0x55, 0x76, 0x68
+;   ret
+
+function %bitrev_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bitrev v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   mv a2,a0
+;   rev8 a3,a1
+;   brev8 a0,a3
+;   mv a3,a2
+;   rev8 a1,a3
+;   brev8 a1,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a2, a0
+;   .byte 0x93, 0xd6, 0x85, 0x6b
+;   .byte 0x13, 0xd5, 0x76, 0x68
+;   mv a3, a2
+;   .byte 0x93, 0xd5, 0x86, 0x6b
+;   .byte 0x93, 0xd5, 0x75, 0x68
+;   ret
+

@@ -1,11 +1,13 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
 use crate::dominator_tree::DominatorTree;
+use crate::ir::pcc;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::timing;
 use crate::trace;
+use crate::CodegenError;
 
 use regalloc2::RegallocOptions;
 
@@ -24,10 +26,11 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     let block_order = BlockLoweringOrder::new(f, domtree, ctrl_plane);
 
     // Build the lowering context.
-    let lower = crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs)?;
+    let lower =
+        crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs, b.flags().clone())?;
 
     // Lower the IR.
-    let vcode = {
+    let mut vcode = {
         log::debug!(
             "Number of CLIF instructions to lower: {}",
             f.dfg.num_insts()
@@ -44,6 +47,11 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     );
     log::debug!("Number of lowered vcode blocks: {}", vcode.num_blocks());
     trace!("vcode from lowering: \n{:?}", vcode);
+
+    // Perform validation of proof-carrying-code facts, if requested.
+    if b.flags().enable_pcc() {
+        pcc::check_vcode_facts(f, &mut vcode, b).map_err(CodegenError::Pcc)?;
+    }
 
     // Perform register allocation.
     let regalloc_result = {

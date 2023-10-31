@@ -3,11 +3,13 @@ use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
+use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    AbiParam, ArgumentPurpose, Function, InstBuilder, Signature, UserFuncName, Value,
+    AbiParam, ArgumentPurpose, Function, InstBuilder, MemFlags, Signature, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
+use cranelift_entity::SecondaryMap;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
@@ -121,6 +123,14 @@ pub struct FuncEnvironment<'module_environment> {
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
 
+    /// The PCC memory type describing the vmctx layout, if we're
+    /// using PCC.
+    pcc_vmctx_memtype: Option<ir::MemoryType>,
+
+    /// The PCC memory type describing the data for each memory, if
+    /// we're using PCC.
+    pcc_memory_memtypes: SecondaryMap<MemoryIndex, Option<ir::MemoryType>>,
+
     /// Caches of signatures for builtin functions.
     builtin_function_signatures: BuiltinFunctionSignatures,
 
@@ -188,6 +198,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             types,
             heaps: PrimaryMap::default(),
             vmctx: None,
+            pcc_vmctx_memtype: None,
+            pcc_memory_memtypes: SecondaryMap::new(),
             builtin_function_signatures,
             offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
             tunables,
@@ -212,6 +224,68 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
+            if self.isa.flags().enable_pcc() {
+                let mut fields = vec![];
+                for (memory_idx, plan) in &self.module.memory_plans {
+                    // For now, we only do PCC on defined, owned (non-shared), static, 32-bit memories (whew!).
+                    if plan.memory.shared || plan.memory.memory64 {
+                        continue;
+                    }
+                    let static_bound_wasm_pages = match &plan.style {
+                        MemoryStyle::Dynamic { .. } => continue,
+                        MemoryStyle::Static { bound } => *bound,
+                    };
+                    let static_bound = static_bound_wasm_pages.checked_mul(0x1_0000).unwrap();
+                    let def_memory_idx = match self.module.defined_memory_index(memory_idx) {
+                        Some(i) => i,
+                        None => continue,
+                    };
+                    let owned_memory_idx = self.module.owned_memory_index(def_memory_idx);
+
+                    let base_field_offset = self
+                        .offsets
+                        .vmctx_vmmemory_definition_base(owned_memory_idx);
+                    // Create a new "blob" memory type to represent the pointed-to memory.
+                    let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
+                        size: static_bound
+                            .checked_add(plan.offset_guard_size)
+                            .expect("Memory plan has overflowing size plus guard"),
+                    });
+
+                    self.pcc_memory_memtypes[memory_idx] = Some(data_mt);
+
+                    fields.push(ir::MemoryTypeField {
+                        offset: u64::from(base_field_offset),
+                        ty: self.isa.pointer_type(),
+                        // Read-only field from the PoV of PCC checks:
+                        // don't allow stores to this field. (Even if
+                        // it is a dynamic memory whose base can
+                        // change, that update happens inside the
+                        // runtime, not in generated code.)
+                        readonly: true,
+                        fact: Some(Fact::Mem {
+                            ty: data_mt,
+                            min_offset: 0,
+                            max_offset: 0,
+                        }),
+                    });
+                }
+                let size = fields
+                    .iter()
+                    .map(|field| field.offset + u64::from(self.isa.pointer_type().bytes()))
+                    .max()
+                    .unwrap_or(0);
+
+                let vmctx_memtype =
+                    func.create_memory_type(ir::MemoryTypeData::Struct { size, fields });
+
+                self.pcc_vmctx_memtype = Some(vmctx_memtype);
+                func.global_value_facts[vmctx] = Some(Fact::Mem {
+                    ty: vmctx_memtype,
+                    min_offset: 0,
+                    max_offset: 0,
+                });
+            }
             self.vmctx = Some(vmctx);
             vmctx
         })
@@ -352,7 +426,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 base: vmctx,
                 offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                 global_type: pointer_type,
-                readonly: true,
+                flags: MemFlags::trusted().with_readonly(),
             });
             (global, 0)
         }
@@ -1197,6 +1271,10 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn heap_access_spectre_mitigation(&self) -> bool {
         self.isa.flags().enable_heap_access_spectre_mitigation()
     }
+
+    fn proof_carrying_code(&self) -> bool {
+        self.isa.flags().enable_pcc()
+    }
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
@@ -1237,7 +1315,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    readonly: true,
+                    flags: MemFlags::trusted().with_readonly(),
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
                 let current_elements_offset =
@@ -1250,7 +1328,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            readonly: false,
+            flags: MemFlags::trusted(),
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
@@ -1259,7 +1337,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
             )
             .unwrap(),
-            readonly: false,
+            flags: MemFlags::trusted(),
         });
 
         let element_size = u64::from(
@@ -1761,6 +1839,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 u64::MAX
             });
 
+        let max_size = self.module.memory_plans[index]
+            .memory
+            .maximum
+            .and_then(|max| max.checked_mul(u64::from(WASM_PAGE_SIZE)));
+
         let (ptr, base_offset, current_length_offset) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
@@ -1774,7 +1857,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         base: vmctx,
                         offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                         global_type: pointer_type,
-                        readonly: true,
+                        flags: MemFlags::trusted().with_readonly(),
                     });
                     let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
@@ -1797,7 +1880,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    readonly: true,
+                    flags: MemFlags::trusted().with_readonly(),
                 });
                 let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
@@ -1819,7 +1902,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: ptr,
                     offset: Offset32::new(current_length_offset),
                     global_type: pointer_type,
-                    readonly: false,
+                    flags: MemFlags::trusted(),
                 });
                 (
                     offset_guard_size,
@@ -1843,18 +1926,33 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             ),
         };
 
+        let mut flags = MemFlags::trusted().with_checked();
+        if readonly_base {
+            flags.set_readonly();
+        }
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            readonly: readonly_base,
+            flags,
         });
+        let memory_type = self.pcc_memory_memtypes[index];
+        if let Some(ty) = memory_type {
+            func.global_value_facts[heap_base] = Some(Fact::Mem {
+                ty,
+                min_offset: 0,
+                max_offset: 0,
+            });
+        }
+
         Ok(self.heaps.push(HeapData {
             base: heap_base,
             min_size,
+            max_size,
             offset_guard_size,
             style: heap_style,
             index_type: self.memory_index_type(index),
+            memory_type,
         }))
     }
 

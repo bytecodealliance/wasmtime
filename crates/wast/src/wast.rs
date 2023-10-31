@@ -3,8 +3,10 @@ use crate::component;
 use crate::core;
 use crate::spectest::*;
 use anyhow::{anyhow, bail, Context as _, Error, Result};
+use std::collections::HashMap;
 use std::path::Path;
 use std::str;
+use std::thread;
 use wasmtime::*;
 use wast::lexer::Lexer;
 use wast::parser::{self, ParseBuffer};
@@ -62,7 +64,10 @@ enum Export {
     Component(component::Func),
 }
 
-impl<T> WastContext<T> {
+impl<T> WastContext<T>
+where
+    T: Clone + Send + 'static,
+{
     /// Construct a new instance of `WastContext`.
     pub fn new(store: Store<T>) -> Self {
         // Spec tests will redefine the same module/name sometimes, so we need
@@ -361,26 +366,54 @@ impl<T> WastContext<T> {
         let buf = ParseBuffer::new_with_lexer(lexer).map_err(adjust_wast)?;
         let ast = parser::parse::<Wast>(&buf).map_err(adjust_wast)?;
 
-        for directive in ast.directives {
-            let sp = directive.span();
-            if log::log_enabled!(log::Level::Debug) {
-                let (line, col) = sp.linecol_in(wast);
-                log::debug!("running directive on {}:{}:{}", filename, line + 1, col);
-            }
-            self.run_directive(directive)
-                .map_err(|e| match e.downcast() {
-                    Ok(err) => adjust_wast(err).into(),
-                    Err(e) => e,
-                })
-                .with_context(|| {
-                    let (line, col) = sp.linecol_in(wast);
-                    format!("failed directive on {}:{}:{}", filename, line + 1, col)
-                })?;
-        }
-        Ok(())
+        self.run_directives(ast.directives, filename, wast)
     }
 
-    fn run_directive(&mut self, directive: WastDirective) -> Result<()> {
+    fn run_directives(
+        &mut self,
+        directives: Vec<WastDirective<'_>>,
+        filename: &str,
+        wast: &str,
+    ) -> Result<()> {
+        let adjust_wast = |mut err: wast::Error| {
+            err.set_path(filename.as_ref());
+            err.set_text(wast);
+            err
+        };
+
+        thread::scope(|scope| {
+            let mut threads = HashMap::new();
+            for directive in directives {
+                let sp = directive.span();
+                if log::log_enabled!(log::Level::Debug) {
+                    let (line, col) = sp.linecol_in(wast);
+                    log::debug!("running directive on {}:{}:{}", filename, line + 1, col);
+                }
+                self.run_directive(directive, filename, wast, &scope, &mut threads)
+                    .map_err(|e| match e.downcast() {
+                        Ok(err) => adjust_wast(err).into(),
+                        Err(e) => e,
+                    })
+                    .with_context(|| {
+                        let (line, col) = sp.linecol_in(wast);
+                        format!("failed directive on {}:{}:{}", filename, line + 1, col)
+                    })?;
+            }
+            Ok(())
+        })
+    }
+
+    fn run_directive<'a>(
+        &mut self,
+        directive: WastDirective<'a>,
+        filename: &'a str,
+        wast: &'a str,
+        scope: &'a thread::Scope<'a, '_>,
+        threads: &mut HashMap<&'a str, thread::ScopedJoinHandle<'a, Result<()>>>,
+    ) -> Result<()>
+    where
+        T: 'a,
+    {
         use wast::WastDirective::*;
 
         match directive {
@@ -465,6 +498,40 @@ impl<T> WastContext<T> {
                 }
             }
             AssertException { .. } => bail!("unimplemented assert_exception"),
+
+            Thread(thread) => {
+                let mut core_linker = Linker::new(self.store.engine());
+                if let Some(id) = thread.shared_module {
+                    let items = self
+                        .core_linker
+                        .iter(&mut self.store)
+                        .filter(|(module, _, _)| *module == id.name())
+                        .collect::<Vec<_>>();
+                    for (module, name, item) in items {
+                        core_linker.define(&mut self.store, module, name, item)?;
+                    }
+                }
+                let mut child_cx = WastContext {
+                    current: None,
+                    core_linker,
+                    #[cfg(feature = "component-model")]
+                    component_linker: component::Linker::new(self.store.engine()),
+                    store: Store::new(self.store.engine(), self.store.data().clone()),
+                };
+                let name = thread.name.name();
+                let child =
+                    scope.spawn(move || child_cx.run_directives(thread.directives, filename, wast));
+                threads.insert(name, child);
+            }
+
+            Wait { thread, .. } => {
+                let name = thread.name();
+                threads
+                    .remove(name)
+                    .ok_or_else(|| anyhow!("no thread named `{name}`"))?
+                    .join()
+                    .unwrap()?;
+            }
         }
 
         Ok(())

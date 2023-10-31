@@ -10,7 +10,7 @@ pub fn foreach(input: TokenStream) -> TokenStream {
     let mut result = Vec::new();
     for f in cwd.read_dir().unwrap() {
         let f = f.unwrap().path();
-        if f.extension().and_then(|s| s.to_str()) == Some("wit") {
+        if f.extension().and_then(|s| s.to_str()) == Some("wit") || f.is_dir() {
             let name = f.file_stem().unwrap().to_str().unwrap();
             let ident = Ident::new(&name.replace("-", "_"), Span::call_site());
             let path = f.to_str().unwrap();

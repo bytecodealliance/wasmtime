@@ -20,5 +20,5 @@ interface insecure-seed {
     /// This will likely be changed to a value import, to prevent it from being
     /// called multiple times and potentially used for purposes other than DoS
     /// protection.
-    insecure-seed: func() -> tuple<u64, u64>
+    insecure-seed: func() -> tuple<u64, u64>;
 }

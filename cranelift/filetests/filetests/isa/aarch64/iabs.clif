@@ -190,3 +190,27 @@ block0(v0: i64):
 ;   cneg x0, x0, le
 ;   ret
 
+function %f11(i128) -> i128 {
+block0(v0: i128):
+  v1 = iabs v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   asr x3, x1, #63
+;   eor x5, x1, x3
+;   eor x7, x0, x3
+;   subs x0, x7, x3
+;   sbc x1, x5, x3
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   asr x3, x1, #0x3f
+;   eor x5, x1, x3
+;   eor x7, x0, x3
+;   subs x0, x7, x3
+;   sbc x1, x5, x3
+;   ret
+

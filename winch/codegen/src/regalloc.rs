@@ -1,6 +1,6 @@
 use crate::{
     isa::reg::{Reg, RegClass},
-    regset::RegSet,
+    regset::{RegBitSet, RegSet},
 };
 
 /// The register allocator.
@@ -15,15 +15,15 @@ use crate::{
 /// This processs ensures that whenever a register is requested,
 /// it is going to be available.
 pub(crate) struct RegAlloc {
-    pub scratch: Reg,
+    /// The register set.
     regset: RegSet,
 }
 
 impl RegAlloc {
-    /// Create a new register allocator
-    /// from a register set.
-    pub fn new(regset: RegSet, scratch: Reg) -> Self {
-        Self { regset, scratch }
+    /// Create a register allocator from a bit set for each register class.
+    pub fn from(gpr: RegBitSet, fpr: RegBitSet) -> Self {
+        let rs = RegSet::new(gpr, fpr);
+        Self { regset: rs }
     }
 
     /// Allocate the next available register for the given class,
@@ -50,12 +50,6 @@ impl RegAlloc {
     where
         F: FnMut(&mut RegAlloc),
     {
-        // If the scratch register is explicitly requested
-        // just return it, it's usage should never cause spills.
-        if named == self.scratch {
-            return named;
-        }
-
         self.regset.reg(named).unwrap_or_else(|| {
             spill(self);
             self.regset
@@ -66,8 +60,6 @@ impl RegAlloc {
 
     /// Free the given register.
     pub fn free(&mut self, reg: Reg) {
-        if reg != self.scratch {
-            self.regset.free(reg);
-        }
+        self.regset.free(reg);
     }
 }

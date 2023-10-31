@@ -11,21 +11,20 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rcx
-;   shrq    $1, %rdi, %rdi
-;   movq    %rcx, %r8
+;   movq    %rdi, %rax
+;   shrq    $1, %rax, %rax
 ;   movabsq $8608480567731124087, %rdx
-;   andq    %rdi, %rdx, %rdi
-;   subq    %r8, %rdi, %r8
-;   shrq    $1, %rdi, %rdi
-;   andq    %rdi, %rdx, %rdi
-;   subq    %r8, %rdi, %r8
-;   shrq    $1, %rdi, %rdi
-;   andq    %rdi, %rdx, %rdi
-;   subq    %r8, %rdi, %r8
-;   movq    %r8, %rax
+;   andq    %rax, %rdx, %rax
+;   subq    %rdi, %rax, %rdi
+;   shrq    $1, %rax, %rax
+;   andq    %rax, %rdx, %rax
+;   subq    %rdi, %rax, %rdi
+;   shrq    $1, %rax, %rax
+;   andq    %rax, %rdx, %rax
+;   subq    %rdi, %rax, %rdi
+;   movq    %rdi, %rax
 ;   shrq    $4, %rax, %rax
-;   addq    %rax, %r8, %rax
+;   addq    %rax, %rdi, %rax
 ;   movabsq $1085102592571150095, %r11
 ;   andq    %rax, %r11, %rax
 ;   movabsq $72340172838076673, %rcx
@@ -40,21 +39,20 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rdi, %rcx
-;   shrq $1, %rdi
-;   movq %rcx, %r8
+;   movq %rdi, %rax
+;   shrq $1, %rax
 ;   movabsq $0x7777777777777777, %rdx
-;   andq %rdx, %rdi
-;   subq %rdi, %r8
-;   shrq $1, %rdi
-;   andq %rdx, %rdi
-;   subq %rdi, %r8
-;   shrq $1, %rdi
-;   andq %rdx, %rdi
-;   subq %rdi, %r8
-;   movq %r8, %rax
+;   andq %rdx, %rax
+;   subq %rax, %rdi
+;   shrq $1, %rax
+;   andq %rdx, %rax
+;   subq %rax, %rdi
+;   shrq $1, %rax
+;   andq %rdx, %rax
+;   subq %rax, %rdi
+;   movq %rdi, %rax
 ;   shrq $4, %rax
-;   addq %r8, %rax
+;   addq %rdi, %rax
 ;   movabsq $0xf0f0f0f0f0f0f0f, %r11
 ;   andq %r11, %rax
 ;   movabsq $0x101010101010101, %rcx
@@ -139,20 +137,19 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   shrl    $1, %edi, %edi
+;   shrl    $1, %eax, %eax
 ;   movl    $2004318071, %edx
-;   andl    %edi, %edx, %edi
-;   movq    %rax, %r8
-;   subl    %r8d, %edi, %r8d
-;   shrl    $1, %edi, %edi
-;   andl    %edi, %edx, %edi
-;   subl    %r8d, %edi, %r8d
-;   shrl    $1, %edi, %edi
-;   andl    %edi, %edx, %edi
-;   subl    %r8d, %edi, %r8d
-;   movq    %r8, %rax
+;   andl    %eax, %edx, %eax
+;   subl    %edi, %eax, %edi
+;   shrl    $1, %eax, %eax
+;   andl    %eax, %edx, %eax
+;   subl    %edi, %eax, %edi
+;   shrl    $1, %eax, %eax
+;   andl    %eax, %edx, %eax
+;   subl    %edi, %eax, %edi
+;   movq    %rdi, %rax
 ;   shrl    $4, %eax, %eax
-;   addl    %eax, %r8d, %eax
+;   addl    %eax, %edi, %eax
 ;   andl    %eax, $252645135, %eax
 ;   imull   %eax, $16843009, %eax
 ;   shrl    $24, %eax, %eax
@@ -166,20 +163,19 @@ block0(v0: i32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
-;   shrl $1, %edi
+;   shrl $1, %eax
 ;   movl $0x77777777, %edx
-;   andl %edx, %edi
-;   movq %rax, %r8
-;   subl %edi, %r8d
-;   shrl $1, %edi
-;   andl %edx, %edi
-;   subl %edi, %r8d
-;   shrl $1, %edi
-;   andl %edx, %edi
-;   subl %edi, %r8d
-;   movq %r8, %rax
+;   andl %edx, %eax
+;   subl %eax, %edi
+;   shrl $1, %eax
+;   andl %edx, %eax
+;   subl %eax, %edi
+;   shrl $1, %eax
+;   andl %edx, %eax
+;   subl %eax, %edi
+;   movq %rdi, %rax
 ;   shrl $4, %eax
-;   addl %r8d, %eax
+;   addl %edi, %eax
 ;   andl $0xf0f0f0f, %eax
 ;   imull $0x1010101, %eax, %eax
 ;   shrl $0x18, %eax

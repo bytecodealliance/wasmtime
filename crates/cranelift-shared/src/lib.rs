@@ -3,7 +3,6 @@ use cranelift_codegen::{
     ir::{self, ExternalName, UserExternalNameRef},
     settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
 };
-use std::collections::BTreeMap;
 use wasmtime_environ::{FlagValue, FuncIndex, Trap, TrapInformation};
 
 pub mod isa_builder;
@@ -37,16 +36,16 @@ pub enum RelocationTarget {
 /// Converts cranelift_codegen settings to the wasmtime_environ equivalent.
 pub fn clif_flags_to_wasmtime(
     flags: impl IntoIterator<Item = settings::Value>,
-) -> BTreeMap<String, FlagValue> {
+) -> Vec<(&'static str, FlagValue<'static>)> {
     flags
         .into_iter()
-        .map(|val| (val.name.to_string(), to_flag_value(&val)))
+        .map(|val| (val.name, to_flag_value(&val)))
         .collect()
 }
 
-fn to_flag_value(v: &settings::Value) -> FlagValue {
+fn to_flag_value(v: &settings::Value) -> FlagValue<'static> {
     match v.kind() {
-        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap().into()),
+        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap()),
         settings::SettingKind::Num => FlagValue::Num(v.as_num().unwrap()),
         settings::SettingKind::Bool => FlagValue::Bool(v.as_bool().unwrap()),
         settings::SettingKind::Preset => unreachable!(),

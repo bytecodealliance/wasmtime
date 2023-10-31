@@ -41,6 +41,15 @@ features = [
     "Win32_Networking_WinSock",
 ]
 
+[dev-dependencies]
+tempfile = { workspace = true }
+test-log = { workspace = true }
+tracing-subscriber = { workspace = true }
+wasmtime = { workspace = true, features = ['cranelift', 'async'] }
+wasmtime-wasi = { path = '../wasi', features = ['sync', 'tokio'] }
+test-programs-artifacts = { workspace = true }
+tokio = { workspace = true, features = ['macros', 'rt-multi-thread'] }
+
 [features]
 default = ["trace_log"]
 # This feature enables the `tracing` logs in the calls to target the `log`

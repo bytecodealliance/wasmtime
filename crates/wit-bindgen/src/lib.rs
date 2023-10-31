@@ -2,7 +2,7 @@ use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMo
 use crate::types::{TypeInfo, Types};
 use anyhow::{anyhow, bail, Context};
 use heck::*;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::io::{Read, Write};
@@ -27,20 +27,22 @@ mod source;
 mod types;
 use source::Source;
 
-struct InterfaceName {
-    /// True when this interface name has been remapped through the use of `with` in the `bindgen!`
-    /// macro invocation.
-    remapped: bool,
-
-    /// The string name for this interface.
-    path: String,
+#[derive(Clone)]
+enum InterfaceName {
+    /// This interface was remapped using `with` to some other Rust code.
+    Remapped {
+        name_at_root: String,
+        local_path: Vec<String>,
+    },
+    /// This interface is generated in the module hierarchy specified.
+    Path(Vec<String>),
 }
 
 #[derive(Default)]
 struct Wasmtime {
     src: Source,
     opts: Opts,
-    import_interfaces: BTreeMap<Option<PackageName>, Vec<ImportInterface>>,
+    import_interfaces: Vec<(String, InterfaceName)>,
     import_functions: Vec<ImportFunction>,
     exports: Exports,
     types: Types,
@@ -48,12 +50,9 @@ struct Wasmtime {
     interface_names: HashMap<InterfaceId, InterfaceName>,
     with_name_counter: usize,
     interface_last_seen_as_import: HashMap<InterfaceId, bool>,
+    trappable_errors: IndexMap<TypeId, String>,
 }
 
-struct ImportInterface {
-    snake: String,
-    module: String,
-}
 struct ImportFunction {
     add_to_linker: String,
     sig: String,
@@ -62,7 +61,7 @@ struct ImportFunction {
 #[derive(Default)]
 struct Exports {
     fields: BTreeMap<String, (String, String)>,
-    modules: BTreeMap<Option<PackageName>, Vec<String>>,
+    modules: Vec<(String, InterfaceName)>,
     funcs: Vec<String>,
 }
 
@@ -113,11 +112,8 @@ pub struct Opts {
 
 #[derive(Debug, Clone)]
 pub struct TrappableError {
-    /// The package and interface that define the error type being mapped.
-    pub wit_package_path: String,
-
-    /// The name of the error type in WIT that is being mapped.
-    pub wit_type_name: String,
+    /// Full path to the error, such as `wasi:io/streams/error`.
+    pub wit_path: String,
 
     /// The name, in Rust, of the error type to generate.
     pub rust_type_name: String,
@@ -176,54 +172,104 @@ impl Wasmtime {
         name: &WorldKey,
         is_export: bool,
     ) -> bool {
-        let with_name = resolve.name_world_key(name);
-        let entry = if let Some(remapped_path) = self.opts.with.get(&with_name) {
+        let mut path = Vec::new();
+        if is_export {
+            path.push("exports".to_string());
+        }
+        match name {
+            WorldKey::Name(name) => {
+                path.push(name.to_snake_case());
+            }
+            WorldKey::Interface(_) => {
+                let iface = &resolve.interfaces[id];
+                let pkgname = &resolve.packages[iface.package.unwrap()].name;
+                path.push(pkgname.namespace.to_snake_case());
+                path.push(self.name_package_module(resolve, iface.package.unwrap()));
+                path.push(iface.name.as_ref().unwrap().to_snake_case());
+            }
+        }
+        let entry = if let Some(remapped_path) = self.lookup_replacement(resolve, name, None) {
+            let remapped_path = remapped_path.to_string();
             let name = format!("__with_name{}", self.with_name_counter);
             self.with_name_counter += 1;
             uwriteln!(self.src, "use {remapped_path} as {name};");
-            InterfaceName {
-                remapped: true,
-                path: name,
+            InterfaceName::Remapped {
+                name_at_root: name,
+                local_path: path,
             }
         } else {
-            let path = match name {
-                WorldKey::Name(name) => name.to_snake_case(),
-                WorldKey::Interface(_) => {
-                    let iface = &resolve.interfaces[id];
-                    let pkgname = &resolve.packages[iface.package.unwrap()].name;
-                    format!(
-                        "{}::{}::{}",
-                        pkgname.namespace.to_snake_case(),
-                        pkgname.name.to_snake_case(),
-                        iface.name.as_ref().unwrap().to_snake_case()
-                    )
-                }
-            };
-            let path = if is_export {
-                format!("exports::{path}")
-            } else {
-                path
-            };
-            InterfaceName {
-                remapped: false,
-                path,
-            }
+            InterfaceName::Path(path)
         };
 
-        let remapped = entry.remapped;
+        let remapped = matches!(entry, InterfaceName::Remapped { .. });
         self.interface_names.insert(id, entry);
-
         remapped
+    }
+
+    /// If the package `id` is the only package with its namespace/name combo
+    /// then pass through the name unmodified. If, however, there are multiple
+    /// versions of this package then the package module is going to get version
+    /// information.
+    fn name_package_module(&self, resolve: &Resolve, id: PackageId) -> String {
+        let pkg = &resolve.packages[id];
+        let versions_with_same_name = resolve
+            .packages
+            .iter()
+            .filter_map(|(_, p)| {
+                if p.name.namespace == pkg.name.namespace && p.name.name == pkg.name.name {
+                    Some(&p.name.version)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let base = pkg.name.name.to_snake_case();
+        if versions_with_same_name.len() == 1 {
+            return base;
+        }
+
+        let version = match &pkg.name.version {
+            Some(version) => version,
+            // If this package didn't have a version then don't mangle its name
+            // and other packages with the same name but with versions present
+            // will have their names mangled.
+            None => return base,
+        };
+
+        // Here there's multiple packages with the same name that differ only in
+        // version, so the version needs to be mangled into the Rust module name
+        // that we're generating. This in theory could look at all of
+        // `versions_with_same_name` and produce a minimal diff, e.g. for 0.1.0
+        // and 0.2.0 this could generate "foo1" and "foo2", but for now
+        // a simpler path is chosen to generate "foo0_1_0" and "foo0_2_0".
+        let version = version
+            .to_string()
+            .replace('.', "_")
+            .replace('-', "_")
+            .replace('+', "_")
+            .to_snake_case();
+        format!("{base}{version}")
     }
 
     fn generate(&mut self, resolve: &Resolve, id: WorldId) -> String {
         self.types.analyze(resolve, id);
+        for (i, te) in self.opts.trappable_error_type.iter().enumerate() {
+            let id = resolve_type_in_package(resolve, &te.wit_path)
+                .context(format!("resolving {:?}", te))
+                .unwrap();
+            let name = format!("_TrappableError{i}");
+            uwriteln!(self.src, "type {name} = {};", te.rust_type_name);
+            let prev = self.trappable_errors.insert(id, name);
+            assert!(prev.is_none());
+        }
+
         let world = &resolve.worlds[id];
         for (name, import) in world.imports.iter() {
             if !self.opts.only_interfaces || matches!(import, WorldItem::Interface(_)) {
                 self.import(resolve, id, name, import);
             }
         }
+
         for (name, export) in world.exports.iter() {
             if !self.opts.only_interfaces || matches!(export, WorldItem::Interface(_)) {
                 self.export(resolve, name, export);
@@ -280,15 +326,8 @@ impl Wasmtime {
                         }}
                     "
                 );
-                let pkg = resolve.interfaces[*id].package.unwrap();
-                let pkgname = match name {
-                    WorldKey::Name(_) => None,
-                    WorldKey::Interface(_) => Some(resolve.packages[pkg].name.clone()),
-                };
                 self.import_interfaces
-                    .entry(pkgname)
-                    .or_insert(Vec::new())
-                    .push(ImportInterface { snake, module });
+                    .push((module, self.interface_names[id].clone()));
             }
             WorldItem::Type(ty) => {
                 let name = match name {
@@ -422,9 +461,7 @@ impl Wasmtime {
                 };
                 self.exports
                     .modules
-                    .entry(pkgname.clone())
-                    .or_insert(Vec::new())
-                    .push(module);
+                    .push((module, self.interface_names[id].clone()));
 
                 let name = resolve.name_world_key(name);
                 let (path, method_name) = match pkgname {
@@ -432,7 +469,7 @@ impl Wasmtime {
                         format!(
                             "exports::{}::{}::{snake}::{camel}",
                             pkgname.namespace.to_snake_case(),
-                            pkgname.name.to_snake_case(),
+                            self.name_package_module(resolve, iface.package.unwrap()),
                         ),
                         format!(
                             "{}_{}_{snake}",
@@ -554,18 +591,10 @@ impl Wasmtime {
         }
 
         let imports = mem::take(&mut self.import_interfaces);
-        self.emit_modules(
-            &imports
-                .into_iter()
-                .map(|(k, v)| (k, v.into_iter().map(|m| m.module).collect()))
-                .collect(),
-        );
-        if !self.exports.modules.is_empty() {
-            uwriteln!(self.src, "pub mod exports {{");
-            let exports = mem::take(&mut self.exports.modules);
-            self.emit_modules(&exports);
-            uwriteln!(self.src, "}}");
-        }
+        self.emit_modules(imports);
+
+        let exports = mem::take(&mut self.exports.modules);
+        self.emit_modules(exports);
 
         let mut src = mem::take(&mut self.src);
         if self.opts.rustfmt {
@@ -595,35 +624,78 @@ impl Wasmtime {
         src.into()
     }
 
-    fn emit_modules(&mut self, modules: &BTreeMap<Option<PackageName>, Vec<String>>) {
-        let mut map = BTreeMap::new();
-        for (pkg, modules) in modules {
-            match pkg {
-                Some(pkg) => {
-                    let prev = map
-                        .entry(&pkg.namespace)
-                        .or_insert(BTreeMap::new())
-                        .insert(&pkg.name, modules);
-                    assert!(prev.is_none());
-                }
-                None => {
-                    for module in modules {
-                        uwriteln!(self.src, "{module}");
-                    }
-                }
+    fn emit_modules(&mut self, modules: Vec<(String, InterfaceName)>) {
+        #[derive(Default)]
+        struct Module {
+            submodules: BTreeMap<String, Module>,
+            contents: Vec<String>,
+        }
+        let mut map = Module::default();
+        for (module, name) in modules {
+            let path = match name {
+                InterfaceName::Remapped { local_path, .. } => local_path,
+                InterfaceName::Path(path) => path,
+            };
+            let mut cur = &mut map;
+            for name in path[..path.len() - 1].iter() {
+                cur = cur
+                    .submodules
+                    .entry(name.clone())
+                    .or_insert(Module::default());
+            }
+            cur.contents.push(module);
+        }
+
+        emit(&mut self.src, map);
+
+        fn emit(me: &mut Source, module: Module) {
+            for (name, submodule) in module.submodules {
+                uwriteln!(me, "pub mod {name} {{");
+                emit(me, submodule);
+                uwriteln!(me, "}}");
+            }
+            for submodule in module.contents {
+                uwriteln!(me, "{submodule}");
             }
         }
-        for (ns, pkgs) in map {
-            uwriteln!(self.src, "pub mod {} {{", ns.to_snake_case());
-            for (pkg, modules) in pkgs {
-                uwriteln!(self.src, "pub mod {} {{", pkg.to_snake_case());
-                for module in modules {
-                    uwriteln!(self.src, "{module}");
-                }
-                uwriteln!(self.src, "}}");
-            }
-            uwriteln!(self.src, "}}");
+    }
+
+    fn lookup_replacement(
+        &self,
+        resolve: &Resolve,
+        key: &WorldKey,
+        item: Option<&str>,
+    ) -> Option<&str> {
+        // First try to lookup the exact name of the interface as specified
+        // via `name_world_key`.
+        let name = resolve.name_world_key(key);
+        let candidate1 = match item {
+            Some(item) => format!("{name}/{item}"),
+            None => name.clone(),
+        };
+        if let Some(ret) = self.opts.with.get(&candidate1) {
+            return Some(ret);
         }
+
+        // .. if the above failed allow omitting the `@...` version information
+        // and see if there's a `with` key for that.
+        //
+        // NB: this means that in a scenario where there's packages with the
+        // same name/namespace where one has a version and one doesn't there's
+        // no way to use `with` to specify just one and not the other. That
+        // should be ok for now, but this should ideally detect a situation like
+        // that and omit this fallback in such a situation.
+        let version_start = name.find('@')?;
+        let name = &name[..version_start];
+        let candidate2 = match item {
+            Some(item) => format!("{name}/{item}"),
+            None => name.to_string(),
+        };
+        if let Some(ret) = self.opts.with.get(&candidate2) {
+            return Some(ret);
+        }
+
+        None
     }
 }
 
@@ -664,19 +736,12 @@ impl Wasmtime {
             return;
         }
         let mut interfaces = Vec::new();
-        for (pkg, imports) in self.import_interfaces.iter() {
-            for import in imports {
-                let mut path = String::new();
-                if let Some(pkg) = pkg {
-                    path.push_str(&pkg.namespace.to_snake_case());
-                    path.push_str("::");
-                    path.push_str(&pkg.name.to_snake_case());
-                    path.push_str("::");
-                }
-
-                path.push_str(&import.snake);
-                interfaces.push(path);
-            }
+        for (_, name) in self.import_interfaces.iter() {
+            let path = match name {
+                InterfaceName::Remapped { .. } => unreachable!("imported a remapped module"),
+                InterfaceName::Path(path) => path,
+            };
+            interfaces.push(path.join("::"));
         }
 
         uwrite!(
@@ -759,77 +824,66 @@ impl Wasmtime {
     }
 }
 
-fn resolve_type_in_package(
-    resolve: &Resolve,
-    package_path: &str,
-    type_name: &str,
-) -> anyhow::Result<TypeId> {
-    // foo:bar/baz
-
-    let (namespace, rest) = package_path
-        .split_once(':')
-        .ok_or_else(|| anyhow!("Invalid package path: missing package identifier"))?;
-
-    let (package_name, iface_name) = rest
-        .split_once('/')
-        .ok_or_else(|| anyhow!("Invalid package path: missing namespace separator"))?;
-
-    // TODO: we should handle version annotations
-    if package_name.contains('@') {
-        bail!("Invalid package path: version parsing is not currently handled");
+fn resolve_type_in_package(resolve: &Resolve, wit_path: &str) -> anyhow::Result<TypeId> {
+    // Build a map, `packages_to_omit_version`, where that package can be
+    // uniquely identified by its name/namespace combo and as such version
+    // information is not required.
+    let mut packages_with_same_name = HashMap::new();
+    for (id, pkg) in resolve.packages.iter() {
+        packages_with_same_name
+            .entry(PackageName {
+                version: None,
+                ..pkg.name.clone()
+            })
+            .or_insert(Vec::new())
+            .push(id)
     }
+    let packages_to_omit_version = packages_with_same_name
+        .iter()
+        .filter_map(
+            |(_name, list)| {
+                if list.len() == 1 {
+                    Some(list)
+                } else {
+                    None
+                }
+            },
+        )
+        .flat_map(|l| l)
+        .collect::<HashSet<_>>();
 
-    let packages = Vec::from_iter(
-        resolve
-            .package_names
-            .iter()
-            .filter(|(pname, _)| pname.namespace == namespace && pname.name == package_name),
-    );
-
-    if packages.len() != 1 {
-        if packages.is_empty() {
-            bail!("No package named `{}`", namespace);
+    // Look for an interface whose assigned prefix starts `wit_path`. Not
+    // exactly the most efficient thing ever but is sufficient for now.
+    for (id, interface) in resolve.interfaces.iter() {
+        let iface_name = match &interface.name {
+            Some(name) => name,
+            None => continue,
+        };
+        let pkgid = interface.package.unwrap();
+        let pkgname = &resolve.packages[pkgid].name;
+        let prefix = if packages_to_omit_version.contains(&pkgid) {
+            let mut name = pkgname.clone();
+            name.version = None;
+            format!("{name}/{iface_name}")
         } else {
-            // Getting here is a bug, parsing version identifiers would disambiguate the intended
-            // package.
-            bail!(
-                "Multiple packages named `{}` found ({:?})",
-                namespace,
-                packages
-            );
-        }
+            resolve.id_of(id).unwrap()
+        };
+        let wit_path = match wit_path.strip_prefix(&prefix) {
+            Some(rest) => rest,
+            None => continue,
+        };
+        let wit_path = wit_path
+            .strip_prefix('/')
+            .ok_or_else(|| anyhow!("expected `/` after interface name"))?;
+
+        return interface
+            .types
+            .get(wit_path)
+            .copied()
+            .ok_or_else(|| anyhow!("no types found to match `{wit_path}` in interface"));
     }
 
-    let (_, &package_id) = packages[0];
-    let package = &resolve.packages[package_id];
-
-    let (_, &iface_id) = package
-        .interfaces
-        .iter()
-        .find(|(name, _)| name.as_str() == iface_name)
-        .ok_or_else(|| {
-            anyhow!(
-                "Unknown interface `{}` in package `{}`",
-                iface_name,
-                package_path
-            )
-        })?;
-
-    let iface = &resolve.interfaces[iface_id];
-
-    let (_, &type_id) = iface
-        .types
-        .iter()
-        .find(|(n, _)| n.as_str() == type_name)
-        .ok_or_else(|| {
-            anyhow!(
-                "No type named `{}` in package `{}`",
-                package_name,
-                package_path
-            )
-        })?;
-
-    Ok(type_id)
+    bail!("no package/interface found to match `{wit_path}`")
 }
 
 struct InterfaceGenerator<'a> {
@@ -837,32 +891,15 @@ struct InterfaceGenerator<'a> {
     gen: &'a mut Wasmtime,
     resolve: &'a Resolve,
     current_interface: Option<(InterfaceId, &'a WorldKey, bool)>,
-
-    /// A mapping of wit types to their rust type name equivalent. This is the pre-processed
-    /// version of `gen.opts.trappable_error_types`, where the types have been eagerly resolved.
-    trappable_errors: IndexMap<TypeId, String>,
 }
 
 impl<'a> InterfaceGenerator<'a> {
     fn new(gen: &'a mut Wasmtime, resolve: &'a Resolve) -> InterfaceGenerator<'a> {
-        let trappable_errors = gen
-            .opts
-            .trappable_error_type
-            .iter()
-            .map(|te| {
-                let id = resolve_type_in_package(resolve, &te.wit_package_path, &te.wit_type_name)
-                    .context(format!("resolving {:?}", te))?;
-                Ok((id, te.rust_type_name.clone()))
-            })
-            .collect::<anyhow::Result<IndexMap<_, _>>>()
-            .unwrap();
-
         InterfaceGenerator {
             src: Source::default(),
             gen,
             resolve,
             current_interface: None,
-            trappable_errors,
         }
     }
 
@@ -876,10 +913,6 @@ impl<'a> InterfaceGenerator<'a> {
     fn types(&mut self, id: InterfaceId) {
         for (name, id) in self.resolve.interfaces[id].types.iter() {
             self.define_type(name, *id);
-
-            if let Some(rust_name) = self.trappable_errors.get(id) {
-                self.define_trappable_error_type(*id, rust_name.clone())
-            }
         }
     }
 
@@ -912,16 +945,28 @@ impl<'a> InterfaceGenerator<'a> {
         self.assert_type(id, &name);
     }
 
-    fn type_resource(&mut self, id: TypeId, _name: &str, resource: &TypeDef, docs: &Docs) {
-        let camel = resource
-            .name
-            .as_ref()
-            .expect("resources are required to be named")
-            .to_upper_camel_case();
+    fn type_resource(&mut self, id: TypeId, name: &str, resource: &TypeDef, docs: &Docs) {
+        let camel = name.to_upper_camel_case();
 
         if self.types_imported() {
             self.rustdoc(docs);
-            uwriteln!(self.src, "pub enum {camel} {{}}");
+
+            let replacement = match self.current_interface {
+                Some((_, key, _)) => self.gen.lookup_replacement(self.resolve, key, Some(name)),
+                None => self.gen.opts.with.get(name).map(|s| s.as_str()),
+            };
+            match replacement {
+                Some(path) => {
+                    uwriteln!(
+                        self.src,
+                        "pub use {}{path} as {camel};",
+                        self.path_to_root()
+                    );
+                }
+                None => {
+                    uwriteln!(self.src, "pub enum {camel} {{}}");
+                }
+            }
 
             if self.gen.opts.async_.maybe_async() {
                 uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
@@ -1455,9 +1500,11 @@ impl<'a> InterfaceGenerator<'a> {
             _ => return None,
         };
 
-        let rust_type = self.trappable_errors.get(&error_typeid)?;
+        let name = self.gen.trappable_errors.get(&error_typeid)?;
 
-        Some((result, error_typeid, rust_type.clone()))
+        let mut path = self.path_to_root();
+        uwrite!(path, "{name}");
+        Some((result, error_typeid, path))
     }
 
     fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
@@ -1487,13 +1534,58 @@ impl<'a> InterfaceGenerator<'a> {
             }
             self.generate_function_trait_sig(func);
         }
+
+        // Generate `convert_*` functions to convert custom trappable errors
+        // into the representation required by Wasmtime's component API.
+        let mut required_conversion_traits = IndexSet::new();
+        let mut errors_converted = IndexSet::new();
+        let my_error_types = iface
+            .types
+            .iter()
+            .filter(|(_, id)| self.gen.trappable_errors.contains_key(*id))
+            .map(|(_, id)| *id);
+        let used_error_types = iface
+            .functions
+            .iter()
+            .filter_map(|(_, func)| self.special_case_trappable_error(&func.results))
+            .map(|(_, id, _)| id);
+        for err in my_error_types.chain(used_error_types).collect::<Vec<_>>() {
+            let custom_name = &self.gen.trappable_errors[&err];
+            let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
+            let err_name = err.name.as_ref().unwrap();
+            let err_snake = err_name.to_snake_case();
+            let err_camel = err_name.to_upper_camel_case();
+            let owner = match err.owner {
+                TypeOwner::Interface(i) => i,
+                _ => unimplemented!(),
+            };
+            match self.path_to_interface(owner) {
+                Some(path) => {
+                    required_conversion_traits.insert(format!("{path}::Host"));
+                }
+                None => {
+                    if errors_converted.insert(err_name) {
+                        let root = self.path_to_root();
+                        uwriteln!(
+                            self.src,
+                            "fn convert_{err_snake}(&mut self, err: {root}{custom_name}) -> wasmtime::Result<{err_camel}>;"
+                        );
+                    }
+                }
+            }
+        }
         uwriteln!(self.src, "}}");
 
-        let where_clause = if self.gen.opts.async_.maybe_async() {
+        let mut where_clause = if self.gen.opts.async_.maybe_async() {
             "T: Send, U: Host + Send".to_string()
         } else {
             "U: Host".to_string()
         };
+
+        for t in required_conversion_traits {
+            where_clause.push_str(" + ");
+            where_clause.push_str(&t);
+        }
 
         uwriteln!(
             self.src,
@@ -1643,16 +1735,24 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        if self.special_case_trappable_error(&func.results).is_some() {
+        if let Some((_, err, _)) = self.special_case_trappable_error(&func.results) {
+            let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err)];
+            let err_name = err.name.as_ref().unwrap();
+            let owner = match err.owner {
+                TypeOwner::Interface(i) => i,
+                _ => unimplemented!(),
+            };
+            let convert_trait = match self.path_to_interface(owner) {
+                Some(path) => format!("{path}::Host"),
+                None => format!("Host"),
+            };
+            let convert = format!("{}::convert_{}", convert_trait, err_name.to_snake_case());
             uwrite!(
                 self.src,
-                "match r {{
-                    Ok(a) => Ok((Ok(a),)),
-                    Err(e) => match e.downcast() {{
-                        Ok(api_error) => Ok((Err(api_error),)),
-                        Err(anyhow_error) => Err(anyhow_error),
-                    }}
-                }}"
+                "Ok((match r {{
+                    Ok(a) => Ok(a),
+                    Err(e) => Err({convert}(host, e)?),
+                }},))"
             );
         } else if func.results.iter_types().len() == 1 {
             uwrite!(self.src, "Ok((r?,))\n");
@@ -1687,9 +1787,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(")");
         self.push_str(" -> ");
 
-        if let Some((r, error_id, error_typename)) =
-            self.special_case_trappable_error(&func.results)
-        {
+        if let Some((r, _id, error_typename)) = self.special_case_trappable_error(&func.results) {
             // Functions which have a single result `result<ok,err>` get special
             // cased to use the host_wasmtime_rust::Error<err>, making it possible
             // for them to trap or use `?` to propogate their errors
@@ -1700,12 +1798,6 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("()");
             }
             self.push_str(",");
-            if let TypeOwner::Interface(id) = self.resolve.types[error_id].owner {
-                if let Some(path) = self.path_to_interface(id) {
-                    self.push_str(&path);
-                    self.push_str("::");
-                }
-            }
             self.push_str(&error_typename);
             self.push_str(">");
         } else {
@@ -1855,53 +1947,6 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str("}\n");
     }
 
-    fn define_trappable_error_type(&mut self, id: TypeId, rust_name: String) {
-        let info = self.info(id);
-        if self.lifetime_for(&info, TypeMode::Owned).is_some() {
-            panic!("wit error for {rust_name} is not 'static")
-        }
-        let abi_type = self.param_name(id);
-
-        uwriteln!(
-            self.src,
-            "
-                #[derive(Debug)]
-                pub struct {rust_name} {{
-                    inner: anyhow::Error,
-                }}
-                impl std::fmt::Display for {rust_name} {{
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{
-                        write!(f, \"{{}}\", self.inner)
-                    }}
-                }}
-                impl std::error::Error for {rust_name} {{
-                    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {{
-                        self.inner.source()
-                    }}
-                }}
-                impl {rust_name} {{
-                    pub fn trap(inner: anyhow::Error) -> Self {{
-                        Self {{ inner }}
-                    }}
-                    pub fn downcast(self) -> Result<{abi_type}, anyhow::Error> {{
-                        self.inner.downcast()
-                    }}
-                    pub fn downcast_ref(&self) -> Option<&{abi_type}> {{
-                        self.inner.downcast_ref()
-                    }}
-                    pub fn context(self, s: impl Into<String>) -> Self {{
-                        Self {{ inner: self.inner.context(s.into()) }}
-                    }}
-                }}
-                impl From<{abi_type}> for {rust_name} {{
-                    fn from(abi: {abi_type}) -> {rust_name} {{
-                        {rust_name} {{ inner: anyhow::Error::from(abi) }}
-                    }}
-                }}
-           "
-        );
-    }
-
     fn rustdoc(&mut self, docs: &Docs) {
         let docs = match &docs.contents {
             Some(docs) => docs,
@@ -1912,6 +1957,24 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(line);
             self.push_str("\n");
         }
+    }
+
+    fn path_to_root(&self) -> String {
+        let mut path_to_root = String::new();
+        if let Some((_, key, is_export)) = self.current_interface {
+            match key {
+                WorldKey::Name(_) => {
+                    path_to_root.push_str("super::");
+                }
+                WorldKey::Interface(_) => {
+                    path_to_root.push_str("super::super::super::");
+                }
+            }
+            if is_export {
+                path_to_root.push_str("super::");
+            }
+        }
+        path_to_root
     }
 }
 
@@ -1925,25 +1988,23 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
-        let mut path_to_root = String::new();
-        if let Some((cur, key, is_export)) = self.current_interface {
+        if let Some((cur, _, _)) = self.current_interface {
             if cur == interface {
                 return None;
             }
-            match key {
-                WorldKey::Name(_) => {
-                    path_to_root.push_str("super::");
+        }
+        let mut path_to_root = self.path_to_root();
+        match &self.gen.interface_names[&interface] {
+            InterfaceName::Remapped { name_at_root, .. } => path_to_root.push_str(name_at_root),
+            InterfaceName::Path(path) => {
+                for (i, name) in path.iter().enumerate() {
+                    if i > 0 {
+                        path_to_root.push_str("::");
+                    }
+                    path_to_root.push_str(name);
                 }
-                WorldKey::Interface(_) => {
-                    path_to_root.push_str("super::super::super::");
-                }
-            }
-            if is_export {
-                path_to_root.push_str("super::");
             }
         }
-        let InterfaceName { path, .. } = &self.gen.interface_names[&interface];
-        path_to_root.push_str(path);
         Some(path_to_root)
     }
 

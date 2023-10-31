@@ -83,7 +83,7 @@ block0(v0: i128):
 ; block0:
 ;   ctz a3,a1
 ;   ctz a5,a0
-;   select_reg a1,a3,zero##condition=(a0 eq zero)
+;   select a1,a3,zero##condition=(a0 eq zero)
 ;   add a0,a5,a1
 ;   li a1,0
 ;   ret
@@ -92,10 +92,10 @@ block0(v0: i128):
 ; block0: ; offset 0x0
 ;   .byte 0x93, 0x96, 0x15, 0x60
 ;   .byte 0x93, 0x17, 0x15, 0x60
-;   beqz a0, 0xc
-;   mv a1, zero
-;   j 8
+;   bnez a0, 0xc
 ;   mv a1, a3
+;   j 8
+;   mv a1, zero
 ;   add a0, a5, a1
 ;   mv a1, zero
 ;   ret

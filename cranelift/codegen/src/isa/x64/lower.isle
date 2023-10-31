@@ -1265,6 +1265,27 @@
             (cmove ConsumesFlags (cmove ty (CC.S) src neg_result)))
         (with_flags_reg (produces_flags_ignore neg) cmove)))
 
+;; `i128`. Negate the low bits, `adc` to the higher bits, then negate high bits.
+(rule (lower (has_type $I128 (iabs x)))
+      ;; Get the high/low registers for `x`.
+      (let ((x_regs ValueRegs x)
+            (x_lo Gpr (value_regs_get_gpr x_regs 0))
+            (x_hi Gpr (value_regs_get_gpr x_regs 1))
+            ; negate low bits, then add 0 with carry to high bits.
+            (neg_lo ProducesFlags (x64_neg_paired $I64 x_lo))
+            (adc_hi ConsumesFlags (x64_adc_paired $I64 x_hi (imm $I64 0)))
+            (neg_adc_vals ValueRegs (with_flags neg_lo adc_hi))
+            ; negate high bits.
+            (neg_hi ProducesFlags (x64_neg_paired $I64 (value_regs_get neg_adc_vals 1)))
+            (neg_hi_flag_only ProducesFlags (produces_flags_ignore neg_hi))
+            ; cmove based on sign flag from hi negation.
+            (cmove_lo ConsumesFlags (cmove $I64 (CC.S) x_lo
+                                     (value_regs_get neg_adc_vals 0)))
+            (cmove_hi ConsumesFlags (cmove $I64 (CC.S) x_hi
+                                     (produces_flags_get_reg neg_hi)))
+            (cmoves ConsumesFlags (consumes_flags_concat cmove_lo cmove_hi)))
+        (with_flags neg_hi_flag_only cmoves)))
+
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fabs x)))
@@ -2061,8 +2082,7 @@
 ;; than one instruction for certain types (e.g., XMM-held, I128).
 
 (rule (lower (has_type ty (select (maybe_uextend (icmp cc a @ (value_type (fits_in_64 a_ty)) b)) x y)))
-      (let ((size OperandSize (raw_operand_size_of_type a_ty)))
-           (with_flags (x64_cmp size b a) (cmove_from_values ty cc x y))))
+      (lower_select_icmp ty (emit_cmp cc a b) x y))
 
 ;; Finally, we lower `select` from a condition value `c`. These rules are meant
 ;; to be the final, default lowerings if no other patterns matched above.
@@ -2077,6 +2097,10 @@
 (rule -2 (lower (has_type ty (select c @ (value_type $I128) x y)))
       (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
         (select_icmp cond_result x y)))
+
+(decl lower_select_icmp (Type IcmpCondResult Value Value) InstOutput)
+(rule (lower_select_icmp ty (IcmpCondResult.Condition flags cc) x y)
+      (with_flags flags (cmove_from_values ty cc x y)))
 
 ;; Specializations for floating-point compares to generate a `mins*` or a
 ;; `maxs*` instruction. These are equivalent to the "pseudo-m{in,ax}"
@@ -3336,23 +3360,40 @@
 
 ;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Note that the `cvtsi2s{s,d}` instruction is not just an int-to-float
+;; conversion instruction in isolation, it also takes the upper 64-bits of an
+;; xmm register and places it into the destination. We don't actually want that
+;; to happen as it could accidentally create a false dependency with a
+;; previous instruction defining the register's upper 64-bits. See #7085 for
+;; an instance of this.
+;;
+;; This means that the first operand to all of the int-to-float conversions here
+;; are `(xmm_zero)` operands which is a guaranteed zero register that has no
+;; dependencies on other instructions.
+;;
+;; Ideally this would be lifted out to a higher level to get deduplicated
+;; between consecutive int-to-float operations but that's not easy
+;; to do at this time. One possibility would be a mid-end rule which rewrites
+;; `fcvt_from_sint` to an x86-specific opcode using a zero constant which would
+;; be subject to normal LICM, but that's not feasible today.
+
 (rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I8))))
-      (x64_cvtsi2ss $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2ss $I32 (xmm_zero $F32X4) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I16))))
-      (x64_cvtsi2ss $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2ss $I32 (xmm_zero $F32X4) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
-      (x64_cvtsi2ss ty a))
+      (x64_cvtsi2ss ty (xmm_zero $F32X4) a))
 
 (rule 2 (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I8))))
-      (x64_cvtsi2sd $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2sd $I32 (xmm_zero $F64X2) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 2 (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I16))))
-      (x64_cvtsi2sd $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2sd $I32 (xmm_zero $F64X2) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
-      (x64_cvtsi2sd ty a))
+      (x64_cvtsi2sd ty (xmm_zero $F64X2) a))
 
 (rule 0 (lower (fcvt_from_sint a @ (value_type $I32X4)))
       (x64_cvtdq2ps a))
@@ -3363,10 +3404,10 @@
 ;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
-      (x64_cvtsi2ss $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
+      (x64_cvtsi2ss $I64 (xmm_zero $F32X4) (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
-      (x64_cvtsi2sd $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
+      (x64_cvtsi2sd $I64 (xmm_zero $F64X2) (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
 (rule (lower (has_type ty (fcvt_from_uint val @ (value_type $I64))))
       (cvt_u64_to_float_seq ty val))

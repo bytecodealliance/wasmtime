@@ -127,6 +127,7 @@ impl MmapVec {
 impl Deref for MmapVec {
     type Target = [u8];
 
+    #[inline]
     fn deref(&self) -> &[u8] {
         // SAFETY: this mmap owns its own range of the underlying mmap so it
         // should be all good-to-read.

@@ -371,10 +371,47 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | Return { .. }
                         | F32Const { .. }
                         | F64Const { .. }
+                        | F32Add { .. }
+                        | F64Add { .. }
+                        | F32Sub { .. }
+                        | F64Sub { .. }
+                        | F32Mul { .. }
+                        | F64Mul { .. }
+                        | F32Div { .. }
+                        | F64Div { .. }
+                        | F32Min { .. }
+                        | F64Min { .. }
+                        | F32Max { .. }
+                        | F64Max { .. }
+                        | F32Copysign { .. }
+                        | F64Copysign { .. }
                         | F32Abs { .. }
                         | F64Abs { .. }
                         | F32Neg { .. }
-                        | F64Neg { .. } => {}
+                        | F64Neg { .. }
+                        | F32Sqrt { .. }
+                        | F64Sqrt { .. }
+                        | F32Eq { .. }
+                        | F64Eq { .. }
+                        | F32Ne { .. }
+                        | F64Ne { .. }
+                        | F32Lt { .. }
+                        | F64Lt { .. }
+                        | F32Gt { .. }
+                        | F64Gt { .. }
+                        | F32Le { .. }
+                        | F64Le { .. }
+                        | F32Ge { .. }
+                        | F64Ge { .. }
+                        | CallIndirect { .. }
+                        | ElemDrop { .. }
+                        | TableCopy { .. }
+                        | TableSet { .. }
+                        | TableGet { .. }
+                        | TableFill { .. }
+                        | TableGrow { .. }
+                        | TableSize { .. }
+                        | TableInit { .. } => {}
                         _ => {
                             supported = false;
                             break 'main;

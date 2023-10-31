@@ -1,6 +1,9 @@
 test interpret
 test run
+set enable_llvm_abi_extensions=true
+target aarch64
 target s390x
+target x86_64
 
 function %iabs_i128(i128) -> i128 {
 block0(v0: i128):
@@ -10,4 +13,6 @@ block0(v0: i128):
 ; run: %iabs_i128(0) == 0
 ; run: %iabs_i128(-1) == 1
 ; run: %iabs_i128(1) == 1
+; run: %iabs_i128(0x40000000_00000000_80000000_00000000) == 0x40000000_00000000_80000000_00000000
+; run: %iabs_i128(0x80000000_00000000_80000000_00000000) == 0x7fffffff_ffffffff_80000000_00000000
 ; run: %iabs_i128(0x80000000_00000000_00000000_00000000) == 0x80000000_00000000_00000000_00000000

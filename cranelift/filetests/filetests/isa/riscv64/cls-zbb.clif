@@ -13,25 +13,21 @@ block0(v0: i8):
 ; block0:
 ;   sext.b a2,a0
 ;   not a4,a2
-;   select_reg a0,a4,a2##condition=(a2 slt zero)
-;   andi a2,a0,255
-;   clz a4,a2
-;   addi a0,a4,-56
-;   addi a0,a0,-1
+;   select a0,a4,a2##condition=(a2 slt zero)
+;   clz a2,a0
+;   addi a0,a2,-57
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x16, 0x45, 0x60
 ;   not a4, a2
-;   bltz a2, 0xc
-;   mv a0, a2
-;   j 8
+;   bgez a2, 0xc
 ;   mv a0, a4
-;   andi a2, a0, 0xff
-;   .byte 0x13, 0x17, 0x06, 0x60
-;   addi a0, a4, -0x38
-;   addi a0, a0, -1
+;   j 8
+;   mv a0, a2
+;   .byte 0x13, 0x16, 0x05, 0x60
+;   addi a0, a2, -0x39
 ;   ret
 
 function %cls_i16(i16) -> i16 {
@@ -44,25 +40,21 @@ block0(v0: i16):
 ; block0:
 ;   sext.h a2,a0
 ;   not a4,a2
-;   select_reg a0,a4,a2##condition=(a2 slt zero)
-;   zext.h a2,a0
-;   clz a4,a2
-;   addi a0,a4,-48
-;   addi a0,a0,-1
+;   select a0,a4,a2##condition=(a2 slt zero)
+;   clz a2,a0
+;   addi a0,a2,-49
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x16, 0x55, 0x60
 ;   not a4, a2
-;   bltz a2, 0xc
-;   mv a0, a2
-;   j 8
+;   bgez a2, 0xc
 ;   mv a0, a4
-;   .byte 0x3b, 0x46, 0x05, 0x08
-;   .byte 0x13, 0x17, 0x06, 0x60
-;   addi a0, a4, -0x30
-;   addi a0, a0, -1
+;   j 8
+;   mv a0, a2
+;   .byte 0x13, 0x16, 0x05, 0x60
+;   addi a0, a2, -0x31
 ;   ret
 
 function %cls_i32(i32) -> i32 {
@@ -75,21 +67,21 @@ block0(v0: i32):
 ; block0:
 ;   sext.w a2,a0
 ;   not a4,a2
-;   select_reg a0,a4,a2##condition=(a2 slt zero)
-;   clzw a2,a0
-;   addi a0,a2,-1
+;   select a0,a4,a2##condition=(a2 slt zero)
+;   clz a2,a0
+;   addi a0,a2,-33
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a2, a0
 ;   not a4, a2
-;   bltz a2, 0xc
-;   mv a0, a2
-;   j 8
+;   bgez a2, 0xc
 ;   mv a0, a4
-;   .byte 0x1b, 0x16, 0x05, 0x60
-;   addi a0, a2, -1
+;   j 8
+;   mv a0, a2
+;   .byte 0x13, 0x16, 0x05, 0x60
+;   addi a0, a2, -0x21
 ;   ret
 
 function %cls_i64(i64) -> i64 {
@@ -101,7 +93,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   not a2,a0
-;   select_reg a4,a2,a0##condition=(a0 slt zero)
+;   select a4,a2,a0##condition=(a0 slt zero)
 ;   clz a0,a4
 ;   addi a0,a0,-1
 ;   ret
@@ -109,10 +101,10 @@ block0(v0: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   not a2, a0
-;   bltz a0, 0xc
-;   mv a4, a0
-;   j 8
+;   bgez a0, 0xc
 ;   mv a4, a2
+;   j 8
+;   mv a4, a0
 ;   .byte 0x13, 0x15, 0x07, 0x60
 ;   addi a0, a0, -1
 ;   ret
@@ -126,14 +118,13 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   not a3,a0
-;   select_reg a5,a3,a0##condition=(a1 slt zero)
+;   select a5,a3,a0##condition=(a1 slt zero)
 ;   not a2,a1
-;   select_reg a3,a2,a1##condition=(a1 slt zero)
+;   select a3,a2,a1##condition=(a1 slt zero)
 ;   clz a0,a3
 ;   clz a1,a5
-;   select_reg a3,a1,zero##condition=(a3 eq zero)
+;   select a3,a1,zero##condition=(a3 eq zero)
 ;   add a5,a0,a3
-;   li a1,0
 ;   addi a0,a5,-1
 ;   li a1,0
 ;   ret
@@ -141,23 +132,22 @@ block0(v0: i128):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   not a3, a0
-;   bltz a1, 0xc
-;   mv a5, a0
-;   j 8
+;   bgez a1, 0xc
 ;   mv a5, a3
-;   not a2, a1
-;   bltz a1, 0xc
-;   mv a3, a1
 ;   j 8
+;   mv a5, a0
+;   not a2, a1
+;   bgez a1, 0xc
 ;   mv a3, a2
+;   j 8
+;   mv a3, a1
 ;   .byte 0x13, 0x95, 0x06, 0x60
 ;   .byte 0x93, 0x95, 0x07, 0x60
-;   beqz a3, 0xc
-;   mv a3, zero
-;   j 8
+;   bnez a3, 0xc
 ;   mv a3, a1
+;   j 8
+;   mv a3, zero
 ;   add a5, a0, a3
-;   mv a1, zero
 ;   addi a0, a5, -1
 ;   mv a1, zero
 ;   ret

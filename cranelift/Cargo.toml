@@ -44,7 +44,7 @@ indicatif = "0.13.0"
 thiserror = { workspace = true }
 walkdir = { workspace = true }
 anyhow = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ['default'] }
 similar = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }

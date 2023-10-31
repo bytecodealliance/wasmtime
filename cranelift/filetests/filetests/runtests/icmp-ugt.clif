@@ -53,3 +53,13 @@ block0(v0: i64, v1: i64):
 ; run: %icmp_ugt_i64(0, 1) == 0
 ; run: %icmp_ugt_i64(-5, -1) == 0
 ; run: %icmp_ugt_i64(1, -1) == 0
+
+
+function %icmp_ugt_const() -> i8  {
+block0:
+    v11 = iconst.i8 196
+    v17 = icmp ugt v11, v11
+    return v17
+}
+
+; run: %icmp_ugt_const() == 0

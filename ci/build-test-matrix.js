@@ -91,17 +91,11 @@ const array = [
     "target": "riscv64gc-unknown-linux-gnu",
     "gcc_package": "gcc-riscv64-linux-gnu",
     "gcc": "riscv64-linux-gnu-gcc",
-    "qemu": "qemu-riscv64 -cpu rv64,v=true,vlen=256,vext_spec=v1.0,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true -L /usr/riscv64-linux-gnu",
+    "qemu": "qemu-riscv64 -cpu rv64,v=true,vlen=256,vext_spec=v1.0,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true,zcb=true -L /usr/riscv64-linux-gnu",
     "qemu_target": "riscv64-linux-user",
     "name": "Test Linux riscv64",
     "filter": "linux-riscv64",
     "isa": "riscv64",
-    // There appears to be a miscompile in Rust 1.72 for riscv64 where
-    // wasmtime-wasi tests are segfaulting in CI with the stack pointing in
-    // Tokio. Updating rustc seems to do the trick, so without doing a full
-    // rigorous investigation this uses beta for now but Rust 1.73 should be
-    // good to go for this.
-    "rust": "beta-2023-09-10",
   }
 ];
 

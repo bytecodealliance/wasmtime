@@ -17,7 +17,7 @@ block1:
 ;   li a1,0
 ;   fmv.d.x fa3,a1
 ;   fle.d a2,fa3,fa3
-;   bne a2,zero,taken(label2),not_taken(label1)
+;   beq a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -48,7 +48,7 @@ block1:
 ;   li a1,0
 ;   fmv.d.x fa3,a1
 ;   fle.d a2,fa3,fa3
-;   bne a2,zero,taken(label2),not_taken(label1)
+;   beq a2,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -62,5 +62,751 @@ block1:
 ;   fmv.d.x fa3, a1
 ;   fle.d a2, fa3, fa3
 ; block1: ; offset 0xc
+;   ret
+
+function %ord(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ord v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   feq.s a3,fa0,fa0
+;   feq.s a5,fa1,fa1
+;   and a0,a3,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a3, fa0, fa0
+;   feq.s a5, fa1, fa1
+;   and a0, a3, a5
+;   ret
+
+function %uno(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp uno v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   feq.s a3,fa0,fa0
+;   feq.s a5,fa1,fa1
+;   and a1,a3,a5
+;   seqz a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a3, fa0, fa0
+;   feq.s a5, fa1, fa1
+;   and a1, a3, a5
+;   seqz a0, a1
+;   ret
+
+function %eq(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp eq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   feq.s a0,fa0,fa1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a0, fa0, fa1
+;   ret
+
+function %ne(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ne v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   feq.s a3,fa0,fa1
+;   seqz a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a3, fa0, fa1
+;   seqz a0, a3
+;   ret
+
+function %one(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp one v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   flt.s a3,fa0,fa1
+;   flt.s a5,fa1,fa0
+;   or a0,a3,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.s a3, fa0, fa1
+;   flt.s a5, fa1, fa0
+;   or a0, a3, a5
+;   ret
+
+function %ueq(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ueq v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   flt.s a3,fa0,fa1
+;   flt.s a5,fa1,fa0
+;   or a1,a3,a5
+;   seqz a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.s a3, fa0, fa1
+;   flt.s a5, fa1, fa0
+;   or a1, a3, a5
+;   seqz a0, a1
+;   ret
+
+function %lt(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp lt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   flt.d a0,fa0,fa1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.d a0, fa0, fa1
+;   ret
+
+function %le(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp le v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   fle.d a0,fa0,fa1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fle.d a0, fa0, fa1
+;   ret
+
+function %gt(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp gt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   flt.d a0,fa1,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.d a0, fa1, fa0
+;   ret
+
+function %ge(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp ge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   fle.d a0,fa1,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fle.d a0, fa1, fa0
+;   ret
+
+function %ult(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp ult v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   fle.d a3,fa1,fa0
+;   seqz a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fle.d a3, fa1, fa0
+;   seqz a0, a3
+;   ret
+
+function %ule(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp ule v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   flt.d a3,fa1,fa0
+;   seqz a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.d a3, fa1, fa0
+;   seqz a0, a3
+;   ret
+
+function %ugt(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp ugt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   fle.d a3,fa0,fa1
+;   seqz a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fle.d a3, fa0, fa1
+;   seqz a0, a3
+;   ret
+
+function %uge(f64, f64) -> i8 {
+block0(v0: f64, v1: f64):
+    v2 = fcmp uge v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   flt.d a3,fa0,fa1
+;   seqz a0,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.d a3, fa0, fa1
+;   seqz a0, a3
+;   ret
+
+function %br_ord(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ord v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   feq.s a5,fa0,fa0
+;   feq.s a1,fa1,fa1
+;   and a3,a5,a1
+;   bne a3,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a5, fa0, fa0
+;   feq.s a1, fa1, fa1
+;   and a3, a5, a1
+;   bnez a3, 0xc
+; block1: ; offset 0x10
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x18
+;   addi a0, zero, 1
+;   ret
+
+function %br_uno(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp uno v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   feq.s a5,fa0,fa0
+;   feq.s a1,fa1,fa1
+;   and a3,a5,a1
+;   beq a3,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a5, fa0, fa0
+;   feq.s a1, fa1, fa1
+;   and a3, a5, a1
+;   beqz a3, 0xc
+; block1: ; offset 0x10
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x18
+;   addi a0, zero, 1
+;   ret
+
+function %br_eq(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp eq v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   feq.s a5,fa0,fa1
+;   bne a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a5, fa0, fa1
+;   bnez a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_ne(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ne v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   feq.s a5,fa0,fa1
+;   beq a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   feq.s a5, fa0, fa1
+;   beqz a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_one(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp one v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   flt.s a5,fa0,fa1
+;   flt.s a1,fa1,fa0
+;   or a3,a5,a1
+;   bne a3,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.s a5, fa0, fa1
+;   flt.s a1, fa1, fa0
+;   or a3, a5, a1
+;   bnez a3, 0xc
+; block1: ; offset 0x10
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x18
+;   addi a0, zero, 1
+;   ret
+
+function %br_ueq(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ueq v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   flt.s a5,fa0,fa1
+;   flt.s a1,fa1,fa0
+;   or a3,a5,a1
+;   beq a3,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.s a5, fa0, fa1
+;   flt.s a1, fa1, fa0
+;   or a3, a5, a1
+;   beqz a3, 0xc
+; block1: ; offset 0x10
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x18
+;   addi a0, zero, 1
+;   ret
+
+function %br_lt(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp lt v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   flt.s a5,fa0,fa1
+;   bne a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.s a5, fa0, fa1
+;   bnez a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_gt(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp gt v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   flt.s a5,fa1,fa0
+;   bne a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.s a5, fa1, fa0
+;   bnez a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_le(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp le v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   fle.s a5,fa0,fa1
+;   bne a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fle.s a5, fa0, fa1
+;   bnez a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_ge(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ge v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   fle.s a5,fa1,fa0
+;   bne a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fle.s a5, fa1, fa0
+;   bnez a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_ult(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ult v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   fle.s a5,fa1,fa0
+;   beq a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fle.s a5, fa1, fa0
+;   beqz a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_ugt(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ugt v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   fle.s a5,fa0,fa1
+;   beq a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fle.s a5, fa0, fa1
+;   beqz a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_ule(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp ule v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   flt.s a5,fa1,fa0
+;   beq a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.s a5, fa1, fa0
+;   beqz a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
+;   ret
+
+function %br_uge(f32, f32) -> i8 {
+block0(v0: f32, v1: f32):
+    v2 = fcmp uge v0, v1
+    brif v2, block1, block2
+block1:
+    v3 = iconst.i8 1
+    return v3
+block2:
+    v4 = iconst.i8 0
+    return v4
+}
+
+; VCode:
+; block0:
+;   flt.s a5,fa0,fa1
+;   beq a5,zero,taken(label2),not_taken(label1)
+; block1:
+;   li a0,0
+;   ret
+; block2:
+;   li a0,1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   flt.s a5, fa0, fa1
+;   beqz a5, 0xc
+; block1: ; offset 0x8
+;   mv a0, zero
+;   ret
+; block2: ; offset 0x10
+;   addi a0, zero, 1
 ;   ret
 

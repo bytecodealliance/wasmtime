@@ -34,8 +34,8 @@ impl Reg {
     }
 
     /// Get the encoding of the underlying register.
-    pub const fn hw_enc(self) -> u8 {
-        self.0.hw_enc() as u8
+    pub const fn hw_enc(self) -> usize {
+        self.0.hw_enc()
     }
 
     /// Get the physical register representation.

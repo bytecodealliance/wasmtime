@@ -9,7 +9,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -21,8 +21,8 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   ld s1,48(fp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
-;   add sp,+48
+;   addi sp,sp,16
+;   addi sp,sp,48
 ;   ret
 ;
 ; Disassembled:
@@ -78,11 +78,11 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-16
+;   addi sp,sp,-16
 ; block0:
 ;   li s1,10
 ;   sd s1,8(nominal_sp)
@@ -112,7 +112,7 @@ block0:
 ;   li t2,125
 ;   li s1,130
 ;   li a0,135
-;   add sp,-48
+;   addi sp,sp,-48
 ;   virtual_sp_offset_adj +48
 ;   sd t0,0(sp)
 ;   sd t1,8(sp)
@@ -120,13 +120,13 @@ block0:
 ;   sd s1,24(sp)
 ;   sd a0,32(sp)
 ;   load_sym t0,%tail_callee_stack_args+0
-;   ld a0,0(nominal_sp)
 ;   ld s1,8(nominal_sp)
+;   ld a0,0(nominal_sp)
 ;   callind t0
-;   add sp,+16
+;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -176,8 +176,8 @@ block0:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ld a0, 0x30(sp)
 ;   ld s1, 0x38(sp)
+;   ld a0, 0x30(sp)
 ;   jalr t0
 ;   addi sp, sp, 0x10
 ;   ld ra, 8(sp)
@@ -219,11 +219,11 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-32
+;   addi sp,sp,-32
 ; block0:
 ;   li a3,10
 ;   sd a3,16(nominal_sp)
@@ -259,13 +259,13 @@ block0:
 ;   sd t2,16(s1)
 ;   sd a0,24(s1)
 ;   sd a1,32(s1)
-;   ld a1,0(nominal_sp)
-;   ld a0,8(nominal_sp)
 ;   ld s1,16(nominal_sp)
-;   add sp,+32
+;   ld a0,8(nominal_sp)
+;   ld a1,0(nominal_sp)
+;   addi sp,sp,32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -310,9 +310,9 @@ block0:
 ;   sd t2, 0x10(s1)
 ;   sd a0, 0x18(s1)
 ;   sd a1, 0x20(s1)
-;   ld a1, 0(sp)
-;   ld a0, 8(sp)
 ;   ld s1, 0x10(sp)
+;   ld a0, 8(sp)
+;   ld a1, 0(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -328,12 +328,12 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   add sp,-48
+;   addi sp,sp,-48
 ;   virtual_sp_offset_adj +48
 ;   load_addr s1,0(sp)
 ;   load_sym t0,%tail_callee_stack_rets+0
@@ -343,11 +343,11 @@ block0:
 ;   ld a0,16(sp)
 ;   ld a2,24(sp)
 ;   ld s1,32(sp)
-;   add sp,+48
+;   addi sp,sp,48
 ;   virtual_sp_offset_adj -48
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -385,11 +385,11 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-32
+;   addi sp,sp,-32
 ; block0:
 ;   sd a0,0(nominal_sp)
 ;   sd a2,8(nominal_sp)
@@ -408,11 +408,11 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   ld a0,0(nominal_sp)
 ;   ld a2,8(nominal_sp)
 ;   ld a4,16(nominal_sp)
-;   add sp,+32
+;   addi sp,sp,32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
-;   add sp,+48
+;   addi sp,sp,16
+;   addi sp,sp,48
 ;   ret
 ;
 ; Disassembled:
@@ -482,11 +482,11 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   add sp,-16
+;   addi sp,sp,-16
 ; block0:
 ;   li s1,10
 ;   sd s1,8(nominal_sp)
@@ -516,7 +516,7 @@ block0:
 ;   li t2,125
 ;   li s1,130
 ;   li a0,135
-;   add sp,-96
+;   addi sp,sp,-96
 ;   virtual_sp_offset_adj +96
 ;   sd t0,0(sp)
 ;   sd t1,8(sp)
@@ -526,20 +526,20 @@ block0:
 ;   load_addr a0,48(sp)
 ;   sd a0,40(sp)
 ;   load_sym t0,%tail_callee_stack_args_and_rets+0
-;   ld a0,0(nominal_sp)
 ;   ld s1,8(nominal_sp)
+;   ld a0,0(nominal_sp)
 ;   callind t0
 ;   ld a4,0(sp)
 ;   ld a0,8(sp)
 ;   ld a2,16(sp)
 ;   ld a4,24(sp)
 ;   ld s1,32(sp)
-;   add sp,+48
+;   addi sp,sp,48
 ;   virtual_sp_offset_adj -48
-;   add sp,+16
+;   addi sp,sp,16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -591,8 +591,8 @@ block0:
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ld a0, 0x60(sp)
 ;   ld s1, 0x68(sp)
+;   ld a0, 0x60(sp)
 ;   jalr t0
 ;   ld a4, 0(sp)
 ;   ld a0, 8(sp)

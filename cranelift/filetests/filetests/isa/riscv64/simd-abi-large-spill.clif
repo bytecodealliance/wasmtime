@@ -16,12 +16,12 @@ block0:
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   sd s1,-8(sp)
-;   add sp,-1040
+;   addi sp,sp,-1040
 ; block0:
 ;   mv s1,a0
 ;   vle16.v v11,[const(0)] #avl=8, #vtype=(e16, m1, ta, ma)
@@ -30,11 +30,11 @@ block0:
 ;   mv a0,s1
 ;   vle8.v v11,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v11,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
-;   add sp,+1040
+;   addi sp,sp,1040
 ;   ld s1,-8(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -53,7 +53,7 @@ block0:
 ;   .byte 0x87, 0xd5, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x08, 0xcc
 ;   .byte 0xa7, 0x05, 0x01, 0x02
-;   auipc ra, 0 ; reloc_external RiscvCall u2:0 0
+;   auipc ra, 0 ; reloc_external RiscvCallPlt u2:0 0
 ;   jalr ra
 ;   mv a0, s1
 ;   .byte 0x87, 0x05, 0x01, 0x02

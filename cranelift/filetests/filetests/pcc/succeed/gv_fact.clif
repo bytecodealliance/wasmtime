@@ -1,0 +1,58 @@
+test compile
+set enable_pcc=true
+target aarch64
+target x86_64
+
+function %f0(i64 vmctx) -> i64 {
+    mt0 = struct 16 { 8: i64 ! mem(mt1, 0, 0) }
+    mt1 = memory 0x1_0000_0000
+    gv0 ! mem(mt0, 0, 0) = vmctx
+    gv1 ! mem(mt1, 0, 0) = load.i64 notrap aligned checked gv0+8
+    
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v1 ! mem(mt1, 0, 0) = global_value.i64 gv1
+    return v1
+}
+
+function %f1(i64 vmctx) -> i64 {
+    mt0 = struct 16 { 8: i64 ! mem(mt1, 0, 0) }
+    mt1 = struct 8 { 0: i64 ! mem(mt2, 0, 0) }
+    mt2 = memory 0x1_0000_0000
+    gv0 ! mem(mt0, 0, 0) = vmctx
+    gv1 ! mem(mt1, 0, 0) = load.i64 notrap aligned checked gv0+8
+    gv2 ! mem(mt2, 0, 0) = load.i64 notrap aligned checked gv1+0
+    
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v1 ! mem(mt2, 0, 0) = global_value.i64 gv2
+    return v1
+}
+
+function %f2(i64 vmctx) -> i64 {
+    mt0 = struct 16 { 8: i64 ! mem(mt1, 0, 0) }
+    mt1 = struct 8 { 0: i64 ! mem(mt2, 0, 0) }
+    mt2 = memory 0x1_0000_0000
+    gv0 ! mem(mt0, 0, 0) = vmctx
+    gv1 ! mem(mt1, 0, 0) = load.i64 notrap aligned checked gv0+8
+    gv2 ! mem(mt2, 0, 0) = load.i64 notrap aligned checked gv1+0
+    gv3 ! mem(mt2, 8, 8) = iadd_imm.i64 gv2, 8
+    
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v1 ! mem(mt2, 8, 8) = global_value.i64 gv3
+    return v1
+}
+
+function %f3(i64 vmctx) -> i64 {
+    mt0 = struct 16 { 8: i64 ! mem(mt1, 0, 0) }
+    mt1 = struct 8 { 0: i64 ! mem(mt2, 0, 0) }
+    mt2 = memory 0x1_0000_0000
+    gv0 ! mem(mt0, 0, 0) = vmctx
+    gv1 ! mem(mt1, 0, 0) = load.i64 notrap aligned checked gv0+8
+    gv2 ! mem(mt2, 0, 0) = load.i64 notrap aligned checked gv1+0
+    gv3 ! mem(mt2, 8, 8) = iadd_imm.i64 gv2, 8
+
+    ;; like the above, but with no fact provided on `v0`; it should
+    ;; get copied from the GV.
+block0(v0: i64):
+    v1 ! mem(mt2, 8, 8) = global_value.i64 gv3
+    return v1
+}

@@ -12,7 +12,9 @@ edition.workspace = true
 
 [dependencies]
 wasmtime-environ = { workspace = true }
-wasmtime-jit-debug = { workspace = true, features = ["perf_jitdump"], optional = true }
+wasmtime-jit-debug = { workspace = true, features = [
+  "perf_jitdump",
+], optional = true }
 wasmtime-runtime = { workspace = true }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
@@ -21,10 +23,10 @@ gimli = { workspace = true }
 object = { workspace = true }
 serde = "1.0.188"
 serde_derive = "1.0.188"
-addr2line = { version = "0.21.0", default-features = false }
+addr2line = { version = "0.21.0", default-features = false, optional = true }
 bincode = "1.2.1"
-rustc-demangle = "0.1.16"
-cpp_demangle = "0.3.2"
+rustc-demangle = { version = "0.1.16", optional = true }
+cpp_demangle = { version = "0.3.2", optional = true }
 log = { workspace = true }
 wasmtime-jit-icache-coherence = { workspace = true }
 
@@ -33,13 +35,11 @@ rustix = { workspace = true, features = ['thread'] }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
-features = [
-  "Win32_System_Diagnostics_Debug",
-]
+features = ["Win32_System_Diagnostics_Debug"]
 
 [target.'cfg(all(target_arch = "x86_64", not(target_os = "android")))'.dependencies]
-ittapi = { version = "0.3.3", optional = true  }
+ittapi = { version = "0.4.0", optional = true }
 
 [features]
-jitdump = ['wasmtime-jit-debug']
-vtune = ['ittapi']
+profiling = ['dep:wasmtime-jit-debug', 'dep:ittapi']
+demangle = ['dep:rustc-demangle', 'dep:cpp_demangle']

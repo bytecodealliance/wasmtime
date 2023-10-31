@@ -29,7 +29,7 @@ wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
-wasm-encoder = { workspace = true }
+wasm-encoder = { workspace = true, optional = true }
 anyhow = { workspace = true }
 libc = "0.2"
 cfg-if = { workspace = true }
@@ -41,14 +41,13 @@ serde_json = { workspace = true }
 bincode = "1.2.1"
 indexmap = { workspace = true }
 paste = "1.0.3"
-psm = "0.1.11"
 once_cell = { workspace = true }
 rayon = { version = "1.0", optional = true }
 object = { workspace = true }
 async-trait = { workspace = true, optional = true }
 encoding_rs = { version = "0.8.31", optional = true }
 bumpalo = "3.11.0"
-fxprof-processed-profile = "0.6.0"
+fxprof-processed-profile = { version = "0.6.0", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -56,21 +55,36 @@ features = [
   "Win32_System_Diagnostics_Debug",
 ]
 
+[target.'cfg(target_arch = "s390x")'.dependencies]
+psm = "0.1.11"
+
 [dev-dependencies]
 tempfile = "3.0"
 wasmtime-wasi = { path = "../wasi", default-features = true }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 
+# =============================================================================
+#
+# Features for the Wasmtime crate.
+#
+# This section contains the compile-time features of the `wasmtime` crate. These
+# features can be used to add more functionality and APIs exposed from the
+# crate's API. Most of them are enabled by default. Disabling features can be
+# done to cut down on binary size by disabling features that are not required
+# for a particular embedding.
 [features]
 default = [
   'async',
   'cache',
   'wat',
-  'jitdump',
+  'profiling',
   'parallel-compilation',
   'cranelift',
   'pooling-allocator',
-  'vtune',
+  'demangle',
+  'addr2line',
+  'coredump',
+  'debug-builtins',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -87,11 +101,8 @@ winch = ["dep:wasmtime-winch"]
 # Enables support for incremental compilation cache to be enabled in `Config`.
 incremental-cache = ["wasmtime-cranelift?/incremental-cache"]
 
-# Enables support for the `perf` jitdump profiler
-jitdump = ["wasmtime-jit/jitdump"]
-
-# Enables support for the `VTune` profiler
-vtune = ["wasmtime-jit/vtune"]
+# Enables support for profiling guest modules.
+profiling = ["wasmtime-jit/profiling", "dep:fxprof-processed-profile"]
 
 # Enables parallel compilation of WebAssembly code.
 parallel-compilation = ["dep:rayon"]
@@ -133,3 +144,18 @@ component-model = [
 ]
 
 wmemcheck = ["wasmtime-runtime/wmemcheck", "wasmtime-cranelift?/wmemcheck"]
+
+# Enables support for demangling WebAssembly function names at runtime in
+# errors such as backtraces.
+demangle = ["wasmtime-jit/demangle"]
+
+# Enable support for generating core dumps on traps.
+coredump = ["dep:wasm-encoder"]
+
+# Support address-to-file/line information in traps when wasm files have DWARF
+# debugging information.
+addr2line = ["wasmtime-jit/addr2line"]
+
+# Export some symbols from the final binary to assist in debugging
+# Cranelift-generated code with native debuggers like GDB and LLDB.
+debug-builtins = ["wasmtime-runtime/debug-builtins"]

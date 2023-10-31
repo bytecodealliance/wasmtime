@@ -209,46 +209,20 @@ pub extern "C" fn wasmtime_context_gc(mut context: CStoreContextMut<'_>) {
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_context_add_fuel(
+pub extern "C" fn wasmtime_context_set_fuel(
     mut store: CStoreContextMut<'_>,
     fuel: u64,
 ) -> Option<Box<wasmtime_error_t>> {
-    crate::handle_result(store.add_fuel(fuel), |()| {})
+    crate::handle_result(store.set_fuel(fuel), |()| {})
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_context_fuel_consumed(store: CStoreContext<'_>, fuel: &mut u64) -> bool {
-    match store.fuel_consumed() {
-        Some(amt) => {
-            *fuel = amt;
-            true
-        }
-        None => false,
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_context_fuel_remaining(
-    store: CStoreContextMut<'_>,
+pub extern "C" fn wasmtime_context_get_fuel(
+    store: CStoreContext<'_>,
     fuel: &mut u64,
-) -> bool {
-    match store.fuel_remaining() {
-        Some(remaining) => {
-            *fuel = remaining;
-            true
-        }
-        None => false,
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_context_consume_fuel(
-    mut store: CStoreContextMut<'_>,
-    fuel: u64,
-    remaining_fuel: &mut u64,
 ) -> Option<Box<wasmtime_error_t>> {
-    crate::handle_result(store.consume_fuel(fuel), |remaining| {
-        *remaining_fuel = remaining;
+    crate::handle_result(store.get_fuel(), |amt| {
+        *fuel = amt;
     })
 }
 
