@@ -13,6 +13,7 @@ pub mod opt;
 #[cfg(feature = "logging")]
 fn init_file_per_thread_logger(prefix: &'static str) {
     file_per_thread_logger::initialize(prefix);
+    file_per_thread_logger::allow_uninitialized();
 
     // Extending behavior of default spawner:
     // https://docs.rs/rayon/1.1.0/rayon/struct.ThreadPoolBuilder.html#method.spawn_handler
