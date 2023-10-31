@@ -1,5 +1,4 @@
-use std::net::SocketAddr;
-
+use crate::preview2::host::network::util;
 use crate::preview2::{
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
@@ -15,6 +14,7 @@ use cap_net_ext::{AddressFamily, PoolExt};
 use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
+use std::net::SocketAddr;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
 
@@ -105,7 +105,7 @@ impl<T: WasiView> udp::HostUdpSocket for T {
 
         // Step #1: Disconnect
         if let UdpState::Connected = socket.udp_state {
-            disconnect(socket.udp_socket())?;
+            util::udp_disconnect(socket.udp_socket())?;
             socket.udp_state = UdpState::Bound;
         }
 
@@ -485,14 +485,5 @@ impl Subscribe for OutgoingDatagramStream {
                 self.send_state = SendState::Idle;
             }
         }
-    }
-}
-
-fn disconnect<Fd: rustix::fd::AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
-    match rustix::net::connect_unspec(sockfd) {
-        // BSD platforms return an error even if the socket was disconnected successfully.
-        #[cfg(target_os = "macos")]
-        Err(rustix::io::Errno::INVAL | rustix::io::Errno::AFNOSUPPORT) => Ok(()),
-        r => r,
     }
 }

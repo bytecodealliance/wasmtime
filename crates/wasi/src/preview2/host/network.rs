@@ -227,16 +227,11 @@ pub(crate) mod util {
     use crate::preview2::bindings::sockets::network::ErrorCode;
     use crate::preview2::network::SocketAddressFamily;
     use crate::preview2::SocketResult;
+    use cap_net_ext::{Blocking, TcpBinder, TcpConnecter, TcpListenerExt};
+    use cap_std::net::{TcpListener, TcpStream};
+    use rustix::fd::AsFd;
     use rustix::io::Errno;
-
-    // On POSIX, non-blocking `connect` returns `EINPROGRESS`. Windows returns `WSAEWOULDBLOCK`.
-    // <https://pubs.opengroup.org/onlinepubs/9699919799/functions/connect.html>
-    // <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
-    pub const CONNECT_INPROGRESS: Errno = if cfg!(windows) {
-        Errno::WOULDBLOCK
-    } else {
-        Errno::INPROGRESS
-    };
+    use rustix::net::sockopt;
 
     pub fn validate_unicast(addr: &SocketAddr) -> SocketResult<()> {
         match to_canonical(&addr.ip()) {
@@ -312,11 +307,101 @@ pub(crate) mod util {
             && *addr != Ipv6Addr::LOCALHOST
     }
 
-    pub fn normalize_setsockopt_buffer_size(value: u64) -> usize {
-        value.clamp(1, i32::MAX as u64).try_into().unwrap()
+    /*
+     * Syscalls wrappers with (opinionated) portability fixes.
+     */
+
+    pub fn tcp_bind(listener: &TcpListener, binder: &TcpBinder) -> std::io::Result<()> {
+        binder
+            .bind_existing_tcp_listener(listener)
+            .map_err(|error| match Errno::from_io_error(&error) {
+                #[cfg(windows)]
+                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                _ => error,
+            })
     }
 
-    pub fn normalize_getsockopt_buffer_size(value: u64) -> u64 {
+    pub fn tcp_connect(listener: &TcpListener, connecter: &TcpConnecter) -> std::io::Result<()> {
+        connecter.connect_existing_tcp_listener(listener).map_err(
+            |error| match Errno::from_io_error(&error) {
+                // On POSIX, non-blocking `connect` returns `EINPROGRESS`. Windows returns `WSAEWOULDBLOCK`.
+                #[cfg(windows)]
+                Some(Errno::WOULDBLOCK) => Errno::INPROGRESS.into(),
+                _ => error,
+            },
+        )
+    }
+
+    pub fn tcp_accept(
+        listener: &TcpListener,
+        blocking: Blocking,
+    ) -> std::io::Result<(TcpStream, SocketAddr)> {
+        listener
+            .accept_with(blocking)
+            .map_err(|error| match Errno::from_io_error(&error) {
+                #[cfg(windows)]
+                Some(Errno::INPROGRESS) => Errno::INTR.into(), // "A blocking Windows Sockets 1.1 call is in progress, or the service provider is still processing a callback function."
+
+                // Normalize Linux' non-standard behavior.
+                // "Linux accept() passes already-pending network errors on the new socket as an error code from accept(). This behavior differs from other BSD socket implementations."
+                #[cfg(target_os = "linux")]
+                Some(
+                    Errno::CONNRESET
+                    | Errno::NETRESET
+                    | Errno::HOSTUNREACH
+                    | Errno::HOSTDOWN
+                    | Errno::NETDOWN
+                    | Errno::NETUNREACH
+                    | Errno::PROTO
+                    | Errno::NOPROTOOPT
+                    | Errno::NONET
+                    | Errno::OPNOTSUPP,
+                ) => Errno::CONNABORTED.into(),
+
+                _ => error,
+            })
+    }
+
+    pub fn udp_disconnect<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
+        match rustix::net::connect_unspec(sockfd) {
+            // BSD platforms return an error even if the UDP socket was disconnected successfully.
+            #[cfg(target_os = "macos")]
+            Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
+            r => r,
+        }
+    }
+
+    pub fn get_ip_ttl<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<u8> {
+        sockopt::get_ip_ttl(sockfd)?
+            .try_into()
+            .map_err(|_| Errno::OPNOTSUPP)
+    }
+
+    pub fn get_ipv6_unicast_hops<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<u8> {
+        sockopt::get_ipv6_unicast_hops(sockfd)
+    }
+
+    pub fn set_ip_ttl<Fd: AsFd>(sockfd: Fd, value: u8) -> rustix::io::Result<()> {
+        match value {
+            // A well-behaved IP application should never send out new packets with TTL 0.
+            // We validate the value ourselves because OS'es are not consistent in this.
+            // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
+            0 => Err(Errno::INVAL),
+            _ => sockopt::set_ip_ttl(sockfd, value.into()),
+        }
+    }
+
+    pub fn set_ipv6_unicast_hops<Fd: AsFd>(sockfd: Fd, value: u8) -> rustix::io::Result<()> {
+        match value {
+            // A well-behaved IP application should never send out new packets with TTL 0.
+            // We validate the value ourselves because OS'es are not consistent in this.
+            // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
+            0 => Err(Errno::INVAL),
+            _ => sockopt::set_ipv6_unicast_hops(sockfd, Some(value)),
+        }
+    }
+
+    fn normalize_get_buffer_size(value: usize) -> usize {
         if cfg!(target_os = "linux") {
             // Linux doubles the value passed to setsockopt to allow space for bookkeeping overhead.
             // getsockopt returns this internally doubled value.
@@ -324,6 +409,52 @@ pub(crate) mod util {
             value / 2
         } else {
             value
+        }
+    }
+
+    fn normalize_set_buffer_size(value: usize) -> usize {
+        value.clamp(1, i32::MAX as usize)
+    }
+
+    pub fn get_socket_recv_buffer_size<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<usize> {
+        let value = sockopt::get_socket_recv_buffer_size(sockfd)?;
+        Ok(normalize_get_buffer_size(value))
+    }
+
+    pub fn get_socket_send_buffer_size<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<usize> {
+        let value = sockopt::get_socket_send_buffer_size(sockfd)?;
+        Ok(normalize_get_buffer_size(value))
+    }
+
+    pub fn set_socket_recv_buffer_size<Fd: AsFd>(
+        sockfd: Fd,
+        value: usize,
+    ) -> rustix::io::Result<()> {
+        let value = normalize_set_buffer_size(value);
+
+        match sockopt::set_socket_recv_buffer_size(sockfd, value) {
+            // Most platforms (Linux, Windows, Fuchsia, Solaris, Illumos, Haiku, ESP-IDF, ..and more?) treat the value
+            // passed to SO_SNDBUF/SO_RCVBUF as a performance tuning hint and silently clamp the input if it exceeds
+            // their capability.
+            // As far as I can see, only the *BSD family views this option as a hard requirement and fails when the
+            // value is out of range. We normalize this behavior in favor of the more commonly understood
+            // "performance hint" semantics. In other words; even ENOBUFS is "Ok".
+            // A future improvement could be to query the corresponding sysctl on *BSD platforms and clamp the input
+            // `size` ourselves, to completely close the gap with other platforms.
+            Err(Errno::NOBUFS) => Ok(()),
+            r => r,
+        }
+    }
+
+    pub fn set_socket_send_buffer_size<Fd: AsFd>(
+        sockfd: Fd,
+        value: usize,
+    ) -> rustix::io::Result<()> {
+        let value = normalize_set_buffer_size(value);
+
+        match sockopt::set_socket_send_buffer_size(sockfd, value) {
+            Err(Errno::NOBUFS) => Ok(()), // See set_socket_recv_buffer_size
+            r => r,
         }
     }
 }

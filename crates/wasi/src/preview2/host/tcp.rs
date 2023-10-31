@@ -41,17 +41,18 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         util::validate_unicast(&local_address)?;
         util::validate_address_family(&local_address, &socket.family)?;
 
-        let binder = network.pool.tcp_binder(local_address)?;
+        {
+            let binder = network.pool.tcp_binder(local_address)?;
+            let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
 
-        // Perform the OS bind call.
-        binder
-            .bind_existing_tcp_listener(&*socket.tcp_socket().as_socketlike_view::<TcpListener>())
-            .map_err(|error| match Errno::from_io_error(&error) {
-                Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
-                #[cfg(windows)]
-                Some(Errno::NOBUFS) => ErrorCode::AddressInUse, // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
-                _ => ErrorCode::from(error),
+            // Perform the OS bind call.
+            util::tcp_bind(listener, &binder).map_err(|error| {
+                match Errno::from_io_error(&error) {
+                    Some(Errno::AFNOSUPPORT) => ErrorCode::InvalidArgument, // Just in case our own validations weren't sufficient.
+                    _ => ErrorCode::from(error),
+                }
             })?;
+        }
 
         let socket = table.get_mut(&this)?;
         socket.tcp_state = TcpState::BindStarted;
@@ -102,13 +103,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             util::validate_address_family(&remote_address, &socket.family)?;
 
             let connecter = network.pool.tcp_connecter(remote_address)?;
+            let listener = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
 
             // Do an OS `connect`. Our socket is non-blocking, so it'll either...
-            {
-                let view = &*socket.tcp_socket().as_socketlike_view::<TcpListener>();
-                let r = connecter.connect_existing_tcp_listener(view);
-                r
-            }
+            util::tcp_connect(listener, &connecter)
         };
 
         match r {
@@ -119,7 +117,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
                 return Ok(());
             }
             // continue in progress,
-            Err(err) if Errno::from_io_error(&err) == Some(util::CONNECT_INPROGRESS) => {}
+            Err(err) if Errno::from_io_error(&err) == Some(Errno::INPROGRESS) => {}
             // or fail immediately.
             Err(err) => {
                 return Err(match Errno::from_io_error(&err) {
@@ -242,34 +240,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         // Do the OS accept call.
         let tcp_socket = socket.tcp_socket();
-        let (connection, _addr) = tcp_socket
-            .try_io(Interest::READABLE, || {
-                tcp_socket
-                    .as_socketlike_view::<TcpListener>()
-                    .accept_with(Blocking::No)
-            })
-            .map_err(|error| match Errno::from_io_error(&error) {
-                #[cfg(windows)]
-                Some(Errno::INPROGRESS) => ErrorCode::WouldBlock, // "A blocking Windows Sockets 1.1 call is in progress, or the service provider is still processing a callback function."
-
-                // Normalize Linux' non-standard behavior.
-                // "Linux accept() passes already-pending network errors on the new socket as an error code from accept(). This behavior differs from other BSD socket implementations."
-                #[cfg(target_os = "linux")]
-                Some(
-                    Errno::CONNRESET
-                    | Errno::NETRESET
-                    | Errno::HOSTUNREACH
-                    | Errno::HOSTDOWN
-                    | Errno::NETDOWN
-                    | Errno::NETUNREACH
-                    | Errno::PROTO
-                    | Errno::NOPROTOOPT
-                    | Errno::NONET
-                    | Errno::OPNOTSUPP,
-                ) => ErrorCode::ConnectionAborted,
-
-                _ => ErrorCode::from(error),
-            })?;
+        let (connection, _addr) = tcp_socket.try_io(Interest::READABLE, || {
+            let listener = &*tcp_socket.as_socketlike_view::<TcpListener>();
+            util::tcp_accept(listener, Blocking::No)
+        })?;
 
         #[cfg(target_os = "macos")]
         {
@@ -278,18 +252,17 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             // and only if a specific value was explicitly set on the listener.
 
             if let Some(size) = socket.receive_buffer_size {
-                _ = sockopt::set_socket_recv_buffer_size(&connection, size); // Ignore potential error.
+                _ = util::set_socket_recv_buffer_size(&connection, size); // Ignore potential error.
             }
 
             if let Some(size) = socket.send_buffer_size {
-                _ = sockopt::set_socket_send_buffer_size(&connection, size); // Ignore potential error.
+                _ = util::set_socket_send_buffer_size(&connection, size); // Ignore potential error.
             }
 
             // For some reason, IP_TTL is inherited, but IPV6_UNICAST_HOPS isn't.
             if let (SocketAddressFamily::Ipv6 { .. }, Some(ttl)) = (socket.family, socket.hop_limit)
             {
-                _ = sockopt::set_ipv6_unicast_hops(&connection, Some(ttl));
-                // Ignore potential error.
+                _ = util::set_ipv6_unicast_hops(&connection, ttl); // Ignore potential error.
             }
         }
 
@@ -459,12 +432,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let socket = table.get(&this)?;
 
         let ttl = match socket.family {
-            SocketAddressFamily::Ipv4 => sockopt::get_ip_ttl(socket.tcp_socket())?
-                .try_into()
-                .unwrap(),
-            SocketAddressFamily::Ipv6 { .. } => {
-                sockopt::get_ipv6_unicast_hops(socket.tcp_socket())?
-            }
+            SocketAddressFamily::Ipv4 => util::get_ip_ttl(socket.tcp_socket())?,
+            SocketAddressFamily::Ipv6 { .. } => util::get_ipv6_unicast_hops(socket.tcp_socket())?,
         };
 
         Ok(ttl)
@@ -478,17 +447,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
-        if value == 0 {
-            // A well-behaved IP application should never send out new packets with TTL 0.
-            // We validate the value ourselves because OS'es are not consistent in this.
-            // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
-            return Err(ErrorCode::InvalidArgument.into());
-        }
-
         match socket.family {
-            SocketAddressFamily::Ipv4 => sockopt::set_ip_ttl(socket.tcp_socket(), value.into())?,
+            SocketAddressFamily::Ipv4 => util::set_ip_ttl(socket.tcp_socket(), value)?,
             SocketAddressFamily::Ipv6 { .. } => {
-                sockopt::set_ipv6_unicast_hops(socket.tcp_socket(), Some(value))?
+                util::set_ipv6_unicast_hops(socket.tcp_socket(), value)?
             }
         }
 
@@ -504,8 +466,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        let value = sockopt::get_socket_recv_buffer_size(socket.tcp_socket())? as u64;
-        Ok(util::normalize_getsockopt_buffer_size(value))
+        let value = util::get_socket_recv_buffer_size(socket.tcp_socket())?;
+        Ok(value as u64)
     }
 
     fn set_receive_buffer_size(
@@ -515,20 +477,9 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
-        let value = util::normalize_setsockopt_buffer_size(value);
+        let value = value.try_into().unwrap_or(usize::MAX);
 
-        match sockopt::set_socket_recv_buffer_size(socket.tcp_socket(), value) {
-            // Most platforms (Linux, Windows, Fuchsia, Solaris, Illumos, Haiku, ESP-IDF, ..and more?) treat the value
-            // passed to SO_SNDBUF/SO_RCVBUF as a performance tuning hint and silently clamp the input if it exceeds
-            // their capability.
-            // As far as I can see, only the *BSD family views this option as a hard requirement and fails when the
-            // value is out of range. We normalize this behavior in favor of the more commonly understood
-            // "performance hint" semantics. In other words; even ENOBUFS is "Ok".
-            // A future improvement could be to query the corresponding sysctl on *BSD platforms and clamp the input
-            // `size` ourselves, to completely close the gap with other platforms.
-            Err(Errno::NOBUFS) => Ok(()),
-            r => r,
-        }?;
+        util::set_socket_recv_buffer_size(socket.tcp_socket(), value)?;
 
         #[cfg(target_os = "macos")]
         {
@@ -542,8 +493,8 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table();
         let socket = table.get(&this)?;
 
-        let value = sockopt::get_socket_send_buffer_size(socket.tcp_socket())? as u64;
-        Ok(util::normalize_getsockopt_buffer_size(value))
+        let value = util::get_socket_send_buffer_size(socket.tcp_socket())?;
+        Ok(value as u64)
     }
 
     fn set_send_buffer_size(
@@ -553,12 +504,9 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
     ) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
-        let value = util::normalize_setsockopt_buffer_size(value);
+        let value = value.try_into().unwrap_or(usize::MAX);
 
-        match sockopt::set_socket_send_buffer_size(socket.tcp_socket(), value) {
-            Err(Errno::NOBUFS) => Ok(()), // See `set_receive_buffer_size`
-            r => r,
-        }?;
+        util::set_socket_send_buffer_size(socket.tcp_socket(), value)?;
 
         #[cfg(target_os = "macos")]
         {
