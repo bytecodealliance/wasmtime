@@ -132,7 +132,10 @@ impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
         let pollable = table.get(&pollable)?;
         let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
         futures::pin_mut!(ready);
-        Ok(futures::future::poll_immediate(ready).await.is_some())
+        Ok(matches!(
+            futures::future::poll_immediate(ready).await,
+            Some(())
+        ))
     }
     fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
         let pollable = self.table_mut().delete(pollable)?;
