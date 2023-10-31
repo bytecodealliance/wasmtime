@@ -267,6 +267,22 @@ impl BaseExpr {
 }
 
 impl Expr {
+    /// Constant value.
+    fn constant(offset: i64) -> Self {
+        Expr {
+            base: BaseExpr::None,
+            offset,
+        }
+    }
+
+    /// The value of a global value.
+    fn global_value(gv: ir::GlobalValue) -> Self {
+        Expr {
+            base: BaseExpr::GlobalValue(gv),
+            offset: 0,
+        }
+    }
+
     /// Is one expression definitely less than or equal to another?
     /// (We can't always know; in such cases, returns `false`.)
     fn le(lhs: &Expr, rhs: &Expr) -> bool {
@@ -427,6 +443,25 @@ impl Fact {
             bit_width,
             min: value,
             max: value,
+        }
+    }
+
+    /// Create a dynamic range fact that points to the base of a dynamic memory.
+    pub fn dynamic_base_ptr(ty: ir::MemoryType) -> Self {
+        Fact::DynamicMem {
+            ty,
+            min: Expr::constant(0),
+            max: Expr::constant(0),
+            nullable: false,
+        }
+    }
+
+    /// Create a fact that specifies the value is exactly the value of a GV.
+    pub fn global_value(bit_width: u16, gv: ir::GlobalValue) -> Self {
+        Fact::DynamicRange {
+            bit_width,
+            min: Expr::global_value(gv),
+            max: Expr::global_value(gv),
         }
     }
 

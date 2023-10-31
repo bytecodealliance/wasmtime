@@ -1859,14 +1859,68 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         global_type: pointer_type,
                         flags: MemFlags::trusted(),
                     });
+
+                    let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
+                        // Create a memtype representing the untyped memory region.
+                        let data_mt = func.create_memory_type(ir::MemoryTypeData::DynamicMemory {
+                            gv: heap_bound,
+                            size: offset_guard_size,
+                        });
+                        // This fact applies to any pointer to the start of the memory.
+                        let base_fact = ir::Fact::dynamic_base_ptr(data_mt);
+                        // This fact applies to the length.
+                        let length_fact = ir::Fact::global_value(
+                            u16::try_from(self.isa.pointer_type().bits()).unwrap(),
+                            heap_bound,
+                        );
+                        // Create a field in the vmctx for the base pointer.
+                        match &mut func.memory_types[ptr_memtype] {
+                            ir::MemoryTypeData::Struct { size, fields } => {
+                                let base_offset = u64::try_from(base_offset).unwrap();
+                                fields.push(ir::MemoryTypeField {
+                                    offset: base_offset,
+                                    ty: self.isa.pointer_type(),
+                                    // Read-only field from the PoV of PCC checks:
+                                    // don't allow stores to this field. (Even if
+                                    // it is a dynamic memory whose base can
+                                    // change, that update happens inside the
+                                    // runtime, not in generated code.)
+                                    readonly: true,
+                                    fact: Some(base_fact.clone()),
+                                });
+                                let current_length_offset =
+                                    u64::try_from(current_length_offset).unwrap();
+                                fields.push(ir::MemoryTypeField {
+                                    offset: current_length_offset,
+                                    ty: self.isa.pointer_type(),
+                                    // As above, read-only; only the runtime modifies it.
+                                    readonly: true,
+                                    fact: Some(length_fact),
+                                });
+
+                                let pointer_size = u64::from(self.isa.pointer_type().bytes());
+                                let fields_end = std::cmp::max(
+                                    base_offset + pointer_size,
+                                    current_length_offset + pointer_size,
+                                );
+                                *size = std::cmp::max(*size, fields_end);
+                            }
+                            _ => {}
+                        }
+                        // Apply a fact to the base pointer.
+                        (Some(base_fact), Some(data_mt))
+                    } else {
+                        (None, None)
+                    };
+
                     (
                         offset_guard_size,
                         HeapStyle::Dynamic {
                             bound_gv: heap_bound,
                         },
                         false,
-                        None,
-                        None,
+                        base_fact,
+                        data_mt,
                     )
                 }
                 MemoryPlan {
