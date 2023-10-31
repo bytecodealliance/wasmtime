@@ -811,3 +811,96 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         Ok(())
     }
 }
+
+impl<T: WasiHttpView> crate::bindings::http::types::HostRequestOptions for T {
+    fn new(&mut self) -> wasmtime::Result<Resource<types::RequestOptions>> {
+        let id = self.table().push(types::RequestOptions::default())?;
+        Ok(id)
+    }
+
+    fn connect_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+    ) -> wasmtime::Result<Option<types::Duration>> {
+        let millis = self
+            .table()
+            .get(&opts)?
+            .connect_timeout
+            .map(|d| d.as_millis());
+
+        if let Some(millis) = millis {
+            Ok(Some(millis.try_into()?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn set_connect_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+        ms: Option<types::Duration>,
+    ) -> wasmtime::Result<Result<(), ()>> {
+        self.table().get_mut(&opts)?.connect_timeout =
+            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
+        Ok(Ok(()))
+    }
+
+    fn first_byte_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+    ) -> wasmtime::Result<Option<types::Duration>> {
+        let millis = self
+            .table()
+            .get(&opts)?
+            .first_byte_timeout
+            .map(|d| d.as_millis());
+
+        if let Some(millis) = millis {
+            Ok(Some(millis.try_into()?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn set_first_byte_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+        ms: Option<types::Duration>,
+    ) -> wasmtime::Result<Result<(), ()>> {
+        self.table().get_mut(&opts)?.first_byte_timeout =
+            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
+        Ok(Ok(()))
+    }
+
+    fn between_bytes_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+    ) -> wasmtime::Result<Option<types::Duration>> {
+        let millis = self
+            .table()
+            .get(&opts)?
+            .between_bytes_timeout
+            .map(|d| d.as_millis());
+
+        if let Some(millis) = millis {
+            Ok(Some(millis.try_into()?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn set_between_bytes_timeout_ms(
+        &mut self,
+        opts: Resource<types::RequestOptions>,
+        ms: Option<types::Duration>,
+    ) -> wasmtime::Result<Result<(), ()>> {
+        self.table().get_mut(&opts)?.between_bytes_timeout =
+            ms.map(|ms| std::time::Duration::from_millis(ms as u64));
+        Ok(Ok(()))
+    }
+
+    fn drop(&mut self, rep: Resource<types::RequestOptions>) -> wasmtime::Result<()> {
+        let _ = self.table().delete(rep)?;
+        Ok(())
+    }
+}

@@ -2,6 +2,7 @@
 /// HTTP Requests and Responses, both incoming and outgoing, as well as
 /// their headers, trailers, and bodies.
 interface types {
+  use wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-05.{duration};
   use wasi:io/streams@0.2.0-rc-2023-11-05.{input-stream, output-stream};
   use wasi:io/poll@0.2.0-rc-2023-11-05.{pollable};
 
@@ -223,21 +224,32 @@ interface types {
   ///
   /// These timeouts are separate from any the user may use to bound a
   /// blocking call to `wasi:io/poll.poll-list`.
-  ///
-  /// FIXME: Make this a resource to allow it to be optionally extended by
-  /// future evolution of the standard and/or other interfaces at some later
-  /// date?
-  record request-options {
+  resource request-options {
+    /// Construct a default `request-options` value.
+    constructor();
 
     /// The timeout for the initial connect to the HTTP Server.
-    connect-timeout-ms: option<u32>,
+    connect-timeout-ms: func() -> option<duration>;
+
+    /// Set the timeout for the initial connect to the HTTP Server. An error
+    /// return value indicates that this timeout is not supported.
+    set-connect-timeout-ms: func(ms: option<duration>) -> result;
 
     /// The timeout for receiving the first byte of the Response body.
-    first-byte-timeout-ms: option<u32>,
+    first-byte-timeout-ms: func() -> option<duration>;
+
+    /// Set the timeout for receiving the first byte of the Response body. An
+    /// error return value indicates that this timeout is not supported.
+    set-first-byte-timeout-ms: func(ms: option<duration>) -> result;
 
     /// The timeout for receiving subsequent chunks of bytes in the Response
     /// body stream.
-    between-bytes-timeout-ms: option<u32>
+    between-bytes-timeout-ms: func() -> option<duration>;
+
+    /// Set the timeout for receiving subsequent chunks of bytes in the Response
+    /// body stream. An error return value indicates that this timeout is not
+    /// supported.
+    set-between-bytes-timeout-ms: func(ms: option<duration>) -> result;
   }
 
   /// Represents the ability to send an HTTP Response.

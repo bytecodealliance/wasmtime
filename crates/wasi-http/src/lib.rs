@@ -30,6 +30,7 @@ pub mod bindings {
             "wasi:http/types/outgoing-request": super::types::HostOutgoingRequest,
             "wasi:http/types/incoming-request": super::types::HostIncomingRequest,
             "wasi:http/types/fields": super::types::HostFields,
+            "wasi:http/types/request-options": super::types::HostRequestOptions,
         }
     });
 
