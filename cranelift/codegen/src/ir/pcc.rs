@@ -47,6 +47,10 @@
 //!
 //! TODO:
 //!
+//! Deployment:
+//! - Add to fuzzing
+//! - Turn on during wasm spec-tests
+//!
 //! More checks:
 //! - Check that facts on `vmctx` GVs are subsumed by the actual facts
 //!   on the vmctx arg in block0 (function arg).
