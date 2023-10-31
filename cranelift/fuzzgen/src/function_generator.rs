@@ -22,7 +22,7 @@ use cranelift::prelude::{
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
-use target_lexicon::{Architecture, Triple};
+use target_lexicon::{Architecture, OperatingSystem, Triple};
 
 type BlockSignature = Vec<Type>;
 
@@ -1261,7 +1261,16 @@ where
     fn system_callconv(&mut self) -> CallConv {
         // TODO: This currently only runs on linux, so this is the only choice
         // We should improve this once we generate flags and targets
-        CallConv::SystemV
+        let mut convs = vec![CallConv::SystemV, CallConv::Cold, CallConv::Fast];
+        let tt = &self.target_triple;
+        match tt.operating_system {
+            OperatingSystem::MacOSX { .. } => match tt.architecture {
+                Architecture::Aarch64(_) => convs.push(CallConv::AppleAarch64),
+                _ => {}
+            },
+            _ => {}
+        };
+        *self.u.choose(&convs).unwrap()
     }
 
     /// Finds a stack slot with size of at least n bytes
