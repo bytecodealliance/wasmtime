@@ -220,3 +220,110 @@ impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
         }
     }
 }
+
+pub(crate) mod util {
+    use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+
+    use crate::preview2::bindings::sockets::network::ErrorCode;
+    use crate::preview2::network::SocketAddressFamily;
+    use crate::preview2::SocketResult;
+    use rustix::io::Errno;
+
+    // On POSIX, non-blocking `connect` returns `EINPROGRESS`. Windows returns `WSAEWOULDBLOCK`.
+    // <https://pubs.opengroup.org/onlinepubs/9699919799/functions/connect.html>
+    // <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-connect>
+    pub const CONNECT_INPROGRESS: Errno = if cfg!(windows) {
+        Errno::WOULDBLOCK
+    } else {
+        Errno::INPROGRESS
+    };
+
+    pub fn validate_unicast(addr: &SocketAddr) -> SocketResult<()> {
+        match to_canonical(&addr.ip()) {
+            IpAddr::V4(ipv4) => {
+                if ipv4.is_multicast() || ipv4.is_broadcast() {
+                    Err(ErrorCode::InvalidArgument.into())
+                } else {
+                    Ok(())
+                }
+            }
+            IpAddr::V6(ipv6) => {
+                if ipv6.is_multicast() {
+                    Err(ErrorCode::InvalidArgument.into())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    pub fn validate_remote_address(addr: &SocketAddr) -> SocketResult<()> {
+        if to_canonical(&addr.ip()).is_unspecified() {
+            return Err(ErrorCode::InvalidArgument.into());
+        }
+
+        if addr.port() == 0 {
+            return Err(ErrorCode::InvalidArgument.into());
+        }
+
+        Ok(())
+    }
+
+    pub fn validate_address_family(
+        addr: &SocketAddr,
+        socket_family: &SocketAddressFamily,
+    ) -> SocketResult<()> {
+        match (socket_family, addr.ip()) {
+            (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
+            (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
+                if is_deprecated_ipv4_compatible(&ipv6) {
+                    // Reject IPv4-*compatible* IPv6 addresses. They have been deprecated
+                    // since 2006, OS handling of them is inconsistent and our own
+                    // validations don't take them into account either.
+                    // Note that these are not the same as IPv4-*mapped* IPv6 addresses.
+                    Err(ErrorCode::InvalidArgument.into())
+                } else if *v6only && ipv6.to_ipv4_mapped().is_some() {
+                    Err(ErrorCode::InvalidArgument.into())
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Err(ErrorCode::InvalidArgument.into()),
+        }
+    }
+
+    // Can be removed once `IpAddr::to_canonical` becomes stable.
+    fn to_canonical(addr: &IpAddr) -> IpAddr {
+        match addr {
+            IpAddr::V4(ipv4) => IpAddr::V4(*ipv4),
+            IpAddr::V6(ipv6) => {
+                if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                    IpAddr::V4(ipv4)
+                } else {
+                    IpAddr::V6(*ipv6)
+                }
+            }
+        }
+    }
+
+    fn is_deprecated_ipv4_compatible(addr: &Ipv6Addr) -> bool {
+        matches!(addr.segments(), [0, 0, 0, 0, 0, 0, _, _])
+            && *addr != Ipv6Addr::UNSPECIFIED
+            && *addr != Ipv6Addr::LOCALHOST
+    }
+
+    pub fn normalize_setsockopt_buffer_size(value: u64) -> usize {
+        value.clamp(1, i32::MAX as u64).try_into().unwrap()
+    }
+
+    pub fn normalize_getsockopt_buffer_size(value: u64) -> u64 {
+        if cfg!(target_os = "linux") {
+            // Linux doubles the value passed to setsockopt to allow space for bookkeeping overhead.
+            // getsockopt returns this internally doubled value.
+            // We'll half the value to at least get it back into the same ballpark that the application requested it in.
+            value / 2
+        } else {
+            value
+        }
+    }
+}
