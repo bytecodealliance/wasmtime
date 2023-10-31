@@ -1,0 +1,13 @@
+test compile
+set enable_pcc=true
+target aarch64
+target x86_64
+
+function %simple1(i64 vmctx, i32) -> i8 {
+    mt0 = memory 0x1_0000_0000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 0xffff_ffff): i32):
+    v2 ! range(64, 0, 0xffff_ffff) = uextend.i64 v1
+    v3 ! mem(mt0, 0, 0xffff_ffff) = iadd.i64 v0, v2
+    v4 = load.i8 checked v3
+    return v4
+}

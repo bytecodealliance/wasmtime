@@ -208,7 +208,7 @@ pub struct Resource<T> {
     ///   discard this resource when the borrow duration has finished.
     ///
     /// * `NOT_IN_TABLE` / `u32::MAX - 1` - this indicates that this is an owned
-    ///   resource not present in any store's stable. This resource is not lent
+    ///   resource not present in any store's table. This resource is not lent
     ///   out. It can be passed as an `(own $t)` directly into a guest's table
     ///   or it can be passed as a borrow to a guest which will insert it into
     ///   a host store's table for dynamic borrow tracking.
@@ -451,7 +451,16 @@ unsafe impl<T: 'static> Lift for Resource<T> {
 
 impl<T> fmt::Debug for Resource<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Resource").field("rep", &self.rep).finish()
+        let state = match self.state.load(Relaxed) {
+            BORROW => "borrow",
+            NOT_IN_TABLE => "own (not in table)",
+            TAKEN => "taken",
+            _ => "own",
+        };
+        f.debug_struct("Resource")
+            .field("rep", &self.rep)
+            .field("state", &state)
+            .finish()
     }
 }
 

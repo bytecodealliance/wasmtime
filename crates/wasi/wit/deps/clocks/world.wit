@@ -1,0 +1,7 @@
+package wasi:clocks@0.2.0-rc-2023-11-05;
+
+world imports {
+    import monotonic-clock;
+    import wall-clock;
+    import timezone;
+}

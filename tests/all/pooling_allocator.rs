@@ -1,6 +1,7 @@
 use super::skip_pooling_allocator_tests;
 use anyhow::Result;
 use wasmtime::*;
+use wasmtime_runtime::MpkEnabled;
 
 #[test]
 fn successful_instantiation() -> Result<()> {
@@ -1151,7 +1152,8 @@ fn total_memories_limit() -> Result<()> {
 
     let mut pool = crate::small_pool_config();
     pool.total_memories(TOTAL_MEMORIES)
-        .total_core_instances(TOTAL_MEMORIES + 1);
+        .total_core_instances(TOTAL_MEMORIES + 1)
+        .memory_protection_keys(MpkEnabled::Disable);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
@@ -1169,7 +1171,7 @@ fn total_memories_limit() -> Result<()> {
         Err(e) => assert_eq!(
             e.to_string(),
             format!(
-                "maximum concurrent memory limit of {} reached",
+                "maximum concurrent memory limit of {} reached for stripe 0",
                 TOTAL_MEMORIES
             ),
         ),

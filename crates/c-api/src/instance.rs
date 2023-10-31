@@ -1,9 +1,9 @@
 use crate::{
     wasm_extern_t, wasm_extern_vec_t, wasm_module_t, wasm_store_t, wasm_trap_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_module_t, CStoreContextMut, StoreRef,
+    wasmtime_extern_t, wasmtime_module_t, CStoreContextMut, StoreData, StoreRef,
 };
 use std::mem::MaybeUninit;
-use wasmtime::{Instance, Trap};
+use wasmtime::{Instance, InstancePre, Trap};
 
 #[derive(Clone)]
 pub struct wasm_instance_t {
@@ -149,4 +149,24 @@ pub unsafe extern "C" fn wasmtime_instance_export_nth(
         }
         None => false,
     }
+}
+
+#[repr(transparent)]
+pub struct wasmtime_instance_pre_t {
+    pub(crate) underlying: InstancePre<StoreData>,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_instance_pre_delete(_instance_pre: Box<wasmtime_instance_pre_t>) {
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_instance_pre_instantiate(
+    instance_pre: &wasmtime_instance_pre_t,
+    store: CStoreContextMut<'_>,
+    instance_ptr: &mut Instance,
+    trap_ptr: &mut *mut wasm_trap_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let result = instance_pre.underlying.instantiate(store);
+    handle_instantiate(result, instance_ptr, trap_ptr)
 }

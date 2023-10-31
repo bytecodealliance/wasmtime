@@ -483,7 +483,7 @@ pub trait TypeConvert {
         match ty {
             wasmparser::HeapType::Func => WasmHeapType::Func,
             wasmparser::HeapType::Extern => WasmHeapType::Extern,
-            wasmparser::HeapType::Indexed(i) => self.lookup_heap_type(TypeIndex::from_u32(i)),
+            wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(TypeIndex::from_u32(i)),
 
             wasmparser::HeapType::Any
             | wasmparser::HeapType::None

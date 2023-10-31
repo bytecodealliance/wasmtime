@@ -437,6 +437,23 @@
                  (dst WritableXmm)
                  (src_size OperandSize))
 
+       ;; Conversion from signed integers to floats, the `{v,}`cvtsi2s{s,d}`
+       ;; instructions.
+       ;;
+       ;; Note that this is special in that `src1` is an xmm/float register
+       ;; while `src2` is a general purpose register as this is converting an
+       ;; integer in a gpr to an equivalent float in an xmm reg.
+       (CvtIntToFloat (op SseOpcode)
+                      (src1 Xmm)
+                      (src2 GprMem)
+                      (dst WritableXmm)
+                      (src2_size OperandSize))
+       (CvtIntToFloatVex (op AvxOpcode)
+                         (src1 Xmm)
+                         (src2 GprMem)
+                         (dst WritableXmm)
+                         (src2_size OperandSize))
+
        ;; Converts an unsigned int64 to a float32/float64.
        (CvtUint64ToFloatSeq (dst_size OperandSize) ;; 4 or 8
                             (src Gpr)
@@ -710,26 +727,6 @@
 
 (type BoxCallInfo extern (enum))
 (type BoxReturnCallInfo extern (enum))
-
-(type BoxVecMachLabel extern (enum))
-
-(type MachLabelSlice extern (enum))
-
-;; The size of the jump table.
-(decl jump_table_size (BoxVecMachLabel) u32)
-(extern constructor jump_table_size jump_table_size)
-
-;; Extract a the target from a MachLabelSlice with exactly one target.
-(decl single_target (MachLabel) MachLabelSlice)
-(extern extractor single_target single_target)
-
-;; Extract a the targets from a MachLabelSlice with exactly two targets.
-(decl two_targets (MachLabel MachLabel) MachLabelSlice)
-(extern extractor two_targets two_targets)
-
-;; Extract the default target and jump table from a MachLabelSlice.
-(decl jump_table_targets (MachLabel BoxVecMachLabel) MachLabelSlice)
-(extern extractor jump_table_targets jump_table_targets)
 
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
@@ -1672,15 +1669,6 @@
 (decl xmi_imm (u32) XmmMemImm)
 (extern constructor xmi_imm xmi_imm)
 
-;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-
-;; This is a direct import of `IntCC::without_equal`.
-;; Get the corresponding IntCC with the equal component removed.
-;; For conditions without a zero component, this is a no-op.
-(decl intcc_without_eq (IntCC) IntCC)
-(extern constructor intcc_without_eq intcc_without_eq)
-
 ;;;; Helpers for determining the register class of a value type ;;;;;;;;;;;;;;;;
 
 (type RegisterClass
@@ -2095,6 +2083,18 @@
             (_ Unit (emit (MInst.UnaryRmRImmVex size op src dst imm))))
         dst))
 
+(decl cvt_int_to_float (SseOpcode Xmm GprMem OperandSize) Xmm)
+(rule (cvt_int_to_float op src1 src2 size)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.CvtIntToFloat op src1 src2 dst size))))
+        dst))
+
+(decl cvt_int_to_float_vex (AvxOpcode Xmm GprMem OperandSize) Xmm)
+(rule (cvt_int_to_float_vex op src1 src2 size)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.CvtIntToFloatVex op src1 src2 dst size))))
+        dst))
+
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
 (rule (cvt_u64_to_float_seq ty src)
       (let ((size OperandSize (raw_operand_size_of_type ty))
@@ -2163,7 +2163,7 @@
 ;; even not generate a zero-extended move in this case.
 (rule 1 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
         (if-let $true (value32_zeros_upper32 src))
-        src)
+        (add_range_fact src 64 0 0xffff_ffff))
 
 (rule (extend_to_gpr (and val (value_type from_ty))
                      to_ty
@@ -4351,20 +4351,20 @@
         (xmm_unary_rm_r_vex (AvxOpcode.Vcvtdq2pd) x))
 
 ;; Helper for creating `cvtsi2ss` instructions.
-(decl x64_cvtsi2ss (Type GprMem) Xmm)
-(rule (x64_cvtsi2ss ty x)
-      (gpr_to_xmm (SseOpcode.Cvtsi2ss) x (raw_operand_size_of_type ty)))
-(rule 1 (x64_cvtsi2ss ty x)
+(decl x64_cvtsi2ss (Type Xmm GprMem) Xmm)
+(rule (x64_cvtsi2ss ty x y)
+      (cvt_int_to_float (SseOpcode.Cvtsi2ss) x y (raw_operand_size_of_type ty)))
+(rule 1 (x64_cvtsi2ss ty x y)
         (if-let $true (use_avx))
-        (gpr_to_xmm_vex (AvxOpcode.Vcvtsi2ss) x (raw_operand_size_of_type ty)))
+        (cvt_int_to_float_vex (AvxOpcode.Vcvtsi2ss) x y (raw_operand_size_of_type ty)))
 
 ;; Helper for creating `cvtsi2sd` instructions.
-(decl x64_cvtsi2sd (Type GprMem) Xmm)
-(rule (x64_cvtsi2sd ty x)
-      (gpr_to_xmm (SseOpcode.Cvtsi2sd) x (raw_operand_size_of_type ty)))
-(rule 1 (x64_cvtsi2sd ty x)
+(decl x64_cvtsi2sd (Type Xmm GprMem) Xmm)
+(rule (x64_cvtsi2sd ty x y)
+      (cvt_int_to_float (SseOpcode.Cvtsi2sd) x y (raw_operand_size_of_type ty)))
+(rule 1 (x64_cvtsi2sd ty x y)
         (if-let $true (use_avx))
-        (gpr_to_xmm_vex (AvxOpcode.Vcvtsi2sd) x (raw_operand_size_of_type ty)))
+        (cvt_int_to_float_vex (AvxOpcode.Vcvtsi2sd) x y (raw_operand_size_of_type ty)))
 
 ;; Helper for creating `cvttps2dq` instructions.
 (decl x64_cvttps2dq (XmmMem) Xmm)

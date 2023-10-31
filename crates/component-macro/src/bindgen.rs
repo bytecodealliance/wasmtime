@@ -1,10 +1,11 @@
 use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::{braced, token, Ident, Token};
+use syn::{braced, token, Token};
 use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError};
 use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
 
@@ -88,7 +89,7 @@ impl Parse for Config {
                         }
                         inline = Some(format!(
                             "
-                                package wasmtime:component-macro-synthesized
+                                package wasmtime:component-macro-synthesized;
 
                                 world interfaces {{
                                     {}
@@ -317,28 +318,11 @@ impl Parse for Opt {
 }
 
 fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<TrappableError> {
-    // Accept a Rust identifier or a string literal. This is required
-    // because not all wit identifiers are Rust identifiers, so we can
-    // smuggle the invalid ones inside quotes.
-    fn ident_or_str(input: ParseStream<'_>) -> Result<String> {
-        let l = input.lookahead1();
-        if l.peek(syn::LitStr) {
-            Ok(input.parse::<syn::LitStr>()?.value())
-        } else if l.peek(syn::Ident) {
-            Ok(input.parse::<syn::Ident>()?.to_string())
-        } else {
-            Err(l.error())
-        }
-    }
-
-    let wit_package_path = input.parse::<syn::LitStr>()?.value();
-    input.parse::<Token![::]>()?;
-    let wit_type_name = ident_or_str(input)?;
-    input.parse::<Token![:]>()?;
-    let rust_type_name = input.parse::<Ident>()?.to_string();
+    let wit_path = input.parse::<syn::LitStr>()?.value();
+    input.parse::<Token![=>]>()?;
+    let rust_type_name = input.parse::<syn::Path>()?.to_token_stream().to_string();
     Ok(TrappableError {
-        wit_package_path,
-        wit_type_name,
+        wit_path,
         rust_type_name,
     })
 }

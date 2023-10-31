@@ -1,4 +1,4 @@
-package foo:foo
+package foo:foo;
 
 interface anon {
   enum error {
@@ -6,10 +6,10 @@ interface anon {
     failure,
   }
 
-  option-test: func() -> result<option<string>, error>
+  option-test: func() -> result<option<string>, error>;
 }
 
 world the-world {
-  import anon
-  export anon
+  import anon;
+  export anon;
 }

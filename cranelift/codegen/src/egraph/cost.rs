@@ -33,12 +33,6 @@ use crate::ir::Opcode;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Cost(u32);
 impl Cost {
-    pub(crate) fn at_level(&self, loop_level: usize) -> Cost {
-        let loop_level = std::cmp::min(2, loop_level);
-        let multiplier = 1u32 << ((10 * loop_level) as u32);
-        Cost(self.0.saturating_mul(multiplier)).finite()
-    }
-
     pub(crate) fn infinity() -> Cost {
         // 2^32 - 1 is, uh, pretty close to infinite... (we use `Cost`
         // only for heuristics and always saturate so this suffices!)

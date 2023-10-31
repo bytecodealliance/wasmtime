@@ -24,6 +24,7 @@ mod abi;
 pub mod encoding;
 mod inst;
 mod lower;
+mod pcc;
 pub mod settings;
 
 /// An X64 backend.

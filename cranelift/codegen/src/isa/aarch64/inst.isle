@@ -883,7 +883,8 @@
 
        ;; Jump-table sequence, as one compound instruction (see note in lower_inst.rs for rationale).
        (JTSequence
-        (info BoxJTSequenceInfo)
+        (default MachLabel)
+        (targets BoxVecMachLabel)
         (ridx Reg)
         (rtmp1 WritableReg)
         (rtmp2 WritableReg))
@@ -946,8 +947,9 @@
 
        ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol in x0.
        (ElfTlsGetAddr
-        (symbol ExternalName)
-        (rd WritableReg))
+        (symbol BoxExternalName)
+        (rd WritableReg)
+        (tmp WritableReg))
 
        (MachOTlsGetAddr
         (symbol ExternalName)
@@ -1717,17 +1719,12 @@
 (decl u64_into_imm_logic (Type u64) ImmLogic)
 (extern constructor u64_into_imm_logic u64_into_imm_logic)
 
-(decl branch_target (VecMachLabel u8) BranchTarget)
+(decl branch_target (MachLabel) BranchTarget)
 (extern constructor branch_target branch_target)
+(convert MachLabel BranchTarget branch_target)
 
-(decl targets_jt_size (VecMachLabel) u32)
-(extern constructor targets_jt_size targets_jt_size)
-
-(decl targets_jt_space (VecMachLabel) CodeOffset)
+(decl targets_jt_space (BoxVecMachLabel) CodeOffset)
 (extern constructor targets_jt_space targets_jt_space)
-
-(decl targets_jt_info (VecMachLabel) BoxJTSequenceInfo)
-(extern constructor targets_jt_info targets_jt_info)
 
 ;; Calculate the minimum floating-point bound for a conversion to floating
 ;; point from an integer type.
@@ -2708,6 +2705,9 @@
 (rule (and_vec x y size) (vec_rrr (VecALUOp.And) x y size))
 
 ;; Helpers for generating `eor` instructions.
+(decl eor (Type Reg Reg) Reg)
+(rule (eor ty x y) (alu_rrr (ALUOp.Eor) ty x y))
+
 (decl eor_vec (Reg Reg VectorSize) Reg)
 (rule (eor_vec x y size) (vec_rrr (VecALUOp.Eor) x y size))
 
@@ -3312,17 +3312,6 @@
 (rule (splat_const n size)
       (vec_dup (imm $I64 (ImmExtend.Zero) n) size))
 
-;; Each of these extractors tests whether the upper half of the input equals the
-;; lower half of the input
-(decl u128_replicated_u64 (u64) u128)
-(extern extractor u128_replicated_u64 u128_replicated_u64)
-(decl u64_replicated_u32 (u64) u64)
-(extern extractor u64_replicated_u32 u64_replicated_u32)
-(decl u32_replicated_u16 (u64) u64)
-(extern extractor u32_replicated_u16 u32_replicated_u16)
-(decl u16_replicated_u8 (u64) u64)
-(extern extractor u16_replicated_u8 u16_replicated_u8)
-
 ;; Lower a FloatCC to a Cond.
 (decl fp_cond_code (FloatCC) Cond)
 ;; TODO: Port lower_fp_condcode() to ISLE.
@@ -3776,7 +3765,8 @@
 (decl elf_tls_get_addr (ExternalName) Reg)
 (rule (elf_tls_get_addr name)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+            (tmp WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.ElfTlsGetAddr (box_external_name name) dst tmp))))
         dst))
 
 (decl macho_tls_get_addr (ExternalName) Reg)
@@ -4076,12 +4066,12 @@
 ;; PC-rel offset to the jumptable would be incorrect.
 ;; (The alternative is to introduce a relocation pass
 ;; for inlined jumptables, which is much worse, IMHO.)
-(decl jt_sequence (Reg BoxJTSequenceInfo) ConsumesFlags)
-(rule (jt_sequence ridx info)
+(decl jt_sequence (Reg MachLabel BoxVecMachLabel) ConsumesFlags)
+(rule (jt_sequence ridx default targets)
       (let ((rtmp1 WritableReg (temp_writable_reg $I64))
             (rtmp2 WritableReg (temp_writable_reg $I64)))
        (ConsumesFlags.ConsumesFlagsSideEffect
-        (MInst.JTSequence info ridx rtmp1 rtmp2))))
+        (MInst.JTSequence default targets ridx rtmp1 rtmp2))))
 
 ;; Helper for emitting `MInst.CondBr` instructions.
 (decl cond_br (BranchTarget BranchTarget CondBrKind) ConsumesFlags)
@@ -4102,18 +4092,16 @@
        (MInst.EmitIsland needed_space)))
 
 ;; Helper for emitting `br_table` sequences.
-(decl br_table_impl (u64 Reg VecMachLabel) Unit)
-(rule (br_table_impl (imm12_from_u64 jt_size) ridx targets)
-      (let ((jt_info BoxJTSequenceInfo (targets_jt_info targets)))
-       (emit_side_effect (with_flags_side_effect
-            (cmp_imm (OperandSize.Size32) ridx jt_size)
-            (jt_sequence ridx jt_info)))))
-(rule -1 (br_table_impl jt_size ridx targets)
-      (let ((jt_size Reg (imm $I64 (ImmExtend.Zero) jt_size))
-            (jt_info BoxJTSequenceInfo (targets_jt_info targets)))
+(decl br_table_impl (u64 Reg MachLabel BoxVecMachLabel) Unit)
+(rule (br_table_impl (imm12_from_u64 jt_size) ridx default targets)
+      (emit_side_effect (with_flags_side_effect
+           (cmp_imm (OperandSize.Size32) ridx jt_size)
+           (jt_sequence ridx default targets))))
+(rule -1 (br_table_impl jt_size ridx default targets)
+      (let ((jt_size Reg (imm $I64 (ImmExtend.Zero) jt_size)))
        (emit_side_effect (with_flags_side_effect
             (cmp (OperandSize.Size32) ridx jt_size)
-            (jt_sequence ridx jt_info)))))
+            (jt_sequence ridx default targets)))))
 
 ;; Helper for emitting the `uzp1` instruction
 (decl vec_uzp1 (Reg Reg VectorSize) Reg)

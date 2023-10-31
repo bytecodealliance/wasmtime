@@ -1,4 +1,4 @@
-package foo:foo
+package foo:foo;
 
 interface http-types{
   record request {
@@ -11,11 +11,11 @@ interface http-types{
 
 world http-interface {
   export http-handler: interface {
-    use http-types.{request,response}
-    handle-request: func(request: request) -> response
+    use http-types.{request,response};
+    handle-request: func(request: request) -> response;
   }
   import http-fetch: interface {
-    use http-types.{request,response}
-    fetch-request: func(request: request) -> response
+    use http-types.{request,response};
+    fetch-request: func(request: request) -> response;
   }
 }

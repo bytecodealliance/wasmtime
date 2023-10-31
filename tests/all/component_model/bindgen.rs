@@ -15,14 +15,14 @@ mod no_imports {
 
     wasmtime::component::bindgen!({
         inline: "
-            package foo:foo
+            package foo:foo;
 
             world no-imports {
                 export foo: interface {
-                    foo: func()
+                    foo: func();
                 }
 
-                export bar: func()
+                export bar: func();
             }
         ",
     });
@@ -62,14 +62,14 @@ mod one_import {
 
     wasmtime::component::bindgen!({
         inline: "
-            package foo:foo
+            package foo:foo;
 
             world one-import {
                 import foo: interface {
-                    foo: func()
+                    foo: func();
                 }
 
-                export bar: func()
+                export bar: func();
             }
         ",
     });
@@ -127,14 +127,14 @@ mod resources_at_world_level {
 
     wasmtime::component::bindgen!({
         inline: "
-            package foo:foo
+            package foo:foo;
 
             world resources {
                 resource x {
-                    constructor()
+                    constructor();
                 }
 
-                export y: func(x: x)
+                export y: func(x: x);
             }
         ",
     });
@@ -216,22 +216,22 @@ mod resources_at_interface_level {
 
     wasmtime::component::bindgen!({
         inline: "
-            package foo:foo
+            package foo:foo;
 
             interface def {
                 resource x {
-                    constructor()
+                    constructor();
                 }
             }
 
             interface user {
-                use def.{x}
+                use def.{x};
 
-                y: func(x: x)
+                y: func(x: x);
             }
 
             world resources {
-                export user
+                export user;
             }
         ",
     });
@@ -322,12 +322,12 @@ mod async_config {
 
     wasmtime::component::bindgen!({
         inline: "
-            package foo:foo
+            package foo:foo;
 
             world t1 {
-                import x: func()
-                import y: func()
-                export z: func()
+                import x: func();
+                import y: func();
+                export z: func();
             }
         ",
         async: true,
@@ -352,12 +352,12 @@ mod async_config {
 
     wasmtime::component::bindgen!({
         inline: "
-            package foo:foo
+            package foo:foo;
 
             world t2 {
-                import x: func()
-                import y: func()
-                export z: func()
+                import x: func();
+                import y: func();
+                export z: func();
             }
         ",
         async: {
@@ -382,12 +382,12 @@ mod async_config {
 
     wasmtime::component::bindgen!({
         inline: "
-            package foo:foo
+            package foo:foo;
 
             world t3 {
-                import x: func()
-                import y: func()
-                export z: func()
+                import x: func();
+                import y: func();
+                export z: func();
             }
         ",
         async: {
@@ -418,27 +418,27 @@ mod exported_resources {
 
     wasmtime::component::bindgen!({
         inline: "
-            package foo:foo
+            package foo:foo;
 
             interface a {
                 resource x {
-                    constructor()
+                    constructor();
                 }
             }
 
             world resources {
                 export b: interface {
-                    use a.{x as y}
+                    use a.{x as y};
 
                     resource x {
-                        constructor(y: y)
-                        foo: func() -> u32
+                        constructor(y: y);
+                        foo: func() -> u32;
                     }
                 }
 
-                resource x
+                resource x;
 
-                export f: func(x1: x, x2: x) -> x
+                export f: func(x1: x, x2: x) -> x;
             }
         ",
     });

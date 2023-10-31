@@ -21,3 +21,5 @@ foo
 publish
 vendor
 examples/build
+examples/.cache
+*.coredump

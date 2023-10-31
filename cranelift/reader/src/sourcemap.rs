@@ -10,8 +10,8 @@ use crate::error::{Location, ParseResult};
 use crate::lexer::split_entity_name;
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
 use cranelift_codegen::ir::{
-    Block, Constant, DynamicStackSlot, FuncRef, GlobalValue, JumpTable, SigRef, StackSlot, Table,
-    Value,
+    Block, Constant, DynamicStackSlot, FuncRef, GlobalValue, JumpTable, MemoryType, SigRef,
+    StackSlot, Table, Value,
 };
 use std::collections::HashMap;
 
@@ -179,6 +179,11 @@ impl SourceMap {
 
     /// Define the global value `entity`.
     pub fn def_gv(&mut self, entity: GlobalValue, loc: Location) -> ParseResult<()> {
+        self.def_entity(entity.into(), loc)
+    }
+
+    /// Define the memory type `entity`.
+    pub fn def_mt(&mut self, entity: MemoryType, loc: Location) -> ParseResult<()> {
         self.def_entity(entity.into(), loc)
     }
 

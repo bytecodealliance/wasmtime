@@ -1,0 +1,42 @@
+test compile
+set enable_pcc=true
+target aarch64
+target x86_64
+
+;; Equivalent to a Wasm `i64.load` from a dynamic memory.
+function %f0(i64 vmctx, i32) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned checked gv0+0 ;; base
+    gv2 = load.i64 notrap aligned checked gv0+8 ;; size
+    
+    ;; mock vmctx struct:
+    mt0 = struct 16 {
+        0: i64 readonly ! dynamic_mem(mt1, 0, 0),
+        8: i64 readonly ! dynamic_range(64, gv2, gv2),
+    }
+    ;; mock dynamic memory: dynamic range, plus 2GiB guard
+    mt1 = dynamic_memory gv2 + 0x8000_0000
+
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! dynamic_range(32, v1, v1): i32):
+    v2 ! dynamic_range(64, v1, v1)            = uextend.i64 v1       ;; extended Wasm offset
+    v3 ! dynamic_mem(mt1, 0, 0)               = global_value.i64 gv1 ;; base
+    v4 ! dynamic_range(64, gv2, gv2)          = global_value.i64 gv2 ;; size
+    v5 ! compare(uge, v1, gv2)                = icmp.i64 uge v2, v4  ;; bounds-check compare of extended Wasm offset to size
+    v6 ! dynamic_mem(mt1, v1, v1)             = iadd.i64 v3, v2      ;; compute access address: memory base plus extended Wasm offset
+    v7 ! dynamic_mem(mt1, 0, 0, nullable)     = iconst.i64 0         ;; null pointer for speculative path
+    v8 ! dynamic_mem(mt1, 0, gv2-1, nullable) = select_spectre_guard v5, v7, v6  ;; if OOB, pick null, otherwise the real address
+    v9                                        = load.i64 checked v8
+    return v9
+}
+
+;; select sees:
+;;  v5 ! compare(uge, v1, gv2)
+;;  v6 ! dynamic_mem(mt1, v1, v1)
+;;  v7 ! dynamic_mem(mt0, 0, 0, nullable)
+;;
+;; preprocess:
+;; v6' (assuming compare is false) = dynamic_mem(mt1, 0, gv2-1)
+;; v7' (assuming compare is true)  = dynamic_mem(mt1, 0, 0, nullable)
+;;
+;; take the union of range and nullability:
+;; dynamic_mem(mt1, 0, gv2-1, nullable)

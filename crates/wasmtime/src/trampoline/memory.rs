@@ -10,6 +10,7 @@ use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,
     VMOffsets, WASM_PAGE_SIZE,
 };
+use wasmtime_runtime::mpk::ProtectionKey;
 use wasmtime_runtime::{
     CompiledModuleId, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl,
     Memory, MemoryAllocationIndex, MemoryImage, OnDemandInstanceAllocator, RuntimeLinearMemory,
@@ -63,6 +64,7 @@ pub fn create_memory(
         store: StorePtr::new(store.traitobj()),
         runtime_info,
         wmemcheck: false,
+        pkey: None,
     };
 
     unsafe {
@@ -71,7 +73,7 @@ pub fn create_memory(
             ondemand: OnDemandInstanceAllocator::default(),
         }
         .allocate_module(request)?;
-        let instance_id = store.add_instance(handle.clone(), true);
+        let instance_id = store.add_dummy_instance(handle.clone());
         Ok(instance_id)
     }
 }
@@ -250,6 +252,18 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     }
 
     fn purge_module(&self, _: CompiledModuleId) {
+        unreachable!()
+    }
+
+    fn next_available_pkey(&self) -> Option<ProtectionKey> {
+        unreachable!()
+    }
+
+    fn restrict_to_pkey(&self, _: ProtectionKey) {
+        unreachable!()
+    }
+
+    fn allow_all_pkeys(&self) {
         unreachable!()
     }
 }

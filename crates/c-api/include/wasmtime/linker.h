@@ -292,6 +292,24 @@ WASM_API_EXTERN bool wasmtime_linker_get(
     wasmtime_extern_t *item
 );
 
+/**
+ * \brief Preform all the checks for instantiating `module` with the linker,
+ *        except that instantiation doesn't actually finish.
+ *
+ * \param linker the linker used to instantiate the provided module.
+ * \param module the module that is being instantiated.
+ * \param instance_pre the returned instance_pre, if successful.
+ *
+ * \return An error or `NULL` if successful.
+ *
+ * For more information see the Rust documentation at:
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Linker.html#method.instantiate_pre
+ */
+WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_instantiate_pre(
+    const wasmtime_linker_t *linker,
+    const wasmtime_module_t *module,
+    wasmtime_instance_pre_t **instance_pre);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

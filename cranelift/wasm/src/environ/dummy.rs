@@ -261,6 +261,10 @@ impl<'dummy_environment> TargetEnvironment for DummyFuncEnvironment<'dummy_envir
     fn heap_access_spectre_mitigation(&self) -> bool {
         false
     }
+
+    fn proof_carrying_code(&self) -> bool {
+        false
+    }
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
@@ -297,17 +301,19 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: addr,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
-            readonly: true,
+            flags: ir::MemFlags::trusted().with_readonly(),
         });
 
         Ok(self.heaps.push(HeapData {
             base: gv,
             min_size: 0,
+            max_size: None,
             offset_guard_size: 0x8000_0000,
             style: HeapStyle::Static {
                 bound: 0x1_0000_0000,
             },
             index_type: I32,
+            memory_type: None,
         }))
     }
 
@@ -318,13 +324,14 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: vmctx,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
-            readonly: true, // when tables in wasm become "growable", revisit whether this can be readonly or not.
+            // When tables in wasm become "growable", revisit whether this can be readonly or not.
+            flags: ir::MemFlags::trusted().with_readonly(),
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
             offset: Offset32::new(0),
             global_type: I32,
-            readonly: true,
+            flags: ir::MemFlags::trusted().with_readonly(),
         });
 
         Ok(func.create_table(ir::TableData {
@@ -708,6 +715,10 @@ impl TargetEnvironment for DummyEnvironment {
     }
 
     fn heap_access_spectre_mitigation(&self) -> bool {
+        false
+    }
+
+    fn proof_carrying_code(&self) -> bool {
         false
     }
 }

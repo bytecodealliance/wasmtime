@@ -8,7 +8,7 @@ use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::WastContext;
 
 /// Runs a WebAssembly test script file
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[clap(name = "wast", version)]
 pub struct WastCommand {
     #[clap(flatten)]
@@ -22,7 +22,7 @@ pub struct WastCommand {
 impl WastCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        self.common.init_logging();
+        self.common.init_logging()?;
 
         let config = self.common.config(None)?;
         let store = Store::new(&Engine::new(&config)?, ());

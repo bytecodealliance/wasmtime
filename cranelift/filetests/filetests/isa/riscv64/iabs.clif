@@ -12,7 +12,7 @@ block0(v0: i8):
 ;   slli a2,a0,56
 ;   srai a4,a2,56
 ;   sub a0,zero,a4
-;   select_reg a0,a4,a0##condition=(a4 sgt a0)
+;   select a0,a4,a0##condition=(a4 sgt a0)
 ;   ret
 ;
 ; Disassembled:
@@ -20,8 +20,7 @@ block0(v0: i8):
 ;   slli a2, a0, 0x38
 ;   srai a4, a2, 0x38
 ;   neg a0, a4
-;   blt a0, a4, 8
-;   j 8
+;   bge a0, a4, 8
 ;   mv a0, a4
 ;   ret
 
@@ -36,7 +35,7 @@ block0(v0: i16):
 ;   slli a2,a0,48
 ;   srai a4,a2,48
 ;   sub a0,zero,a4
-;   select_reg a0,a4,a0##condition=(a4 sgt a0)
+;   select a0,a4,a0##condition=(a4 sgt a0)
 ;   ret
 ;
 ; Disassembled:
@@ -44,8 +43,7 @@ block0(v0: i16):
 ;   slli a2, a0, 0x30
 ;   srai a4, a2, 0x30
 ;   neg a0, a4
-;   blt a0, a4, 8
-;   j 8
+;   bge a0, a4, 8
 ;   mv a0, a4
 ;   ret
 
@@ -59,17 +57,17 @@ block0(v0: i32):
 ; block0:
 ;   sext.w a2,a0
 ;   sub a4,zero,a2
-;   select_reg a0,a2,a4##condition=(a2 sgt a4)
+;   select a0,a2,a4##condition=(a2 sgt a4)
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a2, a0
 ;   neg a4, a2
-;   blt a4, a2, 0xc
-;   mv a0, a4
-;   j 8
+;   bge a4, a2, 0xc
 ;   mv a0, a2
+;   j 8
+;   mv a0, a4
 ;   ret
 
 function %iabs_i64(i64) -> i64 {
@@ -81,7 +79,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   sub a2,zero,a0
-;   select_reg a0,a0,a2##condition=(a0 sgt a2)
+;   select a0,a0,a2##condition=(a0 sgt a2)
 ;   ret
 ;
 ; Disassembled:

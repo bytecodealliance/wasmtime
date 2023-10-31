@@ -5,7 +5,7 @@ use crate::CodeMemory;
 use anyhow::{bail, Result};
 
 cfg_if::cfg_if! {
-    if #[cfg(all(feature = "jitdump", target_os = "linux"))] {
+    if #[cfg(all(feature = "profiling", target_os = "linux"))] {
         mod jitdump;
         pub use jitdump::new as new_jitdump;
     } else {
@@ -33,7 +33,7 @@ cfg_if::cfg_if! {
 cfg_if::cfg_if! {
     // Note: VTune support is disabled on windows mingw because the ittapi crate doesn't compile
     // there; see also https://github.com/bytecodealliance/wasmtime/pull/4003 for rationale.
-    if #[cfg(all(feature = "vtune", target_arch = "x86_64", not(any(target_os = "android", all(target_os = "windows", target_env = "gnu")))))] {
+    if #[cfg(all(feature = "profiling", target_arch = "x86_64", not(any(target_os = "android", all(target_os = "windows", target_env = "gnu")))))] {
         mod vtune;
         pub use vtune::new as new_vtune;
     } else {
@@ -76,7 +76,7 @@ pub trait ProfilingAgent: Send + Sync + 'static {
             }
             let address = sym.address();
             let size = sym.size();
-            if address == 0 || size == 0 {
+            if size == 0 {
                 continue;
             }
             if let Ok(name) = sym.name() {

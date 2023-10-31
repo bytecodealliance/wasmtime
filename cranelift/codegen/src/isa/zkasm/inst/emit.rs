@@ -659,7 +659,7 @@ impl MachInstEmit for Inst {
                         // For now we only support calls.
                         assert!(info.opcode.is_call());
                         sink.add_call_site(info.opcode);
-                        sink.add_reloc(Reloc::RiscvCall, &info.dest, 0);
+                        sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
                         // This will be patched externally to do a necessary jump.
                         put_string(&format!("; CALL {name}\n"), sink);
 

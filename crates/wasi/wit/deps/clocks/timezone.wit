@@ -1,16 +1,5 @@
-package wasi:clocks
-
 interface timezone {
-    use wall-clock.{datetime}
-
-    /// A timezone.
-    ///
-    /// In timezones that recognize daylight saving time, also known as daylight
-    /// time and summer time, the information returned from the functions varies
-    /// over time to reflect these adjustments.
-    ///
-    /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
-    type timezone = u32
+    use wall-clock.{datetime};
 
     /// Return information needed to display the given `datetime`. This includes
     /// the UTC offset, the time zone name, and a flag indicating whether
@@ -19,14 +8,10 @@ interface timezone {
     /// If the timezone cannot be determined for the given `datetime`, return a
     /// `timezone-display` for `UTC` with a `utc-offset` of 0 and no daylight
     /// saving time.
-    display: func(this: timezone, when: datetime) -> timezone-display
+    display: func(when: datetime) -> timezone-display;
 
     /// The same as `display`, but only return the UTC offset.
-    utc-offset: func(this: timezone, when: datetime) -> s32
-
-    /// Dispose of the specified input-stream, after which it may no longer
-    /// be used.
-    drop-timezone: func(this: timezone)
+    utc-offset: func(when: datetime) -> s32;
 
     /// Information useful for displaying the timezone of a specific `datetime`.
     ///

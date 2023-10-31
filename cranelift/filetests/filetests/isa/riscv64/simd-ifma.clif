@@ -11,7 +11,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64x2):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -23,7 +23,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64x2):
 ;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -58,7 +58,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -70,7 +70,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64):
 ;   vse8.v v15,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -104,7 +104,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64x2):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -116,7 +116,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64x2):
 ;   vse8.v v15,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -152,7 +152,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -164,7 +164,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64):
 ;   vse8.v v15,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -197,7 +197,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64x2):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -210,7 +210,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64x2):
 ;   vse8.v v9,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -246,7 +246,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -258,7 +258,7 @@ block0(v0: i64x2, v1: i64x2, v2: i64):
 ;   vse8.v v8,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

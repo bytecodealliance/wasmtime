@@ -32,8 +32,14 @@ fn emit_signed_cvt(
     } else {
         SseOpcode::Cvtsi2ss
     };
-    let inst = Inst::gpr_to_xmm(op, RegMem::reg(src), OperandSize::Size64, dst);
-    inst.emit(&[], sink, info, state);
+    Inst::CvtIntToFloat {
+        op,
+        dst: Writable::from_reg(Xmm::new(dst.to_reg()).unwrap()),
+        src1: Xmm::new(dst.to_reg()).unwrap(),
+        src2: GprMem::new(RegMem::reg(src)).unwrap(),
+        src2_size: OperandSize::Size64,
+    }
+    .emit(&[], sink, info, state);
 }
 
 /// Emits a one way conditional jump if CC is set (true).
@@ -2285,6 +2291,20 @@ pub(crate) fn emit(
             let src1 = allocs.next(src1.to_reg());
             let src2 = src2.clone().to_reg_mem_imm().with_allocs(allocs);
 
+            // When the opcode is commutative, src1 is xmm{0..7}, and src2 is
+            // xmm{8..15}, then we can swap the operands to save one byte on the
+            // instruction's encoding.
+            let (src1, src2) = match (src1, src2) {
+                (src1, RegMemImm::Reg { reg: src2 })
+                    if op.is_commutative()
+                        && src1.to_real_reg().unwrap().hw_enc() < 8
+                        && src2.to_real_reg().unwrap().hw_enc() >= 8 =>
+                {
+                    (src2, RegMemImm::Reg { reg: src1 })
+                }
+                (src1, src2) => (src1, src2),
+            };
+
             let src2 = match src2 {
                 // For opcodes where one of the operands is an immediate the
                 // encoding is a bit different, notably the usage of
@@ -2319,6 +2339,7 @@ pub(crate) fn emit(
                 }
                 RegMemImm::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
             };
+
             let (prefix, map, opcode) = match op {
                 AvxOpcode::Vminps => (LP::None, OM::_0F, 0x5D),
                 AvxOpcode::Vminpd => (LP::_66, OM::_0F, 0x5D),
@@ -2857,30 +2878,21 @@ pub(crate) fn emit(
             let (prefix, map, opcode) = match op {
                 // vmovd/vmovq are differentiated by `w`
                 AvxOpcode::Vmovd | AvxOpcode::Vmovq => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x6E),
-                AvxOpcode::Vcvtsi2ss => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x2A),
-                AvxOpcode::Vcvtsi2sd => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x2A),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             let w = match src_size {
                 OperandSize::Size64 => true,
                 _ => false,
             };
-            let mut insn = VexInstruction::new()
+            VexInstruction::new()
                 .length(VexVectorLength::V128)
                 .w(w)
                 .prefix(prefix)
                 .map(map)
                 .opcode(opcode)
                 .rm(src)
-                .reg(dst.to_real_reg().unwrap().hw_enc());
-            // These opcodes technically take a second operand which is the
-            // upper bits to preserve during the float conversion. We don't
-            // actually use this in this backend right now so reuse the
-            // destination register. This at least matches what LLVM does.
-            if let AvxOpcode::Vcvtsi2ss | AvxOpcode::Vcvtsi2sd = op {
-                insn = insn.vvvv(dst.to_real_reg().unwrap().hw_enc());
-            }
-            insn.encode(sink);
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .encode(sink);
         }
 
         Inst::XmmRmREvex {
@@ -3185,8 +3197,6 @@ pub(crate) fn emit(
                 // Movd and movq use the same opcode; the presence of the REX prefix (set below)
                 // actually determines which is used.
                 SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefixes::_66, 0x0F6E),
-                SseOpcode::Cvtsi2ss => (LegacyPrefixes::_F3, 0x0F2A),
-                SseOpcode::Cvtsi2sd => (LegacyPrefixes::_F2, 0x0F2A),
                 _ => panic!("unexpected opcode {:?}", op),
             };
             let rex = RexFlags::from(*src_size);
@@ -3222,6 +3232,72 @@ pub(crate) fn emit(
                     emit_std_reg_mem(sink, prefix, opcode, len, dst, addr, rex, 0);
                 }
             }
+        }
+
+        Inst::CvtIntToFloat {
+            op,
+            src1,
+            src2,
+            dst,
+            src2_size,
+        } => {
+            let src1 = allocs.next(src1.to_reg());
+            let dst = allocs.next(dst.to_reg().to_reg());
+            assert_eq!(src1, dst);
+            let src2 = src2.clone().to_reg_mem().with_allocs(allocs);
+
+            let (prefix, opcode) = match op {
+                SseOpcode::Cvtsi2ss => (LegacyPrefixes::_F3, 0x0F2A),
+                SseOpcode::Cvtsi2sd => (LegacyPrefixes::_F2, 0x0F2A),
+                _ => panic!("unexpected opcode {:?}", op),
+            };
+            let rex = RexFlags::from(*src2_size);
+            match src2 {
+                RegMem::Reg { reg: src2 } => {
+                    emit_std_reg_reg(sink, prefix, opcode, 2, dst, src2, rex);
+                }
+                RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state, sink);
+                    emit_std_reg_mem(sink, prefix, opcode, 2, dst, addr, rex, 0);
+                }
+            }
+        }
+
+        Inst::CvtIntToFloatVex {
+            op,
+            src1,
+            src2,
+            dst,
+            src2_size,
+        } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let (prefix, map, opcode) = match op {
+                AvxOpcode::Vcvtsi2ss => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x2A),
+                AvxOpcode::Vcvtsi2sd => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x2A),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            let w = match src2_size {
+                OperandSize::Size64 => true,
+                _ => false,
+            };
+            VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .w(w)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .rm(src2)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .vvvv(src1.to_real_reg().unwrap().hw_enc())
+                .encode(sink);
         }
 
         Inst::CvtUint64ToFloatSeq {

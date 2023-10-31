@@ -76,17 +76,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   ld a0,[const(0)]
+;   lui a0,65535
+;   slli a0,a0,4
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0x10(a0)
+;   lui a0, 0xffff
+;   slli a0, a0, 4
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0xff, 0xff
-;   .byte 0x00, 0x00, 0x00, 0x00
 
 function %f() -> i64 {
 block0:
@@ -96,17 +94,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   ld a0,[const(0)]
+;   lui a0,65535
+;   slli a0,a0,20
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0x10(a0)
+;   lui a0, 0xffff
+;   slli a0, a0, 0x14
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0xff, 0xff, 0x00, 0x00
 
 function %f() -> i64 {
 block0:
@@ -116,17 +112,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   ld a0,[const(0)]
+;   lui a0,65535
+;   slli a0,a0,36
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0x10(a0)
+;   lui a0, 0xffff
+;   slli a0, a0, 0x24
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0xff, 0xff
 
 function %f() -> i64 {
 block0:
@@ -356,18 +350,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   ld a0,[const(0)]
-;   fmv.d.x fa0,a0
+;   lui a0,1023
+;   slli a2,a0,40
+;   fmv.d.x fa0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0x10(a0)
-;   fmv.d.x fa0, a0
+;   lui a0, 0x3ff
+;   slli a2, a0, 0x28
+;   fmv.d.x fa0, a2
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0xf0, 0x3f
 
 function %f() -> f32 {
 block0:
@@ -395,18 +388,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   ld a0,[const(0)]
-;   fmv.d.x fa0,a0
+;   lui a0,16457
+;   slli a2,a0,36
+;   fmv.d.x fa0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0x10(a0)
-;   fmv.d.x fa0, a0
+;   lui a0, 0x4049
+;   slli a2, a0, 0x24
+;   fmv.d.x fa0, a2
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x49, 0x40
 
 function %f() -> f32 {
 block0:
@@ -470,18 +462,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   ld a0,[const(0)]
-;   fmv.d.x fa0,a0
+;   lui a0,3075
+;   slli a2,a0,40
+;   fmv.d.x fa0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0x10(a0)
-;   fmv.d.x fa0, a0
+;   lui a0, 0xc03
+;   slli a2, a0, 0x28
+;   fmv.d.x fa0, a2
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x30, 0xc0
 
 function %f() -> f32 {
 block0:

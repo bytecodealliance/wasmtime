@@ -5,6 +5,10 @@ use crate::settings;
 use alloc::vec::Vec;
 use std::borrow::Cow;
 
+fn fa7() -> Reg {
+    f_reg(17)
+}
+
 #[test]
 fn test_riscv64_binemit() {
     struct TestUnit {
@@ -1156,7 +1160,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: Some(FRM::RNE),
+            frm: FRM::RNE,
             alu_op: FpuOPRRR::FaddS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1167,7 +1171,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: Some(FRM::RTZ),
+            frm: FRM::RTZ,
             alu_op: FpuOPRRR::FsubS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1178,7 +1182,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: Some(FRM::RUP),
+            frm: FRM::RUP,
             alu_op: FpuOPRRR::FmulS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1189,18 +1193,18 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRR::FdivS,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
         },
-        "fdiv.s fa0,fa0,fa1",
+        "fdiv.s fa0,fa0,fa1,fcsr",
         0x18b57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRRR::FsgnjS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1211,7 +1215,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RTZ,
             alu_op: FpuOPRRR::FsgnjnS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1223,7 +1227,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RDN,
             alu_op: FpuOPRRR::FsgnjxS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1234,7 +1238,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRRR::FminS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1246,7 +1250,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RTZ,
             alu_op: FpuOPRRR::FmaxS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1257,7 +1261,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RDN,
             alu_op: FpuOPRRR::FeqS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1268,7 +1272,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RTZ,
             alu_op: FpuOPRRR::FltS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1279,7 +1283,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRRR::FleS,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1292,51 +1296,51 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRR::FaddD,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
         },
-        "fadd.d fa0,fa0,fa1",
+        "fadd.d fa0,fa0,fa1,fcsr",
         0x2b57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRR::FsubD,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
         },
-        "fsub.d fa0,fa0,fa1",
+        "fsub.d fa0,fa0,fa1,fcsr",
         0xab57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRR::FmulD,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
         },
-        "fmul.d fa0,fa0,fa1",
+        "fmul.d fa0,fa0,fa1,fcsr",
         0x12b57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRR::FdivD,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
         },
-        "fdiv.d fa0,fa0,fa1",
+        "fdiv.d fa0,fa0,fa1,fcsr",
         0x1ab57553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRRR::FsgnjD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1347,7 +1351,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RTZ,
             alu_op: FpuOPRRR::FsgnjnD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1359,7 +1363,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RDN,
             alu_op: FpuOPRRR::FsgnjxD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1370,7 +1374,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRRR::FminD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1382,7 +1386,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RTZ,
             alu_op: FpuOPRRR::FmaxD,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1393,7 +1397,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RDN,
             alu_op: FpuOPRRR::FeqD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1404,7 +1408,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RTZ,
             alu_op: FpuOPRRR::FltD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1415,7 +1419,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRRR::FleD,
             rd: writable_a0(),
             rs1: fa0(),
@@ -1428,7 +1432,7 @@ fn test_riscv64_binemit() {
     //
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: Some(FRM::RNE),
+            frm: FRM::RNE,
             alu_op: FpuOPRR::FsqrtS,
             rd: writable_fa0(),
             rs: fa1(),
@@ -1438,28 +1442,28 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtWS,
             rd: writable_a0(),
             rs: fa1(),
         },
-        "fcvt.w.s a0,fa1",
+        "fcvt.w.s a0,fa1,fcsr",
         0xc005f553,
     ));
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtWuS,
             rd: writable_a0(),
             rs: fa1(),
         },
-        "fcvt.wu.s a0,fa1",
+        "fcvt.wu.s a0,fa1,fcsr",
         0xc015f553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::FmvXW,
             rd: writable_a0(),
             rs: fa1(),
@@ -1469,7 +1473,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::RTZ,
             alu_op: FpuOPRR::FclassS,
             rd: writable_a0(),
             rs: fa1(),
@@ -1480,28 +1484,28 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtSw,
             rd: writable_fa0(),
             rs: a0(),
         },
-        "fcvt.s.w fa0,a0",
+        "fcvt.s.w fa0,a0,fcsr",
         0xd0057553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtSwU,
             rd: writable_fa0(),
             rs: a0(),
         },
-        "fcvt.s.wu fa0,a0",
+        "fcvt.s.wu fa0,a0,fcsr",
         0xd0157553,
     ));
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::FmvWX,
             rd: writable_fa0(),
             rs: a0(),
@@ -1511,81 +1515,81 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtLS,
             rd: writable_a0(),
             rs: fa0(),
         },
-        "fcvt.l.s a0,fa0",
+        "fcvt.l.s a0,fa0,fcsr",
         0xc0257553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtLuS,
             rd: writable_a0(),
             rs: fa0(),
         },
-        "fcvt.lu.s a0,fa0",
+        "fcvt.lu.s a0,fa0,fcsr",
         0xc0357553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
 
             alu_op: FpuOPRR::FcvtSL,
             rd: writable_fa0(),
             rs: a0(),
         },
-        "fcvt.s.l fa0,a0",
+        "fcvt.s.l fa0,a0,fcsr",
         0xd0257553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtSLU,
             rd: writable_fa0(),
             rs: a0(),
         },
-        "fcvt.s.lu fa0,a0",
+        "fcvt.s.lu fa0,a0,fcsr",
         0xd0357553,
     ));
 
     //
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FsqrtD,
             rd: writable_fa0(),
             rs: fa1(),
         },
-        "fsqrt.d fa0,fa1",
+        "fsqrt.d fa0,fa1,fcsr",
         0x5a05f553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtWD,
             rd: writable_a0(),
             rs: fa1(),
         },
-        "fcvt.w.d a0,fa1",
+        "fcvt.w.d a0,fa1,fcsr",
         0xc205f553,
     ));
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtWuD,
             rd: writable_a0(),
             rs: fa1(),
         },
-        "fcvt.wu.d a0,fa1",
+        "fcvt.wu.d a0,fa1,fcsr",
         0xc215f553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::FmvXD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1595,7 +1599,7 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::RTZ,
             alu_op: FpuOPRR::FclassD,
             rd: writable_a0(),
             rs: fa1(),
@@ -1606,17 +1610,17 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtSD,
             rd: writable_fa0(),
             rs: fa0(),
         },
-        "fcvt.s.d fa0,fa0",
+        "fcvt.s.d fa0,fa0,fcsr",
         0x40157553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::FcvtDWU,
             rd: writable_fa0(),
             rs: a0(),
@@ -1627,7 +1631,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::FmvDX,
             rd: writable_fa0(),
             rs: a0(),
@@ -1637,49 +1641,49 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtLD,
             rd: writable_a0(),
             rs: fa0(),
         },
-        "fcvt.l.d a0,fa0",
+        "fcvt.l.d a0,fa0,fcsr",
         0xc2257553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtLuD,
             rd: writable_a0(),
             rs: fa0(),
         },
-        "fcvt.lu.d a0,fa0",
+        "fcvt.lu.d a0,fa0,fcsr",
         0xc2357553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtDL,
             rd: writable_fa0(),
             rs: a0(),
         },
-        "fcvt.d.l fa0,a0",
+        "fcvt.d.l fa0,a0,fcsr",
         0xd2257553,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRR::FcvtDLu,
             rd: writable_fa0(),
             rs: a0(),
         },
-        "fcvt.d.lu fa0,a0",
+        "fcvt.d.lu fa0,a0,fcsr",
         0xd2357553,
     ));
     //////////////////////
 
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            frm: Some(FRM::RNE),
+            frm: FRM::RNE,
             alu_op: FpuOPRRRR::FmaddS,
             rd: writable_fa0(),
             rs1: fa0(),
@@ -1691,56 +1695,56 @@ fn test_riscv64_binemit() {
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRRR::FmsubS,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
             rs3: fa7(),
         },
-        "fmsub.s fa0,fa0,fa1,fa7",
+        "fmsub.s fa0,fa0,fa1,fa7,fcsr",
         0x88b57547,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRRR::FnmsubS,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
             rs3: fa7(),
         },
-        "fnmsub.s fa0,fa0,fa1,fa7",
+        "fnmsub.s fa0,fa0,fa1,fa7,fcsr",
         0x88b5754b,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRRR::FnmaddS,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
             rs3: fa7(),
         },
-        "fnmadd.s fa0,fa0,fa1,fa7",
+        "fnmadd.s fa0,fa0,fa1,fa7,fcsr",
         0x88b5754f,
     ));
 
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRRR::FmaddD,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
             rs3: fa7(),
         },
-        "fmadd.d fa0,fa0,fa1,fa7",
+        "fmadd.d fa0,fa0,fa1,fa7,fcsr",
         0x8ab57543,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            frm: None,
+            frm: FRM::Fcsr,
 
             alu_op: FpuOPRRRR::FmsubD,
             rd: writable_fa0(),
@@ -1748,31 +1752,31 @@ fn test_riscv64_binemit() {
             rs2: fa1(),
             rs3: fa7(),
         },
-        "fmsub.d fa0,fa0,fa1,fa7",
+        "fmsub.d fa0,fa0,fa1,fa7,fcsr",
         0x8ab57547,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRRR::FnmsubD,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
             rs3: fa7(),
         },
-        "fnmsub.d fa0,fa0,fa1,fa7",
+        "fnmsub.d fa0,fa0,fa1,fa7,fcsr",
         0x8ab5754b,
     ));
     insns.push(TestUnit::new(
         Inst::FpuRRRR {
-            frm: None,
+            frm: FRM::Fcsr,
             alu_op: FpuOPRRRR::FnmaddD,
             rd: writable_fa0(),
             rs1: fa0(),
             rs2: fa1(),
             rs3: fa7(),
         },
-        "fnmadd.d fa0,fa0,fa1,fa7",
+        "fnmadd.d fa0,fa0,fa1,fa7,fcsr",
         0x8ab5754f,
     ));
 
@@ -2039,7 +2043,7 @@ fn test_riscv64_binemit() {
     insns.push(TestUnit::new(
         Inst::FpuRRR {
             alu_op: FpuOPRRR::FsgnjS,
-            frm: None,
+            frm: FRM::RNE,
             rd: writable_fa0(),
             rs1: fa1(),
             rs2: fa1(),
@@ -2050,7 +2054,7 @@ fn test_riscv64_binemit() {
     insns.push(TestUnit::new(
         Inst::FpuRRR {
             alu_op: FpuOPRRR::FsgnjD,
-            frm: None,
+            frm: FRM::RNE,
             rd: writable_fa0(),
             rs1: fa1(),
             rs2: fa1(),
@@ -2062,7 +2066,7 @@ fn test_riscv64_binemit() {
     insns.push(TestUnit::new(
         Inst::FpuRRR {
             alu_op: FpuOPRRR::FsgnjnS,
-            frm: None,
+            frm: FRM::RTZ,
             rd: writable_fa0(),
             rs1: fa1(),
             rs2: fa1(),
@@ -2073,7 +2077,7 @@ fn test_riscv64_binemit() {
     insns.push(TestUnit::new(
         Inst::FpuRRR {
             alu_op: FpuOPRRR::FsgnjnD,
-            frm: None,
+            frm: FRM::RTZ,
             rd: writable_fa0(),
             rs1: fa1(),
             rs2: fa1(),
@@ -2110,111 +2114,6 @@ fn make_test_flags() -> (settings::Flags, super::super::riscv_settings::Flags) {
     (flags, isa_flags)
 }
 
-#[derive(Debug)]
-pub(crate) struct DebugRTypeInst {
-    op_code: u32,
-    rd: u32,
-    funct3: u32,
-    rs1: u32,
-    rs2: u32,
-    funct7: u32,
-}
-
-impl DebugRTypeInst {
-    pub(crate) fn from_bs(x: &[u8]) -> Option<Self> {
-        if x.len() != 4 {
-            return None;
-        }
-        let a = [x[0], x[1], x[2], x[3]];
-        Some(Self::from_u32(u32::from_le_bytes(a)))
-    }
-
-    pub(crate) fn from_u32(x: u32) -> Self {
-        let op_code = x & 0b111_1111;
-        let x = x >> 7;
-        let rd = x & 0b1_1111;
-        let x = x >> 5;
-        let funct3 = x & 0b111;
-        let x = x >> 3;
-        let rs1 = x & 0b1_1111;
-        let x = x >> 5;
-        let rs2 = x & 0b1_1111;
-        let x = x >> 5;
-        let funct7 = x & 0b111_1111;
-        Self {
-            op_code,
-            rd,
-            funct3,
-            rs1,
-            rs2,
-            funct7,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct DebugITypeInst {
-    op_code: u32,
-    rd: u32,
-    funct3: u32,
-    rs: u32,
-    imm12: u32,
-    shamt5: u32,
-    shamt6: u32,
-    funct7: u32,
-    funct6: u32,
-}
-
-impl DebugITypeInst {
-    pub(crate) fn from_bs(x: &[u8]) -> Self {
-        let a = [x[0], x[1], x[2], x[3]];
-        Self::from_u32(u32::from_le_bytes(a))
-    }
-    pub(crate) fn from_u32(x: u32) -> Self {
-        let op_code = x & 0b111_1111;
-        let x = x >> 7;
-        let rd = x & 0b1_1111;
-        let x = x >> 5;
-        let funct3 = x & 0b111;
-        let x = x >> 3;
-        let rs = x & 0b1_1111;
-        let x = x >> 5;
-        let imm12 = x & 0b1111_1111_1111;
-        let shamt5 = imm12 & 0b1_1111;
-        let shamt6 = imm12 & 0b11_1111;
-        let funct7 = imm12 >> 5;
-        let funct6 = funct7 >> 1;
-        Self {
-            op_code,
-            rd,
-            funct3,
-            rs,
-            imm12,
-            shamt5,
-            shamt6,
-            funct7,
-            funct6,
-        }
-    }
-    fn print_b(self) {
-        println!("opcode:{:b}", self.op_code);
-        println!("rd:{}", self.rd);
-        println!("funct3:{:b}", self.funct3);
-        println!("rs:{}", self.rs);
-        println!("shamt5:{:b}", self.shamt5);
-        println!("shamt6:{:b}", self.shamt6);
-        println!("funct6:{:b}", self.funct6);
-        println!("funct7:{:b}", self.funct7);
-    }
-}
-
-#[test]
-fn xxx() {
-    let x = 1240847763;
-    let x = DebugITypeInst::from_u32(x);
-    x.print_b();
-}
-
 #[test]
 fn riscv64_worst_case_instruction_size() {
     let (flags, isa_flags) = make_test_flags();
@@ -2223,84 +2122,12 @@ fn riscv64_worst_case_instruction_size() {
     //there are all candidates potential generate a lot of bytes.
     let mut candidates: Vec<MInst> = vec![];
 
-    candidates.push(Inst::IntSelect {
-        dst: vec![writable_a0(), writable_a0()],
-        ty: I128,
-        op: IntSelectOP::Smax,
-        x: ValueRegs::two(x_reg(1), x_reg(2)),
-        y: ValueRegs::two(x_reg(3), x_reg(4)),
-    });
-
-    candidates.push(Inst::FcvtToInt {
-        rd: writable_a0(),
-        rs: fa0(),
-        is_signed: true,
-        in_type: F64,
-        out_type: I8,
-        is_sat: false,
-        tmp: writable_a1(),
-    });
-    candidates.push(Inst::FcvtToInt {
-        rd: writable_a0(),
-        rs: fa0(),
-        is_signed: true,
-        in_type: F64,
-        out_type: I16,
-        is_sat: false,
-        tmp: writable_a1(),
-    });
-    candidates.push(Inst::FcvtToInt {
-        rd: writable_a0(),
-        rs: fa0(),
-        is_signed: true,
-        in_type: F32,
-        out_type: I8,
-        is_sat: false,
-        tmp: writable_a1(),
-    });
-    candidates.push(Inst::FcvtToInt {
-        rd: writable_a0(),
-        rs: fa0(),
-        is_signed: true,
-        in_type: F32,
-        out_type: I16,
-        is_sat: false,
-        tmp: writable_a1(),
-    });
-    candidates.push(Inst::FcvtToInt {
-        rd: writable_a0(),
-        rs: fa0(),
-        is_signed: true,
-        in_type: F64,
-        out_type: I8,
-        is_sat: false,
-        tmp: writable_a1(),
-    });
-    candidates.push(Inst::FcvtToInt {
-        rd: writable_a0(),
-        rs: fa0(),
-        is_signed: true,
-        in_type: F64,
-        out_type: I16,
-        is_sat: false,
-        tmp: writable_a1(),
-    });
-
     candidates.push(Inst::FloatRound {
         op: FloatRoundOP::Trunc,
         int_tmp: writable_a0(),
         f_tmp: writable_a0(),
         rd: writable_fa0(),
         rs: fa0(),
-        ty: F64,
-    });
-
-    candidates.push(Inst::FloatSelect {
-        op: FloatSelectOP::Max,
-        rd: writable_fa0(),
-        tmp: writable_a0(),
-        rs1: fa0(),
-        rs2: fa0(),
         ty: F64,
     });
 

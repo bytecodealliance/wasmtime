@@ -237,6 +237,8 @@ impl Context {
     /// Run the verifier on the function.
     ///
     /// Also check that the dominator tree and control flow graph are consistent with the function.
+    ///
+    /// TODO: rename to "CLIF validate" or similar.
     pub fn verify<'a, FOI: Into<FlagsOrIsa<'a>>>(&self, fisa: FOI) -> VerifierResult<()> {
         let mut errors = VerifierErrors::default();
         let _ = verify_context(&self.func, &self.cfg, &self.domtree, fisa, &mut errors);

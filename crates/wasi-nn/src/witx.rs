@@ -179,6 +179,8 @@ impl From<gen::types::TensorType> for crate::wit::types::TensorType {
             gen::types::TensorType::F32 => crate::wit::types::TensorType::Fp32,
             gen::types::TensorType::U8 => crate::wit::types::TensorType::U8,
             gen::types::TensorType::I32 => crate::wit::types::TensorType::I32,
+            gen::types::TensorType::I64 => crate::wit::types::TensorType::I64,
+            gen::types::TensorType::F64 => crate::wit::types::TensorType::Fp64,
         }
     }
 }

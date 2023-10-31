@@ -946,9 +946,7 @@ impl Func {
     /// this function is properly rooted within it. Additionally this function
     /// should not be liberally used since it's a very low-level knob.
     pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
-        self.caller_checked_func_ref(store.as_context_mut().0)
-            .as_ptr()
-            .cast()
+        self.vm_func_ref(store.as_context_mut().0).as_ptr().cast()
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -1080,7 +1078,7 @@ impl Func {
     }
 
     #[inline]
-    pub(crate) fn caller_checked_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
+    pub(crate) fn vm_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
         let func_data = &mut store.store_data_mut()[self.0];
         if let Some(in_store) = func_data.in_store_func_ref {
             in_store.as_non_null()
@@ -1339,6 +1337,16 @@ impl Func {
         // (unsafely), which should be safe since we just did the type check above.
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
     }
+
+    /// Get a stable hash key for this function.
+    ///
+    /// Even if the same underlying function is added to the `StoreData`
+    /// multiple times and becomes multiple `wasmtime::Func`s, this hash key
+    /// will be consistent across all of these functions.
+    #[allow(dead_code)] // Not used yet, but added for consistency.
+    pub(crate) fn hash_key(&self, store: &mut StoreOpaque) -> impl std::hash::Hash + Eq {
+        self.vm_func_ref(store).as_ptr() as usize
+    }
 }
 
 /// Prepares for entrance into WebAssembly.
@@ -1408,7 +1416,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
         return None;
     }
 
-    let stack_pointer = psm::stack_pointer() as usize;
+    let stack_pointer = stack_pointer();
 
     // Determine the stack pointer where, after which, any wasm code will
     // immediately trap. This is checked on the entry to all wasm functions.
@@ -1433,6 +1441,43 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     };
 
     Some(prev_stack)
+}
+
+#[inline]
+fn stack_pointer() -> usize {
+    let stack_pointer: usize;
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "x86_64")] {
+            unsafe {
+                std::arch::asm!(
+                    "mov {}, rsp",
+                    out(reg) stack_pointer,
+                    options(nostack,nomem),
+                );
+            }
+        } else if #[cfg(target_arch = "aarch64")] {
+            unsafe {
+                std::arch::asm!(
+                    "mov {}, sp",
+                    out(reg) stack_pointer,
+                    options(nostack,nomem),
+                );
+            }
+        } else if #[cfg(target_arch = "riscv64")] {
+            unsafe {
+                std::arch::asm!(
+                    "mv {}, sp",
+                    out(reg) stack_pointer,
+                    options(nostack,nomem),
+                );
+            }
+        } else if #[cfg(target_arch = "s390x")] {
+            stack_pointer = psm::stack_pointer() as usize;
+        } else {
+            compile_error!("unsupported platform");
+        }
+    }
+    stack_pointer
 }
 
 fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
@@ -1850,43 +1895,26 @@ impl<T> Caller<'_, T> {
         self.store.gc()
     }
 
-    /// Returns the fuel consumed by this store.
+    /// Returns the remaining fuel in the store.
     ///
-    /// For more information see [`Store::fuel_consumed`](crate::Store::fuel_consumed)
-    pub fn fuel_consumed(&self) -> Option<u64> {
-        self.store.fuel_consumed()
+    /// For more information see [`Store::get_fuel`](crate::Store::get_fuel)
+    pub fn get_fuel(&self) -> Result<u64> {
+        self.store.get_fuel()
     }
 
-    /// Inject more fuel into this store to be consumed when executing wasm code.
+    /// Set the amount of fuel in this store to be consumed when executing wasm code.
     ///
-    /// For more information see [`Store::add_fuel`](crate::Store::add_fuel)
-    pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
-        self.store.add_fuel(fuel)
+    /// For more information see [`Store::set_fuel`](crate::Store::set_fuel)
+    pub fn set_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.store.set_fuel(fuel)
     }
 
-    /// Synthetically consumes fuel from the store.
-    ///
-    /// For more information see [`Store::consume_fuel`](crate::Store::consume_fuel)
-    pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
-        self.store.consume_fuel(fuel)
-    }
-
-    /// Configures this `Store` to trap whenever fuel runs out.
+    /// Configures this `Store` to yield while executing futures every N units of fuel.
     ///
     /// For more information see
-    /// [`Store::out_of_fuel_trap`](crate::Store::out_of_fuel_trap)
-    pub fn out_of_fuel_trap(&mut self) {
-        self.store.out_of_fuel_trap()
-    }
-
-    /// Configures this `Store` to yield while executing futures whenever fuel
-    /// runs out.
-    ///
-    /// For more information see
-    /// [`Store::out_of_fuel_async_yield`](crate::Store::out_of_fuel_async_yield)
-    pub fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
-        self.store
-            .out_of_fuel_async_yield(injection_count, fuel_to_inject)
+    /// [`Store::fuel_async_yield_interval`](crate::Store::fuel_async_yield_interval)
+    pub fn fuel_async_yield_interval(&mut self, interval: Option<u64>) -> Result<()> {
+        self.store.fuel_async_yield_interval(interval)
     }
 }
 
@@ -2352,5 +2380,49 @@ mod rooted {
                 self.func().func_ref()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Instance, Module, Store};
+
+    #[test]
+    fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
+        let mut store = Store::<()>::default();
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (func (export "f")
+                        nop
+                    )
+                )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+
+        // Each time we `get_func`, we call `Func::from_wasmtime` which adds a
+        // new entry to `StoreData`, so `f1` and `f2` will have different
+        // indices into `StoreData`.
+        let f1 = instance.get_func(&mut store, "f").unwrap();
+        let f2 = instance.get_func(&mut store, "f").unwrap();
+
+        // But their hash keys are the same.
+        assert!(
+            f1.hash_key(&mut store.as_context_mut().0)
+                == f2.hash_key(&mut store.as_context_mut().0)
+        );
+
+        // But the hash keys are different from different funcs.
+        let instance2 = Instance::new(&mut store, &module, &[])?;
+        let f3 = instance2.get_func(&mut store, "f").unwrap();
+        assert!(
+            f1.hash_key(&mut store.as_context_mut().0)
+                != f3.hash_key(&mut store.as_context_mut().0)
+        );
+
+        Ok(())
     }
 }

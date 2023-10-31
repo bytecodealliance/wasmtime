@@ -1,0 +1,30 @@
+test verifier
+set enable_pcc=true
+target aarch64
+target x86_64
+
+function %f0(i64) -> i32 {
+    mt0 = struct 8 { 4: i32, 0: i32 } ; error: out-of-order
+
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v1 = load.i32 v0+0
+    return v1
+}
+
+function %f1(i64) -> i32 {
+    ;; out-of-bounds field:
+    mt0 = struct 8 { 0: i32, 6: i32 } ; error: field at offset 6 of size 4 that overflows
+
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v1 = load.i32 v0+0
+    return v1
+}
+
+function %f2(i64) -> i32 {
+    ;; overflowing offset + field size:
+    mt0 = struct 8 { 0: i32, 0xffff_ffff_ffff_ffff: i32 } ; error: field at offset 18446744073709551615 of size 4; offset plus size overflows a u64
+
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v1 = load.i32 v0+0
+    return v1
+}

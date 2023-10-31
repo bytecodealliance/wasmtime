@@ -62,7 +62,7 @@
 
         <DirectoryRef Id="BINDIR">
             <Component Id="wasmtime.exe" Guid="*">
-                <File Id="wasmtime.exe" Source="target\release\wasmtime.exe" KeyPath="yes" Checksum="yes"/>
+                <File Id="wasmtime.exe" Source="target\x86_64-pc-windows-msvc\release\wasmtime.exe" KeyPath="yes" Checksum="yes"/>
             </Component>
         </DirectoryRef>
 

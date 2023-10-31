@@ -11,7 +11,7 @@ use std::string::String;
 // Instruction sub-components: shift and extend descriptors
 
 /// A shift operator for a register or immediate.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ShiftOp {
     /// Logical shift left.
@@ -580,6 +580,14 @@ impl OperandSize {
             OperandSize::Size64 => 1,
         }
     }
+
+    /// The maximum unsigned value representable in a value of this size.
+    pub fn max_value(&self) -> u64 {
+        match self {
+            OperandSize::Size32 => u32::MAX as u64,
+            OperandSize::Size64 => u64::MAX,
+        }
+    }
 }
 
 /// Type used to communicate the size of a scalar SIMD & FP operand.
@@ -637,6 +645,17 @@ impl ScalarSize {
             ScalarSize::Size32 => ScalarSize::Size16,
             ScalarSize::Size64 => ScalarSize::Size32,
             ScalarSize::Size128 => ScalarSize::Size64,
+        }
+    }
+
+    /// Return a type with the same size as this scalar.
+    pub fn ty(&self) -> Type {
+        match self {
+            ScalarSize::Size8 => I8,
+            ScalarSize::Size16 => I16,
+            ScalarSize::Size32 => I32,
+            ScalarSize::Size64 => I64,
+            ScalarSize::Size128 => I128,
         }
     }
 }

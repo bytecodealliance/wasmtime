@@ -1,6 +1,6 @@
 use crate::{
     bad_utf8, handle_result, wasm_engine_t, wasm_functype_t, wasm_trap_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_module_t, CStoreContext, CStoreContextMut,
+    wasmtime_extern_t, wasmtime_instance_pre_t, wasmtime_module_t, CStoreContext, CStoreContextMut,
 };
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
@@ -9,7 +9,7 @@ use wasmtime::{Func, Instance, Linker};
 
 #[repr(C)]
 pub struct wasmtime_linker_t {
-    linker: Linker<crate::StoreData>,
+    pub(crate) linker: Linker<crate::StoreData>,
 }
 
 wasmtime_c_api_macros::declare_own!(wasmtime_linker_t);
@@ -37,6 +37,8 @@ macro_rules! to_str {
         }
     };
 }
+
+pub(crate) use to_str;
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_define(
@@ -134,6 +136,19 @@ pub extern "C" fn wasmtime_linker_instantiate(
 ) -> Option<Box<wasmtime_error_t>> {
     let result = linker.linker.instantiate(store, &module.module);
     super::instance::handle_instantiate(result, instance_ptr, trap_ptr)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_linker_instantiate_pre(
+    linker: &wasmtime_linker_t,
+    module: &wasmtime_module_t,
+    instance_ptr: &mut *mut wasmtime_instance_pre_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let linker = &linker.linker;
+    handle_result(linker.instantiate_pre(&module.module), |i| {
+        let instance_pre = Box::new(wasmtime_instance_pre_t { underlying: i });
+        *instance_ptr = Box::into_raw(instance_pre)
+    })
 }
 
 #[no_mangle]

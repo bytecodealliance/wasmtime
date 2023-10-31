@@ -76,7 +76,7 @@ block0(v0: f64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -91,71 +91,71 @@ block0(v0: f64):
 ;   fsd fs9,-72(sp)
 ;   fsd fs10,-80(sp)
 ;   fsd fs11,-88(sp)
-;   add sp,-96
+;   addi sp,sp,-96
 ; block0:
-;   fadd.d fa3,fa0,fa0
-;   fadd.d fa4,fa0,fa0
-;   fadd.d fa5,fa0,fa0
-;   fadd.d fa1,fa0,fa0
-;   fadd.d fa2,fa0,fa0
-;   fadd.d ft9,fa0,fa0
-;   fadd.d ft10,fa0,fa0
-;   fadd.d ft11,fa0,fa0
-;   fadd.d fs0,fa0,fa0
-;   fadd.d fs1,fa0,fa0
-;   fadd.d fs2,fa0,fa0
-;   fadd.d fs3,fa0,fa0
-;   fadd.d fs4,fa0,fa0
-;   fadd.d fs5,fa0,fa0
-;   fadd.d fs6,fa0,fa0
-;   fadd.d fs7,fa0,fa0
-;   fadd.d fs8,fa0,fa0
-;   fadd.d fs9,fa0,fa0
-;   fadd.d fs10,fa0,fa0
-;   fadd.d fs11,fa0,fa0
-;   fadd.d ft0,fa0,fa0
-;   fadd.d ft1,fa0,fa0
-;   fadd.d ft2,fa0,fa0
-;   fadd.d ft3,fa0,fa0
-;   fadd.d ft4,fa0,fa0
-;   fadd.d ft5,fa0,fa0
-;   fadd.d ft6,fa0,fa0
-;   fadd.d ft7,fa0,fa0
-;   fadd.d fa6,fa0,fa0
-;   fadd.d fa7,fa0,fa0
-;   fadd.d ft8,fa0,fa0
-;   fadd.d fa3,fa0,fa3
-;   fadd.d fa4,fa4,fa5
-;   fadd.d fa5,fa1,fa2
-;   fadd.d fa0,ft9,ft10
-;   fadd.d fa1,ft11,fs0
-;   fadd.d fa2,fs1,fs2
-;   fadd.d ft9,fs3,fs4
-;   fadd.d ft10,fs5,fs6
-;   fadd.d ft11,fs7,fs8
-;   fadd.d fs0,fs9,fs10
-;   fadd.d fs1,fs11,ft0
-;   fadd.d fs2,ft1,ft2
-;   fadd.d fs3,ft3,ft4
-;   fadd.d fs4,ft5,ft6
-;   fadd.d fs5,ft7,fa6
-;   fadd.d fs6,fa7,ft8
-;   fadd.d fa3,fa3,fa4
-;   fadd.d fa4,fa5,fa0
-;   fadd.d fa5,fa1,fa2
-;   fadd.d fa0,ft9,ft10
-;   fadd.d fa1,ft11,fs0
-;   fadd.d fa2,fs1,fs2
-;   fadd.d ft9,fs3,fs4
-;   fadd.d ft10,fs5,fs6
-;   fadd.d fa3,fa3,fa4
-;   fadd.d fa4,fa5,fa0
-;   fadd.d fa5,fa1,fa2
-;   fadd.d fa0,ft9,ft10
-;   fadd.d fa3,fa3,fa4
-;   fadd.d fa4,fa5,fa0
-;   fadd.d fa0,fa3,fa4
-;   add sp,+96
+;   fadd.d fa3,fa0,fa0,rne
+;   fadd.d fa4,fa0,fa0,rne
+;   fadd.d fa5,fa0,fa0,rne
+;   fadd.d fa1,fa0,fa0,rne
+;   fadd.d fa2,fa0,fa0,rne
+;   fadd.d ft9,fa0,fa0,rne
+;   fadd.d ft10,fa0,fa0,rne
+;   fadd.d ft11,fa0,fa0,rne
+;   fadd.d fs0,fa0,fa0,rne
+;   fadd.d fs1,fa0,fa0,rne
+;   fadd.d fs2,fa0,fa0,rne
+;   fadd.d fs3,fa0,fa0,rne
+;   fadd.d fs4,fa0,fa0,rne
+;   fadd.d fs5,fa0,fa0,rne
+;   fadd.d fs6,fa0,fa0,rne
+;   fadd.d fs7,fa0,fa0,rne
+;   fadd.d fs8,fa0,fa0,rne
+;   fadd.d fs9,fa0,fa0,rne
+;   fadd.d fs10,fa0,fa0,rne
+;   fadd.d fs11,fa0,fa0,rne
+;   fadd.d ft0,fa0,fa0,rne
+;   fadd.d ft1,fa0,fa0,rne
+;   fadd.d ft2,fa0,fa0,rne
+;   fadd.d ft3,fa0,fa0,rne
+;   fadd.d ft4,fa0,fa0,rne
+;   fadd.d ft5,fa0,fa0,rne
+;   fadd.d ft6,fa0,fa0,rne
+;   fadd.d ft7,fa0,fa0,rne
+;   fadd.d fa6,fa0,fa0,rne
+;   fadd.d fa7,fa0,fa0,rne
+;   fadd.d ft8,fa0,fa0,rne
+;   fadd.d fa3,fa0,fa3,rne
+;   fadd.d fa4,fa4,fa5,rne
+;   fadd.d fa5,fa1,fa2,rne
+;   fadd.d fa0,ft9,ft10,rne
+;   fadd.d fa1,ft11,fs0,rne
+;   fadd.d fa2,fs1,fs2,rne
+;   fadd.d ft9,fs3,fs4,rne
+;   fadd.d ft10,fs5,fs6,rne
+;   fadd.d ft11,fs7,fs8,rne
+;   fadd.d fs0,fs9,fs10,rne
+;   fadd.d fs1,fs11,ft0,rne
+;   fadd.d fs2,ft1,ft2,rne
+;   fadd.d fs3,ft3,ft4,rne
+;   fadd.d fs4,ft5,ft6,rne
+;   fadd.d fs5,ft7,fa6,rne
+;   fadd.d fs6,fa7,ft8,rne
+;   fadd.d fa3,fa3,fa4,rne
+;   fadd.d fa4,fa5,fa0,rne
+;   fadd.d fa5,fa1,fa2,rne
+;   fadd.d fa0,ft9,ft10,rne
+;   fadd.d fa1,ft11,fs0,rne
+;   fadd.d fa2,fs1,fs2,rne
+;   fadd.d ft9,fs3,fs4,rne
+;   fadd.d ft10,fs5,fs6,rne
+;   fadd.d fa3,fa3,fa4,rne
+;   fadd.d fa4,fa5,fa0,rne
+;   fadd.d fa5,fa1,fa2,rne
+;   fadd.d fa0,ft9,ft10,rne
+;   fadd.d fa3,fa3,fa4,rne
+;   fadd.d fa4,fa5,fa0,rne
+;   fadd.d fa0,fa3,fa4,rne
+;   addi sp,sp,96
 ;   fld fs0,-8(sp)
 ;   fld fs2,-16(sp)
 ;   fld fs3,-24(sp)
@@ -169,7 +169,7 @@ block0(v0: f64):
 ;   fld fs11,-88(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -191,68 +191,68 @@ block0(v0: f64):
 ;   fsd fs11, -0x58(sp)
 ;   addi sp, sp, -0x60
 ; block1: ; offset 0x40
-;   fadd.d fa3, fa0, fa0
-;   fadd.d fa4, fa0, fa0
-;   fadd.d fa5, fa0, fa0
-;   fadd.d fa1, fa0, fa0
-;   fadd.d fa2, fa0, fa0
-;   fadd.d ft9, fa0, fa0
-;   fadd.d ft10, fa0, fa0
-;   fadd.d ft11, fa0, fa0
-;   fadd.d fs0, fa0, fa0
-;   fadd.d fs1, fa0, fa0
-;   fadd.d fs2, fa0, fa0
-;   fadd.d fs3, fa0, fa0
-;   fadd.d fs4, fa0, fa0
-;   fadd.d fs5, fa0, fa0
-;   fadd.d fs6, fa0, fa0
-;   fadd.d fs7, fa0, fa0
-;   fadd.d fs8, fa0, fa0
-;   fadd.d fs9, fa0, fa0
-;   fadd.d fs10, fa0, fa0
-;   fadd.d fs11, fa0, fa0
-;   fadd.d ft0, fa0, fa0
-;   fadd.d ft1, fa0, fa0
-;   fadd.d ft2, fa0, fa0
-;   fadd.d ft3, fa0, fa0
-;   fadd.d ft4, fa0, fa0
-;   fadd.d ft5, fa0, fa0
-;   fadd.d ft6, fa0, fa0
-;   fadd.d ft7, fa0, fa0
-;   fadd.d fa6, fa0, fa0
-;   fadd.d fa7, fa0, fa0
-;   fadd.d ft8, fa0, fa0
-;   fadd.d fa3, fa0, fa3
-;   fadd.d fa4, fa4, fa5
-;   fadd.d fa5, fa1, fa2
-;   fadd.d fa0, ft9, ft10
-;   fadd.d fa1, ft11, fs0
-;   fadd.d fa2, fs1, fs2
-;   fadd.d ft9, fs3, fs4
-;   fadd.d ft10, fs5, fs6
-;   fadd.d ft11, fs7, fs8
-;   fadd.d fs0, fs9, fs10
-;   fadd.d fs1, fs11, ft0
-;   fadd.d fs2, ft1, ft2
-;   fadd.d fs3, ft3, ft4
-;   fadd.d fs4, ft5, ft6
-;   fadd.d fs5, ft7, fa6
-;   fadd.d fs6, fa7, ft8
-;   fadd.d fa3, fa3, fa4
-;   fadd.d fa4, fa5, fa0
-;   fadd.d fa5, fa1, fa2
-;   fadd.d fa0, ft9, ft10
-;   fadd.d fa1, ft11, fs0
-;   fadd.d fa2, fs1, fs2
-;   fadd.d ft9, fs3, fs4
-;   fadd.d ft10, fs5, fs6
-;   fadd.d fa3, fa3, fa4
-;   fadd.d fa4, fa5, fa0
-;   fadd.d fa5, fa1, fa2
-;   fadd.d fa0, ft9, ft10
-;   fadd.d fa3, fa3, fa4
-;   fadd.d fa4, fa5, fa0
-;   fadd.d fa0, fa3, fa4
+;   fadd.d fa3, fa0, fa0, rne
+;   fadd.d fa4, fa0, fa0, rne
+;   fadd.d fa5, fa0, fa0, rne
+;   fadd.d fa1, fa0, fa0, rne
+;   fadd.d fa2, fa0, fa0, rne
+;   fadd.d ft9, fa0, fa0, rne
+;   fadd.d ft10, fa0, fa0, rne
+;   fadd.d ft11, fa0, fa0, rne
+;   fadd.d fs0, fa0, fa0, rne
+;   fadd.d fs1, fa0, fa0, rne
+;   fadd.d fs2, fa0, fa0, rne
+;   fadd.d fs3, fa0, fa0, rne
+;   fadd.d fs4, fa0, fa0, rne
+;   fadd.d fs5, fa0, fa0, rne
+;   fadd.d fs6, fa0, fa0, rne
+;   fadd.d fs7, fa0, fa0, rne
+;   fadd.d fs8, fa0, fa0, rne
+;   fadd.d fs9, fa0, fa0, rne
+;   fadd.d fs10, fa0, fa0, rne
+;   fadd.d fs11, fa0, fa0, rne
+;   fadd.d ft0, fa0, fa0, rne
+;   fadd.d ft1, fa0, fa0, rne
+;   fadd.d ft2, fa0, fa0, rne
+;   fadd.d ft3, fa0, fa0, rne
+;   fadd.d ft4, fa0, fa0, rne
+;   fadd.d ft5, fa0, fa0, rne
+;   fadd.d ft6, fa0, fa0, rne
+;   fadd.d ft7, fa0, fa0, rne
+;   fadd.d fa6, fa0, fa0, rne
+;   fadd.d fa7, fa0, fa0, rne
+;   fadd.d ft8, fa0, fa0, rne
+;   fadd.d fa3, fa0, fa3, rne
+;   fadd.d fa4, fa4, fa5, rne
+;   fadd.d fa5, fa1, fa2, rne
+;   fadd.d fa0, ft9, ft10, rne
+;   fadd.d fa1, ft11, fs0, rne
+;   fadd.d fa2, fs1, fs2, rne
+;   fadd.d ft9, fs3, fs4, rne
+;   fadd.d ft10, fs5, fs6, rne
+;   fadd.d ft11, fs7, fs8, rne
+;   fadd.d fs0, fs9, fs10, rne
+;   fadd.d fs1, fs11, ft0, rne
+;   fadd.d fs2, ft1, ft2, rne
+;   fadd.d fs3, ft3, ft4, rne
+;   fadd.d fs4, ft5, ft6, rne
+;   fadd.d fs5, ft7, fa6, rne
+;   fadd.d fs6, fa7, ft8, rne
+;   fadd.d fa3, fa3, fa4, rne
+;   fadd.d fa4, fa5, fa0, rne
+;   fadd.d fa5, fa1, fa2, rne
+;   fadd.d fa0, ft9, ft10, rne
+;   fadd.d fa1, ft11, fs0, rne
+;   fadd.d fa2, fs1, fs2, rne
+;   fadd.d ft9, fs3, fs4, rne
+;   fadd.d ft10, fs5, fs6, rne
+;   fadd.d fa3, fa3, fa4, rne
+;   fadd.d fa4, fa5, fa0, rne
+;   fadd.d fa5, fa1, fa2, rne
+;   fadd.d fa0, ft9, ft10, rne
+;   fadd.d fa3, fa3, fa4, rne
+;   fadd.d fa4, fa5, fa0, rne
+;   fadd.d fa0, fa3, fa4, rne
 ;   addi sp, sp, 0x60
 ;   fld fs0, -8(sp)
 ;   fld fs2, -0x10(sp)
@@ -317,7 +317,7 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -328,7 +328,7 @@ block0(v0: i64):
 ;   sd s5,-40(sp)
 ;   sd s6,-48(sp)
 ;   sd s7,-56(sp)
-;   add sp,-64
+;   addi sp,sp,-64
 ; block0:
 ;   add a1,a0,a0
 ;   add a2,a0,a1
@@ -366,7 +366,7 @@ block0(v0: i64):
 ;   add a2,a3,a4
 ;   add a1,a5,a1
 ;   add a0,a2,a1
-;   add sp,+64
+;   addi sp,sp,64
 ;   ld s1,-8(sp)
 ;   ld s2,-16(sp)
 ;   ld s3,-24(sp)
@@ -376,7 +376,7 @@ block0(v0: i64):
 ;   ld s7,-56(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

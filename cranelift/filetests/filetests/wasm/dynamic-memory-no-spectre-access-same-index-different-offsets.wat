@@ -61,6 +61,12 @@
 ;;     gv2 = load.i64 notrap aligned gv0
 ;;
 ;;                                 block0(v0: i32, v1: i64):
+;;                                     v29 -> v1
+;;                                     v30 -> v1
+;;                                     v31 -> v1
+;;                                     v32 -> v1
+;;                                     v33 -> v1
+;;                                     v34 -> v1
 ;; @0047                               v6 = load.i64 notrap aligned v1+8
 ;; @0047                               v5 = uextend.i64 v0
 ;; @0047                               v7 = icmp ugt v5, v6
@@ -80,29 +86,29 @@
 ;; @004c                               trap heap_oob
 ;;
 ;;                                 block5:
-;;                                     v27 = iconst.i64 4
-;; @004c                               v16 = iadd.i64 v9, v27  ; v27 = 4
-;; @004c                               v17 = load.i32 little heap v16
-;;                                     v3 -> v17
-;; @0051                               v19 = iconst.i64 0x0010_0003
-;; @0051                               v20 = uadd_overflow_trap.i64 v5, v19, heap_oob  ; v19 = 0x0010_0003
-;; @0051                               v22 = icmp ugt v20, v6
-;; @0051                               brif v22, block6, block7
+;; @004c                               v16 = iconst.i64 4
+;; @004c                               v17 = iadd.i64 v9, v16  ; v16 = 4
+;; @004c                               v18 = load.i32 little heap v17
+;;                                     v3 -> v18
+;; @0051                               v20 = iconst.i64 0x0010_0003
+;; @0051                               v21 = uadd_overflow_trap.i64 v5, v20, heap_oob  ; v20 = 0x0010_0003
+;; @0051                               v23 = icmp ugt v21, v6
+;; @0051                               brif v23, block6, block7
 ;;
 ;;                                 block6 cold:
 ;; @0051                               trap heap_oob
 ;;
 ;;                                 block7:
-;; @0051                               v23 = load.i64 notrap aligned v1
-;; @0051                               v24 = iadd v23, v5
-;;                                     v28 = iconst.i64 0x000f_ffff
-;; @0051                               v25 = iadd v24, v28  ; v28 = 0x000f_ffff
-;; @0051                               v26 = load.i32 little heap v25
-;;                                     v4 -> v26
+;; @0051                               v24 = load.i64 notrap aligned v1
+;; @0051                               v25 = iadd v24, v5
+;; @0051                               v26 = iconst.i64 0x000f_ffff
+;; @0051                               v27 = iadd v25, v26  ; v26 = 0x000f_ffff
+;; @0051                               v28 = load.i32 little heap v27
+;;                                     v4 -> v28
 ;; @0056                               jump block1
 ;;
 ;;                                 block1:
-;; @0056                               return v10, v17, v26
+;; @0056                               return v10, v18, v28
 ;; }
 ;;
 ;; function u0:1(i32, i32, i32, i32, i64 vmctx) fast {
@@ -111,6 +117,12 @@
 ;;     gv2 = load.i64 notrap aligned gv0
 ;;
 ;;                                 block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i64):
+;;                                     v26 -> v4
+;;                                     v27 -> v4
+;;                                     v28 -> v4
+;;                                     v29 -> v4
+;;                                     v30 -> v4
+;;                                     v31 -> v4
 ;; @005d                               v6 = load.i64 notrap aligned v4+8
 ;; @005d                               v5 = uextend.i64 v0
 ;; @005d                               v7 = icmp ugt v5, v6
@@ -129,23 +141,23 @@
 ;; @0064                               trap heap_oob
 ;;
 ;;                                 block5:
-;;                                     v24 = iconst.i64 4
-;; @0064                               v15 = iadd.i64 v9, v24  ; v24 = 4
-;; @0064                               store.i32 little heap v2, v15
-;; @006b                               v17 = iconst.i64 0x0010_0003
-;; @006b                               v18 = uadd_overflow_trap.i64 v5, v17, heap_oob  ; v17 = 0x0010_0003
-;; @006b                               v20 = icmp ugt v18, v6
-;; @006b                               brif v20, block6, block7
+;; @0064                               v15 = iconst.i64 4
+;; @0064                               v16 = iadd.i64 v9, v15  ; v15 = 4
+;; @0064                               store.i32 little heap v2, v16
+;; @006b                               v18 = iconst.i64 0x0010_0003
+;; @006b                               v19 = uadd_overflow_trap.i64 v5, v18, heap_oob  ; v18 = 0x0010_0003
+;; @006b                               v21 = icmp ugt v19, v6
+;; @006b                               brif v21, block6, block7
 ;;
 ;;                                 block6 cold:
 ;; @006b                               trap heap_oob
 ;;
 ;;                                 block7:
-;; @006b                               v21 = load.i64 notrap aligned v4
-;; @006b                               v22 = iadd v21, v5
-;;                                     v25 = iconst.i64 0x000f_ffff
-;; @006b                               v23 = iadd v22, v25  ; v25 = 0x000f_ffff
-;; @006b                               store.i32 little heap v3, v23
+;; @006b                               v22 = load.i64 notrap aligned v4
+;; @006b                               v23 = iadd v22, v5
+;; @006b                               v24 = iconst.i64 0x000f_ffff
+;; @006b                               v25 = iadd v23, v24  ; v24 = 0x000f_ffff
+;; @006b                               store.i32 little heap v3, v25
 ;; @0070                               jump block1
 ;;
 ;;                                 block1:

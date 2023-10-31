@@ -11,9 +11,10 @@ pub mod profiling;
 mod unwind;
 
 pub use crate::code_memory::CodeMemory;
+#[cfg(feature = "addr2line")]
+pub use crate::instantiate::SymbolizeContext;
 pub use crate::instantiate::{
     subslice_range, CompiledFunctionInfo, CompiledModule, CompiledModuleInfo, ObjectBuilder,
-    SymbolizeContext,
 };
 pub use demangling::*;
 

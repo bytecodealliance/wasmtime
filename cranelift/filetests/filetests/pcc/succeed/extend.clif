@@ -1,0 +1,17 @@
+test compile
+set enable_pcc=true
+target aarch64
+target x86_64
+
+function %f0(i32) -> i64 {
+block0(v0 ! range(32, 42, 0xffff_fffe): i32):
+  ;; we're allowed to broaden the range on either end:
+  v1 ! range(64, 1, 0xffff_ffff) = uextend.i64 v0
+  return v1
+}
+
+function %f1(i32) -> i64 {
+block0(v0 ! range(16, 0, 0xffff): i32):
+  v1 ! range(64, 0, 0xffff_ffff) = uextend.i64 v0
+  return v1
+}

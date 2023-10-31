@@ -163,8 +163,10 @@ fn map_tensor_type_to_precision(tensor_type: TensorType) -> openvino::Precision 
     match tensor_type {
         TensorType::Fp16 => Precision::FP16,
         TensorType::Fp32 => Precision::FP32,
+        TensorType::Fp64 => Precision::FP64,
         TensorType::U8 => Precision::U8,
         TensorType::I32 => Precision::I32,
+        TensorType::I64 => Precision::I64,
         TensorType::Bf16 => todo!("not yet supported in `openvino` bindings"),
     }
 }

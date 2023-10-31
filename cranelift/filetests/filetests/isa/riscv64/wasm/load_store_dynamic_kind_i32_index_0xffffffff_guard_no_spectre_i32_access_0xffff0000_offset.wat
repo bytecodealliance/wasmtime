@@ -44,12 +44,12 @@
 ;;   slli a4,a0,32
 ;;   srli a0,a4,32
 ;;   ld a5,8(a2)
-;;   ugt a5,a0,a5##ty=i64
-;;   bne a5,zero,taken(label3),not_taken(label1)
+;;   bgtu a0,a5,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a2,0(a2)
 ;;   add a0,a2,a0
-;;   ld a2,[const(0)]
+;;   lui a5,65535
+;;   slli a2,a5,4
 ;;   add a0,a0,a2
 ;;   sw a1,0(a0)
 ;;   j label2
@@ -63,12 +63,12 @@
 ;;   slli a4,a0,32
 ;;   srli a0,a4,32
 ;;   ld a5,8(a1)
-;;   ugt a5,a0,a5##ty=i64
-;;   bne a5,zero,taken(label3),not_taken(label1)
+;;   bgtu a0,a5,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a1,0(a1)
 ;;   add a0,a1,a0
-;;   ld a1,[const(0)]
+;;   lui a5,65535
+;;   slli a1,a5,4
 ;;   add a0,a0,a1
 ;;   lw a0,0(a0)
 ;;   j label2

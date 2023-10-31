@@ -164,9 +164,21 @@ macro_rules! isle_common_prelude_methods {
             0 == value
         }
 
+        fn i64_is_zero(&mut self, value: i64) -> bool {
+            0 == value
+        }
+
         #[inline]
         fn u64_is_odd(&mut self, x: u64) -> bool {
             x & 1 == 1
+        }
+
+        fn i64_shr(&mut self, a: i64, b: i64) -> i64 {
+            a >> b
+        }
+
+        fn i64_ctz(&mut self, a: i64) -> i64 {
+            a.trailing_zeros().into()
         }
 
         #[inline]
@@ -364,6 +376,15 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn ty_8_or_16(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 8 || ty.bits() == 16 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_16_or_32(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 16 || ty.bits() == 32 {
                 Some(ty)
             } else {
                 None
@@ -847,6 +868,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
+            x.without_equal()
+        }
+
+        #[inline]
         fn floatcc_swap_args(&mut self, cc: &FloatCC) -> FloatCC {
             cc.swap_args()
         }
@@ -907,6 +933,48 @@ macro_rules! isle_common_prelude_methods {
 
         fn u64_as_u32(&mut self, val: u64) -> Option<u32> {
             u32::try_from(val).ok()
+        }
+
+        fn u8_as_i8(&mut self, val: u8) -> i8 {
+            val as i8
+        }
+
+        fn u128_replicated_u64(&mut self, val: u128) -> Option<u64> {
+            let low64 = val as u64 as u128;
+            if (low64 | (low64 << 64)) == val {
+                Some(low64 as u64)
+            } else {
+                None
+            }
+        }
+
+        fn u64_replicated_u32(&mut self, val: u64) -> Option<u64> {
+            let low32 = val as u32 as u64;
+            if (low32 | (low32 << 32)) == val {
+                Some(low32)
+            } else {
+                None
+            }
+        }
+
+        fn u32_replicated_u16(&mut self, val: u64) -> Option<u64> {
+            let val = val as u32;
+            let low16 = val as u16 as u32;
+            if (low16 | (low16 << 16)) == val {
+                Some(low16.into())
+            } else {
+                None
+            }
+        }
+
+        fn u16_replicated_u8(&mut self, val: u64) -> Option<u8> {
+            let val = val as u16;
+            let low8 = val as u8 as u16;
+            if (low8 | (low8 << 8)) == val {
+                Some(low8 as u8)
+            } else {
+                None
+            }
         }
     };
 }

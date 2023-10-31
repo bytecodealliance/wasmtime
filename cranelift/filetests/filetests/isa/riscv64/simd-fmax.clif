@@ -9,7 +9,7 @@ block0(v0: f64x2, v1: f64x2):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -19,14 +19,15 @@ block0(v0: f64x2, v1: f64x2):
 ;   vmfeq.vv v14,v9,v9 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmfeq.vv v8,v11,v11 #avl=2, #vtype=(e64, m1, ta, ma)
 ;   vmand.mm v0,v14,v8 #avl=2, #vtype=(e64, m1, ta, ma)
-;   ld a1,[const(0)]
-;   vmv.v.x v14,a1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vfmax.vv v8,v9,v11 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vmerge.vvm v10,v14,v8,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   lui a1,4095
+;   slli a2,a1,39
+;   vmv.v.x v8,a2 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vfmax.vv v10,v9,v11 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v12,v8,v10,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:
@@ -45,19 +46,17 @@ block0(v0: f64x2, v1: f64x2):
 ;   .byte 0x57, 0x97, 0x94, 0x62
 ;   .byte 0x57, 0x94, 0xb5, 0x62
 ;   .byte 0x57, 0x20, 0xe4, 0x66
-;   auipc a1, 0
-;   ld a1, 0x2c(a1)
-;   .byte 0x57, 0xc7, 0x05, 0x5e
-;   .byte 0x57, 0x94, 0x95, 0x1a
-;   .byte 0x57, 0x05, 0xe4, 0x5c
+;   lui a1, 0xfff
+;   slli a2, a1, 0x27
+;   .byte 0x57, 0x44, 0x06, 0x5e
+;   .byte 0x57, 0x95, 0x95, 0x1a
+;   .byte 0x57, 0x06, 0x85, 0x5c
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x05, 0x05, 0x02
+;   .byte 0x27, 0x06, 0x05, 0x02
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
 ;   ret
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0xf8, 0x7f
 
 function %fmax_f32x4(f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4):
@@ -66,7 +65,7 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; VCode:
-;   add sp,-16
+;   addi sp,sp,-16
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
@@ -83,7 +82,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vse8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
-;   add sp,+16
+;   addi sp,sp,16
 ;   ret
 ;
 ; Disassembled:

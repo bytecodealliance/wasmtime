@@ -167,7 +167,8 @@ pub extern "C" fn wasmtime_frame_module_name<'a>(
         .module_name
         .get_or_init(|| {
             frame.trace.frames()[frame.idx]
-                .module_name()
+                .module()
+                .name()
                 .map(|s| wasm_name_t::from(s.to_string().into_bytes()))
         })
         .as_ref()

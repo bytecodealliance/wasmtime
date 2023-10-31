@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
 use wasmparser::{Validator, WasmFeatures};
 use wasmtime_environ::component::*;
@@ -129,13 +129,11 @@ impl Factc {
             .context("failed to validate input wasm")?;
         let wasm_types = wasm_types.as_ref();
         for i in 0..wasm_types.component_type_count() {
-            let ty = wasm_types.component_type_at(i);
-            let ty = match &wasm_types[ty] {
-                wasmparser::types::Type::ComponentFunc(_) => {
-                    types.convert_component_func_type(wasm_types, ty)?
-                }
+            let ty = match wasm_types.component_any_type_at(i) {
+                wasmparser::types::ComponentAnyTypeId::Func(id) => id,
                 _ => continue,
             };
+            let ty = types.convert_component_func_type(wasm_types, ty)?;
             adapters.push(Adapter {
                 lift_ty: ty,
                 lower_ty: ty,
@@ -179,7 +177,7 @@ impl Factc {
             wasmprinter::print_bytes(&wasm)
                 .context("failed to convert binary wasm to text")?
                 .into_bytes()
-        } else if self.output.is_none() && atty::is(atty::Stream::Stdout) {
+        } else if self.output.is_none() && std::io::stdout().is_terminal() {
             bail!("cannot print binary wasm output to a terminal unless `-t` flag is passed")
         } else {
             wasm.clone()

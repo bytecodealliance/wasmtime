@@ -43,7 +43,7 @@ fn caches_across_engines() {
         // differ in wasm features enabled (which can affect
         // runtime/compilation settings)
         let res = Module::deserialize(
-            &Engine::new(Config::new().wasm_simd(false)).unwrap(),
+            &Engine::new(Config::new().wasm_threads(false)).unwrap(),
             &bytes,
         );
         assert!(res.is_err());
@@ -182,7 +182,7 @@ fn serialize_not_overly_massive() -> Result<()> {
 #[cfg_attr(any(not(target_arch = "x86_64"), miri), ignore)]
 fn missing_sse_and_floats_still_works() -> Result<()> {
     let mut config = Config::new();
-    config.wasm_simd(false);
+    config.wasm_simd(false).wasm_relaxed_simd(false);
     unsafe {
         config.cranelift_flag_set("has_sse41", "false");
     }

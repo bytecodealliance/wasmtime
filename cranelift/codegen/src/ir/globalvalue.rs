@@ -1,7 +1,7 @@
 //! Global values.
 
 use crate::ir::immediates::{Imm64, Offset32};
-use crate::ir::{ExternalName, GlobalValue, Type};
+use crate::ir::{ExternalName, GlobalValue, MemFlags, Type};
 use crate::isa::TargetIsa;
 use core::fmt;
 
@@ -31,9 +31,8 @@ pub enum GlobalValueData {
         /// Type of the loaded value.
         global_type: Type,
 
-        /// Specifies whether the memory that this refers to is readonly, allowing for the
-        /// elimination of redundant loads.
-        readonly: bool,
+        /// Specifies the memory flags to be used by the load. Guaranteed to be notrap and aligned.
+        flags: MemFlags,
     },
 
     /// Value is an offset from another global value.
@@ -111,15 +110,8 @@ impl fmt::Display for GlobalValueData {
                 base,
                 offset,
                 global_type,
-                readonly,
-            } => write!(
-                f,
-                "load.{} notrap aligned {}{}{}",
-                global_type,
-                if readonly { "readonly " } else { "" },
-                base,
-                offset
-            ),
+                flags,
+            } => write!(f, "load.{}{} {}{}", global_type, flags, base, offset),
             Self::IAddImm {
                 global_type,
                 base,
