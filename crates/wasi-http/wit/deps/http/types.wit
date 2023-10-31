@@ -3,7 +3,7 @@
 /// their headers, trailers, and bodies.
 interface types {
   use wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-05.{duration};
-  use wasi:io/streams@0.2.0-rc-2023-11-05.{input-stream, output-stream};
+  use wasi:io/streams@0.2.0-rc-2023-11-05.{input-stream, output-stream, error as stream-error};
   use wasi:io/poll@0.2.0-rc-2023-11-05.{pollable};
 
   /// This type corresponds to HTTP standard Methods.
@@ -27,14 +27,65 @@ interface types {
     other(string)
   }
 
-  /// TODO: perhaps better align with HTTP semantics?
-  /// This type enumerates the different kinds of errors that may occur when
-  /// initially returning a response.
-  variant error {
-    invalid-url(string),
-    timeout-error(string),
-    protocol-error(string),
-    unexpected-error(string)
+  // The cases of this variant correspond to the IANA HTTP Proxy Error Types:
+  //   https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types
+  variant error-code {
+    DNS-timeout,
+    DNS-error(DNS-error-payload),
+    destination-not-found,
+    destination-unavailable,
+    destination-IP-prohibited,
+    destination-IP-unroutable,
+    connection-refused,
+    connection-terminated,
+    connection-timeout,
+    connection-read-timeout,
+    connection-write-timeout,
+    connection-limit-reached,
+    TLS-protocol-error,
+    TLS-certificate-error,
+    TLS-alert-received(TLS-alert-received-payload),
+    HTTP-request-error(HTTP-request-error-payload),
+    HTTP-request-denied,
+    HTTP-response-incomplete,
+    HTTP-response-header-section-size(u32),
+    HTTP-response-header-size(field-size-payload),
+    HTTP-response-body-size(u32),
+    HTTP-response-trailer-section-size(u32),
+    HTTP-response-trailer-size(field-size-payload),
+    HTTP-response-transfer-coding(string),
+    HTTP-response-content-coding(string),
+    HTTP-response-timeout,
+    HTTP-upgrade-failed,
+    HTTP-protocol-error,
+    proxy-internal-response,
+    proxy-internal-error,
+    proxy-configuration-error,
+    proxy-loop-detected
+  }
+
+  // Defines the case payload type for `DNS-error` above:
+  record DNS-error-payload {
+    rcode: string,
+    info-code: u16
+  }
+
+  // Defines the case payload type for `TLS-alert-received` above:
+  record TLS-alert-received-payload {
+    alert-ID: u8,
+    alert-message: string
+  }
+
+  // Defines the case payload type for `HTTP-request-error` above:
+  record HTTP-request-error-payload {
+    status-code: u16,
+    status-phrase: string
+  }
+
+  // Defines the case payload type for `HTTP-response-{header,trailer}-size` above:
+  record field-size-payload {
+    field-name: string,
+    field-size: u32
   }
 
   /// This tyep enumerates the different kinds of errors that may occur when
@@ -44,6 +95,18 @@ interface types {
     forbidden,
     immutable
   }
+
+  /// Attempts to extract a http-related `error` from the stream `error`
+  /// provided.
+  ///
+  /// Stream operations which return `stream-error::last-operation-failed` have
+  /// a payload with more information about the operation that failed. This
+  /// payload can be passed through to this function to see if there's
+  /// http-related information about the error to return.
+  ///
+  /// Note that this function is fallible because not all stream-related errors
+  /// are http-related errors.
+  http-error: func(err: borrow<stream-error>) -> option<error-code>;
 
   /// Field keys are always strings.
   type field-key = string;
@@ -263,7 +326,7 @@ interface types {
     /// implementation determine how to respond with an HTTP error response.
     set: static func(
       param: response-outparam,
-      response: result<outgoing-response, error>,
+      response: result<outgoing-response, error-code>,
     );
   }
 
@@ -338,7 +401,7 @@ interface types {
     /// as well as any trailers, were received successfully, or that an error
     /// occured receiving them. The optional `trailers` indicates whether or not
     /// trailers were present in the body.
-    get: func() -> option<result<option<trailers>, error>>;
+    get: func() -> option<result<option<trailers>, error-code>>;
   }
 
   /// Represents an outgoing HTTP Response.
@@ -434,7 +497,7 @@ interface types {
     /// occured. Errors may also occur while consuming the response body,
     /// but those will be reported by the `incoming-body` and its
     /// `output-stream` child.
-    get: func() -> option<result<result<incoming-response, error>>>;
+    get: func() -> option<result<result<incoming-response, error-code>>>;
 
   }
 }

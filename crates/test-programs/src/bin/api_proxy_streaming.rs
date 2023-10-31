@@ -451,7 +451,7 @@ mod executor {
 
     pub fn outgoing_request_send(
         request: OutgoingRequest,
-    ) -> impl Future<Output = Result<IncomingResponse, types::Error>> {
+    ) -> impl Future<Output = Result<IncomingResponse, types::ErrorCode>> {
         future::poll_fn({
             let response = outgoing_handler::handle(request, None);
 

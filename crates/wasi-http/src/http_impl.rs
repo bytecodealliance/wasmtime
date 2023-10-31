@@ -1,22 +1,23 @@
-use crate::bindings::http::{
-    outgoing_handler,
-    types::{self as http_types, Scheme},
+use crate::{
+    bindings::http::{
+        outgoing_handler,
+        types::{self, Scheme},
+    },
+    http_request_error,
+    types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequest},
+    WasiHttpView,
 };
-use crate::types::{self, HostFutureIncomingResponse, OutgoingRequest};
-use crate::WasiHttpView;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::Method;
-use types::HostOutgoingRequest;
 use wasmtime::component::Resource;
 
 impl<T: WasiHttpView> outgoing_handler::Host for T {
     fn handle(
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
-        options: Option<Resource<http_types::RequestOptions>>,
-    ) -> wasmtime::Result<Result<Resource<HostFutureIncomingResponse>, outgoing_handler::Error>>
-    {
+        options: Option<Resource<types::RequestOptions>>,
+    ) -> wasmtime::Result<Result<Resource<HostFutureIncomingResponse>, types::ErrorCode>> {
         let opts = options.and_then(|opts| self.table().get(&opts).ok());
 
         let connect_timeout = opts
@@ -44,9 +45,10 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             crate::bindings::http::types::Method::Trace => Method::TRACE,
             crate::bindings::http::types::Method::Patch => Method::PATCH,
             crate::bindings::http::types::Method::Other(method) => {
-                return Ok(Err(outgoing_handler::Error::InvalidUrl(format!(
-                    "unknown method {method}"
-                ))));
+                return Ok(Err(http_request_error(
+                    405,
+                    format!("unknown method {method}"),
+                )));
             }
         };
 
@@ -54,9 +56,10 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             Scheme::Http => (false, "http://", 80),
             Scheme::Https => (true, "https://", 443),
             Scheme::Other(scheme) => {
-                return Ok(Err(outgoing_handler::Error::InvalidUrl(format!(
-                    "unsupported scheme {scheme}"
-                ))))
+                return Ok(Err(http_request_error(
+                    400,
+                    format!("unsupported scheme {scheme}"),
+                )))
             }
         };
 
@@ -86,7 +89,9 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .body
             .unwrap_or_else(|| Empty::<Bytes>::new().map_err(|_| unreachable!()).boxed());
 
-        let request = builder.body(body).map_err(types::http_protocol_error)?;
+        let request = builder
+            .body(body)
+            .map_err(|_| types::ErrorCode::HttpProtocolError)?;
 
         Ok(Ok(self.send_request(OutgoingRequest {
             use_tls,
