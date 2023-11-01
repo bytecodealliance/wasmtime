@@ -363,9 +363,9 @@ impl hyper::service::Service<Request> for ProxyHandler {
 
             let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
 
-            let req = store.data_mut().new_incoming_request(
-                req.map(|body| body.map_err(|e| anyhow::anyhow!(e)).boxed()),
-            )?;
+            let req = store
+                .data_mut()
+                .new_incoming_request(req.map(|body| body.map_err(|e| e.into()).boxed()))?;
 
             let out = store.data_mut().new_response_outparam(sender)?;
 

@@ -734,7 +734,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
                     return Ok(Some(Ok(Err(e))));
                 }
 
-                Ok(resp) => resp,
+                Ok(Ok(resp)) => resp,
+                Ok(Err(e)) => return Ok(Some(Ok(Err(e)))),
             };
 
         let (parts, body) = resp.resp.into_parts();
@@ -752,6 +753,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
 
         Ok(Some(Ok(Ok(resp))))
     }
+
     fn subscribe(
         &mut self,
         id: Resource<HostFutureIncomingResponse>,
