@@ -148,8 +148,9 @@ pub mod bindings {
                 "[method]output-stream.blocking-write-and-flush",
                 "[method]output-stream.blocking-write-zeroes-and-flush",
                 "[method]directory-entry-stream.read-directory-entry",
-                "poll-list",
-                "poll-one",
+                "poll",
+                "[method]pollable.block",
+                "[method]pollable.ready",
             ],
         },
         trappable_error_type: {

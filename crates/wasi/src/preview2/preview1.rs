@@ -2156,7 +2156,7 @@ impl<
             pollables.push(p);
         }
         let ready: HashSet<_> = self
-            .poll_list(pollables)
+            .poll(pollables)
             .await
             .context("failed to call `poll-oneoff`")
             .map_err(types::Error::trap)?

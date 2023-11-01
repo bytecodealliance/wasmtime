@@ -16,7 +16,7 @@ pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + Sync +
 /// A pollable is not the same thing as a Rust Future: the same pollable may be used to
 /// repeatedly check for readiness of a given condition, e.g. if a stream is readable
 /// or writable. So, rather than containing a Future, which can only become Ready once, a
-/// Pollable contains a way to create a Future in each call to `poll_list`.
+/// Pollable contains a way to create a Future in each call to `poll`.
 pub struct Pollable {
     index: u32,
     make_future: MakeFuture,
@@ -65,7 +65,7 @@ where
 
 #[async_trait::async_trait]
 impl<T: WasiView> poll::Host for T {
-    async fn poll_list(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
+    async fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
         type ReadylistIndex = u32;
 
         let table = self.table_mut();
@@ -116,19 +116,27 @@ impl<T: WasiView> poll::Host for T {
 
         Ok(PollList { futures }.await)
     }
+}
 
-    async fn poll_one(&mut self, pollable: Resource<Pollable>) -> Result<()> {
+#[async_trait::async_trait]
+impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
+    async fn block(&mut self, pollable: Resource<Pollable>) -> Result<()> {
         let table = self.table_mut();
-
         let pollable = table.get(&pollable)?;
         let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
         ready.await;
         Ok(())
     }
-}
-
-#[async_trait::async_trait]
-impl<T: WasiView> crate::preview2::bindings::io::poll::HostPollable for T {
+    async fn ready(&mut self, pollable: Resource<Pollable>) -> Result<bool> {
+        let table = self.table_mut();
+        let pollable = table.get(&pollable)?;
+        let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
+        futures::pin_mut!(ready);
+        Ok(matches!(
+            futures::future::poll_immediate(ready).await,
+            Some(())
+        ))
+    }
     fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
         let pollable = self.table_mut().delete(pollable)?;
         if let Some(delete) = pollable.remove_index_on_delete {
@@ -148,16 +156,18 @@ pub mod sync {
     use wasmtime::component::Resource;
 
     impl<T: WasiView> poll::Host for T {
-        fn poll_list(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
-            in_tokio(async { async_poll::Host::poll_list(self, pollables).await })
-        }
-
-        fn poll_one(&mut self, pollable: Resource<Pollable>) -> Result<()> {
-            in_tokio(async { async_poll::Host::poll_one(self, pollable).await })
+        fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
+            in_tokio(async { async_poll::Host::poll(self, pollables).await })
         }
     }
 
     impl<T: WasiView> crate::preview2::bindings::sync_io::io::poll::HostPollable for T {
+        fn ready(&mut self, pollable: Resource<Pollable>) -> Result<bool> {
+            in_tokio(async { async_poll::HostPollable::ready(self, pollable).await })
+        }
+        fn block(&mut self, pollable: Resource<Pollable>) -> Result<()> {
+            in_tokio(async { async_poll::HostPollable::block(self, pollable).await })
+        }
         fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
             async_poll::HostPollable::drop(self, pollable)
         }

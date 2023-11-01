@@ -16,12 +16,8 @@ use std::ops::Range;
 const TIMEOUT_NS: u64 = 1_000_000_000;
 
 impl Pollable {
-    pub fn wait(&self) {
-        poll::poll_one(self);
-    }
-
     pub fn wait_until(&self, timeout: &Pollable) -> Result<(), ErrorCode> {
-        let ready = poll::poll_list(&[self, timeout]);
+        let ready = poll::poll(&[self, timeout]);
         assert!(ready.len() > 0);
         match ready[0] {
             0 => Ok(()),
@@ -36,7 +32,7 @@ impl OutputStream {
         let pollable = self.subscribe();
 
         while !bytes.is_empty() {
-            pollable.wait();
+            pollable.block();
 
             let permit = self.check_write()?;
 
@@ -75,7 +71,7 @@ impl TcpSocket {
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
@@ -88,7 +84,7 @@ impl TcpSocket {
 
         loop {
             match self.finish_listen() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
@@ -105,7 +101,7 @@ impl TcpSocket {
 
         loop {
             match self.finish_connect() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
@@ -116,7 +112,7 @@ impl TcpSocket {
 
         loop {
             match self.accept() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
@@ -139,7 +135,7 @@ impl UdpSocket {
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }

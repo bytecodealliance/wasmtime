@@ -8,7 +8,7 @@ fn main() {
     let addresses =
         ip_name_lookup::resolve_addresses(&network, "example.com", None, false).unwrap();
     let pollable = addresses.subscribe();
-    poll::poll_one(&pollable);
+    pollable.block();
     assert!(addresses.resolve_next_address().is_ok());
 
     let result = ip_name_lookup::resolve_addresses(&network, "a.b<&>", None, false);
@@ -20,7 +20,7 @@ fn main() {
     let addresses = ip_name_lookup::resolve_addresses(&network, "github.com", None, false).unwrap();
     let lookup = addresses.subscribe();
     let timeout = monotonic_clock::subscribe_duration(1_000_000_000);
-    let ready = poll::poll_list(&[&lookup, &timeout]);
+    let ready = poll::poll(&[&lookup, &timeout]);
     assert!(ready.len() > 0);
     match ready[0] {
         0 => loop {
