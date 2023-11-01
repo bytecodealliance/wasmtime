@@ -616,6 +616,31 @@ block0(v0: i8):
 ; check: v6 = rotl v0, v5  ; v5 = 2
 ; check: return v6
 
+function %i128_ushr_overflow_becomes_0(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i16 200
+    v2 = ushr v0, v1
+    v3 = ushr v2, v1
+    return v3
+}
+
+; check: v4 = iconst.i64 0
+; nextln: v5 = uextend.i128 v4  ; v4 = 0
+; nextln: return v5
+
+
+function %i128_ishl_overflow_becomes_0(i128) -> i128 {
+block0(v0: i128):
+    v1 = iconst.i16 200
+    v2 = ishl v0, v1
+    v3 = ishl v2, v1
+    return v3
+}
+
+; check: v4 = iconst.i64 0
+; nextln: v5 = uextend.i128 v4  ; v4 = 0
+; nextln: return v5
+
 function %simd_shift_does_not_panic(i8x16) -> i8x16 {
 block0(v0: i8x16):
     v1 = iconst.i64 0
@@ -627,19 +652,6 @@ block0(v0: i8x16):
 ; check: v1 = iconst.i64 0
 ; nextln: v2 = ushr v0, v1  ; v1 = 0
 ; check: return v2
-
-function %i128_shift_does_not_become_iconst_i128(i128) -> i128 {
-block0(v0: i128):
-    v1 = iconst.i16 200
-    v2 = ushr v0, v1
-    v3 = ushr v2, v1
-    return v3
-}
-
-; check: v1 = iconst.i16 200
-; nextln: v2 = ushr v0, v1  ; v1 = 200
-; nextln: v3 = ushr v2, v1  ; v1 = 200
-; nextln: return v3
 
 function %merges_shift_amount_based_on_lane_type(i8x16) -> i8x16 {
 block0(v0: i8x16):
