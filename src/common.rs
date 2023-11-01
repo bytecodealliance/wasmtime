@@ -246,3 +246,21 @@ impl Profile {
         }
     }
 }
+
+pub fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
+    let mut parts = s.splitn(2, '=');
+    Ok((
+        parts.next().unwrap().to_string(),
+        parts.next().map(|s| s.to_string()),
+    ))
+}
+
+pub fn parse_dirs(s: &str) -> Result<(String, String)> {
+    let mut parts = s.split("::");
+    let host = parts.next().unwrap();
+    let guest = match parts.next() {
+        Some(guest) => guest,
+        None => host,
+    };
+    Ok((host.into(), guest.into()))
+}

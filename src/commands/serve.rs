@@ -1,5 +1,5 @@
-use crate::common::{Profile, RunCommon, RunTarget};
-use anyhow::{anyhow, bail, Result};
+use crate::common::{parse_dirs, parse_env_var, Profile, RunCommon, RunTarget};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use std::{
     path::PathBuf,
@@ -14,6 +14,7 @@ use wasmtime::{Engine, Store, StoreLimits};
 use wasmtime_wasi::preview2::{
     self, StreamError, StreamResult, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
+use wasmtime_wasi::sync::{ambient_authority, Dir};
 use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
 
 #[cfg(feature = "wasi-nn")]
@@ -69,6 +70,25 @@ const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
 pub struct ServeCommand {
     #[clap(flatten)]
     run: RunCommon,
+
+    /// Grant access of a host directory to a guest.
+    ///
+    /// If specified as just `HOST_DIR` then the same directory name on the
+    /// host is made available within the guest. If specified as `HOST::GUEST`
+    /// then the `HOST` directory is opened and made available as the name
+    /// `GUEST` in the guest.
+    #[clap(long = "dir", value_name = "HOST_DIR[::GUEST_DIR]", value_parser = parse_dirs)]
+    dirs: Vec<(String, String)>,
+
+    /// Pass an environment variable to the program.
+    ///
+    /// The `--env FOO=BAR` form will set the environment variable named `FOO`
+    /// to the value `BAR` for the guest program using WASI. The `--env FOO`
+    /// form will set the environment variable named `FOO` to the same value it
+    /// has in the calling process for the guest, or in other words it will
+    /// cause the environment variable `FOO` to be inherited.
+    #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
+    vars: Vec<(String, Option<String>)>,
 
     /// Socket address for the web server to bind to.
     #[clap(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
@@ -141,6 +161,24 @@ impl ServeCommand {
         let mut builder = WasiCtxBuilder::new();
 
         builder.envs(&[("REQUEST_ID", req_id.to_string())]);
+
+        for (key, value) in self.vars.iter() {
+            let value = match value {
+                Some(value) => value.clone(),
+                None => std::env::var(key)
+                    .map_err(|_| anyhow!("environment variable `{key}` not found"))?,
+            };
+            builder.env(key, &value);
+        }
+
+        for (name, dir) in self.compute_preopen_dirs()? {
+            builder.preopened_dir(
+                dir,
+                preview2::DirPerms::all(),
+                preview2::FilePerms::all(),
+                name,
+            );
+        }
 
         builder.stdout(LogStream {
             prefix: format!("stdout [{req_id}] :: "),
@@ -275,6 +313,20 @@ impl ServeCommand {
                 }
             });
         }
+    }
+
+    fn compute_preopen_dirs(&self) -> Result<Vec<(String, Dir)>> {
+        let mut preopen_dirs = Vec::new();
+
+        for (host, guest) in self.dirs.iter() {
+            preopen_dirs.push((
+                guest.clone(),
+                Dir::open_ambient_dir(host, ambient_authority())
+                    .with_context(|| format!("failed to open directory '{}'", host))?,
+            ));
+        }
+
+        Ok(preopen_dirs)
     }
 }
 

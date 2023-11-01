@@ -5,7 +5,7 @@
     allow(irrefutable_let_patterns, unreachable_patterns)
 )]
 
-use crate::common::{Profile, RunCommon, RunTarget};
+use crate::common::{parse_dirs, parse_env_var, Profile, RunCommon, RunTarget};
 
 use anyhow::{anyhow, bail, Context as _, Error, Result};
 use clap::Parser;
@@ -26,24 +26,6 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttpCtx;
-
-fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
-    let mut parts = s.splitn(2, '=');
-    Ok((
-        parts.next().unwrap().to_string(),
-        parts.next().map(|s| s.to_string()),
-    ))
-}
-
-fn parse_dirs(s: &str) -> Result<(String, String)> {
-    let mut parts = s.split("::");
-    let host = parts.next().unwrap();
-    let guest = match parts.next() {
-        Some(guest) => guest,
-        None => host,
-    };
-    Ok((host.into(), guest.into()))
-}
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
