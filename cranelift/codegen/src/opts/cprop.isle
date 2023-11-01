@@ -198,3 +198,13 @@
 (rule (splat32 n) (splat64 (u64_or n (u64_shl n 32))))
 (decl splat64 (u64) Constant)
 (extern constructor splat64 splat64)
+
+;; Reassociate nested shifts of constants to put constants together for cprop.
+;;
+;; ((A shift b) shift C) ==> ((A shift C) shift b)
+(rule (simplify (ishl ty (ishl ty a@(iconst _ _) b) c@(iconst _ _)))
+      (ishl ty (ishl ty a c) b))
+(rule (simplify (ushr ty (ushr ty a@(iconst _ _) b) c@(iconst _ _)))
+      (ushr ty (ushr ty a c) b))
+(rule (simplify (sshr ty (sshr ty a@(iconst _ _) b) c@(iconst _ _)))
+      (sshr ty (sshr ty a c) b))
