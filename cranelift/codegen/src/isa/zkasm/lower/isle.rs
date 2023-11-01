@@ -249,7 +249,9 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
         let insts = match ty {
             F32 => MInst::load_fp_constant32(tmp, val as u32, alloc_tmp),
             F64 => MInst::load_fp_constant64(tmp, val, alloc_tmp),
-            _ => MInst::load_constant_u64(tmp, val, alloc_tmp),
+            I32 => MInst::load_constant_u32(tmp, val, alloc_tmp),
+            I64 => MInst::load_constant_u64(tmp, val, alloc_tmp),
+            _ => panic!("Not implemented"),
         };
         self.emit_list(&insts);
         tmp.to_reg()

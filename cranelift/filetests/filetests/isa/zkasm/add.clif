@@ -25,7 +25,7 @@ function u0:1(i32 vmctx) fast {
 ; block0:
 ;   
 ;   +999999999 + +1000000000 => A;
-;   auipc B,0; ld B,12(B); j 12; .8byte 0x773593ff
+;   auipc B,0; ld B,12(B); j 8; .4byte 0x773593ff
 ;   call userextname0
 ;   j label1
 ; block1:

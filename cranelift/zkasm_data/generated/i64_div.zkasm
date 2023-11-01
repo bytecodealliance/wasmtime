@@ -10,10 +10,10 @@ function_1:
   D :MSTORE(SP - 2)
   E :MSTORE(SP - 3)
   B :MSTORE(SP - 4)
-  214748364 => A
+  214748364n => A
   A => E
-  107374183 => A
-  2 => B
+  107374183n => A
+  2n => B
   0 => D
   0 => C
   $${var _mulArith = A * B}
@@ -23,13 +23,13 @@ function_1:
   0 => C
   $${var _mulArith = A * B}
   ${_mulArith} => E :ARITH
-  214748364 => B
+  214748364n => B
   0 => D
   0 => C
   $${var _divArith = E / B}
   ${_divArith} => A
   E:ARITH
-  214748366 => B
+  214748366n => B
   B :ASSERT
   $ => C :MLOAD(SP - 1)
   $ => D :MLOAD(SP - 2)

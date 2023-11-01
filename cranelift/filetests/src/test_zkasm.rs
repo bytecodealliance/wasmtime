@@ -209,5 +209,7 @@ mod tests {
         ne,
         nop,
         _should_fail_unreachable,
+        i32_const,
+        i64_const,
     }
 }
