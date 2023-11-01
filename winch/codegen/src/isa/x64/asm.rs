@@ -773,7 +773,10 @@ impl Assembler {
     }
 
     pub fn popcnt(&mut self, src: Reg, size: OperandSize) {
-        assert!(self.isa_flags.has_popcnt(), "Requires has_popcnt flag");
+        assert!(
+            self.isa_flags.has_popcnt() && self.isa_flags.has_sse42(),
+            "Requires has_popcnt and has_sse42 flags"
+        );
         self.emit(Inst::UnaryRmR {
             size: size.into(),
             op: args::UnaryRmROpcode::Popcnt,
