@@ -88,3 +88,15 @@ following steps to reproduce it locally:
    to print the configuration and WebAssembly input used by the test case (see
    uses of  `log_wasm` in the `wasmtime-fuzzing` crate).
 
+## Target specific options
+
+### `cranelift-fuzzgen`
+
+Fuzzgen supports passing the `FUZZGEN_ALLOWED_OPS` environment variable, which when available restricts the instructions that it will generate.
+
+Running `FUZZGEN_ALLOWED_OPS=ineg,ishl cargo fuzz run cranelift-fuzzgen` will run fuzzgen but only generate `ineg` or `ishl` opcodes.
+
+### `cranelift-icache`
+
+The icache target also uses the fuzzgen library, thus also supports the `FUZZGEN_ALLOWED_OPS` enviornment variable as described in the `cranelift-fuzzgen` section above.
+
