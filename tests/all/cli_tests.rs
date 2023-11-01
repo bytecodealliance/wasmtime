@@ -1176,6 +1176,25 @@ warning: this CLI invocation of Wasmtime is going to break in the future -- for
     Ok(())
 }
 
+#[test]
+fn float_args() -> Result<()> {
+    let result = run_wasmtime(&[
+        "--invoke",
+        "echo_f32",
+        "tests/all/cli_tests/simple.wat",
+        "1.0",
+    ])?;
+    assert_eq!(result, "1\n");
+    let result = run_wasmtime(&[
+        "--invoke",
+        "echo_f64",
+        "tests/all/cli_tests/simple.wat",
+        "1.1",
+    ])?;
+    assert_eq!(result, "1.1\n");
+    Ok(())
+}
+
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
     use anyhow::Result;
