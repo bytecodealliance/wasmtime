@@ -1179,7 +1179,7 @@ warning: this CLI invocation of Wasmtime is going to break in the future -- for
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
     use anyhow::Result;
-    use std::io::Write;
+    use std::io::{Read, Write};
     use std::process::Stdio;
     use test_programs_artifacts::*;
 
@@ -1428,6 +1428,42 @@ mod test_programs {
         assert!(stdout.starts_with("Called _start\n"));
         assert!(stdout.ends_with("Done\n"));
         assert!(output.status.success());
+        Ok(())
+    }
+
+    // Test to ensure that prints in the guest aren't buffered on the host by
+    // accident. The test here will print something without a newline and then
+    // wait for input on stdin, and the test here is to ensure that the
+    // character shows up here even as the guest is waiting on input via stdin.
+    #[test]
+    fn cli_stdio_write_flushes() -> Result<()> {
+        fn run(args: &[&str]) -> Result<()> {
+            println!("running {args:?}");
+            let mut child = get_wasmtime_command()?
+                .args(args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+            let mut stdout = child.stdout.take().unwrap();
+            let mut buf = [0; 10];
+            match stdout.read(&mut buf) {
+                Ok(2) => assert_eq!(&buf[..2], b"> "),
+                e => panic!("unexpected read result {e:?}"),
+            }
+            drop(stdout);
+            drop(child.stdin.take().unwrap());
+            let status = child.wait()?;
+            assert!(status.success());
+            Ok(())
+        }
+
+        run(&["run", "-Spreview2=n", CLI_STDIO_WRITE_FLUSHES])?;
+        run(&["run", "-Spreview2=y", CLI_STDIO_WRITE_FLUSHES])?;
+        run(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_STDIO_WRITE_FLUSHES_COMPONENT,
+        ])?;
         Ok(())
     }
 }
