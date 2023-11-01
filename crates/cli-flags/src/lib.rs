@@ -356,12 +356,10 @@ impl CommonOptions {
         } else {
             use std::io::IsTerminal;
             use tracing_subscriber::{EnvFilter, FmtSubscriber};
-            let mut b = FmtSubscriber::builder()
+            let b = FmtSubscriber::builder()
                 .with_writer(std::io::stderr)
-                .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"));
-            if std::io::stderr().is_terminal() {
-                b = b.with_ansi(true);
-            }
+                .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"))
+                .with_ansi(std::io::stderr().is_terminal());
             b.init();
         }
         #[cfg(not(feature = "logging"))]
