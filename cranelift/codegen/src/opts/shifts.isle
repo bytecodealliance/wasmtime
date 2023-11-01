@@ -102,3 +102,45 @@
 (rule (simplify (ineg ty (ushr ty x sconst @ (iconst ty (u64_from_imm64 shift_amt)))))
       (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
       (sshr ty x sconst))
+
+;; Shifts and rotates allow a different type for the shift amount, so we
+;; can remove any extend/reduce operations on the shift amount.
+;;
+;; (op x (ireduce y)) == (op x y)
+;; (op x (uextend y)) == (op x y)
+;; (op x (sextend y)) == (op x y)
+;;
+;; where `op` is one of ishl, ushr, sshr, rotl, rotr
+;;
+;; TODO: This rule is restricted to <=64 bits for ireduce since the x86
+;; backend doesn't support SIMD shifts with 128-bit shift amounts.
+
+(rule (simplify (ishl ty x (ireduce _ y @ (value_type (fits_in_64 _))))) (ishl ty x y))
+(rule (simplify (ishl ty x (uextend _ y))) (ishl ty x y))
+(rule (simplify (ishl ty x (sextend _ y))) (ishl ty x y))
+(rule (simplify (ushr ty x (ireduce _ y @ (value_type (fits_in_64 _))))) (ushr ty x y))
+(rule (simplify (ushr ty x (uextend _ y))) (ushr ty x y))
+(rule (simplify (ushr ty x (sextend _ y))) (ushr ty x y))
+(rule (simplify (sshr ty x (ireduce _ y @ (value_type (fits_in_64 _))))) (sshr ty x y))
+(rule (simplify (sshr ty x (uextend _ y))) (sshr ty x y))
+(rule (simplify (sshr ty x (sextend _ y))) (sshr ty x y))
+(rule (simplify (rotr ty x (ireduce _ y @ (value_type (fits_in_64 _))))) (rotr ty x y))
+(rule (simplify (rotr ty x (uextend _ y))) (rotr ty x y))
+(rule (simplify (rotr ty x (sextend _ y))) (rotr ty x y))
+(rule (simplify (rotl ty x (ireduce _ y @ (value_type (fits_in_64 _))))) (rotl ty x y))
+(rule (simplify (rotl ty x (uextend _ y))) (rotl ty x y))
+(rule (simplify (rotl ty x (sextend _ y))) (rotl ty x y))
+
+;; Remove iconcat from the shift amount input. This is correct even if the
+;; the iconcat is i8 type, since it can represent the largest shift amount
+;; for i128 types.
+;;
+;; (op x (iconcat y1 y2)) == (op x y1)
+;;
+;; where `op` is one of ishl, ushr, sshr, rotl, rotr
+
+(rule (simplify (ishl ty x (iconcat _ y _))) (ishl ty x y))
+(rule (simplify (ushr ty x (iconcat _ y _))) (ushr ty x y))
+(rule (simplify (sshr ty x (iconcat _ y _))) (sshr ty x y))
+(rule (simplify (rotr ty x (iconcat _ y _))) (rotr ty x y))
+(rule (simplify (rotl ty x (iconcat _ y _))) (rotl ty x y))
