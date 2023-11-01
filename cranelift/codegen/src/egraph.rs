@@ -424,7 +424,7 @@ impl<'a> EgraphPass<'a> {
                 }
             }
         }
-        trace!("stats: {:?}", self.stats);
+        trace!("stats: {:#?}", self.stats);
         self.elaborate();
     }
 

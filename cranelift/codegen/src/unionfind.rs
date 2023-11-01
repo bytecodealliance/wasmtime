@@ -13,6 +13,7 @@ pub struct UnionFind<Idx: EntityRef> {
 
 #[derive(Clone, Debug, PartialEq)]
 struct Val<Idx>(Idx);
+
 impl<Idx: EntityRef + ReservedValue> Default for Val<Idx> {
     fn default() -> Self {
         Self(Idx::reserved_value())
