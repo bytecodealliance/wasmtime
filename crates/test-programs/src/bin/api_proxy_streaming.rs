@@ -53,7 +53,6 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
             let mut results = stream::iter(results).buffer_unordered(MAX_CONCURRENCY);
 
             let response = OutgoingResponse::new(
-                200,
                 Fields::from_list(&[("content-type".to_string(), b"text/plain".to_vec())]).unwrap(),
             );
 
@@ -79,7 +78,6 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
             // Echo the request body without buffering it.
 
             let response = OutgoingResponse::new(
-                200,
                 Fields::from_list(
                     &headers
                         .into_iter()
@@ -129,7 +127,6 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
                         );
 
                         let response = OutgoingResponse::new(
-                            200,
                             Fields::from_list(
                                 &headers
                                     .into_iter()
@@ -242,7 +239,10 @@ fn method_not_allowed(response_out: ResponseOutparam) {
 }
 
 fn respond(status: u16, response_out: ResponseOutparam) {
-    let response = OutgoingResponse::new(status, Fields::new());
+    let response = OutgoingResponse::new(Fields::new());
+    response
+        .set_status_code(status)
+        .expect("setting status code");
 
     let body = response.body().expect("response should be writable");
 

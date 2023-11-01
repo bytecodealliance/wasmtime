@@ -27,7 +27,7 @@ fn main() {
             "application/text".to_string().into_bytes(),
         )])
         .unwrap();
-        let response = http_types::OutgoingResponse::new(200, headers);
+        let response = http_types::OutgoingResponse::new(headers);
         let outgoing_body = response.body().unwrap();
         let response_body = outgoing_body.write().unwrap();
         response_body

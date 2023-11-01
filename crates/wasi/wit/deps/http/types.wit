@@ -351,16 +351,18 @@ interface types {
   /// Represents an outgoing HTTP Response.
   resource outgoing-response {
 
-    /// Construct an `outgoing-response`.
+    /// Construct an `outgoing-response`, with a default `status-code` of `200`.
+    /// If a different `status-code` is needed, it must be set via the
+    /// `set-status-code` method.
     ///
-    /// * `status-code` is the HTTP Status Code for the Response.
     /// * `headers` is the HTTP Headers for the Response.
-    constructor(status-code: status-code, headers: headers);
+    constructor(headers: headers);
 
     /// Get the HTTP Status Code for the Response.
     status-code: func() -> status-code;
+
     /// Set the HTTP Status Code for the Response.
-    set-status-code: func(status-code: status-code);
+    set-status-code: func(status-code: status-code) -> result<_, error>;
 
     /// Get the headers associated with the Request.
     ///
