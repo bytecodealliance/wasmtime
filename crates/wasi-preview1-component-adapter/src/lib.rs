@@ -95,6 +95,14 @@ impl<T, E> TrappingUnwrap<T> for Result<T, E> {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn reset_adapter_state() {
+    let state = get_state_ptr();
+    if !state.is_null() {
+        State::init(state)
+    }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,
     old_size: usize,
@@ -2385,8 +2393,8 @@ enum AllocationState {
 
 #[allow(improper_ctypes)]
 extern "C" {
-    fn get_state_ptr() -> *const State;
-    fn set_state_ptr(state: *const State);
+    fn get_state_ptr() -> *mut State;
+    fn set_state_ptr(state: *mut State);
     fn get_allocation_state() -> AllocationState;
     fn set_allocation_state(state: AllocationState);
 }
@@ -2415,7 +2423,7 @@ impl State {
     }
 
     #[cold]
-    fn new() -> &'static State {
+    fn new() -> *mut State {
         #[link(wasm_import_module = "__main_module__")]
         extern "C" {
             fn cabi_realloc(
@@ -2445,31 +2453,37 @@ impl State {
         unsafe { set_allocation_state(AllocationState::StateAllocated) };
 
         unsafe {
-            ret.write(State {
-                magic1: MAGIC,
-                magic2: MAGIC,
-                import_alloc: ImportAlloc::new(),
-                descriptors: RefCell::new(None),
-                path_buf: UnsafeCell::new(MaybeUninit::uninit()),
-                long_lived_arena: BumpArena::new(),
-                args: Cell::new(None),
-                env_vars: Cell::new(None),
-                dirent_cache: DirentCache {
-                    stream: Cell::new(None),
-                    for_fd: Cell::new(0),
-                    cookie: Cell::new(wasi::DIRCOOKIE_START),
-                    cached_dirent: Cell::new(wasi::Dirent {
-                        d_next: 0,
-                        d_ino: 0,
-                        d_type: FILETYPE_UNKNOWN,
-                        d_namlen: 0,
-                    }),
-                    path_data: UnsafeCell::new(MaybeUninit::uninit()),
-                },
-                dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
-            });
-            &*ret
+            Self::init(ret);
         }
+
+        ret
+    }
+
+    #[cold]
+    unsafe fn init(state: *mut State) {
+        state.write(State {
+            magic1: MAGIC,
+            magic2: MAGIC,
+            import_alloc: ImportAlloc::new(),
+            descriptors: RefCell::new(None),
+            path_buf: UnsafeCell::new(MaybeUninit::uninit()),
+            long_lived_arena: BumpArena::new(),
+            args: Cell::new(None),
+            env_vars: Cell::new(None),
+            dirent_cache: DirentCache {
+                stream: Cell::new(None),
+                for_fd: Cell::new(0),
+                cookie: Cell::new(wasi::DIRCOOKIE_START),
+                cached_dirent: Cell::new(wasi::Dirent {
+                    d_next: 0,
+                    d_ino: 0,
+                    d_type: FILETYPE_UNKNOWN,
+                    d_namlen: 0,
+                }),
+                path_data: UnsafeCell::new(MaybeUninit::uninit()),
+            },
+            dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
+        });
     }
 
     /// Accessor for the descriptors member that ensures it is properly initialized
