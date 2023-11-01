@@ -289,7 +289,7 @@ pub struct HostIncomingResponse {
 }
 
 pub struct HostOutgoingResponse {
-    pub status: u16,
+    pub status: http::StatusCode,
     pub headers: FieldMap,
     pub body: Option<HyperOutgoingBody>,
 }

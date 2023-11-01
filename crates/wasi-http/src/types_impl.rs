@@ -632,13 +632,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingBody for T {
 impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
     fn new(
         &mut self,
-        status: StatusCode,
         headers: Resource<Headers>,
     ) -> wasmtime::Result<Resource<HostOutgoingResponse>> {
         let fields = move_fields(self.table(), headers)?;
 
         let id = self.table().push(HostOutgoingResponse {
-            status,
+            status: http::StatusCode::OK,
             headers: fields,
             body: None,
         })?;
@@ -669,16 +668,26 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
         &mut self,
         id: Resource<HostOutgoingResponse>,
     ) -> wasmtime::Result<types::StatusCode> {
-        Ok(self.table().get(&id)?.status)
+        Ok(self.table().get(&id)?.status.into())
     }
 
     fn set_status_code(
         &mut self,
         id: Resource<HostOutgoingResponse>,
         status: types::StatusCode,
-    ) -> wasmtime::Result<()> {
-        self.table().get_mut(&id)?.status = status;
-        Ok(())
+    ) -> wasmtime::Result<Result<(), Error>> {
+        let resp = self.table().get_mut(&id)?;
+
+        match http::StatusCode::from_u16(status) {
+            Ok(status) => resp.status = status,
+            Err(_) => {
+                return Ok(Err(Error::UnexpectedError(
+                    "Invalid status code".to_string(),
+                )))
+            }
+        };
+
+        Ok(Ok(()))
     }
 
     fn headers(
