@@ -758,3 +758,46 @@ block0(v0: i8, v1: i8):
 }
 
 ; check: return v0
+
+function %shifts_to_rotl(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i16 3
+    v2 = iconst.i32 61
+    v3 = ishl v0, v1
+    v4 = ushr v0, v2
+    v5 = bor v3, v4
+    return v5
+}
+
+; check: v1 = iconst.i16 3
+; nextln: v6 = rotl v0, v1  ; v1 = 3
+; check: return v6
+
+
+function %shifts_to_rotl_reverse(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i16 32
+    v2 = iconst.i32 32
+    v3 = ishl v0, v1
+    v4 = ushr v0, v2
+    v5 = bor v4, v3
+    return v5
+}
+
+; check: v1 = iconst.i16 32
+; nextln: v6 = rotl v0, v1  ; v1 = 32
+; check: return v6
+
+function %shifts_to_rotr_equivalent(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i16 3
+    v2 = iconst.i32 61
+    v3 = ishl v0, v2
+    v4 = ushr v0, v1
+    v5 = bor v3, v4
+    return v5
+}
+
+; check: v2 = iconst.i32 61
+; nextln: v6 = rotl v0, v2  ; v2 = 61
+; check: return v6

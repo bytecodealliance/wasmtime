@@ -268,3 +268,21 @@
       (rotl ty x (isub_uextend y z)))
 (rule (simplify (rotl ty (rotr ty x y @ (value_type kty)) z @ (value_type kty)))
       (rotr ty x (isub_uextend y z)))
+
+;; Convert shifts into rotates. We always normalize into a rotate left.
+;;
+;; (bor (ishl x k1) (ushr x k2)) == (rotl x k1) if k2 == ty_bits - k1
+;; (bor (ushr x k2) (ishl x k1)) == (rotl x k1) if k2 == ty_bits - k1
+;;
+;; TODO: This rule is restricted to scalars since no backend currently
+;; supports SIMD rotates.
+(rule (simplify (bor (ty_int ty)
+                      (ishl ty x k @ (iconst _ (u64_from_imm64 k1)))
+                      (ushr ty x (iconst _ (u64_from_imm64 k2)))))
+      (if-let $true (u64_eq k2 (u64_sub (ty_bits_u64 (lane_type ty)) k1)))
+      (rotl ty x k))
+(rule (simplify (bor (ty_int ty)
+                      (ushr ty x (iconst _ (u64_from_imm64 k2)))
+                      (ishl ty x k @ (iconst _ (u64_from_imm64 k1)))))
+      (if-let $true (u64_eq k2 (u64_sub (ty_bits_u64 (lane_type ty)) k1)))
+      (rotl ty x k))
