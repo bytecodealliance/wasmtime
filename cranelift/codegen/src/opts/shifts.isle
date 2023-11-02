@@ -209,3 +209,12 @@
 
 (rule (simplify (rotr ty (rotr ty x y) z))
       (rotr ty x (iadd ty y z)))
+
+
+;; (rotr (rotl x y) z) == (rotr x (isub y z))
+;; (rotl (rotr x y) z) == (rotl x (isub y z))
+(rule (simplify (rotr ty (rotl ty x y) z))
+      (rotl ty x (isub ty y z)))
+
+(rule (simplify (rotl ty (rotr ty x y) z))
+      (rotr ty x (isub ty y z)))

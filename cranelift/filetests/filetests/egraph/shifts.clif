@@ -588,55 +588,6 @@ block0(v0: i8):
 ; check: v6 = sshr v0, v5  ; v5 = 2
 ; check: return v6
 
-
-function %rotr_prop(i8) -> i8 {
-block0(v0: i8):
-    v1 = iconst.i8 1
-    v2 = iconst.i8 1
-    v3 = rotr.i8 v0, v1
-    v4 = rotr.i8 v3, v2
-    return v4
-}
-
-; check: v11 = iconst.i8 2
-; check: v13 = rotr v0, v11  ; v11 = 2
-; check: return v13
-
-function %rotr_add(i8, i8, i8) -> i8 {
-block0(v0: i8, v1: i8, v2: i8):
-    v3 = rotr.i8 v0, v1
-    v4 = rotr.i8 v3, v2
-    return v4
-}
-
-; check: v5 = iadd v1, v2
-; check: v6 = rotr v0, v5
-; check: return v6
-
-function %rotl_prop(i8) -> i8 {
-block0(v0: i8):
-    v1 = iconst.i8 1
-    v2 = iconst.i8 1
-    v3 = rotl.i8 v0, v1
-    v4 = rotl.i8 v3, v2
-    return v4
-}
-
-; check: v11 = iconst.i8 2
-; check: v13 = rotl v0, v11  ; v11 = 2
-; check: return v13
-
-function %rotl_add(i8, i8, i8) -> i8 {
-block0(v0: i8, v1: i8, v2: i8):
-    v3 = rotl.i8 v0, v1
-    v4 = rotl.i8 v3, v2
-    return v4
-}
-
-; check: v5 = iadd v1, v2
-; check: v6 = rotl v0, v5
-; check: return v6
-
 function %i128_ushr_overflow_becomes_0(i128) -> i128 {
 block0(v0: i128):
     v1 = iconst.i16 200
@@ -690,3 +641,101 @@ block0(v0: i8x16):
 ; nextln: v6 = iconst.i16 6
 ; nextln: v7 = sshr v3, v6  ; v6 = 6
 ; check: return v7
+
+
+function %rotr_rotr_prop(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 1
+    v2 = iconst.i8 1
+    v3 = rotr.i8 v0, v1
+    v4 = rotr.i8 v3, v2
+    return v4
+}
+
+; check: v11 = iconst.i8 2
+; check: v13 = rotr v0, v11  ; v11 = 2
+; check: return v13
+
+function %rotr_rotr_add(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = rotr.i8 v0, v1
+    v4 = rotr.i8 v3, v2
+    return v4
+}
+
+; check: v5 = iadd v1, v2
+; check: v6 = rotr v0, v5
+; check: return v6
+
+function %rotl_rotl_prop(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 1
+    v2 = iconst.i8 1
+    v3 = rotl.i8 v0, v1
+    v4 = rotl.i8 v3, v2
+    return v4
+}
+
+; check: v11 = iconst.i8 2
+; check: v13 = rotl v0, v11  ; v11 = 2
+; check: return v13
+
+function %rotl_rotl_add(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = rotl.i8 v0, v1
+    v4 = rotl.i8 v3, v2
+    return v4
+}
+
+; check: v5 = iadd v1, v2
+; check: v6 = rotl v0, v5
+; check: return v6
+
+
+function %rotl_rotr_prop(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 2
+    v2 = iconst.i8 1
+    v3 = rotr.i8 v0, v1
+    v4 = rotl.i8 v3, v2
+    return v4
+}
+
+; check: v2 = iconst.i8 1
+; check: v21 = rotr v0, v2  ; v2 = 1
+; check: return v21
+
+function %rotl_rotr_add(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = rotr.i8 v0, v1
+    v4 = rotl.i8 v3, v2
+    return v4
+}
+
+; check: v5 = isub v1, v2
+; check: v6 = rotr v0, v5
+; check: return v6
+
+function %rotl_rotr_prop(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 2
+    v2 = iconst.i8 1
+    v3 = rotl.i8 v0, v1
+    v4 = rotr.i8 v3, v2
+    return v4
+}
+
+; check: v2 = iconst.i8 1
+; check: v21 = rotl v0, v2  ; v2 = 1
+; check: return v21
+
+function %rotl_rotr_add(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+    v3 = rotl.i8 v0, v1
+    v4 = rotr.i8 v3, v2
+    return v4
+}
+
+; check: v5 = isub v1, v2
+; check: v6 = rotl v0, v5
+; check: return v6
