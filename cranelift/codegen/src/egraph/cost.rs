@@ -30,9 +30,31 @@ use crate::ir::Opcode;
 /// `finite()` method.) An infinite cost is used to represent a value
 /// that cannot be computed, or otherwise serve as a sentinel when
 /// performing search for the lowest-cost representation of a value.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Cost {
     opcode_cost: u32,
+    depth: u32,
+}
+
+impl Ord for Cost {
+    #[inline]
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Break `opcode_cost` ties with `depth`. This means that, when the
+        // opcode cost is the same, we prefer shallow and wide expressions to
+        // narrow and deep. For example, `(a + b) + (c + d)` is preferred to
+        // `((a + b) + c) + d`. This is beneficial because it exposes more
+        // instruction-level parallelism and shortens live ranges.
+        self.opcode_cost
+            .cmp(&other.opcode_cost)
+            .then_with(|| self.depth.cmp(&other.depth))
+    }
+}
+
+impl PartialOrd for Cost {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Cost {
@@ -41,15 +63,22 @@ impl Cost {
         // only for heuristics and always saturate so this suffices!)
         Cost {
             opcode_cost: u32::MAX,
+            depth: u32::MAX,
         }
     }
 
     pub(crate) fn zero() -> Cost {
-        Cost { opcode_cost: 0 }
+        Cost {
+            opcode_cost: 0,
+            depth: 0,
+        }
     }
 
     pub(crate) fn new(opcode_cost: u32) -> Cost {
-        let cost = Cost { opcode_cost };
+        let cost = Cost {
+            opcode_cost,
+            depth: 0,
+        };
         cost.finite()
     }
 
@@ -59,7 +88,28 @@ impl Cost {
     fn finite(self) -> Cost {
         Cost {
             opcode_cost: std::cmp::min(u32::MAX - 1, self.opcode_cost),
+            depth: std::cmp::min(u32::MAX - 1, self.depth),
         }
+    }
+
+    /// Compute the cost of the operation and its given operands.
+    ///
+    /// Caller is responsible for checking that the opcode came from an instruction
+    /// that satisfies `inst_predicates::is_pure_for_egraph()`.
+    pub(crate) fn of_pure_op(op: Opcode, operand_costs: impl IntoIterator<Item = Self>) -> Self {
+        let mut c: Self = pure_op_cost(op) + operand_costs.into_iter().sum();
+        c.depth = c.depth.saturating_add(1);
+        c
+    }
+}
+
+impl std::iter::Sum<Cost> for Cost {
+    fn sum<I: Iterator<Item = Cost>>(iter: I) -> Self {
+        let mut c = Self::zero();
+        for x in iter {
+            c = c + x;
+        }
+        c
     }
 }
 
@@ -75,15 +125,17 @@ impl std::ops::Add<Cost> for Cost {
     fn add(self, other: Cost) -> Cost {
         let cost = Cost {
             opcode_cost: self.opcode_cost.saturating_add(other.opcode_cost),
+            depth: std::cmp::max(self.depth, other.depth),
         };
         cost.finite()
     }
 }
 
-/// Return the cost of a *pure* opcode. Caller is responsible for
-/// checking that the opcode came from an instruction that satisfies
-/// `inst_predicates::is_pure_for_egraph()`.
-pub(crate) fn pure_op_cost(op: Opcode) -> Cost {
+/// Return the cost of a *pure* opcode.
+///
+/// Caller is responsible for checking that the opcode came from an instruction
+/// that satisfies `inst_predicates::is_pure_for_egraph()`.
+fn pure_op_cost(op: Opcode) -> Cost {
     match op {
         // Constants.
         Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new(1),
