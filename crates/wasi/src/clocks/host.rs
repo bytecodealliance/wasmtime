@@ -69,13 +69,13 @@ impl HostMonotonicClock for MonotonicClock {
 
 pub struct Timezone {
     // The underlying system timezone.
-    timezone: cap_std::time::Timezone,
+    timezone: cap_time_ext::Timezone,
 }
 
 impl Timezone {
     pub fn new(ambient_authority: AmbientAuthority) -> Self {
         Self {
-            timezone: cap_std::time::Timezone::new(ambient_authority),
+            timezone: cap_time_ext::Timezone::new(ambient_authority),
         }
     }
 
