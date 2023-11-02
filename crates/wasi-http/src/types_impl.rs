@@ -1,5 +1,5 @@
 use crate::bindings::http::types::{
-    self, Error, HeaderError, Headers, Method, Scheme, StatusCode, Trailers,
+    self, Error, Headers, Method, Scheme, StatusCode, Trailers,
 };
 use crate::body::{FinishMessage, HostFutureTrailers};
 use crate::types::{HostIncomingRequest, HostOutgoingResponse};
@@ -85,22 +85,22 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
     fn from_list(
         &mut self,
         entries: Vec<(String, Vec<u8>)>,
-    ) -> wasmtime::Result<Result<Resource<HostFields>, HeaderError>> {
+    ) -> wasmtime::Result<Result<Resource<HostFields>, types::ValidationError>> {
         let mut map = hyper::HeaderMap::new();
 
         for (header, value) in entries {
             let header = match hyper::header::HeaderName::from_bytes(header.as_bytes()) {
                 Ok(header) => header,
-                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+                Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
             };
 
             if is_forbidden_header(self, &header) {
-                return Ok(Err(HeaderError::Forbidden));
+                return Ok(Err(types::ValidationError::Forbidden));
             }
 
             let value = match hyper::header::HeaderValue::from_bytes(&value) {
                 Ok(value) => value,
-                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+                Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
             };
 
             map.append(header, value);
@@ -145,21 +145,21 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
         byte_values: Vec<Vec<u8>>,
-    ) -> wasmtime::Result<Result<(), HeaderError>> {
+    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
-            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
         };
 
         if is_forbidden_header(self, &header) {
-            return Ok(Err(HeaderError::Forbidden));
+            return Ok(Err(types::ValidationError::Forbidden));
         }
 
         let mut values = Vec::with_capacity(byte_values.len());
         for value in byte_values {
             match hyper::header::HeaderValue::from_bytes(&value) {
                 Ok(value) => values.push(value),
-                Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+                Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
             }
         }
 
@@ -189,19 +189,19 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
         value: Vec<u8>,
-    ) -> wasmtime::Result<Result<(), HeaderError>> {
+    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
-            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
         };
 
         if is_forbidden_header(self, &header) {
-            return Ok(Err(HeaderError::Forbidden));
+            return Ok(Err(types::ValidationError::Forbidden));
         }
 
         let value = match hyper::header::HeaderValue::from_bytes(&value) {
             Ok(value) => value,
-            Err(_) => return Ok(Err(HeaderError::InvalidSyntax)),
+            Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
         };
 
         let m = get_fields_mut(self.table(), &fields)

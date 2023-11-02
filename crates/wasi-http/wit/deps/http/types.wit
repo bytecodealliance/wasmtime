@@ -37,10 +37,14 @@ interface types {
     unexpected-error(string)
   }
 
-  /// This tyep enumerates the different kinds of errors that may occur when
-  /// setting or appending to a `fields` resource.
-  variant header-error {
+  /// This type enumerates the different kinds of errors that may occur when
+  /// validating arguments to setters.
+  variant validation-error {
+    /// This error indicates that the value given to a setter was syntactically
+    /// invalid.
     invalid-syntax,
+
+    /// This error indicates that a value given to a setter was forbidden.
     forbidden,
   }
 
@@ -75,7 +79,7 @@ interface types {
     /// syntactically invalid, or if a header was forbidden.
     from-list: static func(
       entries: list<tuple<field-key,field-value>>
-    ) -> result<fields, header-error>;
+    ) -> result<fields, validation-error>;
 
     /// Get all of the values corresponding to a key.
     get: func(name: field-key) -> list<field-value>;
@@ -85,7 +89,7 @@ interface types {
     ///
     /// The operation can fail if the name or value arguments are invalid, or if
     /// the name is forbidden.
-    set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
+    set: func(name: field-key, value: list<field-value>) -> result<_, validation-error>;
 
     /// Delete all values for a key. Does nothing if no values for the key
     /// exist.
@@ -96,7 +100,7 @@ interface types {
     ///
     /// The operation can fail if the name or value arguments are invalid, or if
     /// the name is forbidden.
-    append: func(name: field-key, value: field-value) -> result<_, header-error>;
+    append: func(name: field-key, value: field-value) -> result<_, validation-error>;
 
 
     /// Retrieve the full set of keys and values in the Fields. Like the
