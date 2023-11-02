@@ -378,7 +378,7 @@ impl hyper::service::Service<Request> for ProxyHandler {
                 .call_handle(store, req, out)
                 .await
             {
-                eprint!("{:?}\n", e);
+                log::error!("[{req_id}] :: {:#?}", e);
                 return Err(e);
             }
 
