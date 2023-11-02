@@ -31,23 +31,35 @@ use crate::ir::Opcode;
 /// that cannot be computed, or otherwise serve as a sentinel when
 /// performing search for the lowest-cost representation of a value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct Cost(u32);
+pub(crate) struct Cost {
+    opcode_cost: u32,
+}
+
 impl Cost {
     pub(crate) fn infinity() -> Cost {
         // 2^32 - 1 is, uh, pretty close to infinite... (we use `Cost`
         // only for heuristics and always saturate so this suffices!)
-        Cost(u32::MAX)
+        Cost {
+            opcode_cost: u32::MAX,
+        }
     }
 
     pub(crate) fn zero() -> Cost {
-        Cost(0)
+        Cost { opcode_cost: 0 }
+    }
+
+    pub(crate) fn new(opcode_cost: u32) -> Cost {
+        let cost = Cost { opcode_cost };
+        cost.finite()
     }
 
     /// Clamp this cost at a "finite" value. Can be used in
     /// conjunction with saturating ops to avoid saturating into
     /// `infinity()`.
     fn finite(self) -> Cost {
-        Cost(std::cmp::min(u32::MAX - 1, self.0))
+        Cost {
+            opcode_cost: std::cmp::min(u32::MAX - 1, self.opcode_cost),
+        }
     }
 }
 
@@ -59,8 +71,12 @@ impl std::default::Default for Cost {
 
 impl std::ops::Add<Cost> for Cost {
     type Output = Cost;
+
     fn add(self, other: Cost) -> Cost {
-        Cost(self.0.saturating_add(other.0)).finite()
+        let cost = Cost {
+            opcode_cost: self.opcode_cost.saturating_add(other.opcode_cost),
+        };
+        cost.finite()
     }
 }
 
@@ -70,11 +86,11 @@ impl std::ops::Add<Cost> for Cost {
 pub(crate) fn pure_op_cost(op: Opcode) -> Cost {
     match op {
         // Constants.
-        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost(1),
+        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new(1),
 
         // Extends/reduces.
         Opcode::Uextend | Opcode::Sextend | Opcode::Ireduce | Opcode::Iconcat | Opcode::Isplit => {
-            Cost(2)
+            Cost::new(2)
         }
 
         // "Simple" arithmetic.
@@ -86,9 +102,9 @@ pub(crate) fn pure_op_cost(op: Opcode) -> Cost {
         | Opcode::Bnot
         | Opcode::Ishl
         | Opcode::Ushr
-        | Opcode::Sshr => Cost(3),
+        | Opcode::Sshr => Cost::new(3),
 
         // Everything else (pure.)
-        _ => Cost(4),
+        _ => Cost::new(4),
     }
 }
