@@ -382,7 +382,7 @@ impl hyper::service::Service<Request> for ProxyHandler {
                 return Err(e);
             }
 
-            Ok::<_, anyhow::Error>(())
+            Ok(())
         });
 
         Box::pin(async move {
