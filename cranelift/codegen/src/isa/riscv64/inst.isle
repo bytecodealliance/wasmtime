@@ -1783,9 +1783,6 @@
 
 
 
-;; Generate a mask for the bit-width of the given type
-(decl pure shift_mask (Type) u64)
-(rule (shift_mask ty) (u64_sub (ty_bits (lane_type ty)) 1))
 
 ;; Helper for generating a i64 from a pair of Imm20 and Imm12 constants
 (decl i64_generate_imm (Imm20 Imm12) i64)

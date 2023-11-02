@@ -98,11 +98,11 @@
 ;; (x | -x) sets the sign bit to 1 if x is nonzero, and 0 if x is zero. sshr propagates
 ;; the sign bit to the rest of the value.
 (rule (simplify (sshr ty (bor ty x (ineg ty x)) (iconst ty (u64_from_imm64 shift_amt))))
-      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
       (bmask ty x))
 
 (rule (simplify (sshr ty (bor ty (ineg ty x) x) (iconst ty (u64_from_imm64 shift_amt))))
-      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
       (bmask ty x))
 
 ;; Matches any expressions that preserve "truthiness".
