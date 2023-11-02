@@ -420,7 +420,7 @@ impl HostOutgoingBody {
             }
         }
 
-        let (body_sender, body_receiver) = mpsc::channel(1);
+        let (body_sender, body_receiver) = mpsc::channel(2);
         let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
             body_receiver,
@@ -441,19 +441,17 @@ impl HostOutgoingBody {
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
 pub struct BodyWriteStream {
     writer: mpsc::Sender<Bytes>,
-    pending: Option<Bytes>,
     write_budget: usize,
-    closed: bool,
 }
 
 impl BodyWriteStream {
     /// Create a [`BodyWriteStream`].
     pub fn new(write_budget: usize, writer: mpsc::Sender<Bytes>) -> Self {
+        // at least one capacity is required to send a message
+        assert!(writer.max_capacity() >= 1);
         BodyWriteStream {
             writer,
             write_budget,
-            pending: None,
-            closed: false,
         }
     }
 }
@@ -461,44 +459,44 @@ impl BodyWriteStream {
 #[async_trait::async_trait]
 impl HostOutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
-        // If there are pending bytes to send then `check_write` wouldn't have
-        // said that bytes could be written.
-        if self.pending.is_some() {
-            return Err(StreamError::Trap(anyhow!("write exceeded budget")));
-        }
+        match self.writer.try_send(bytes) {
+            // If the message was sent then it's queued up now in hyper to get
+            // received.
+            Ok(()) => Ok(()),
 
-        // Delegate to `flush` which will attempt to write out the bytes. This
-        // will attempt to send them immediately if possible. Note that this
-        // will also handle the case that we're actually a closed channel.
-        self.pending = Some(bytes);
-        self.flush()
+            // If this channel is full then that means `check_write` wasn't
+            // called. The call to `check_write` always guarantees that there's
+            // at least one capacity if a write is allowed.
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                Err(StreamError::Trap(anyhow!("write exceeded budget")))
+            }
+
+            // Hyper is gone so this stream is now closed.
+            Err(mpsc::error::TrySendError::Closed(_)) => Err(StreamError::Closed),
+        }
     }
 
     fn flush(&mut self) -> Result<(), StreamError> {
-        // Try sending out the bytes now if we can, otherwise delay this to
-        // later.
-        if let Some(bytes) = self.pending.take() {
-            match self.writer.try_send(bytes) {
-                Ok(()) => {}
-                Err(mpsc::error::TrySendError::Full(bytes)) => self.pending = Some(bytes),
-                // Note that the bytes are lost here but there's nothing we can
-                // do about that because the channel is closed.
-                Err(mpsc::error::TrySendError::Closed(_)) => self.closed = true,
-            }
+        // Flushing doesn't happen in this body stream since we're currently
+        // only tracking sending bytes over to hyper.
+        if self.writer.is_closed() {
+            Err(StreamError::Closed)
+        } else {
+            Ok(())
         }
-        if self.closed {
-            return Err(StreamError::Closed);
-        }
-        Ok(())
     }
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        // Try flushing out any pending bytes if there are any to clear the
-        // `pending` field if possible. This will also check to see if we're a
-        // closed channel.
-        self.flush()?;
-
-        if self.pending.is_some() {
+        if self.writer.is_closed() {
+            Err(StreamError::Closed)
+        } else if self.writer.capacity() == 0 {
+            // If there is no more capacity in this sender channel then don't
+            // allow any more writes because the hyper task needs to catch up
+            // now.
+            //
+            // Note that this relies on this task being the only one sending
+            // data to ensure that no one else can steal a write into this
+            // channel.
             Ok(0)
         } else {
             Ok(self.write_budget)
@@ -509,15 +507,9 @@ impl HostOutputStream for BodyWriteStream {
 #[async_trait::async_trait]
 impl Subscribe for BodyWriteStream {
     async fn ready(&mut self) {
-        if self.pending.is_none() || self.closed {
-            return;
-        }
-        // If there's pending data and this isn't a closed channel yet then wait
-        // for a permit that allows us to send, and on acquisition send the
-        // buffered bytes.
-        match self.writer.reserve().await {
-            Ok(permit) => permit.send(self.pending.take().unwrap()),
-            Err(_) => self.closed = true,
-        }
+        // Attempt to perform a reservation for a send. If there's capacity in
+        // the channel or it's already closed then this will return immediately.
+        // If the channel is full this will block until capacity opens up.
+        let _ = self.writer.reserve().await;
     }
 }
