@@ -1738,6 +1738,15 @@ impl VCodeConstants {
     pub fn get(&self, c: VCodeConstant) -> &VCodeConstantData {
         &self.constants[c]
     }
+
+    /// Checks if the given [VCodeConstantData] is registered as
+    /// used by the pool.
+    pub fn pool_uses(&self, constant: &VCodeConstantData) -> bool {
+        match constant {
+            VCodeConstantData::Pool(c, _) => self.pool_uses.contains_key(c),
+            _ => false,
+        }
+    }
 }
 
 /// A use of a constant by one or more VCode instructions; see [VCodeConstants].
