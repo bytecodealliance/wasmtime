@@ -202,16 +202,10 @@
       (if-let $true (u64_le (ty_bits_u64 ty) shift_amt))
       (subsume (iconst_u64 ty 0)))
 
-;; (rotr (rotr x k1) k2) == (rotr x (add k1 k2))
-;; (rotl (rotl x k1) k2) == (rotl x (add k1 k2))
-(rule (simplify (rotl ty
-                      (rotl ty x (iconst kty (u64_from_imm64 k1)))
-                      (iconst _ (u64_from_imm64 k2))))
-      (if-let shift_amt (u64_and (u64_add k1 k2) (ty_shift_mask ty)))
-      (rotl ty x (iconst_u64 kty shift_amt)))
+;; (rotr (rotr x y) z) == (rotr x (iadd y z))
+;; (rotl (rotl x y) z) == (rotl x (iadd y z))
+(rule (simplify (rotl ty (rotl ty x y) z))
+      (rotl ty x (iadd ty y z)))
 
-(rule (simplify (rotr ty
-                      (rotr ty x (iconst kty (u64_from_imm64 k1)))
-                      (iconst _ (u64_from_imm64 k2))))
-      (if-let shift_amt (u64_and (u64_add k1 k2) (ty_shift_mask ty)))
-      (rotr ty x (iconst_u64 kty shift_amt)))
+(rule (simplify (rotr ty (rotr ty x y) z))
+      (rotr ty x (iadd ty y z)))
