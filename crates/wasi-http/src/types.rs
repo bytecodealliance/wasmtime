@@ -42,10 +42,7 @@ pub trait WasiHttpView: Send {
             // TODO: this needs to be plumbed through
             between_bytes_timeout: std::time::Duration::from_millis(600 * 1000),
         };
-        Ok(self.table().push(HostIncomingRequest {
-            parts,
-            body: Some(body),
-        })?)
+        Ok(self.table().push(HostIncomingRequest { parts, body })?)
     }
 
     fn new_response_outparam(
@@ -257,7 +254,7 @@ impl TryInto<http::Method> for types::Method {
 
 pub struct HostIncomingRequest {
     pub parts: http::request::Parts,
-    pub body: Option<HostIncomingBodyBuilder>,
+    pub body: HostIncomingBodyBuilder,
 }
 
 pub struct HostResponseOutparam {
@@ -284,7 +281,7 @@ pub struct HostRequestOptions {
 pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: FieldMap,
-    pub body: Option<HostIncomingBodyBuilder>,
+    pub body: HostIncomingBodyBuilder,
     pub worker: Arc<AbortOnDropJoinHandle<Result<(), types::Error>>>,
 }
 

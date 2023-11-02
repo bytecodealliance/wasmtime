@@ -304,16 +304,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingRequest for T {
     fn consume(
         &mut self,
         id: Resource<HostIncomingRequest>,
-    ) -> wasmtime::Result<Result<Resource<HostIncomingBody>, ()>> {
-        let req = self.table().get_mut(&id)?;
-        match req.body.take() {
-            Some(builder) => {
-                let id = self.table().push(builder.build())?;
-                Ok(Ok(id))
-            }
-
-            None => Ok(Err(())),
-        }
+    ) -> wasmtime::Result<Resource<HostIncomingBody>> {
+        let req = self.table().delete(id)?;
+        let id = self.table().push(req.body.build())?;
+        Ok(id)
     }
 
     fn drop(&mut self, id: Resource<HostIncomingRequest>) -> wasmtime::Result<()> {
@@ -533,20 +527,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingResponse for T {
     fn consume(
         &mut self,
         response: Resource<HostIncomingResponse>,
-    ) -> wasmtime::Result<Result<Resource<HostIncomingBody>, ()>> {
+    ) -> wasmtime::Result<Resource<HostIncomingBody>> {
         let table = self.table();
-        let r = table
-            .get_mut(&response)
-            .context("[incoming_response_consume] getting response")?;
-
-        match r.body.take() {
-            Some(builder) => {
-                let id = self.table().push(builder.build())?;
-                Ok(Ok(id))
-            }
-
-            None => Ok(Err(())),
-        }
+        let r = table.delete(response)?;
+        let id = self.table().push(r.body.build())?;
+        Ok(id)
     }
 }
 
@@ -752,11 +737,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
         let resp = self.table().push(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers: FieldMap::from(parts.headers),
-            body: Some(HostIncomingBodyBuilder {
+            body: HostIncomingBodyBuilder {
                 body,
                 worker: Some(Arc::clone(&resp.worker)),
                 between_bytes_timeout: resp.between_bytes_timeout,
-            }),
+            },
             worker: resp.worker,
         })?;
 

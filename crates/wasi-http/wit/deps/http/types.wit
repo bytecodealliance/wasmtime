@@ -100,7 +100,7 @@ interface types {
 
 
     /// Retrieve the full set of keys and values in the Fields. Like the
-    /// constructor, the list represents each key-value pair. 
+    /// constructor, the list represents each key-value pair.
     ///
     /// The outer list represents each key-value pair in the Fields. Keys
     /// which have multiple values are represented by multiple entries in this
@@ -108,7 +108,7 @@ interface types {
     entries: func() -> list<tuple<field-key,field-value>>;
 
     /// Make a deep copy of the Fields. Equivelant in behavior to calling the
-    /// `fields` constructor on the return value of `entries` 
+    /// `fields` constructor on the return value of `entries`
     clone: func() -> fields;
   }
 
@@ -140,9 +140,8 @@ interface types {
     /// `incoming-request` before all children are dropped will trap.
     headers: func() -> headers;
 
-    /// Gives the `incoming-body` associated with this request. Will only
-    /// return success at most once, and subsequent calls will return error.
-    consume: func() -> result<incoming-body>;
+    /// Gives the `incoming-body` associated with this request.
+    consume: static func(r: incoming-request) -> incoming-body;
   }
 
   /// Represents an outgoing HTTP Request.
@@ -286,9 +285,8 @@ interface types {
     /// Returns the headers from the incoming response.
     headers: func() -> headers;
 
-    /// Returns the incoming body. May be called at most once. Returns error
-    /// if called additional times.
-    consume: func() -> result<incoming-body>;
+    /// Returns the incoming body.
+    consume: static func(r: incoming-response) -> incoming-body;
   }
 
   /// Represents an incoming HTTP Request or Response's Body.
