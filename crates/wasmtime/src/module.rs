@@ -402,7 +402,6 @@ impl Module {
         use crate::compiler::CompileInputs;
 
         let tunables = &engine.config().tunables;
-        let compiler = engine.compiler();
 
         // First a `ModuleEnvironment` is created which records type information
         // about the wasm module. This is where the WebAssembly is parsed and
@@ -437,25 +436,9 @@ impl Module {
         engine.append_compiler_info(&mut object);
         engine.append_bti(&mut object);
 
-        // If configured attempt to use static memory initialization which
-        // can either at runtime be implemented as a single memcpy to
-        // initialize memory or otherwise enabling virtual-memory-tricks
-        // such as mmap'ing from a file to get copy-on-write.
-        if engine.config().memory_init_cow {
-            let align = engine.compiler().page_size_align();
-            let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
-            translation.try_static_init(align, max_always_allowed);
-        }
-
-        // Attempt to convert table initializer segments to
-        // FuncTable representation where possible, to enable
-        // table lazy init.
-        translation.try_func_table_init();
-
         let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
             object,
-            tunables,
-            compiler,
+            engine,
             compiled_funcs,
             std::iter::once(translation).collect(),
         )?;
