@@ -128,11 +128,7 @@ pub fn request(
     let headers = headers_handle.entries();
     drop(headers_handle);
 
-    let incoming_body = incoming_response
-        .consume()
-        .map_err(|()| anyhow!("incoming response has no body stream"))?;
-
-    drop(incoming_response);
+    let incoming_body = http_types::IncomingResponse::consume(incoming_response);
 
     let input_stream = incoming_body.stream().unwrap();
     let input_stream_pollable = input_stream.subscribe();

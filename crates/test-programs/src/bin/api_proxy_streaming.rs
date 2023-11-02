@@ -92,8 +92,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
 
             ResponseOutparam::set(response_out, Ok(response));
 
-            let mut stream =
-                executor::incoming_body(request.consume().expect("request should be readable"));
+            let mut stream = executor::incoming_body(IncomingRequest::consume(request));
 
             while let Some(chunk) = stream.next().await {
                 match chunk {
@@ -122,9 +121,8 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
             }) {
                 match double_echo(request, &url).await {
                     Ok((request_copy, response)) => {
-                        let mut stream = executor::incoming_body(
-                            response.consume().expect("response should be consumable"),
-                        );
+                        let mut stream =
+                            executor::incoming_body(IncomingResponse::consume(response));
 
                         let response = OutgoingResponse::new(
                             Fields::from_list(
@@ -202,11 +200,7 @@ async fn double_echo(
 
     let response = executor::outgoing_request_send(outgoing_request);
 
-    let mut stream = executor::incoming_body(
-        incoming_request
-            .consume()
-            .expect("request should be consumable"),
-    );
+    let mut stream = executor::incoming_body(IncomingRequest::consume(incoming_request));
 
     let copy = async move {
         while let Some(chunk) = stream.next().await {
@@ -280,8 +274,7 @@ async fn hash(url: &Url) -> Result<String> {
         bail!("unexpected status: {status}");
     }
 
-    let mut body =
-        executor::incoming_body(response.consume().expect("response should be readable"));
+    let mut body = executor::incoming_body(IncomingResponse::consume(response));
 
     use sha2::Digest;
     let mut hasher = sha2::Sha256::new();
