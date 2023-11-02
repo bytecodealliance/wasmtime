@@ -172,14 +172,19 @@ fn enc_conditional_br(
     }
 }
 
-fn enc_test_branch(kind: TestBranchKind, taken: BranchTarget, reg: Reg, bit: u8) -> u32 {
+fn enc_test_bit_and_branch(
+    kind: TestBitAndBranchKind,
+    taken: BranchTarget,
+    reg: Reg,
+    bit: u8,
+) -> u32 {
     assert!(bit < 64);
     let op_31 = u32::from(bit >> 5);
     let op_23_19 = u32::from(bit & 0b11111);
     let op_30_24 = 0b0110110
         | match kind {
-            TestBranchKind::Z => 0,
-            TestBranchKind::NZ => 1,
+            TestBitAndBranchKind::Z => 0,
+            TestBitAndBranchKind::NZ => 1,
         };
     (op_31 << 31)
         | (op_30_24 << 24)
@@ -3240,7 +3245,7 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
-            &Inst::TestBranch {
+            &Inst::TestBitAndBranch {
                 taken,
                 not_taken,
                 kind,
@@ -3252,10 +3257,11 @@ impl MachInstEmit for Inst {
                 let cond_off = sink.cur_offset();
                 if let Some(l) = taken.as_label() {
                     sink.use_label_at_offset(cond_off, l, LabelUse::Branch14);
-                    let inverted = enc_test_branch(kind.invert(), taken, rn, bit).to_le_bytes();
+                    let inverted =
+                        enc_test_bit_and_branch(kind.complement(), taken, rn, bit).to_le_bytes();
                     sink.add_cond_branch(cond_off, cond_off + 4, l, &inverted[..]);
                 }
-                sink.put4(enc_test_branch(kind, taken, rn, bit));
+                sink.put4(enc_test_bit_and_branch(kind, taken, rn, bit));
 
                 // Unconditional part next.
                 let uncond_off = sink.cur_offset();

@@ -835,8 +835,8 @@
 
        ;; A conditional branch which tests the `bit` of `rn` and branches
        ;; depending on `kind`.
-       (TestBranch
-        (kind TestBranchKind)
+       (TestBitAndBranch
+        (kind TestBitAndBranchKind)
         (taken BranchTarget)
         (not_taken BranchTarget)
         (rn Reg)
@@ -1212,7 +1212,7 @@
       (enum Size32
             Size64))
 
-(type TestBranchKind (enum (Z) (NZ)))
+(type TestBitAndBranchKind (enum (Z) (NZ)))
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
 (decl operand_size (Type) OperandSize)
@@ -4090,20 +4090,20 @@
       (ConsumesFlags.ConsumesFlagsSideEffect
        (MInst.CondBr taken not_taken kind)))
 
-;; Helper for emitting `MInst.Tbnz` instructions.
-(decl test_branch (TestBranchKind BranchTarget BranchTarget Reg u8) SideEffectNoResult)
+;; Helper for emitting `MInst.TestBitAndBranch` instructions.
+(decl test_branch (TestBitAndBranchKind BranchTarget BranchTarget Reg u8) SideEffectNoResult)
 (rule (test_branch kind taken not_taken rn bit)
-      (SideEffectNoResult.Inst (MInst.TestBranch kind taken not_taken rn bit)))
+      (SideEffectNoResult.Inst (MInst.TestBitAndBranch kind taken not_taken rn bit)))
 
 ;; Helper for emitting `tbnz` instructions.
 (decl tbnz (BranchTarget BranchTarget Reg u8) SideEffectNoResult)
 (rule (tbnz taken not_taken rn bit)
-      (test_branch (TestBranchKind.NZ) taken not_taken rn bit))
+      (test_branch (TestBitAndBranchKind.NZ) taken not_taken rn bit))
 
-;; Helper for emitting `MInst.Tbnz` instructions.
+;; Helper for emitting `tbz` instructions.
 (decl tbz (BranchTarget BranchTarget Reg u8) SideEffectNoResult)
 (rule (tbz taken not_taken rn bit)
-      (test_branch (TestBranchKind.Z) taken not_taken rn bit))
+      (test_branch (TestBitAndBranchKind.Z) taken not_taken rn bit))
 
 ;; Helper for emitting `MInst.MovToNZCV` instructions.
 (decl mov_to_nzcv (Reg) ProducesFlags)

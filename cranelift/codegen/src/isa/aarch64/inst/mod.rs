@@ -902,7 +902,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
             CondBrKind::Cond(_) => {}
         },
-        &Inst::TestBranch { rn, .. } => {
+        &Inst::TestBitAndBranch { rn, .. } => {
             collector.reg_use(rn);
         }
         &Inst::IndirectBr { rn, .. } => {
@@ -1046,7 +1046,7 @@ impl MachInst for Inst {
             &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
-            &Inst::TestBranch { .. } => MachTerminator::Cond,
+            &Inst::TestBitAndBranch { .. } => MachTerminator::Cond,
             &Inst::IndirectBr { .. } => MachTerminator::Indirect,
             &Inst::JTSequence { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
@@ -2667,7 +2667,7 @@ impl Inst {
                     }
                 }
             }
-            &Inst::TestBranch {
+            &Inst::TestBitAndBranch {
                 kind,
                 ref taken,
                 ref not_taken,
@@ -2675,8 +2675,8 @@ impl Inst {
                 bit,
             } => {
                 let cond = match kind {
-                    TestBranchKind::Z => "z",
-                    TestBranchKind::NZ => "nz",
+                    TestBitAndBranchKind::Z => "z",
+                    TestBitAndBranchKind::NZ => "nz",
                 };
                 let taken = taken.pretty_print(0, allocs);
                 let not_taken = not_taken.pretty_print(0, allocs);

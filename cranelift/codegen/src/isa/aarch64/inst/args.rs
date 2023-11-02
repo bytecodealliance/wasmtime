@@ -770,14 +770,14 @@ impl APIKey {
     }
 }
 
-pub use crate::isa::aarch64::lower::isle::generated_code::TestBranchKind;
+pub use crate::isa::aarch64::lower::isle::generated_code::TestBitAndBranchKind;
 
-impl TestBranchKind {
-    /// Inverts this branch condition.
-    pub fn invert(&self) -> TestBranchKind {
+impl TestBitAndBranchKind {
+    /// Complements this branch condition to act on the opposite result.
+    pub fn complement(&self) -> TestBitAndBranchKind {
         match self {
-            TestBranchKind::Z => TestBranchKind::NZ,
-            TestBranchKind::NZ => TestBranchKind::Z,
+            TestBitAndBranchKind::Z => TestBitAndBranchKind::NZ,
+            TestBitAndBranchKind::NZ => TestBitAndBranchKind::Z,
         }
     }
 }
