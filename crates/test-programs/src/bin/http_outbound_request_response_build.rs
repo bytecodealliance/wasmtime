@@ -8,13 +8,18 @@ fn main() {
             "application/json".to_string().into_bytes(),
         )])
         .unwrap();
-        let request = http_types::OutgoingRequest::new(
-            &http_types::Method::Get,
-            None,
-            Some(&http_types::Scheme::Https),
-            Some("www.example.com"),
-            headers,
-        );
+        let request = http_types::OutgoingRequest::new(headers);
+
+        request
+            .set_method(&http_types::Method::Get)
+            .expect("setting method");
+        request
+            .set_scheme(Some(&http_types::Scheme::Https))
+            .expect("setting scheme");
+        request
+            .set_authority(Some("www.example.com"))
+            .expect("setting authority");
+
         let outgoing_body = request.body().unwrap();
         let request_body = outgoing_body.write().unwrap();
         request_body

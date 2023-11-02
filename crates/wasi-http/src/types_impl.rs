@@ -1,7 +1,5 @@
-use crate::bindings::http::types::{
-    self, Error, Headers, Method, Scheme, StatusCode, Trailers,
-};
-use crate::body::{FinishMessage, HostFutureTrailers};
+use crate::bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers};
+use crate::body::{FinishMessage, HostFutureTrailers, HostFutureTrailersState};
 use crate::types::{HostIncomingRequest, HostOutgoingResponse};
 use crate::WasiHttpView;
 use crate::{
@@ -325,21 +323,17 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingRequest for T {
 impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
     fn new(
         &mut self,
-        method: Method,
-        path_with_query: Option<String>,
-        scheme: Option<Scheme>,
-        authority: Option<String>,
         headers: Resource<Headers>,
     ) -> wasmtime::Result<Resource<HostOutgoingRequest>> {
         let headers = move_fields(self.table(), headers)?;
 
         self.table()
             .push(HostOutgoingRequest {
-                path_with_query,
-                authority,
-                method,
+                path_with_query: None,
+                authority: None,
+                method: types::Method::Get,
                 headers,
-                scheme,
+                scheme: None,
                 body: None,
             })
             .context("[new_outgoing_request] pushing request")
@@ -385,9 +379,18 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         method: Method,
-    ) -> wasmtime::Result<()> {
-        self.table().get_mut(&request)?.method = method.into();
-        Ok(())
+    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+        let req = self.table().get_mut(&request)?;
+
+        if let Method::Other(s) = &method {
+            if let Err(_) = http::Method::from_str(s) {
+                return Ok(Err(types::ValidationError::InvalidSyntax));
+            }
+        }
+
+        req.method = method;
+
+        Ok(Ok(()))
     }
 
     fn path_with_query(
@@ -401,9 +404,18 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         path_with_query: Option<String>,
-    ) -> wasmtime::Result<()> {
-        self.table().get_mut(&request)?.path_with_query = path_with_query;
-        Ok(())
+    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+        let req = self.table().get_mut(&request)?;
+
+        if let Some(s) = path_with_query.as_ref() {
+            if let Err(_) = http::uri::PathAndQuery::from_str(s) {
+                return Ok(Err(types::ValidationError::InvalidSyntax));
+            }
+        }
+
+        req.path_with_query = path_with_query;
+
+        Ok(Ok(()))
     }
 
     fn scheme(
@@ -417,9 +429,18 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         scheme: Option<Scheme>,
-    ) -> wasmtime::Result<()> {
-        self.table().get_mut(&request)?.scheme = scheme;
-        Ok(())
+    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+        let req = self.table().get_mut(&request)?;
+
+        if let Some(types::Scheme::Other(s)) = scheme.as_ref() {
+            if let Err(_) = http::uri::Scheme::from_str(s.as_str()) {
+                return Ok(Err(types::ValidationError::InvalidSyntax));
+            }
+        }
+
+        req.scheme = scheme;
+
+        Ok(Ok(()))
     }
 
     fn authority(
@@ -433,9 +454,24 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         authority: Option<String>,
-    ) -> wasmtime::Result<()> {
-        self.table().get_mut(&request)?.authority = authority;
-        Ok(())
+    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+        let req = self.table().get_mut(&request)?;
+
+        if let Some(s) = authority.as_ref() {
+            println!("checking authority {s}");
+            let auth = match http::uri::Authority::from_str(s.as_str()) {
+                Ok(auth) => auth,
+                Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+            };
+
+            if s.contains(':') && auth.port_u16().is_none() {
+                return Ok(Err(types::ValidationError::InvalidSyntax));
+            }
+        }
+
+        req.authority = authority;
+
+        Ok(Ok(()))
     }
 
     fn headers(
@@ -675,16 +711,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
         &mut self,
         id: Resource<HostOutgoingResponse>,
         status: types::StatusCode,
-    ) -> wasmtime::Result<Result<(), Error>> {
+    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
         let resp = self.table().get_mut(&id)?;
 
         match http::StatusCode::from_u16(status) {
             Ok(status) => resp.status = status,
-            Err(_) => {
-                return Ok(Err(Error::UnexpectedError(
-                    "Invalid status code".to_string(),
-                )))
-            }
+            Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
         };
 
         Ok(Ok(()))

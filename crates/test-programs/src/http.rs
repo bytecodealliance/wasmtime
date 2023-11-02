@@ -1,6 +1,6 @@
 use crate::wasi::http::{outgoing_handler, types as http_types};
 use crate::wasi::io::streams;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use std::fmt;
 
 pub struct Response {
@@ -52,13 +52,16 @@ pub fn request(
         .concat(),
     )?;
 
-    let request = http_types::OutgoingRequest::new(
-        &method,
-        Some(path_with_query),
-        Some(&scheme),
-        Some(authority),
-        headers,
-    );
+    let request = http_types::OutgoingRequest::new(headers);
+
+    request.set_method(&method).context("method")?;
+    request.set_scheme(Some(&scheme)).context("scheme")?;
+    request
+        .set_authority(Some(authority))
+        .context("authority")?;
+    request
+        .set_path_with_query(Some(&path_with_query))
+        .context("path_with_query")?;
 
     let outgoing_body = request
         .body()
