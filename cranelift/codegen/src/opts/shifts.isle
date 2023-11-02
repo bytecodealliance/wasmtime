@@ -202,19 +202,38 @@
       (if-let $true (u64_le (ty_bits_u64 ty) shift_amt))
       (subsume (iconst_u64 ty 0)))
 
+
+;; Emits an iadd for two values. If they have different types
+;; then the smaller type is zero extended to the larger type.
+(decl iadd_uextend (Value Value) Value)
+(rule 1 (iadd_uextend x @ (value_type ty) y @ (value_type ty))
+      (iadd ty x y))
+(rule 2 (iadd_uextend x @ (value_type x_ty) y @ (value_type y_ty))
+      (if-let $true (u64_lt (ty_bits_u64 x_ty) (ty_bits_u64 y_ty)))
+      (iadd y_ty (uextend y_ty x) y))
+(rule 3 (iadd_uextend x @ (value_type x_ty) y @ (value_type y_ty))
+      (if-let $true (u64_lt (ty_bits_u64 y_ty) (ty_bits_u64 x_ty)))
+      (iadd x_ty x (uextend x_ty y)))
+
 ;; (rotr (rotr x y) z) == (rotr x (iadd y z))
 ;; (rotl (rotl x y) z) == (rotl x (iadd y z))
-(rule (simplify (rotl ty (rotl ty x y) z))
-      (rotl ty x (iadd ty y z)))
+(rule (simplify (rotl ty (rotl ty x y) z)) (rotl ty x (iadd_uextend y z)))
+(rule (simplify (rotr ty (rotr ty x y) z)) (rotr ty x (iadd_uextend y z)))
 
-(rule (simplify (rotr ty (rotr ty x y) z))
-      (rotr ty x (iadd ty y z)))
 
+;; Emits an isub for two values. If they have different types
+;; then the smaller type is zero extended to the larger type.
+(decl isub_uextend (Value Value) Value)
+(rule 1 (isub_uextend x @ (value_type ty) y @ (value_type ty))
+      (isub ty x y))
+(rule 2 (isub_uextend x @ (value_type x_ty) y @ (value_type y_ty))
+      (if-let $true (u64_lt (ty_bits_u64 x_ty) (ty_bits_u64 y_ty)))
+      (isub y_ty (uextend y_ty x) y))
+(rule 3 (isub_uextend x @ (value_type x_ty) y @ (value_type y_ty))
+      (if-let $true (u64_lt (ty_bits_u64 y_ty) (ty_bits_u64 x_ty)))
+      (isub x_ty x (uextend x_ty y)))
 
 ;; (rotr (rotl x y) z) == (rotr x (isub y z))
 ;; (rotl (rotr x y) z) == (rotl x (isub y z))
-(rule (simplify (rotr ty (rotl ty x y) z))
-      (rotl ty x (isub ty y z)))
-
-(rule (simplify (rotl ty (rotr ty x y) z))
-      (rotr ty x (isub ty y z)))
+(rule (simplify (rotr ty (rotl ty x y) z)) (rotl ty x (isub_uextend y z)))
+(rule (simplify (rotl ty (rotr ty x y) z)) (rotr ty x (isub_uextend y z)))

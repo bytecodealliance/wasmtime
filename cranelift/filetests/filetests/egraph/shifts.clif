@@ -739,3 +739,28 @@ block0(v0: i8, v1: i8, v2: i8):
 ; check: v5 = isub v1, v2
 ; check: v6 = rotl v0, v5
 ; check: return v6
+
+
+function %rotr_rotr_add_extend(i8, i8, i16) -> i8 {
+block0(v0: i8, v1: i8, v2: i16):
+    v3 = rotr.i8 v0, v1
+    v4 = rotr.i8 v3, v2
+    return v4
+}
+
+; check: v5 = uextend.i16 v1
+; nextln: v6 = iadd v5, v2
+; nextln: v7 = rotr v0, v6
+; check: return v7
+
+function %rotr_rotl_sub_extend(i8, i8, i16) -> i8 {
+block0(v0: i8, v1: i8, v2: i16):
+    v3 = rotr.i8 v0, v1
+    v4 = rotl.i8 v3, v2
+    return v4
+}
+
+; check: v5 = uextend.i16 v1
+; nextln: v6 = isub v5, v2
+; nextln: v7 = rotr v0, v6
+; check: return v7
