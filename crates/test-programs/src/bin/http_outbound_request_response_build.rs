@@ -1,3 +1,4 @@
+use anyhow::Context;
 use test_programs::wasi::http::types as http_types;
 
 fn main() {
@@ -39,5 +40,58 @@ fn main() {
             .blocking_write_and_flush("response-body".as_bytes())
             .unwrap();
     }
+
+    {
+        let req = http_types::OutgoingRequest::new(http_types::Fields::new());
+
+        assert!(matches!(
+            req.set_method(&http_types::Method::Other("invalid method".to_string()))
+                .context("invalid method")
+                .unwrap_err()
+                .downcast::<http_types::ValidationError>(),
+            Ok(http_types::ValidationError::InvalidSyntax)
+        ));
+
+        assert!(matches!(
+            req.set_authority(Some("bad-port:99999"))
+                .context("bad port")
+                .unwrap_err()
+                .downcast::<http_types::ValidationError>(),
+            Ok(http_types::ValidationError::InvalidSyntax)
+        ));
+
+        assert!(matches!(
+            req.set_authority(Some("bad-\nhost"))
+                .context("bad hostname")
+                .unwrap_err()
+                .downcast::<http_types::ValidationError>(),
+            Ok(http_types::ValidationError::InvalidSyntax)
+        ));
+
+        assert!(matches!(
+            req.set_authority(Some("too-many-ports:80:80:80"))
+                .context("too many ports")
+                .unwrap_err()
+                .downcast::<http_types::ValidationError>(),
+            Ok(http_types::ValidationError::InvalidSyntax)
+        ));
+
+        assert!(matches!(
+            req.set_scheme(Some(&http_types::Scheme::Other("bad\nscheme".to_string())))
+                .context("bad scheme")
+                .unwrap_err()
+                .downcast::<http_types::ValidationError>(),
+            Ok(http_types::ValidationError::InvalidSyntax)
+        ));
+
+        assert!(matches!(
+            req.set_path_with_query(Some("/bad\npath"))
+                .context("bad path")
+                .unwrap_err()
+                .downcast::<http_types::ValidationError>(),
+            Ok(http_types::ValidationError::InvalidSyntax)
+        ));
+    }
+
     println!("Done");
 }
