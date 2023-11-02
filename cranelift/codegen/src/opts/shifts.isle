@@ -149,9 +149,9 @@
 ;; This only works if the shift amount remains smaller than the bit
 ;; width of the type.
 ;;
-;; (ishl (ishl x k1) k2) == (ishl x (add k1 k2)) if k1 + k2 < ty_bits
-;; (ushr (ushr x k1) k2) == (ushr x (add k1 k2)) if k1 + k2 < ty_bits
-;; (sshr (sshr x k1) k2) == (sshr x (add k1 k2)) if k1 + k2 < ty_bits
+;; (ishl (ishl x k1) k2) == (ishl x (add k1 k2)) if shift_mask(k1) + shift_mask(k2) < ty_bits
+;; (ushr (ushr x k1) k2) == (ushr x (add k1 k2)) if shift_mask(k1) + shift_mask(k2) < ty_bits
+;; (sshr (sshr x k1) k2) == (sshr x (add k1 k2)) if shift_mask(k1) + shift_mask(k2) < ty_bits
 (rule (simplify (ishl ty
                       (ishl ty x (iconst kty (u64_from_imm64 k1)))
                       (iconst _ (u64_from_imm64 k2))))
@@ -182,8 +182,8 @@
 ;; Simliarly, if the shift amount overflows the type, then we can turn
 ;; it into a 0
 ;;
-;; (ishl (ishl x k1) k2) == 0 if k1 + k2 >= ty_bits
-;; (ushr (ushr x k1) k2) == 0 if k1 + k2 >= ty_bits
+;; (ishl (ishl x k1) k2) == 0 if shift_mask(k1) + shift_mask(k2) >= ty_bits
+;; (ushr (ushr x k1) k2) == 0 if shift_mask(k1) + shift_mask(k2) >= ty_bits
 (rule (simplify (ishl ty
                       (ishl ty x (iconst _ (u64_from_imm64 k1)))
                       (iconst _ (u64_from_imm64 k2))))
