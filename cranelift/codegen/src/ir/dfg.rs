@@ -630,7 +630,7 @@ impl From<ValueData> for ValueDataPacked {
                 Self::make(Self::TAG_ALIAS, ty, 0, original.as_bits())
             }
             ValueData::Union { ty, x, y } => {
-                Self::make(Self::TAG_ALIAS, ty, x.as_bits(), y.as_bits())
+                Self::make(Self::TAG_UNION, ty, x.as_bits(), y.as_bits())
             }
         }
     }

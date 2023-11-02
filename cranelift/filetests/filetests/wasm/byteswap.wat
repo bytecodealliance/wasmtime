@@ -78,7 +78,6 @@
 ;;
 ;;                                 block1:
 ;;                                     v18 = bswap.i32 v0
-;;                                     v19 -> v18
 ;; @0057                               return v18
 ;; }
 ;;
@@ -88,6 +87,5 @@
 ;;
 ;;                                 block1:
 ;;                                     v38 = bswap.i64 v0
-;;                                     v39 -> v38
 ;; @00ad                               return v38
 ;; }

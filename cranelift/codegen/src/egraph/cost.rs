@@ -70,11 +70,13 @@ impl std::ops::Add<Cost> for Cost {
 pub(crate) fn pure_op_cost(op: Opcode) -> Cost {
     match op {
         // Constants.
-        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost(0),
+        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost(1),
+
         // Extends/reduces.
         Opcode::Uextend | Opcode::Sextend | Opcode::Ireduce | Opcode::Iconcat | Opcode::Isplit => {
-            Cost(1)
+            Cost(2)
         }
+
         // "Simple" arithmetic.
         Opcode::Iadd
         | Opcode::Isub
@@ -84,8 +86,9 @@ pub(crate) fn pure_op_cost(op: Opcode) -> Cost {
         | Opcode::Bnot
         | Opcode::Ishl
         | Opcode::Ushr
-        | Opcode::Sshr => Cost(2),
+        | Opcode::Sshr => Cost(3),
+
         // Everything else (pure.)
-        _ => Cost(3),
+        _ => Cost(4),
     }
 }
