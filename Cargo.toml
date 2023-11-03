@@ -343,7 +343,7 @@ component-model = [
   "wasmtime-wast/component-model",
   "wasmtime-cli-flags/component-model"
 ]
-wat = ["dep:wat"]
+wat = ["dep:wat", "wasmtime/wat"]
 cache = ["dep:wasmtime-cache", "wasmtime-cli-flags/cache"]
 parallel-compilation = ["wasmtime-cli-flags/parallel-compilation"]
 logging = ["wasmtime-cli-flags/logging"]
