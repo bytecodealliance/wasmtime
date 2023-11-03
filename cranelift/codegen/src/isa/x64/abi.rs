@@ -33,7 +33,7 @@ pub struct X64ABIMachineSpec;
 impl X64ABIMachineSpec {
     fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
         insts.reserve(probe_count as usize);
-        for i in 0..probe_count {
+        for _ in 0..probe_count {
             // "Allocate" stack space for the probe by decrementing the stack pointer before
             // the write. This is required to make valgrind happy.
             // See: https://github.com/bytecodealliance/wasmtime/issues/7454
