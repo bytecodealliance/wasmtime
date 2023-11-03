@@ -47,9 +47,13 @@ block0:
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
-;   movn x16, #4095 ; str wzr, [sp, x16, SXTX]
-;   movn x16, #8191 ; str wzr, [sp, x16, SXTX]
-;   movn x16, #12287 ; str wzr, [sp, x16, SXTX]
+;   sub sp, sp, #4096
+;   str wzr, [sp]
+;   sub sp, sp, #4096
+;   str wzr, [sp]
+;   sub sp, sp, #4096
+;   str wzr, [sp]
+;   add sp, sp, #12288
 ;   sub sp, sp, #12288
 ; block0:
 ;   mov x0, sp
@@ -61,14 +65,15 @@ block0:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
-;   mov x16, #-0x1000
-;   str wzr, [sp, x16, sxtx]
-;   mov x16, #-0x2000
-;   str wzr, [sp, x16, sxtx]
-;   mov x16, #-0x3000
-;   str wzr, [sp, x16, sxtx]
+;   sub sp, sp, #1, lsl #12
+;   stur wzr, [sp]
+;   sub sp, sp, #1, lsl #12
+;   stur wzr, [sp]
+;   sub sp, sp, #1, lsl #12
+;   stur wzr, [sp]
+;   add sp, sp, #3, lsl #12
 ;   sub sp, sp, #3, lsl #12
-; block1: ; offset 0x24
+; block1: ; offset 0x28
 ;   mov x0, sp
 ;   add sp, sp, #3, lsl #12
 ;   ldp x29, x30, [sp], #0x10
