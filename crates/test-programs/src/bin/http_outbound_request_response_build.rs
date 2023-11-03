@@ -1,4 +1,3 @@
-use anyhow::Context;
 use test_programs::wasi::http::types as http_types;
 
 fn main() {
@@ -44,53 +43,19 @@ fn main() {
     {
         let req = http_types::OutgoingRequest::new(http_types::Fields::new());
 
-        assert!(matches!(
-            req.set_method(&http_types::Method::Other("invalid method".to_string()))
-                .context("invalid method")
-                .unwrap_err()
-                .downcast::<http_types::ValidationError>(),
-            Ok(http_types::ValidationError::InvalidSyntax)
-        ));
+        assert!(req
+            .set_method(&http_types::Method::Other("invalid method".to_string()))
+            .is_err());
 
-        assert!(matches!(
-            req.set_authority(Some("bad-port:99999"))
-                .context("bad port")
-                .unwrap_err()
-                .downcast::<http_types::ValidationError>(),
-            Ok(http_types::ValidationError::InvalidSyntax)
-        ));
+        assert!(req.set_authority(Some("bad-port:99999")).is_err());
+        assert!(req.set_authority(Some("bad-\nhost")).is_err());
+        assert!(req.set_authority(Some("too-many-ports:80:80:80")).is_err());
 
-        assert!(matches!(
-            req.set_authority(Some("bad-\nhost"))
-                .context("bad hostname")
-                .unwrap_err()
-                .downcast::<http_types::ValidationError>(),
-            Ok(http_types::ValidationError::InvalidSyntax)
-        ));
+        assert!(req
+            .set_scheme(Some(&http_types::Scheme::Other("bad\nscheme".to_string())))
+            .is_err());
 
-        assert!(matches!(
-            req.set_authority(Some("too-many-ports:80:80:80"))
-                .context("too many ports")
-                .unwrap_err()
-                .downcast::<http_types::ValidationError>(),
-            Ok(http_types::ValidationError::InvalidSyntax)
-        ));
-
-        assert!(matches!(
-            req.set_scheme(Some(&http_types::Scheme::Other("bad\nscheme".to_string())))
-                .context("bad scheme")
-                .unwrap_err()
-                .downcast::<http_types::ValidationError>(),
-            Ok(http_types::ValidationError::InvalidSyntax)
-        ));
-
-        assert!(matches!(
-            req.set_path_with_query(Some("/bad\npath"))
-                .context("bad path")
-                .unwrap_err()
-                .downcast::<http_types::ValidationError>(),
-            Ok(http_types::ValidationError::InvalidSyntax)
-        ));
+        assert!(req.set_path_with_query(Some("/bad\npath")).is_err());
     }
 
     println!("Done");

@@ -83,22 +83,22 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
     fn from_list(
         &mut self,
         entries: Vec<(String, Vec<u8>)>,
-    ) -> wasmtime::Result<Result<Resource<HostFields>, types::ValidationError>> {
+    ) -> wasmtime::Result<Result<Resource<HostFields>, types::HeaderError>> {
         let mut map = hyper::HeaderMap::new();
 
         for (header, value) in entries {
             let header = match hyper::header::HeaderName::from_bytes(header.as_bytes()) {
                 Ok(header) => header,
-                Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+                Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             };
 
             if is_forbidden_header(self, &header) {
-                return Ok(Err(types::ValidationError::Forbidden));
+                return Ok(Err(types::HeaderError::Forbidden));
             }
 
             let value = match hyper::header::HeaderValue::from_bytes(&value) {
                 Ok(value) => value,
-                Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+                Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             };
 
             map.append(header, value);
@@ -143,21 +143,21 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
         byte_values: Vec<Vec<u8>>,
-    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+    ) -> wasmtime::Result<Result<(), types::HeaderError>> {
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
-            Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+            Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
         if is_forbidden_header(self, &header) {
-            return Ok(Err(types::ValidationError::Forbidden));
+            return Ok(Err(types::HeaderError::Forbidden));
         }
 
         let mut values = Vec::with_capacity(byte_values.len());
         for value in byte_values {
             match hyper::header::HeaderValue::from_bytes(&value) {
                 Ok(value) => values.push(value),
-                Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+                Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             }
         }
 
@@ -187,19 +187,19 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         fields: Resource<HostFields>,
         name: String,
         value: Vec<u8>,
-    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+    ) -> wasmtime::Result<Result<(), types::HeaderError>> {
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
-            Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+            Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
         if is_forbidden_header(self, &header) {
-            return Ok(Err(types::ValidationError::Forbidden));
+            return Ok(Err(types::HeaderError::Forbidden));
         }
 
         let value = match hyper::header::HeaderValue::from_bytes(&value) {
             Ok(value) => value,
-            Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+            Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
         let m = get_fields_mut(self.table(), &fields)
@@ -379,12 +379,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         method: Method,
-    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+    ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table().get_mut(&request)?;
 
         if let Method::Other(s) = &method {
             if let Err(_) = http::Method::from_str(s) {
-                return Ok(Err(types::ValidationError::InvalidSyntax));
+                return Ok(Err(()));
             }
         }
 
@@ -404,12 +404,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         path_with_query: Option<String>,
-    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+    ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table().get_mut(&request)?;
 
         if let Some(s) = path_with_query.as_ref() {
             if let Err(_) = http::uri::PathAndQuery::from_str(s) {
-                return Ok(Err(types::ValidationError::InvalidSyntax));
+                return Ok(Err(()));
             }
         }
 
@@ -429,12 +429,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         scheme: Option<Scheme>,
-    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+    ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table().get_mut(&request)?;
 
         if let Some(types::Scheme::Other(s)) = scheme.as_ref() {
             if let Err(_) = http::uri::Scheme::from_str(s.as_str()) {
-                return Ok(Err(types::ValidationError::InvalidSyntax));
+                return Ok(Err(()));
             }
         }
 
@@ -454,18 +454,18 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
         authority: Option<String>,
-    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+    ) -> wasmtime::Result<Result<(), ()>> {
         let req = self.table().get_mut(&request)?;
 
         if let Some(s) = authority.as_ref() {
             println!("checking authority {s}");
             let auth = match http::uri::Authority::from_str(s.as_str()) {
                 Ok(auth) => auth,
-                Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+                Err(_) => return Ok(Err(())),
             };
 
             if s.contains(':') && auth.port_u16().is_none() {
-                return Ok(Err(types::ValidationError::InvalidSyntax));
+                return Ok(Err(()));
             }
         }
 
@@ -711,12 +711,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
         &mut self,
         id: Resource<HostOutgoingResponse>,
         status: types::StatusCode,
-    ) -> wasmtime::Result<Result<(), types::ValidationError>> {
+    ) -> wasmtime::Result<Result<(), ()>> {
         let resp = self.table().get_mut(&id)?;
 
         match http::StatusCode::from_u16(status) {
             Ok(status) => resp.status = status,
-            Err(_) => return Ok(Err(types::ValidationError::InvalidSyntax)),
+            Err(_) => return Ok(Err(())),
         };
 
         Ok(Ok(()))

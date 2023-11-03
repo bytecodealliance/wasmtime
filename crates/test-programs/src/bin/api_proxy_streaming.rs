@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use bindings::wasi::http::types::{
     Fields, IncomingRequest, IncomingResponse, Method, OutgoingBody, OutgoingRequest,
     OutgoingResponse, ResponseOutparam, Scheme,
@@ -178,11 +178,11 @@ async fn double_echo(
 
     outgoing_request
         .set_method(&Method::Post)
-        .context("method")?;
+        .map_err(|()| anyhow!("failed to set method"))?;
 
     outgoing_request
         .set_path_with_query(Some(url.path()))
-        .context("path_with_query")?;
+        .map_err(|()| anyhow!("failed to set path_with_query"))?;
 
     outgoing_request
         .set_scheme(Some(&match url.scheme() {
@@ -190,7 +190,7 @@ async fn double_echo(
             "https" => Scheme::Https,
             scheme => Scheme::Other(scheme.into()),
         }))
-        .context("scheme")?;
+        .map_err(|()| anyhow!("failed to set scheme"))?;
 
     outgoing_request
         .set_authority(Some(&format!(
@@ -202,7 +202,7 @@ async fn double_echo(
                 String::new()
             }
         )))
-        .context("authority")?;
+        .map_err(|()| anyhow!("failed to set authority"))?;
 
     let mut body = executor::outgoing_body(
         outgoing_request
@@ -266,14 +266,14 @@ async fn hash(url: &Url) -> Result<String> {
 
     request
         .set_path_with_query(Some(url.path()))
-        .context("path_with_query")?;
+        .map_err(|()| anyhow!("failed to set path_with_query"))?;
     request
         .set_scheme(Some(&match url.scheme() {
             "http" => Scheme::Http,
             "https" => Scheme::Https,
             scheme => Scheme::Other(scheme.into()),
         }))
-        .context("scheme")?;
+        .map_err(|()| anyhow!("failed to set scheme"))?;
     request
         .set_authority(Some(&format!(
             "{}{}",
@@ -284,7 +284,7 @@ async fn hash(url: &Url) -> Result<String> {
                 String::new()
             }
         )))
-        .context("authority")?;
+        .map_err(|()| anyhow!("failed to set authority"))?;
 
     let response = executor::outgoing_request_send(request).await?;
 

@@ -37,14 +37,10 @@ interface types {
     unexpected-error(string)
   }
 
-  /// This type enumerates the different kinds of errors that may occur when
-  /// validating arguments to setters.
-  variant validation-error {
-    /// This error indicates that the value given to a setter was syntactically
-    /// invalid.
+  /// This tyep enumerates the different kinds of errors that may occur when
+  /// setting or appending to a `fields` resource.
+  variant header-error {
     invalid-syntax,
-
-    /// This error indicates that a value given to a setter was forbidden.
     forbidden,
   }
 
@@ -79,7 +75,7 @@ interface types {
     /// syntactically invalid, or if a header was forbidden.
     from-list: static func(
       entries: list<tuple<field-key,field-value>>
-    ) -> result<fields, validation-error>;
+    ) -> result<fields, header-error>;
 
     /// Get all of the values corresponding to a key.
     get: func(name: field-key) -> list<field-value>;
@@ -89,7 +85,7 @@ interface types {
     ///
     /// The operation can fail if the name or value arguments are invalid, or if
     /// the name is forbidden.
-    set: func(name: field-key, value: list<field-value>) -> result<_, validation-error>;
+    set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
 
     /// Delete all values for a key. Does nothing if no values for the key
     /// exist.
@@ -100,7 +96,7 @@ interface types {
     ///
     /// The operation can fail if the name or value arguments are invalid, or if
     /// the name is forbidden.
-    append: func(name: field-key, value: field-value) -> result<_, validation-error>;
+    append: func(name: field-key, value: field-value) -> result<_, header-error>;
 
 
     /// Retrieve the full set of keys and values in the Fields. Like the
@@ -177,23 +173,21 @@ interface types {
     /// Get the Method for the Request.
     method: func() -> method;
     /// Set the Method for the Request.
-    set-method: func(method: method) -> result<_, validation-error>;
+    set-method: func(method: method) -> result;
 
     /// Get the combination of the HTTP Path and Query for the Request.
     /// When `none`, this represents an empty Path and empty Query.
     path-with-query: func() -> option<string>;
     /// Set the combination of the HTTP Path and Query for the Request.
     /// When `none`, this represents an empty Path and empty Query.
-    set-path-with-query: func(
-      path-with-query: option<string>
-    ) -> result<_, validation-error>;
+    set-path-with-query: func( path-with-query: option<string>) -> result;
 
     /// Get the HTTP Related Scheme for the Request. When `none`, the
     /// implementation may choose an appropriate default scheme.
     scheme: func() -> option<scheme>;
     /// Set the HTTP Related Scheme for the Request. When `none`, the
     /// implementation may choose an appropriate default scheme.
-    set-scheme: func(scheme: option<scheme>) -> result<_, validation-error>;
+    set-scheme: func(scheme: option<scheme>) -> result;
 
     /// Get the HTTP Authority for the Request. A value of `none` may be used
     /// with Related Schemes which do not require an Authority. The HTTP and
@@ -202,9 +196,7 @@ interface types {
     /// Set the HTTP Authority for the Request. A value of `none` may be used
     /// with Related Schemes which do not require an Authority. The HTTP and
     /// HTTPS schemes always require an authority.
-    set-authority: func(
-      authority: option<string>
-    ) -> result<_, validation-error>;
+    set-authority: func(authority: option<string>) -> result;
 
     /// Get the headers associated with the Request.
     ///
@@ -358,7 +350,7 @@ interface types {
     status-code: func() -> status-code;
 
     /// Set the HTTP Status Code for the Response.
-    set-status-code: func(status-code: status-code) -> result<_, validation-error>;
+    set-status-code: func(status-code: status-code) -> result;
 
     /// Get the headers associated with the Request.
     ///

@@ -1,4 +1,4 @@
-use test_programs::wasi::http::types::{Method, Scheme, ValidationError};
+use test_programs::wasi::http::types::{Method, Scheme};
 
 fn main() {
     let res = test_programs::http::request(
@@ -10,8 +10,5 @@ fn main() {
         None,
     );
 
-    assert!(matches!(
-        res.unwrap_err().downcast(),
-        Ok(ValidationError::InvalidSyntax),
-    ));
+    assert!(res.is_err());
 }

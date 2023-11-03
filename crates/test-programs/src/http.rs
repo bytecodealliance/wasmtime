@@ -1,6 +1,6 @@
 use crate::wasi::http::{outgoing_handler, types as http_types};
 use crate::wasi::io::streams;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use std::fmt;
 
 pub struct Response {
@@ -54,14 +54,18 @@ pub fn request(
 
     let request = http_types::OutgoingRequest::new(headers);
 
-    request.set_method(&method).context("method")?;
-    request.set_scheme(Some(&scheme)).context("scheme")?;
+    request
+        .set_method(&method)
+        .map_err(|()| anyhow!("failed to set method"))?;
+    request
+        .set_scheme(Some(&scheme))
+        .map_err(|()| anyhow!("failed to set scheme"))?;
     request
         .set_authority(Some(authority))
-        .context("authority")?;
+        .map_err(|()| anyhow!("failed to set authority"))?;
     request
         .set_path_with_query(Some(&path_with_query))
-        .context("path_with_query")?;
+        .map_err(|()| anyhow!("failed to set path_with_query"))?;
 
     let outgoing_body = request
         .body()
