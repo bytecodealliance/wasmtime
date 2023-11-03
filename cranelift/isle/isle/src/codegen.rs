@@ -221,6 +221,7 @@ impl<'a> Codegen<'a> {
                type Context;
                type Output;
                fn next(&mut self, ctx: &mut Self::Context) -> Option<Self::Output>;
+               fn size_hint(&self) -> (usize, Option<usize>) {{ (0, None) }}
            }}
 
            pub struct ContextIterWrapper<Item, I: Iterator < Item = Item>, C: Context> {{
@@ -237,6 +238,9 @@ impl<'a> Codegen<'a> {
                type Output = Item;
                fn next(&mut self, _ctx: &mut Self::Context) -> Option<Self::Output> {{
                    self.iter.next()
+               }}
+               fn size_hint(&self) -> (usize, Option<usize>) {{
+                   self.iter.size_hint()
                }}
            }}
            "#,

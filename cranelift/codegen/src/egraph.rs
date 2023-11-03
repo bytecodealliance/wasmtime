@@ -230,6 +230,10 @@ where
             return orig_value;
         }
         isle_ctx.ctx.rewrite_depth += 1;
+        trace!(
+            "Incrementing rewrite depth; now {}",
+            isle_ctx.ctx.rewrite_depth
+        );
 
         // Invoke the ISLE toplevel constructor, getting all new
         // values produced as equivalents to this value.
@@ -237,12 +241,24 @@ where
         isle_ctx.ctx.stats.rewrite_rule_invoked += 1;
         let mut optimized_values =
             crate::opts::generated_code::constructor_simplify(&mut isle_ctx, orig_value);
+        trace!(
+            "  -> returned from ISLE, optimized values's size hint = {:?}",
+            optimized_values.size_hint()
+        );
 
         // Create a union of all new values with the original (or
         // maybe just one new value marked as "subsuming" the
         // original, if present.)
+        let mut i = 0;
         let mut union_value = orig_value;
         while let Some(optimized_value) = optimized_values.next(&mut isle_ctx) {
+            i += 1;
+            const MATCHES_LIMIT: u32 = 5;
+            if i > MATCHES_LIMIT {
+                trace!("Reached maximum matches limit; too many optimized values, ignoring rest.");
+                break;
+            }
+
             trace!(
                 "Returned from ISLE for {}, got {:?}",
                 orig_value,
