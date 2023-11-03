@@ -61,14 +61,12 @@ block0:
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   lui t6,-1
-;   add sp,t6,sp
+;   lui t3,-1
+;   add sp,sp,t3
 ;   sw zero,0(sp)
-;   lui t6,-1
-;   add sp,t6,sp
+;   add sp,sp,t3
 ;   sw zero,0(sp)
-;   lui t6,-1
-;   add sp,t6,sp
+;   add sp,sp,t3
 ;   sw zero,0(sp)
 ;   lui t6,3
 ;   add sp,t6,sp
@@ -89,20 +87,18 @@ block0:
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   lui t6, 0xfffff
-;   add sp, t6, sp
+;   lui t3, 0xfffff
+;   add sp, sp, t3
 ;   sw zero, 0(sp)
-;   lui t6, 0xfffff
-;   add sp, t6, sp
+;   add sp, sp, t3
 ;   sw zero, 0(sp)
-;   lui t6, 0xfffff
-;   add sp, t6, sp
+;   add sp, sp, t3
 ;   sw zero, 0(sp)
 ;   lui t6, 3
 ;   add sp, t6, sp
 ;   lui t6, 0xffffd
 ;   add sp, t6, sp
-; block1: ; offset 0x44
+; block1: ; offset 0x3c
 ;   mv a0, sp
 ;   lui t6, 3
 ;   add sp, t6, sp
