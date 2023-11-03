@@ -76,7 +76,7 @@
 ;; block0:
 ;;   j label1
 ;; block1:
-;;   roriw a0,a0,100
+;;   roriw a0,a0,4
 ;;   ret
 ;;
 ;; function u0:7:
