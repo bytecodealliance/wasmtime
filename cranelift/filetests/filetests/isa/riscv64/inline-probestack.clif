@@ -25,7 +25,7 @@ block0:
 ;   load_addr a0,0(nominal_sp)
 ;   lui t6,1
 ;   addi t6,t6,-2048
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -42,7 +42,7 @@ block0:
 ;   mv a0, sp
 ;   lui t6, 1
 ;   addi t6, t6, -0x800
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -69,13 +69,13 @@ block0:
 ;   add sp,sp,t3
 ;   sw zero,0(sp)
 ;   lui t6,3
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   lui t6,-3
-;   add sp,t6,sp
+;   add sp,sp,t6
 ; block0:
 ;   load_addr a0,0(nominal_sp)
 ;   lui t6,3
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -95,13 +95,13 @@ block0:
 ;   add sp, sp, t3
 ;   sw zero, 0(sp)
 ;   lui t6, 3
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   lui t6, 0xffffd
-;   add sp, t6, sp
+;   add sp, sp, t6
 ; block1: ; offset 0x3c
 ;   mv a0, sp
 ;   lui t6, 3
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -123,12 +123,12 @@ block0:
 ;   inline_stack_probe##guard_size=4096 probe_count=25 tmp=t3
 ;   lui t6,-24
 ;   addi t6,t6,-1696
-;   add sp,t6,sp
+;   add sp,sp,t6
 ; block0:
 ;   load_addr a0,0(nominal_sp)
 ;   lui t6,24
 ;   addi t6,t6,1696
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -149,12 +149,12 @@ block0:
 ;   j -0x10
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6a0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ; block1: ; offset 0x38
 ;   mv a0, sp
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6a0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

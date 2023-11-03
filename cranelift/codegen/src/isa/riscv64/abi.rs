@@ -336,8 +336,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             insts.push(Inst::AluRRR {
                 alu_op: AluOPRRR::Add,
                 rd: writable_stack_reg(),
-                rs1: tmp.to_reg(),
-                rs2: stack_reg(),
+                rs1: stack_reg(),
+                rs2: tmp.to_reg(),
             });
         }
 
