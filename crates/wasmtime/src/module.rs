@@ -1344,3 +1344,27 @@ fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<Modu
     };
     ModuleMemoryImages::new(module.module(), module.code_memory().wasm_data(), mmap)
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{Engine, Module};
+    use wasmtime_environ::MemoryInitialization;
+
+    #[test]
+    fn cow_on_by_default() {
+        let engine = Engine::default();
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (memory 1)
+                    (data (i32.const 100) "abcd")
+                )
+            "#,
+        )
+        .unwrap();
+
+        let init = &module.env_module().memory_initialization;
+        assert!(matches!(init, MemoryInitialization::Static { .. }));
+    }
+}
