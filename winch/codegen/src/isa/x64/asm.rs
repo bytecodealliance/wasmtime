@@ -202,8 +202,14 @@ impl Assembler {
                 // instrunction.
                 let constant_data = pool.get(*c);
                 let data = VCodeConstantData::Pool(*c, constant_data.clone());
+                // If the constaant data is not marked as used, it will be
+                // inserted, therefore, it needs to be registered.
+                let needs_registration = !constants.pool_uses(&data);
                 let constant = constants.insert(VCodeConstantData::Pool(*c, constant_data.clone()));
-                buffer.register_constant(&constant, &data);
+
+                if needs_registration {
+                    buffer.register_constant(&constant, &data);
+                }
                 SyntheticAmode::ConstantOffset(constant)
             }
         }
