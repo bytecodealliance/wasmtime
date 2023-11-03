@@ -15,7 +15,8 @@ use wasmtime::{
 use crate::{
     bad_utf8, handle_result, to_str, translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t,
     wasmtime_caller_t, wasmtime_error_t, wasmtime_instance_pre_t, wasmtime_linker_t,
-    wasmtime_module_t, wasmtime_val_t, wasmtime_val_union, CStoreContextMut, WASMTIME_I32,
+    wasmtime_module_t, wasmtime_val_t, wasmtime_val_union, CStoreContextMut, CallbackDataPtr,
+    WASMTIME_I32,
 };
 
 #[no_mangle]
@@ -89,14 +90,9 @@ impl Future for wasmtime_async_continuation_t {
 
 pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(*mut c_void) -> bool;
 
-struct CallbackData {
-    env: *mut c_void,
-}
-unsafe impl Send for CallbackData {}
-
 async fn invoke_c_async_callback<'a>(
     cb: wasmtime_func_async_callback_t,
-    data: CallbackData,
+    data: CallbackDataPtr,
     mut caller: Caller<'a, crate::StoreData>,
     params: &'a [Val],
     results: &'a mut [Val],
@@ -127,7 +123,7 @@ async fn invoke_c_async_callback<'a>(
         finalizer: None,
     };
     cb(
-        data.env,
+        data.ptr,
         &mut caller,
         params.as_ptr(),
         params.len(),
@@ -171,7 +167,7 @@ unsafe fn c_async_callback_to_rust_fn(
     let foreign = crate::ForeignData { data, finalizer };
     move |caller, params, results| {
         let _ = &foreign; // move entire foreign into this closure
-        let data = CallbackData { env: foreign.data };
+        let data = CallbackDataPtr { ptr: foreign.data };
         Box::new(invoke_c_async_callback(
             callback, data, caller, params, results,
         ))
