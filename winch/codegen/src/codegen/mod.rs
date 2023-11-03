@@ -167,15 +167,19 @@ where
         // `CodeGenContext::reset_stack` only gets called when
         // handling unreachable end or unreachable else, so we only
         // care about freeing any registers in the provided range.
+        let mut bytes_freed = 0;
         context.drop_last(
             context.stack.len() - target_stack_len,
             |regalloc, val| match val {
                 Val::Reg(tr) => regalloc.free(tr.reg),
+                Val::Memory(m) => bytes_freed += m.slot.size,
                 _ => {}
             },
         );
         if masm.sp_offset() > target_sp {
-            masm.free_stack(masm.sp_offset() - target_sp);
+            let bytes = masm.sp_offset() - target_sp;
+            assert!(bytes_freed == bytes);
+            masm.free_stack(bytes);
         }
     }
 
