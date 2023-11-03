@@ -1053,15 +1053,24 @@ fn create_reg_enviroment() -> MachineEnv {
 
 impl Riscv64MachineDeps {
     fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
-        insts.reserve(probe_count as usize);
-        for i in 0..probe_count {
-            let offset = (guard_size * (i + 1)) as i64;
+        // When manually unrolling adjust the stack pointer and then write a zero
+        // to the stack at that offset.
+        //
+        // We do this because valgrind expects us to never write beyond the stack
+        // pointer and associated redzone.
+        // See: https://github.com/bytecodealliance/wasmtime/issues/7454
+        for _ in 0..probe_count {
+            insts.extend(Self::gen_sp_reg_adjust(-(guard_size as i32)));
+
             insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(-offset, I8),
+                StackAMode::SPOffset(0, I8),
                 zero_reg(),
                 I32,
             ));
         }
+
+        // Restore the stack pointer to its original value
+        insts.extend(Self::gen_sp_reg_adjust((guard_size * probe_count) as i32));
     }
 
     fn gen_probestack_loop(
