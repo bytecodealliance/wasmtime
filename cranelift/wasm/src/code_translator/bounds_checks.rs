@@ -62,7 +62,12 @@ where
     let spectre_mitigations_enabled = env.heap_access_spectre_mitigation();
     let pcc = env.proof_carrying_code();
 
-    let make_compare = |builder: &mut FunctionBuilder, compare_kind, lhs, lhs_off, rhs, rhs_off| {
+    let make_compare = |builder: &mut FunctionBuilder,
+                        compare_kind: IntCC,
+                        lhs: ir::Value,
+                        lhs_off: Option<i64>,
+                        rhs: ir::Value,
+                        rhs_off: Option<i64>| {
         let result = builder.ins().icmp(compare_kind, lhs, rhs);
         if pcc {
             // Name the original value as a def of the SSA value;
@@ -76,8 +81,11 @@ where
 
             // Create a fact on the LHS that is a "trivial symbolic
             // fact": v1 has range v1+LHS_off..=v1+LHS_off
-            builder.func.dfg.facts[lhs] =
-                Some(Fact::value_offset(pointer_bit_width, orig_index, lhs_off));
+            builder.func.dfg.facts[lhs] = Some(Fact::value_offset(
+                pointer_bit_width,
+                orig_index,
+                lhs_off.unwrap(),
+            ));
             // If the RHS is a symbolic value (v1 or gv1), we can
             // emit a Compare fact.
             if let Some(rhs) = builder.func.dfg.facts[rhs]
@@ -86,8 +94,8 @@ where
             {
                 builder.func.dfg.facts[result] = Some(Fact::Compare {
                     kind: compare_kind,
-                    lhs: Expr::offset(&Expr::value(orig_index), lhs_off).unwrap(),
-                    rhs: Expr::offset(rhs, rhs_off).unwrap(),
+                    lhs: Expr::offset(&Expr::value(orig_index), lhs_off.unwrap()).unwrap(),
+                    rhs: Expr::offset(rhs, rhs_off.unwrap()).unwrap(),
                 });
             }
             // Likewise, if the RHS is a constant, we can emit a
@@ -98,8 +106,8 @@ where
             {
                 builder.func.dfg.facts[result] = Some(Fact::Compare {
                     kind: compare_kind,
-                    lhs: Expr::offset(&Expr::value(orig_index), lhs_off).unwrap(),
-                    rhs: Expr::constant((k as i64).checked_add(rhs_off).unwrap()),
+                    lhs: Expr::offset(&Expr::value(orig_index), lhs_off.unwrap()).unwrap(),
+                    rhs: Expr::constant((k as i64).checked_add(rhs_off.unwrap()).unwrap()),
                 });
             }
         }
@@ -138,9 +146,9 @@ where
                 builder,
                 IntCC::UnsignedGreaterThanOrEqual,
                 index,
-                0,
+                Some(0),
                 bound,
-                0,
+                Some(0),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
@@ -182,7 +190,14 @@ where
         //    will all emit the same `index > bound` check, which we can GVN.
         HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.offset_guard_size => {
             let bound = get_dynamic_heap_bound(builder, env, heap);
-            let oob = make_compare(builder, IntCC::UnsignedGreaterThan, index, 0, bound, 0);
+            let oob = make_compare(
+                builder,
+                IntCC::UnsignedGreaterThan,
+                index,
+                Some(0),
+                bound,
+                Some(0),
+            );
             Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
                 heap,
@@ -223,9 +238,9 @@ where
                 builder,
                 IntCC::UnsignedGreaterThan,
                 index,
-                0,
+                Some(0),
                 adjusted_bound,
-                adjustment,
+                Some(adjustment),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
@@ -248,6 +263,8 @@ where
         HeapStyle::Dynamic { bound_gv } => {
             let access_size_val = builder
                 .ins()
+                // Explicit cast from u64 to i64: we just want the raw
+                // bits, and iconst takes an `Imm64`.
                 .iconst(env.pointer_type(), offset_and_size as i64);
             if pcc {
                 builder.func.dfg.facts[access_size_val] =
@@ -262,7 +279,7 @@ where
                 builder.func.dfg.facts[adjusted_index] = Some(Fact::value_offset(
                     pointer_bit_width,
                     index,
-                    offset_and_size as i64,
+                    i64::try_from(offset_and_size).unwrap(),
                 ));
             }
             let bound = get_dynamic_heap_bound(builder, env, heap);
@@ -270,9 +287,9 @@ where
                 builder,
                 IntCC::UnsignedGreaterThan,
                 adjusted_index,
-                offset_and_size as i64,
+                i64::try_from(offset_and_size).ok(),
                 bound,
-                0,
+                Some(0),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
@@ -383,9 +400,9 @@ where
                 builder,
                 IntCC::UnsignedGreaterThan,
                 index,
-                0,
+                Some(0),
                 adjusted_bound_value,
-                0,
+                Some(0),
             );
             Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
@@ -495,7 +512,6 @@ fn cast_index_to_pointer_ty(
 /// address computations?
 #[derive(Clone, Copy, Debug)]
 enum AddrPcc {
-    None,
     /// A 32-bit static memory with the given size.
     Static32(ir::MemoryType, u64),
     /// Dynamic bounds-check, with actual memory size (the `GlobalValue`)
@@ -503,23 +519,11 @@ enum AddrPcc {
     Dynamic(ir::MemoryType, ir::GlobalValue),
 }
 impl AddrPcc {
-    fn is_some(&self) -> bool {
-        match self {
-            AddrPcc::None => false,
-            _ => true,
-        }
+    fn static32(memory_type: Option<ir::MemoryType>, size: u64) -> Option<Self> {
+        memory_type.map(|ty| AddrPcc::Static32(ty, size))
     }
-    fn static32(memory_type: Option<ir::MemoryType>, size: u64) -> Self {
-        match memory_type {
-            Some(ty) => AddrPcc::Static32(ty, size),
-            None => AddrPcc::None,
-        }
-    }
-    fn dynamic(memory_type: Option<ir::MemoryType>, bound: ir::GlobalValue) -> Self {
-        match memory_type {
-            Some(ty) => AddrPcc::Dynamic(ty, bound),
-            None => AddrPcc::None,
-        }
+    fn dynamic(memory_type: Option<ir::MemoryType>, bound: ir::GlobalValue) -> Option<Self> {
+        memory_type.map(|ty| AddrPcc::Dynamic(ty, bound))
     }
 }
 
@@ -538,7 +542,7 @@ fn explicit_check_oob_condition_and_compute_addr(
     // Whether Spectre mitigations are enabled for heap accesses.
     spectre_mitigations_enabled: bool,
     // Whether we're emitting PCC facts.
-    pcc: AddrPcc,
+    pcc: Option<AddrPcc>,
     // The `i8` boolean value that is non-zero when the heap access is out of
     // bounds (and therefore we should trap) and is zero when the heap access is
     // in bounds (and therefore we can proceed).
@@ -556,18 +560,18 @@ fn explicit_check_oob_condition_and_compute_addr(
         addr = pos.ins().select_spectre_guard(oob_condition, null, addr);
 
         match pcc {
-            AddrPcc::None => {}
-            AddrPcc::Static32(ty, size) => {
+            None => {}
+            Some(AddrPcc::Static32(ty, size)) => {
                 pos.func.dfg.facts[null] =
                     Some(Fact::constant(u16::try_from(addr_ty.bits()).unwrap(), 0));
                 pos.func.dfg.facts[addr] = Some(Fact::Mem {
                     ty,
                     min_offset: 0,
-                    max_offset: size - u64::from(access_size),
+                    max_offset: size.checked_sub(u64::from(access_size)).unwrap(),
                     nullable: true,
                 });
             }
-            AddrPcc::Dynamic(ty, gv) => {
+            Some(AddrPcc::Dynamic(ty, gv)) => {
                 pos.func.dfg.facts[null] =
                     Some(Fact::constant(u16::try_from(addr_ty.bits()).unwrap(), 0));
                 pos.func.dfg.facts[addr] = Some(Fact::DynamicMem {
@@ -602,15 +606,15 @@ fn compute_addr(
     addr_ty: ir::Type,
     index: ir::Value,
     offset: u32,
-    pcc: AddrPcc,
+    pcc: Option<AddrPcc>,
 ) -> ir::Value {
     debug_assert_eq!(pos.func.dfg.value_type(index), addr_ty);
 
     let heap_base = pos.ins().global_value(addr_ty, heap.base);
 
     match pcc {
-        AddrPcc::None => {}
-        AddrPcc::Static32(ty, _size) => {
+        None => {}
+        Some(AddrPcc::Static32(ty, _size)) => {
             pos.func.dfg.facts[heap_base] = Some(Fact::Mem {
                 ty,
                 min_offset: 0,
@@ -618,7 +622,7 @@ fn compute_addr(
                 nullable: false,
             });
         }
-        AddrPcc::Dynamic(ty, _limit) => {
+        Some(AddrPcc::Dynamic(ty, _limit)) => {
             pos.func.dfg.facts[heap_base] = Some(Fact::dynamic_base_ptr(ty));
         }
     }
@@ -626,8 +630,8 @@ fn compute_addr(
     let base_and_index = pos.ins().iadd(heap_base, index);
 
     match pcc {
-        AddrPcc::None => {}
-        AddrPcc::Static32(ty, _) | AddrPcc::Dynamic(ty, _) => {
+        None => {}
+        Some(AddrPcc::Static32(ty, _) | AddrPcc::Dynamic(ty, _)) => {
             if let Some(idx) = pos.func.dfg.facts[index]
                 .as_ref()
                 .and_then(|f| f.as_symbol())
@@ -669,8 +673,8 @@ fn compute_addr(
         let result = pos.ins().iadd(base_and_index, offset_val);
 
         match pcc {
-            AddrPcc::None => {}
-            AddrPcc::Static32(ty, _) | AddrPcc::Dynamic(ty, _) => {
+            None => {}
+            Some(AddrPcc::Static32(ty, _) | AddrPcc::Dynamic(ty, _)) => {
                 if let Some(idx) = pos.func.dfg.facts[index]
                     .as_ref()
                     .and_then(|f| f.as_symbol())

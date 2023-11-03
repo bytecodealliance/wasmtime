@@ -189,6 +189,18 @@ pub enum Fact {
 
     /// A definition of a value to be used as a symbol in
     /// BaseExprs. There can only be one of these per value number.
+    ///
+    /// Note that this differs from a `DynamicRange` specifying that
+    /// some value in the program is the same as `value`. A `def(v1)`
+    /// fact is propagated to machine code and serves as a source of
+    /// truth: the value or location labeled with this fact *defines*
+    /// what `v1` is, and any `dynamic_range(64, v1, v1)`-labeled
+    /// values elsewhere are claiming to be equal to this value.
+    ///
+    /// This is necessary because we don't propagate SSA value labels
+    /// down to machine code otherwise; so when referring symbolically
+    /// to addresses and expressions derived from addresses, we need
+    /// to introduce the symbol first.
     Def {
         /// The SSA value this value defines.
         value: ir::Value,
@@ -458,7 +470,7 @@ impl fmt::Display for Fact {
                 let nullable_flag = if *nullable { ", nullable" } else { "" };
                 write!(f, "dynamic_mem({ty}, {min}, {max}{nullable_flag})")
             }
-            Fact::Def { value } => write!(f, "value({value})"),
+            Fact::Def { value } => write!(f, "def({value})"),
             Fact::Compare { kind, lhs, rhs } => {
                 write!(f, "compare({kind}, {lhs}, {rhs})")
             }
@@ -491,6 +503,12 @@ impl Fact {
     }
 
     /// Create a fact that specifies the value is exactly an SSA value.
+    ///
+    /// Note that this differs from a `def` fact: it is not *defining*
+    /// a symbol to have the value that this fact is attached to;
+    /// rather it is claiming that this value is the same as whatever
+    /// that symbol is. (In other words, the def should be elsewhere,
+    /// and we are tying ourselves to it.)
     pub fn value(bit_width: u16, value: ir::Value) -> Self {
         Fact::DynamicRange {
             bit_width,
