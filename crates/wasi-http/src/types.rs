@@ -3,7 +3,7 @@
 
 use crate::{
     bindings::http::types::{self, Method, Scheme},
-    body::{HostIncomingBodyBuilder, HyperIncomingBody, HyperOutgoingBody},
+    body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
@@ -36,12 +36,11 @@ pub trait WasiHttpView: Send {
         req: hyper::Request<HyperIncomingBody>,
     ) -> wasmtime::Result<Resource<HostIncomingRequest>> {
         let (parts, body) = req.into_parts();
-        let body = HostIncomingBodyBuilder {
+        let body = HostIncomingBody::new(
             body,
-            worker: None,
             // TODO: this needs to be plumbed through
-            between_bytes_timeout: std::time::Duration::from_millis(600 * 1000),
-        };
+            std::time::Duration::from_millis(600 * 1000),
+        );
         Ok(self.table().push(HostIncomingRequest {
             parts,
             body: Some(body),
@@ -156,8 +155,12 @@ async fn handler(
             .map_err(|_| timeout_error("connection"))??;
 
             let worker = preview2::spawn(async move {
-                let _ = conn.await;
-                Ok::<_, types::Error>(())
+                match conn.await {
+                    Ok(()) => {}
+                    // TODO: shouldn't throw away this error and ideally should
+                    // surface somewhere.
+                    Err(e) => tracing::warn!("dropping error {e}"),
+                }
             });
 
             (sender, worker)
@@ -172,8 +175,11 @@ async fn handler(
         .map_err(|_| timeout_error("connection"))??;
 
         let worker = preview2::spawn(async move {
-            conn.await?;
-            Ok::<_, types::Error>(())
+            match conn.await {
+                Ok(()) => {}
+                // TODO: same as above, shouldn't throw this error away.
+                Err(e) => tracing::warn!("dropping error {e}"),
+            }
         });
 
         (sender, worker)
@@ -257,7 +263,7 @@ impl TryInto<http::Method> for types::Method {
 
 pub struct HostIncomingRequest {
     pub parts: http::request::Parts,
-    pub body: Option<HostIncomingBodyBuilder>,
+    pub body: Option<HostIncomingBody>,
 }
 
 pub struct HostResponseOutparam {
@@ -284,8 +290,8 @@ pub struct HostRequestOptions {
 pub struct HostIncomingResponse {
     pub status: u16,
     pub headers: FieldMap,
-    pub body: Option<HostIncomingBodyBuilder>,
-    pub worker: Arc<AbortOnDropJoinHandle<Result<(), types::Error>>>,
+    pub body: Option<HostIncomingBody>,
+    pub worker: Arc<AbortOnDropJoinHandle<()>>,
 }
 
 pub struct HostOutgoingResponse {
@@ -336,7 +342,7 @@ pub enum HostFields {
 
 pub struct IncomingResponseInternal {
     pub resp: hyper::Response<HyperIncomingBody>,
-    pub worker: Arc<AbortOnDropJoinHandle<Result<(), types::Error>>>,
+    pub worker: Arc<AbortOnDropJoinHandle<()>>,
     pub between_bytes_timeout: std::time::Duration,
 }
 
