@@ -181,6 +181,7 @@
 #define WASMTIME_API_H
 
 #include <wasi.h>
+// IWYU pragma: begin_exports
 #include <wasmtime/config.h>
 #include <wasmtime/engine.h>
 #include <wasmtime/error.h>
@@ -196,6 +197,7 @@
 #include <wasmtime/trap.h>
 #include <wasmtime/val.h>
 #include <wasmtime/async.h>
+// IWYU pragma: end_exports
 
 /**
  * \brief Wasmtime version string.
