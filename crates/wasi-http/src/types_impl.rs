@@ -1,17 +1,16 @@
-use crate::bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers};
-use crate::body::{FinishMessage, HostFutureTrailers, HostFutureTrailersState};
-use crate::types::{HostIncomingRequest, HostOutgoingResponse};
-use crate::WasiHttpView;
 use crate::{
-    body::{HostIncomingBody, HostOutgoingBody},
+    bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers},
+    body::{FinishMessage, HostFutureTrailers, HostIncomingBody, HostOutgoingBody},
     types::{
-        FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingResponse,
-        HostOutgoingRequest, HostResponseOutparam,
+        FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
+        HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
     },
+    WasiHttpView,
 };
 use anyhow::Context;
 use hyper::header::HeaderName;
 use std::any::Any;
+use std::str::FromStr;
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
