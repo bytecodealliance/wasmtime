@@ -1,11 +1,11 @@
 use crate::bindings::http::types::{
     self, Error, HeaderError, Headers, Method, Scheme, StatusCode, Trailers,
 };
-use crate::body::{FinishMessage, HostFutureTrailers, HostFutureTrailersState};
+use crate::body::{FinishMessage, HostFutureTrailers};
 use crate::types::{HostIncomingRequest, HostOutgoingResponse};
 use crate::WasiHttpView;
 use crate::{
-    body::{HostIncomingBody, HostIncomingBodyBuilder, HostOutgoingBody},
+    body::{HostIncomingBody, HostOutgoingBody},
     types::{
         FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingResponse,
         HostOutgoingRequest, HostResponseOutparam,
@@ -13,7 +13,7 @@ use crate::{
 };
 use anyhow::Context;
 use hyper::header::HeaderName;
-use std::{any::Any, sync::Arc};
+use std::any::Any;
 use wasmtime::component::Resource;
 use wasmtime_wasi::preview2::{
     bindings::io::streams::{InputStream, OutputStream},
@@ -307,8 +307,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingRequest for T {
     ) -> wasmtime::Result<Result<Resource<HostIncomingBody>, ()>> {
         let req = self.table().get_mut(&id)?;
         match req.body.take() {
-            Some(builder) => {
-                let id = self.table().push(builder.build())?;
+            Some(body) => {
+                let id = self.table().push(body)?;
                 Ok(Ok(id))
             }
 
@@ -540,8 +540,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingResponse for T {
             .context("[incoming_response_consume] getting response")?;
 
         match r.body.take() {
-            Some(builder) => {
-                let id = self.table().push(builder.build())?;
+            Some(body) => {
+                let id = self.table().push(body)?;
                 Ok(Ok(id))
             }
 
@@ -571,17 +571,17 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureTrailers for T {
         id: Resource<HostFutureTrailers>,
     ) -> wasmtime::Result<Option<Result<Option<Resource<Trailers>>, Error>>> {
         let trailers = self.table().get_mut(&id)?;
-        match &trailers.state {
-            HostFutureTrailersState::Waiting(_) => return Ok(None),
-            HostFutureTrailersState::Done(Err(e)) => return Ok(Some(Err(e.clone()))),
-            HostFutureTrailersState::Done(Ok(None)) => return Ok(Some(Ok(None))),
-            HostFutureTrailersState::Done(Ok(Some(_))) => {}
+        match trailers {
+            HostFutureTrailers::Waiting(_) => return Ok(None),
+            HostFutureTrailers::Done(Err(e)) => return Ok(Some(Err(e.clone()))),
+            HostFutureTrailers::Done(Ok(None)) => return Ok(Some(Ok(None))),
+            HostFutureTrailers::Done(Ok(_)) => {}
         }
 
         fn get_fields(elem: &mut dyn Any) -> &mut FieldMap {
             let trailers = elem.downcast_mut::<HostFutureTrailers>().unwrap();
-            match &mut trailers.state {
-                HostFutureTrailersState::Done(Ok(Some(e))) => e,
+            match trailers {
+                HostFutureTrailers::Done(Ok(Some(e))) => e,
                 _ => unreachable!(),
             }
         }
@@ -605,7 +605,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostIncomingBody for T {
     ) -> wasmtime::Result<Result<Resource<InputStream>, ()>> {
         let body = self.table().get_mut(&id)?;
 
-        if let Some(stream) = body.stream.take() {
+        if let Some(stream) = body.take_stream() {
             let stream = InputStream::Host(Box::new(stream));
             let stream = self.table().push_child(stream, &id)?;
             return Ok(Ok(stream));
@@ -752,10 +752,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
         let resp = self.table().push(HostIncomingResponse {
             status: parts.status.as_u16(),
             headers: FieldMap::from(parts.headers),
-            body: Some(HostIncomingBodyBuilder {
-                body,
-                worker: Some(Arc::clone(&resp.worker)),
-                between_bytes_timeout: resp.between_bytes_timeout,
+            body: Some({
+                let mut body = HostIncomingBody::new(body, resp.between_bytes_timeout);
+                body.retain_worker(&resp.worker);
+                body
             }),
             worker: resp.worker,
         })?;
