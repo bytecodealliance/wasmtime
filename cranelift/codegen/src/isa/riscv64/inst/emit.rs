@@ -345,8 +345,16 @@ impl Inst {
                 rd,
                 rs1,
                 rs2,
-            } if rd.to_reg() == rs1 && rs1 != zero_reg() && rs2 != zero_reg() => {
-                sink.put2(encode_cr_type(CrOp::CAdd, rd, rs2));
+            } if (rd.to_reg() == rs1 || rd.to_reg() == rs2)
+                && rs1 != zero_reg()
+                && rs2 != zero_reg() =>
+            {
+                // Technically `c.add rd, rs` expands to `add rd, rd, rs`, but we can
+                // also swap rs1 with rs2 and we get an equivalent instruction. i.e we
+                // can also compress `add rd, rs, rd` into `c.add rd, rs`.
+                let src = if rd.to_reg() == rs1 { rs2 } else { rs1 };
+
+                sink.put2(encode_cr_type(CrOp::CAdd, rd, src));
             }
 
             // C.MV
