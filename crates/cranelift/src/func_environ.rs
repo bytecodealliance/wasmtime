@@ -232,6 +232,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     ty: vmctx_memtype,
                     min_offset: 0,
                     max_offset: 0,
+                    nullable: false,
                 });
             }
 
@@ -1942,6 +1943,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                             ty: data_mt,
                             min_offset: 0,
                             max_offset: 0,
+                            nullable: false,
                         };
                         // Create a field in the vmctx for the base pointer.
                         match &mut func.memory_types[ptr_memtype] {

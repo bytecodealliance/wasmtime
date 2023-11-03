@@ -167,7 +167,7 @@ pub struct VCode<I: VCodeInst> {
     reftyped_vregs: Vec<VReg>,
 
     /// Constants.
-    constants: VCodeConstants,
+    pub(crate) constants: VCodeConstants,
 
     /// Value labels for debuginfo attached to vregs.
     debug_value_labels: Vec<(VReg, InsnIndex, InsnIndex, u32)>,

@@ -46,6 +46,7 @@ pub(crate) fn check(
     // the `cmp_state` here and perhaps use it below but don't let it
     // remain.
     let cmp_flags = state.cmp_flags.take();
+    trace!(" * with cmp_flags = {cmp_flags:?}");
 
     match vcode[inst_idx] {
         Inst::Args { .. } => {
@@ -102,7 +103,7 @@ pub(crate) fn check(
         } => check_store_addr(ctx, flags, rn, vcode, access_ty),
 
         Inst::AluRRR {
-            alu_op: ALUOp::Add,
+            alu_op: ALUOp::Add | ALUOp::AddS,
             size,
             rd,
             rn,
@@ -116,7 +117,7 @@ pub(crate) fn check(
             )
         }),
         Inst::AluRRImm12 {
-            alu_op: ALUOp::Add,
+            alu_op: ALUOp::Add | ALUOp::AddS,
             size,
             rd,
             rn,
@@ -145,8 +146,26 @@ pub(crate) fn check(
                 ctx.offset(&rn, size.bits().into(), -imm12),
             )
         }),
+        Inst::AluRRR {
+            alu_op: ALUOp::Sub,
+            size,
+            rd,
+            rn,
+            rm,
+        } => check_binop(ctx, vcode, 64, rd, rn, rm, |rn, rm| {
+            if let Some(k) = rm.as_const(64) {
+                clamp_range(
+                    ctx,
+                    64,
+                    size.bits().into(),
+                    ctx.offset(rn, size.bits().into(), -(k as i64)),
+                )
+            } else {
+                clamp_range(ctx, 64, size.bits().into(), None)
+            }
+        }),
         Inst::AluRRRShift {
-            alu_op: ALUOp::Add,
+            alu_op: ALUOp::Add | ALUOp::AddS,
             size,
             rd,
             rn,
@@ -168,7 +187,7 @@ pub(crate) fn check(
             })
         }
         Inst::AluRRRExtend {
-            alu_op: ALUOp::Add,
+            alu_op: ALUOp::Add | ALUOp::AddS,
             size,
             rd,
             rn,
@@ -228,6 +247,17 @@ pub(crate) fn check(
             Ok(())
         }
 
+        Inst::AluRRImmLogic {
+            alu_op: ALUOp::Orr,
+            size,
+            rd,
+            rn,
+            imml,
+        } if rn == zero_reg() => {
+            let constant = imml.value();
+            check_constant(ctx, vcode, rd, size.bits().into(), constant)
+        }
+
         Inst::AluRRR { rd, size, .. }
         | Inst::AluRRImm12 { rd, size, .. }
         | Inst::AluRRRShift { rd, size, .. }
@@ -279,7 +309,9 @@ pub(crate) fn check(
             }
         }
 
-        Inst::CSel { rd, cond, rn, rm } if cond == Cond::Hs && cmp_flags.is_some() => {
+        Inst::CSel { rd, cond, rn, rm }
+            if (cond == Cond::Hs || cond == Cond::Hi) && cmp_flags.is_some() =>
+        {
             let (cmp_lhs, cmp_rhs) = cmp_flags.unwrap();
             trace!("CSel: cmp {cond:?} ({cmp_lhs:?}, {cmp_rhs:?})");
 
@@ -298,13 +330,23 @@ pub(crate) fn check(
                 // the false side we know the inequality is strict, so we
                 // can offset by one.
 
-                // True side: lhs <= rhs, not strict.
+                // True side: lhs >= rhs (Hs) or lhs > rhs (Hi).
                 let rn = get_fact_or_default(vcode, rn, 64);
-                let rn = ctx.apply_inequality(&rn, &cmp_lhs, &cmp_rhs, InequalityKind::Loose);
-                // false side: rhs < lhs, strict.
+                let lhs_kind = match cond {
+                    Cond::Hs => InequalityKind::Loose,
+                    Cond::Hi => InequalityKind::Strict,
+                    _ => unreachable!(),
+                };
+                let rn = ctx.apply_inequality(&rn, &cmp_lhs, &cmp_rhs, lhs_kind);
+                // false side: rhs < lhs (Hs) or rhs <= lhs (Hi).
                 let rm = get_fact_or_default(vcode, rm, 64);
-                let rm = ctx.apply_inequality(&rm, &cmp_rhs, &cmp_lhs, InequalityKind::Strict);
-                let union = Fact::union(&rn, &rm);
+                let rhs_kind = match cond {
+                    Cond::Hs => InequalityKind::Strict,
+                    Cond::Hi => InequalityKind::Loose,
+                    _ => unreachable!(),
+                };
+                let rm = ctx.apply_inequality(&rm, &cmp_rhs, &cmp_lhs, rhs_kind);
+                let union = ctx.union(&rn, &rm);
                 // Union the two facts.
                 clamp_range(ctx, 64, 64, union)
             })
