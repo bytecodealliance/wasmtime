@@ -104,6 +104,7 @@ where
             ControlStackFrame::If {
                 reachable,
                 original_stack_len,
+                original_sp_offset,
                 ..
             } => {
                 if *reachable {
@@ -112,7 +113,12 @@ where
                     // entry, the if-else branch will be reachable.
                     self.context.reachable = true;
                     // Reset the stack to the original length and offset.
-                    Self::reset_stack(&mut self.context, *original_stack_len);
+                    Self::reset_stack(
+                        &mut self.context,
+                        self.masm,
+                        *original_stack_len,
+                        *original_sp_offset,
+                    );
                     frame.bind_else(self.masm, self.context.reachable);
                 }
             }
@@ -127,9 +133,9 @@ where
         if frame.is_next_sequence_reachable() {
             self.context.reachable = true;
 
-            let (value_stack_len, _) = frame.original_stack_len_and_sp_offset();
+            let (value_stack_len, target_sp) = frame.original_stack_len_and_sp_offset();
             // Reset the stack to the original length and offset.
-            Self::reset_stack(&mut self.context, value_stack_len);
+            Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
             // If the current frame is the outermost frame, which corresponds to the
             // current function's body, only bind the exit label as we don't need to
             // push any more values to the value stack, else perform the entire `bind_end`
@@ -145,17 +151,19 @@ where
             // and SP in the expected state.  The compiler can enter
             // in this state through an infinite loop.
             let (value_stack_len, target_sp) = frame.original_stack_len_and_sp_offset();
-            Self::reset_stack(&mut self.context, value_stack_len);
-            if self.masm.sp_offset() > target_sp {
-                self.masm.free_stack(self.masm.sp_offset() - target_sp);
-            }
+            Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
         }
     }
 
     /// Helper function to reset value and stack pointer to the given length and stack pointer
     /// offset respectively. This function is only used when restoring the code generation's
     /// reachabiliy state when handling an unreachable `end` or `else`.
-    pub fn reset_stack(context: &mut CodeGenContext, target_stack_len: usize) {
+    pub fn reset_stack(
+        context: &mut CodeGenContext,
+        masm: &mut M,
+        target_stack_len: usize,
+        target_sp: u32,
+    ) {
         // `CodeGenContext::reset_stack` only gets called when
         // handling unreachable end or unreachable else, so we only
         // care about freeing any registers in the provided range.
@@ -166,6 +174,9 @@ where
                 _ => {}
             },
         );
+        if masm.sp_offset() > target_sp {
+            masm.free_stack(masm.sp_offset() - target_sp);
+        }
     }
 
     fn emit_body(
