@@ -286,3 +286,25 @@
                       (ishl ty x k @ (iconst _ (u64_from_imm64 k1)))))
       (if-let $true (u64_eq k2 (u64_sub (ty_bits_u64 (lane_type ty)) k1)))
       (rotl ty x k))
+
+;; Normalize the shift amount. Some rules can't fire unless the shift amount
+;; is normalized. This also helps us materialize fewer and smaller constants.
+;;
+;; (op x k) == (op x (and k (ty_shift_mask ty)))
+;;
+;; where `op` is one of ishl, ushr, sshr, rotl, rotr
+(rule (simplify (ishl ty x (iconst kty (u64_from_imm64 k))))
+      (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
+      (ishl ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
+(rule (simplify (ushr ty x (iconst kty (u64_from_imm64 k))))
+      (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
+      (ushr ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
+(rule (simplify (sshr ty x (iconst kty (u64_from_imm64 k))))
+      (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
+      (sshr ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
+(rule (simplify (rotr ty x (iconst kty (u64_from_imm64 k))))
+      (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
+      (rotr ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
+(rule (simplify (rotl ty x (iconst kty (u64_from_imm64 k))))
+      (if-let $false (u64_eq k (u64_and k (ty_shift_mask ty))))
+      (rotl ty x (iconst kty (imm64 (u64_and k (ty_shift_mask ty))))))
