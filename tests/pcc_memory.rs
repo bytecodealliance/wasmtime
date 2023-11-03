@@ -34,7 +34,11 @@ fn test_build() {
         for static_memory_maximum_size in [0, 64 * KIB, 1 * MIB, 4 * GIB, 6 * GIB] {
             for guard_size in [0, 64 * KIB, 2 * GIB] {
                 log::trace!("test:\n{}\n", test);
-                log::trace!("static {:x} guard {:x}", static_memory_maximum_size, guard_size);
+                log::trace!(
+                    "static {:x} guard {:x}",
+                    static_memory_maximum_size,
+                    guard_size
+                );
                 let mut cfg = Config::new();
                 cfg.static_memory_maximum_size(static_memory_maximum_size);
                 cfg.static_memory_guard_size(guard_size);
