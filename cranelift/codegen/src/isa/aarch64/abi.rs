@@ -677,43 +677,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
         let probe_count = align_to(frame_size, guard_size) / guard_size;
         if probe_count <= PROBE_MAX_UNROLL {
-            // When manually unrolling stick an instruction that stores 0 at a
-            // constant offset relative to the stack pointer. This will
-            // turn into something like `movn tmp, #n ; stur xzr [sp, tmp]`.
-            //
-            // Note that this may actually store beyond the stack size for the
-            // last item but that's ok since it's unused stack space and if
-            // that faults accidentally we're so close to faulting it shouldn't
-            // make too much difference to fault there.
-            insts.reserve(probe_count as usize);
-            for i in 0..probe_count {
-                let offset = (guard_size * (i + 1)) as i64;
-                insts.push(Self::gen_store_stack(
-                    StackAMode::SPOffset(-offset, I8),
-                    zero_reg(),
-                    I32,
-                ));
-            }
+            Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
-            // The non-unrolled version uses two temporary registers. The
-            // `start` contains the current offset from sp and counts downwards
-            // during the loop by increments of `guard_size`. The `end` is
-            // the size of the frame and where we stop.
-            //
-            // Note that this emission is all post-regalloc so it should be ok
-            // to use the temporary registers here as input/output as the loop
-            // itself is not allowed to use the registers.
-            let start = writable_spilltmp_reg();
-            let end = writable_tmp2_reg();
-            // `gen_inline_probestack` is called after regalloc2, so it's acceptable to reuse
-            // `start` and `end` as temporaries in load_constant.
-            insts.extend(Inst::load_constant(start, 0, &mut |_| start));
-            insts.extend(Inst::load_constant(end, frame_size.into(), &mut |_| end));
-            insts.push(Inst::StackProbeLoop {
-                start,
-                end: end.to_reg(),
-                step: Imm12::maybe_from_u64(guard_size.into()).unwrap(),
-            });
+            Self::gen_probestack_loop(insts, frame_size, guard_size)
         }
     }
 
@@ -1207,6 +1173,50 @@ impl ABIMachineSpec for AArch64MachineDeps {
             outgoing_args_size,
             clobbered_callee_saves: regs,
         }
+    }
+}
+
+impl AArch64MachineDeps {
+    fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
+        // When manually unrolling stick an instruction that stores 0 at a
+        // constant offset relative to the stack pointer. This will
+        // turn into something like `movn tmp, #n ; stur xzr [sp, tmp]`.
+        //
+        // Note that this may actually store beyond the stack size for the
+        // last item but that's ok since it's unused stack space and if
+        // that faults accidentally we're so close to faulting it shouldn't
+        // make too much difference to fault there.
+        insts.reserve(probe_count as usize);
+        for i in 0..probe_count {
+            let offset = (guard_size * (i + 1)) as i64;
+            insts.push(Self::gen_store_stack(
+                StackAMode::SPOffset(-offset, I8),
+                zero_reg(),
+                I32,
+            ));
+        }
+    }
+
+    fn gen_probestack_loop(insts: &mut SmallInstVec<Inst>, frame_size: u32, guard_size: u32) {
+        // The non-unrolled version uses two temporary registers. The
+        // `start` contains the current offset from sp and counts downwards
+        // during the loop by increments of `guard_size`. The `end` is
+        // the size of the frame and where we stop.
+        //
+        // Note that this emission is all post-regalloc so it should be ok
+        // to use the temporary registers here as input/output as the loop
+        // itself is not allowed to use the registers.
+        let start = writable_spilltmp_reg();
+        let end = writable_tmp2_reg();
+        // `gen_inline_probestack` is called after regalloc2, so it's acceptable to reuse
+        // `start` and `end` as temporaries in load_constant.
+        insts.extend(Inst::load_constant(start, 0, &mut |_| start));
+        insts.extend(Inst::load_constant(end, frame_size.into(), &mut |_| end));
+        insts.push(Inst::StackProbeLoop {
+            start,
+            end: end.to_reg(),
+            step: Imm12::maybe_from_u64(guard_size.into()).unwrap(),
+        });
     }
 }
 
