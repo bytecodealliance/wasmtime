@@ -172,6 +172,27 @@ fn enc_conditional_br(
     }
 }
 
+fn enc_test_bit_and_branch(
+    kind: TestBitAndBranchKind,
+    taken: BranchTarget,
+    reg: Reg,
+    bit: u8,
+) -> u32 {
+    assert!(bit < 64);
+    let op_31 = u32::from(bit >> 5);
+    let op_23_19 = u32::from(bit & 0b11111);
+    let op_30_24 = 0b0110110
+        | match kind {
+            TestBitAndBranchKind::Z => 0,
+            TestBitAndBranchKind::NZ => 1,
+        };
+    (op_31 << 31)
+        | (op_30_24 << 24)
+        | (op_23_19 << 19)
+        | (taken.as_offset14_or_zero() << 5)
+        | machreg_to_gpr(reg)
+}
+
 fn enc_move_wide(op: MoveWideOp, rd: Writable<Reg>, imm: MoveWideConst, size: OperandSize) -> u32 {
     assert!(imm.shift <= 0b11);
     let op = match op {
@@ -3215,6 +3236,32 @@ impl MachInstEmit for Inst {
                     sink.add_cond_branch(cond_off, cond_off + 4, l, &inverted[..]);
                 }
                 sink.put4(enc_conditional_br(taken, kind, &mut allocs));
+
+                // Unconditional part next.
+                let uncond_off = sink.cur_offset();
+                if let Some(l) = not_taken.as_label() {
+                    sink.use_label_at_offset(uncond_off, l, LabelUse::Branch26);
+                    sink.add_uncond_branch(uncond_off, uncond_off + 4, l);
+                }
+                sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
+            }
+            &Inst::TestBitAndBranch {
+                taken,
+                not_taken,
+                kind,
+                rn,
+                bit,
+            } => {
+                let rn = allocs.next(rn);
+                // Emit the conditional branch first
+                let cond_off = sink.cur_offset();
+                if let Some(l) = taken.as_label() {
+                    sink.use_label_at_offset(cond_off, l, LabelUse::Branch14);
+                    let inverted =
+                        enc_test_bit_and_branch(kind.complement(), taken, rn, bit).to_le_bytes();
+                    sink.add_cond_branch(cond_off, cond_off + 4, l, &inverted[..]);
+                }
+                sink.put4(enc_test_bit_and_branch(kind, taken, rn, bit));
 
                 // Unconditional part next.
                 let uncond_off = sink.cur_offset();

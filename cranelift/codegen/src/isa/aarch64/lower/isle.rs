@@ -812,4 +812,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     fn uimm12_scaled_from_i64(&mut self, val: i64, ty: Type) -> Option<UImm12Scaled> {
         UImm12Scaled::maybe_from_i64(val, ty)
     }
+
+    fn test_and_compare_bit_const(&mut self, ty: Type, n: u64) -> Option<u8> {
+        if n.count_ones() != 1 {
+            return None;
+        }
+        let bit = n.trailing_zeros();
+        if bit >= ty.bits() {
+            return None;
+        }
+        Some(bit as u8)
+    }
 }

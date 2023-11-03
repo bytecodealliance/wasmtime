@@ -833,6 +833,15 @@
         (not_taken BranchTarget)
         (kind CondBrKind))
 
+       ;; A conditional branch which tests the `bit` of `rn` and branches
+       ;; depending on `kind`.
+       (TestBitAndBranch
+        (kind TestBitAndBranchKind)
+        (taken BranchTarget)
+        (not_taken BranchTarget)
+        (rn Reg)
+        (bit u8))
+
        ;; A conditional trap: execute a `udf` if the condition is true. This is
        ;; one VCode instruction because it uses embedded control flow; it is
        ;; logically a single-in, single-out region, but needs to appear as one
@@ -1202,6 +1211,8 @@
 (type OperandSize extern
       (enum Size32
             Size64))
+
+(type TestBitAndBranchKind (enum (Z) (NZ)))
 
 ;; Helper for calculating the `OperandSize` corresponding to a type
 (decl operand_size (Type) OperandSize)
@@ -4078,6 +4089,21 @@
 (rule (cond_br taken not_taken kind)
       (ConsumesFlags.ConsumesFlagsSideEffect
        (MInst.CondBr taken not_taken kind)))
+
+;; Helper for emitting `MInst.TestBitAndBranch` instructions.
+(decl test_branch (TestBitAndBranchKind BranchTarget BranchTarget Reg u8) SideEffectNoResult)
+(rule (test_branch kind taken not_taken rn bit)
+      (SideEffectNoResult.Inst (MInst.TestBitAndBranch kind taken not_taken rn bit)))
+
+;; Helper for emitting `tbnz` instructions.
+(decl tbnz (BranchTarget BranchTarget Reg u8) SideEffectNoResult)
+(rule (tbnz taken not_taken rn bit)
+      (test_branch (TestBitAndBranchKind.NZ) taken not_taken rn bit))
+
+;; Helper for emitting `tbz` instructions.
+(decl tbz (BranchTarget BranchTarget Reg u8) SideEffectNoResult)
+(rule (tbz taken not_taken rn bit)
+      (test_branch (TestBitAndBranchKind.Z) taken not_taken rn bit))
 
 ;; Helper for emitting `MInst.MovToNZCV` instructions.
 (decl mov_to_nzcv (Reg) ProducesFlags)
