@@ -148,17 +148,9 @@ interface types {
   /// Represents an outgoing HTTP Request.
   resource outgoing-request {
 
-    /// Construct a new `outgoing-request`.
+    /// Construct a new `outgoing-request` with a default `method` of `GET`, and
+    /// default values for `path-with-query`, `scheme`, and `authority.
     ///
-    /// * `method` represents the HTTP Method for the Request.
-    /// * `path-with-query` is the combination of the HTTP Path and Query for
-    ///    the Request. When `none`, this represents an empty Path and empty
-    ///    Query.
-    /// * `scheme` is the HTTP Related Scheme for the Request. When `none`,
-    ///    the implementation may choose an appropriate default scheme.
-    /// * `authority` is the HTTP Authority for the Request. A value of `none`
-    ///    may be used with Related Schemes which do not require an Authority.
-    ///    The HTTP and HTTPS schemes always require an authority.
     /// * `headers` is the HTTP Headers for the Request.
     ///
     /// It is possible to construct, or manipulate with the accessor functions
@@ -167,10 +159,6 @@ interface types {
     /// It is the obligation of the `outgoing-handler.handle` implementation
     /// to reject invalid constructions of `outgoing-request`.
     constructor(
-      method: method,
-      path-with-query: option<string>,
-      scheme: option<scheme>,
-      authority: option<string>,
       headers: headers
     );
 
@@ -184,22 +172,25 @@ interface types {
 
     /// Get the Method for the Request.
     method: func() -> method;
-    /// Set the Method for the Request.
-    set-method: func(method: method);
+    /// Set the Method for the Request. Fails if the string present in a
+    /// `method.other` argument is not a syntactically valid method.
+    set-method: func(method: method) -> result;
 
     /// Get the combination of the HTTP Path and Query for the Request.
     /// When `none`, this represents an empty Path and empty Query.
     path-with-query: func() -> option<string>;
     /// Set the combination of the HTTP Path and Query for the Request.
-    /// When `none`, this represents an empty Path and empty Query.
-    set-path-with-query: func(path-with-query: option<string>);
+    /// When `none`, this represents an empty Path and empty Query. Fails is the
+    /// string given is not a syntactically valid path and query uri component.
+    set-path-with-query: func(path-with-query: option<string>) -> result;
 
     /// Get the HTTP Related Scheme for the Request. When `none`, the
     /// implementation may choose an appropriate default scheme.
     scheme: func() -> option<scheme>;
     /// Set the HTTP Related Scheme for the Request. When `none`, the
-    /// implementation may choose an appropriate default scheme.
-    set-scheme: func(scheme: option<scheme>);
+    /// implementation may choose an appropriate default scheme. Fails if the
+    /// string given is not a syntactically valid uri scheme.
+    set-scheme: func(scheme: option<scheme>) -> result;
 
     /// Get the HTTP Authority for the Request. A value of `none` may be used
     /// with Related Schemes which do not require an Authority. The HTTP and
@@ -207,8 +198,9 @@ interface types {
     authority: func() -> option<string>;
     /// Set the HTTP Authority for the Request. A value of `none` may be used
     /// with Related Schemes which do not require an Authority. The HTTP and
-    /// HTTPS schemes always require an authority.
-    set-authority: func(authority: option<string>);
+    /// HTTPS schemes always require an authority. Fails if the string given is
+    /// not a syntactically valid uri authority.
+    set-authority: func(authority: option<string>) -> result;
 
     /// Get the headers associated with the Request.
     ///
@@ -361,8 +353,9 @@ interface types {
     /// Get the HTTP Status Code for the Response.
     status-code: func() -> status-code;
 
-    /// Set the HTTP Status Code for the Response.
-    set-status-code: func(status-code: status-code) -> result<_, error>;
+    /// Set the HTTP Status Code for the Response. Fails if the status-code
+    /// given is not a valid http status code.
+    set-status-code: func(status-code: status-code) -> result;
 
     /// Get the headers associated with the Request.
     ///

@@ -52,13 +52,20 @@ pub fn request(
         .concat(),
     )?;
 
-    let request = http_types::OutgoingRequest::new(
-        &method,
-        Some(path_with_query),
-        Some(&scheme),
-        Some(authority),
-        headers,
-    );
+    let request = http_types::OutgoingRequest::new(headers);
+
+    request
+        .set_method(&method)
+        .map_err(|()| anyhow!("failed to set method"))?;
+    request
+        .set_scheme(Some(&scheme))
+        .map_err(|()| anyhow!("failed to set scheme"))?;
+    request
+        .set_authority(Some(authority))
+        .map_err(|()| anyhow!("failed to set authority"))?;
+    request
+        .set_path_with_query(Some(&path_with_query))
+        .map_err(|()| anyhow!("failed to set path_with_query"))?;
 
     let outgoing_body = request
         .body()

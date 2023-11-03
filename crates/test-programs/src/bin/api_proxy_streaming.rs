@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use bindings::wasi::http::types::{
     Fields, IncomingRequest, IncomingResponse, Method, OutgoingBody, OutgoingRequest,
     OutgoingResponse, ResponseOutparam, Scheme,
@@ -174,15 +174,26 @@ async fn double_echo(
     incoming_request: IncomingRequest,
     url: &Url,
 ) -> Result<(impl Future<Output = Result<()>>, IncomingResponse)> {
-    let outgoing_request = OutgoingRequest::new(
-        &Method::Post,
-        Some(url.path()),
-        Some(&match url.scheme() {
+    let outgoing_request = OutgoingRequest::new(Fields::new());
+
+    outgoing_request
+        .set_method(&Method::Post)
+        .map_err(|()| anyhow!("failed to set method"))?;
+
+    outgoing_request
+        .set_path_with_query(Some(url.path()))
+        .map_err(|()| anyhow!("failed to set path_with_query"))?;
+
+    outgoing_request
+        .set_scheme(Some(&match url.scheme() {
             "http" => Scheme::Http,
             "https" => Scheme::Https,
             scheme => Scheme::Other(scheme.into()),
-        }),
-        Some(&format!(
+        }))
+        .map_err(|()| anyhow!("failed to set scheme"))?;
+
+    outgoing_request
+        .set_authority(Some(&format!(
             "{}{}",
             url.host_str().unwrap_or(""),
             if let Some(port) = url.port() {
@@ -190,9 +201,8 @@ async fn double_echo(
             } else {
                 String::new()
             }
-        )),
-        Fields::new(),
-    );
+        )))
+        .map_err(|()| anyhow!("failed to set authority"))?;
 
     let mut body = executor::outgoing_body(
         outgoing_request
@@ -252,15 +262,20 @@ fn respond(status: u16, response_out: ResponseOutparam) {
 }
 
 async fn hash(url: &Url) -> Result<String> {
-    let request = OutgoingRequest::new(
-        &Method::Get,
-        Some(url.path()),
-        Some(&match url.scheme() {
+    let request = OutgoingRequest::new(Fields::new());
+
+    request
+        .set_path_with_query(Some(url.path()))
+        .map_err(|()| anyhow!("failed to set path_with_query"))?;
+    request
+        .set_scheme(Some(&match url.scheme() {
             "http" => Scheme::Http,
             "https" => Scheme::Https,
             scheme => Scheme::Other(scheme.into()),
-        }),
-        Some(&format!(
+        }))
+        .map_err(|()| anyhow!("failed to set scheme"))?;
+    request
+        .set_authority(Some(&format!(
             "{}{}",
             url.host_str().unwrap_or(""),
             if let Some(port) = url.port() {
@@ -268,9 +283,8 @@ async fn hash(url: &Url) -> Result<String> {
             } else {
                 String::new()
             }
-        )),
-        Fields::new(),
-    );
+        )))
+        .map_err(|()| anyhow!("failed to set authority"))?;
 
     let response = executor::outgoing_request_send(request).await?;
 
