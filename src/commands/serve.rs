@@ -373,12 +373,16 @@ impl hyper::service::Service<Request> for ProxyHandler {
                 wasmtime_wasi_http::proxy::Proxy::instantiate_pre(&mut store, &inner.instance_pre)
                     .await?;
 
-            proxy
+            if let Err(e) = proxy
                 .wasi_http_incoming_handler()
                 .call_handle(store, req, out)
-                .await?;
+                .await
+            {
+                log::error!("[{req_id}] :: {:#?}", e);
+                return Err(e);
+            }
 
-            Ok::<_, anyhow::Error>(())
+            Ok(())
         });
 
         Box::pin(async move {
