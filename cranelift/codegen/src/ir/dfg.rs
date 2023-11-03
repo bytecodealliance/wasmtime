@@ -554,7 +554,7 @@ fn encode_narrow_field(x: u32, bits: u8) -> u32 {
     if x == 0xffff_ffff {
         (1 << bits) - 1
     } else {
-        debug_assert!(x < (1 << bits));
+        debug_assert!(x < (1 << bits), "{x} does not fit into {bits} bits");
         x
     }
 }
