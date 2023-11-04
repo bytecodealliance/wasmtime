@@ -200,11 +200,11 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *
  */
 WASM_API_EXTERN void wasmtime_context_set_epoch_deadline(wasmtime_context_t *context, uint64_t ticks_beyond_current);
 
-// \brief An enum for the behavior before extending the epoch deadline.
+/// \brief An enum for the behavior before extending the epoch deadline.
 typedef uint8_t wasmtime_update_deadline_kind_t;
-// \brief Directly continue to updating the deadline and executing WebAssembly.
+/// \brief Directly continue to updating the deadline and executing WebAssembly.
 #define WASMTIME_UPDATE_DEADLINE_CONTINUE 0
-// \brief Yield control (via async support) then update the deadline.
+/// \brief Yield control (via async support) then update the deadline.
 #define WASMTIME_UPDATE_DEADLINE_YIELD    1
 
 /**
