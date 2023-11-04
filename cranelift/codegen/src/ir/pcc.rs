@@ -47,6 +47,10 @@
 //!
 //! TODO:
 //!
+//! Deployment:
+//! - Add to fuzzing
+//! - Turn on during wasm spec-tests
+//!
 //! More checks:
 //! - Check that facts on `vmctx` GVs are subsumed by the actual facts
 //!   on the vmctx arg in block0 (function arg).
@@ -165,6 +169,8 @@ pub enum Fact {
         min_offset: u64,
         /// The maximum offset into the memory type, inclusive.
         max_offset: u64,
+        /// This pointer can also be null.
+        nullable: bool,
     },
 
     /// A pointer to a memory type, dynamically bounded. The pointer
@@ -181,15 +187,34 @@ pub enum Fact {
         nullable: bool,
     },
 
+    /// A definition of a value to be used as a symbol in
+    /// BaseExprs. There can only be one of these per value number.
+    ///
+    /// Note that this differs from a `DynamicRange` specifying that
+    /// some value in the program is the same as `value`. A `def(v1)`
+    /// fact is propagated to machine code and serves as a source of
+    /// truth: the value or location labeled with this fact *defines*
+    /// what `v1` is, and any `dynamic_range(64, v1, v1)`-labeled
+    /// values elsewhere are claiming to be equal to this value.
+    ///
+    /// This is necessary because we don't propagate SSA value labels
+    /// down to machine code otherwise; so when referring symbolically
+    /// to addresses and expressions derived from addresses, we need
+    /// to introduce the symbol first.
+    Def {
+        /// The SSA value this value defines.
+        value: ir::Value,
+    },
+
     /// A comparison result between two dynamic values with a
     /// comparison of a certain kind.
     Compare {
         /// The kind of comparison.
         kind: ir::condcodes::IntCC,
         /// The left-hand side of the comparison.
-        lhs: BaseExpr,
+        lhs: Expr,
         /// The right-hand side of the comparison.
-        rhs: BaseExpr,
+        rhs: Expr,
     },
 
     /// A "conflict fact": this fact results from merging two other
@@ -263,6 +288,30 @@ impl BaseExpr {
 }
 
 impl Expr {
+    /// Constant value.
+    pub fn constant(offset: i64) -> Self {
+        Expr {
+            base: BaseExpr::None,
+            offset,
+        }
+    }
+
+    /// The value of an SSA value.
+    pub fn value(value: ir::Value) -> Self {
+        Expr {
+            base: BaseExpr::Value(value),
+            offset: 0,
+        }
+    }
+
+    /// The value of a global value.
+    pub fn global_value(gv: ir::GlobalValue) -> Self {
+        Expr {
+            base: BaseExpr::GlobalValue(gv),
+            offset: 0,
+        }
+    }
+
     /// Is one expression definitely less than or equal to another?
     /// (We can't always know; in such cases, returns `false`.)
     fn le(lhs: &Expr, rhs: &Expr) -> bool {
@@ -329,12 +378,21 @@ impl Expr {
     }
 
     /// Add a static offset to an expression.
-    fn offset(lhs: &Expr, rhs: i64) -> Option<Expr> {
+    pub fn offset(lhs: &Expr, rhs: i64) -> Option<Expr> {
         let offset = lhs.offset.checked_add(rhs)?;
         Some(Expr {
             base: lhs.base.clone(),
             offset,
         })
+    }
+
+    /// Is this Expr a BaseExpr with no offset? Return it if so.
+    pub fn without_offset(&self) -> Option<&BaseExpr> {
+        if self.offset == 0 {
+            Some(&self.base)
+        } else {
+            None
+        }
     }
 }
 
@@ -395,7 +453,14 @@ impl fmt::Display for Fact {
                 ty,
                 min_offset,
                 max_offset,
-            } => write!(f, "mem({ty}, {min_offset:#x}, {max_offset:#x})"),
+                nullable,
+            } => {
+                let nullable_flag = if *nullable { ", nullable" } else { "" };
+                write!(
+                    f,
+                    "mem({ty}, {min_offset:#x}, {max_offset:#x}{nullable_flag})"
+                )
+            }
             Fact::DynamicMem {
                 ty,
                 min,
@@ -405,6 +470,7 @@ impl fmt::Display for Fact {
                 let nullable_flag = if *nullable { ", nullable" } else { "" };
                 write!(f, "dynamic_mem({ty}, {min}, {max}{nullable_flag})")
             }
+            Fact::Def { value } => write!(f, "def({value})"),
             Fact::Compare { kind, lhs, rhs } => {
                 write!(f, "compare({kind}, {lhs}, {rhs})")
             }
@@ -423,6 +489,58 @@ impl Fact {
             bit_width,
             min: value,
             max: value,
+        }
+    }
+
+    /// Create a dynamic range fact that points to the base of a dynamic memory.
+    pub fn dynamic_base_ptr(ty: ir::MemoryType) -> Self {
+        Fact::DynamicMem {
+            ty,
+            min: Expr::constant(0),
+            max: Expr::constant(0),
+            nullable: false,
+        }
+    }
+
+    /// Create a fact that specifies the value is exactly an SSA value.
+    ///
+    /// Note that this differs from a `def` fact: it is not *defining*
+    /// a symbol to have the value that this fact is attached to;
+    /// rather it is claiming that this value is the same as whatever
+    /// that symbol is. (In other words, the def should be elsewhere,
+    /// and we are tying ourselves to it.)
+    pub fn value(bit_width: u16, value: ir::Value) -> Self {
+        Fact::DynamicRange {
+            bit_width,
+            min: Expr::value(value),
+            max: Expr::value(value),
+        }
+    }
+
+    /// Create a fact that specifies the value is exactly an SSA value plus some offset.
+    pub fn value_offset(bit_width: u16, value: ir::Value, offset: i64) -> Self {
+        Fact::DynamicRange {
+            bit_width,
+            min: Expr::offset(&Expr::value(value), offset).unwrap(),
+            max: Expr::offset(&Expr::value(value), offset).unwrap(),
+        }
+    }
+
+    /// Create a fact that specifies the value is exactly the value of a GV.
+    pub fn global_value(bit_width: u16, gv: ir::GlobalValue) -> Self {
+        Fact::DynamicRange {
+            bit_width,
+            min: Expr::global_value(gv),
+            max: Expr::global_value(gv),
+        }
+    }
+
+    /// Create a fact that specifies the value is exactly the value of a GV plus some offset.
+    pub fn global_value_offset(bit_width: u16, gv: ir::GlobalValue, offset: i64) -> Self {
+        Fact::DynamicRange {
+            bit_width,
+            min: Expr::offset(&Expr::global_value(gv), offset).unwrap(),
+            max: Expr::offset(&Expr::global_value(gv), offset).unwrap(),
         }
     }
 
@@ -505,6 +623,14 @@ impl Fact {
         }
     }
 
+    /// Is this fact a single-value range with a symbolic Expr?
+    pub fn as_symbol(&self) -> Option<&Expr> {
+        match self {
+            Fact::DynamicRange { min, max, .. } if min == max => Some(min),
+            _ => None,
+        }
+    }
+
     /// Merge two facts. We take the *intersection*: that is, we know
     /// both facts to be true, so we can intersect ranges. (This
     /// differs from the usual static analysis approach, where we are
@@ -553,11 +679,13 @@ impl Fact {
                     ty: ty_lhs,
                     min_offset: min_offset_lhs,
                     max_offset: max_offset_lhs,
+                    nullable: nullable_lhs,
                 },
                 Fact::Mem {
                     ty: ty_rhs,
                     min_offset: min_offset_rhs,
                     max_offset: max_offset_rhs,
+                    nullable: nullable_rhs,
                 },
             ) if ty_lhs == ty_rhs
                 && max_offset_lhs >= min_offset_rhs
@@ -567,6 +695,7 @@ impl Fact {
                     ty: *ty_lhs,
                     min_offset: std::cmp::max(*min_offset_lhs, *min_offset_rhs),
                     max_offset: std::cmp::min(*max_offset_lhs, *max_offset_rhs),
+                    nullable: *nullable_lhs && *nullable_rhs,
                 }
             }
 
@@ -593,43 +722,6 @@ impl Fact {
             }
 
             _ => Fact::Conflict,
-        }
-    }
-
-    /// Compute the union of two facts, if possible.
-    pub fn union(lhs: &Fact, rhs: &Fact) -> Option<Fact> {
-        match (lhs, rhs) {
-            (lhs, rhs) if lhs == rhs => Some(lhs.clone()),
-
-            (
-                Fact::DynamicMem {
-                    ty: ty_lhs,
-                    min: min_lhs,
-                    max: max_lhs,
-                    nullable: nullable_lhs,
-                },
-                Fact::DynamicMem {
-                    ty: ty_rhs,
-                    min: min_rhs,
-                    max: max_rhs,
-                    nullable: nullable_rhs,
-                },
-            ) if ty_lhs == ty_rhs => Some(Fact::DynamicMem {
-                ty: *ty_lhs,
-                min: Expr::min(min_lhs, min_rhs),
-                max: Expr::max(max_lhs, max_rhs),
-                nullable: *nullable_lhs || *nullable_rhs,
-            }),
-
-            _ => None,
-        }
-    }
-
-    /// Is this fact a single-value range with a symbolic Expr?
-    fn as_symbol(&self) -> Option<&Expr> {
-        match self {
-            Fact::DynamicRange { min, max, .. } if min == max => Some(min),
-            _ => None,
         }
     }
 }
@@ -730,16 +822,19 @@ impl<'a> FactContext<'a> {
                     ty: ty_lhs,
                     min_offset: min_offset_lhs,
                     max_offset: max_offset_lhs,
+                    nullable: nullable_lhs,
                 },
                 Fact::Mem {
                     ty: ty_rhs,
                     min_offset: min_offset_rhs,
                     max_offset: max_offset_rhs,
+                    nullable: nullable_rhs,
                 },
             ) => {
                 ty_lhs == ty_rhs
                     && max_offset_lhs <= max_offset_rhs
                     && min_offset_lhs >= min_offset_rhs
+                    && (*nullable_lhs || !*nullable_rhs)
             }
 
             (
@@ -771,6 +866,12 @@ impl<'a> FactContext<'a> {
                 },
                 Fact::DynamicMem { nullable: true, .. },
             ) if *bit_width == self.pointer_width => true,
+
+            // Any fact subsumes a Def, because the Def makes no
+            // claims about the actual value (it ties a symbol to that
+            // value, but the value is fed to the symbol, not the
+            // other way around).
+            (_, Fact::Def { .. }) => true,
 
             _ => false,
         }
@@ -827,6 +928,7 @@ impl<'a> FactContext<'a> {
                     ty,
                     min_offset,
                     max_offset,
+                    nullable,
                 },
             )
             | (
@@ -834,19 +936,24 @@ impl<'a> FactContext<'a> {
                     ty,
                     min_offset,
                     max_offset,
+                    nullable,
                 },
                 Fact::Range {
                     bit_width: bw_max,
                     min,
                     max,
                 },
-            ) if *bw_max >= self.pointer_width && add_width >= *bw_max => {
+            ) if *bw_max >= self.pointer_width
+                && add_width >= *bw_max
+                && (!*nullable || *max == 0) =>
+            {
                 let min_offset = min_offset.checked_add(*min)?;
                 let max_offset = max_offset.checked_add(*max)?;
                 Some(Fact::Mem {
                     ty: *ty,
                     min_offset,
                     max_offset,
+                    nullable: false,
                 })
             }
 
@@ -888,7 +995,7 @@ impl<'a> FactContext<'a> {
                     ty,
                     min: min_mem,
                     max: max_mem,
-                    nullable,
+                    nullable: false,
                 },
                 Fact::DynamicRange {
                     bit_width,
@@ -906,7 +1013,7 @@ impl<'a> FactContext<'a> {
                     ty,
                     min: min_mem,
                     max: max_mem,
-                    nullable,
+                    nullable: false,
                 },
             ) if *bit_width == self.pointer_width => {
                 let min = Expr::add(min_mem, min_range)?;
@@ -915,7 +1022,43 @@ impl<'a> FactContext<'a> {
                     ty: *ty,
                     min,
                     max,
-                    nullable: *nullable,
+                    nullable: false,
+                })
+            }
+
+            (
+                Fact::Mem {
+                    ty,
+                    min_offset,
+                    max_offset,
+                    nullable: false,
+                },
+                Fact::DynamicRange {
+                    bit_width,
+                    min: min_range,
+                    max: max_range,
+                },
+            )
+            | (
+                Fact::DynamicRange {
+                    bit_width,
+                    min: min_range,
+                    max: max_range,
+                },
+                Fact::Mem {
+                    ty,
+                    min_offset,
+                    max_offset,
+                    nullable: false,
+                },
+            ) if *bit_width == self.pointer_width => {
+                let min = Expr::offset(min_range, i64::try_from(*min_offset).ok()?)?;
+                let max = Expr::offset(max_range, i64::try_from(*max_offset).ok()?)?;
+                Some(Fact::DynamicMem {
+                    ty: *ty,
+                    min,
+                    max,
+                    nullable: false,
                 })
             }
 
@@ -944,14 +1087,14 @@ impl<'a> FactContext<'a> {
                     min: min_static,
                     max: max_static,
                 },
-            ) if *bw_static == self.pointer_width => {
+            ) if *bw_static == self.pointer_width && (!*nullable || *max_static == 0) => {
                 let min = Expr::offset(min_dynamic, i64::try_from(*min_static).ok()?)?;
                 let max = Expr::offset(max_dynamic, i64::try_from(*max_static).ok()?)?;
                 Some(Fact::DynamicMem {
                     ty: *ty,
                     min,
                     max,
-                    nullable: *nullable,
+                    nullable: false,
                 })
             }
 
@@ -998,6 +1141,10 @@ impl<'a> FactContext<'a> {
                 min: min.clone(),
                 max: max.clone(),
             }),
+
+            // If the claim is a definition of a value, we can say
+            // that the output has a range of exactly that value.
+            Fact::Def { value } => Some(Fact::value(to_width, *value)),
 
             // Otherwise, we can at least claim that the value is
             // within the range of `from_width`.
@@ -1069,6 +1216,8 @@ impl<'a> FactContext<'a> {
     /// Scales a value with a fact by a known constant.
     pub fn scale(&self, fact: &Fact, width: u16, factor: u32) -> Option<Fact> {
         let result = match fact {
+            x if factor == 1 => Some(x.clone()),
+
             Fact::Range {
                 bit_width,
                 min,
@@ -1102,6 +1251,10 @@ impl<'a> FactContext<'a> {
 
     /// Offsets a value with a fact by a known amount.
     pub fn offset(&self, fact: &Fact, width: u16, offset: i64) -> Option<Fact> {
+        if offset == 0 {
+            return Some(fact.clone());
+        }
+
         let compute_offset = |base: u64| -> Option<u64> {
             if offset >= 0 {
                 base.checked_add(u64::try_from(offset).unwrap())
@@ -1141,6 +1294,7 @@ impl<'a> FactContext<'a> {
                 ty,
                 min_offset: mem_min_offset,
                 max_offset: mem_max_offset,
+                nullable: false,
             } => {
                 let min_offset = compute_offset(*mem_min_offset)?;
                 let max_offset = compute_offset(*mem_max_offset)?;
@@ -1148,13 +1302,14 @@ impl<'a> FactContext<'a> {
                     ty: *ty,
                     min_offset,
                     max_offset,
+                    nullable: false,
                 })
             }
             Fact::DynamicMem {
                 ty,
                 min,
                 max,
-                nullable,
+                nullable: false,
             } => {
                 let min = Expr::offset(min, offset)?;
                 let max = Expr::offset(max, offset)?;
@@ -1162,7 +1317,7 @@ impl<'a> FactContext<'a> {
                     ty: *ty,
                     min,
                     max,
-                    nullable: *nullable,
+                    nullable: false,
                 })
             }
             _ => None,
@@ -1184,6 +1339,7 @@ impl<'a> FactContext<'a> {
                 ty,
                 min_offset,
                 max_offset,
+                nullable: _,
             } => {
                 let end_offset: u64 = max_offset
                     .checked_add(u64::from(size))
@@ -1296,9 +1452,16 @@ impl<'a> FactContext<'a> {
         rhs: &Fact,
         kind: InequalityKind,
     ) -> Fact {
-        match (lhs.as_symbol(), rhs.as_symbol(), fact) {
+        let result = match (
+            lhs.as_symbol(),
+            lhs.as_const(self.pointer_width)
+                .and_then(|k| i64::try_from(k).ok()),
+            rhs.as_symbol(),
+            fact,
+        ) {
             (
                 Some(lhs),
+                None,
                 Some(rhs),
                 Fact::DynamicMem {
                     ty,
@@ -1332,8 +1495,137 @@ impl<'a> FactContext<'a> {
                 }
             }
 
+            (
+                None,
+                Some(lhs_const),
+                Some(rhs),
+                Fact::DynamicMem {
+                    ty,
+                    min: _,
+                    max,
+                    nullable,
+                },
+            ) if rhs.base == max.base => {
+                let strict_offset = match kind {
+                    InequalityKind::Strict => 1,
+                    InequalityKind::Loose => 0,
+                };
+                if let Some(offset) = max
+                    .offset
+                    .checked_add(lhs_const)
+                    .and_then(|x| x.checked_sub(rhs.offset))
+                    .and_then(|x| x.checked_sub(strict_offset))
+                {
+                    Fact::Mem {
+                        ty: *ty,
+                        min_offset: 0,
+                        max_offset: u64::try_from(offset).unwrap_or(0),
+                        nullable: *nullable,
+                    }
+                } else {
+                    fact.clone()
+                }
+            }
+
             _ => fact.clone(),
-        }
+        };
+        trace!("apply_inequality({fact:?}, {lhs:?}, {rhs:?}, {kind:?} -> {result:?}");
+        result
+    }
+
+    /// Compute the union of two facts, if possible.
+    pub fn union(&self, lhs: &Fact, rhs: &Fact) -> Option<Fact> {
+        let result = match (lhs, rhs) {
+            (lhs, rhs) if lhs == rhs => Some(lhs.clone()),
+
+            (
+                Fact::DynamicMem {
+                    ty: ty_lhs,
+                    min: min_lhs,
+                    max: max_lhs,
+                    nullable: nullable_lhs,
+                },
+                Fact::DynamicMem {
+                    ty: ty_rhs,
+                    min: min_rhs,
+                    max: max_rhs,
+                    nullable: nullable_rhs,
+                },
+            ) if ty_lhs == ty_rhs => Some(Fact::DynamicMem {
+                ty: *ty_lhs,
+                min: Expr::min(min_lhs, min_rhs),
+                max: Expr::max(max_lhs, max_rhs),
+                nullable: *nullable_lhs || *nullable_rhs,
+            }),
+
+            (
+                Fact::Range {
+                    bit_width: bw_const,
+                    min: 0,
+                    max: 0,
+                },
+                Fact::DynamicMem {
+                    ty,
+                    min,
+                    max,
+                    nullable: _,
+                },
+            )
+            | (
+                Fact::DynamicMem {
+                    ty,
+                    min,
+                    max,
+                    nullable: _,
+                },
+                Fact::Range {
+                    bit_width: bw_const,
+                    min: 0,
+                    max: 0,
+                },
+            ) if *bw_const == self.pointer_width => Some(Fact::DynamicMem {
+                ty: *ty,
+                min: min.clone(),
+                max: max.clone(),
+                nullable: true,
+            }),
+
+            (
+                Fact::Range {
+                    bit_width: bw_const,
+                    min: 0,
+                    max: 0,
+                },
+                Fact::Mem {
+                    ty,
+                    min_offset,
+                    max_offset,
+                    nullable: _,
+                },
+            )
+            | (
+                Fact::Mem {
+                    ty,
+                    min_offset,
+                    max_offset,
+                    nullable: _,
+                },
+                Fact::Range {
+                    bit_width: bw_const,
+                    min: 0,
+                    max: 0,
+                },
+            ) if *bw_const == self.pointer_width => Some(Fact::Mem {
+                ty: *ty,
+                min_offset: *min_offset,
+                max_offset: *max_offset,
+                nullable: true,
+            }),
+
+            _ => None,
+        };
+        trace!("union({lhs:?}, {rhs:?}) -> {result:?}");
+        result
     }
 }
 

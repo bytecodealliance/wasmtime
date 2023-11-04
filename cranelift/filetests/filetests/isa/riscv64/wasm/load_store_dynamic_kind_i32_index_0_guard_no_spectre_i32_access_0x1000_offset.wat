@@ -44,9 +44,9 @@
 ;;   slli a4,a0,32
 ;;   srli a0,a4,32
 ;;   ld a5,8(a2)
-;;   lui a4,-1
-;;   addi a3,a4,-4
-;;   add a5,a5,a3
+;;   lui a4,1
+;;   addi a3,a4,4
+;;   sub a5,a5,a3
 ;;   bgtu a0,a5,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a2,0(a2)
@@ -63,9 +63,9 @@
 ;;   slli a4,a0,32
 ;;   srli a0,a4,32
 ;;   ld a5,8(a1)
-;;   lui a4,-1
-;;   addi a2,a4,-4
-;;   add a5,a5,a2
+;;   lui a4,1
+;;   addi a2,a4,4
+;;   sub a5,a5,a2
 ;;   bgtu a0,a5,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a1,0(a1)

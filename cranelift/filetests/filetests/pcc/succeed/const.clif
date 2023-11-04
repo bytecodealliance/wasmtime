@@ -1,0 +1,18 @@
+test compile
+set enable_pcc=true
+target aarch64
+target x86_64
+
+function %f0() {
+block0:
+    v0 ! range(64, 0, 0) = iconst.i64 0
+    v1 ! range(64, 1, 1) = iconst.i64 1
+    v2 ! range(64, 0xfff, 0xfff) = iconst.i64 0xfff
+    v3 ! range(64, 0x10000, 0x10000) = iconst.i64 0x10000
+    v4 ! range(64, 0xffffc, 0xffffc) = iconst.i64 0xffffc
+    v5 ! range(64, 0x1_0000_0000, 0x1_0000_0000) = iconst.i64 0x1_0000_0000
+    v6 ! range(64, 0x1_0000_0000_0000, 0x1_0000_0000_0000) = iconst.i64 0x1_0000_0000_0000
+    v7 ! range(64, 0xffff_0000_0000_0000, 0xffff_0000_0000_0000) = iconst.i64 0xffff_0000_0000_0000
+    v8 ! range(64, 0xffff_0000_0000_ffff, 0xffff_0000_0000_ffff) = iconst.i64 0xffff_0000_0000_ffff
+    return
+}

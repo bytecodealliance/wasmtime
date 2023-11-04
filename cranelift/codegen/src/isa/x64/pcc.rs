@@ -9,7 +9,7 @@ use crate::isa::x64::inst::args::{
 };
 use crate::isa::x64::inst::Inst;
 use crate::machinst::pcc::*;
-use crate::machinst::{InsnIndex, VCode};
+use crate::machinst::{InsnIndex, VCode, VCodeConstantData};
 use crate::machinst::{Reg, Writable};
 use crate::trace;
 
@@ -411,6 +411,20 @@ pub(crate) fn check(
         Inst::CmpRmiR {
             size, dst, ref src, ..
         } => match <&RegMemImm>::from(src) {
+            RegMemImm::Mem {
+                addr: SyntheticAmode::ConstantOffset(k),
+            } => {
+                match vcode.constants.get(*k) {
+                    VCodeConstantData::U64(bytes) => {
+                        let value = u64::from_le_bytes(*bytes);
+                        let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                        let rhs = Fact::constant(64, value);
+                        state.cmp_flags = Some((lhs, rhs));
+                    }
+                    _ => {}
+                }
+                Ok(())
+            }
             RegMemImm::Mem { ref addr } => {
                 if let Some(rhs) = check_load(ctx, None, addr, vcode, size.to_type(), 64)? {
                     let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
@@ -424,7 +438,12 @@ pub(crate) fn check(
                 state.cmp_flags = Some((lhs, rhs));
                 Ok(())
             }
-            RegMemImm::Imm { .. } => Ok(()),
+            RegMemImm::Imm { simm32 } => {
+                let lhs = get_fact_or_default(vcode, dst.to_reg(), 64);
+                let rhs = Fact::constant(64, (*simm32 as i32) as i64 as u64);
+                state.cmp_flags = Some((lhs, rhs));
+                Ok(())
+            }
         },
 
         Inst::Setcc { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
@@ -443,19 +462,28 @@ pub(crate) fn check(
                 check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 Ok(())
             }
-            RegMem::Reg { reg } if cc == CC::NB && cmp_flags.is_some() => {
+            RegMem::Reg { reg } if (cc == CC::NB || cc == CC::NBE) && cmp_flags.is_some() => {
                 let (cmp_lhs, cmp_rhs) = cmp_flags.unwrap();
                 trace!("lhs = {:?} rhs = {:?}", cmp_lhs, cmp_rhs);
                 let reg = *reg;
                 check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
                     // See comments in aarch64::pcc CSel for more details on this.
                     let in_true = get_fact_or_default(vcode, reg, 64);
-                    let in_true =
-                        ctx.apply_inequality(&in_true, &cmp_lhs, &cmp_rhs, InequalityKind::Loose);
+                    let in_true_kind = match cc {
+                        CC::NB => InequalityKind::Loose,
+                        CC::NBE => InequalityKind::Strict,
+                        _ => unreachable!(),
+                    };
+                    let in_true = ctx.apply_inequality(&in_true, &cmp_lhs, &cmp_rhs, in_true_kind);
                     let in_false = get_fact_or_default(vcode, alternative.to_reg(), 64);
+                    let in_false_kind = match cc {
+                        CC::NB => InequalityKind::Strict,
+                        CC::NBE => InequalityKind::Loose,
+                        _ => unreachable!(),
+                    };
                     let in_false =
-                        ctx.apply_inequality(&in_false, &cmp_rhs, &cmp_lhs, InequalityKind::Strict);
-                    let union = Fact::union(&in_true, &in_false);
+                        ctx.apply_inequality(&in_false, &cmp_rhs, &cmp_lhs, in_false_kind);
+                    let union = ctx.union(&in_true, &in_false);
                     clamp_range(ctx, 64, 64, union)
                 })
             }

@@ -41,34 +41,36 @@
 
 ;; function u0:0:
 ;; block0:
-;;   slli a0,a0,32
-;;   srli a3,a0,32
+;;   slli a3,a0,32
+;;   srli a3,a3,32
 ;;   ld a4,8(a2)
-;;   addi a4,a4,-4
+;;   li a5,4
+;;   sub a4,a4,a5
 ;;   sltu a4,a4,a3
 ;;   ld a2,0(a2)
 ;;   add a2,a2,a3
-;;   sub a5,zero,a4
-;;   not a3,a5
-;;   and a3,a2,a3
-;;   sw a1,0(a3)
+;;   sub a0,zero,a4
+;;   not a3,a0
+;;   and a4,a2,a3
+;;   sw a1,0(a4)
 ;;   j label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   slli a0,a0,32
-;;   srli a2,a0,32
-;;   ld a3,8(a1)
-;;   addi a3,a3,-4
-;;   sltu a3,a3,a2
-;;   ld a1,0(a1)
-;;   add a1,a1,a2
-;;   sub a5,zero,a3
-;;   not a2,a5
-;;   and a3,a1,a2
-;;   lw a0,0(a3)
+;;   slli a2,a0,32
+;;   srli a3,a2,32
+;;   ld a2,8(a1)
+;;   li a4,4
+;;   sub a2,a2,a4
+;;   sltu a2,a2,a3
+;;   ld a4,0(a1)
+;;   add a3,a4,a3
+;;   sub a0,zero,a2
+;;   not a2,a0
+;;   and a4,a3,a2
+;;   lw a0,0(a4)
 ;;   j label1
 ;; block1:
 ;;   ret
