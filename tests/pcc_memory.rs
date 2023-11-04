@@ -138,6 +138,7 @@ mod pcc_memory_tests {
     ];
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_build() {
         let _ = env_logger::try_init();
         const KIB: u64 = 1024;
