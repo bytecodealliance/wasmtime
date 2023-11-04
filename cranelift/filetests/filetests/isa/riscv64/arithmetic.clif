@@ -512,14 +512,12 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   li a3,-1
-;   subw a0,a0,a3
+;   addiw a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, -1
-;   subw a0, a0, a3
+;   addiw a0, a0, 1
 ;   ret
 
 function %f28(i64) -> i64 {
@@ -531,14 +529,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a3,-1
-;   sub a0,a0,a3
+;   addi a0,a0,1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, -1
-;   sub a0, a0, a3
+;   addi a0, a0, 1
 ;   ret
 
 function %f29(i64) -> i64 {
