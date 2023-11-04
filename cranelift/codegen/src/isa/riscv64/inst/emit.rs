@@ -377,25 +377,42 @@ impl Inst {
                     alu_op @ (AluOPRRR::And
                     | AluOPRRR::Or
                     | AluOPRRR::Xor
-                    | AluOPRRR::Sub
                     | AluOPRRR::Addw
-                    | AluOPRRR::Subw
                     | AluOPRRR::Mul),
+                rd,
+                rs1,
+                rs2,
+            } if (rd.to_reg() == rs1 || rd.to_reg() == rs2)
+                && reg_is_compressible(rs1)
+                && reg_is_compressible(rs2) =>
+            {
+                let op = match alu_op {
+                    AluOPRRR::And => CaOp::CAnd,
+                    AluOPRRR::Or => CaOp::COr,
+                    AluOPRRR::Xor => CaOp::CXor,
+                    AluOPRRR::Addw => CaOp::CAddw,
+                    AluOPRRR::Mul if has_zcb && has_m => CaOp::CMul,
+                    _ => return None,
+                };
+                // The canonical expansion for these instruction has `rd == rs1`, but
+                // these are all comutative operations, so we can swap the operands.
+                let src = if rd.to_reg() == rs1 { rs2 } else { rs1 };
+
+                sink.put2(encode_ca_type(op, rd, src));
+            }
+
+            // The sub instructions are non comutative, so we can't swap the operands.
+            Inst::AluRRR {
+                alu_op: alu_op @ (AluOPRRR::Sub | AluOPRRR::Subw),
                 rd,
                 rs1,
                 rs2,
             } if rd.to_reg() == rs1 && reg_is_compressible(rs1) && reg_is_compressible(rs2) => {
                 let op = match alu_op {
-                    AluOPRRR::And => CaOp::CAnd,
-                    AluOPRRR::Or => CaOp::COr,
-                    AluOPRRR::Xor => CaOp::CXor,
                     AluOPRRR::Sub => CaOp::CSub,
-                    AluOPRRR::Addw => CaOp::CAddw,
                     AluOPRRR::Subw => CaOp::CSubw,
-                    AluOPRRR::Mul if has_zcb && has_m => CaOp::CMul,
                     _ => return None,
                 };
-
                 sink.put2(encode_ca_type(op, rd, rs2));
             }
 
