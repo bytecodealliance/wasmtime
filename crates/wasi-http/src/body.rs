@@ -7,11 +7,7 @@ use http_body_util::BodyExt;
 use std::future::Future;
 use std::mem;
 use std::task::{Context, Poll};
-use std::{
-    pin::Pin,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::preview2::{
     self, poll_noop, AbortOnDropJoinHandle, HostInputStream, HostOutputStream, StreamError,
@@ -424,7 +420,7 @@ impl HostOutgoingBody {
             }
         }
 
-        let (body_sender, body_receiver) = mpsc::channel(1);
+        let (body_sender, body_receiver) = mpsc::channel(2);
         let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
             body_receiver,
@@ -442,156 +438,20 @@ impl HostOutgoingBody {
     }
 }
 
-// copied in from preview2::write_stream
-
-#[derive(Debug)]
-struct WorkerState {
-    alive: bool,
-    items: std::collections::VecDeque<Bytes>,
-    write_budget: usize,
-    flush_pending: bool,
-    error: Option<anyhow::Error>,
-}
-
-impl WorkerState {
-    fn check_error(&mut self) -> Result<(), StreamError> {
-        if let Some(e) = self.error.take() {
-            return Err(StreamError::LastOperationFailed(e));
-        }
-        if !self.alive {
-            return Err(StreamError::Closed);
-        }
-        Ok(())
-    }
-}
-
-struct Worker {
-    state: Mutex<WorkerState>,
-    new_work: tokio::sync::Notify,
-    write_ready_changed: tokio::sync::Notify,
-}
-
-enum Job {
-    Flush,
-    Write(Bytes),
-}
-
-impl Worker {
-    fn new(write_budget: usize) -> Self {
-        Self {
-            state: Mutex::new(WorkerState {
-                alive: true,
-                items: std::collections::VecDeque::new(),
-                write_budget,
-                flush_pending: false,
-                error: None,
-            }),
-            new_work: tokio::sync::Notify::new(),
-            write_ready_changed: tokio::sync::Notify::new(),
-        }
-    }
-    async fn ready(&self) {
-        loop {
-            {
-                let state = self.state();
-                if state.error.is_some()
-                    || !state.alive
-                    || (!state.flush_pending && state.write_budget > 0)
-                {
-                    return;
-                }
-            }
-            self.write_ready_changed.notified().await;
-        }
-    }
-    fn check_write(&self) -> Result<usize, StreamError> {
-        let mut state = self.state();
-        if let Err(e) = state.check_error() {
-            return Err(e);
-        }
-
-        if state.flush_pending || state.write_budget == 0 {
-            return Ok(0);
-        }
-
-        Ok(state.write_budget)
-    }
-    fn state(&self) -> std::sync::MutexGuard<WorkerState> {
-        self.state.lock().unwrap()
-    }
-    fn pop(&self) -> Option<Job> {
-        let mut state = self.state();
-        if state.items.is_empty() {
-            if state.flush_pending {
-                return Some(Job::Flush);
-            }
-        } else if let Some(bytes) = state.items.pop_front() {
-            return Some(Job::Write(bytes));
-        }
-
-        None
-    }
-    fn report_error(&self, e: std::io::Error) {
-        {
-            let mut state = self.state();
-            state.alive = false;
-            state.error = Some(e.into());
-            state.flush_pending = false;
-        }
-        self.write_ready_changed.notify_one();
-    }
-
-    async fn work(&self, writer: mpsc::Sender<Bytes>) {
-        loop {
-            while let Some(job) = self.pop() {
-                match job {
-                    Job::Flush => {
-                        self.state().flush_pending = false;
-                    }
-
-                    Job::Write(bytes) => {
-                        tracing::debug!("worker writing: {bytes:?}");
-                        let len = bytes.len();
-                        match writer.send(bytes).await {
-                            Err(_) => {
-                                self.report_error(std::io::Error::new(
-                                    std::io::ErrorKind::BrokenPipe,
-                                    "Outgoing stream body reader has dropped",
-                                ));
-                                return;
-                            }
-                            Ok(_) => {
-                                self.state().write_budget += len;
-                            }
-                        }
-                    }
-                }
-
-                self.write_ready_changed.notify_one();
-            }
-
-            self.new_work.notified().await;
-        }
-    }
-}
-
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
 pub struct BodyWriteStream {
-    worker: Arc<Worker>,
-    _join_handle: preview2::AbortOnDropJoinHandle<()>,
+    writer: mpsc::Sender<Bytes>,
+    write_budget: usize,
 }
 
 impl BodyWriteStream {
     /// Create a [`BodyWriteStream`].
     pub fn new(write_budget: usize, writer: mpsc::Sender<Bytes>) -> Self {
-        let worker = Arc::new(Worker::new(write_budget));
-
-        let w = Arc::clone(&worker);
-        let join_handle = preview2::spawn(async move { w.work(writer).await });
-
+        // at least one capacity is required to send a message
+        assert!(writer.max_capacity() >= 1);
         BodyWriteStream {
-            worker,
-            _join_handle: join_handle,
+            writer,
+            write_budget,
         }
     }
 }
@@ -599,41 +459,57 @@ impl BodyWriteStream {
 #[async_trait::async_trait]
 impl HostOutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
-        let mut state = self.worker.state();
-        state.check_error()?;
-        if state.flush_pending {
-            return Err(StreamError::Trap(anyhow!(
-                "write not permitted while flush pending"
-            )));
-        }
-        match state.write_budget.checked_sub(bytes.len()) {
-            Some(remaining_budget) => {
-                state.write_budget = remaining_budget;
-                state.items.push_back(bytes);
+        match self.writer.try_send(bytes) {
+            // If the message was sent then it's queued up now in hyper to get
+            // received.
+            Ok(()) => Ok(()),
+
+            // If this channel is full then that means `check_write` wasn't
+            // called. The call to `check_write` always guarantees that there's
+            // at least one capacity if a write is allowed.
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                Err(StreamError::Trap(anyhow!("write exceeded budget")))
             }
-            None => return Err(StreamError::Trap(anyhow!("write exceeded budget"))),
+
+            // Hyper is gone so this stream is now closed.
+            Err(mpsc::error::TrySendError::Closed(_)) => Err(StreamError::Closed),
         }
-        drop(state);
-        self.worker.new_work.notify_one();
-        Ok(())
     }
+
     fn flush(&mut self) -> Result<(), StreamError> {
-        let mut state = self.worker.state();
-        state.check_error()?;
-
-        state.flush_pending = true;
-        self.worker.new_work.notify_one();
-
-        Ok(())
+        // Flushing doesn't happen in this body stream since we're currently
+        // only tracking sending bytes over to hyper.
+        if self.writer.is_closed() {
+            Err(StreamError::Closed)
+        } else {
+            Ok(())
+        }
     }
 
     fn check_write(&mut self) -> Result<usize, StreamError> {
-        self.worker.check_write()
+        if self.writer.is_closed() {
+            Err(StreamError::Closed)
+        } else if self.writer.capacity() == 0 {
+            // If there is no more capacity in this sender channel then don't
+            // allow any more writes because the hyper task needs to catch up
+            // now.
+            //
+            // Note that this relies on this task being the only one sending
+            // data to ensure that no one else can steal a write into this
+            // channel.
+            Ok(0)
+        } else {
+            Ok(self.write_budget)
+        }
     }
 }
+
 #[async_trait::async_trait]
 impl Subscribe for BodyWriteStream {
     async fn ready(&mut self) {
-        self.worker.ready().await
+        // Attempt to perform a reservation for a send. If there's capacity in
+        // the channel or it's already closed then this will return immediately.
+        // If the channel is full this will block until capacity opens up.
+        let _ = self.writer.reserve().await;
     }
 }
