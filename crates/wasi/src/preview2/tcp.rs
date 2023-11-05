@@ -1,3 +1,4 @@
+use super::network::SocketAddressFamily;
 use super::{HostInputStream, HostOutputStream, StreamError};
 use crate::preview2::{
     with_ambient_tokio_runtime, AbortOnDropJoinHandle, InputStream, OutputStream, Subscribe,
@@ -72,12 +73,6 @@ pub struct TcpSocket {
     /// The manually configured TTL. `None` means: no preference, use system default.
     #[cfg(target_os = "macos")]
     pub(crate) hop_limit: Option<u8>,
-}
-
-#[derive(Copy, Clone)]
-pub(crate) enum SocketAddressFamily {
-    Ipv4,
-    Ipv6 { v6only: bool },
 }
 
 pub(crate) struct TcpReadStream {
