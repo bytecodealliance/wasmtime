@@ -28,3 +28,9 @@ impl From<rustix::io::Errno> for SocketError {
         ErrorCode::from(error).into()
     }
 }
+
+#[derive(Copy, Clone)]
+pub enum SocketAddressFamily {
+    Ipv4,
+    Ipv6 { v6only: bool },
+}
