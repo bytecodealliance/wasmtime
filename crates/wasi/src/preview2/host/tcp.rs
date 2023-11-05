@@ -415,18 +415,6 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(sockopt::set_socket_keepalive(socket.tcp_socket(), value)?)
     }
 
-    fn no_delay(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-        Ok(sockopt::get_tcp_nodelay(socket.tcp_socket())?)
-    }
-
-    fn set_no_delay(&mut self, this: Resource<tcp::TcpSocket>, value: bool) -> SocketResult<()> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-        Ok(sockopt::set_tcp_nodelay(socket.tcp_socket(), value)?)
-    }
-
     fn unicast_hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u8> {
         let table = self.table();
         let socket = table.get(&this)?;
