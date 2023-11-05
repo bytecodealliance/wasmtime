@@ -56,7 +56,7 @@ impl Network {
     }
 
     pub fn blocking_resolve_addresses(&self, name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
-        let stream = ip_name_lookup::resolve_addresses(&self, name, None, false)?;
+        let stream = ip_name_lookup::resolve_addresses(&self, name)?;
 
         let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let pollable = stream.subscribe();

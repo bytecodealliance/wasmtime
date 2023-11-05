@@ -1,7 +1,8 @@
 use crate::preview2::bindings::sockets::network::{
-    self, ErrorCode, IpAddressFamily, IpSocketAddress, Ipv4Address, Ipv4SocketAddress, Ipv6Address,
+    self, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress,
     Ipv6SocketAddress,
 };
+use crate::preview2::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
 use crate::preview2::{SocketError, WasiView};
 use rustix::io::Errno;
 use std::io;
@@ -104,6 +105,15 @@ impl From<Errno> for ErrorCode {
     }
 }
 
+impl From<std::net::IpAddr> for IpAddress {
+    fn from(addr: std::net::IpAddr) -> Self {
+        match addr {
+            std::net::IpAddr::V4(v4) => Self::Ipv4(from_ipv4_addr(v4)),
+            std::net::IpAddr::V6(v6) => Self::Ipv6(from_ipv6_addr(v6)),
+        }
+    }
+}
+
 impl From<IpSocketAddress> for std::net::SocketAddr {
     fn from(addr: IpSocketAddress) -> Self {
         match addr {
@@ -157,26 +167,6 @@ impl From<std::net::SocketAddrV6> for Ipv6SocketAddress {
             scope_id: addr.scope_id(),
         }
     }
-}
-
-fn to_ipv4_addr(addr: Ipv4Address) -> std::net::Ipv4Addr {
-    let (x0, x1, x2, x3) = addr;
-    std::net::Ipv4Addr::new(x0, x1, x2, x3)
-}
-
-fn from_ipv4_addr(addr: std::net::Ipv4Addr) -> Ipv4Address {
-    let [x0, x1, x2, x3] = addr.octets();
-    (x0, x1, x2, x3)
-}
-
-fn to_ipv6_addr(addr: Ipv6Address) -> std::net::Ipv6Addr {
-    let (x0, x1, x2, x3, x4, x5, x6, x7) = addr;
-    std::net::Ipv6Addr::new(x0, x1, x2, x3, x4, x5, x6, x7)
-}
-
-fn from_ipv6_addr(addr: std::net::Ipv6Addr) -> Ipv6Address {
-    let [x0, x1, x2, x3, x4, x5, x6, x7] = addr.segments();
-    (x0, x1, x2, x3, x4, x5, x6, x7)
 }
 
 impl std::net::ToSocketAddrs for IpSocketAddress {
