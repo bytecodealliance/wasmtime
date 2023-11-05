@@ -51,8 +51,6 @@ fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
     assert!(matches!(sock.set_listen_backlog_size(32), Ok(_)));
     assert!(matches!(sock.keep_alive(), Ok(_)));
     assert!(matches!(sock.set_keep_alive(false), Ok(_)));
-    assert!(matches!(sock.no_delay(), Ok(_)));
-    assert!(matches!(sock.set_no_delay(false), Ok(_)));
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
@@ -111,8 +109,6 @@ fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
     assert!(matches!(sock.set_listen_backlog_size(32), Ok(_)));
     assert!(matches!(sock.keep_alive(), Ok(_)));
     assert!(matches!(sock.set_keep_alive(false), Ok(_)));
-    assert!(matches!(sock.no_delay(), Ok(_)));
-    assert!(matches!(sock.set_no_delay(false), Ok(_)));
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
@@ -178,8 +174,6 @@ fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
     ));
     assert!(matches!(sock.keep_alive(), Ok(_)));
     assert!(matches!(sock.set_keep_alive(false), Ok(_)));
-    assert!(matches!(sock.no_delay(), Ok(_)));
-    assert!(matches!(sock.set_no_delay(false), Ok(_)));
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));
@@ -238,8 +232,6 @@ fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
 
     assert!(matches!(sock.keep_alive(), Ok(_)));
     assert!(matches!(sock.set_keep_alive(false), Ok(_)));
-    assert!(matches!(sock.no_delay(), Ok(_)));
-    assert!(matches!(sock.set_no_delay(false), Ok(_)));
     assert!(matches!(sock.unicast_hop_limit(), Ok(_)));
     assert!(matches!(sock.set_unicast_hop_limit(255), Ok(_)));
     assert!(matches!(sock.receive_buffer_size(), Ok(_)));

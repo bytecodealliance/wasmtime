@@ -13,7 +13,6 @@ fn test_tcp_sockopt_defaults(family: IpAddressFamily) {
     }
 
     sock.keep_alive().unwrap(); // Only verify that it has a default value at all, but either value is valid.
-    assert_eq!(sock.no_delay().unwrap(), false);
     assert!(sock.unicast_hop_limit().unwrap() > 0);
     assert!(sock.receive_buffer_size().unwrap() > 0);
     assert!(sock.send_buffer_size().unwrap() > 0);
@@ -32,9 +31,6 @@ fn test_tcp_sockopt_input_ranges(family: IpAddressFamily) {
 
     assert!(matches!(sock.set_keep_alive(true), Ok(_)));
     assert!(matches!(sock.set_keep_alive(false), Ok(_)));
-
-    assert!(matches!(sock.set_no_delay(true), Ok(_)));
-    assert!(matches!(sock.set_no_delay(false), Ok(_)));
 
     assert!(matches!(
         sock.set_unicast_hop_limit(0),
@@ -64,11 +60,6 @@ fn test_tcp_sockopt_readback(family: IpAddressFamily) {
     sock.set_keep_alive(false).unwrap();
     assert_eq!(sock.keep_alive().unwrap(), false);
 
-    sock.set_no_delay(true).unwrap();
-    assert_eq!(sock.no_delay().unwrap(), true);
-    sock.set_no_delay(false).unwrap();
-    assert_eq!(sock.no_delay().unwrap(), false);
-
     sock.set_unicast_hop_limit(42).unwrap();
     assert_eq!(sock.unicast_hop_limit().unwrap(), 42);
 
@@ -93,7 +84,6 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
         }
 
         listener.set_keep_alive(!default_keep_alive).unwrap();
-        listener.set_no_delay(true).unwrap();
         listener.set_unicast_hop_limit(42).unwrap();
         listener.set_receive_buffer_size(0x10000).unwrap();
         listener.set_send_buffer_size(0x10000).unwrap();
@@ -113,7 +103,6 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
         }
 
         assert_eq!(accepted_client.keep_alive().unwrap(), !default_keep_alive);
-        assert_eq!(accepted_client.no_delay().unwrap(), true);
         assert_eq!(accepted_client.unicast_hop_limit().unwrap(), 42);
         assert_eq!(accepted_client.receive_buffer_size().unwrap(), 0x10000);
         assert_eq!(accepted_client.send_buffer_size().unwrap(), 0x10000);
@@ -122,7 +111,6 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
     // Update options on listener to something else:
     {
         listener.set_keep_alive(default_keep_alive).unwrap();
-        listener.set_no_delay(false).unwrap();
         listener.set_unicast_hop_limit(43).unwrap();
         listener.set_receive_buffer_size(0x20000).unwrap();
         listener.set_send_buffer_size(0x20000).unwrap();
@@ -131,7 +119,6 @@ fn test_tcp_sockopt_inheritance(net: &Network, family: IpAddressFamily) {
     // Verify that the already accepted socket was not affected:
     {
         assert_eq!(accepted_client.keep_alive().unwrap(), !default_keep_alive);
-        assert_eq!(accepted_client.no_delay().unwrap(), true);
         assert_eq!(accepted_client.unicast_hop_limit().unwrap(), 42);
         assert_eq!(accepted_client.receive_buffer_size().unwrap(), 0x10000);
         assert_eq!(accepted_client.send_buffer_size().unwrap(), 0x10000);
@@ -150,7 +137,6 @@ fn test_tcp_sockopt_after_listen(net: &Network, family: IpAddressFamily) {
     // Update options while the socket is already listening:
     {
         listener.set_keep_alive(!default_keep_alive).unwrap();
-        listener.set_no_delay(true).unwrap();
         listener.set_unicast_hop_limit(42).unwrap();
         listener.set_receive_buffer_size(0x10000).unwrap();
         listener.set_send_buffer_size(0x10000).unwrap();
@@ -163,7 +149,6 @@ fn test_tcp_sockopt_after_listen(net: &Network, family: IpAddressFamily) {
     // Verify options on accepted socket:
     {
         assert_eq!(accepted_client.keep_alive().unwrap(), !default_keep_alive);
-        assert_eq!(accepted_client.no_delay().unwrap(), true);
         assert_eq!(accepted_client.unicast_hop_limit().unwrap(), 42);
         assert_eq!(accepted_client.receive_buffer_size().unwrap(), 0x10000);
         assert_eq!(accepted_client.send_buffer_size().unwrap(), 0x10000);
