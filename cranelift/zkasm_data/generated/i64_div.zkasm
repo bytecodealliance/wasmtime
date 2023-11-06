@@ -25,9 +25,10 @@ function_1:
   ${_mulArith} => E :ARITH
   214748364n => B
   0 => D
-  0 => C
   $${var _divArith = E / B}
+  $${var _remArith = E % B}
   ${_divArith} => A
+  ${_remArith} => C
   E:ARITH
   214748366n => B
   B :ASSERT

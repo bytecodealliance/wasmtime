@@ -18,6 +18,18 @@ function_1:
   ${_divArith} => A
   ${_remArith} => C
   E:ARITH
+  C => A
+  1 => B
+  B :ASSERT
+  8 => E
+  3 => B
+  0 => D
+  $${var _divArith = E / B}
+  $${var _remArith = E % B}
+  ${_divArith} => A
+  ${_remArith} => C
+  E:ARITH
+  C => A
   2 => B
   B :ASSERT
   $ => C :MLOAD(SP - 1)

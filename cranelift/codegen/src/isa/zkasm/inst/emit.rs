@@ -489,9 +489,24 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 // Same as in MulArith about D register
                 put_string("0 => D\n", sink);
-                put_string("0 => C\n", sink);
                 put_string("$${var _divArith = E / B}\n", sink);
+                put_string("$${var _remArith = E % B}\n", sink);
                 put_string("${_divArith} => A\n", sink);
+                put_string("${_remArith} => C\n", sink);
+                put_string("E:ARITH\n", sink);
+            }
+            &Inst::RemArith { rd, rs1, rs2 } => {
+                let rs1 = allocs.next(rs1);
+                let rs2 = allocs.next(rs2);
+                debug_assert_eq!(rs1, e0());
+                debug_assert_eq!(rs2, b0());
+                let rd = allocs.next_writable(rd);
+                // Same as in MulArith about D register
+                put_string("0 => D\n", sink);
+                put_string("$${var _divArith = E / B}\n", sink);
+                put_string("$${var _remArith = E % B}\n", sink);
+                put_string("${_divArith} => A\n", sink);
+                put_string("${_remArith} => C\n", sink);
                 put_string("E:ARITH\n", sink);
             }
             &Inst::AluRRR {

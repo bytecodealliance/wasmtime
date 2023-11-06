@@ -126,34 +126,14 @@
 
 ;;;; Rules for `rem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule -1 (lower (has_type (fits_in_16 ty) (urem x y)))
-  (let
-    ((y2 XReg (zext y ty $I64))
-      (_ InstOutput (gen_div_by_zero y2)))
-    (rv_remuw (zext x ty $I64) y2)))
-
-(rule -1 (lower (has_type (fits_in_16 ty) (srem x y)))
-  (let
-    ((y2 XReg (sext y ty $I64))
-      (_ InstOutput (gen_div_by_zero y2)))
-    (rv_remw (sext x ty $I64) y2)))
-
-(rule (lower (has_type $I32 (srem x y)))
-  (let
-    ((y2 XReg (sext y $I32 $I64))
-      (_ InstOutput (gen_div_by_zero y2)))
-   (rv_remw x y2)))
+(rule (lower (srem x y))
+  (zk_rem x y))
 
 (rule (lower (has_type $I32 (urem x y)))
   (let
     ((y2 XReg (zext y $I32 $I64))
         (_ InstOutput (gen_div_by_zero y2)))
     (rv_remuw x y2)))
-
-(rule (lower (has_type $I64 (srem x y)))
-  (let
-    ((_ InstOutput (gen_div_by_zero y)))
-    (rv_rem x y)))
 
 (rule (lower (has_type $I64 (urem x y)))
   (let
