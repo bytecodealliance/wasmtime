@@ -387,7 +387,7 @@ jobs:
     env:
       QEMU_BUILD_VERSION: 8.1.1
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
     - uses: actions/checkout@v3
@@ -673,7 +673,7 @@ jobs:
     name: Release build for ${{ matrix.build }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.build-matrix) }}
     steps:
     - uses: actions/checkout@v3
