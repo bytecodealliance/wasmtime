@@ -438,7 +438,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::LoadConst64 { rd, imm } => {
                 let rd = allocs.next_writable(rd);
-                put_string(&format!("{imm} => {}\n", reg_name(rd.to_reg())), sink);
+                put_string(&format!("{imm}n => {}\n", reg_name(rd.to_reg())), sink);
             }
             &Inst::Unwind { ref inst } => {
                 put_string(&format!("Unwind\n"), sink);
