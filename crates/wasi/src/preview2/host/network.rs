@@ -278,7 +278,7 @@ pub(crate) mod util {
     }
 
     // Can be removed once `IpAddr::to_canonical` becomes stable.
-    fn to_canonical(addr: &IpAddr) -> IpAddr {
+    pub fn to_canonical(addr: &IpAddr) -> IpAddr {
         match addr {
             IpAddr::V4(ipv4) => IpAddr::V4(*ipv4),
             IpAddr::V6(ipv6) => {

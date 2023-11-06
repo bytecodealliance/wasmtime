@@ -1,10 +1,11 @@
 use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
+use crate::preview2::host::network::util;
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
 use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
 use anyhow::Result;
 use std::mem;
-use std::net::{IpAddr, Ipv6Addr, ToSocketAddrs};
+use std::net::{Ipv6Addr, ToSocketAddrs};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::vec;
@@ -115,24 +116,10 @@ fn blocking_resolve(host: &url::Host) -> Result<Vec<IpAddress>, SocketError> {
             let addresses = (domain.as_str(), 0)
                 .to_socket_addrs()
                 .map_err(|_| ErrorCode::NameUnresolvable)? // If/when we use `getaddrinfo` directly, map the error properly.
-                .map(|addr| to_canonical(&addr.ip()).into())
+                .map(|addr| util::to_canonical(&addr.ip()).into())
                 .collect();
 
             Ok(addresses)
-        }
-    }
-}
-
-// Can be removed once `IpAddr::to_canonical` becomes stable.
-fn to_canonical(addr: &IpAddr) -> IpAddr {
-    match addr {
-        IpAddr::V4(ipv4) => IpAddr::V4(*ipv4),
-        IpAddr::V6(ipv6) => {
-            if let Some(ipv4) = ipv6.to_ipv4_mapped() {
-                IpAddr::V4(ipv4)
-            } else {
-                IpAddr::V6(*ipv6)
-            }
         }
     }
 }
