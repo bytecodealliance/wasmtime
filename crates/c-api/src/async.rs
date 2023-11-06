@@ -15,8 +15,7 @@ use wasmtime::{
 use crate::{
     bad_utf8, handle_result, to_str, translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t,
     wasmtime_caller_t, wasmtime_error_t, wasmtime_instance_pre_t, wasmtime_linker_t,
-    wasmtime_module_t, wasmtime_val_t, wasmtime_val_union, CStoreContextMut, CallbackDataPtr,
-    WASMTIME_I32,
+    wasmtime_module_t, wasmtime_val_t, wasmtime_val_union, CStoreContextMut, WASMTIME_I32,
 };
 
 #[no_mangle]
@@ -87,6 +86,17 @@ impl Future for wasmtime_async_continuation_t {
         }
     }
 }
+
+/// Internal structure to add Send/Sync to a c_void member.
+///
+/// This is useful in closures that need to capture some C data.
+#[derive(Debug)]
+struct CallbackDataPtr {
+    pub ptr: *mut std::ffi::c_void,
+}
+
+unsafe impl Send for CallbackDataPtr {}
+unsafe impl Sync for CallbackDataPtr {}
 
 pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(*mut c_void) -> bool;
 

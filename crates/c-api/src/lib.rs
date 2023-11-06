@@ -114,14 +114,3 @@ unsafe fn slice_from_raw_parts_mut<'a, T>(ptr: *mut T, len: usize) -> &'a mut [T
         std::slice::from_raw_parts_mut(ptr, len)
     }
 }
-
-/// Internal structure to add Send/Sync to a c_void member.
-///
-/// This is useful in closures that need to capture some C data.
-#[derive(Debug)]
-struct CallbackDataPtr {
-    pub ptr: *mut std::ffi::c_void,
-}
-
-unsafe impl Send for CallbackDataPtr {}
-unsafe impl Sync for CallbackDataPtr {}
