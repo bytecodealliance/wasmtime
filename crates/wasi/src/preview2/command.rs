@@ -33,6 +33,7 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::filesystem::types::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::filesystem::preopens::add_to_linker(l, |t| t)?;
+    crate::preview2::bindings::io::error::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::io::poll::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::io::streams::add_to_linker(l, |t| t)?;
     crate::preview2::bindings::random::random::add_to_linker(l, |t| t)?;
@@ -95,6 +96,7 @@ pub mod sync {
         crate::preview2::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sync_io::filesystem::types::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::filesystem::preopens::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::io::error::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sync_io::io::poll::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sync_io::io::streams::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::random::random::add_to_linker(l, |t| t)?;

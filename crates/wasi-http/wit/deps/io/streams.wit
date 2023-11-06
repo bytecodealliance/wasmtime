@@ -6,6 +6,7 @@ package wasi:io@0.2.0-rc-2023-11-05;
 /// In the future, the component model is expected to add built-in stream types;
 /// when it does, they are expected to subsume this API.
 interface streams {
+    use error.{error};
     use poll.{pollable};
 
     /// An error for input-stream and output-stream operations.
@@ -18,26 +19,6 @@ interface streams {
         /// stream. A closed output-stream will return this error on all
         /// future operations.
         closed
-    }
-
-    /// Contextual error information about the last failure that happened on
-    /// a read, write, or flush from an `input-stream` or `output-stream`.
-    ///
-    /// This type is returned through the `stream-error` type whenever an
-    /// operation on a stream directly fails or an error is discovered
-    /// after-the-fact, for example when a write's failure shows up through a
-    /// later `flush` or `check-write`.
-    ///
-    /// Interfaces such as `wasi:filesystem/types` provide functionality to
-    /// further "downcast" this error into interface-specific error information.
-    resource error {
-        /// Returns a string that's suitable to assist humans in debugging this
-        /// error.
-        ///
-        /// The returned string will change across platforms and hosts which
-        /// means that parsing it, for example, would be a
-        /// platform-compatibility hazard.
-        to-debug-string: func() -> string;
     }
 
     /// An input bytestream.
