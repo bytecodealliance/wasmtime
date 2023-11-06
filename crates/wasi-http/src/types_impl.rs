@@ -176,6 +176,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             Err(_) => return Ok(()),
         };
 
+        if is_forbidden_header(self, &header) {
+            return Ok(());
+        }
+
         let m = get_fields_mut(self.table(), &fields)?;
         m.remove(header);
         Ok(())
