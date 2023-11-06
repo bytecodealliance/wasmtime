@@ -323,8 +323,12 @@ async fn preview2_tcp_bind() {
     run(PREVIEW2_TCP_BIND_COMPONENT, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn preview2_udp_connect() {
-    run(PREVIEW2_UDP_CONNECT_COMPONENT, false).await.unwrap()
+async fn preview2_tcp_connect() {
+    run(PREVIEW2_TCP_CONNECT_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_udp_sockopts() {
+    run(PREVIEW2_UDP_SOCKOPTS_COMPONENT, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview2_udp_sample_application() {
@@ -333,8 +337,16 @@ async fn preview2_udp_sample_application() {
         .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn preview2_tcp_connect() {
-    run(PREVIEW2_TCP_CONNECT_COMPONENT, false).await.unwrap()
+async fn preview2_udp_states() {
+    run(PREVIEW2_UDP_STATES_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_udp_bind() {
+    run(PREVIEW2_UDP_BIND_COMPONENT, false).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview2_udp_connect() {
+    run(PREVIEW2_UDP_CONNECT_COMPONENT, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview2_stream_pollable_correct() {

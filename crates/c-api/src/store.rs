@@ -106,20 +106,9 @@ pub extern "C" fn wasmtime_store_new(
     })
 }
 
-// Internal structure to add Send/Sync to the c_void member.
-#[derive(Debug)]
-pub struct CallbackDataPtr {
-    pub ptr: *mut c_void,
-}
-
-impl CallbackDataPtr {
-    fn as_mut_ptr(&self) -> *mut c_void {
-        self.ptr
-    }
-}
-
-unsafe impl Send for CallbackDataPtr {}
-unsafe impl Sync for CallbackDataPtr {}
+pub type wasmtime_update_deadline_kind_t = u8;
+pub const WASMTIME_UPDATE_DEADLINE_CONTINUE: wasmtime_update_deadline_kind_t = 0;
+pub const WASMTIME_UPDATE_DEADLINE_YIELD: wasmtime_update_deadline_kind_t = 1;
 
 #[no_mangle]
 pub extern "C" fn wasmtime_store_epoch_deadline_callback(
@@ -128,22 +117,32 @@ pub extern "C" fn wasmtime_store_epoch_deadline_callback(
         CStoreContextMut<'_>,
         *mut c_void,
         *mut u64,
+        *mut wasmtime_update_deadline_kind_t,
     ) -> Option<Box<wasmtime_error_t>>,
     data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
-    let sendable = CallbackDataPtr { ptr: data };
+    let foreign = crate::ForeignData { data, finalizer };
     store.store.epoch_deadline_callback(move |mut store_ctx| {
+        let _ = &foreign; // Move foreign into this closure
         let mut delta: u64 = 0;
+        let mut kind = WASMTIME_UPDATE_DEADLINE_CONTINUE;
         let result = (func)(
             store_ctx.as_context_mut(),
-            sendable.as_mut_ptr(),
+            foreign.data,
             &mut delta as *mut u64,
+            &mut kind as *mut wasmtime_update_deadline_kind_t,
         );
         match result {
             Some(err) => Err(wasmtime::Error::from(<wasmtime_error_t as Into<
                 anyhow::Error,
             >>::into(*err))),
-            None => Ok(UpdateDeadline::Continue(delta)),
+            None if kind == WASMTIME_UPDATE_DEADLINE_CONTINUE => {
+                Ok(UpdateDeadline::Continue(delta))
+            }
+            #[cfg(feature = "async")]
+            None if kind == WASMTIME_UPDATE_DEADLINE_YIELD => Ok(UpdateDeadline::Yield(delta)),
+            _ => panic!("unknown wasmtime_update_deadline_kind_t: {}", kind),
         }
     });
 }

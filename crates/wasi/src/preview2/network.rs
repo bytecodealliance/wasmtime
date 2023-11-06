@@ -30,6 +30,12 @@ impl From<rustix::io::Errno> for SocketError {
     }
 }
 
+#[derive(Copy, Clone)]
+pub enum SocketAddressFamily {
+    Ipv4,
+    Ipv6 { v6only: bool },
+}
+
 pub(crate) fn to_ipv4_addr(addr: Ipv4Address) -> std::net::Ipv4Addr {
     let (x0, x1, x2, x3) = addr;
     std::net::Ipv4Addr::new(x0, x1, x2, x3)

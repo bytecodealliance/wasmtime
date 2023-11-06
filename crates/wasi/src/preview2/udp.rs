@@ -7,6 +7,8 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use super::network::SocketAddressFamily;
+
 /// The state of a UDP socket.
 ///
 /// This represents the various states a socket can be in during the
@@ -39,7 +41,7 @@ pub struct UdpSocket {
     pub(crate) udp_state: UdpState,
 
     /// Socket address family.
-    pub(crate) family: AddressFamily,
+    pub(crate) family: SocketAddressFamily,
 }
 
 #[async_trait]
@@ -52,10 +54,19 @@ impl Subscribe for UdpSocket {
 impl UdpSocket {
     /// Create a new socket in the given family.
     pub fn new(family: AddressFamily) -> io::Result<Self> {
+        let socket = Self::new_tokio_socket(family)?;
+
+        let socket_address_family = match family {
+            AddressFamily::Ipv4 => SocketAddressFamily::Ipv4,
+            AddressFamily::Ipv6 => SocketAddressFamily::Ipv6 {
+                v6only: rustix::net::sockopt::get_ipv6_v6only(&socket)?,
+            },
+        };
+
         Ok(UdpSocket {
-            inner: Arc::new(Self::new_tokio_socket(family)?),
+            inner: Arc::new(socket),
             udp_state: UdpState::Default,
-            family,
+            family: socket_address_family,
         })
     }
 
@@ -88,6 +99,9 @@ pub struct OutgoingDatagramStream {
 
     /// If this has a value, the stream is "connected".
     pub(crate) remote_address: Option<SocketAddr>,
+
+    /// Socket address family.
+    pub(crate) family: SocketAddressFamily,
 
     pub(crate) send_state: SendState,
 }
