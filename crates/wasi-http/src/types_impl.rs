@@ -170,19 +170,23 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         Ok(Ok(()))
     }
 
-    fn delete(&mut self, fields: Resource<HostFields>, name: String) -> wasmtime::Result<()> {
+    fn delete(
+        &mut self,
+        fields: Resource<HostFields>,
+        name: String,
+    ) -> wasmtime::Result<Result<(), types::HeaderError>> {
         let header = match hyper::header::HeaderName::from_bytes(name.as_bytes()) {
             Ok(header) => header,
-            Err(_) => return Ok(()),
+            Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
         if is_forbidden_header(self, &header) {
-            return Ok(());
+            return Ok(Err(types::HeaderError::Forbidden));
         }
 
         let m = get_fields_mut(self.table(), &fields)?;
         m.remove(header);
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn append(

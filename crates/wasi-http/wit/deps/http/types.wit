@@ -88,9 +88,9 @@ interface types {
     set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
 
     /// Delete all values for a key. Does nothing if no values for the key
-    /// exist, the `field-key` is syntactically invalid, or if the `field-key`
-    /// is forbidden.
-    delete: func(name: field-key);
+    /// exist. Returns and error if the `field-key` is syntactically invalid, or
+    /// if the `field-key` is forbidden.
+    delete: func(name: field-key) -> result<_, header-error>;
 
     /// Append a value for a key. Does not change or delete any existing
     /// values for that key.
@@ -98,7 +98,6 @@ interface types {
     /// The operation can fail if the name or value arguments are invalid, or if
     /// the name is forbidden.
     append: func(name: field-key, value: field-value) -> result<_, header-error>;
-
 
     /// Retrieve the full set of keys and values in the Fields. Like the
     /// constructor, the list represents each key-value pair. 
