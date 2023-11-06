@@ -46,6 +46,11 @@
       (rs1 Reg)
       (rs2 Reg))
 
+    (RemArith
+      (rd WritableReg)
+      (rs1 Reg)
+      (rs2 Reg))
+
     ;; An load
     (Load
       (rd WritableReg)
@@ -705,6 +710,14 @@
 (rule (zk_div rs1 rs2)
       (let ((dst WritableXReg (temp_writable_xreg))
             (_ Unit (emit (MInst.DivArith dst rs1 rs2))))
+        dst))
+
+;; Helper for emitting the `rem` instruction.
+;; rd ← rs1 % rs2
+(decl zk_rem (XReg XReg) XReg)
+(rule (zk_rem rs1 rs2)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.RemArith dst rs1 rs2))))
         dst))
 
 ;; Helper for emitting the `divu` ("Divide Unsigned") instruction.

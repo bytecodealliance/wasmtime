@@ -211,5 +211,6 @@ mod tests {
         _should_fail_unreachable,
         i32_const,
         i64_const,
+        rem,
     }
 }
