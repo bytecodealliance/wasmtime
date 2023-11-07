@@ -57,9 +57,6 @@
 (rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
   (rv_subw x y))
 
-(rule 2 (lower (has_type $I128 (isub x y)))
-  (i128_sub x y))
-
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (ty_int ty) (ineg val)))
@@ -72,33 +69,6 @@
 
 (rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (imul x y)))
   (zk_mul x y))
-
-;; for I128
-(rule 2 (lower (has_type $I128 (imul x y)))
-  (let
-    ((x_regs ValueRegs x)
-      (x_lo XReg (value_regs_get x_regs 0))
-      (x_hi XReg (value_regs_get x_regs 1))
-
-      ;; Get the high/low registers for `y`.
-      (y_regs ValueRegs y)
-      (y_lo XReg (value_regs_get y_regs 0))
-      (y_hi XReg (value_regs_get y_regs 1))
-
-      ;; 128bit mul formula:
-      ;;   dst_lo = x_lo * y_lo
-      ;;   dst_hi = mulhu(x_lo, y_lo) + (x_lo * y_hi) + (x_hi * y_lo)
-      ;;
-      ;; We can convert the above formula into the following
-      ;; mulhu   dst_hi, x_lo, y_lo
-      ;; madd    dst_hi, x_lo, y_hi, dst_hi
-      ;; madd    dst_hi, x_hi, y_lo, dst_hi
-      ;; madd    dst_lo, x_lo, y_lo, zero
-      (dst_hi1 XReg (rv_mulhu x_lo y_lo))
-      (dst_hi2 XReg (madd x_lo y_hi dst_hi1))
-      (dst_hi XReg (madd x_hi y_lo dst_hi2))
-      (dst_lo XReg (madd x_lo y_lo (zero_reg))))
-    (value_regs dst_lo dst_hi)))
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (smulhi x y)))
@@ -152,34 +122,19 @@
 (rule 0 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
   (rv_xor x y))
 
-(rule 3 (lower (has_type $I128 (bxor x y)))
-  (lower_b128_binary (AluOPRRR.Xor) x y))
-
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bswap x)))
   (gen_bswap ty x))
 
-(rule 2 (lower (has_type $I128 (bswap x)))
-  (value_regs
-    (gen_bswap $I64 (value_regs_get x 1))
-    (gen_bswap $I64 (value_regs_get x 0))))
-
-
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (ctz x)))
   (lower_ctz ty x))
 
-(rule 1 (lower (has_type $I128 (ctz x)))
-  (lower_ctz_128 x))
-
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (clz x)))
   (lower_clz ty x))
-
-(rule 1 (lower (has_type $I128 (clz x)))
-  (lower_clz_i128 x))
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type out_ty (uextend val @ (value_type in_ty))))
@@ -223,26 +178,6 @@
 (rule 1 (lower (has_type $I64 (ishl x y)))
   (rv_sll x (value_regs_get y 0)))
 
-; ;; I128 cases
-; (rule 4 (lower (has_type $I128 (ishl x y)))
-;   (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-;         (shamt XReg (value_regs_get tmp 0))
-;         (len_sub_shamt XReg (value_regs_get tmp 1))
-;         ;;
-;         (low XReg (rv_sll (value_regs_get x 0) shamt))
-;         ;; high part.
-;         (high_part1 XReg (rv_srl (value_regs_get x 0) len_sub_shamt))
-;         (high_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part1))
-;         ;;
-;         (high_part3 XReg (rv_sll (value_regs_get x 1) shamt))
-;         (high XReg (rv_or high_part2 high_part3))
-;         ;;
-;         (const64 XReg (load_u64_constant 64))
-;         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-;     (value_regs
-;       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
-;       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
-
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 8/16 bit types need a mask on the shift amount, and the LHS needs to be
@@ -258,25 +193,6 @@
 ;; Similarly, the 64bit version does the right thing.
 (rule 1 (lower (has_type $I64 (ushr x y)))
   (rv_srl x (value_regs_get y 0)))
-
-; (rule 3 (lower (has_type $I128 (ushr x y)))
-;   (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-;         (shamt XReg (value_regs_get tmp 0))
-;         (len_sub_shamt XReg (value_regs_get tmp 1))
-;         ;; low part.
-;         (low_part1 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
-;         (low_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
-;         ;;
-;         (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
-;         (low XReg (rv_or low_part2 low_part3))
-;         ;;
-;         (const64 XReg (load_u64_constant 64))
-;         ;;
-;         (high XReg (rv_srl (value_regs_get x 1) shamt))
-;         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-;     (value_regs
-;       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
-;       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -294,43 +210,13 @@
 (rule 1 (lower (has_type $I64 (sshr x y)))
   (rv_sra x (value_regs_get y 0)))
 
-; (rule 3 (lower (has_type $I128 (sshr x y)))
-;   (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-;         (shamt XReg (value_regs_get tmp 0))
-;         (len_sub_shamt XReg (value_regs_get tmp 1))
-;         ;; low part.
-;         (low_part1 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
-;         (low_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
-;         ;;
-;         (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
-;         (low XReg (rv_or low_part2 low_part3))
-;         ;;
-;         (const64 XReg (load_u64_constant 64))
-;         ;;
-;         (high XReg (rv_sra (value_regs_get x 1) shamt))
-;         ;;
-;         (const_neg_1 XReg (load_imm12 -1))
-;         ;;
-;         (high_replacement XReg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
-;         (const64 XReg (load_u64_constant 64))
-;         (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-;     (value_regs
-;       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
-;       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
-
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (rotl x y)))
   (lower_rotl ty (zext x ty $I64) (value_regs_get y 0)))
 
-; (rule 1 (lower (has_type $I128 (rotl x y)))
-;   (lower_i128_rotl x y))
-
 ;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (rotr x y)))
   (lower_rotr ty (zext x ty $I64) (value_regs_get y 0)))
-
-; (rule 1 (lower (has_type $I128 (rotr x y)))
-;   (lower_i128_rotr x y))
 
 ;;;;;  Rules for `ireduce`;;;;;;;;;;;;;;;;;
 (rule
@@ -381,15 +267,6 @@
     ((t1 XReg (value_regs_get x 0))
       (t2 XReg (value_regs_get x 1)))
     (output_pair t1 t2)))
-
-;;;;;  Rules for `iconcat`;;;;;;;;;
-(rule
-  (lower (has_type $I128 (iconcat x y)))
-  (let
-    ((t1 XReg x)
-      (t2 XReg y))
-    (value_regs t1 t2)))
-
 
 ;;;;;  Rules for `smax`;;;;;;;;;
 
@@ -458,10 +335,6 @@
   (lower (has_type ty (load flags p @ (value_type (ty_addr32 _)) offset)))
   (gen_load p offset (load_op ty) flags ty)
 )
-;;;; for I128
-(rule 1
-  (lower (has_type $I128 (load flags p @ (value_type (ty_addr64 _)) offset)))
-  (gen_load_128 p offset flags))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule
@@ -481,11 +354,6 @@
 (rule
   (lower (store flags x @ (value_type ty) p @ (value_type (ty_addr32 _)) offset))
   (gen_store p offset (store_op ty) flags x))
-
-;;; special for I128
-(rule 1
-  (lower (store flags x @ (value_type $I128 ) p @ (value_type (ty_addr64 _)) offset))
-  (gen_store_128 p offset flags x))
 
 (decl gen_icmp (IntCC ValueRegs ValueRegs Type) XReg)
 (rule
