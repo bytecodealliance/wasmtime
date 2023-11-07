@@ -89,8 +89,11 @@ pub(crate) trait ABI {
         Self::word_bits() / 8
     }
 
-    /// Returns the designated scratch register.
+    /// Returns the designated general purpose scratch register.
     fn scratch_reg() -> Reg;
+
+    /// Returns the designated floating point scratch register.
+    fn float_scratch_reg() -> Reg;
 
     /// Returns the frame pointer register.
     fn fp_reg() -> Reg;
