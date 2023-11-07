@@ -15,7 +15,22 @@ use bindings::wasi::http::types::{IncomingRequest, ResponseOutparam};
 struct T;
 
 impl bindings::exports::wasi::http::incoming_handler::Guest for T {
-    fn handle(_request: IncomingRequest, outparam: ResponseOutparam) {
+    fn handle(request: IncomingRequest, outparam: ResponseOutparam) {
+        let header = String::from("custom-forbidden-header");
+        let req_hdrs = request.headers();
+
+        assert!(
+            !req_hdrs.get(&header).is_empty(),
+            "missing `custom-forbidden-header` from request"
+        );
+
+        assert!(req_hdrs.delete(&header).is_err());
+
+        assert!(
+            !req_hdrs.get(&header).is_empty(),
+            "delete of forbidden header succeeded"
+        );
+
         let hdrs = bindings::wasi::http::types::Headers::new();
         let resp = bindings::wasi::http::types::OutgoingResponse::new(hdrs);
         let body = resp.body().expect("outgoing response");
