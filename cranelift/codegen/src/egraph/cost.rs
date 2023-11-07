@@ -117,11 +117,7 @@ impl Cost {
 
 impl std::iter::Sum<Cost> for Cost {
     fn sum<I: Iterator<Item = Cost>>(iter: I) -> Self {
-        let mut c = Self::zero();
-        for x in iter {
-            c = c + x;
-        }
-        c
+        iter.fold(Self::zero(), |a, b| a + b)
     }
 }
 
