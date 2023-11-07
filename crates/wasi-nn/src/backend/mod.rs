@@ -8,24 +8,23 @@ mod openvino;
 use self::openvino::OpenvinoBackend;
 use crate::backend::kserve::{KServeBackend, KServeClient};
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
-use crate::{Backend, ExecutionContext, Graph, GraphRegistry};
+use crate::{Backend, ExecutionContext, Graph, GraphRegistry, Registry};
 use std::{error::Error, fmt, path::Path, str::FromStr};
-use std::path::Path;
 
 use thiserror::Error;
 use wiggle::async_trait_crate::async_trait;
 use wiggle::GuestError;
 
 /// Return a list of all available backend frameworks.
-pub fn list() -> Vec<(BackendKind, Box<dyn Backend>)> {
+pub fn list() -> Vec<Backend> {
     vec![
-        (BackendKind::OpenVINO, Box::new(OpenvinoBackend::default())),
-        (BackendKind::KServe, Box::new(KServeBackend::default())),
+        (Backend::from(OpenvinoBackend::default())),
+        (Backend::from(KServeBackend::default())),
     ]
 }
 
-pub fn build_kserve_registry(server_url: &String) -> Box<dyn GraphRegistry> {
-    Box::new(KServeBackend { server_url: server_url.clone(), ..Default::default() })
+pub fn build_kserve_registry(server_url: &String) -> Registry {
+    Registry::from(KServeBackend { server_url: server_url.clone(), ..Default::default() })
 }
 
 /// A [Backend] contains the necessary state to load [Graph]s.
@@ -77,30 +76,30 @@ pub enum BackendError {
     #[error("Unsupoprted operation: {0}")]
     UnsupportedOperation(&'static str),
 }
-
-#[derive(Hash, PartialEq, Debug, Eq, Clone, Copy)]
-pub enum BackendKind {
-    OpenVINO,
-    KServe,
-}
-
-impl FromStr for BackendKind {
-    type Err = BackendKindParseError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "openvino" => Ok(BackendKind::OpenVINO),
-            _ => Err(BackendKindParseError(s.into())),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BackendKindParseError(String);
-
-impl fmt::Display for BackendKindParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "unknown backend: {}", self.0)
-    }
-}
-
-impl Error for BackendKindParseError {}
+//
+// #[derive(Hash, PartialEq, Debug, Eq, Clone, Copy)]
+// pub enum BackendKind {
+//     OpenVINO,
+//     KServe,
+// }
+//
+// impl FromStr for BackendKind {
+//     type Err = BackendKindParseError;
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         match s.to_lowercase().as_str() {
+//             "openvino" => Ok(BackendKind::OpenVINO),
+//             _ => Err(BackendKindParseError(s.into())),
+//         }
+//     }
+// }
+//
+// #[derive(Debug)]
+// pub struct BackendKindParseError(String);
+//
+// impl fmt::Display for BackendKindParseError {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "unknown backend: {}", self.0)
+//     }
+// }
+//
+// impl Error for BackendKindParseError {}

@@ -183,6 +183,9 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         index: u32,
         tensor: &gen::types::Tensor<'b>,
     ) -> Result<()> {
+
+
+
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
             let tensor = crate::wit::types::Tensor {
                 dimensions: tensor.dimensions.to_vec()?,
@@ -223,15 +226,15 @@ impl<'a> gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
 }
 
 // Implement some conversion from `witx::types::*` to this crate's version.
-impl TryFrom<gen::types::GraphEncoding> for crate::backend::BackendKind {
-    type Error = UsageError;
-    fn try_from(value: gen::types::GraphEncoding) -> std::result::Result<Self, Self::Error> {
-        match value {
-            gen::types::GraphEncoding::Openvino => Ok(crate::backend::BackendKind::OpenVINO),
-            _ => Err(UsageError::InvalidEncoding(value.into())),
-        }
-    }
-}
+// impl TryFrom<gen::types::GraphEncoding> for crate::backend::BackendKind {
+//     type Error = UsageError;
+//     fn try_from(value: gen::types::GraphEncoding) -> std::result::Result<Self, Self::Error> {
+//         match value {
+//             gen::types::GraphEncoding::Openvino => Ok(crate::backend::BackendKind::OpenVINO),
+//             _ => Err(UsageError::InvalidEncoding(value.into())),
+//         }
+//     }
+// }
 
 impl From<gen::types::ExecutionTarget> for crate::wit::types::ExecutionTarget {
     fn from(value: gen::types::ExecutionTarget) -> Self {

@@ -1,14 +1,14 @@
 //! Implements the host state for the `wasi-nn` API: [WasiNnCtx].
 
-use crate::backend::{self, Backend, BackendError, BackendKind, build_kserve_registry};
+use crate::backend::{self, BackendError, build_kserve_registry};
 use crate::wit::types::GraphEncoding;
-use crate::{backend, Backend, ExecutionContext, Graph, GraphRegistry, InMemoryRegistry, Registry};
+use crate::{Backend, ExecutionContext, Graph, GraphRegistry, InMemoryRegistry, Registry};
 
 use anyhow::anyhow;
 use std::{collections::HashMap, hash::Hash, path::Path};
 use thiserror::Error;
 use wiggle::GuestError;
-use crate::backend::BackendKind::KServe;
+// use crate::backend::BackendKind::KServe;
 
 type GraphId = u32;
 type GraphExecutionContextId = u32;
@@ -37,9 +37,9 @@ pub fn preload(
     Ok((backends, Registry::from(registry)))
 }
 
-pub fn kserve_registry() -> anyhow::Result<(Backends, Registry)> {
-    let mut backends: HashMap<_, _> = crate::backend::list().into_iter().collect();
-    let mut registry = build_kserve_registry(&"http://localhost:8000".to_string());
+pub fn kserve_registry() -> anyhow::Result<(impl IntoIterator<Item = Backend>, Registry)> {
+    let mut backends = backend::list();
+    let registry = build_kserve_registry(&"http://localhost:8000".to_string());
 
     Ok((backends, registry))
 }

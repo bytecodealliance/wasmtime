@@ -24,8 +24,8 @@ use wasmtime::component::__internal::wasmtime_environ::object::BigEndian;
 use wiggle::async_trait_crate::async_trait;
 
 use crate::{ExecutionContext, Graph, GraphRegistry};
-use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph};
-use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
+use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner};
+use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use std::cmp::min;
 
 const INFERENCE_HEADER_CONTENT_LENGTH: &str = "inference-header-content-length";
@@ -48,9 +48,9 @@ impl Default for KServeBackend {
     }
 }
 
-impl Backend for KServeBackend {
-    fn name(&self) -> &str {
-        "KServe"
+impl BackendInner for KServeBackend {
+    fn encoding(&self) -> GraphEncoding {
+        GraphEncoding::Autodetect
     }
 
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
@@ -148,7 +148,7 @@ impl BackendExecutionContext for KServeExecutionContext {
             outputs: &outputs,
         };
         let mut result = self.client.inference_request(&self.model_metadata.name, &inference_request).await?;
-        self.outputs.append(& mut result.outputs);
+        self.outputs.append(&mut result.outputs);
         Ok(())
     }
 
@@ -220,28 +220,51 @@ fn read_tensor_elements(tensor: &Tensor) -> Vec<KServeTensorElement> {
     let mut cursor = Cursor::new(tensor.data.as_slice().to_vec());
 
     let mut data = match tensor.tensor_type {
-        TensorType::U8 | TensorType::Bytes => Vec::with_capacity(1),
+        TensorType::U8 => Vec::with_capacity(1),
         _ => Vec::with_capacity(tensor.data.len() / map_tensor_type_to_size(&tensor.tensor_type))
     };
 
-    let expected_size = tensor.dimensions.iter().fold(1u32, |acc, d| acc * d) as usize;
+    let parse_bytes_as_string = tensor.dimensions[0] == 0;
+
+    let expected_size = if parse_bytes_as_string {
+        //Skip the first dimension if it is 0
+        tensor.dimensions.iter().skip(1).fold(1u32, |acc, d| acc * d) as usize
+    } else {
+        tensor.dimensions.iter().fold(1u32, |acc, d| acc * d) as usize
+    };
+
+    //TODO: We've determined alignment is not an issue so in theory as long as there are enough
+    //bytes passed in the tensor to match the expected dimensions it should be safe to just
+    //do an unsafe Vec::from_raw_parts.
     while cursor.has_remaining() {
         data.push(match tensor.tensor_type {
-            // TensorType::U8 => KServeTensorElement::Number(Number::from(cursor.read_u8().unwrap())),
             TensorType::Bf16 => panic!("bf16 is not supported for kserve backend."),
             TensorType::Fp16 => panic!("bf16 is not supported for kserve backend."),
             TensorType::I32 => KServeTensorElement::Number(Number::from(cursor.read_i32::<LittleEndian>().unwrap())),
+            TensorType::I64 => KServeTensorElement::Number(Number::from(cursor.read_i64::<LittleEndian>().unwrap())),
             TensorType::Fp32 => KServeTensorElement::Number(Number::from_f64(cursor.read_f32::<LittleEndian>().unwrap() as f64).unwrap()),
-            TensorType::Bytes | TensorType::U8 => unsafe {
-                assert_eq!(tensor.dimensions[0] * tensor.dimensions[0], 1);
-                assert_eq!(tensor.dimensions[1], 1);
-                let mut s: String = String::new();
-                cursor.read_to_string(&mut s);
-                KServeTensorElement::String(s)
+            TensorType::Fp64 => KServeTensorElement::Number(Number::from_f64(cursor.read_f64::<LittleEndian>().unwrap()).unwrap()),
+            TensorType::U8 => unsafe {
+                if parse_bytes_as_string {
+                    let mut s: String = String::new();
+                    let strlen = cursor
+                        .read_to_string(&mut s)
+                        .expect("Unable to read string from tensor");
+                    assert!(tensor.dimensions[1] == 1 || (tensor.dimensions[1] as usize) == strlen);
+                    KServeTensorElement::String(s)
+                } else {
+                    KServeTensorElement::Number(Number::from(cursor.read_u8().unwrap()))
+                }
             }
         });
     }
-    assert_eq!(expected_size, data.len());
+
+    if parse_bytes_as_string {
+        //It can either be 1 or the length of data, if it was specified in the tensor.
+        assert!(expected_size == 1 || expected_size == data.len())
+    } else {
+        assert_eq!(expected_size, data.len());
+    }
     data
 }
 
@@ -252,7 +275,8 @@ fn map_tensor_type_to_size(tensor_type: &TensorType) -> usize {
         TensorType::Fp16 => 2,
         TensorType::I32 => 4,
         TensorType::Fp32 => 4,
-        TensorType::Bytes => 1,
+        TensorType::Fp64 => 8,
+        TensorType::I64 => 8,
     }
 }
 
@@ -262,7 +286,6 @@ fn map_datatype_to_tensor_type(datatype: &KServeDatatype) -> TensorType {
         KServeDatatype::INT32 => TensorType::I32,
         KServeDatatype::FP16 => TensorType::Fp16,
         KServeDatatype::FP32 => TensorType::Fp32,
-        KServeDatatype::BYTES => TensorType::Bytes,
         KServeDatatype::BF16 => TensorType::Bf16,
         _ => panic!("Unsupported operation.")
     }
@@ -275,7 +298,8 @@ fn map_tensor_type_to_datatype(tensor_type: TensorType) -> KServeDatatype {
         TensorType::Fp16 => KServeDatatype::FP16,
         TensorType::I32 => KServeDatatype::INT32,
         TensorType::Fp32 => KServeDatatype::FP32,
-        TensorType::Bytes => KServeDatatype::BYTES,
+        TensorType::I64 => KServeDatatype::INT64,
+        TensorType::Fp64 => KServeDatatype::FP64,
     }
 }
 
@@ -745,7 +769,7 @@ async fn try_deserialize<T: DeserializeOwned>(
     //     .map(|collected| collected.aggregate())
     //     .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
     let body = response.collect().await.unwrap().to_bytes().to_vec();
-    println!("Body: {:?}", String::from_utf8(body[..min(body.len(),256)].to_vec()));
+    println!("Body: {:?}", String::from_utf8(body[..min(body.len(), 256)].to_vec()));
     serde_json::from_slice(body.as_slice())//from_reader(body.reader())
         .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))
 }
