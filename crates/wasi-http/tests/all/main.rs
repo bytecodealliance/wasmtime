@@ -199,11 +199,18 @@ async fn run_wasi_http(
 
 #[test_log::test(tokio::test)]
 async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
-    let req = hyper::Request::builder()
-        .method(http::Method::GET)
-        .body(body::empty())?;
+    let mut req = hyper::Request::builder().method(http::Method::GET);
 
-    let resp = run_wasi_http(test_programs_artifacts::API_PROXY_COMPONENT, req, None).await?;
+    req.headers_mut()
+        .unwrap()
+        .append("custom-forbidden-header", "yes".parse().unwrap());
+
+    let resp = run_wasi_http(
+        test_programs_artifacts::API_PROXY_COMPONENT,
+        req.body(body::empty())?,
+        None,
+    )
+    .await?;
 
     match resp {
         Ok(resp) => println!("response: {resp:?}"),
