@@ -2,6 +2,7 @@ use crate::wasi::clocks::monotonic_clock;
 use crate::wasi::io::poll::{self, Pollable};
 use crate::wasi::io::streams::{InputStream, OutputStream, StreamError};
 use crate::wasi::sockets::instance_network;
+use crate::wasi::sockets::ip_name_lookup;
 use crate::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
     Network,
@@ -52,6 +53,31 @@ impl OutputStream {
 impl Network {
     pub fn default() -> Network {
         instance_network::instance_network()
+    }
+
+    pub fn blocking_resolve_addresses(&self, name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
+        let stream = ip_name_lookup::resolve_addresses(&self, name)?;
+
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
+        let pollable = stream.subscribe();
+
+        let mut addresses = vec![];
+
+        loop {
+            match stream.resolve_next_address() {
+                Ok(Some(addr)) => {
+                    addresses.push(addr);
+                }
+                Ok(None) => match addresses[..] {
+                    [] => return Err(ErrorCode::NameUnresolvable),
+                    _ => return Ok(addresses),
+                },
+                Err(ErrorCode::WouldBlock) => {
+                    pollable.wait_until(&timeout)?;
+                }
+                Err(err) => return Err(err),
+            }
+        }
     }
 }
 
@@ -139,6 +165,13 @@ impl UdpSocket {
                 result => return result,
             }
         }
+    }
+
+    pub fn blocking_bind_unspecified(&self, network: &Network) -> Result<(), ErrorCode> {
+        let ip = IpAddress::new_unspecified(self.address_family());
+        let port = 0;
+
+        self.blocking_bind(network, IpSocketAddress::new(ip, port))
     }
 }
 

@@ -1,13 +1,17 @@
 use crate::preview2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
-use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, IpAddressFamily, Network};
+use crate::preview2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
+use crate::preview2::host::network::util;
 use crate::preview2::poll::{subscribe, Pollable, Subscribe};
 use crate::preview2::{spawn_blocking, AbortOnDropJoinHandle, SocketError, WasiView};
 use anyhow::Result;
 use std::mem;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::{Ipv6Addr, ToSocketAddrs};
 use std::pin::Pin;
+use std::str::FromStr;
 use std::vec;
 use wasmtime::component::Resource;
+
+use super::network::{from_ipv4_addr, from_ipv6_addr};
 
 pub enum ResolveAddressStream {
     Waiting(AbortOnDropJoinHandle<Result<Vec<IpAddress>, SocketError>>),
@@ -20,60 +24,16 @@ impl<T: WasiView> Host for T {
         &mut self,
         network: Resource<Network>,
         name: String,
-        family: Option<IpAddressFamily>,
-        include_unavailable: bool,
     ) -> Result<Resource<ResolveAddressStream>, SocketError> {
         let network = self.table().get(&network)?;
 
-        // `Host::parse` serves us two functions:
-        // 1. validate the input is not an IP address,
-        // 2. convert unicode domains to punycode.
-        let name = match url::Host::parse(&name).map_err(|_| ErrorCode::InvalidArgument)? {
-            url::Host::Domain(name) => name,
-            url::Host::Ipv4(_) => return Err(ErrorCode::InvalidArgument.into()),
-            url::Host::Ipv6(_) => return Err(ErrorCode::InvalidArgument.into()),
-        };
+        let host = parse(&name)?;
 
         if !network.allow_ip_name_lookup {
             return Err(ErrorCode::PermanentResolverFailure.into());
         }
 
-        // ignored for now, should probably have a future PR to actually take
-        // this into account. This would require invoking `getaddrinfo` directly
-        // rather than using the standard library to do it for us.
-        let _ = include_unavailable;
-
-        // For now use the standard library to perform actual resolution through
-        // the usage of the `ToSocketAddrs` trait. This blocks the current
-        // thread, so use `spawn_blocking`. Finally note that this is only
-        // resolving names, not ports, so force the port to be 0.
-        let task = spawn_blocking(move || -> Result<Vec<_>, SocketError> {
-            let result = (name.as_str(), 0)
-                .to_socket_addrs()
-                .map_err(|_| ErrorCode::NameUnresolvable)?; // If/when we use `getaddrinfo` directly, map the error properly.
-            Ok(result
-                .filter_map(|addr| {
-                    // In lieu of preventing these addresses from being resolved
-                    // in the first place, filter them out here.
-                    match addr {
-                        SocketAddr::V4(addr) => match family {
-                            None | Some(IpAddressFamily::Ipv4) => {
-                                let [a, b, c, d] = addr.ip().octets();
-                                Some(IpAddress::Ipv4((a, b, c, d)))
-                            }
-                            Some(IpAddressFamily::Ipv6) => None,
-                        },
-                        SocketAddr::V6(addr) => match family {
-                            None | Some(IpAddressFamily::Ipv6) => {
-                                let [a, b, c, d, e, f, g, h] = addr.ip().segments();
-                                Some(IpAddress::Ipv6((a, b, c, d, e, f, g, h)))
-                            }
-                            Some(IpAddressFamily::Ipv4) => None,
-                        },
-                    }
-                })
-                .collect())
-        });
+        let task = spawn_blocking(move || blocking_resolve(&host));
         let resource = self.table_mut().push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }
@@ -123,6 +83,43 @@ impl Subscribe for ResolveAddressStream {
     async fn ready(&mut self) {
         if let ResolveAddressStream::Waiting(future) = self {
             *self = ResolveAddressStream::Done(future.await.map(|v| v.into_iter()));
+        }
+    }
+}
+
+fn parse(name: &str) -> Result<url::Host, SocketError> {
+    // `url::Host::parse` serves us two functions:
+    // 1. validate the input is a valid domain name or IP,
+    // 2. convert unicode domains to punycode.
+    match url::Host::parse(&name) {
+        Ok(host) => Ok(host),
+
+        // `url::Host::parse` doesn't understand bare IPv6 addresses without [brackets]
+        Err(_) => {
+            if let Ok(addr) = Ipv6Addr::from_str(name) {
+                Ok(url::Host::Ipv6(addr))
+            } else {
+                Err(ErrorCode::InvalidArgument.into())
+            }
+        }
+    }
+}
+
+fn blocking_resolve(host: &url::Host) -> Result<Vec<IpAddress>, SocketError> {
+    match host {
+        url::Host::Ipv4(v4addr) => Ok(vec![IpAddress::Ipv4(from_ipv4_addr(*v4addr))]),
+        url::Host::Ipv6(v6addr) => Ok(vec![IpAddress::Ipv6(from_ipv6_addr(*v6addr))]),
+        url::Host::Domain(domain) => {
+            // For now use the standard library to perform actual resolution through
+            // the usage of the `ToSocketAddrs` trait. This is only
+            // resolving names, not ports, so force the port to be 0.
+            let addresses = (domain.as_str(), 0)
+                .to_socket_addrs()
+                .map_err(|_| ErrorCode::NameUnresolvable)? // If/when we use `getaddrinfo` directly, map the error properly.
+                .map(|addr| util::to_canonical(&addr.ip()).into())
+                .collect();
+
+            Ok(addresses)
         }
     }
 }

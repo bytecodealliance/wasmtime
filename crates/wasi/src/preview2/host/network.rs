@@ -1,7 +1,8 @@
 use crate::preview2::bindings::sockets::network::{
-    self, ErrorCode, IpAddressFamily, IpSocketAddress, Ipv4Address, Ipv4SocketAddress, Ipv6Address,
+    self, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress,
     Ipv6SocketAddress,
 };
+use crate::preview2::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
 use crate::preview2::{SocketError, WasiView};
 use rustix::io::Errno;
 use std::io;
@@ -104,6 +105,15 @@ impl From<Errno> for ErrorCode {
     }
 }
 
+impl From<std::net::IpAddr> for IpAddress {
+    fn from(addr: std::net::IpAddr) -> Self {
+        match addr {
+            std::net::IpAddr::V4(v4) => Self::Ipv4(from_ipv4_addr(v4)),
+            std::net::IpAddr::V6(v6) => Self::Ipv6(from_ipv6_addr(v6)),
+        }
+    }
+}
+
 impl From<IpSocketAddress> for std::net::SocketAddr {
     fn from(addr: IpSocketAddress) -> Self {
         match addr {
@@ -159,26 +169,6 @@ impl From<std::net::SocketAddrV6> for Ipv6SocketAddress {
     }
 }
 
-fn to_ipv4_addr(addr: Ipv4Address) -> std::net::Ipv4Addr {
-    let (x0, x1, x2, x3) = addr;
-    std::net::Ipv4Addr::new(x0, x1, x2, x3)
-}
-
-fn from_ipv4_addr(addr: std::net::Ipv4Addr) -> Ipv4Address {
-    let [x0, x1, x2, x3] = addr.octets();
-    (x0, x1, x2, x3)
-}
-
-fn to_ipv6_addr(addr: Ipv6Address) -> std::net::Ipv6Addr {
-    let (x0, x1, x2, x3, x4, x5, x6, x7) = addr;
-    std::net::Ipv6Addr::new(x0, x1, x2, x3, x4, x5, x6, x7)
-}
-
-fn from_ipv6_addr(addr: std::net::Ipv6Addr) -> Ipv6Address {
-    let [x0, x1, x2, x3, x4, x5, x6, x7] = addr.segments();
-    (x0, x1, x2, x3, x4, x5, x6, x7)
-}
-
 impl std::net::ToSocketAddrs for IpSocketAddress {
     type Iter = <std::net::SocketAddr as std::net::ToSocketAddrs>::Iter;
 
@@ -217,6 +207,254 @@ impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
         match family {
             cap_net_ext::AddressFamily::Ipv4 => IpAddressFamily::Ipv4,
             cap_net_ext::AddressFamily::Ipv6 => IpAddressFamily::Ipv6,
+        }
+    }
+}
+
+pub(crate) mod util {
+    use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+
+    use crate::preview2::bindings::sockets::network::ErrorCode;
+    use crate::preview2::network::SocketAddressFamily;
+    use crate::preview2::SocketResult;
+    use cap_net_ext::{Blocking, TcpBinder, TcpConnecter, TcpListenerExt, UdpBinder};
+    use cap_std::net::{TcpListener, TcpStream, UdpSocket};
+    use rustix::fd::AsFd;
+    use rustix::io::Errno;
+    use rustix::net::sockopt;
+
+    pub fn validate_unicast(addr: &SocketAddr) -> SocketResult<()> {
+        match to_canonical(&addr.ip()) {
+            IpAddr::V4(ipv4) => {
+                if ipv4.is_multicast() || ipv4.is_broadcast() {
+                    Err(ErrorCode::InvalidArgument.into())
+                } else {
+                    Ok(())
+                }
+            }
+            IpAddr::V6(ipv6) => {
+                if ipv6.is_multicast() {
+                    Err(ErrorCode::InvalidArgument.into())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    pub fn validate_remote_address(addr: &SocketAddr) -> SocketResult<()> {
+        if to_canonical(&addr.ip()).is_unspecified() {
+            return Err(ErrorCode::InvalidArgument.into());
+        }
+
+        if addr.port() == 0 {
+            return Err(ErrorCode::InvalidArgument.into());
+        }
+
+        Ok(())
+    }
+
+    pub fn validate_address_family(
+        addr: &SocketAddr,
+        socket_family: &SocketAddressFamily,
+    ) -> SocketResult<()> {
+        match (socket_family, addr.ip()) {
+            (SocketAddressFamily::Ipv4, IpAddr::V4(_)) => Ok(()),
+            (SocketAddressFamily::Ipv6 { v6only }, IpAddr::V6(ipv6)) => {
+                if is_deprecated_ipv4_compatible(&ipv6) {
+                    // Reject IPv4-*compatible* IPv6 addresses. They have been deprecated
+                    // since 2006, OS handling of them is inconsistent and our own
+                    // validations don't take them into account either.
+                    // Note that these are not the same as IPv4-*mapped* IPv6 addresses.
+                    Err(ErrorCode::InvalidArgument.into())
+                } else if *v6only && ipv6.to_ipv4_mapped().is_some() {
+                    Err(ErrorCode::InvalidArgument.into())
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Err(ErrorCode::InvalidArgument.into()),
+        }
+    }
+
+    // Can be removed once `IpAddr::to_canonical` becomes stable.
+    pub fn to_canonical(addr: &IpAddr) -> IpAddr {
+        match addr {
+            IpAddr::V4(ipv4) => IpAddr::V4(*ipv4),
+            IpAddr::V6(ipv6) => {
+                if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                    IpAddr::V4(ipv4)
+                } else {
+                    IpAddr::V6(*ipv6)
+                }
+            }
+        }
+    }
+
+    fn is_deprecated_ipv4_compatible(addr: &Ipv6Addr) -> bool {
+        matches!(addr.segments(), [0, 0, 0, 0, 0, 0, _, _])
+            && *addr != Ipv6Addr::UNSPECIFIED
+            && *addr != Ipv6Addr::LOCALHOST
+    }
+
+    /*
+     * Syscalls wrappers with (opinionated) portability fixes.
+     */
+
+    pub fn tcp_bind(listener: &TcpListener, binder: &TcpBinder) -> std::io::Result<()> {
+        binder
+            .bind_existing_tcp_listener(listener)
+            .map_err(|error| match Errno::from_io_error(&error) {
+                #[cfg(windows)]
+                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                _ => error,
+            })
+    }
+
+    pub fn udp_bind(socket: &UdpSocket, binder: &UdpBinder) -> std::io::Result<()> {
+        binder.bind_existing_udp_socket(socket).map_err(|error| {
+            match Errno::from_io_error(&error) {
+                #[cfg(windows)]
+                Some(Errno::NOBUFS) => Errno::ADDRINUSE.into(), // Windows returns WSAENOBUFS when the ephemeral ports have been exhausted.
+                _ => error,
+            }
+        })
+    }
+
+    pub fn tcp_connect(listener: &TcpListener, connecter: &TcpConnecter) -> std::io::Result<()> {
+        connecter.connect_existing_tcp_listener(listener).map_err(
+            |error| match Errno::from_io_error(&error) {
+                // On POSIX, non-blocking `connect` returns `EINPROGRESS`. Windows returns `WSAEWOULDBLOCK`.
+                #[cfg(windows)]
+                Some(Errno::WOULDBLOCK) => Errno::INPROGRESS.into(),
+                _ => error,
+            },
+        )
+    }
+
+    pub fn tcp_accept(
+        listener: &TcpListener,
+        blocking: Blocking,
+    ) -> std::io::Result<(TcpStream, SocketAddr)> {
+        listener
+            .accept_with(blocking)
+            .map_err(|error| match Errno::from_io_error(&error) {
+                #[cfg(windows)]
+                Some(Errno::INPROGRESS) => Errno::INTR.into(), // "A blocking Windows Sockets 1.1 call is in progress, or the service provider is still processing a callback function."
+
+                // Normalize Linux' non-standard behavior.
+                // "Linux accept() passes already-pending network errors on the new socket as an error code from accept(). This behavior differs from other BSD socket implementations."
+                #[cfg(target_os = "linux")]
+                Some(
+                    Errno::CONNRESET
+                    | Errno::NETRESET
+                    | Errno::HOSTUNREACH
+                    | Errno::HOSTDOWN
+                    | Errno::NETDOWN
+                    | Errno::NETUNREACH
+                    | Errno::PROTO
+                    | Errno::NOPROTOOPT
+                    | Errno::NONET
+                    | Errno::OPNOTSUPP,
+                ) => Errno::CONNABORTED.into(),
+
+                _ => error,
+            })
+    }
+
+    pub fn udp_disconnect<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
+        match rustix::net::connect_unspec(sockfd) {
+            // BSD platforms return an error even if the UDP socket was disconnected successfully.
+            #[cfg(target_os = "macos")]
+            Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
+            r => r,
+        }
+    }
+
+    pub fn get_ip_ttl<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<u8> {
+        sockopt::get_ip_ttl(sockfd)?
+            .try_into()
+            .map_err(|_| Errno::OPNOTSUPP)
+    }
+
+    pub fn get_ipv6_unicast_hops<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<u8> {
+        sockopt::get_ipv6_unicast_hops(sockfd)
+    }
+
+    pub fn set_ip_ttl<Fd: AsFd>(sockfd: Fd, value: u8) -> rustix::io::Result<()> {
+        match value {
+            // A well-behaved IP application should never send out new packets with TTL 0.
+            // We validate the value ourselves because OS'es are not consistent in this.
+            // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
+            0 => Err(Errno::INVAL),
+            _ => sockopt::set_ip_ttl(sockfd, value.into()),
+        }
+    }
+
+    pub fn set_ipv6_unicast_hops<Fd: AsFd>(sockfd: Fd, value: u8) -> rustix::io::Result<()> {
+        match value {
+            // A well-behaved IP application should never send out new packets with TTL 0.
+            // We validate the value ourselves because OS'es are not consistent in this.
+            // On Linux the validation is even inconsistent between their IPv4 and IPv6 implementation.
+            0 => Err(Errno::INVAL),
+            _ => sockopt::set_ipv6_unicast_hops(sockfd, Some(value)),
+        }
+    }
+
+    fn normalize_get_buffer_size(value: usize) -> usize {
+        if cfg!(target_os = "linux") {
+            // Linux doubles the value passed to setsockopt to allow space for bookkeeping overhead.
+            // getsockopt returns this internally doubled value.
+            // We'll half the value to at least get it back into the same ballpark that the application requested it in.
+            value / 2
+        } else {
+            value
+        }
+    }
+
+    fn normalize_set_buffer_size(value: usize) -> usize {
+        value.clamp(1, i32::MAX as usize)
+    }
+
+    pub fn get_socket_recv_buffer_size<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<usize> {
+        let value = sockopt::get_socket_recv_buffer_size(sockfd)?;
+        Ok(normalize_get_buffer_size(value))
+    }
+
+    pub fn get_socket_send_buffer_size<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<usize> {
+        let value = sockopt::get_socket_send_buffer_size(sockfd)?;
+        Ok(normalize_get_buffer_size(value))
+    }
+
+    pub fn set_socket_recv_buffer_size<Fd: AsFd>(
+        sockfd: Fd,
+        value: usize,
+    ) -> rustix::io::Result<()> {
+        let value = normalize_set_buffer_size(value);
+
+        match sockopt::set_socket_recv_buffer_size(sockfd, value) {
+            // Most platforms (Linux, Windows, Fuchsia, Solaris, Illumos, Haiku, ESP-IDF, ..and more?) treat the value
+            // passed to SO_SNDBUF/SO_RCVBUF as a performance tuning hint and silently clamp the input if it exceeds
+            // their capability.
+            // As far as I can see, only the *BSD family views this option as a hard requirement and fails when the
+            // value is out of range. We normalize this behavior in favor of the more commonly understood
+            // "performance hint" semantics. In other words; even ENOBUFS is "Ok".
+            // A future improvement could be to query the corresponding sysctl on *BSD platforms and clamp the input
+            // `size` ourselves, to completely close the gap with other platforms.
+            Err(Errno::NOBUFS) => Ok(()),
+            r => r,
+        }
+    }
+
+    pub fn set_socket_send_buffer_size<Fd: AsFd>(
+        sockfd: Fd,
+        value: usize,
+    ) -> rustix::io::Result<()> {
+        let value = normalize_set_buffer_size(value);
+
+        match sockopt::set_socket_send_buffer_size(sockfd, value) {
+            Err(Errno::NOBUFS) => Ok(()), // See set_socket_recv_buffer_size
+            r => r,
         }
     }
 }
