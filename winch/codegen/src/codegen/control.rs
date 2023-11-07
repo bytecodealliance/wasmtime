@@ -28,16 +28,16 @@
 //! a [`crate::masm::MacroAssembler::cmp_with_set`] and instead emit
 //! a conditional jump inline when emitting the control flow instruction.
 
+// TODO: Add more docs, rename `BlockTypeInfo`?
 use super::{CodeGenContext, MacroAssembler, OperandSize};
 use crate::{
-    abi::{ABIResults, ABI},
-    masm::IntCmpKind,
-    CallingConvention,
+    abi::{ABIResultsData, StackResultsBase},
+    codegen::env::BlockTypeInfo,
+    masm::{IntCmpKind, SPOffset},
 };
 use cranelift_codegen::MachLabel;
-use wasmtime_environ::WasmType;
 
-/// Holds the necessary metdata to support the emission
+/// Holds the all the metdata to support the emission
 /// of control flow instructions.
 #[derive(Debug)]
 pub(crate) enum ControlStackFrame {
@@ -46,36 +46,42 @@ pub(crate) enum ControlStackFrame {
         cont: MachLabel,
         /// The exit label of the block.
         exit: MachLabel,
-        /// The return values of the block.
-        results: ABIResults,
-        /// The size of the value stack at the beginning of the If.
-        original_stack_len: usize,
+        /// Data about the block's results.
+        results_data: ABIResultsData,
+        /// Information about the parameters and returns of the block.
+        block_type_info: BlockTypeInfo,
+        /// The length of the value stack at the beginning of the If.
+        base_stack_len: usize,
         /// The stack pointer offset at the beginning of the If.
-        original_sp_offset: u32,
+        base_sp: SPOffset,
         /// Local reachability state when entering the block.
         reachable: bool,
     },
     Else {
         /// The exit label of the block.
         exit: MachLabel,
-        /// The return values of the block.
-        results: ABIResults,
-        /// The size of the value stack at the beginning of the Else.
-        original_stack_len: usize,
+        /// Data about the block's results.
+        results_data: ABIResultsData,
+        /// Information about the parameters and returns of the block.
+        block_type_info: BlockTypeInfo,
+        /// The length of the value stack at the beginning of the Else.
+        base_stack_len: usize,
         /// The stack pointer offset at the beginning of the Else.
-        original_sp_offset: u32,
+        base_sp: SPOffset,
         /// Local reachability state when entering the block.
         reachable: bool,
     },
     Block {
         /// The block exit label.
         exit: MachLabel,
-        /// The size of the value stack at the beginning of the block.
-        original_stack_len: usize,
-        /// The return values of the block.
-        results: ABIResults,
+        /// The length of the value stack at the beginning of the block.
+        base_stack_len: usize,
+        /// Data about the block's results.
+        results_data: ABIResultsData,
+        /// Information about the parameters and returns of the block.
+        block_type_info: BlockTypeInfo,
         /// The stack pointer offset at the beginning of the Block.
-        original_sp_offset: u32,
+        base_sp: SPOffset,
         /// Exit state of the block.
         ///
         /// This flag is used to dertermine if a block is a branch
@@ -84,32 +90,33 @@ pub(crate) enum ControlStackFrame {
         is_branch_target: bool,
     },
     Loop {
-        /// The start of the loop.
+        /// The start of the Loop.
         head: MachLabel,
-        /// The size of the value stack at the beginning of the block.
-        original_stack_len: usize,
-        /// The stack pointer offset at the beginning of the Block.
-        original_sp_offset: u32,
-        /// The return values of the block.
-        results: ABIResults,
+        /// The length of the value stack at the beginning of the Loop.
+        base_stack_len: usize,
+        /// The stack pointer offset at the beginning of the Loop.
+        base_sp: SPOffset,
+        /// Information about the parameters and returns of the block.
+        block_type_info: BlockTypeInfo,
     },
 }
 
 impl ControlStackFrame {
     /// Returns [`ControlStackFrame`] for an if.
-    pub fn if_<M: MacroAssembler>(
-        returns: &[WasmType],
+    pub fn r#if<M: MacroAssembler>(
+        results_data: ABIResultsData,
+        block_type_info: BlockTypeInfo,
         masm: &mut M,
         context: &mut CodeGenContext,
     ) -> Self {
-        let results = <M::ABI as ABI>::abi_results(&returns, &CallingConvention::Default);
         let mut control = Self::If {
             cont: masm.get_label(),
             exit: masm.get_label(),
-            results,
+            results_data,
+            block_type_info,
             reachable: context.reachable,
-            original_stack_len: 0,
-            original_sp_offset: 0,
+            base_stack_len: 0,
+            base_sp: SPOffset::from_u32(0),
         };
 
         control.emit(masm, context);
@@ -119,32 +126,35 @@ impl ControlStackFrame {
     /// Creates a block that represents the base
     /// block for the function body.
     pub fn function_body_block<M: MacroAssembler>(
-        results: ABIResults,
+        results_data: ABIResultsData,
+        block_type_info: BlockTypeInfo,
         masm: &mut M,
         context: &mut CodeGenContext,
     ) -> Self {
         Self::Block {
-            original_stack_len: context.stack.len(),
-            results,
+            base_stack_len: context.stack.len(),
+            results_data,
+            block_type_info,
             is_branch_target: false,
             exit: masm.get_label(),
-            original_sp_offset: masm.sp_offset(),
+            base_sp: masm.sp_offset(),
         }
     }
 
     /// Returns [`ControlStackFrame`] for a block.
     pub fn block<M: MacroAssembler>(
-        returns: &[WasmType],
+        results_data: ABIResultsData,
+        block_type_info: BlockTypeInfo,
         masm: &mut M,
         context: &mut CodeGenContext,
     ) -> Self {
-        let results = <M::ABI as ABI>::abi_results(&returns, &CallingConvention::Default);
         let mut control = Self::Block {
-            original_stack_len: 0,
-            results,
+            base_stack_len: 0,
+            results_data,
+            block_type_info,
             is_branch_target: false,
             exit: masm.get_label(),
-            original_sp_offset: 0,
+            base_sp: SPOffset::from_u32(0),
         };
 
         control.emit(masm, context);
@@ -152,21 +162,101 @@ impl ControlStackFrame {
     }
 
     /// Returns [`ControlStackFrame`] for a loop.
-    pub fn loop_<M: MacroAssembler>(
-        returns: &[WasmType],
+    pub fn r#loop<M: MacroAssembler>(
+        block_type_info: BlockTypeInfo,
         masm: &mut M,
         context: &mut CodeGenContext,
     ) -> Self {
-        let results = <M::ABI as ABI>::abi_results(&returns, &CallingConvention::Default);
         let mut control = Self::Loop {
-            original_stack_len: 0,
-            results,
+            base_stack_len: 0,
+            block_type_info,
             head: masm.get_label(),
-            original_sp_offset: 0,
+            base_sp: SPOffset::from_u32(0),
         };
 
         control.emit(masm, context);
         control
+    }
+
+    fn init<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+        // Save any live registers and locals.
+        context.spill(masm);
+        self.set_base_stack_len(context.stack.len());
+        self.set_base_sp(masm.sp_offset());
+
+        // Duplicate the stack values that will be consumed the if, so that
+        // in the presence of an else, there's no need to keep a side copy
+        // of the stack, instead the value stack will already contain the
+        // right number of values.
+        if self.is_if() {
+            let block_type_info = self.block_type_info();
+            if block_type_info.param_count > 0 {
+                context.stack.dup(block_type_info.param_count);
+            }
+        }
+
+        // TODO: Consider doing this sp
+        if let Some(data) = self.results() {
+            let results_size = data.results.size();
+            if results_size > 0 {
+                masm.reserve_stack(results_size);
+                self.set_results_base(StackResultsBase::sp(masm.sp_offset()));
+            }
+        }
+    }
+
+    fn set_results_base(&mut self, base: StackResultsBase) {
+        use ControlStackFrame::*;
+
+        match self {
+            If { results_data, .. } | Block { results_data, .. } => results_data.base = Some(base),
+            _ => {}
+        }
+    }
+
+    fn set_base_stack_len(&mut self, len: usize) {
+        use ControlStackFrame::*;
+
+        match self {
+            If { base_stack_len, .. }
+            | Block { base_stack_len, .. }
+            | Loop { base_stack_len, .. } => *base_stack_len = len,
+            _ => {}
+        }
+    }
+
+    fn set_base_sp(&mut self, base: SPOffset) {
+        use ControlStackFrame::*;
+
+        match self {
+            If { base_sp, .. } | Block { base_sp, .. } | Loop { base_sp, .. } => *base_sp = base,
+            _ => {}
+        }
+    }
+
+    fn block_type_info(&mut self) -> &BlockTypeInfo {
+        use ControlStackFrame::*;
+        match self {
+            If {
+                block_type_info, ..
+            }
+            | Else {
+                block_type_info, ..
+            }
+            | Loop {
+                block_type_info, ..
+            }
+            | Block {
+                block_type_info, ..
+            } => block_type_info,
+        }
+    }
+
+    fn is_if(&self) -> bool {
+        match self {
+            ControlStackFrame::If { .. } => true,
+            _ => false,
+        }
     }
 
     fn emit<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
@@ -177,53 +267,24 @@ impl ControlStackFrame {
             return;
         }
 
-        match self {
-            If {
-                cont,
-                original_stack_len,
-                original_sp_offset,
-                ..
-            } => {
+        match *self {
+            If { cont, .. } => {
                 // Pop the condition value.
                 let top = context.pop_to_reg(masm, None);
-
-                // Unconditionall spill before emitting control flow.
-                context.spill(masm);
-
-                *original_stack_len = context.stack.len();
-                *original_sp_offset = masm.sp_offset();
+                self.init(masm, context);
                 masm.branch(
                     IntCmpKind::Eq,
                     top.reg.into(),
                     top.reg.into(),
-                    *cont,
+                    cont,
                     OperandSize::S32,
                 );
                 context.free_reg(top);
             }
-            Block {
-                original_stack_len,
-                original_sp_offset,
-                ..
-            } => {
-                // Unconditional spill before entering the block.
-                // We assume that there are no live registers when
-                // exiting the block.
-                context.spill(masm);
-                *original_stack_len = context.stack.len();
-                *original_sp_offset = masm.sp_offset();
-            }
-            Loop {
-                original_stack_len,
-                original_sp_offset,
-                head,
-                ..
-            } => {
-                // Unconditional spill before entering the loop block.
-                context.spill(masm);
-                *original_stack_len = context.stack.len();
-                *original_sp_offset = masm.sp_offset();
-                masm.bind(*head);
+            Block { .. } => self.init(masm, context),
+            Loop { head, .. } => {
+                self.init(masm, context);
+                masm.bind(head);
             }
             _ => unreachable!(),
         }
@@ -235,15 +296,19 @@ impl ControlStackFrame {
         use ControlStackFrame::*;
         match self {
             If {
-                results,
-                original_stack_len,
+                results_data,
+                base_stack_len,
                 exit,
+                block_type_info,
                 ..
             } => {
-                assert!((*original_stack_len + results.len()) == context.stack.len());
+                assert!(
+                    (*base_stack_len + block_type_info.result_count - block_type_info.param_count)
+                        == context.stack.len()
+                );
                 // Before emitting an unconditional jump to the exit branch,
                 // we handle the result of the if-then block.
-                context.pop_abi_results(&results, masm);
+                context.pop_abi_results(results_data, masm);
                 // Before binding the else branch, we emit the jump to the end
                 // label.
                 masm.jmp(*exit);
@@ -261,9 +326,10 @@ impl ControlStackFrame {
         match self {
             If {
                 cont,
-                results,
-                original_stack_len,
-                original_sp_offset,
+                results_data,
+                block_type_info,
+                base_stack_len,
+                base_sp,
                 exit,
                 ..
             } => {
@@ -273,10 +339,11 @@ impl ControlStackFrame {
                 // Update the stack control frame with an else control frame.
                 *self = ControlStackFrame::Else {
                     exit: *exit,
-                    original_stack_len: *original_stack_len,
-                    results: results.clone(),
+                    base_stack_len: *base_stack_len,
                     reachable,
-                    original_sp_offset: *original_sp_offset,
+                    base_sp: *base_sp,
+                    results_data: results_data.clone(),
+                    block_type_info: *block_type_info,
                 };
             }
             _ => unreachable!(),
@@ -288,35 +355,56 @@ impl ControlStackFrame {
         use ControlStackFrame::*;
         match self {
             If {
-                results,
-                original_stack_len,
-                ..
-            }
-            | Else {
-                results,
-                original_stack_len,
+                results_data,
+                base_stack_len,
+                block_type_info,
                 ..
             } => {
-                assert!((*original_stack_len + results.len()) == context.stack.len());
-                // Before binding the exit label, we handle the block results.
-                context.pop_abi_results(&results, masm);
+                assert!(
+                    // [Self::init] duplicates the stack values when pushing an if;
+                    // this ensures that the current length of the value stack
+                    // is representative of such duplication, since no else was found.
+                    (*base_stack_len + block_type_info.result_count + block_type_info.param_count
+                        - block_type_info.param_count)
+                        == context.stack.len()
+                );
+
+                context.pop_abi_results(results_data, masm);
+                context.drop_last(block_type_info.param_count, |_, _| {});
+                // Assert that once the block results are popped and once the duplicate
+                // values are dropped, the value stack length is the expected one.
+                assert!(*base_stack_len - block_type_info.param_count == context.stack.len());
                 self.bind_end(masm, context);
             }
-            Block {
-                original_stack_len,
-                results,
+            Else {
+                results_data,
+                base_stack_len,
+                block_type_info,
+                ..
+            }
+            | Block {
+                results_data,
+                base_stack_len,
+                block_type_info,
                 ..
             } => {
-                assert!((*original_stack_len + results.len()) == context.stack.len());
-                context.pop_abi_results(&results, masm);
+                assert!(
+                    (*base_stack_len + block_type_info.result_count - block_type_info.param_count)
+                        == context.stack.len()
+                );
+                // Before binding the exit label, we handle the block results.
+                context.pop_abi_results(results_data, masm);
                 self.bind_end(masm, context);
             }
             Loop {
-                results,
-                original_stack_len,
+                block_type_info,
+                base_stack_len,
                 ..
             } => {
-                assert!((*original_stack_len + results.len()) == context.stack.len());
+                assert!(
+                    (*base_stack_len + block_type_info.result_count - block_type_info.param_count)
+                        == context.stack.len()
+                );
             }
         }
     }
@@ -325,7 +413,9 @@ impl ControlStackFrame {
     /// ABI results to the value stack.
     pub fn bind_end<M: MacroAssembler>(&self, masm: &mut M, context: &mut CodeGenContext) {
         // Push the results to the value stack.
-        context.push_abi_results(self.results(), masm);
+        if let Some(data) = self.results() {
+            context.push_abi_results(data, masm);
+        }
         self.bind_exit_label(masm);
     }
 
@@ -381,14 +471,14 @@ impl ControlStackFrame {
 
     /// Returns [`crate::abi::ABIResults`] of the control stack frame
     /// block.
-    pub fn results(&self) -> &ABIResults {
+    pub fn results(&self) -> Option<&ABIResultsData> {
         use ControlStackFrame::*;
 
         match self {
-            If { results, .. }
-            | Else { results, .. }
-            | Block { results, .. }
-            | Loop { results, .. } => results,
+            If { results_data, .. } | Else { results_data, .. } | Block { results_data, .. } => {
+                Some(results_data)
+            }
+            Loop { .. } => None,
         }
     }
 
@@ -416,42 +506,36 @@ impl ControlStackFrame {
 
     /// Returns the value stack length and stack pointer offset of the
     /// control frame registered at entry.
-    pub fn original_stack_len_and_sp_offset(&self) -> (usize, u32) {
+    pub fn base_stack_len_and_sp(&self) -> (usize, SPOffset) {
         use ControlStackFrame::*;
         match self {
             If {
-                original_stack_len,
-                original_sp_offset,
+                base_sp,
+                base_stack_len,
                 ..
             }
             | Else {
-                original_stack_len,
-                original_sp_offset,
+                base_sp,
+                base_stack_len,
                 ..
             }
             | Block {
-                original_stack_len,
-                original_sp_offset,
+                base_sp,
+                base_stack_len,
                 ..
             }
             | Loop {
-                original_stack_len,
-                original_sp_offset,
+                base_sp,
+                base_stack_len,
                 ..
-            } => (*original_stack_len, *original_sp_offset),
+            } => (*base_stack_len, *base_sp),
         }
     }
 
     /// Resolves how to handle results when the current frame is a
     /// jump target Notably in the case of loops we don't take into
-    /// account the frame's results, just the params (void until
-    /// multi-value is supported).
-    pub fn as_target_results(&self) -> ABIResults {
-        use ControlStackFrame::*;
-        match self {
-            //TODO: For now, once we fully switch we'll use the loop's params.
-            Loop { .. } => ABIResults::default(),
-            f => f.results().clone(),
-        }
+    /// account the frame's results.
+    pub fn as_target_results(&self) -> Option<&ABIResultsData> {
+        self.results()
     }
 }

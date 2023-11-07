@@ -58,12 +58,12 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    abi::{ABIOperand, ABISig, ABI},
+    abi::{ABIOperand, ABIResultsData, ABISig, StackResultsBase, ABI},
     codegen::{
         ptr_type_from_ptr_size, BuiltinFunction, BuiltinType, Callee, CalleeInfo, CodeGenContext,
         TypedReg,
     },
-    masm::{CalleeKind, MacroAssembler, OperandSize},
+    masm::{CalleeKind, MacroAssembler, OperandSize, SPOffset},
     reg::Reg,
     CallingConvention,
 };
@@ -93,13 +93,14 @@ impl FnCall {
         let ptr_type = ptr_type_from_ptr_size(context.vmoffsets.ptr.size());
         let sig = Self::get_sig::<M>(&callee, ptr_type);
         let sig = sig.as_ref();
-
-        let arg_stack_space = sig.params_stack_size();
         let kind = Self::map(&context.vmoffsets, &callee, sig, context, masm);
-        let call_stack_space = Self::save(context, masm, &sig);
 
+        let call_stack_space = Self::save(context, masm, &sig);
+        let ret_area = Self::make_ret_area(&sig, masm);
+        let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
-            Self::assign(sig, context, masm);
+            let scratch = <M::ABI as ABI>::scratch_reg();
+            Self::assign(sig, ret_area.as_ref(), context, masm, scratch);
             kind
         });
 
@@ -107,15 +108,29 @@ impl FnCall {
             CalleeKind::Indirect(r) => context.free_reg(r),
             _ => {}
         }
+
         Self::cleanup(
             sig,
-            call_stack_space.checked_add(reserved_stack).unwrap(),
+            reserved_stack,
+            call_stack_space,
+            ret_area,
             masm,
             context,
         );
     }
 
-    /// Derive the [`ABISig`] for a particulare [`Callee`].
+    /// Calculates the return area for the callee, if any.
+    fn make_ret_area<M: MacroAssembler>(
+        callee_sig: &ABISig,
+        masm: &mut M,
+    ) -> Option<StackResultsBase> {
+        callee_sig.results.has_stack_results().then(|| {
+            masm.reserve_stack(callee_sig.results_stack_size());
+            StackResultsBase::sp(masm.sp_offset())
+        })
+    }
+
+    /// Derive the [`ABISig`] for a particular [`Callee`].
     fn get_sig<M: MacroAssembler>(callee: &Callee, ptr_type: WasmType) -> Cow<'_, ABISig> {
         match callee {
             Callee::Builtin(info) => Cow::Borrowed(info.sig()),
@@ -210,13 +225,14 @@ impl FnCall {
         // range of the stack so that they are used as first
         // and second arguments.
         let stack = &mut context.stack;
-        let location = stack.len() - (sig.params.len() - 2);
-        let values = [
-            TypedReg::new(ptr_type, callee_vmctx).into(),
-            TypedReg::new(ptr_type, caller_vmctx).into(),
-        ]
-        .into_iter();
-        context.stack.insert_many(location, values);
+        let location = stack.len().checked_sub(sig.params.len() - 2).unwrap_or(0);
+        context.stack.insert_many(
+            location,
+            [
+                TypedReg::new(ptr_type, callee_vmctx).into(),
+                TypedReg::new(ptr_type, caller_vmctx).into(),
+            ],
+        );
 
         CalleeKind::indirect(callee)
     }
@@ -231,8 +247,8 @@ impl FnCall {
         // Pop the funcref pointer to a register and allocate a register to hold the
         // address of the funcref. Since the callee is not addressed from a global non
         // allocatable register (like the vmctx in the case of an import), we load the
-        // funcref to a register ensuring that it doesn't get assigned to a non-arg
-        // register.
+        // funcref to a register ensuring that it doesn't get assigned to a register
+        // used in the callee's signature.
         let (funcref_ptr, funcref) = context.without::<_, M, _>(&sig.regs, masm, |cx, masm| {
             (cx.pop_to_reg(masm, None).into(), cx.any_gpr(masm))
         });
@@ -246,23 +262,43 @@ impl FnCall {
     }
 
     /// Assign arguments for the function call.
-    fn assign<M: MacroAssembler>(sig: &ABISig, context: &mut CodeGenContext, masm: &mut M) {
-        let arg_count = sig.params.len();
+    fn assign<M: MacroAssembler>(
+        sig: &ABISig,
+        ret_area: Option<&StackResultsBase>,
+        context: &mut CodeGenContext,
+        masm: &mut M,
+        scratch: Reg,
+    ) {
+        let arg_count = sig.params.len_without_retptr();
         let stack = &context.stack;
-        let mut stack_values = stack.peekn(arg_count);
-        for arg in sig.params() {
-            let val = stack_values
-                .next()
-                .unwrap_or_else(|| panic!("expected stack value for function argument"));
+        let stack_values = stack.peekn(arg_count);
+        for (arg, val) in sig.params_without_results_param().iter().zip(stack_values) {
             match arg {
                 &ABIOperand::Reg { reg, .. } => {
                     context.move_val_to_reg(&val, reg, masm);
                 }
                 &ABIOperand::Stack { ty, offset, .. } => {
-                    let addr = masm.address_at_sp(offset);
-                    let size: OperandSize = (ty).into();
+                    let addr = masm.address_at_sp(SPOffset::from_u32(offset));
+                    let size: OperandSize = ty.into();
                     context.move_val_to_reg(val, scratch, masm);
                     masm.store(scratch.into(), addr, size);
+                }
+            }
+        }
+
+        if sig.has_stack_results() {
+            let operand = sig.params.unwrap_results_area_operand();
+            let base = ret_area.unwrap().unwrap_sp();
+            let addr = masm.address_from_sp(base);
+
+            match operand {
+                &ABIOperand::Reg { ty, reg, .. } => {
+                    masm.load_addr(addr, reg, ty.into());
+                }
+                &ABIOperand::Stack { ty, offset, .. } => {
+                    let slot = masm.address_at_sp(SPOffset::from_u32(offset));
+                    masm.load_addr(addr, scratch, ty.into());
+                    masm.store(scratch.into(), slot, ty.into());
                 }
             }
         }
@@ -296,7 +332,7 @@ impl FnCall {
     // |                  |  |
     // +------------------+  |
     fn save<M: MacroAssembler>(context: &mut CodeGenContext, masm: &mut M, sig: &ABISig) -> u32 {
-        let callee_params = &sig.params;
+        let callee_params = &sig.params_without_results_param();
         let stack = &context.stack;
         match callee_params.len() {
             0 => {
@@ -305,7 +341,7 @@ impl FnCall {
             }
             _ => {
                 assert!(stack.len() >= callee_params.len());
-                let partition = stack.len() - callee_params.len();
+                let partition = stack.len().checked_sub(callee_params.len()).unwrap_or(0);
                 let _ = context.save_live_registers_and_calculate_sizeof(masm, 0..partition);
                 context.save_live_registers_and_calculate_sizeof(masm, partition..)
             }
@@ -315,11 +351,32 @@ impl FnCall {
     /// Cleanup stack space and free registers after emitting the call.
     fn cleanup<M: MacroAssembler>(
         sig: &ABISig,
-        total_space: u32,
+        reserved_space: u32,
+        stack_consumed: u32,
+        ret_area: Option<StackResultsBase>,
         masm: &mut M,
         context: &mut CodeGenContext,
     ) {
-        masm.free_stack(total_space);
+        // Deallocate the reserved space for stack arguments and for alignment,
+        // which was allocated last.
+        masm.free_stack(reserved_space);
+
+        if let Some(ret_area) = ret_area {
+            if stack_consumed > 0 {
+                // Perform a memory move, by shuffling the result area to
+                // higher addresses. This is needed because the result area
+                // is located after any memory addresses located on the stack.
+                let sp = ret_area.unwrap_sp();
+                let result_bytes = sig.results_stack_size();
+                debug_assert!(sp.as_u32() >= stack_consumed + result_bytes);
+                let dst = SPOffset::from_u32(sp.as_u32() - stack_consumed);
+                masm.memmove(sp, dst, result_bytes);
+            }
+        };
+
+        // Free the bytes consumed by the call.
+        masm.free_stack(stack_consumed);
+
         // Only account for registers given that any memory entries
         // consumed by the call (assigned to a register or to a stack
         // slot) were freed by the previous call to
@@ -337,11 +394,15 @@ impl FnCall {
         // * Rely on the new implementation of `drop_last` to calcuate
         // the stack memory entries consumed by the call and then free
         // the calculated stack space.
-        context.drop_last(sig.params.len(), |regalloc, v| {
+        context.drop_last(sig.params.len_without_retptr(), |regalloc, v| {
             if v.is_reg() {
                 regalloc.free(v.get_reg().into());
             }
         });
-        context.push_abi_results(&sig.results, masm);
+
+        let mut results_data = ABIResultsData::wrap(sig.results.clone());
+        results_data.base = ret_area;
+
+        context.push_abi_results(&results_data, masm);
     }
 }

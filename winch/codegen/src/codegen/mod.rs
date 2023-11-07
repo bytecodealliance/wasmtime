@@ -1,5 +1,6 @@
 use crate::{
-    abi::{ABISig, ABI},
+    abi::{ABIOperand, ABIResultsData, ABISig, StackResultsBase, ABI},
+    codegen::BlockTypeInfo,
     isa::reg::Reg,
     masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::{TypedReg, Val},
@@ -80,11 +81,22 @@ where
         self.masm.prologue();
         self.masm.reserve_stack(self.context.frame.locals_size);
 
+        // If the function has multiple returns, assign the corresponding base.
+        let mut results_data = ABIResultsData::wrap(self.sig.results.clone());
+        if self.sig.params.has_results_base_param() {
+            results_data.base = Some(StackResultsBase::slot(
+                self.context.frame.results_base_slot.unwrap(),
+            ));
+        }
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
         self.control_frames
             .push(ControlStackFrame::function_body_block(
-                self.sig.results.clone(),
+                results_data,
+                BlockTypeInfo::new(
+                    self.sig.params_without_results_param().len(),
+                    self.sig.results.len(),
+                ),
                 self.masm,
                 &mut self.context,
             ));
@@ -103,8 +115,8 @@ where
         match frame {
             ControlStackFrame::If {
                 reachable,
-                original_stack_len,
-                original_sp_offset,
+                base_stack_len,
+                base_sp,
                 ..
             } => {
                 if *reachable {
@@ -113,12 +125,7 @@ where
                     // entry, the if-else branch will be reachable.
                     self.context.reachable = true;
                     // Reset the stack to the original length and offset.
-                    Self::reset_stack(
-                        &mut self.context,
-                        self.masm,
-                        *original_stack_len,
-                        *original_sp_offset,
-                    );
+                    Self::reset_stack(&mut self.context, self.masm, *base_stack_len, *base_sp);
                     frame.bind_else(self.masm, self.context.reachable);
                 }
             }
@@ -133,7 +140,7 @@ where
         if frame.is_next_sequence_reachable() {
             self.context.reachable = true;
 
-            let (value_stack_len, target_sp) = frame.original_stack_len_and_sp_offset();
+            let (value_stack_len, target_sp) = frame.base_stack_len_and_sp();
             // Reset the stack to the original length and offset.
             Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
             // If the current frame is the outermost frame, which corresponds to the
@@ -150,8 +157,12 @@ where
             // state, perform the necessary cleanup to leave the stack
             // and SP in the expected state.  The compiler can enter
             // in this state through an infinite loop.
-            let (value_stack_len, target_sp) = frame.original_stack_len_and_sp_offset();
-            Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
+            let (value_stack_len, target_sp) = frame.base_stack_len_and_sp();
+            Self::reset_stack(&mut self.context, value_stack_len);
+            if self.masm.sp_offset().as_u32() > target_sp.as_u32() {
+                self.masm
+                    .free_stack(self.masm.sp_offset().as_u32() - target_sp.as_u32());
+            }
         }
     }
 
@@ -162,22 +173,24 @@ where
         context: &mut CodeGenContext,
         masm: &mut M,
         target_stack_len: usize,
-        target_sp: u32,
+        target_sp: SPOffset,
     ) {
         // `CodeGenContext::reset_stack` only gets called when
         // handling unreachable end or unreachable else, so we only
         // care about freeing any registers in the provided range.
         let mut bytes_freed = 0;
-        context.drop_last(
-            context.stack.len() - target_stack_len,
-            |regalloc, val| match val {
-                Val::Reg(tr) => regalloc.free(tr.reg),
-                Val::Memory(m) => bytes_freed += m.slot.size,
-                _ => {}
-            },
-        );
-        if masm.sp_offset() > target_sp {
-            let bytes = masm.sp_offset() - target_sp;
+        if target_stack_len < context.stack.len() {
+            context.drop_last(
+                context.stack.len() - target_stack_len,
+                |regalloc, val| match val {
+                    Val::Reg(tr) => regalloc.free(tr.reg),
+                    Val::Memory(m) => bytes_freed += m.slot.size,
+                    _ => {}
+                },
+            );
+        }
+        if masm.sp_offset().as_u32() > target_sp.as_u32() {
+            let bytes = masm.sp_offset().as_u32() - target_sp.as_u32();
             assert!(bytes_freed == bytes);
             masm.free_stack(bytes);
         }
@@ -195,11 +208,23 @@ where
         // Save the vmctx pointer to its local slot in case we need to reload it
         // at any point.
         let vmctx_addr = self.masm.local_address(&self.context.frame.vmctx_slot);
-        self.masm.store(
-            <M::ABI as ABI>::vmctx_reg().into(),
-            vmctx_addr,
-            OperandSize::S64,
-        );
+        self.masm
+            .store_ptr(<M::ABI as ABI>::vmctx_reg().into(), vmctx_addr);
+
+        // Save the results base parameter register into its slot.
+        self.sig.params.has_results_base_param().then(|| {
+            match self.sig.params.unwrap_results_area_operand() {
+                ABIOperand::Reg { ty, reg, .. } => {
+                    let results_base_slot = self.context.frame.results_base_slot.as_ref().unwrap();
+                    debug_assert!(results_base_slot.addressed_from_sp());
+                    let addr = self.masm.local_address(results_base_slot);
+                    self.masm.store((*reg).into(), addr, (*ty).into());
+                }
+                // The result base parameter is a stack paramter, addressed
+                // from FP.
+                _ => {}
+            }
+        });
 
         while !body.eof() {
             let offset = body.original_position();
@@ -245,7 +270,9 @@ where
             fn is_reachable(&self) -> bool;
         }
 
-        impl<'a, 'b, 'c, M: MacroAssembler> ReachableState for CodeGen<'a, 'b, 'c, M> {
+        impl<'a, 'translation, 'data, M: MacroAssembler> ReachableState
+            for CodeGen<'a, 'translation, 'data, M>
+        {
             fn is_reachable(&self) -> bool {
                 self.context.reachable
             }
@@ -317,7 +344,9 @@ where
     fn spill_register_arguments(&mut self) {
         use WasmType::*;
         self.sig
-            .params()
+            // Skip the results base param if any; [Self::emit_body],
+            // will handle spilling the results base param if it's in a register.
+            .params_without_results_param()
             .iter()
             .enumerate()
             .filter(|(_, a)| a.is_reg())

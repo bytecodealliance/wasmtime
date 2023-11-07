@@ -878,7 +878,9 @@ where
             if !is_outermost {
                 control.emit_end(self.masm, &mut self.context);
             } else {
-                self.context.pop_abi_results(control.results(), self.masm);
+                if let Some(data) = control.results() {
+                    self.context.pop_abi_results(data, self.masm);
+                }
                 control.bind_exit_label(self.masm);
             }
         }
@@ -1114,8 +1116,9 @@ where
     fn visit_nop(&mut self) {}
 
     fn visit_if(&mut self, blockty: BlockType) {
-        self.control_frames.push(ControlStackFrame::if_(
-            &self.env.resolve_block_type(blockty),
+        self.control_frames.push(ControlStackFrame::r#if(
+            self.env.resolve_block_results_data::<M::ABI>(blockty),
+            self.env.resolve_block_type_info(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1135,15 +1138,16 @@ where
 
     fn visit_block(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::block(
-            &self.env.resolve_block_type(blockty),
+            self.env.resolve_block_results_data::<M::ABI>(blockty),
+            self.env.resolve_block_type_info(blockty),
             self.masm,
             &mut self.context,
         ));
     }
 
     fn visit_loop(&mut self, blockty: BlockType) {
-        self.control_frames.push(ControlStackFrame::loop_(
-            &self.env.resolve_block_type(blockty),
+        self.control_frames.push(ControlStackFrame::r#loop(
+            self.env.resolve_block_type_info(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1154,7 +1158,9 @@ where
         let frame = &mut self.control_frames[index];
         self.context
             .unconditional_jump(frame, self.masm, |masm, cx, frame| {
-                cx.pop_abi_results(&frame.as_target_results(), masm);
+                if let Some(r) = frame.as_target_results() {
+                    cx.pop_abi_results(r, masm);
+                }
             });
     }
 
@@ -1162,13 +1168,19 @@ where
         let index = control_index(depth, self.control_frames.len());
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
-        let results = frame.as_target_results();
-        let top = self
-            .context
-            .without::<TypedReg, M, _>(results.regs(), self.masm, |ctx, masm| {
-                ctx.pop_to_reg(masm, None)
-            });
-        self.context.top_abi_results(&results, self.masm);
+
+        let top = if let Some(data) = frame.as_target_results() {
+            let top = self.context.without::<TypedReg, M, _>(
+                data.results.regs(),
+                self.masm,
+                |ctx, masm| ctx.pop_to_reg(masm, None),
+            );
+            self.context.top_abi_results(data, self.masm);
+            top
+        } else {
+            self.context.pop_to_reg(self.masm, None)
+        };
+
         self.masm.branch(
             IntCmpKind::Ne,
             top.reg.into(),
@@ -1189,15 +1201,25 @@ where
 
         let default_index = control_index(targets.default(), self.control_frames.len());
         let default_result = self.control_frames[default_index].as_target_results();
-        let (index, tmp) = self.context.without::<(TypedReg, _), M, _>(
-            default_result.regs(),
-            self.masm,
-            |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
-        );
 
-        // Materialize any constants or locals into their result representation,
-        // so that when reachability is restored, they are correctly located.
-        self.context.top_abi_results(&default_result, self.masm);
+        let (index, tmp) = if let Some(data) = default_result {
+            let index_and_tmp = self.context.without::<(TypedReg, _), M, _>(
+                data.results.regs(),
+                self.masm,
+                |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
+            );
+
+            // Materialize any constants or locals into their result representation,
+            // so that when reachability is restored, they are correctly located.
+            self.context.top_abi_results(&default_result, self.masm);
+            index_and_tmp
+        } else {
+            (
+                self.context.pop_to_reg(self.masm, None),
+                self.context.any_gpr(self.masm),
+            )
+        };
+
         self.masm.jmp_table(&labels, index.into(), tmp);
 
         for (t, l) in targets
@@ -1211,7 +1233,7 @@ where
 
             // NB: We don't perform any result handling as it was
             // already taken care of above before jumping to the
-            // jump table above.
+            // jump table.
             self.masm.bind(*l);
             self.masm.jmp(*frame.label());
             frame.set_as_target();
@@ -1229,7 +1251,9 @@ where
         let outermost = &mut self.control_frames[0];
         self.context
             .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
-                cx.pop_abi_results(&frame.as_target_results(), masm);
+                if let Some(data) = frame.as_target_results() {
+                    cx.pop_abi_results(data, masm);
+                }
             });
     }
 
@@ -1295,7 +1319,7 @@ where
     wasmparser::for_each_operator!(def_unsupported);
 }
 
-impl<'a, 'b, 'c, M> CodeGen<'a, 'b, 'c, M>
+impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
 where
     M: MacroAssembler,
 {

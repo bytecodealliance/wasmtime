@@ -43,8 +43,9 @@
 //! |        + arguments            |
 //! |                               | ----> Space allocated for calls
 //! |                               |
+use crate::codegen::ptr_type_from_ptr_size;
 use crate::isa::{reg::Reg, CallingConvention};
-use crate::masm::OperandSize;
+use crate::masm::{OperandSize, SPOffset};
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
@@ -55,7 +56,7 @@ pub(crate) use local::*;
 
 /// Internal classification for params or returns,
 /// mainly used for params and return register assignment.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum ParamsOrReturns {
     Params,
     Returns,
@@ -233,6 +234,39 @@ impl Default for ABIOperands {
     }
 }
 
+/// Machine stack location of the stack results.
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum StackResultsBase {
+    /// Addressed from SP at the given offset.
+    SP(SPOffset),
+    /// The address of the results base is stored at a particular,
+    /// well known [LocalSlot].
+    Slot(LocalSlot),
+}
+
+impl StackResultsBase {
+    /// Create a [StackResultsBase] addressed from SP at the given offset.
+    pub fn sp(offs: SPOffset) -> Self {
+        Self::SP(offs)
+    }
+
+    /// Create a [StackResultsBase] addressed stored at the given [LocalSlot].
+    pub fn slot(local: LocalSlot) -> Self {
+        Self::Slot(local)
+    }
+
+    /// Returns the [SPOffset] used as the base of the return area.
+    ///
+    /// # Panics
+    /// This function panics if the return area doesn't hold a [SPOffset].
+    pub fn unwrap_sp(&self) -> SPOffset {
+        match self {
+            Self::SP(offs) => *offs,
+            _ => unreachable!(),
+        }
+    }
+}
+
 /// ABI-specific representation of an [`ABISig`].
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ABIResults {
@@ -240,9 +274,36 @@ pub(crate) struct ABIResults {
     operands: ABIOperands,
 }
 
+/// Data about the [`ABIResults`].
+/// This struct is meant to be used once the [`ABIResults`] can be
+/// materialized to a particular location in the machine stack,
+/// if any.
+#[derive(Debug, Clone)]
+pub(crate) struct ABIResultsData {
+    /// The results.
+    pub results: ABIResults,
+    /// The return pointer, if any.
+    pub base: Option<StackResultsBase>,
+}
+
+impl ABIResultsData {
+    /// Create a [`ABIResultsData`] without a stack results base.
+    pub fn wrap(results: ABIResults) -> Self {
+        Self {
+            results,
+            base: None,
+        }
+    }
+
+    /// Unwraps the stack results base.
+    pub fn unwrap_base(&self) -> &StackResultsBase {
+        self.base.as_ref().unwrap()
+    }
+}
+
 impl ABIResults {
     /// Creates [`ABIResults`] from a slice of `WasmType`.
-    pub fn from<F>(returns: &[WasmType], mut map: F) -> Self
+    pub fn from<F>(returns: &[WasmType], call_conv: &CallingConvention, mut map: F) -> Self
     where
         F: FnMut(&WasmType, u32) -> (ABIOperand, u32),
     {
@@ -250,23 +311,41 @@ impl ABIResults {
             return Self::default();
         }
 
-        let register_capacity = returns.len().min(2);
-        let (operands, regs, bytes): (SmallVec<[ABIOperand; 6]>, HashSet<Reg>, u32) =
-            returns.iter().fold(
-                (
-                    SmallVec::new(),
-                    HashSet::with_capacity(register_capacity),
-                    0,
-                ),
-                |(mut operands, mut regs, stack_bytes), arg| {
-                    let (operand, bytes) = map(arg, stack_bytes);
-                    if operand.is_reg() {
-                        regs.insert(operand.unwrap_reg());
-                    }
-                    operands.push(operand);
-                    (operands, regs, bytes)
-                },
-            );
+        type FoldTuple = (SmallVec<[ABIOperand; 6]>, HashSet<Reg>, u32);
+
+        let fold_impl = |(mut operands, mut regs, stack_bytes): FoldTuple, arg| {
+            let (operand, bytes) = map(arg, stack_bytes);
+            if operand.is_reg() {
+                regs.insert(operand.unwrap_reg());
+            }
+            operands.push(operand);
+            (operands, regs, bytes)
+        };
+
+        // When dealing with multiple results, Winch's calling convention stores the
+        // last return value in a register rather than the first one. In that
+        // sense, Winch's return values in the ABI signature are "reversed" in
+        // terms of storage. This technique is particularly helpful to ensure that
+        // the following invariants are maintained:
+        // * Spilled memory values always precede register values
+        // * Spilled values are stored from oldest to newest, matching their
+        //   respective locations on the machine stack.
+        let (mut operands, regs, bytes): FoldTuple = if call_conv.is_default() {
+            returns
+                .iter()
+                .rev()
+                .fold((SmallVec::new(), HashSet::with_capacity(1), 0), fold_impl)
+        } else {
+            returns
+                .iter()
+                .fold((SmallVec::new(), HashSet::with_capacity(1), 0), fold_impl)
+        };
+
+        // Similar to above, we reverse the result of the operands calculation
+        // to ensure that they match the declared order.
+        if call_conv.is_default() {
+            operands.reverse();
+        }
 
         Self::new(ABIOperands {
             inner: operands,
@@ -311,6 +390,17 @@ impl ABIResults {
         assert!(self.len() == 1);
         &self.operands.inner[0]
     }
+
+    /// Returns the size, in bytes of all the [`ABIOperand`]s in the stack.
+    pub fn size(&self) -> u32 {
+        self.operands.bytes
+    }
+
+    /// Returns true if the [`ABIResults`] require space on the machine stack
+    /// for results.
+    pub fn has_stack_results(&self) -> bool {
+        self.operands.bytes > 0
+    }
 }
 
 /// ABI-specific representation of an [`ABISig`].
@@ -318,41 +408,67 @@ impl ABIResults {
 pub(crate) struct ABIParams {
     /// The param operands.
     operands: ABIOperands,
+    /// Whether [`ABIParams`] contains an extra paramter for the stack
+    /// result area.
+    // TODO: Rename this retptr?
+    has_results_base_param: bool,
 }
 
 impl ABIParams {
     /// Creates [`ABIParams`] from a slice of `WasmType`.
-    pub fn from<F>(params: &[WasmType], initial_bytes: u32, mut map: F) -> Self
+    pub fn from<F, A: ABI>(
+        params: &[WasmType],
+        initial_bytes: u32,
+        needs_stack_results: bool,
+        mut map: F,
+    ) -> Self
     where
         F: FnMut(&WasmType, u32) -> (ABIOperand, u32),
     {
-        if params.len() == 0 {
+        if params.len() == 0 && !needs_stack_results {
             return Self::with_bytes(initial_bytes);
         }
 
         let regiser_capacity = params.len().min(6);
-        let (operands, regs, stack_bytes): (SmallVec<[ABIOperand; 6]>, HashSet<Reg>, u32) =
-            params.iter().fold(
-                (
-                    SmallVec::new(),
-                    HashSet::with_capacity(regiser_capacity),
-                    initial_bytes,
-                ),
-                |(mut operands, mut regs, stack_bytes), arg| {
-                    let (operand, bytes) = map(arg, stack_bytes);
-                    if operand.is_reg() {
-                        regs.insert(operand.unwrap_reg());
-                    }
-                    operands.push(operand);
-                    (operands, regs, bytes)
-                },
-            );
+        let (mut operands, mut regs, mut stack_bytes): (
+            SmallVec<[ABIOperand; 6]>,
+            HashSet<Reg>,
+            u32,
+        ) = params.iter().fold(
+            (
+                SmallVec::new(),
+                HashSet::with_capacity(regiser_capacity),
+                initial_bytes,
+            ),
+            |(mut operands, mut regs, stack_bytes), arg| {
+                let (operand, bytes) = map(arg, stack_bytes);
+                if operand.is_reg() {
+                    regs.insert(operand.unwrap_reg());
+                }
+                operands.push(operand);
+                (operands, regs, bytes)
+            },
+        );
 
-        Self::new(ABIOperands {
-            inner: operands,
-            regs,
-            bytes: stack_bytes,
-        })
+        let ptr_type = ptr_type_from_ptr_size(<A as ABI>::word_bytes() as u8);
+        // Handle stack results by specifying an extra, implicit last argument.
+        if needs_stack_results {
+            let (operand, bytes) = map(&ptr_type, stack_bytes);
+            if operand.is_reg() {
+                regs.insert(operand.unwrap_reg());
+            }
+            operands.push(operand);
+            stack_bytes = bytes;
+        }
+
+        Self {
+            operands: ABIOperands {
+                inner: operands,
+                regs,
+                bytes: stack_bytes,
+            },
+            has_results_base_param: needs_stack_results,
+        }
     }
 
     /// Creates new [`ABIParams`], with the specified amount of stack bytes.
@@ -360,11 +476,6 @@ impl ABIParams {
         let mut params = Self::default();
         params.operands.bytes = bytes;
         params
-    }
-
-    /// Create [`ABIParams`] from [`ABIOperands`].
-    pub fn new(operands: ABIOperands) -> Self {
-        Self { operands }
     }
 
     /// Get the [`ABIOperand`] param in the nth position.
@@ -377,14 +488,41 @@ impl ABIParams {
         &self.operands.inner
     }
 
-    /// Returns the length of the params.
+    /// Returns the length of the params, including the return pointer,
+    /// if any.
     pub fn len(&self) -> usize {
         self.operands.inner.len()
+    }
+
+    /// Returns the length of the params, excluding the return pointer,
+    /// if any.
+    pub fn len_without_retptr(&self) -> usize {
+        if self.has_results_base_param {
+            self.len() - 1
+        } else {
+            self.len()
+        }
+    }
+
+    /// Returns true if the [ABISig] has an extra parameter for stack results.
+    pub fn has_results_base_param(&self) -> bool {
+        self.has_results_base_param
+    }
+
+    /// Returns the last [ABIOperand] used as the pointer to the
+    /// stack results area.
+    ///
+    /// # Panics
+    /// This function panics if the [ABIParams] doesn't have a stack results
+    /// parameter.
+    pub fn unwrap_results_area_operand(&self) -> &ABIOperand {
+        assert!(self.has_results_base_param);
+        self.operands.inner.last().unwrap()
     }
 }
 
 /// An ABI-specific representation of a function signature.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct ABISig {
     /// Function parameters.
     pub params: ABIParams,
@@ -420,15 +558,30 @@ impl ABISig {
         self.results.operands()
     }
 
+    /// Returns a slice over the signature params, excluding the results
+    /// base paramter, if any.
+    // TODO: rename to `without_retptr`
+    pub fn params_without_results_param(&self) -> &[ABIOperand] {
+        if self.params.has_results_base_param() {
+            &self.params()[0..(self.params.len() - 1)]
+        } else {
+            self.params()
+        }
+    }
+
     /// Returns the stack size, in bytes, needed for arguments on the stack.
     pub fn params_stack_size(&self) -> u32 {
         self.params.operands.bytes
     }
 
     /// Returns the stack size, in bytes, needed for results on the stack.
-    #[allow(dead_code)] // Until multi-value is supported.
     pub fn results_stack_size(&self) -> u32 {
         self.results.operands.bytes
+    }
+
+    /// Returns true if the signature has results on the stack.
+    pub fn has_stack_results(&self) -> bool {
+        self.results.has_stack_results()
     }
 }
 

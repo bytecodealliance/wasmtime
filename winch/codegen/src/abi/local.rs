@@ -5,7 +5,7 @@ use wasmtime_environ::WasmType;
 /// Slots for stack arguments are addressed from the frame pointer.
 /// Slots for function-defined locals and for registers are addressed
 /// from the stack pointer.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Copy, Debug)]
 enum Base {
     FP,
     SP,
@@ -15,7 +15,14 @@ enum Base {
 ///
 /// Represents the type, location and addressing mode of a local
 /// in the stack's local and argument area.
-#[derive(Clone)]
+// TODO: Add more documentation here around:
+// - Relationship between ABIOperand and LocalSlot
+// - Types of LocalSlots
+// - Invariants around local slots
+// - How do they are different from StackSlots
+// - The perspective they are meant to be for (callee, more than caller),
+//   well actually caller too, but we'll see once we get there.
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct LocalSlot {
     /// The offset of the local slot.
     pub offset: u32,

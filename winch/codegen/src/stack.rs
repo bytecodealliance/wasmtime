@@ -27,7 +27,7 @@ impl TypedReg {
         }
     }
 
-    /// Create an i64 [`TypedReg`].
+    /// Create an i32 [`TypedReg`].
     pub fn i32(reg: Reg) -> Self {
         Self {
             ty: WasmType::I32,
@@ -298,6 +298,21 @@ impl Stack {
 
         let partition = len - n;
         self.inner.range(partition..)
+    }
+
+    /// Duplicates the top `n` elements of the stack.
+    pub fn dup(&mut self, n: usize) {
+        let len = self.len();
+        assert!(n <= len);
+        let partition = len - n;
+
+        if n > 0 {
+            for e in partition..len {
+                if let Some(v) = self.inner.get(e) {
+                    self.push(*v)
+                }
+            }
+        }
     }
 
     /// Pops the top element of the stack, if any.

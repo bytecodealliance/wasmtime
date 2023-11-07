@@ -9,7 +9,11 @@ use crate::masm::{
     DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, OperandSize, RegImm,
     RemKind, RoundingMode, ShiftKind, TrapCode,
 };
-use crate::{abi::ABI, masm::StackSlot, stack::TypedReg};
+use crate::{
+    abi::ABI,
+    masm::{SPOffset, StackSlot},
+    stack::TypedReg,
+};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
     codegen::{ptr_type_from_ptr_size, Callee, CodeGenContext, FnCall, TableData},
@@ -54,21 +58,33 @@ impl Masm for MacroAssembler {
     }
 
     fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
-        let bytes = if reg.is_int() {
-            let bytes = <Self::ABI as ABI>::word_bytes();
-            self.asm.push_r(reg);
-            self.increment_sp(bytes);
-            bytes
-        } else {
-            let bytes = size.bytes();
-            self.reserve_stack(bytes);
-            self.asm
-                .xmm_mov_rm(reg, &self.address_from_sp(self.sp_offset), size);
-            bytes
+        let bytes = match (reg.class(), size) {
+            (RegClass::Int, OperandSize::S64) => {
+                let word_bytes = <Self::ABI as ABI>::word_bytes();
+                self.asm.push_r(reg);
+                self.increment_sp(word_bytes);
+                word_bytes
+            }
+            (RegClass::Int, OperandSize::S32) => {
+                let bytes = size.bytes();
+                self.reserve_stack(bytes);
+                let sp_offset = SPOffset::from_u32(self.sp_offset);
+                self.asm.mov_rm(reg, &self.address_from_sp(sp_offset), size);
+                bytes
+            }
+            (RegClass::Float, _) => {
+                let bytes = size.bytes();
+                self.reserve_stack(bytes);
+                let sp_offset = SPOffset::from_u32(self.sp_offset);
+                self.asm
+                    .xmm_mov_rm(reg, &self.address_from_sp(sp_offset), size);
+                bytes
+            }
+            _ => unreachable!(),
         };
 
         StackSlot {
-            offset: self.sp_offset,
+            offset: SPOffset::from_u32(self.sp_offset),
             size: bytes,
         }
     }
@@ -90,8 +106,8 @@ impl Masm for MacroAssembler {
         self.decrement_sp(bytes);
     }
 
-    fn reset_stack_pointer(&mut self, offset: u32) {
-        self.sp_offset = offset;
+    fn reset_stack_pointer(&mut self, offset: SPOffset) {
+        self.sp_offset = offset.as_u32();
     }
 
     fn local_address(&mut self, local: &LocalSlot) -> Address {
@@ -190,12 +206,12 @@ impl Masm for MacroAssembler {
         context.stack.push(TypedReg::i32(size).into());
     }
 
-    fn address_from_sp(&self, offset: u32) -> Self::Address {
-        Address::offset(regs::rsp(), self.sp_offset - offset)
+    fn address_from_sp(&self, offset: SPOffset) -> Self::Address {
+        Address::offset(regs::rsp(), self.sp_offset - offset.as_u32())
     }
 
-    fn address_at_sp(&self, offset: u32) -> Self::Address {
-        Address::offset(regs::rsp(), offset)
+    fn address_at_sp(&self, offset: SPOffset) -> Self::Address {
+        Address::offset(regs::rsp(), offset.as_u32())
     }
 
     fn address_at_vmctx(&self, offset: u32) -> Self::Address {
@@ -232,13 +248,23 @@ impl Masm for MacroAssembler {
     }
 
     fn pop(&mut self, dst: Reg, size: OperandSize) {
-        if dst.is_int() {
-            self.asm.pop_r(dst);
-            self.decrement_sp(<Self::ABI as abi::ABI>::word_bytes());
-        } else {
-            let addr = self.address_from_sp(self.sp_offset);
-            self.asm.xmm_mov_mr(&addr, dst, size);
-            self.free_stack(size.bytes());
+        let current_sp = SPOffset::from_u32(self.sp_offset);
+        match (dst.class(), size) {
+            (RegClass::Int, OperandSize::S32) => {
+                let addr = self.address_from_sp(current_sp);
+                self.asm.mov_mr(&addr, dst, size);
+                self.free_stack(size.bytes());
+            }
+            (RegClass::Int, OperandSize::S64) => {
+                self.asm.pop_r(dst);
+                self.decrement_sp(<Self::ABI as ABI>::word_bytes());
+            }
+            (RegClass::Float, _) => {
+                let addr = self.address_from_sp(current_sp);
+                self.asm.xmm_mov_mr(&addr, dst, size);
+                self.free_stack(size.bytes());
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -249,7 +275,7 @@ impl Masm for MacroAssembler {
     ) -> u32 {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
-        let delta = calculate_frame_adjustment(self.sp_offset(), addend, alignment);
+        let delta = calculate_frame_adjustment(self.sp_offset().as_u32(), addend, alignment);
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack);
@@ -266,6 +292,10 @@ impl Masm for MacroAssembler {
         self.load(src, dst, self.ptr_size);
     }
 
+    fn load_addr(&mut self, src: Self::Address, dst: Reg, size: OperandSize) {
+        self.asm.lea(&src, dst, size);
+    }
+
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
         if dst.is_int() {
             self.asm.mov_mr(&src, dst, size);
@@ -274,8 +304,8 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn sp_offset(&self) -> u32 {
-        self.sp_offset
+    fn sp_offset(&self) -> SPOffset {
+        SPOffset::from_u32(self.sp_offset)
     }
 
     fn zero(&mut self, reg: Reg) {

@@ -205,7 +205,7 @@ pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[(Reg, Ope
     use CallingConvention::*;
     use OperandSize::*;
     let regs: SmallVec<[_; 18]> = match call_conv {
-        WasmtimeSystemV => {
+        SystemV => {
             smallvec![rbx(), r12(), r13(), r14(), r15(),]
         }
         WindowsFastcall => {

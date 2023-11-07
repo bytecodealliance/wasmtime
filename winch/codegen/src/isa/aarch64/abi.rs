@@ -1,5 +1,5 @@
 use super::regs;
-use crate::abi::{ABIOperand, ABIParams, ABIResults, ABISig, ABI};
+use crate::abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI};
 use crate::isa::{reg::Reg, CallingConvention};
 use crate::masm::OperandSize;
 use smallvec::SmallVec;
@@ -15,21 +15,40 @@ pub(crate) struct Aarch64ABI;
 /// The second element tracks the floating point register index, capped at 7 (v0-v7).
 // Follows
 // https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing
-#[derive(Default)]
-struct RegIndexEnv(u8, u8);
+struct RegIndexEnv {
+    xregs: u8,
+    vregs: u8,
+    limit: u8,
+}
+
+impl Default for RegIndexEnv {
+    fn default() -> Self {
+        Self {
+            xregs: 0,
+            vregs: 0,
+            limit: 8,
+        }
+    }
+}
 
 impl RegIndexEnv {
+    fn with_limit(limit: u8) -> Self {
+        let mut default = Self::default();
+        default.limit = limit;
+        default
+    }
+
     fn next_xreg(&mut self) -> Option<u8> {
-        if self.0 < 8 {
-            return Some(Self::increment(&mut self.0));
+        if self.xregs < self.limit {
+            return Some(Self::increment(&mut self.xregs));
         }
 
         None
     }
 
     fn next_vreg(&mut self) -> Option<u8> {
-        if self.1 < 8 {
-            return Some(Self::increment(&mut self.1));
+        if self.vregs < self.limit {
+            return Some(Self::increment(&mut self.vregs));
         }
 
         None
@@ -76,20 +95,35 @@ impl ABI for Aarch64ABI {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
 
         let mut params_index_env = RegIndexEnv::default();
-        let params = ABIParams::from(params, 0, |ty, stack_offset| {
-            Self::to_abi_operand(ty, stack_offset, &mut params_index_env)
-        });
-
         let results = Self::abi_results(returns, call_conv);
+        let params = ABIParams::from::<_, Self>(
+            params,
+            0,
+            results.has_stack_results(),
+            |ty, stack_offset| {
+                Self::to_abi_operand(
+                    ty,
+                    stack_offset,
+                    &mut params_index_env,
+                    ParamsOrReturns::Params,
+                )
+            },
+        );
+
         ABISig::new(params, results)
     }
 
     fn abi_results(returns: &[WasmType], call_conv: &CallingConvention) -> ABIResults {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
 
-        let mut returns_index_env = RegIndexEnv::default();
-        ABIResults::from(returns, |ty, stack_offset| {
-            Self::to_abi_operand(ty, stack_offset, &mut returns_index_env)
+        let mut returns_index_env = RegIndexEnv::with_limit(1);
+        ABIResults::from(returns, call_conv, |ty, stack_offset| {
+            Self::to_abi_operand(
+                ty,
+                stack_offset,
+                &mut returns_index_env,
+                ParamsOrReturns::Returns,
+            )
         })
     }
 
@@ -127,6 +161,7 @@ impl Aarch64ABI {
         wasm_arg: &WasmType,
         stack_offset: u32,
         index_env: &mut RegIndexEnv,
+        params_or_returns: ParamsOrReturns,
     ) -> (ABIOperand, u32) {
         let (reg, ty) = match wasm_arg {
             ty @ (WasmType::I32 | WasmType::I64) => (index_env.next_xreg().map(regs::xreg), ty),
@@ -139,8 +174,16 @@ impl Aarch64ABI {
         let ty_size = <Self as ABI>::sizeof(wasm_arg);
         let default = || {
             let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size);
-            let size = Self::stack_slot_size();
-            (arg, stack_offset + size)
+            let slot_size = Self::stack_slot_size();
+            // Stack slots for parameters are aligned to a fixed slot size,
+            // in the case of Aarch64, 8 bytes.
+            // Stack slots for returns are type-size aligned.
+            let next_stack = if params_or_returns == ParamsOrReturns::Params {
+                align_to(stack_offset, slot_size) + slot_size
+            } else {
+                align_to(stack_offset, ty_size) + ty_size
+            };
+            (arg, next_stack)
         };
         reg.map_or_else(default, |reg| {
             (ABIOperand::reg(reg, *ty, ty_size), stack_offset)
