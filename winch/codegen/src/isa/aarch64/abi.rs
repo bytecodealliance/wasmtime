@@ -111,6 +111,10 @@ impl ABI for Aarch64ABI {
         regs::scratch()
     }
 
+    fn float_scratch_reg() -> Reg {
+        todo!()
+    }
+
     fn sp_reg() -> Reg {
         todo!()
     }

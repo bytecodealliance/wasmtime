@@ -157,6 +157,10 @@ impl ABI for X64ABI {
         regs::scratch()
     }
 
+    fn float_scratch_reg() -> Reg {
+        regs::scratch_xmm()
+    }
+
     fn fp_reg() -> Reg {
         regs::rbp()
     }
