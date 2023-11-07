@@ -108,7 +108,7 @@ impl Frame {
             locals_size,
             vmctx_slot: LocalSlot::i64(vmctx_offset),
             defined_locals_range: DefinedLocalsRange(
-                defined_locals_start..defined_locals.stack_size,
+                defined_locals_start..(defined_locals_start + defined_locals.stack_size),
             ),
         })
     }

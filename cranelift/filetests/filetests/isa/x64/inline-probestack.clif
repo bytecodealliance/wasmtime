@@ -49,9 +49,13 @@ block0:
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   movl    %esp, -4096(%rsp)
-;   movl    %esp, -8192(%rsp)
-;   movl    %esp, -12288(%rsp)
+;   subq    %rsp, $4096, %rsp
+;   movl    %esp, 0(%rsp)
+;   subq    %rsp, $4096, %rsp
+;   movl    %esp, 0(%rsp)
+;   subq    %rsp, $4096, %rsp
+;   movl    %esp, 0(%rsp)
+;   addq    %rsp, $12288, %rsp
 ;   subq    %rsp, $12288, %rsp
 ; block0:
 ;   lea     rsp(0 + virtual offset), %rax
@@ -64,11 +68,15 @@ block0:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   movl %esp, -0x1000(%rsp)
-;   movl %esp, -0x2000(%rsp)
-;   movl %esp, -0x3000(%rsp)
+;   subq $0x1000, %rsp
+;   movl %esp, (%rsp)
+;   subq $0x1000, %rsp
+;   movl %esp, (%rsp)
+;   subq $0x1000, %rsp
+;   movl %esp, (%rsp)
+;   addq $0x3000, %rsp
 ;   subq $0x3000, %rsp
-; block1: ; offset 0x20
+; block1: ; offset 0x30
 ;   leaq (%rsp), %rax
 ;   addq $0x3000, %rsp
 ;   movq %rbp, %rsp

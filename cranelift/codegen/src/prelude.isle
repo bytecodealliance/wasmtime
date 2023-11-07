@@ -323,6 +323,10 @@
 (decl pure partial ty_half_width (Type) Type)
 (extern constructor ty_half_width ty_half_width)
 
+;; Generate a mask for the maximum shift amount for a given type. i.e 31 for I32.
+(decl pure ty_shift_mask (Type) u64)
+(rule (ty_shift_mask ty) (u64_sub (ty_bits (lane_type ty)) 1))
+
 ;; Compare two types for equality.
 (decl pure ty_equal (Type Type) bool)
 (extern constructor ty_equal ty_equal)

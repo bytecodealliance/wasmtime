@@ -341,25 +341,30 @@ impl BranchTarget {
     }
 
     /// Return the target's offset, if specified, or zero if label-based.
+    pub fn as_offset14_or_zero(self) -> u32 {
+        self.as_offset_bounded(14)
+    }
+
+    /// Return the target's offset, if specified, or zero if label-based.
     pub fn as_offset19_or_zero(self) -> u32 {
-        let off = match self {
-            BranchTarget::ResolvedOffset(off) => off >> 2,
-            _ => 0,
-        };
-        assert!(off <= 0x3ffff);
-        assert!(off >= -0x40000);
-        (off as u32) & 0x7ffff
+        self.as_offset_bounded(19)
     }
 
     /// Return the target's offset, if specified, or zero if label-based.
     pub fn as_offset26_or_zero(self) -> u32 {
+        self.as_offset_bounded(26)
+    }
+
+    fn as_offset_bounded(self, bits: u32) -> u32 {
         let off = match self {
             BranchTarget::ResolvedOffset(off) => off >> 2,
             _ => 0,
         };
-        assert!(off <= 0x1ffffff);
-        assert!(off >= -0x2000000);
-        (off as u32) & 0x3ffffff
+        let hi = (1 << (bits - 1)) - 1;
+        let lo = -(1 << bits - 1);
+        assert!(off <= hi);
+        assert!(off >= lo);
+        (off as u32) & ((1 << bits) - 1)
     }
 }
 
@@ -762,5 +767,17 @@ impl APIKey {
             APIKey::BSP => (0b0011, 0b111),
         };
         0xd503201f | (crm << 8) | (op2 << 5)
+    }
+}
+
+pub use crate::isa::aarch64::lower::isle::generated_code::TestBitAndBranchKind;
+
+impl TestBitAndBranchKind {
+    /// Complements this branch condition to act on the opposite result.
+    pub fn complement(&self) -> TestBitAndBranchKind {
+        match self {
+            TestBitAndBranchKind::Z => TestBitAndBranchKind::NZ,
+            TestBitAndBranchKind::NZ => TestBitAndBranchKind::Z,
+        }
     }
 }

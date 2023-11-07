@@ -46,8 +46,8 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   movl    %edi, %edi
-;;   movabsq $-4, %r11
-;;   addq    %r11, 8(%rdx), %r11
+;;   movq    8(%rdx), %r11
+;;   subq    %r11, $4, %r11
 ;;   movq    %rdi, %r10
 ;;   addq    %r10, 0(%rdx), %r10
 ;;   xorq    %rax, %rax, %rax
@@ -68,11 +68,10 @@
 ;; block0:
 ;;   movq    %rsi, %rax
 ;;   movl    %edi, %esi
-;;   movabsq $-4, %r11
-;;   movq    %rax, %rcx
-;;   addq    %r11, 8(%rcx), %r11
+;;   movq    8(%rax), %r11
+;;   subq    %r11, $4, %r11
 ;;   movq    %rsi, %r10
-;;   addq    %r10, 0(%rcx), %r10
+;;   addq    %r10, 0(%rax), %r10
 ;;   xorq    %rdi, %rdi, %rdi
 ;;   cmpq    %r11, %rsi
 ;;   cmovnbeq %rdi, %r10, %r10

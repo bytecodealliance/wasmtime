@@ -378,7 +378,34 @@ impl<T> LinkerInstance<'_, T> {
         }
     }
 
-    // TODO: define func_new_async
+    /// Define a new host-provided async function using dynamic types.
+    ///
+    /// This is exactly like [`Self::func_new`] except it takes an async
+    /// host function.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn func_new_async<F>(&mut self, component: &Component, name: &str, f: F) -> Result<()>
+    where
+        F: for<'a> Fn(
+                StoreContextMut<'a, T>,
+                &'a [Val],
+                &'a mut [Val],
+            ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+    {
+        assert!(
+            self.engine.config().async_support,
+            "cannot use `func_new_async` without enabling async support in the config"
+        );
+        let ff = move |mut store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
+            let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
+            let mut future = Pin::from(f(store.as_context_mut(), params, results));
+            unsafe { async_cx.block_on(future.as_mut()) }?
+        };
+        self.func_new(component, name, ff)
+    }
 
     /// Defines a [`Module`] within this instance.
     ///

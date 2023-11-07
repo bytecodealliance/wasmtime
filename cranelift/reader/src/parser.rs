@@ -2181,7 +2181,7 @@ impl<'a> Parser<'a> {
     //
     // fact ::= "range" "(" bit-width "," min-value "," max-value ")"
     //        | "dynamic_range" "(" bit-width "," expr "," expr ")"
-    //        | "mem" "(" memory-type "," mt-offset "," mt-offset ")"
+    //        | "mem" "(" memory-type "," mt-offset "," mt-offset [ "," "nullable" ] ")"
     //        | "dynamic_mem" "(" memory-type "," expr "," expr [ "," "nullable" ] ")"
     //        | "conflict"
     // bit-width ::= uimm64
@@ -2261,11 +2261,22 @@ impl<'a> Parser<'a> {
                 let max_offset: u64 = self
                     .match_uimm64("expected a uimm64 maximum pointer offset for `mem` fact")?
                     .into();
+                let nullable = if self.token() == Some(Token::Comma) {
+                    self.consume();
+                    self.match_token(
+                        Token::Identifier("nullable"),
+                        "expected `nullable` in last optional field of `dynamic_mem`",
+                    )?;
+                    true
+                } else {
+                    false
+                };
                 self.match_token(Token::RPar, "expected a `)`")?;
                 Ok(Fact::Mem {
                     ty,
                     min_offset,
                     max_offset,
+                    nullable,
                 })
             }
             Some(Token::Identifier("dynamic_mem")) => {
@@ -2300,6 +2311,13 @@ impl<'a> Parser<'a> {
                     nullable,
                 })
             }
+            Some(Token::Identifier("def")) => {
+                self.consume();
+                self.match_token(Token::LPar, "expected a `(`")?;
+                let value = self.match_value("expected a value number in `def` fact")?;
+                self.match_token(Token::RPar, "expected a `)`")?;
+                Ok(Fact::Def { value })
+            }
             Some(Token::Identifier("compare")) => {
                 self.consume();
                 self.match_token(Token::LPar, "expected a `(`")?;
@@ -2308,9 +2326,9 @@ impl<'a> Parser<'a> {
                     Token::Comma,
                     "expected comma in `compare` fact after condition code",
                 )?;
-                let lhs = self.parse_base_expr()?;
+                let lhs = self.parse_expr()?;
                 self.match_token(Token::Comma, "expected comma in `compare` fact after LHS")?;
-                let rhs = self.parse_base_expr()?;
+                let rhs = self.parse_expr()?;
                 self.match_token(Token::RPar, "expected a `)`")?;
                 Ok(Fact::Compare { kind, lhs, rhs })
             }
@@ -2319,7 +2337,7 @@ impl<'a> Parser<'a> {
                 Ok(Fact::Conflict)
             }
             _ => Err(self.error(
-                "expected a `range`, 'dynamic_range', `mem`, `dynamic_mem` or `conflict` fact",
+                "expected a `range`, 'dynamic_range', `mem`, `dynamic_mem`, `def`, `compare` or `conflict` fact",
             )),
         }
     }

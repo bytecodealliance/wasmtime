@@ -2882,6 +2882,24 @@
         (with_flags_side_effect flags
          (cond_br taken not_taken (cond_br_not_zero rt))))))
 
+;; Special lowerings for `tbnz` - "Test bit and Branch if Nonzero"
+(rule 1 (lower_branch (brif (band x @ (value_type ty) (u64_from_iconst n)) _ _)
+                     (two_targets taken not_taken))
+  (if-let bit (test_and_compare_bit_const ty n))
+  (emit_side_effect (tbnz taken not_taken x bit)))
+
+;; Special lowering for `tbz` - "Test bit and Branch if Zero"
+(rule 1 (lower_branch (brif (icmp (IntCC.Equal)
+                                  (band x @ (value_type (fits_in_64 ty))
+                                        (u64_from_iconst n))
+                                  (u64_from_iconst 0)) _ _)
+                     (two_targets taken not_taken))
+  (if-let bit (test_and_compare_bit_const ty n))
+  (emit_side_effect (tbz taken not_taken x bit)))
+
+(decl pure partial test_and_compare_bit_const (Type u64) u8)
+(extern constructor test_and_compare_bit_const test_and_compare_bit_const)
+
 ;;; Rules for `jump` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (jump _) (single_target label))

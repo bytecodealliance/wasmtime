@@ -245,3 +245,7 @@ async fn preview1_path_open_preopen() {
 async fn preview1_unicode_output() {
     run(PREVIEW1_UNICODE_OUTPUT, true).await.unwrap()
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview1_file_write() {
+    run(PREVIEW1_FILE_WRITE, true).await.unwrap()
+}

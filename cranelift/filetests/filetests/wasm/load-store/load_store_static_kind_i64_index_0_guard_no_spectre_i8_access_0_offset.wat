@@ -42,11 +42,12 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0
 ;;
 ;;                                 block0(v0: i64, v1: i32, v2: i64):
-;; @0040                               v3 = icmp_imm ugt v0, 0x0fff_ffff
-;; @0040                               trapnz v3, heap_oob
-;; @0040                               v4 = global_value.i64 gv1
-;; @0040                               v5 = iadd v4, v0
-;; @0040                               istore8 little heap v1, v5
+;; @0040                               v3 = iconst.i64 0x0fff_ffff
+;; @0040                               v4 = icmp ugt v0, v3  ; v3 = 0x0fff_ffff
+;; @0040                               trapnz v4, heap_oob
+;; @0040                               v5 = global_value.i64 gv1
+;; @0040                               v6 = iadd v5, v0
+;; @0040                               istore8 little heap v1, v6
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -58,12 +59,13 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0048                               v3 = icmp_imm ugt v0, 0x0fff_ffff
-;; @0048                               trapnz v3, heap_oob
-;; @0048                               v4 = global_value.i64 gv1
-;; @0048                               v5 = iadd v4, v0
-;; @0048                               v6 = uload8.i32 little heap v5
-;; @004b                               jump block1(v6)
+;; @0048                               v3 = iconst.i64 0x0fff_ffff
+;; @0048                               v4 = icmp ugt v0, v3  ; v3 = 0x0fff_ffff
+;; @0048                               trapnz v4, heap_oob
+;; @0048                               v5 = global_value.i64 gv1
+;; @0048                               v6 = iadd v5, v0
+;; @0048                               v7 = uload8.i32 little heap v6
+;; @004b                               jump block1(v7)
 ;;
 ;;                                 block1(v2: i32):
 ;; @004b                               return v2

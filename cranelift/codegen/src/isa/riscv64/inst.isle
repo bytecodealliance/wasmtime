@@ -1783,9 +1783,6 @@
 
 
 
-;; Generate a mask for the bit-width of the given type
-(decl pure shift_mask (Type) u64)
-(rule (shift_mask ty) (u64_sub (ty_bits (lane_type ty)) 1))
 
 ;; Helper for generating a i64 from a pair of Imm20 and Imm12 constants
 (decl i64_generate_imm (Imm20 Imm12) i64)
@@ -1887,6 +1884,14 @@
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
 (decl imm12_from_value (Imm12) Value)
 (extractor (imm12_from_value n) (i64_from_iconst (imm12_from_i64 n)))
+
+;; Conceptually the same as `imm12_from_value`, but tries negating the constant
+;; value (first sign-extending to handle narrow widths).
+(decl pure partial imm12_from_negated_value (Value) Imm12)
+(rule
+  (imm12_from_negated_value (has_type ty (iconst n)))
+  (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
+  imm)
 
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)

@@ -1,0 +1,162 @@
+test compile precise-output
+set enable_probestack=true
+set probestack_strategy=inline
+; This is the default and is equivalent to a page size of 4096
+set probestack_size_log2=12
+target riscv64 has_c
+
+
+; If the stack size is just one page, we can avoid the stack probe entirely
+function %single_page() -> i64 system_v {
+ss0 = explicit_slot 2048
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-2048
+; block0:
+;   load_addr a0,0(nominal_sp)
+;   lui t6,1
+;   addi t6,t6,-2048
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   addi sp, sp, -0x800
+; block1: ; offset 0xc
+;   c.mv a0, sp
+;   c.lui t6, 1
+;   addi t6, t6, -0x800
+;   c.add sp, t6
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+function %unrolled() -> i64 system_v {
+ss0 = explicit_slot 12288
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   lui t3,-1
+;   add sp,sp,t3
+;   sw zero,0(sp)
+;   add sp,sp,t3
+;   sw zero,0(sp)
+;   add sp,sp,t3
+;   sw zero,0(sp)
+;   lui t6,3
+;   add sp,sp,t6
+;   lui t6,-3
+;   add sp,sp,t6
+; block0:
+;   load_addr a0,0(nominal_sp)
+;   lui t6,3
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   c.lui t3, 0xfffff
+;   c.add sp, t3
+;   c.swsp zero, 0(sp)
+;   c.add sp, t3
+;   c.swsp zero, 0(sp)
+;   c.add sp, t3
+;   c.swsp zero, 0(sp)
+;   c.lui t6, 3
+;   c.add sp, t6
+;   c.lui t6, 0xffffd
+;   c.add sp, t6
+; block1: ; offset 0x1e
+;   c.mv a0, sp
+;   c.lui t6, 3
+;   c.add sp, t6
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+
+function %large() -> i64 system_v {
+ss0 = explicit_slot 100000
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   inline_stack_probe##guard_size=4096 probe_count=25 tmp=t3
+;   lui t6,-24
+;   addi t6,t6,-1696
+;   add sp,sp,t6
+; block0:
+;   load_addr a0,0(nominal_sp)
+;   lui t6,24
+;   addi t6,t6,1696
+;   add sp,sp,t6
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   c.addi16sp sp, -0x10
+;   c.sdsp ra, 8(sp)
+;   c.sdsp s0, 0(sp)
+;   c.mv s0, sp
+;   c.lui t6, 0x19
+;   c.lui t3, 1
+;   bgeu t3, t6, 0x12
+;   sub t5, sp, t6
+;   sb zero, 0(t5)
+;   sub t6, t6, t3
+;   c.j -0x10
+;   c.lui t6, 0xfffe8
+;   addi t6, t6, -0x6a0
+;   c.add sp, t6
+; block1: ; offset 0x26
+;   c.mv a0, sp
+;   c.lui t6, 0x18
+;   addi t6, t6, 0x6a0
+;   c.add sp, t6
+;   c.ldsp ra, 8(sp)
+;   c.ldsp s0, 0(sp)
+;   c.addi16sp sp, 0x10
+;   c.jr ra
+

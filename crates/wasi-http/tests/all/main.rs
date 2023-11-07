@@ -2,7 +2,7 @@ use crate::http_server::Server;
 use anyhow::{anyhow, Context, Result};
 use futures::{channel::oneshot, future, stream, FutureExt};
 use http_body::Frame;
-use http_body_util::{combinators::BoxBody, Collected, StreamBody};
+use http_body_util::{combinators::BoxBody, Collected, Empty, StreamBody};
 use hyper::{body::Bytes, server::conn::http1, service::service_fn, Method, StatusCode};
 use sha2::{Digest, Sha256};
 use std::{collections::HashMap, iter, net::Ipv4Addr, str, sync::Arc};
@@ -265,13 +265,16 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
                       between_bytes_timeout,
                       ..
                   }| {
-                Ok(view.table().push(HostFutureIncomingResponse::Ready(
-                    handle(request.into_parts().0).map(|resp| IncomingResponseInternal {
+                let response = handle(request.into_parts().0).map(|resp| {
+                    Ok(IncomingResponseInternal {
                         resp,
-                        worker: preview2::spawn(future::ready(Ok(()))),
+                        worker: Arc::new(preview2::spawn(future::ready(()))),
                         between_bytes_timeout,
-                    }),
-                ))?)
+                    })
+                });
+                Ok(view
+                    .table()
+                    .push(HostFutureIncomingResponse::Ready(response))?)
             },
         ) as RequestSender)
     } else {
@@ -360,6 +363,73 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn wasi_http_echo() -> Result<()> {
+    do_wasi_http_echo("echo", None).await
+}
+
+#[test_log::test(tokio::test)]
+async fn wasi_http_double_echo() -> Result<()> {
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::new(127, 0, 0, 1), 0)).await?;
+
+    let prefix = format!("http://{}", listener.local_addr()?);
+
+    let (_tx, rx) = oneshot::channel::<()>();
+
+    let server = async move {
+        loop {
+            let (stream, _) = listener.accept().await?;
+            task::spawn(async move {
+                if let Err(e) = http1::Builder::new()
+                    .keep_alive(true)
+                    .serve_connection(
+                        stream,
+                        service_fn(
+                            move |request: hyper::Request<hyper::body::Incoming>| async move {
+                                use http_body_util::BodyExt;
+
+                                if let (&Method::POST, "/echo") =
+                                    (request.method(), request.uri().path())
+                                {
+                                    Ok::<_, anyhow::Error>(hyper::Response::new(
+                                        request.into_body().boxed(),
+                                    ))
+                                } else {
+                                    Ok(hyper::Response::builder()
+                                        .status(StatusCode::METHOD_NOT_ALLOWED)
+                                        .body(BoxBody::new(
+                                            Empty::new().map_err(|_| unreachable!()),
+                                        ))?)
+                                }
+                            },
+                        ),
+                    )
+                    .await
+                {
+                    eprintln!("error serving connection: {e:?}");
+                }
+            });
+
+            // Help rustc with type inference:
+            if false {
+                return Ok::<_, anyhow::Error>(());
+            }
+        }
+    }
+    .then(|result| {
+        if let Err(e) = result {
+            eprintln!("error listening for connections: {e:?}");
+        }
+        future::ready(())
+    })
+    .boxed();
+
+    task::spawn(async move {
+        drop(future::select(server, rx).await);
+    });
+
+    do_wasi_http_echo("double-echo", Some(&format!("{prefix}/echo"))).await
+}
+
+async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
     let body = {
         // A sorta-random-ish megabyte
         let mut n = 0_u8;
@@ -371,13 +441,18 @@ async fn wasi_http_echo() -> Result<()> {
         .collect::<Vec<_>>()
     };
 
-    let request = hyper::Request::post("/echo")
-        .header("content-type", "application/octet-stream")
-        .body(BoxBody::new(StreamBody::new(stream::iter(
-            body.chunks(16 * 1024)
-                .map(|chunk| Ok::<_, anyhow::Error>(Frame::data(Bytes::copy_from_slice(chunk))))
-                .collect::<Vec<_>>(),
-        ))))?;
+    let mut request =
+        hyper::Request::post(&format!("/{uri}")).header("content-type", "application/octet-stream");
+
+    if let Some(url_header) = url_header {
+        request = request.header("url", url_header);
+    }
+
+    let request = request.body(BoxBody::new(StreamBody::new(stream::iter(
+        body.chunks(16 * 1024)
+            .map(|chunk| Ok::<_, Error>(Frame::data(Bytes::copy_from_slice(chunk))))
+            .collect::<Vec<_>>(),
+    ))))?;
 
     let response = run_wasi_http(
         test_programs_artifacts::API_PROXY_STREAMING_COMPONENT,

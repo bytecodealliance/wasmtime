@@ -42,9 +42,9 @@
 ;; function u0:0:
 ;; block0:
 ;;   ld a3,8(a2)
-;;   lui a4,-1
-;;   addi a4,a4,-4
-;;   add a3,a3,a4
+;;   lui a4,1
+;;   addi a4,a4,4
+;;   sub a3,a3,a4
 ;;   sltu a3,a3,a0
 ;;   ld a4,0(a2)
 ;;   add a4,a4,a0
@@ -61,9 +61,9 @@
 ;; function u0:1:
 ;; block0:
 ;;   ld a3,8(a1)
-;;   lui a2,-1
-;;   addi a4,a2,-4
-;;   add a3,a3,a4
+;;   lui a2,1
+;;   addi a4,a2,4
+;;   sub a3,a3,a4
 ;;   sltu a3,a3,a0
 ;;   ld a4,0(a1)
 ;;   add a4,a4,a0

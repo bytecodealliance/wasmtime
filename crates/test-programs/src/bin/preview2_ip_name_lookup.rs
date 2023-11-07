@@ -1,36 +1,70 @@
-use test_programs::wasi::clocks::*;
-use test_programs::wasi::io::*;
+use test_programs::wasi::sockets::network::{ErrorCode, IpAddress};
 use test_programs::wasi::sockets::*;
 
 fn main() {
+    // Valid domains
+    resolve("localhost").unwrap();
+    resolve("example.com").unwrap();
+    resolve("münchen.de").unwrap();
+
+    // Valid IP addresses
+    assert_eq!(resolve_one("0.0.0.0").unwrap(), IpAddress::IPV4_UNSPECIFIED);
+    assert_eq!(resolve_one("127.0.0.1").unwrap(), IpAddress::IPV4_LOOPBACK);
+    assert_eq!(
+        resolve_one("192.0.2.0").unwrap(),
+        IpAddress::Ipv4((192, 0, 2, 0))
+    );
+    assert_eq!(resolve_one("::").unwrap(), IpAddress::IPV6_UNSPECIFIED);
+    assert_eq!(resolve_one("::1").unwrap(), IpAddress::IPV6_LOOPBACK);
+    assert_eq!(resolve_one("[::]").unwrap(), IpAddress::IPV6_UNSPECIFIED);
+    assert_eq!(
+        resolve_one("2001:0db8:0:0:0:0:0:0").unwrap(),
+        IpAddress::Ipv6((0x2001, 0x0db8, 0, 0, 0, 0, 0, 0))
+    );
+    assert_eq!(
+        resolve_one("dead:beef::").unwrap(),
+        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
+    );
+    assert_eq!(
+        resolve_one("dead:beef::0").unwrap(),
+        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
+    );
+    assert_eq!(
+        resolve_one("DEAD:BEEF::0").unwrap(),
+        IpAddress::Ipv6((0xdead, 0xbeef, 0, 0, 0, 0, 0, 0))
+    );
+
+    // Invalid inputs
+    assert_eq!(resolve("").unwrap_err(), ErrorCode::InvalidArgument);
+    assert_eq!(resolve(" ").unwrap_err(), ErrorCode::InvalidArgument);
+    assert_eq!(resolve("a.b<&>").unwrap_err(), ErrorCode::InvalidArgument);
+    assert_eq!(
+        resolve("127.0.0.1:80").unwrap_err(),
+        ErrorCode::InvalidArgument
+    );
+    assert_eq!(resolve("[::]:80").unwrap_err(), ErrorCode::InvalidArgument);
+    assert_eq!(
+        resolve("http://example.com/").unwrap_err(),
+        ErrorCode::InvalidArgument
+    );
+}
+
+fn resolve(name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
     let network = instance_network::instance_network();
 
-    let addresses =
-        ip_name_lookup::resolve_addresses(&network, "example.com", None, false).unwrap();
-    let pollable = addresses.subscribe();
-    poll::poll_one(&pollable);
-    assert!(addresses.resolve_next_address().is_ok());
-
-    let result = ip_name_lookup::resolve_addresses(&network, "a.b<&>", None, false);
-    assert!(matches!(result, Err(network::ErrorCode::InvalidArgument)));
-
-    // Try resolving a valid address and ensure that it eventually terminates.
-    // To help prevent this test from being flaky this additionally times out
-    // the resolution and allows errors.
-    let addresses = ip_name_lookup::resolve_addresses(&network, "github.com", None, false).unwrap();
-    let lookup = addresses.subscribe();
-    let timeout = monotonic_clock::subscribe_duration(1_000_000_000);
-    let ready = poll::poll_list(&[&lookup, &timeout]);
-    assert!(ready.len() > 0);
-    match ready[0] {
-        0 => loop {
-            match addresses.resolve_next_address() {
-                Ok(Some(_)) => {}
-                Ok(None) => break,
-                Err(_) => break,
-            }
-        },
-        1 => {}
-        _ => unreachable!(),
+    match network.blocking_resolve_addresses(name) {
+        // The following error codes signal that the input passed validation
+        // and a lookup was actually attempted, but failed. Ignore these to
+        // make the CI tests less flaky:
+        Err(
+            ErrorCode::NameUnresolvable
+            | ErrorCode::TemporaryResolverFailure
+            | ErrorCode::PermanentResolverFailure,
+        ) => Ok(vec![]),
+        r => r,
     }
+}
+
+fn resolve_one(name: &str) -> Result<IpAddress, ErrorCode> {
+    Ok(resolve(name)?.first().unwrap().to_owned())
 }

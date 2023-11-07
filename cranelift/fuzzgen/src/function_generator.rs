@@ -22,6 +22,7 @@ use cranelift::prelude::{
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+use std::str::FromStr;
 use target_lexicon::{Architecture, Triple};
 
 type BlockSignature = Vec<Type>;
@@ -797,6 +798,17 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
         F32X4, F64X2, // SIMD Floats
     ];
 
+    // When this env variable is passed, we only generate instructions for the opcodes listed in
+    // the comma-separated list. This is useful for debugging, as it allows us to focus on a few
+    // specific opcodes.
+    let allowed_opcodes = std::env::var("FUZZGEN_ALLOWED_OPS").ok().map(|s| {
+        s.split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| Opcode::from_str(s).expect("Unrecoginzed opcode"))
+            .collect::<Vec<_>>()
+    });
+
     Opcode::all()
         .iter()
         .filter(|op| {
@@ -1047,6 +1059,11 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::FcvtFromSint, &[I16X8], &[F64X2]),
                 (Opcode::FcvtFromSint, &[I32X4], &[F64X2]),
             )
+        })
+        .filter(|(op, ..)| {
+            allowed_opcodes
+                .as_ref()
+                .map_or(true, |opcodes| opcodes.contains(op))
         })
         .collect()
 });

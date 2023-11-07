@@ -733,3 +733,183 @@ block1:
 ; block1: ; offset 0x1c
 ;   ret
 
+function %tbnz_i8(i8) {
+block0(v0: i8):
+  v1 = band_imm v0, 0x10
+  brif v1, block1, block2
+
+block1:
+  return
+block2:
+  return
+}
+
+; VCode:
+; block0:
+;   tbnz x0, #4, label2 ; b label1
+; block1:
+;   ret
+; block2:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tbnz w0, #4, #8
+; block1: ; offset 0x4
+;   ret
+; block2: ; offset 0x8
+;   ret
+
+function %tbz_i16(i16) {
+block0(v0: i16):
+  v1 = band_imm v0, 0x1000
+  v2 = icmp_imm eq v1, 0
+  brif v2, block1, block2
+
+block1:
+  return
+block2:
+  return
+}
+
+; VCode:
+; block0:
+;   tbz x0, #12, label2 ; b label1
+; block1:
+;   ret
+; block2:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tbz w0, #0xc, #8
+; block1: ; offset 0x4
+;   ret
+; block2: ; offset 0x8
+;   ret
+
+function %tbnz_i32(i32) {
+block0(v0: i32):
+  v1 = band_imm v0, 0x10000
+  brif v1, block1, block2
+
+block1:
+  return
+block2:
+  return
+}
+
+; VCode:
+; block0:
+;   tbnz x0, #16, label2 ; b label1
+; block1:
+;   ret
+; block2:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tbnz w0, #0x10, #8
+; block1: ; offset 0x4
+;   ret
+; block2: ; offset 0x8
+;   ret
+
+
+function %tbz_i64(i64) {
+block0(v0: i64):
+  v1 = band_imm v0, 0x1_00000000
+  v2 = icmp_imm eq v1, 0
+  brif v2, block1, block2
+
+block1:
+  return
+block2:
+  return
+}
+
+; VCode:
+; block0:
+;   tbz x0, #32, label2 ; b label1
+; block1:
+;   ret
+; block2:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   tbz x0, #0x20, #8
+; block1: ; offset 0x4
+;   ret
+; block2: ; offset 0x8
+;   ret
+
+function %not_tbz1(i8) {
+block0(v0: i8):
+  v1 = band_imm v0, 0x100
+  v2 = icmp_imm eq v1, 0
+  brif v2, block1, block2
+
+block1:
+  return
+block2:
+  return
+}
+
+; VCode:
+; block0:
+;   movz w4, #0
+;   and w4, w0, w4
+;   uxtb w4, w4
+;   subs wzr, w4, #0
+;   b.eq label2 ; b label1
+; block1:
+;   ret
+; block2:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov w4, #0
+;   and w4, w0, w4
+;   uxtb w4, w4
+;   cmp w4, #0
+;   b.eq #0x18
+; block1: ; offset 0x14
+;   ret
+; block2: ; offset 0x18
+;   ret
+
+function %not_tbz2(i8) {
+block0(v0: i8):
+  v1 = band_imm v0, 0x3
+  v2 = icmp_imm eq v1, 0
+  brif v2, block1, block2
+
+block1:
+  return
+block2:
+  return
+}
+
+; VCode:
+; block0:
+;   and w3, w0, #3
+;   uxtb w3, w3
+;   subs wzr, w3, #0
+;   b.eq label2 ; b label1
+; block1:
+;   ret
+; block2:
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   and w3, w0, #3
+;   uxtb w3, w3
+;   cmp w3, #0
+;   b.eq #0x14
+; block1: ; offset 0x10
+;   ret
+; block2: ; offset 0x14
+;   ret

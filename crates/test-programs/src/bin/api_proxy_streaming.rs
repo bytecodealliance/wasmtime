@@ -1,9 +1,9 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use bindings::wasi::http::types::{
-    Fields, IncomingRequest, Method, OutgoingBody, OutgoingRequest, OutgoingResponse,
-    ResponseOutparam, Scheme,
+    Fields, IncomingRequest, IncomingResponse, Method, OutgoingBody, OutgoingRequest,
+    OutgoingResponse, ResponseOutparam, Scheme,
 };
-use futures::{stream, SinkExt, StreamExt, TryStreamExt};
+use futures::{future, stream, Future, SinkExt, StreamExt, TryStreamExt};
 use url::Url;
 
 mod bindings {
@@ -35,6 +35,9 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
 
     match (request.method(), request.path_with_query().as_deref()) {
         (Method::Get, Some("/hash-all")) => {
+            // Send outgoing GET requests to the specified URLs and stream the hashes of the response bodies as
+            // they arrive.
+
             let urls = headers.iter().filter_map(|(k, v)| {
                 (k == "url")
                     .then_some(v)
@@ -50,7 +53,6 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
             let mut results = stream::iter(results).buffer_unordered(MAX_CONCURRENCY);
 
             let response = OutgoingResponse::new(
-                200,
                 Fields::from_list(&[("content-type".to_string(), b"text/plain".to_vec())]).unwrap(),
             );
 
@@ -73,8 +75,9 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
         }
 
         (Method::Post, Some("/echo")) => {
+            // Echo the request body without buffering it.
+
             let response = OutgoingResponse::new(
-                200,
                 Fields::from_list(
                     &headers
                         .into_iter()
@@ -108,28 +111,89 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
             }
         }
 
-        _ => {
-            let response = OutgoingResponse::new(405, Fields::new());
+        (Method::Post, Some("/double-echo")) => {
+            // Pipe the request body to an outgoing request and stream the response back to the client.
 
-            let body = response.body().expect("response should be writable");
+            if let Some(url) = headers.iter().find_map(|(k, v)| {
+                (k == "url")
+                    .then_some(v)
+                    .and_then(|v| std::str::from_utf8(v).ok())
+                    .and_then(|v| Url::parse(v).ok())
+            }) {
+                match double_echo(request, &url).await {
+                    Ok((request_copy, response)) => {
+                        let mut stream = executor::incoming_body(
+                            response.consume().expect("response should be consumable"),
+                        );
 
-            ResponseOutparam::set(response_out, Ok(response));
+                        let response = OutgoingResponse::new(
+                            Fields::from_list(
+                                &headers
+                                    .into_iter()
+                                    .filter_map(|(k, v)| (k == "content-type").then_some((k, v)))
+                                    .collect::<Vec<_>>(),
+                            )
+                            .unwrap(),
+                        );
 
-            OutgoingBody::finish(body, None);
+                        let mut body = executor::outgoing_body(
+                            response.body().expect("response should be writable"),
+                        );
+
+                        ResponseOutparam::set(response_out, Ok(response));
+
+                        let response_copy = async move {
+                            while let Some(chunk) = stream.next().await {
+                                body.send(chunk?).await?;
+                            }
+                            Ok::<_, anyhow::Error>(())
+                        };
+
+                        let (request_copy, response_copy) =
+                            future::join(request_copy, response_copy).await;
+                        if let Err(e) = request_copy.and(response_copy) {
+                            eprintln!("error piping to and from {url}: {e}");
+                        }
+                    }
+
+                    Err(e) => {
+                        eprintln!("Error sending outgoing request to {url}: {e}");
+                        server_error(response_out);
+                    }
+                }
+            } else {
+                bad_request(response_out);
+            }
         }
+
+        _ => method_not_allowed(response_out),
     }
 }
 
-async fn hash(url: &Url) -> Result<String> {
-    let request = OutgoingRequest::new(
-        &Method::Get,
-        Some(url.path()),
-        Some(&match url.scheme() {
+async fn double_echo(
+    incoming_request: IncomingRequest,
+    url: &Url,
+) -> Result<(impl Future<Output = Result<()>>, IncomingResponse)> {
+    let outgoing_request = OutgoingRequest::new(Fields::new());
+
+    outgoing_request
+        .set_method(&Method::Post)
+        .map_err(|()| anyhow!("failed to set method"))?;
+
+    outgoing_request
+        .set_path_with_query(Some(url.path()))
+        .map_err(|()| anyhow!("failed to set path_with_query"))?;
+
+    outgoing_request
+        .set_scheme(Some(&match url.scheme() {
             "http" => Scheme::Http,
             "https" => Scheme::Https,
             scheme => Scheme::Other(scheme.into()),
-        }),
-        Some(&format!(
+        }))
+        .map_err(|()| anyhow!("failed to set scheme"))?;
+
+    outgoing_request
+        .set_authority(Some(&format!(
             "{}{}",
             url.host_str().unwrap_or(""),
             if let Some(port) = url.port() {
@@ -137,9 +201,90 @@ async fn hash(url: &Url) -> Result<String> {
             } else {
                 String::new()
             }
-        )),
-        Fields::new(),
+        )))
+        .map_err(|()| anyhow!("failed to set authority"))?;
+
+    let mut body = executor::outgoing_body(
+        outgoing_request
+            .body()
+            .expect("request body should be writable"),
     );
+
+    let response = executor::outgoing_request_send(outgoing_request);
+
+    let mut stream = executor::incoming_body(
+        incoming_request
+            .consume()
+            .expect("request should be consumable"),
+    );
+
+    let copy = async move {
+        while let Some(chunk) = stream.next().await {
+            body.send(chunk?).await?;
+        }
+        Ok::<_, anyhow::Error>(())
+    };
+
+    let response = response.await?;
+
+    let status = response.status();
+
+    if !(200..300).contains(&status) {
+        bail!("unexpected status: {status}");
+    }
+
+    Ok((copy, response))
+}
+
+fn server_error(response_out: ResponseOutparam) {
+    respond(500, response_out)
+}
+
+fn bad_request(response_out: ResponseOutparam) {
+    respond(400, response_out)
+}
+
+fn method_not_allowed(response_out: ResponseOutparam) {
+    respond(405, response_out)
+}
+
+fn respond(status: u16, response_out: ResponseOutparam) {
+    let response = OutgoingResponse::new(Fields::new());
+    response
+        .set_status_code(status)
+        .expect("setting status code");
+
+    let body = response.body().expect("response should be writable");
+
+    ResponseOutparam::set(response_out, Ok(response));
+
+    OutgoingBody::finish(body, None);
+}
+
+async fn hash(url: &Url) -> Result<String> {
+    let request = OutgoingRequest::new(Fields::new());
+
+    request
+        .set_path_with_query(Some(url.path()))
+        .map_err(|()| anyhow!("failed to set path_with_query"))?;
+    request
+        .set_scheme(Some(&match url.scheme() {
+            "http" => Scheme::Http,
+            "https" => Scheme::Https,
+            scheme => Scheme::Other(scheme.into()),
+        }))
+        .map_err(|()| anyhow!("failed to set scheme"))?;
+    request
+        .set_authority(Some(&format!(
+            "{}{}",
+            url.host_str().unwrap_or(""),
+            if let Some(port) = url.port() {
+                format!(":{port}")
+            } else {
+                String::new()
+            }
+        )))
+        .map_err(|()| anyhow!("failed to set authority"))?;
 
     let response = executor::outgoing_request_send(request).await?;
 
@@ -219,7 +364,7 @@ mod executor {
 
                     let mut ready = vec![false; wakers.len()];
 
-                    for index in io::poll::poll_list(&pollables) {
+                    for index in io::poll::poll(&pollables) {
                         ready[usize::try_from(index).unwrap()] = true;
                     }
 

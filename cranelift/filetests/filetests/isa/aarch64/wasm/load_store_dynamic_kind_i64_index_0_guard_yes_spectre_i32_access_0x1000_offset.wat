@@ -42,8 +42,8 @@
 ;; function u0:0:
 ;; block0:
 ;;   ldr x11, [x2, #8]
-;;   movn x12, #4099
-;;   add x11, x11, x12
+;;   movz x12, #4100
+;;   sub x11, x11, x12
 ;;   ldr x12, [x2]
 ;;   add x12, x12, x0
 ;;   add x12, x12, #4096
@@ -59,8 +59,8 @@
 ;; function u0:1:
 ;; block0:
 ;;   ldr x11, [x1, #8]
-;;   movn x12, #4099
-;;   add x11, x11, x12
+;;   movz x12, #4100
+;;   sub x11, x11, x12
 ;;   ldr x12, [x1]
 ;;   add x12, x12, x0
 ;;   add x12, x12, #4096

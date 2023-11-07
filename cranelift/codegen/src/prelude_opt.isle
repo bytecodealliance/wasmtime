@@ -43,3 +43,16 @@
 ;; answer".
 (decl subsume (Value) Value)
 (extern constructor subsume subsume)
+
+;;;;; constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl iconst_u64 (Type u64) Value)
+
+;; Use a single iconst for types that fit in 64 bits.
+(rule 0 (iconst_u64 (ty_int_ref_scalar_64 ty) val)
+    (if-let $true (u64_le val (ty_umax ty)))
+    (iconst ty (imm64_masked ty val)))
+
+;; For i128 types use a iconst, but zero extend it to i128.
+(rule 1 (iconst_u64 $I128 val)
+    (uextend $I128 (iconst $I64 (imm64_masked $I64 val))))
