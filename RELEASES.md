@@ -16,7 +16,118 @@ Unreleased.
 
 ### Added
 
+* Multiple versions of interfaces are now supported in `bindgen!`.
+  [#7172](https://github.com/bytecodealliance/wasmtime/pull/7172)
+
+* UDP has been implemented in `wasi:sockets`.
+  [#7148](https://github.com/bytecodealliance/wasmtime/pull/7148)
+  [#7243](https://github.com/bytecodealliance/wasmtime/pull/7243)
+
+* Support for custom stack memory allocation has been added.
+  [#7209](https://github.com/bytecodealliance/wasmtime/pull/7209)
+
+* The `memory_init_cow` setting can now be configured in the C API.
+  [#7227](https://github.com/bytecodealliance/wasmtime/pull/7227)
+
+* The `splice` method of WASI streams has been implemented.
+  [#7234](https://github.com/bytecodealliance/wasmtime/pull/7234)
+
+* Wasmtime binary releases now have a `wasmtime-min` executable in addition to
+  `libwasmtime-min.*` libraries for the C API. These showcase a minimal
+  build of Wasmtime for comparison.
+  [#7282](https://github.com/bytecodealliance/wasmtime/pull/7282)
+  [#7315](https://github.com/bytecodealliance/wasmtime/pull/7315)
+  [#7350](https://github.com/bytecodealliance/wasmtime/pull/7350)
+
 ### Changed
+
+* Many changes to `wasi:http` WITs have happened to keep up with the proposal as
+  it prepares to reach a more stable status.
+  [#7161](https://github.com/bytecodealliance/wasmtime/pull/7161)
+  [#7406](https://github.com/bytecodealliance/wasmtime/pull/7406)
+  [#7383](https://github.com/bytecodealliance/wasmtime/pull/7383)
+  [#7417](https://github.com/bytecodealliance/wasmtime/pull/7417)
+  [#7451](https://github.com/bytecodealliance/wasmtime/pull/7451)
+
+* Add an error resource to WASI streams.
+  [#7152](https://github.com/bytecodealliance/wasmtime/pull/7152)
+
+* Syntax in `bindgen!`'s `trappable_error_type` configuration has changed.
+  [#7170](https://github.com/bytecodealliance/wasmtime/pull/7170)
+
+* TCP errors in `wasi:sockets` have been simplified and clarified.
+  [#7120](https://github.com/bytecodealliance/wasmtime/pull/7120)
+
+* Wasmtime/Cranelift now require Rust 1.71.0 to compile.
+  [#7206](https://github.com/bytecodealliance/wasmtime/pull/7206)
+
+* Logging in Wasmtime is now configured with `WASMTIME_LOG` instead of
+  `RUST_LOG`.
+  [#7239](https://github.com/bytecodealliance/wasmtime/pull/7239)
+
+* Fuel-related APIs on `Store` have been refactored and reimplemented with two
+  new methods `set_fuel` and `reset_fuel`. Previous methods have been removed.
+  [#7240](https://github.com/bytecodealliance/wasmtime/pull/7240)
+  [#7298](https://github.com/bytecodealliance/wasmtime/pull/7298)
+
+* The `forward` method of WASI streams has been removed.
+  [#7234](https://github.com/bytecodealliance/wasmtime/pull/7234)
+
+* The WebAssembly `threads`, `multi-memory`, and `relaxed-simd` proposals are
+  now enabled by default.
+  [#7285](https://github.com/bytecodealliance/wasmtime/pull/7285)
+
+* Logging is now implemented for `wasmtime serve`.
+  [#7366](https://github.com/bytecodealliance/wasmtime/pull/7366)
+
+* Filesystem locking has been temporarily removed from WASI.
+  [#7355](https://github.com/bytecodealliance/wasmtime/pull/7355)
+
+* Wasmtime's implementation of WASI preview1 built on top of preview2
+  (`-Spreview2`) has been enabled by default.
+  [#7365](https://github.com/bytecodealliance/wasmtime/pull/7365)
+
+* The `wasi:clocks` interface now has two `subscribe` functions and a `duration`
+  type.
+  [#7358](https://github.com/bytecodealliance/wasmtime/pull/7358)
+
+* The `wasi:io/poll` interface has seen some refactoring.
+  [#7427](https://github.com/bytecodealliance/wasmtime/pull/7427)
+
+### Fixed
+
+* Profiling the first function in a module now works.
+  [#7254](https://github.com/bytecodealliance/wasmtime/pull/7254)
+
+* Consecutive writes to files in preview2 have been fixed.
+  [#7394](https://github.com/bytecodealliance/wasmtime/pull/7394)
+
+* Copy-on-write initialization of linear memories has been fixed for components.
+  [#7459](https://github.com/bytecodealliance/wasmtime/pull/7459)
+
+### Cranelift
+
+* Support for proof-carrying code has been added to Cranelift to assist with an
+  extra layer of validation about properties such as WebAssembly memory accesses
+  in the future.
+  [#7165](https://github.com/bytecodealliance/wasmtime/pull/7165)
+  [#7180](https://github.com/bytecodealliance/wasmtime/pull/7180)
+  [#7219](https://github.com/bytecodealliance/wasmtime/pull/7219)
+  [#7231](https://github.com/bytecodealliance/wasmtime/pull/7231)
+  [#7262](https://github.com/bytecodealliance/wasmtime/pull/7262)
+  [#7263](https://github.com/bytecodealliance/wasmtime/pull/7263)
+  [#7274](https://github.com/bytecodealliance/wasmtime/pull/7274)
+  [#7280](https://github.com/bytecodealliance/wasmtime/pull/7280)
+  [#7281](https://github.com/bytecodealliance/wasmtime/pull/7281)
+  [#7352](https://github.com/bytecodealliance/wasmtime/pull/7352)
+  [#7389](https://github.com/bytecodealliance/wasmtime/pull/7389)
+  [#7468](https://github.com/bytecodealliance/wasmtime/pull/7468)
+
+* Rematerialization of values no longer accidentally overrides LICM.
+  [#7306](https://github.com/bytecodealliance/wasmtime/pull/7306)
+
+* Inline stack probes no longer make Valgrind unhappy.
+  [#7470](https://github.com/bytecodealliance/wasmtime/pull/7470)
 
 --------------------------------------------------------------------------------
 
