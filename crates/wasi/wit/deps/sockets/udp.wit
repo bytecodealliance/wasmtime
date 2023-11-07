@@ -97,7 +97,8 @@ interface udp {
         /// - `invalid-argument`:          The port in `remote-address` is set to 0. (EDESTADDRREQ, EADDRNOTAVAIL)
         /// - `invalid-state`:             The socket is not bound.
         /// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
-        /// - `remote-unreachable`:        The remote address is not reachable. (ECONNREFUSED, ECONNRESET, ENETRESET, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
+        /// - `remote-unreachable`:        The remote address is not reachable. (ECONNRESET, ENETRESET, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN, ENONET)
+        /// - `connection-refused`:        The connection was refused. (ECONNREFUSED)
         ///
         /// # References
         /// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/connect.html>
@@ -190,7 +191,8 @@ interface udp {
         /// This function never returns `error(would-block)`.
         ///
         /// # Typical errors
-        /// - `remote-unreachable`: The remote address is not reachable. (ECONNREFUSED, ECONNRESET, ENETRESET on Windows, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
+        /// - `remote-unreachable`: The remote address is not reachable. (ECONNRESET, ENETRESET on Windows, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN, ENONET)
+        /// - `connection-refused`: The connection was refused. (ECONNREFUSED)
         ///
         /// # References
         /// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/recvfrom.html>
@@ -246,7 +248,8 @@ interface udp {
         /// - `invalid-argument`:        The port in `remote-address` is set to 0. (EDESTADDRREQ, EADDRNOTAVAIL)
         /// - `invalid-argument`:        The socket is in "connected" mode and `remote-address` is `some` value that does not match the address passed to `stream`. (EISCONN)
         /// - `invalid-argument`:        The socket is not "connected" and no value for `remote-address` was provided. (EDESTADDRREQ)
-        /// - `remote-unreachable`:      The remote address is not reachable. (ECONNREFUSED, ECONNRESET, ENETRESET on Windows, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
+        /// - `remote-unreachable`:      The remote address is not reachable. (ECONNRESET, ENETRESET on Windows, EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN, ENONET)
+        /// - `connection-refused`:      The connection was refused. (ECONNREFUSED)
         /// - `datagram-too-large`:      The datagram is too large. (EMSGSIZE)
         ///
         /// # References

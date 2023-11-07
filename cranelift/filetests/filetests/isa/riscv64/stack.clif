@@ -59,12 +59,12 @@ block0:
 ;   call %Probestack
 ;   lui t6,-24
 ;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ; block0:
 ;   load_addr a0,0(nominal_sp)
 ;   lui t6,24
 ;   addi t6,t6,1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -82,12 +82,12 @@ block0:
 ;   jalr ra
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ; block1: ; offset 0x2c
 ;   mv a0, sp
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -149,12 +149,12 @@ block0:
 ;   call %Probestack
 ;   lui t6,-24
 ;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ; block0:
 ;   ld a0,0(nominal_sp)
 ;   lui t6,24
 ;   addi t6,t6,1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -172,12 +172,12 @@ block0:
 ;   jalr ra
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ; block1: ; offset 0x2c
 ;   ld a0, 0(sp)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -239,12 +239,12 @@ block0(v0: i64):
 ;   call %Probestack
 ;   lui t6,-24
 ;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ; block0:
 ;   sd a0,0(nominal_sp)
 ;   lui t6,24
 ;   addi t6,t6,1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -262,12 +262,12 @@ block0(v0: i64):
 ;   jalr ra
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ; block1: ; offset 0x2c
 ;   sd a0, 0(sp)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -933,13 +933,13 @@ block0(v0: i128):
 ;   call %Probestack
 ;   lui t6,-24
 ;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ; block0:
 ;   sd a0,0(nominal_sp)
 ;   sd a1,8(nominal_sp)
 ;   lui t6,24
 ;   addi t6,t6,1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -957,13 +957,13 @@ block0(v0: i128):
 ;   jalr ra
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ; block1: ; offset 0x2c
 ;   sd a0, 0(sp)
 ;   sd a1, 8(sp)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10
@@ -1067,13 +1067,13 @@ block0:
 ;   call %Probestack
 ;   lui t6,-24
 ;   addi t6,t6,-1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ; block0:
 ;   ld a0,0(nominal_sp)
 ;   ld a1,8(nominal_sp)
 ;   lui t6,24
 ;   addi t6,t6,1712
-;   add sp,t6,sp
+;   add sp,sp,t6
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   addi sp,sp,16
@@ -1091,13 +1091,13 @@ block0:
 ;   jalr ra
 ;   lui t6, 0xfffe8
 ;   addi t6, t6, -0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ; block1: ; offset 0x2c
 ;   ld a0, 0(sp)
 ;   ld a1, 8(sp)
 ;   lui t6, 0x18
 ;   addi t6, t6, 0x6b0
-;   add sp, t6, sp
+;   add sp, sp, t6
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

@@ -30,7 +30,9 @@ fn test_tcp_bind_specific_port(net: &Network, ip: IpAddress) {
             assert_eq!(bind_addr.ip(), bound_addr.ip());
             assert_eq!(bind_addr.port(), bound_addr.port());
         }
-        Err(ErrorCode::AddressInUse) => {}
+        // Concurrent invocations of this test can yield `AddressInUse` and that
+        // same error can show up on Windows as `AccessDenied`.
+        Err(ErrorCode::AddressInUse | ErrorCode::AccessDenied) => {}
         Err(e) => panic!("error: {e}"),
     }
 }

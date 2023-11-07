@@ -266,6 +266,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         extend: &generated_code::ImmExtend,
         value: u64,
     ) -> Reg {
+        let pcc = self.backend.flags.enable_pcc();
         let bits = ty.bits();
         let value = if bits < 64 {
             if *extend == generated_code::ImmExtend::Sign {
@@ -295,6 +296,14 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                     imm: MoveWideConst::maybe_with_shift(!lower_halfword, 0).unwrap(),
                     size,
                 });
+                if pcc {
+                    self.lower_ctx.add_range_fact(
+                        rd.to_reg(),
+                        64,
+                        u64::from(lower_halfword),
+                        u64::from(lower_halfword),
+                    );
+                }
             } else {
                 self.emit(&MInst::MovWide {
                     op: MoveWideOp::MovZ,
@@ -302,6 +311,14 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                     imm: MoveWideConst::maybe_with_shift(lower_halfword, 0).unwrap(),
                     size,
                 });
+                if pcc {
+                    self.lower_ctx.add_range_fact(
+                        rd.to_reg(),
+                        64,
+                        u64::from(lower_halfword),
+                        u64::from(lower_halfword),
+                    );
+                }
 
                 if upper_halfword != 0 {
                     let tmp = self.temp_writable_reg(I64);
@@ -311,6 +328,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                         imm: MoveWideConst::maybe_with_shift(upper_halfword, 16).unwrap(),
                         size,
                     });
+                    if pcc {
+                        self.lower_ctx
+                            .add_range_fact(tmp.to_reg(), 64, value, value);
+                    }
                     return tmp.to_reg();
                 }
             };
@@ -324,6 +345,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                 imm: MoveWideConst::zero(),
                 size,
             });
+            if pcc {
+                self.lower_ctx
+                    .add_range_fact(rd.to_reg(), 64, u64::MAX, u64::MAX);
+            }
             return rd.to_reg();
         };
 
@@ -347,6 +372,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             .collect();
 
         let mut prev_result = None;
+        let mut running_value: u64 = 0;
         for (i, imm16) in halfwords {
             let shift = i * 16;
             let rd = self.temp_writable_reg(I64);
@@ -354,6 +380,11 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             if let Some(rn) = prev_result {
                 let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
                 self.emit(&MInst::MovK { rd, rn, imm, size });
+                if pcc {
+                    running_value |= imm16 << shift;
+                    self.lower_ctx
+                        .add_range_fact(rd.to_reg(), 64, running_value, running_value);
+                }
             } else {
                 if first_is_inverted {
                     let imm =
@@ -364,6 +395,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                         imm,
                         size,
                     });
+                    if pcc {
+                        running_value = !(imm16 << shift);
+                        self.lower_ctx.add_range_fact(
+                            rd.to_reg(),
+                            64,
+                            running_value,
+                            running_value,
+                        );
+                    }
                 } else {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
                     self.emit(&MInst::MovWide {
@@ -372,6 +412,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                         imm,
                         size,
                     });
+                    if pcc {
+                        running_value = imm16 << shift;
+                        self.lower_ctx.add_range_fact(
+                            rd.to_reg(),
+                            64,
+                            running_value,
+                            running_value,
+                        );
+                    }
                 }
             }
 
@@ -811,5 +860,16 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn uimm12_scaled_from_i64(&mut self, val: i64, ty: Type) -> Option<UImm12Scaled> {
         UImm12Scaled::maybe_from_i64(val, ty)
+    }
+
+    fn test_and_compare_bit_const(&mut self, ty: Type, n: u64) -> Option<u8> {
+        if n.count_ones() != 1 {
+            return None;
+        }
+        let bit = n.trailing_zeros();
+        if bit >= ty.bits() {
+            return None;
+        }
+        Some(bit as u8)
     }
 }

@@ -232,6 +232,10 @@ fn preview1_path_open_preopen() {
 fn preview1_unicode_output() {
     run(PREVIEW1_UNICODE_OUTPUT_COMPONENT, true).unwrap()
 }
+#[test_log::test]
+fn preview1_file_write() {
+    run(PREVIEW1_FILE_WRITE_COMPONENT, false).unwrap()
+}
 
 #[test_log::test]
 fn preview2_sleep() {
@@ -262,16 +266,28 @@ fn preview2_tcp_bind() {
     run(PREVIEW2_TCP_BIND_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-fn preview2_udp_connect() {
-    run(PREVIEW2_UDP_CONNECT_COMPONENT, false).unwrap()
+fn preview2_tcp_connect() {
+    run(PREVIEW2_TCP_CONNECT_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_udp_sockopts() {
+    run(PREVIEW2_UDP_SOCKOPTS_COMPONENT, false).unwrap()
 }
 #[test_log::test]
 fn preview2_udp_sample_application() {
     run(PREVIEW2_UDP_SAMPLE_APPLICATION_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-fn preview2_tcp_connect() {
-    run(PREVIEW2_TCP_CONNECT_COMPONENT, false).unwrap()
+fn preview2_udp_states() {
+    run(PREVIEW2_UDP_STATES_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_udp_bind() {
+    run(PREVIEW2_UDP_BIND_COMPONENT, false).unwrap()
+}
+#[test_log::test]
+fn preview2_udp_connect() {
+    run(PREVIEW2_UDP_CONNECT_COMPONENT, false).unwrap()
 }
 #[test_log::test]
 fn preview2_stream_pollable_correct() {

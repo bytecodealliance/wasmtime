@@ -149,22 +149,26 @@ impl CodeMemory {
     }
 
     /// Returns a reference to the underlying `MmapVec` this memory owns.
+    #[inline]
     pub fn mmap(&self) -> &MmapVec {
         &self.mmap
     }
 
     /// Returns the contents of the text section of the ELF executable this
     /// represents.
+    #[inline]
     pub fn text(&self) -> &[u8] {
         &self.mmap[self.text.clone()]
     }
 
     /// Returns the contents of the `ELF_WASMTIME_DWARF` section.
+    #[inline]
     pub fn dwarf(&self) -> &[u8] {
         &self.mmap[self.dwarf.clone()]
     }
 
     /// Returns the data in the `ELF_NAME_DATA` section.
+    #[inline]
     pub fn func_name_data(&self) -> &[u8] {
         &self.mmap[self.func_name_data.clone()]
     }
@@ -174,24 +178,28 @@ impl CodeMemory {
     ///
     /// This is used for initialization of memories and all data ranges stored
     /// in a `Module` are relative to the slice returned here.
+    #[inline]
     pub fn wasm_data(&self) -> &[u8] {
         &self.mmap[self.wasm_data.clone()]
     }
 
     /// Returns the encoded address map section used to pass to
     /// `wasmtime_environ::lookup_file_pos`.
+    #[inline]
     pub fn address_map_data(&self) -> &[u8] {
         &self.mmap[self.address_map_data.clone()]
     }
 
     /// Returns the contents of the `ELF_WASMTIME_INFO` section, or an empty
     /// slice if it wasn't found.
+    #[inline]
     pub fn wasmtime_info(&self) -> &[u8] {
         &self.mmap[self.info_data.clone()]
     }
 
     /// Returns the contents of the `ELF_WASMTIME_TRAPS` section, or an empty
     /// slice if it wasn't found.
+    #[inline]
     pub fn trap_data(&self) -> &[u8] {
         &self.mmap[self.trap_data.clone()]
     }

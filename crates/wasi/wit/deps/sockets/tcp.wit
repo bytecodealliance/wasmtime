@@ -81,7 +81,7 @@ interface tcp {
         /// - `connection-refused`:        The connection was forcefully rejected. (ECONNREFUSED)
         /// - `connection-reset`:          The connection was reset. (ECONNRESET)
         /// - `connection-aborted`:        The connection was aborted. (ECONNABORTED)
-        /// - `remote-unreachable`:        The remote address is not reachable. (EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN)
+        /// - `remote-unreachable`:        The remote address is not reachable. (EHOSTUNREACH, EHOSTDOWN, ENETUNREACH, ENETDOWN, ENONET)
         /// - `address-in-use`:            Tried to perform an implicit bind, but there were no ephemeral ports available. (EADDRINUSE, EADDRNOTAVAIL on Linux, EAGAIN on BSD)
         /// - `not-in-progress`:           A `connect` operation is not in progress.
         /// - `would-block`:               Can't finish the operation, it is still in progress. (EWOULDBLOCK, EAGAIN)
@@ -126,7 +126,6 @@ interface tcp {
         /// - `address-family`
         /// - `ipv6-only`
         /// - `keep-alive`
-        /// - `no-delay`
         /// - `unicast-hop-limit`
         /// - `receive-buffer-size`
         /// - `send-buffer-size`
@@ -203,12 +202,6 @@ interface tcp {
         /// Equivalent to the SO_KEEPALIVE socket option.
         keep-alive: func() -> result<bool, error-code>;
         set-keep-alive: func(value: bool) -> result<_, error-code>;
-
-        /// Equivalent to the TCP_NODELAY socket option.
-        ///
-        /// The default value is `false`.
-        no-delay: func() -> result<bool, error-code>;
-        set-no-delay: func(value: bool) -> result<_, error-code>;
 
         /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
         ///

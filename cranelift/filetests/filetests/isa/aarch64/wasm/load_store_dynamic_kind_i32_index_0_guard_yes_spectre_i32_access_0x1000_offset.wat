@@ -43,8 +43,8 @@
 ;; block0:
 ;;   mov w12, w0
 ;;   ldr x13, [x2, #8]
-;;   movn x14, #4099
-;;   add x13, x13, x14
+;;   movz x14, #4100
+;;   sub x13, x13, x14
 ;;   ldr x14, [x2]
 ;;   add x14, x14, x0, UXTW
 ;;   add x14, x14, #4096
@@ -61,8 +61,8 @@
 ;; block0:
 ;;   mov w12, w0
 ;;   ldr x13, [x1, #8]
-;;   movn x14, #4099
-;;   add x13, x13, x14
+;;   movz x14, #4100
+;;   sub x13, x13, x14
 ;;   ldr x14, [x1]
 ;;   add x14, x14, x0, UXTW
 ;;   add x14, x14, #4096

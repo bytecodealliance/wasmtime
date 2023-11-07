@@ -56,14 +56,14 @@
 ;; block0:
 ;;   lgr %r5, %r4
 ;;   llgfr %r4, %r2
-;;   lghi %r2, -4
-;;   lgr %r9, %r5
-;;   ag %r2, 8(%r9)
+;;   lgr %r2, %r5
+;;   lg %r5, 8(%r2)
+;;   aghik %r6, %r5, -4
 ;;   lgr %r5, %r4
-;;   ag %r5, 0(%r9)
-;;   lghi %r6, 0
-;;   clgr %r4, %r2
-;;   locgrh %r5, %r6
+;;   ag %r5, 0(%r2)
+;;   lghi %r2, 0
+;;   clgr %r4, %r6
+;;   locgrh %r5, %r2
 ;;   strv %r3, 0(%r5)
 ;;   jg label1
 ;; block1:
@@ -76,13 +76,14 @@
 ;; block0:
 ;;   lgr %r4, %r3
 ;;   llgfr %r3, %r2
-;;   lghi %r2, -4
-;;   ag %r2, 8(%r4)
+;;   lgr %r2, %r4
+;;   lg %r4, 8(%r2)
+;;   aghi %r4, -4
 ;;   lgr %r5, %r3
-;;   ag %r5, 0(%r4)
-;;   lghi %r4, 0
-;;   clgr %r3, %r2
-;;   locgrh %r5, %r4
+;;   ag %r5, 0(%r2)
+;;   lghi %r2, 0
+;;   clgr %r3, %r4
+;;   locgrh %r5, %r2
 ;;   lrv %r2, 0(%r5)
 ;;   jg label1
 ;; block1:

@@ -33,17 +33,23 @@ pub struct X64ABIMachineSpec;
 impl X64ABIMachineSpec {
     fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
         insts.reserve(probe_count as usize);
-        for i in 0..probe_count {
-            let offset = (guard_size * (i + 1)) as i64;
+        for _ in 0..probe_count {
+            // "Allocate" stack space for the probe by decrementing the stack pointer before
+            // the write. This is required to make valgrind happy.
+            // See: https://github.com/bytecodealliance/wasmtime/issues/7454
+            insts.extend(Self::gen_sp_reg_adjust(-(guard_size as i32)));
 
             // TODO: It would be nice if we could store the imm 0, but we don't have insts for those
             // so store the stack pointer. Any register will do, since the stack is undefined at this point
             insts.push(Self::gen_store_stack(
-                StackAMode::SPOffset(-offset, I8),
+                StackAMode::SPOffset(0, I8),
                 regs::rsp(),
                 I32,
             ));
         }
+
+        // Restore the stack pointer to its original value
+        insts.extend(Self::gen_sp_reg_adjust((guard_size * probe_count) as i32));
     }
 
     fn gen_probestack_loop(
@@ -523,8 +529,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // Unroll at most n consecutive probes, before falling back to using a loop
         //
         // This was number was picked because the loop version is 38 bytes long. We can fit
-        // 5 inline probes in that space, so unroll if its beneficial in terms of code size.
-        const PROBE_MAX_UNROLL: u32 = 5;
+        // 4 inline probes in that space, so unroll if its beneficial in terms of code size.
+        const PROBE_MAX_UNROLL: u32 = 4;
 
         // Number of probes that we need to perform
         let probe_count = align_to(frame_size, guard_size) / guard_size;

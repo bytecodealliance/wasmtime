@@ -3,7 +3,7 @@ use test_programs::wasi::sockets::network::{
 };
 use test_programs::wasi::sockets::tcp::TcpSocket;
 
-fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddress) {
+fn test_tcp_sample_application(family: IpAddressFamily, bind_address: IpSocketAddress) {
     let first_message = b"Hello, world!";
     let second_message = b"Greetings, planet!";
 
@@ -54,14 +54,14 @@ fn test_sample_application(family: IpAddressFamily, bind_address: IpSocketAddres
 }
 
 fn main() {
-    test_sample_application(
+    test_tcp_sample_application(
         IpAddressFamily::Ipv4,
         IpSocketAddress::Ipv4(Ipv4SocketAddress {
             port: 0,                 // use any free port
             address: (127, 0, 0, 1), // localhost
         }),
     );
-    test_sample_application(
+    test_tcp_sample_application(
         IpAddressFamily::Ipv6,
         IpSocketAddress::Ipv6(Ipv6SocketAddress {
             port: 0,                           // use any free port

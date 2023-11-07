@@ -2,6 +2,7 @@ use crate::wasi::clocks::monotonic_clock;
 use crate::wasi::io::poll::{self, Pollable};
 use crate::wasi::io::streams::{InputStream, OutputStream, StreamError};
 use crate::wasi::sockets::instance_network;
+use crate::wasi::sockets::ip_name_lookup;
 use crate::wasi::sockets::network::{
     ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress,
     Network,
@@ -16,12 +17,8 @@ use std::ops::Range;
 const TIMEOUT_NS: u64 = 1_000_000_000;
 
 impl Pollable {
-    pub fn wait(&self) {
-        poll::poll_one(self);
-    }
-
     pub fn wait_until(&self, timeout: &Pollable) -> Result<(), ErrorCode> {
-        let ready = poll::poll_list(&[self, timeout]);
+        let ready = poll::poll(&[self, timeout]);
         assert!(ready.len() > 0);
         match ready[0] {
             0 => Ok(()),
@@ -36,7 +33,7 @@ impl OutputStream {
         let pollable = self.subscribe();
 
         while !bytes.is_empty() {
-            pollable.wait();
+            pollable.block();
 
             let permit = self.check_write()?;
 
@@ -57,6 +54,31 @@ impl Network {
     pub fn default() -> Network {
         instance_network::instance_network()
     }
+
+    pub fn blocking_resolve_addresses(&self, name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
+        let stream = ip_name_lookup::resolve_addresses(&self, name)?;
+
+        let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
+        let pollable = stream.subscribe();
+
+        let mut addresses = vec![];
+
+        loop {
+            match stream.resolve_next_address() {
+                Ok(Some(addr)) => {
+                    addresses.push(addr);
+                }
+                Ok(None) => match addresses[..] {
+                    [] => return Err(ErrorCode::NameUnresolvable),
+                    _ => return Ok(addresses),
+                },
+                Err(ErrorCode::WouldBlock) => {
+                    pollable.wait_until(&timeout)?;
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
 }
 
 impl TcpSocket {
@@ -75,7 +97,7 @@ impl TcpSocket {
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
@@ -88,7 +110,7 @@ impl TcpSocket {
 
         loop {
             match self.finish_listen() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
@@ -105,7 +127,7 @@ impl TcpSocket {
 
         loop {
             match self.finish_connect() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
@@ -116,7 +138,7 @@ impl TcpSocket {
 
         loop {
             match self.accept() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
@@ -139,10 +161,17 @@ impl UdpSocket {
 
         loop {
             match self.finish_bind() {
-                Err(ErrorCode::WouldBlock) => sub.wait(),
+                Err(ErrorCode::WouldBlock) => sub.block(),
                 result => return result,
             }
         }
+    }
+
+    pub fn blocking_bind_unspecified(&self, network: &Network) -> Result<(), ErrorCode> {
+        let ip = IpAddress::new_unspecified(self.address_family());
+        let port = 0;
+
+        self.blocking_bind(network, IpSocketAddress::new(ip, port))
     }
 }
 

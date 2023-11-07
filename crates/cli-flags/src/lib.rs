@@ -13,6 +13,7 @@ pub mod opt;
 #[cfg(feature = "logging")]
 fn init_file_per_thread_logger(prefix: &'static str) {
     file_per_thread_logger::initialize(prefix);
+    file_per_thread_logger::allow_uninitialized();
 
     // Extending behavior of default spawner:
     // https://docs.rs/rayon/1.1.0/rayon/struct.ThreadPoolBuilder.html#method.spawn_handler
@@ -63,6 +64,14 @@ wasmtime_option_group! {
 
         /// Enable the pooling allocator, in place of the on-demand allocator.
         pub pooling_allocator: Option<bool>,
+
+        /// How many bytes to keep resident between instantiations for the
+        /// pooling allocator in linear memories.
+        pub pooling_memory_keep_resident: Option<usize>,
+
+        /// How many bytes to keep resident between instantiations for the
+        /// pooling allocator in tables.
+        pub pooling_table_keep_resident: Option<usize>,
 
         /// Configure attempting to initialize linear memory via a
         /// copy-on-write mapping (default: yes)
@@ -361,12 +370,10 @@ impl CommonOptions {
         } else {
             use std::io::IsTerminal;
             use tracing_subscriber::{EnvFilter, FmtSubscriber};
-            let mut b = FmtSubscriber::builder()
+            let b = FmtSubscriber::builder()
                 .with_writer(std::io::stderr)
-                .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"));
-            if std::io::stderr().is_terminal() {
-                b = b.with_ansi(true);
-            }
+                .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"))
+                .with_ansi(std::io::stderr().is_terminal());
             b.init();
         }
         #[cfg(not(feature = "logging"))]
@@ -501,7 +508,14 @@ impl CommonOptions {
             ["pooling-allocator" : self.opts.pooling_allocator]
             enable => {
                 if enable {
-                    config.allocation_strategy(wasmtime::InstanceAllocationStrategy::pooling());
+                    let mut cfg = wasmtime::PoolingAllocationConfig::default();
+                    if let Some(size) = self.opts.pooling_memory_keep_resident {
+                        cfg.linear_memory_keep_resident(size);
+                    }
+                    if let Some(size) = self.opts.pooling_table_keep_resident {
+                        cfg.table_keep_resident(size);
+                    }
+                    config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling(cfg));
                 }
             },
             true => err,

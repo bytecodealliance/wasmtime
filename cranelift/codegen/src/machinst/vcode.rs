@@ -167,7 +167,7 @@ pub struct VCode<I: VCodeInst> {
     reftyped_vregs: Vec<VReg>,
 
     /// Constants.
-    constants: VCodeConstants,
+    pub(crate) constants: VCodeConstants,
 
     /// Value labels for debuginfo attached to vregs.
     debug_value_labels: Vec<(VReg, InsnIndex, InsnIndex, u32)>,
@@ -1738,6 +1738,15 @@ impl VCodeConstants {
     /// Returns the data associated with the specified constant.
     pub fn get(&self, c: VCodeConstant) -> &VCodeConstantData {
         &self.constants[c]
+    }
+
+    /// Checks if the given [VCodeConstantData] is registered as
+    /// used by the pool.
+    pub fn pool_uses(&self, constant: &VCodeConstantData) -> bool {
+        match constant {
+            VCodeConstantData::Pool(c, _) => self.pool_uses.contains_key(c),
+            _ => false,
+        }
     }
 }
 

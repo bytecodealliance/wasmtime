@@ -200,19 +200,44 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *
  */
 WASM_API_EXTERN void wasmtime_context_set_epoch_deadline(wasmtime_context_t *context, uint64_t ticks_beyond_current);
 
+/// \brief An enum for the behavior before extending the epoch deadline.
+typedef uint8_t wasmtime_update_deadline_kind_t;
+/// \brief Directly continue to updating the deadline and executing WebAssembly.
+#define WASMTIME_UPDATE_DEADLINE_CONTINUE 0
+/// \brief Yield control (via async support) then update the deadline.
+#define WASMTIME_UPDATE_DEADLINE_YIELD    1
+
 /**
  * \brief Configures epoch deadline callback to C function.
  *
  * This function configures a store-local callback function that will be
  * called when the running WebAssembly function has exceeded its epoch
- * deadline. That function can return a #wasmtime_error_t to terminate
- * the function, or set the delta argument and return NULL to update the
- * epoch deadline and resume function execution.
+ * deadline. That function can:
+ * - return a #wasmtime_error_t to terminate the function
+ * - set the delta argument and return NULL to update the
+ *   epoch deadline delta and resume function execution.
+ * - set the delta argument, update the epoch deadline, 
+ *   set update_kind to WASMTIME_UPDATE_DEADLINE_YIELD,
+ *   and return NULL to yield (via async support) and 
+ *   resume function execution.
+ *
+ * To use WASMTIME_UPDATE_DEADLINE_YIELD async support must be enabled 
+ * for this store.
  *
  * See also #wasmtime_config_epoch_interruption_set and
  * #wasmtime_context_set_epoch_deadline.
  */
-WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(wasmtime_store_t *store, wasmtime_error_t* (*func)(wasmtime_context_t*, void*, uint64_t*), void *data);
+WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(
+    wasmtime_store_t *store, 
+    wasmtime_error_t* (*func)(
+      wasmtime_context_t* context, 
+      void* data, 
+      uint64_t* epoch_deadline_delta, 
+      wasmtime_update_deadline_kind_t* update_kind
+    ), 
+    void *data,
+    void (*finalizer)(void*)
+);
 
 #ifdef __cplusplus
 }  // extern "C"

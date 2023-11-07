@@ -87,16 +87,22 @@ impl Future for wasmtime_async_continuation_t {
     }
 }
 
-pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(*mut c_void) -> bool;
-
-struct CallbackData {
-    env: *mut c_void,
+/// Internal structure to add Send/Sync to a c_void member.
+///
+/// This is useful in closures that need to capture some C data.
+#[derive(Debug)]
+struct CallbackDataPtr {
+    pub ptr: *mut std::ffi::c_void,
 }
-unsafe impl Send for CallbackData {}
+
+unsafe impl Send for CallbackDataPtr {}
+unsafe impl Sync for CallbackDataPtr {}
+
+pub type wasmtime_func_async_continuation_callback_t = extern "C" fn(*mut c_void) -> bool;
 
 async fn invoke_c_async_callback<'a>(
     cb: wasmtime_func_async_callback_t,
-    data: CallbackData,
+    data: CallbackDataPtr,
     mut caller: Caller<'a, crate::StoreData>,
     params: &'a [Val],
     results: &'a mut [Val],
@@ -127,7 +133,7 @@ async fn invoke_c_async_callback<'a>(
         finalizer: None,
     };
     cb(
-        data.env,
+        data.ptr,
         &mut caller,
         params.as_ptr(),
         params.len(),
@@ -171,7 +177,7 @@ unsafe fn c_async_callback_to_rust_fn(
     let foreign = crate::ForeignData { data, finalizer };
     move |caller, params, results| {
         let _ = &foreign; // move entire foreign into this closure
-        let data = CallbackData { env: foreign.data };
+        let data = CallbackDataPtr { ptr: foreign.data };
         Box::new(invoke_c_async_callback(
             callback, data, caller, params, results,
         ))

@@ -127,7 +127,12 @@ macro_rules! wasi_file_write_impl {
                 Ok(FdFlags::APPEND)
             }
             async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                let n = self.0.lock().write_vectored(bufs)?;
+                let mut io = self.0.lock();
+                let n = io.write_vectored(bufs)?;
+                // On a successful write additionally flush out the bytes to
+                // handle stdio buffering done by libstd since WASI interfaces
+                // here aren't buffered.
+                io.flush()?;
                 Ok(n.try_into().map_err(|_| {
                     Error::range().context("converting write_vectored total length")
                 })?)

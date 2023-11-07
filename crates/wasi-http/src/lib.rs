@@ -66,12 +66,6 @@ impl From<std::io::Error> for crate::bindings::http::types::Error {
     }
 }
 
-impl From<http::Error> for crate::bindings::http::types::Error {
-    fn from(err: http::Error) -> Self {
-        Self::InvalidUrl(err.to_string())
-    }
-}
-
 impl From<hyper::Error> for crate::bindings::http::types::Error {
     fn from(err: hyper::Error) -> Self {
         let message = err.message().to_string();

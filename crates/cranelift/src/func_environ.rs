@@ -9,7 +9,6 @@ use cranelift_codegen::ir::{
     AbiParam, ArgumentPurpose, Function, InstBuilder, MemFlags, Signature, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
-use cranelift_entity::SecondaryMap;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
@@ -127,10 +126,6 @@ pub struct FuncEnvironment<'module_environment> {
     /// using PCC.
     pcc_vmctx_memtype: Option<ir::MemoryType>,
 
-    /// The PCC memory type describing the data for each memory, if
-    /// we're using PCC.
-    pcc_memory_memtypes: SecondaryMap<MemoryIndex, Option<ir::MemoryType>>,
-
     /// Caches of signatures for builtin functions.
     builtin_function_signatures: BuiltinFunctionSignatures,
 
@@ -199,7 +194,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             heaps: PrimaryMap::default(),
             vmctx: None,
             pcc_vmctx_memtype: None,
-            pcc_memory_memtypes: SecondaryMap::new(),
             builtin_function_signatures,
             offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
             tunables,
@@ -225,67 +219,23 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
             if self.isa.flags().enable_pcc() {
-                let mut fields = vec![];
-                for (memory_idx, plan) in &self.module.memory_plans {
-                    // For now, we only do PCC on defined, owned (non-shared), static, 32-bit memories (whew!).
-                    if plan.memory.shared || plan.memory.memory64 {
-                        continue;
-                    }
-                    let static_bound_wasm_pages = match &plan.style {
-                        MemoryStyle::Dynamic { .. } => continue,
-                        MemoryStyle::Static { bound } => *bound,
-                    };
-                    let static_bound = static_bound_wasm_pages.checked_mul(0x1_0000).unwrap();
-                    let def_memory_idx = match self.module.defined_memory_index(memory_idx) {
-                        Some(i) => i,
-                        None => continue,
-                    };
-                    let owned_memory_idx = self.module.owned_memory_index(def_memory_idx);
-
-                    let base_field_offset = self
-                        .offsets
-                        .vmctx_vmmemory_definition_base(owned_memory_idx);
-                    // Create a new "blob" memory type to represent the pointed-to memory.
-                    let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
-                        size: static_bound
-                            .checked_add(plan.offset_guard_size)
-                            .expect("Memory plan has overflowing size plus guard"),
-                    });
-
-                    self.pcc_memory_memtypes[memory_idx] = Some(data_mt);
-
-                    fields.push(ir::MemoryTypeField {
-                        offset: u64::from(base_field_offset),
-                        ty: self.isa.pointer_type(),
-                        // Read-only field from the PoV of PCC checks:
-                        // don't allow stores to this field. (Even if
-                        // it is a dynamic memory whose base can
-                        // change, that update happens inside the
-                        // runtime, not in generated code.)
-                        readonly: true,
-                        fact: Some(Fact::Mem {
-                            ty: data_mt,
-                            min_offset: 0,
-                            max_offset: 0,
-                        }),
-                    });
-                }
-                let size = fields
-                    .iter()
-                    .map(|field| field.offset + u64::from(self.isa.pointer_type().bytes()))
-                    .max()
-                    .unwrap_or(0);
-
-                let vmctx_memtype =
-                    func.create_memory_type(ir::MemoryTypeData::Struct { size, fields });
+                // Create a placeholder memtype for the vmctx; we'll
+                // add fields to it as we lazily create HeapData
+                // structs and global values.
+                let vmctx_memtype = func.create_memory_type(ir::MemoryTypeData::Struct {
+                    size: 0,
+                    fields: vec![],
+                });
 
                 self.pcc_vmctx_memtype = Some(vmctx_memtype);
                 func.global_value_facts[vmctx] = Some(Fact::Mem {
                     ty: vmctx_memtype,
                     min_offset: 0,
                     max_offset: 0,
+                    nullable: false,
                 });
             }
+
             self.vmctx = Some(vmctx);
             vmctx
         })
@@ -1844,7 +1794,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .maximum
             .and_then(|max| max.checked_mul(u64::from(WASM_PAGE_SIZE)));
 
-        let (ptr, base_offset, current_length_offset) = {
+        let (ptr, base_offset, current_length_offset, ptr_memtype) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
                 if is_shared {
@@ -1862,7 +1812,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
                         i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                    (memory, base_offset, current_length_offset)
+                    (memory, base_offset, current_length_offset, None)
                 } else {
                     let owned_index = self.module.owned_memory_index(def_index);
                     let owned_base_offset =
@@ -1872,7 +1822,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         .vmctx_vmmemory_definition_current_length(owned_index);
                     let current_base_offset = i32::try_from(owned_base_offset).unwrap();
                     let current_length_offset = i32::try_from(owned_length_offset).unwrap();
-                    (vmctx, current_base_offset, current_length_offset)
+                    (
+                        vmctx,
+                        current_base_offset,
+                        current_length_offset,
+                        self.pcc_vmctx_memtype,
+                    )
                 }
             } else {
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
@@ -1885,46 +1840,147 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
                     i32::from(self.offsets.ptr.vmmemory_definition_current_length());
-                (memory, base_offset, current_length_offset)
+                (memory, base_offset, current_length_offset, None)
             }
         };
 
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
-        let (offset_guard_size, heap_style, readonly_base) = match self.module.memory_plans[index] {
-            MemoryPlan {
-                style: MemoryStyle::Dynamic { .. },
-                offset_guard_size,
-                pre_guard_size: _,
-                memory: _,
-            } => {
-                let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
-                    base: ptr,
-                    offset: Offset32::new(current_length_offset),
-                    global_type: pointer_type,
-                    flags: MemFlags::trusted(),
-                });
-                (
+        let (offset_guard_size, heap_style, readonly_base, base_fact, memory_type) =
+            match self.module.memory_plans[index] {
+                MemoryPlan {
+                    style: MemoryStyle::Dynamic { .. },
                     offset_guard_size,
-                    HeapStyle::Dynamic {
-                        bound_gv: heap_bound,
-                    },
-                    false,
-                )
-            }
-            MemoryPlan {
-                style: MemoryStyle::Static { bound },
-                offset_guard_size,
-                pre_guard_size: _,
-                memory: _,
-            } => (
-                offset_guard_size,
-                HeapStyle::Static {
-                    bound: u64::from(bound) * u64::from(WASM_PAGE_SIZE),
-                },
-                true,
-            ),
-        };
+                    pre_guard_size: _,
+                    memory: _,
+                } => {
+                    let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
+                        base: ptr,
+                        offset: Offset32::new(current_length_offset),
+                        global_type: pointer_type,
+                        flags: MemFlags::trusted(),
+                    });
+
+                    let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
+                        // Create a memtype representing the untyped memory region.
+                        let data_mt = func.create_memory_type(ir::MemoryTypeData::DynamicMemory {
+                            gv: heap_bound,
+                            size: offset_guard_size,
+                        });
+                        // This fact applies to any pointer to the start of the memory.
+                        let base_fact = ir::Fact::dynamic_base_ptr(data_mt);
+                        // This fact applies to the length.
+                        let length_fact = ir::Fact::global_value(
+                            u16::try_from(self.isa.pointer_type().bits()).unwrap(),
+                            heap_bound,
+                        );
+                        // Create a field in the vmctx for the base pointer.
+                        match &mut func.memory_types[ptr_memtype] {
+                            ir::MemoryTypeData::Struct { size, fields } => {
+                                let base_offset = u64::try_from(base_offset).unwrap();
+                                fields.push(ir::MemoryTypeField {
+                                    offset: base_offset,
+                                    ty: self.isa.pointer_type(),
+                                    // Read-only field from the PoV of PCC checks:
+                                    // don't allow stores to this field. (Even if
+                                    // it is a dynamic memory whose base can
+                                    // change, that update happens inside the
+                                    // runtime, not in generated code.)
+                                    readonly: true,
+                                    fact: Some(base_fact.clone()),
+                                });
+                                let current_length_offset =
+                                    u64::try_from(current_length_offset).unwrap();
+                                fields.push(ir::MemoryTypeField {
+                                    offset: current_length_offset,
+                                    ty: self.isa.pointer_type(),
+                                    // As above, read-only; only the runtime modifies it.
+                                    readonly: true,
+                                    fact: Some(length_fact),
+                                });
+
+                                let pointer_size = u64::from(self.isa.pointer_type().bytes());
+                                let fields_end = std::cmp::max(
+                                    base_offset + pointer_size,
+                                    current_length_offset + pointer_size,
+                                );
+                                *size = std::cmp::max(*size, fields_end);
+                            }
+                            _ => {}
+                        }
+                        // Apply a fact to the base pointer.
+                        (Some(base_fact), Some(data_mt))
+                    } else {
+                        (None, None)
+                    };
+
+                    (
+                        offset_guard_size,
+                        HeapStyle::Dynamic {
+                            bound_gv: heap_bound,
+                        },
+                        false,
+                        base_fact,
+                        data_mt,
+                    )
+                }
+                MemoryPlan {
+                    style: MemoryStyle::Static { bound: bound_pages },
+                    offset_guard_size,
+                    pre_guard_size: _,
+                    memory: _,
+                } => {
+                    let bound_bytes = u64::from(bound_pages) * u64::from(WASM_PAGE_SIZE);
+                    let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
+                        // Create a memtype representing the untyped memory region.
+                        let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
+                            size: bound_bytes
+                                .checked_add(offset_guard_size)
+                                .expect("Memory plan has overflowing size plus guard"),
+                        });
+                        // This fact applies to any pointer to the start of the memory.
+                        let base_fact = Fact::Mem {
+                            ty: data_mt,
+                            min_offset: 0,
+                            max_offset: 0,
+                            nullable: false,
+                        };
+                        // Create a field in the vmctx for the base pointer.
+                        match &mut func.memory_types[ptr_memtype] {
+                            ir::MemoryTypeData::Struct { size, fields } => {
+                                let offset = u64::try_from(base_offset).unwrap();
+                                fields.push(ir::MemoryTypeField {
+                                    offset,
+                                    ty: self.isa.pointer_type(),
+                                    // Read-only field from the PoV of PCC checks:
+                                    // don't allow stores to this field. (Even if
+                                    // it is a dynamic memory whose base can
+                                    // change, that update happens inside the
+                                    // runtime, not in generated code.)
+                                    readonly: true,
+                                    fact: Some(base_fact.clone()),
+                                });
+                                *size = std::cmp::max(
+                                    *size,
+                                    offset + u64::from(self.isa.pointer_type().bytes()),
+                                );
+                            }
+                            _ => {}
+                        }
+                        // Apply a fact to the base pointer.
+                        (Some(base_fact), Some(data_mt))
+                    } else {
+                        (None, None)
+                    };
+                    (
+                        offset_guard_size,
+                        HeapStyle::Static { bound: bound_bytes },
+                        true,
+                        base_fact,
+                        data_mt,
+                    )
+                }
+            };
 
         let mut flags = MemFlags::trusted().with_checked();
         if readonly_base {
@@ -1936,14 +1992,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             global_type: pointer_type,
             flags,
         });
-        let memory_type = self.pcc_memory_memtypes[index];
-        if let Some(ty) = memory_type {
-            func.global_value_facts[heap_base] = Some(Fact::Mem {
-                ty,
-                min_offset: 0,
-                max_offset: 0,
-            });
-        }
+        func.global_value_facts[heap_base] = base_fact;
 
         Ok(self.heaps.push(HeapData {
             base: heap_base,
@@ -2554,6 +2603,16 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         if self.tunables.consume_fuel && state.reachable() {
             self.fuel_function_exit(builder);
+        }
+        if let Some(pcc_vmctx_memtype) = self.pcc_vmctx_memtype {
+            // Sort the fields by offset in the struct definition for
+            // vmctx, now that we've completed it.
+            match &mut builder.func.memory_types[pcc_vmctx_memtype] {
+                ir::MemoryTypeData::Struct { fields, .. } => {
+                    fields.sort_by_key(|f| f.offset);
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
