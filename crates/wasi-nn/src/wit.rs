@@ -79,9 +79,9 @@ impl gen::inference::Host for WasiNnCtx {
         &mut self,
         graph_id: gen::graph::Graph,
     ) -> wasmtime::Result<Result<gen::inference::GraphExecutionContext, gen::errors::Error>> {
-        let exec_context = match  self.graphs.get_mut(graph_id) {
+        let exec_context = match self.graphs.get_mut(graph_id) {
             Some(graph) => graph.init_execution_context().await?,
-            None => return Err(UsageError::InvalidGraphHandle.into())
+            None => return Err(UsageError::InvalidGraphHandle.into()),
         };
 
         let exec_context_id = self.executions.insert(exec_context);

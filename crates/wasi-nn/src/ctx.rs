@@ -1,13 +1,16 @@
 //! Implements the host state for the `wasi-nn` API: [WasiNnCtx].
 
-use crate::backend::{self, BackendError, build_kserve_registry};
-use crate::wit::types::GraphEncoding;
-use crate::{Backend, ExecutionContext, Graph, GraphRegistry, InMemoryRegistry, Registry};
+use std::{collections::HashMap, hash::Hash, path::Path};
 
 use anyhow::anyhow;
-use std::{collections::HashMap, hash::Hash, path::Path};
 use thiserror::Error;
+
 use wiggle::GuestError;
+
+use crate::backend::{self, build_kserve_registry, BackendError};
+use crate::wit::types::GraphEncoding;
+use crate::{Backend, ExecutionContext, Graph, InMemoryRegistry, Registry};
+
 // use crate::backend::BackendKind::KServe;
 
 type GraphId = u32;
@@ -22,6 +25,7 @@ type GraphDirectory = String;
 pub fn preload(
     preload_graphs: &[(BackendName, GraphDirectory)],
 ) -> anyhow::Result<(impl IntoIterator<Item = Backend>, Registry)> {
+    #[allow(unused_mut)]
     let mut backends = backend::list();
     let mut registry = InMemoryRegistry::new();
     for (kind, path) in preload_graphs {
@@ -38,6 +42,7 @@ pub fn preload(
 }
 
 pub fn kserve_registry() -> anyhow::Result<(impl IntoIterator<Item = Backend>, Registry)> {
+    #[allow(unused_mut)]
     let mut backends = backend::list();
     let registry = build_kserve_registry(&"http://localhost:8000".to_string());
 
@@ -112,8 +117,8 @@ impl<K, V> Default for Table<K, V> {
 }
 
 impl<K, V> Table<K, V>
-    where
-        K: Eq + Hash + From<u32> + Copy,
+where
+    K: Eq + Hash + From<u32> + Copy,
 {
     pub fn insert(&mut self, value: V) -> K {
         let key = self.use_next_key();
@@ -121,6 +126,7 @@ impl<K, V> Table<K, V>
         key
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, key: K) -> Option<&V> {
         self.entries.get(&key)
     }
@@ -138,15 +144,18 @@ impl<K, V> Table<K, V>
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use wiggle::async_trait;
     use crate::registry::GraphRegistry;
+
+    use super::*;
 
     #[test]
     fn example() {
         struct FakeRegistry;
+        #[async_trait]
         impl GraphRegistry for FakeRegistry {
-            fn get_mut(&mut self, _: &str) -> Option<&mut Graph> {
-                None
+            async fn get_mut(&mut self, _: &str) -> Result<Option<&mut Graph>, BackendError> {
+                Ok(None)
             }
         }
 

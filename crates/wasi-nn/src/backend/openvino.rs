@@ -4,9 +4,9 @@ use super::{BackendError, BackendExecutionContext, BackendFromDir, BackendGraph,
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
-use wiggle::async_trait_crate::async_trait;
 use std::sync::{Arc, Mutex};
 use std::{fs::File, io::Read, path::Path};
+use wiggle::async_trait_crate::async_trait;
 
 #[derive(Default)]
 pub struct OpenvinoBackend(Option<openvino::Core>);

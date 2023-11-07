@@ -39,7 +39,7 @@ impl InMemoryRegistry {
 
 #[async_trait]
 impl GraphRegistry for InMemoryRegistry {
-    async fn get_mut(&mut self, name: &str) -> Result<Option<&mut Graph>,BackendError> {
+    async fn get_mut(&mut self, name: &str) -> Result<Option<&mut Graph>, BackendError> {
         Ok(self.0.get_mut(name))
     }
 }

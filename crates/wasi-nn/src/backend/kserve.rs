@@ -1,34 +1,36 @@
 //! Implements the wasi-nn API.
 
+use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::io::{Cursor, Error, ErrorKind, Read};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use byteorder::{LittleEndian, ReadBytesExt};
-use http_body_util::{BodyExt, Empty, Full};
-use hyper::{body, Method, Request, Response, StatusCode, Uri};
-use hyper::body::{Bytes, Incoming};
+use http_body_util::{BodyExt, Full};
 use hyper::body::Buf;
-use hyper::client::conn::http1::{Connection, SendRequest};
+use hyper::body::{Bytes, Incoming};
+use hyper::client::conn::http1::SendRequest;
 use hyper::header::HeaderName;
 use hyper::http::uri::Authority;
-use serde::{Deserialize, Serialize};
+use hyper::{Method, Request, Response, StatusCode, Uri};
 use serde::de::DeserializeOwned;
-use serde_json::{json, Number};
+use serde::{Deserialize, Serialize};
+use serde_json::Number;
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 
-use wasmtime::component::__internal::wasmtime_environ::object::BigEndian;
 use wiggle::async_trait_crate::async_trait;
 
-use crate::{ExecutionContext, Graph, GraphRegistry};
-use crate::backend::{Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner};
+use crate::backend::{
+    BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner,
+};
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
-use std::cmp::min;
+use crate::{ExecutionContext, Graph, GraphRegistry};
 
+#[allow(dead_code)]
 const INFERENCE_HEADER_CONTENT_LENGTH: &str = "inference-header-content-length";
+#[allow(dead_code)]
 const BINARY_DATA_SIZE: &str = "binary_data_size";
 
 pub(crate) struct KServeBackend {
@@ -53,7 +55,11 @@ impl BackendInner for KServeBackend {
         GraphEncoding::Autodetect
     }
 
-    fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
+    fn load(
+        &mut self,
+        _builders: &[&[u8]],
+        _target: ExecutionTarget,
+    ) -> Result<Graph, BackendError> {
         return Err(BackendError::UnsupportedOperation("load"));
     }
 
@@ -71,11 +77,12 @@ struct KServeGraph {
 impl BackendGraph for KServeGraph {
     async fn init_execution_context(&self) -> Result<ExecutionContext, BackendError> {
         let client = KServeClient::new(&self.server_url).await;
-        Ok(ExecutionContext(Box::new(KServeExecutionContext::new(client, &self.model_name).await?)))
+        Ok(ExecutionContext(Box::new(
+            KServeExecutionContext::new(client, &self.model_name).await?,
+        )))
         // return Err(BackendError::UnsupportedOperation("init_execution_context"));
     }
 }
-
 
 struct KServeExecutionContext {
     client: Box<KServeClient>,
@@ -89,7 +96,8 @@ impl KServeExecutionContext {
     async fn new(client: KServeClient, model_name: &String) -> Result<Self, BackendError> {
         let mut client = client;
         let model_metadata = client.get_model_metadata(model_name).await?;
-        let mut input_list: Vec<&String> = model_metadata.inputs.iter().map(|tm| &tm.name).collect();
+        let mut input_list: Vec<&String> =
+            model_metadata.inputs.iter().map(|tm| &tm.name).collect();
         let mut input_mapping: HashMap<usize, String> = HashMap::new();
         input_list.sort();
 
@@ -131,15 +139,19 @@ impl BackendExecutionContext for KServeExecutionContext {
     }
 
     async fn compute(&mut self) -> Result<(), BackendError> {
-        let outputs = self.model_metadata.outputs.iter().map(|mm| KServeRequestOutput {
-            name: mm.name.clone(),
-            parameters: KServeBinaryInferenceParameters {
-                binary_data: None,
-                binary_data_output: None,
-                binary_data_size: None,
-            },
-        }).collect();
-
+        let outputs = self
+            .model_metadata
+            .outputs
+            .iter()
+            .map(|mm| KServeRequestOutput {
+                name: mm.name.clone(),
+                parameters: KServeBinaryInferenceParameters {
+                    binary_data: None,
+                    binary_data_output: None,
+                    binary_data_size: None,
+                },
+            })
+            .collect();
 
         let inference_request = KServeInferenceRequest {
             id: None,
@@ -147,37 +159,85 @@ impl BackendExecutionContext for KServeExecutionContext {
             inputs: &self.inputs,
             outputs: &outputs,
         };
-        let mut result = self.client.inference_request(&self.model_metadata.name, &inference_request).await?;
+        let mut result = self
+            .client
+            .inference_request(&self.model_metadata.name, &inference_request)
+            .await?;
         self.outputs.append(&mut result.outputs);
         Ok(())
     }
 
     fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError> {
         let output = &self.outputs[index as usize];
-        let total_size = output.data.len() * map_tensor_type_to_size(&map_datatype_to_tensor_type(&output.metadata.datatype));
+        let total_size = output.data.len()
+            * map_tensor_type_to_size(&map_datatype_to_tensor_type(&output.metadata.datatype));
         if total_size > destination.len() {
             return Err(BackendError::NotEnoughMemory(total_size));
         }
         let mut start_index = 0;
         for elem in &output.data {
             match elem {
-                KServeTensorElement::Bool(b) => copy_to_destination(destination, &mut start_index, if *b { &[1u8] } else { &[0u8] }.as_slice()),
-                KServeTensorElement::Number(n) => {
-                    match output.metadata.datatype {
-                        KServeDatatype::UINT8 => copy_to_destination(destination, &mut start_index, (n.as_u64().unwrap() as u8).to_le_bytes().as_slice()),
-                        KServeDatatype::UINT16 => copy_to_destination(destination, &mut start_index, (n.as_u64().unwrap() as u16).to_le_bytes().as_slice()),
-                        KServeDatatype::UINT32 => copy_to_destination(destination, &mut start_index, (n.as_u64().unwrap() as u32).to_le_bytes().as_slice()),
-                        KServeDatatype::UINT64 => copy_to_destination(destination, &mut start_index, (n.as_u64().unwrap()).to_le_bytes().as_slice()),
-                        KServeDatatype::INT8 => copy_to_destination(destination, &mut start_index, (n.as_i64().unwrap() as i8).to_le_bytes().as_slice()),
-                        KServeDatatype::INT16 => copy_to_destination(destination, &mut start_index, (n.as_i64().unwrap() as i16).to_le_bytes().as_slice()),
-                        KServeDatatype::INT32 => copy_to_destination(destination, &mut start_index, (n.as_i64().unwrap() as i32).to_le_bytes().as_slice()),
-                        KServeDatatype::INT64 => copy_to_destination(destination, &mut start_index, (n.as_i64().unwrap() as i64).to_le_bytes().as_slice()),
-                        KServeDatatype::FP32 => copy_to_destination(destination, &mut start_index, (n.as_f64().unwrap() as f32).to_le_bytes().as_slice()),
-                        KServeDatatype::FP64 => copy_to_destination(destination, &mut start_index, (n.as_f64().unwrap()).to_le_bytes().as_slice()),
-                        _ => panic!("Unsupported kserve datatype for rust")
-                    }
+                KServeTensorElement::Bool(b) => copy_to_destination(
+                    destination,
+                    &mut start_index,
+                    if *b { &[1u8] } else { &[0u8] }.as_slice(),
+                ),
+                KServeTensorElement::Number(n) => match output.metadata.datatype {
+                    KServeDatatype::UINT8 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_u64().unwrap() as u8).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::UINT16 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_u64().unwrap() as u16).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::UINT32 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_u64().unwrap() as u32).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::UINT64 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_u64().unwrap()).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::INT8 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_i64().unwrap() as i8).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::INT16 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_i64().unwrap() as i16).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::INT32 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_i64().unwrap() as i32).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::INT64 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_i64().unwrap() as i64).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::FP32 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_f64().unwrap() as f32).to_le_bytes().as_slice(),
+                    ),
+                    KServeDatatype::FP64 => copy_to_destination(
+                        destination,
+                        &mut start_index,
+                        (n.as_f64().unwrap()).to_le_bytes().as_slice(),
+                    ),
+                    _ => panic!("Unsupported kserve datatype for rust"),
+                },
+                KServeTensorElement::String(s) => {
+                    copy_to_destination(destination, &mut start_index, s.as_bytes())
                 }
-                KServeTensorElement::String(s) => copy_to_destination(destination, &mut start_index, s.as_bytes())
             };
         }
         Ok(total_size as u32)
@@ -221,14 +281,18 @@ fn read_tensor_elements(tensor: &Tensor) -> Vec<KServeTensorElement> {
 
     let mut data = match tensor.tensor_type {
         TensorType::U8 => Vec::with_capacity(1),
-        _ => Vec::with_capacity(tensor.data.len() / map_tensor_type_to_size(&tensor.tensor_type))
+        _ => Vec::with_capacity(tensor.data.len() / map_tensor_type_to_size(&tensor.tensor_type)),
     };
 
     let parse_bytes_as_string = tensor.dimensions[0] == 0;
 
     let expected_size = if parse_bytes_as_string {
         //Skip the first dimension if it is 0
-        tensor.dimensions.iter().skip(1).fold(1u32, |acc, d| acc * d) as usize
+        tensor
+            .dimensions
+            .iter()
+            .skip(1)
+            .fold(1u32, |acc, d| acc * d) as usize
     } else {
         tensor.dimensions.iter().fold(1u32, |acc, d| acc * d) as usize
     };
@@ -240,11 +304,19 @@ fn read_tensor_elements(tensor: &Tensor) -> Vec<KServeTensorElement> {
         data.push(match tensor.tensor_type {
             TensorType::Bf16 => panic!("bf16 is not supported for kserve backend."),
             TensorType::Fp16 => panic!("bf16 is not supported for kserve backend."),
-            TensorType::I32 => KServeTensorElement::Number(Number::from(cursor.read_i32::<LittleEndian>().unwrap())),
-            TensorType::I64 => KServeTensorElement::Number(Number::from(cursor.read_i64::<LittleEndian>().unwrap())),
-            TensorType::Fp32 => KServeTensorElement::Number(Number::from_f64(cursor.read_f32::<LittleEndian>().unwrap() as f64).unwrap()),
-            TensorType::Fp64 => KServeTensorElement::Number(Number::from_f64(cursor.read_f64::<LittleEndian>().unwrap()).unwrap()),
-            TensorType::U8 => unsafe {
+            TensorType::I32 => KServeTensorElement::Number(Number::from(
+                cursor.read_i32::<LittleEndian>().unwrap(),
+            )),
+            TensorType::I64 => KServeTensorElement::Number(Number::from(
+                cursor.read_i64::<LittleEndian>().unwrap(),
+            )),
+            TensorType::Fp32 => KServeTensorElement::Number(
+                Number::from_f64(cursor.read_f32::<LittleEndian>().unwrap() as f64).unwrap(),
+            ),
+            TensorType::Fp64 => KServeTensorElement::Number(
+                Number::from_f64(cursor.read_f64::<LittleEndian>().unwrap()).unwrap(),
+            ),
+            TensorType::U8 => {
                 if parse_bytes_as_string {
                     let mut s: String = String::new();
                     let strlen = cursor
@@ -287,7 +359,7 @@ fn map_datatype_to_tensor_type(datatype: &KServeDatatype) -> TensorType {
         KServeDatatype::FP16 => TensorType::Fp16,
         KServeDatatype::FP32 => TensorType::Fp32,
         KServeDatatype::BF16 => TensorType::Bf16,
-        _ => panic!("Unsupported operation.")
+        _ => panic!("Unsupported operation."),
     }
 }
 
@@ -303,24 +375,14 @@ fn map_tensor_type_to_datatype(tensor_type: TensorType) -> KServeDatatype {
     }
 }
 
-/// Return the execution target string expected by OpenVINO from the
-/// `ExecutionTarget` enum provided by wasi-nn.
-fn map_execution_target_to_string(target: ExecutionTarget) -> &'static str {
-    match target {
-        ExecutionTarget::Cpu => "CPU",
-        ExecutionTarget::Gpu => "GPU",
-        ExecutionTarget::Tpu => "TPU",
-    }
-}
-
 pub struct KServeClient {
     server_url: String,
+    #[allow(dead_code)]
     url: Uri,
-    // stream: TcpStream,
+    #[allow(dead_code)]
     task: JoinHandle<()>,
     authority: Authority,
     sender: SendRequest<Full<Bytes>>,
-    // conn: Connection<TcpStream,Full<Bytes>>
 }
 
 impl KServeClient {
@@ -371,7 +433,7 @@ impl KServeClient {
         // let (mut sender, conn) = hyper::client::conn::http1::handshake(self.stream).await?;
 
         // Await the response...
-        let mut res = self
+        let res = self
             .sender
             .send_request(request)
             .await
@@ -381,6 +443,7 @@ impl KServeClient {
         res
     }
 
+    #[allow(dead_code)]
     pub async fn get_server_metadata(&mut self) -> Result<KServeServerMetadata, BackendError> {
         let server_metadata_url = build_server_metadata_url(&self.server_url)
             .parse::<hyper::Uri>()
@@ -423,7 +486,7 @@ impl KServeClient {
             .body(Full::from(""))
             .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
 
-        let mut res = self.send_request(req).await;
+        let res = self.send_request(req).await;
 
         println!("Response status: {:?}", res.status());
 
@@ -436,6 +499,7 @@ impl KServeClient {
         }
     }
 
+    #[allow(dead_code)]
     async fn inference_request(
         &mut self,
         model_name: &String,
@@ -455,7 +519,7 @@ impl KServeClient {
             .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
 
         // Await the response...
-        let mut res = self.send_request(req).await;
+        let res = self.send_request(req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
         println!("Response status: {:?}", res.status());
@@ -527,7 +591,7 @@ impl KServeClient {
             .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
 
         // Await the response...
-        let mut res = self.send_request(req).await;
+        let res = self.send_request(req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
         println!("Response status: {:?}", res.status());
@@ -574,6 +638,7 @@ impl KServeClient {
         }
     }
 
+    #[allow(dead_code)]
     async fn inference_request_bytes(
         &mut self,
         model_name: &String,
@@ -597,7 +662,7 @@ impl KServeClient {
             .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
 
         // Await the response...
-        let mut res = self.send_request(req).await;
+        let res = self.send_request(req).await;
         assert_eq!(res.status(), StatusCode::OK);
 
         println!("Response status: {:?}", res.status());
@@ -752,6 +817,7 @@ pub enum KServeDatatype {
     BF16,
 }
 
+#[allow(dead_code)]
 async fn get_body_bytes(response: Response<Incoming>) -> Result<Vec<u8>, BackendError> {
     response
         .collect()
@@ -769,11 +835,15 @@ async fn try_deserialize<T: DeserializeOwned>(
     //     .map(|collected| collected.aggregate())
     //     .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))?;
     let body = response.collect().await.unwrap().to_bytes().to_vec();
-    println!("Body: {:?}", String::from_utf8(body[..min(body.len(), 256)].to_vec()));
-    serde_json::from_slice(body.as_slice())//from_reader(body.reader())
+    println!(
+        "Body: {:?}",
+        String::from_utf8(body[..min(body.len(), 256)].to_vec())
+    );
+    serde_json::from_slice(body.as_slice()) //from_reader(body.reader())
         .map_err(|e| BackendError::BackendAccess(anyhow::Error::from(e)))
 }
 
+#[allow(dead_code)]
 fn build_server_metadata_url(server_url: &String) -> String {
     format!("{}/v2", server_url)
 }
@@ -782,6 +852,7 @@ fn build_model_metadata_url(server_url: &String, model_name: &String) -> String 
     format!("{}/v2/models/{}", server_url, model_name)
 }
 
+#[allow(dead_code)]
 fn build_model_metadata_url_for_version(
     server_url: &String,
     model_name: &String,
@@ -797,13 +868,15 @@ fn build_inference_url(server_url: &String, model_name: &String) -> String {
     format!("{}/v2/models/{}/infer", server_url, model_name)
 }
 
+#[allow(dead_code)]
 fn inference_content_length_header() -> HeaderName {
     hyper::header::HeaderName::from_static(INFERENCE_HEADER_CONTENT_LENGTH)
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_binary_inference() {
-    let mut kserve_client = KServeClient::new(String::from("http://localhost:8000")).await;
+    let mut kserve_client = KServeClient::new(&String::from("http://localhost:8000")).await;
     let prompt = String::from("captain america, 4k");
     let input = KServeTensorMetadata {
         name: String::from("prompt"),
@@ -837,9 +910,10 @@ async fn test_binary_inference() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_inference() {
     println!("Attempting to retrieve server metadata from Triton.");
-    let mut kserve_client = KServeClient::new(String::from("http://localhost:8000")).await;
+    let mut kserve_client = KServeClient::new(&String::from("http://localhost:8000")).await;
     let prompt = String::from("captain america, 4k");
     let input = vec![KServeTensor {
         metadata: KServeTensorMetadata {
@@ -871,9 +945,10 @@ async fn test_inference() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_get_server_metadata() {
     eprintln!("Attempting to retrieve server metadata from Triton.");
-    let mut kserve_client = KServeClient::new(String::from("http://localhost:8000")).await;
+    let mut kserve_client = KServeClient::new(&String::from("http://localhost:8000")).await;
 
     let server_metadata = kserve_client.get_server_metadata().await;
 

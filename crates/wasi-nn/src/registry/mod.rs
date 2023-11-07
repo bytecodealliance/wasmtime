@@ -8,10 +8,10 @@
 
 mod in_memory;
 
+use crate::backend::BackendError;
 use crate::Graph;
 pub use in_memory::InMemoryRegistry;
 use wiggle::async_trait;
-use crate::backend::BackendError;
 
 #[async_trait]
 pub trait GraphRegistry: Send + Sync {
