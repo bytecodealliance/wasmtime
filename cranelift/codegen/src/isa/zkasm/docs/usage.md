@@ -20,7 +20,7 @@ In this guide, you'll learn how to use `cranelift` to compile `.wat` files into 
 To compile a `.wat` file to `.zkasm`:
 
 1. Write your `.wat` code to a file in the `cranelift/zkasm_data` directory.
-   
+
 2. Add the name of your file to the `testcases!` macro in `cranelift/filetests/src/test_zkasm.rs`. For instance:
 
    ```rust
@@ -88,11 +88,11 @@ To test a `.zkasm` file:
 If you wish to compile a `.wat` file with logging (without generating a `.zkasm` file), you can use the following command:
 
    ```bash
-   RUST_LOG=trace cargo run --features=all-arch -p -D cranelift-tools --bin=clif-util wasm --target=sparc <filepath>
+   RUST_LOG=trace cargo run --features=all-arch -p -D cranelift-tools --bin=clif-util wasm --target=zkasm <filepath>
    ```
 
    For example:
 
    ```bash
-   RUST_LOG=trace cargo run --features=all-arch -p cranelift-tools --bin=clif-util wasm --target=sparc cranelift/zkasm_data/add.wat 2>trace.txt
+   RUST_LOG=trace cargo run --features=all-arch -p cranelift-tools --bin=clif-util wasm --target=zkasm cranelift/zkasm_data/add.wat 2>trace.txt
    ```
