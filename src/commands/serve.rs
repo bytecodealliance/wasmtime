@@ -372,15 +372,15 @@ impl hyper::service::Service<Request> for ProxyHandler {
                     } else if err.is_parse_status() || err.is_user() {
                         http_types::ErrorCode::HttpRequestError(
                             http_types::HttpRequestErrorPayload {
-                                status_code: 400,
-                                status_phrase: "".to_string(),
+                                status_code: Some(400),
+                                status_phrase: Some("".to_string()),
                             },
                         )
                     } else if err.is_parse_too_large() {
                         http_types::ErrorCode::HttpRequestError(
                             http_types::HttpRequestErrorPayload {
-                                status_code: 413,
-                                status_phrase: "".to_string(),
+                                status_code: Some(413),
+                                status_phrase: Some("".to_string()),
                             },
                         )
                     } else {

@@ -15,7 +15,7 @@ fn main() {
             .downcast::<ErrorCode>()
             .expect("expected a wasi-http ErrorCode"),
         ErrorCode::HttpRequestError(HttpRequestErrorPayload {
-            status_code: 405,
+            status_code: Some(405),
             ..
         }),
     ));

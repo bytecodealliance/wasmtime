@@ -27,8 +27,8 @@ interface types {
     other(string)
   }
 
-  // The cases of this variant correspond to the IANA HTTP Proxy Error Types:
-  //   https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types
+  /// The cases of this variant correspond to the IANA HTTP Proxy Error Types:
+  ///   https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types
   variant error-code {
     DNS-timeout,
     DNS-error(DNS-error-payload),
@@ -48,13 +48,13 @@ interface types {
     HTTP-request-error(HTTP-request-error-payload),
     HTTP-request-denied,
     HTTP-response-incomplete,
-    HTTP-response-header-section-size(u32),
+    HTTP-response-header-section-size(option<u32>),
     HTTP-response-header-size(field-size-payload),
-    HTTP-response-body-size(u32),
-    HTTP-response-trailer-section-size(u32),
+    HTTP-response-body-size(option<u32>),
+    HTTP-response-trailer-section-size(option<u32>),
     HTTP-response-trailer-size(field-size-payload),
-    HTTP-response-transfer-coding(string),
-    HTTP-response-content-coding(string),
+    HTTP-response-transfer-coding(option<string>),
+    HTTP-response-content-coding(option<string>),
     HTTP-response-timeout,
     HTTP-upgrade-failed,
     HTTP-protocol-error,
@@ -64,28 +64,28 @@ interface types {
     proxy-loop-detected
   }
 
-  // Defines the case payload type for `DNS-error` above:
+  /// Defines the case payload type for `DNS-error` above:
   record DNS-error-payload {
-    rcode: string,
-    info-code: u16
+    rcode: option<string>,
+    info-code: option<u16>
   }
 
-  // Defines the case payload type for `TLS-alert-received` above:
+  /// Defines the case payload type for `TLS-alert-received` above:
   record TLS-alert-received-payload {
-    alert-ID: u8,
-    alert-message: string
+    alert-ID: option<u8>,
+    alert-message: option<string>
   }
 
-  // Defines the case payload type for `HTTP-request-error` above:
+  /// Defines the case payload type for `HTTP-request-error` above:
   record HTTP-request-error-payload {
-    status-code: u16,
-    status-phrase: string
+    status-code: option<u16>,
+    status-phrase: option<string>
   }
 
-  // Defines the case payload type for `HTTP-response-{header,trailer}-size` above:
+  /// Defines the case payload type for `HTTP-response-{header,trailer}-size` above:
   record field-size-payload {
-    field-name: string,
-    field-size: u32
+    field-name: option<string>,
+    field-size: option<u32>
   }
 
   /// This tyep enumerates the different kinds of errors that may occur when
@@ -107,6 +107,13 @@ interface types {
   /// Note that this function is fallible because not all stream-related errors
   /// are http-related errors.
   http-error: func(err: borrow<stream-error>) -> option<error-code>;
+
+  /// This tyep enumerates the different kinds of errors that may occur when
+  /// setting or appending to a `fields` resource.
+  variant header-error {
+    invalid-syntax,
+    forbidden,
+  }
 
   /// Field keys are always strings.
   type field-key = string;
