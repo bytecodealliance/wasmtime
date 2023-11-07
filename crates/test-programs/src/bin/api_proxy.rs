@@ -24,7 +24,7 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
             "missing `custom-forbidden-header` from request"
         );
 
-        req_hdrs.delete(&header);
+        assert!(req_hdrs.delete(&header).is_err());
 
         assert!(
             !req_hdrs.get(&header).is_empty(),
