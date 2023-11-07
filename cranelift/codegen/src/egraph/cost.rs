@@ -74,7 +74,7 @@ impl Cost {
     const DEPTH_BITS: u8 = 8;
     const DEPTH_MASK: u32 = (1 << Self::DEPTH_BITS) - 1;
     const OP_COST_MASK: u32 = !Self::DEPTH_MASK;
-    const MAX_OP_COST: u32 = Self::OP_COST_MASK >> Self::DEPTH_BITS;
+    const MAX_OP_COST: u32 = (Self::OP_COST_MASK >> Self::DEPTH_BITS) - 1;
 
     pub(crate) fn infinity() -> Cost {
         // 2^32 - 1 is, uh, pretty close to infinite... (we use `Cost`
@@ -86,13 +86,14 @@ impl Cost {
         Cost(0)
     }
 
-    fn new(opcode_cost: u32, depth: u8) -> Cost {
-        debug_assert!(
-            opcode_cost <= Self::MAX_OP_COST,
-            "Cost::new: given opcode cost of {opcode_cost} is larger than max of {}",
-            Self::MAX_OP_COST,
-        );
-        Cost((opcode_cost << Self::DEPTH_BITS) | u32::from(depth))
+    /// Construct a new finite cost from the given parts.
+    ///
+    /// The opcode cost is clamped to the maximum value representable.
+    fn new_finite(opcode_cost: u32, depth: u8) -> Cost {
+        let opcode_cost = std::cmp::min(opcode_cost, Self::MAX_OP_COST);
+        let cost = Cost((opcode_cost << Self::DEPTH_BITS) | u32::from(depth));
+        debug_assert_ne!(cost, Cost::infinity());
+        cost
     }
 
     fn depth(&self) -> u8 {
@@ -104,20 +105,13 @@ impl Cost {
         (self.0 & Self::OP_COST_MASK) >> Self::DEPTH_BITS
     }
 
-    /// Clamp this cost at a "finite" value. Can be used in
-    /// conjunction with saturating ops to avoid saturating into
-    /// `infinity()`.
-    fn finite(self) -> Cost {
-        Cost(std::cmp::min(u32::MAX - 1, self.0))
-    }
-
     /// Compute the cost of the operation and its given operands.
     ///
     /// Caller is responsible for checking that the opcode came from an instruction
     /// that satisfies `inst_predicates::is_pure_for_egraph()`.
     pub(crate) fn of_pure_op(op: Opcode, operand_costs: impl IntoIterator<Item = Self>) -> Self {
         let c = pure_op_cost(op) + operand_costs.into_iter().sum();
-        Cost::new(c.op_cost(), c.depth().saturating_add(1)).finite()
+        Cost::new_finite(c.op_cost(), c.depth().saturating_add(1))
     }
 }
 
@@ -146,7 +140,7 @@ impl std::ops::Add<Cost> for Cost {
             Self::MAX_OP_COST,
         );
         let depth = std::cmp::max(self.depth(), other.depth());
-        Cost::new(op_cost, depth).finite()
+        Cost::new_finite(op_cost, depth)
     }
 }
 
@@ -157,11 +151,11 @@ impl std::ops::Add<Cost> for Cost {
 fn pure_op_cost(op: Opcode) -> Cost {
     match op {
         // Constants.
-        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new(1, 0),
+        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new_finite(1, 0),
 
         // Extends/reduces.
         Opcode::Uextend | Opcode::Sextend | Opcode::Ireduce | Opcode::Iconcat | Opcode::Isplit => {
-            Cost::new(2, 0)
+            Cost::new_finite(2, 0)
         }
 
         // "Simple" arithmetic.
@@ -173,9 +167,9 @@ fn pure_op_cost(op: Opcode) -> Cost {
         | Opcode::Bnot
         | Opcode::Ishl
         | Opcode::Ushr
-        | Opcode::Sshr => Cost::new(3, 0),
+        | Opcode::Sshr => Cost::new_finite(3, 0),
 
         // Everything else (pure.)
-        _ => Cost::new(4, 0),
+        _ => Cost::new_finite(4, 0),
     }
 }
