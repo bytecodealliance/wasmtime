@@ -1,0 +1,85 @@
+test compile
+set enable_pcc=true
+target aarch64
+target x86_64
+
+function %f0(i64, i32) -> i64 {
+    mt0 = memory 0x1_0000_0000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 0x100): i32):
+    v2 ! range(64, 0, 0x100) = uextend.i64 v1
+    v3 ! mem(mt0, 0, 8) = iadd.i64 v0, v2
+    v4 = load.i64 checked v3
+    return v4
+}
+
+function %f1(i64, i32) -> i64 {
+    ;; Note the guard region of 8 bytes -- just enough for the below!
+    mt0 = memory 0x1_0000_0008
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 0xffff_ffff): i32):
+    v2 ! range(64, 0, 0xffff_ffff) = uextend.i64 v1
+    v3 ! mem(mt0, 0, 0xffff_ffff) = iadd.i64 v0, v2
+    v4 = load.i64 checked v3
+    return v4
+}
+
+;; RegRegExtend mode on aarch64.
+function %f2(i64, i32) -> i8 {
+    mt0 = memory 0x1000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 0xfff): i32):
+    v2 ! range(64, 0, 0xfff) = uextend.i64 v1
+    v3 ! mem(mt0, 0, 0xfff) = iadd.i64 v0, v2
+    v4 = load.i8 checked v3
+    return v4
+}
+
+;; RegReg mode on aarch64.
+function %f3(i64, i64) -> i8 {
+    mt0 = memory 0x1000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(64, 0, 0xfff): i64):
+    v2 ! mem(mt0, 0, 0xfff) = iadd.i64 v0, v1
+    v3 = load.i8 checked v2
+    return v3
+}
+
+;; RegScaledExtended mode on aarch64.
+function %f4(i64, i32) -> i64 {
+    mt0 = memory 0x8000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(32, 0, 0xfff): i32):
+    v2 ! range(64, 0, 0xfff) = uextend.i64 v1
+    v3 = iconst.i32 3
+    v4 ! range(64, 0, 0x7ff8) = ishl.i64 v2, v3
+    v5 ! mem(mt0, 0, 0x7ff8) = iadd.i64 v0, v4
+    v6 = load.i64 checked v5
+    return v6
+}
+
+;; RegScaled mode on aarch64.
+function %f5(i64, i64) -> i64 {
+    mt0 = memory 0x8000
+block0(v0 ! mem(mt0, 0, 0): i64, v1 ! range(64, 0, 0xfff): i64):
+    v2 = iconst.i32 3
+    v3 ! range(64, 0, 0x7ff8) = ishl.i64 v1, v2
+    v4 ! mem(mt0, 0, 0x7ff8) = iadd.i64 v0, v3
+    v5 = load.i64 checked v4
+    return v5
+}
+
+;; UnsignedOffset mode on aarch64.
+function %f6(i64) -> i64 {
+    mt0 = memory 0x8000
+block0(v0 ! mem(mt0, 0, 0): i64):
+    v2 = iconst.i64 8
+    v3 ! mem(mt0, 8, 8) = iadd.i64 v0, v2
+    v4 = load.i64 checked v3
+    return v4
+}
+
+;; Unscaled mode on aarch64.
+function %f6(i64) -> i64 {
+    mt0 = memory 0x8000
+block0(v0 ! mem(mt0, 8, 8): i64):
+    v2 = iconst.i64 8
+    v3 ! mem(mt0, 0, 0) = isub.i64 v0, v2
+    v4 = load.i64 checked v3
+    return v4
+}

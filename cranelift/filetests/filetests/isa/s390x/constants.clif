@@ -9,12 +9,12 @@ block0:
 
 ; VCode:
 ; block0:
-;   lhi %r2, -1
+;   lhi %r2, 255
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhi %r2, -1
+;   lhi %r2, 0xff
 ;   br %r14
 
 function %f() -> i16 {

@@ -155,7 +155,8 @@ async fn resume_separate_thread() -> Result<()> {
 
     execute_across_threads(async move {
         let mut store = Store::new(&engine, ());
-        store.out_of_fuel_async_yield(u64::MAX, 1);
+        store.set_fuel(u64::MAX).unwrap();
+        store.fuel_async_yield_interval(Some(1)).unwrap();
         linker.instantiate_async(&mut store, &component).await?;
         Ok::<_, anyhow::Error>(())
     })
@@ -207,7 +208,8 @@ async fn poll_through_wasm_activation() -> Result<()> {
         let engine = engine.clone();
         async move {
             let mut store = Store::new(&engine, ());
-            store.out_of_fuel_async_yield(u64::MAX, 1);
+            store.set_fuel(u64::MAX).unwrap();
+            store.fuel_async_yield_interval(Some(1)).unwrap();
             let instance = linker.instantiate_async(&mut store, &component).await?;
             let func = instance.get_typed_func::<(Vec<u8>,), ()>(&mut store, "run")?;
             func.call_async(&mut store, (vec![1, 2, 3],)).await?;

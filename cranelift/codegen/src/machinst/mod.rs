@@ -61,7 +61,7 @@ use smallvec::{smallvec, SmallVec};
 use std::string::String;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 #[macro_use]
 pub mod isle;
@@ -85,6 +85,7 @@ pub use inst_common::*;
 pub mod valueregs;
 pub use reg::*;
 pub use valueregs::*;
+pub mod pcc;
 pub mod reg;
 
 /// A machine instruction.
@@ -111,6 +112,9 @@ pub trait MachInst: Clone + Debug {
 
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool;
+
+    /// Does this instruction access memory?
+    fn is_mem_access(&self) -> bool;
 
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
@@ -234,6 +238,8 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
     fn supports_veneer(self) -> bool;
     /// How many bytes are needed for a veneer?
     fn veneer_size(self) -> CodeOffset;
+    /// What's the largest possible veneer that may be generated?
+    fn worst_case_veneer_size() -> CodeOffset;
     /// Generate a veneer. The given code-buffer slice is `self.veneer_size()`
     /// bytes long at offset `veneer_offset` in the buffer. The original
     /// label-use will be patched to refer to this veneer's offset.  A new
@@ -428,7 +434,7 @@ impl<T: CompilePhase> CompiledCodeBase<T> {
                         buf,
                         " ; reloc_external {} {} {}",
                         reloc.kind,
-                        reloc.name.display(params),
+                        reloc.target.display(params),
                         reloc.addend,
                     )?;
                 }
@@ -480,10 +486,24 @@ impl CompiledCode {
         &self,
         isa: &dyn crate::isa::TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        use crate::isa::unwind::UnwindInfoKind;
         let unwind_info_kind = match isa.triple().operating_system {
             target_lexicon::OperatingSystem::Windows => UnwindInfoKind::Windows,
             _ => UnwindInfoKind::SystemV,
         };
+        self.create_unwind_info_of_kind(isa, unwind_info_kind)
+    }
+
+    /// Creates unwind information for the function using the supplied
+    /// "kind". Supports cross-OS (but not cross-arch) generation.
+    ///
+    /// Returns `None` if the function has no unwind information.
+    #[cfg(feature = "unwind")]
+    pub fn create_unwind_info_of_kind(
+        &self,
+        isa: &dyn crate::isa::TargetIsa,
+        unwind_info_kind: crate::isa::unwind::UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         isa.emit_unwind_info(self, unwind_info_kind)
     }
 }
@@ -534,18 +554,4 @@ pub trait TextSectionBuilder {
     /// Completes this text section, filling out any final details, and returns
     /// the bytes of the text section.
     fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8>;
-}
-
-/// Expected unwind info type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum UnwindInfoKind {
-    /// No unwind info.
-    None,
-    /// SystemV CIE/FDE unwind info.
-    #[cfg(feature = "unwind")]
-    SystemV,
-    /// Windows X64 Unwind info
-    #[cfg(feature = "unwind")]
-    Windows,
 }

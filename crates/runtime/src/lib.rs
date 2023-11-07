@@ -2,25 +2,8 @@
 
 #![deny(missing_docs, trivial_numeric_casts, unused_extern_crates)]
 #![warn(unused_import_braces)]
-#![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(clippy::new_without_default, clippy::new_without_default)
-)]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    warn(
-        clippy::float_arithmetic,
-        clippy::mut_mut,
-        clippy::nonminimal_bool,
-        clippy::map_unwrap_or,
-        clippy::clippy::print_stdout,
-        clippy::unicode_not_nfc,
-        clippy::use_self
-    )
-)]
 
-use anyhow::Error;
+use anyhow::{Error, Result};
 use std::fmt;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -46,8 +29,10 @@ mod table;
 mod traphandlers;
 mod vmcontext;
 
+#[cfg(feature = "debug-builtins")]
 pub mod debug_builtins;
 pub mod libcalls;
+pub mod mpk;
 
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
@@ -67,6 +52,7 @@ pub use crate::memory::{
 };
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
+pub use crate::mpk::MpkEnabled;
 pub use crate::store_box::*;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::*;
@@ -132,7 +118,9 @@ pub unsafe trait Store {
     ) -> Result<bool, Error>;
     /// Callback invoked to notify the store's resource limiter that a memory
     /// grow operation has failed.
-    fn memory_grow_failed(&mut self, error: &Error);
+    ///
+    /// Note that this is not invoked if `memory_growing` returns an error.
+    fn memory_grow_failed(&mut self, error: Error) -> Result<()>;
     /// Callback invoked to allow the store's resource limiter to reject a
     /// table grow operation.
     fn table_growing(
@@ -143,7 +131,9 @@ pub unsafe trait Store {
     ) -> Result<bool, Error>;
     /// Callback invoked to notify the store's resource limiter that a table
     /// grow operation has failed.
-    fn table_grow_failed(&mut self, error: &Error);
+    ///
+    /// Note that this is not invoked if `table_growing` returns an error.
+    fn table_grow_failed(&mut self, error: Error) -> Result<()>;
     /// Callback invoked whenever fuel runs out by a wasm instance. If an error
     /// is returned that's raised as a trap. Otherwise wasm execution will
     /// continue as normal.
@@ -195,8 +185,8 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     /// not callable from outside the Wasm module itself.
     fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction>;
 
-    /// Return the addres, in memory, of the trampoline that allows Wasm to call
-    /// a native function of the given signature.
+    /// Return the address, in memory, of the trampoline that allows Wasm to
+    /// call a native function of the given signature.
     fn wasm_to_native_trampoline(
         &self,
         signature: VMSharedSignatureIndex,

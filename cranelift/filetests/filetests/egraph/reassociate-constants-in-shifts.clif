@@ -1,0 +1,41 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+;; Test egraph rewrite rules that reassociate constants out of nested shifts.
+
+function %a(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = ishl v1, v0
+    v3 = iconst.i32 2
+    v4 = ishl v2, v3
+    return v4
+; check:  v6 = iconst.i32 4
+; nextln: v7 = ishl v6, v0
+; check:  return v7
+}
+
+function %b(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = ushr v1, v0
+    v3 = iconst.i32 2
+    v4 = ushr v2, v3
+    return v4
+; check:  v3 = iconst.i32 2
+; nextln: v6 = ushr v3, v0
+; check:  return v6
+}
+
+function %c(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 8
+    v2 = sshr v1, v0
+    v3 = iconst.i32 2
+    v4 = sshr v2, v3
+    return v4
+; check:  v3 = iconst.i32 2
+; nextln: v6 = sshr v3, v0
+; check:  return v6
+}

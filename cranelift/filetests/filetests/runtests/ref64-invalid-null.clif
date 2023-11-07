@@ -3,7 +3,8 @@ test run
 target aarch64
 target x86_64
 target s390x
-target riscv64gc
+target riscv64
+target riscv64 has_c has_zcb
 
 function %is_null_true_r64() -> i8 {
 block0:

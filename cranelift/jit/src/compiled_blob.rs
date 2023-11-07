@@ -1,6 +1,6 @@
 use cranelift_codegen::binemit::Reloc;
-use cranelift_module::ModuleExtName;
 use cranelift_module::ModuleReloc;
+use cranelift_module::ModuleRelocTarget;
 use std::convert::TryFrom;
 
 /// Reads a 32bit instruction at `iptr`, and writes it again after
@@ -21,9 +21,9 @@ pub(crate) struct CompiledBlob {
 impl CompiledBlob {
     pub(crate) fn perform_relocations(
         &self,
-        get_address: impl Fn(&ModuleExtName) -> *const u8,
-        get_got_entry: impl Fn(&ModuleExtName) -> *const u8,
-        get_plt_entry: impl Fn(&ModuleExtName) -> *const u8,
+        get_address: impl Fn(&ModuleRelocTarget) -> *const u8,
+        get_got_entry: impl Fn(&ModuleRelocTarget) -> *const u8,
+        get_plt_entry: impl Fn(&ModuleRelocTarget) -> *const u8,
     ) {
         use std::ptr::write_unaligned;
 
@@ -40,7 +40,6 @@ impl CompiledBlob {
                 Reloc::Abs4 => {
                     let base = get_address(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u32, u32::try_from(what as usize).unwrap())
                     };
@@ -48,7 +47,6 @@ impl CompiledBlob {
                 Reloc::Abs8 => {
                     let base = get_address(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut u64, u64::try_from(what as usize).unwrap())
                     };
@@ -57,37 +55,25 @@ impl CompiledBlob {
                     let base = get_address(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut i32, pcrel)
-                    };
+                    unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::X86GOTPCRel4 => {
                     let base = get_got_entry(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut i32, pcrel)
-                    };
+                    unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::X86CallPLTRel4 => {
                     let base = get_plt_entry(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
                     let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut i32, pcrel)
-                    };
+                    unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::S390xPCRel32Dbl | Reloc::S390xPLTRel32Dbl => {
                     let base = get_address(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
                     let pcrel = i32::try_from(((what as isize) - (at as isize)) >> 1).unwrap();
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut i32, pcrel)
-                    };
+                    unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::Arm64Call => {
                     let base = get_address(name);
@@ -107,8 +93,8 @@ impl CompiledBlob {
                     let imm26 = (diff as u32) << chop >> chop;
                     unsafe { modify_inst32(iptr, |inst| inst | imm26) };
                 }
-                Reloc::RiscvCall => {
-                    // A R_RISCV_CALL relocation expects auipc+jalr instruction pair.
+                Reloc::RiscvCallPlt => {
+                    // A R_RISCV_CALL_PLT relocation expects auipc+jalr instruction pair.
                     // It is the equivalent of two relocations:
                     // 1. R_RISCV_PCREL_HI20 on the `auipc`
                     // 2. R_RISCV_PCREL_LO12_I on the `jalr`

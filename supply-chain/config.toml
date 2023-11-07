@@ -169,6 +169,9 @@ audit-as-crates-io = true
 [policy.wasmtime-wit-bindgen]
 audit-as-crates-io = true
 
+[policy.wasmtime-wmemcheck]
+audit-as-crates-io = true
+
 [policy.wiggle]
 audit-as-crates-io = true
 
@@ -369,10 +372,6 @@ notes = "we are exempting tokio, hyper, and their tightly coupled dependencies b
 version = "0.13.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.instant]]
-version = "0.1.12"
-criteria = "safe-to-deploy"
-
 [[exemptions.ipnet]]
 version = "2.5.0"
 criteria = "safe-to-deploy"
@@ -495,20 +494,12 @@ criteria = "safe-to-deploy"
 version = "0.8.5"
 criteria = "safe-to-deploy"
 
-[[exemptions.rand_chacha]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.rand_xorshift]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_syscall]]
 version = "0.2.13"
-criteria = "safe-to-deploy"
-
-[[exemptions.redox_syscall]]
-version = "0.3.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.redox_users]]
@@ -527,10 +518,6 @@ notes = "contains assembly language and object file implementations of crypto pr
 [[exemptions.rusty-fork]]
 version = "0.3.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.sharded-slab]]
-version = "0.1.4"
-criteria = "safe-to-run"
 
 [[exemptions.shellexpand]]
 version = "2.1.0"
@@ -580,10 +567,6 @@ criteria = "safe-to-deploy"
 version = "0.1.17"
 criteria = "safe-to-deploy"
 
-[[exemptions.thread_local]]
-version = "1.1.4"
-criteria = "safe-to-run"
-
 [[exemptions.tinytemplate]]
 version = "1.2.1"
 criteria = "safe-to-run"
@@ -608,10 +591,6 @@ criteria = "safe-to-deploy"
 [[exemptions.tracing-core]]
 version = "0.1.28"
 criteria = "safe-to-deploy"
-
-[[exemptions.tracing-subscriber]]
-version = "0.3.11"
-criteria = "safe-to-run"
 
 [[exemptions.typenum]]
 version = "1.15.0"

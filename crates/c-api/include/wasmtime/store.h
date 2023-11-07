@@ -148,7 +148,7 @@ WASM_API_EXTERN void wasmtime_context_set_data(wasmtime_context_t* context, void
 WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t* context);
 
 /**
- * \brief Adds fuel to this context's store for wasm to consume while executing.
+ * \brief Set fuel to this context's store for wasm to consume while executing.
  *
  * For this method to work fuel consumption must be enabled via
  * #wasmtime_config_consume_fuel_set. By default a store starts with 0 fuel
@@ -156,53 +156,24 @@ WASM_API_EXTERN void wasmtime_context_gc(wasmtime_context_t* context);
  * This function must be called for the store to have
  * some fuel to allow WebAssembly to execute.
  *
- * Note that at this time when fuel is entirely consumed it will cause
- * wasm to trap. More usages of fuel are planned for the future.
+ * Note that when fuel is entirely consumed it will cause wasm to trap.
  *
  * If fuel is not enabled within this store then an error is returned. If fuel
  * is successfully added then NULL is returned.
  */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *store, uint64_t fuel);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_fuel(wasmtime_context_t *store, uint64_t fuel);
 
 /**
- * \brief Returns the amount of fuel consumed by this context's store execution
- * so far.
+ * \brief Returns the amount of fuel remaining in this context's store.
  *
  * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set
- * then this function will return false. Otherwise true is returned and the
+ * then this function will return an error. Otherwise `NULL` is returned and the
  * fuel parameter is filled in with fuel consumed so far.
  *
  * Also note that fuel, if enabled, must be originally configured via
- * #wasmtime_context_add_fuel.
+ * #wasmtime_context_set_fuel.
  */
-WASM_API_EXTERN bool wasmtime_context_fuel_consumed(const wasmtime_context_t *context, uint64_t *fuel);
-
-/**
- * \brief Returns the amount of fuel remaining in this context's store execution
- * before engine traps execution.
- *
- * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set
- * then this function will return false. Otherwise true is returned and the
- * fuel parameter is filled in with remaining fuel.
- *
- * Also note that fuel, if enabled, must be originally configured via
- * #wasmtime_context_add_fuel.
- */
-WASM_API_EXTERN bool wasmtime_context_fuel_remaining(const wasmtime_context_t *context, uint64_t *fuel);
-
-/**
- * \brief Attempt to manually consume fuel from the store.
- *
- * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set then
- * this function will return an error. Otherwise this will attempt to consume
- * the specified amount of `fuel` from the store. If successful the remaining
- * amount of fuel is stored into `remaining`. If `fuel` couldn't be consumed
- * then an error is returned.
- *
- * Also note that fuel, if enabled, must be originally configured via
- * #wasmtime_context_add_fuel.
- */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_context_consume_fuel(wasmtime_context_t *context, uint64_t fuel, uint64_t *remaining);
+WASM_API_EXTERN wasmtime_error_t* wasmtime_context_get_fuel(const wasmtime_context_t *context, uint64_t *fuel);
 
 /**
  * \brief Configures WASI state within the specified store.
@@ -229,19 +200,44 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *
  */
 WASM_API_EXTERN void wasmtime_context_set_epoch_deadline(wasmtime_context_t *context, uint64_t ticks_beyond_current);
 
+/// \brief An enum for the behavior before extending the epoch deadline.
+typedef uint8_t wasmtime_update_deadline_kind_t;
+/// \brief Directly continue to updating the deadline and executing WebAssembly.
+#define WASMTIME_UPDATE_DEADLINE_CONTINUE 0
+/// \brief Yield control (via async support) then update the deadline.
+#define WASMTIME_UPDATE_DEADLINE_YIELD    1
+
 /**
  * \brief Configures epoch deadline callback to C function.
  *
  * This function configures a store-local callback function that will be
  * called when the running WebAssembly function has exceeded its epoch
- * deadline. That function can return a #wasmtime_error_t to terminate
- * the function, or set the delta argument and return NULL to update the
- * epoch deadline and resume function execution.
+ * deadline. That function can:
+ * - return a #wasmtime_error_t to terminate the function
+ * - set the delta argument and return NULL to update the
+ *   epoch deadline delta and resume function execution.
+ * - set the delta argument, update the epoch deadline, 
+ *   set update_kind to WASMTIME_UPDATE_DEADLINE_YIELD,
+ *   and return NULL to yield (via async support) and 
+ *   resume function execution.
+ *
+ * To use WASMTIME_UPDATE_DEADLINE_YIELD async support must be enabled 
+ * for this store.
  *
  * See also #wasmtime_config_epoch_interruption_set and
  * #wasmtime_context_set_epoch_deadline.
  */
-WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(wasmtime_store_t *store, wasmtime_error_t* (*func)(wasmtime_context_t*, void*, uint64_t*), void *data);
+WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(
+    wasmtime_store_t *store, 
+    wasmtime_error_t* (*func)(
+      wasmtime_context_t* context, 
+      void* data, 
+      uint64_t* epoch_deadline_delta, 
+      wasmtime_update_deadline_kind_t* update_kind
+    ), 
+    void *data,
+    void (*finalizer)(void*)
+);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -1,6 +1,6 @@
 use crate::r#ref::ExternRef;
 use crate::store::StoreOpaque;
-use crate::{AsContextMut, Func, ValType};
+use crate::{AsContextMut, Func, ValType, V128};
 use anyhow::{bail, Result};
 use std::ptr;
 use wasmtime_runtime::TableElement;
@@ -32,7 +32,7 @@ pub enum Val {
     F64(u64),
 
     /// A 128-bit number
-    V128(u128),
+    V128(V128),
 
     /// A first-class reference to a WebAssembly function.
     ///
@@ -107,7 +107,7 @@ impl Val {
             Val::I64(i) => ValRaw::i64(*i),
             Val::F32(u) => ValRaw::f32(*u),
             Val::F64(u) => ValRaw::f64(*u),
-            Val::V128(b) => ValRaw::v128(*b),
+            Val::V128(b) => ValRaw::v128(b.as_u128()),
             Val::ExternRef(e) => {
                 let externref = match e {
                     Some(e) => e.to_raw(store),
@@ -138,7 +138,7 @@ impl Val {
             ValType::I64 => Val::I64(raw.get_i64()),
             ValType::F32 => Val::F32(raw.get_f32()),
             ValType::F64 => Val::F64(raw.get_f64()),
-            ValType::V128 => Val::V128(raw.get_v128()),
+            ValType::V128 => Val::V128(raw.get_v128().into()),
             ValType::ExternRef => Val::ExternRef(ExternRef::from_raw(raw.get_externref())),
             ValType::FuncRef => Val::FuncRef(Func::from_raw(store, raw.get_funcref())),
         }
@@ -151,7 +151,7 @@ impl Val {
         (F32(f32) f32 unwrap_f32 f32::from_bits(*e))
         (F64(f64) f64 unwrap_f64 f64::from_bits(*e))
         (FuncRef(Option<&Func>) funcref unwrap_funcref e.as_ref())
-        (V128(u128) v128 unwrap_v128 *e)
+        (V128(V128) v128 unwrap_v128 *e)
     }
 
     /// Attempt to access the underlying `externref` value of this `Val`.
@@ -194,9 +194,7 @@ impl Val {
                 if !f.comes_from_same_store(store) {
                     bail!("cross-`Store` values are not supported in tables");
                 }
-                Ok(TableElement::FuncRef(
-                    f.caller_checked_func_ref(store).as_ptr(),
-                ))
+                Ok(TableElement::FuncRef(f.vm_func_ref(store).as_ptr()))
             }
             (Val::FuncRef(None), ValType::FuncRef) => Ok(TableElement::FuncRef(ptr::null_mut())),
             (Val::ExternRef(Some(x)), ValType::ExternRef) => {
@@ -285,6 +283,13 @@ impl From<Func> for Val {
 impl From<u128> for Val {
     #[inline]
     fn from(val: u128) -> Val {
+        Val::V128(val.into())
+    }
+}
+
+impl From<V128> for Val {
+    #[inline]
+    fn from(val: V128) -> Val {
         Val::V128(val)
     }
 }

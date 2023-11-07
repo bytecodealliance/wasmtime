@@ -106,8 +106,8 @@ block3(v7: r64, v8: r64):
 ;   uxtb w12, w0
 ;   cbnz x12, label2 ; b label1
 ; block1:
-;   mov x1, x24
 ;   ldr x0, [sp, #16]
+;   mov x1, x24
 ;   b label3
 ; block2:
 ;   mov x0, x24
@@ -144,8 +144,8 @@ block3(v7: r64, v8: r64):
 ;   uxtb w12, w0
 ;   cbnz x12, #0x58
 ; block2: ; offset 0x4c
-;   mov x1, x24
 ;   ldur x0, [sp, #0x10]
+;   mov x1, x24
 ;   b #0x60
 ; block3: ; offset 0x58
 ;   mov x0, x24

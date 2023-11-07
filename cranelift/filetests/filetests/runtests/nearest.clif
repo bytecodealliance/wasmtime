@@ -6,8 +6,8 @@ target x86_64 sse42
 target x86_64 sse42 has_avx
 target aarch64
 target s390x
-;; FIXME: needs support for vectors
-;;target riscv64
+target riscv64
+target riscv64 has_c has_zcb
 
 function %nearest_f32(f32) -> f32 {
 block0(v0: f32):
@@ -150,19 +150,3 @@ block0(v0: f64):
 ; run: %near_is_nan_f64(-sNaN:0x1) == 1
 ; run: %near_is_nan_f64(+sNaN:0x4000000000001) == 1
 ; run: %near_is_nan_f64(-sNaN:0x4000000000001) == 1
-
-function %nearest_f32x4(f32x4) -> f32x4 {
-block0(v0: f32x4):
-  v1 = nearest v0
-  return v1
-}
-; run: %nearest_f32x4([0x0.5 0x1.0 0x1.5 0x2.9]) == [0x0.0 0x1.0 0x1.0 0x1.8p1]
-; run: %nearest_f32x4([-0x0.5 -0x1.0 -0x1.5 -0x2.9]) == [-0x0.0 -0x1.0 -0x1.0 -0x1.8p1]
-
-function %nearest_f64x2(f64x2) -> f64x2 {
-block0(v0: f64x2):
-  v1 = nearest v0
-  return v1
-}
-; run: %nearest_f64x2([0x0.5 0x1.0]) == [0x0.0 0x1.0]
-; run: %nearest_f64x2([-0x0.5 -0x1.0]) == [-0x0.0 -0x1.0]

@@ -58,14 +58,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui t1,16
-;   addi a0,t1,4095
+;   lui a0,16
+;   addi a0,a0,-1
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui t1, 0x10
-;   addi a0, t1, -1
+;   lui a0, 0x10
+;   addi a0, a0, -1
 ;   ret
 
 function %f() -> i64 {
@@ -76,16 +76,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffff0000
+;   lui a0,65535
+;   slli a0,a0,4
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
-;   .byte 0x00, 0x00, 0xff, 0xff
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   lui a0, 0xffff
+;   slli a0, a0, 4
 ;   ret
 
 function %f() -> i64 {
@@ -96,16 +94,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffff00000000
+;   lui a0,65535
+;   slli a0,a0,20
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0xff, 0xff, 0x00, 0x00
+;   lui a0, 0xffff
+;   slli a0, a0, 0x14
 ;   ret
 
 function %f() -> i64 {
@@ -116,16 +112,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffff000000000000
+;   lui a0,65535
+;   slli a0,a0,36
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0xff, 0xff
+;   lui a0, 0xffff
+;   slli a0, a0, 0x24
 ;   ret
 
 function %f() -> i64 {
@@ -152,7 +146,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui a0,1048560
+;   lui a0,-16
 ;   ret
 ;
 ; Disassembled:
@@ -168,17 +162,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffffffff0000ffff
+;   ld a0,[const(0)]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0xff, 0xff, 0x00, 0x00
 ;   .byte 0xff, 0xff, 0xff, 0xff
-;   ret
 
 function %f() -> i64 {
 block0:
@@ -188,17 +182,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffff0000ffffffff
+;   ld a0,[const(0)]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0xff, 0xff, 0xff, 0xff
 ;   .byte 0x00, 0x00, 0xff, 0xff
-;   ret
 
 function %f() -> i64 {
 block0:
@@ -208,17 +202,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffffffffffff
+;   ld a0,[const(0)]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0xff, 0xff, 0xff, 0xff
 ;   .byte 0xff, 0xff, 0x00, 0x00
-;   ret
 
 function %f() -> i64 {
 block0:
@@ -228,17 +222,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xf34bf0a31212003a
+;   ld a0,[const(0)]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x3a, 0x00, 0x12, 0x12
 ;   .byte 0xa3, 0xf0, 0x4b, 0xf3
-;   ret
 
 function %f() -> i64 {
 block0:
@@ -248,17 +242,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0x12e900001ef40000
+;   ld a0,[const(0)]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0x00, 0x00, 0xf4, 0x1e
 ;   .byte 0x00, 0x00, 0xe9, 0x12
-;   ret
 
 function %f() -> i64 {
 block0:
@@ -268,17 +262,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0x12e9ffff1ef4ffff
+;   ld a0,[const(0)]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0xff, 0xff, 0xf4, 0x1e
 ;   .byte 0xff, 0xff, 0xe9, 0x12
-;   ret
 
 function %f() -> i32 {
 block0:
@@ -304,16 +298,12 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xfffffff7
+;   li a0,-9
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
-;   .byte 0xf7, 0xff, 0xff, 0xff
-;   .byte 0x00, 0x00, 0x00, 0x00
+;   addi a0, zero, -9
 ;   ret
 
 function %f() -> i64 {
@@ -324,17 +314,17 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xfffffff7
+;   ld a0,[const(0)]
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
-;   ld a0, 0xc(a0)
-;   j 0xc
+;   ld a0, 0x10(a0)
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
 ;   .byte 0xf7, 0xff, 0xff, 0xff
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   ret
 
 function %f() -> i64 {
 block0:
@@ -360,18 +350,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc t1,0; ld t1,12(t1); j 12; .8byte 0x3ff0000000000000
-;   fmv.d.x fa0,t1
+;   lui a0,1023
+;   slli a2,a0,40
+;   fmv.d.x fa0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc t1, 0
-;   ld t1, 0xc(t1)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0xf0, 0x3f
-;   fmv.d.x fa0, t1
+;   lui a0, 0x3ff
+;   slli a2, a0, 0x28
+;   fmv.d.x fa0, a2
 ;   ret
 
 function %f() -> f32 {
@@ -382,14 +370,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui t1,264704
-;   fmv.w.x fa0,t1
+;   lui a0,264704
+;   fmv.w.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui t1, 0x40a00
-;   fmv.w.x fa0, t1
+;   lui a0, 0x40a00
+;   fmv.w.x fa0, a0
 ;   ret
 
 function %f() -> f64 {
@@ -400,18 +388,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc t1,0; ld t1,12(t1); j 12; .8byte 0x4049000000000000
-;   fmv.d.x fa0,t1
+;   lui a0,16457
+;   slli a2,a0,36
+;   fmv.d.x fa0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc t1, 0
-;   ld t1, 0xc(t1)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x49, 0x40
-;   fmv.d.x fa0, t1
+;   lui a0, 0x4049
+;   slli a2, a0, 0x24
+;   fmv.d.x fa0, a2
 ;   ret
 
 function %f() -> f32 {
@@ -422,14 +408,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui t1,271488
-;   fmv.w.x fa0,t1
+;   lui a0,271488
+;   fmv.w.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui t1, 0x42480
-;   fmv.w.x fa0, t1
+;   lui a0, 0x42480
+;   fmv.w.x fa0, a0
 ;   ret
 
 function %f() -> f64 {
@@ -440,14 +426,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   li t1,0
-;   fmv.d.x fa0,t1
+;   li a0,0
+;   fmv.d.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv t1, zero
-;   fmv.d.x fa0, t1
+;   mv a0, zero
+;   fmv.d.x fa0, a0
 ;   ret
 
 function %f() -> f32 {
@@ -458,14 +444,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   li t1,0
-;   fmv.w.x fa0,t1
+;   li a0,0
+;   fmv.w.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv t1, zero
-;   fmv.w.x fa0, t1
+;   mv a0, zero
+;   fmv.w.x fa0, a0
 ;   ret
 
 function %f() -> f64 {
@@ -476,18 +462,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc t1,0; ld t1,12(t1); j 12; .8byte 0xc030000000000000
-;   fmv.d.x fa0,t1
+;   lui a0,3075
+;   slli a2,a0,40
+;   fmv.d.x fa0,a2
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc t1, 0
-;   ld t1, 0xc(t1)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00
-;   .byte 0x00, 0x00, 0x30, 0xc0
-;   fmv.d.x fa0, t1
+;   lui a0, 0xc03
+;   slli a2, a0, 0x28
+;   fmv.d.x fa0, a2
 ;   ret
 
 function %f() -> f32 {
@@ -498,16 +482,64 @@ block0:
 
 ; VCode:
 ; block0:
-;   auipc t1,0; ld t1,12(t1); j 8; .4byte 0xc1800000
-;   fmv.w.x fa0,t1
+;   lui a0,-256000
+;   fmv.w.x fa0,a0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   auipc t1, 0
-;   lwu t1, 0xc(t1)
-;   j 8
-;   .byte 0x00, 0x00, 0x80, 0xc1
-;   fmv.w.x fa0, t1
+;   lui a0, 0xc1800
+;   fmv.w.x fa0, a0
 ;   ret
 
+function %addi_1() -> i64 {
+block0:
+  v0 = iconst.i64 0xfff
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,1
+;   addi a0,a0,-1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 1
+;   addi a0, a0, -1
+;   ret
+
+function %addi_2() -> i64 {
+block0:
+  v0 = iconst.i64 0x800
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,1
+;   addi a0,a0,-2048
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 1
+;   addi a0, a0, -0x800
+;   ret
+
+function %addi_3() -> i64 {
+block0:
+  v0 = iconst.i64 0x7ff
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,2047
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a0, zero, 0x7ff
+;   ret

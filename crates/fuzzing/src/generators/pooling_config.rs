@@ -1,6 +1,7 @@
 //! Generate instance limits for the pooling allocation strategy.
 
 use arbitrary::{Arbitrary, Unstructured};
+use wasmtime::MpkEnabled;
 
 /// Configuration for `wasmtime::PoolingAllocationStrategy`.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -30,6 +31,9 @@ pub struct PoolingAllocationConfig {
 
     pub async_stack_zeroing: bool,
     pub async_stack_keep_resident: usize,
+
+    pub memory_protection_keys: MpkEnabled,
+    pub max_memory_protection_keys: usize,
 }
 
 impl PoolingAllocationConfig {
@@ -61,6 +65,8 @@ impl PoolingAllocationConfig {
 
         cfg.async_stack_zeroing(self.async_stack_zeroing);
         cfg.async_stack_keep_resident(self.async_stack_keep_resident);
+
+        cfg.memory_protection_keys(self.memory_protection_keys);
 
         cfg
     }
@@ -104,6 +110,9 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
 
             async_stack_zeroing: u.arbitrary()?,
             async_stack_keep_resident: u.int_in_range(0..=1 << 20)?,
+
+            memory_protection_keys: u.choose(&[MpkEnabled::Auto, MpkEnabled::Disable])?.clone(),
+            max_memory_protection_keys: u.int_in_range(0..=20)?,
         })
     }
 }

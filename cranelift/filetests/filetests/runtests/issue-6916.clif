@@ -1,0 +1,44 @@
+test interpret
+test run
+set opt_level=speed
+target x86_64
+target x86_64 has_avx
+target aarch64
+target s390x
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %simd_band(f32, f32) -> f32x4 fast {
+block0(v0: f32, v1: f32):
+    v2 = splat.f32x4 v0
+    v3 = splat.f32x4 v1
+    v4 = band v2, v3
+    return v4
+}
+; run: %simd_band(0x1.0, 0x1.0) == [0x1.0 0x1.0 0x1.0 0x1.0]
+
+function %simd_bor(f32, f32) -> f32x4 fast {
+block0(v0: f32, v1: f32):
+    v2 = splat.f32x4 v0
+    v3 = splat.f32x4 v1
+    v4 = bor v2, v3
+    return v4
+}
+; run: %simd_bor(0x1.0, 0x1.0) == [0x1.0 0x1.0 0x1.0 0x1.0]
+
+function %simd_bxor(f32, f32) -> f32x4 fast {
+block0(v0: f32, v1: f32):
+    v2 = splat.f32x4 v0
+    v3 = splat.f32x4 v1
+    v4 = bxor v2, v3
+    return v4
+}
+; run: %simd_bxor(0x1.0, 0x1.0) == [0x0.0 0x0.0 0x0.0 0x0.0]
+
+function %simd_bnot(f32) -> f32x4 fast {
+block0(v0: f32):
+    v1 = splat.f32x4 v0
+    v2 = bnot v1
+    return v2
+}
+; run: %simd_bnot(0x1.0) == [-0x1.fffffep1 -0x1.fffffep1 -0x1.fffffep1 -0x1.fffffep1]

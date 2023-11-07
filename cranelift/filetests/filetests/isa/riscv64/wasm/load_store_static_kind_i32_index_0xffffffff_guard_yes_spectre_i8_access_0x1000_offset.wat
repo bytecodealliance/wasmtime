@@ -39,26 +39,22 @@
 
 ;; function u0:0:
 ;; block0:
-;;   slli a5,a0,32
-;;   srli a7,a5,32
-;;   ld a6,0(a2)
-;;   add a6,a6,a7
-;;   lui a7,1
-;;   add a6,a6,a7
-;;   sb a1,0(a6)
+;;   slli a0,a0,32
+;;   srli a3,a0,32
+;;   ld a2,0(a2)
+;;   add a2,a2,a3
+;;   sb a1,4096(a2)
 ;;   j label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   slli a5,a0,32
-;;   srli a7,a5,32
-;;   ld a6,0(a1)
-;;   add a6,a6,a7
-;;   lui a7,1
-;;   add a6,a6,a7
-;;   lbu a0,0(a6)
+;;   slli a0,a0,32
+;;   srli a2,a0,32
+;;   ld a1,0(a1)
+;;   add a1,a1,a2
+;;   lbu a0,4096(a1)
 ;;   j label1
 ;; block1:
 ;;   ret

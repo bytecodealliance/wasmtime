@@ -32,6 +32,8 @@ pub type InstOutput = SmallVec<[ValueRegs; 2]>;
 pub type InstOutputBuilder = Cell<InstOutput>;
 pub type BoxExternalName = Box<ExternalName>;
 pub type Range = (usize, usize);
+pub type MachLabelSlice = [MachLabel];
+pub type BoxVecMachLabel = Box<Vec<MachLabel>>;
 
 pub enum RangeView {
     Empty,
@@ -59,6 +61,16 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn value_regs(&mut self, r1: Reg, r2: Reg) -> ValueRegs {
             ValueRegs::two(r1, r2)
+        }
+
+        #[inline]
+        fn writable_value_regs(&mut self, r1: WritableReg, r2: WritableReg) -> WritableValueRegs {
+            WritableValueRegs::two(r1, r2)
+        }
+
+        #[inline]
+        fn writable_value_reg(&mut self, r: WritableReg) -> WritableValueRegs {
+            WritableValueRegs::one(r)
         }
 
         #[inline]
@@ -207,6 +219,15 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn def_inst(&mut self, val: Value) -> Option<Inst> {
             self.lower_ctx.dfg().value_def(val).inst()
+        }
+
+        #[inline]
+        fn i64_from_iconst(&mut self, val: Value) -> Option<i64> {
+            let inst = self.def_inst(val)?;
+            let constant = self.lower_ctx.get_constant(inst)? as i64;
+            let ty = self.lower_ctx.output_ty(inst, 0);
+            let shift_amt = std::cmp::max(0, 64 - self.ty_bits(ty));
+            Some((constant << shift_amt) >> shift_amt)
         }
 
         fn zero_value(&mut self, value: Value) -> Option<Value> {
@@ -627,6 +648,45 @@ macro_rules! isle_lower_prelude_methods {
             } else {
                 Some(bits as u64)
             }
+        }
+
+        fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
+            if targets.len() == 1 {
+                Some(targets[0])
+            } else {
+                None
+            }
+        }
+
+        fn two_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, MachLabel)> {
+            if targets.len() == 2 {
+                Some((targets[0], targets[1]))
+            } else {
+                None
+            }
+        }
+
+        fn jump_table_targets(
+            &mut self,
+            targets: &MachLabelSlice,
+        ) -> Option<(MachLabel, BoxVecMachLabel)> {
+            use std::boxed::Box;
+            if targets.is_empty() {
+                return None;
+            }
+
+            let default_label = targets[0];
+            let jt_targets = Box::new(targets[1..].to_vec());
+            Some((default_label, jt_targets))
+        }
+
+        fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
+            targets.len() as u32
+        }
+
+        fn add_range_fact(&mut self, reg: Reg, bits: u16, min: u64, max: u64) -> Reg {
+            self.lower_ctx.add_range_fact(reg, bits, min, max);
+            reg
         }
     };
 }

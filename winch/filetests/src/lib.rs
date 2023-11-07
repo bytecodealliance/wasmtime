@@ -5,16 +5,17 @@ mod test {
     use super::disasm::disasm;
     use anyhow::Context;
     use cranelift_codegen::settings::{self, Configurable};
-    use serde::{Deserialize, Serialize};
+    use serde_derive::{Deserialize, Serialize};
     use similar::TextDiff;
     use std::str::FromStr;
     use target_lexicon::Triple;
     use wasmtime_environ::ModuleTranslation;
     use wasmtime_environ::{
         wasmparser::{Parser as WasmParser, Validator},
-        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables, TypeConvert,
+        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTypes, Tunables, TypeConvert,
+        VMOffsets,
     };
-    use winch_codegen::{lookup, TargetIsa};
+    use winch_codegen::{lookup, BuiltinFunctions, TargetIsa};
     use winch_test_macros::generate_file_tests;
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -108,13 +109,13 @@ mod test {
             .translate(parser, &wasm)
             .context("Failed to translate WebAssembly module")
             .unwrap();
-        let _ = types.finish();
+        let types = types.finish();
 
         let body_inputs = std::mem::take(&mut translation.function_body_inputs);
 
         let binding = body_inputs
             .into_iter()
-            .map(|func| compile(&isa, &translation, func).join("\n"))
+            .map(|func| compile(&isa, &types, &translation, func).join("\n"))
             .collect::<Vec<String>>()
             .join("\n\n");
         let actual = binding.as_str();
@@ -147,6 +148,7 @@ mod test {
 
     fn compile(
         isa: &Box<dyn TargetIsa>,
+        module_types: &ModuleTypes,
         translation: &ModuleTranslation,
         f: (DefinedFuncIndex, FunctionBodyData<'_>),
     ) -> Vec<String> {
@@ -154,13 +156,22 @@ mod test {
         let types = &translation.get_types();
 
         let index = module.func_index(f.0);
-        let sig = types[types.function_at(index.as_u32())].unwrap_func();
+        let sig = types[types.core_function_at(index.as_u32())].unwrap_func();
         let sig = translation.module.convert_func_type(&sig);
 
+        let vmoffsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
+        let mut builtins = BuiltinFunctions::new(&vmoffsets, isa.wasmtime_call_conv());
         let FunctionBodyData { body, validator } = f.1;
         let mut validator = validator.into_validator(Default::default());
         let buffer = isa
-            .compile_function(&sig, &body, &translation, &mut validator)
+            .compile_function(
+                &sig,
+                &body,
+                translation,
+                module_types,
+                &mut builtins,
+                &mut validator,
+            )
             .expect("Couldn't compile function");
 
         disasm(buffer.data(), isa).unwrap()

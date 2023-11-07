@@ -9,11 +9,14 @@ use std::string::String;
 use std::vec::Vec;
 
 use crate::module::ModuleReloc;
-use crate::ModuleExtName;
+use crate::ModuleRelocTarget;
 
 /// This specifies how data is to be initialized.
 #[derive(Clone, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub enum Init {
     /// This indicates that no initialization has been specified yet.
     Uninitialized,
@@ -42,14 +45,17 @@ impl Init {
 
 /// A description of a data object.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct DataDescription {
     /// How the data should be initialized.
     pub init: Init,
     /// External function declarations.
-    pub function_decls: PrimaryMap<ir::FuncRef, ModuleExtName>,
+    pub function_decls: PrimaryMap<ir::FuncRef, ModuleRelocTarget>,
     /// External data object declarations.
-    pub data_decls: PrimaryMap<ir::GlobalValue, ModuleExtName>,
+    pub data_decls: PrimaryMap<ir::GlobalValue, ModuleRelocTarget>,
     /// Function addresses to write at specified offsets.
     pub function_relocs: Vec<(CodeOffset, ir::FuncRef)>,
     /// Data addresses to write at specified offsets.
@@ -116,7 +122,7 @@ impl DataDescription {
     /// Users of the `Module` API generally should call
     /// `Module::declare_func_in_data` instead, as it takes care of generating
     /// the appropriate `ExternalName`.
-    pub fn import_function(&mut self, name: ModuleExtName) -> ir::FuncRef {
+    pub fn import_function(&mut self, name: ModuleRelocTarget) -> ir::FuncRef {
         self.function_decls.push(name)
     }
 
@@ -127,7 +133,7 @@ impl DataDescription {
     /// Users of the `Module` API generally should call
     /// `Module::declare_data_in_data` instead, as it takes care of generating
     /// the appropriate `ExternalName`.
-    pub fn import_global_value(&mut self, name: ModuleExtName) -> ir::GlobalValue {
+    pub fn import_global_value(&mut self, name: ModuleRelocTarget) -> ir::GlobalValue {
         self.data_decls.push(name)
     }
 
@@ -170,7 +176,7 @@ impl DataDescription {
 
 #[cfg(test)]
 mod tests {
-    use crate::ModuleExtName;
+    use crate::ModuleRelocTarget;
 
     use super::{DataDescription, Init};
 
@@ -185,11 +191,11 @@ mod tests {
 
         data.define_zeroinit(256);
 
-        let _func_a = data.import_function(ModuleExtName::user(0, 0));
-        let func_b = data.import_function(ModuleExtName::user(0, 1));
-        let func_c = data.import_function(ModuleExtName::user(0, 2));
-        let _data_a = data.import_global_value(ModuleExtName::user(0, 3));
-        let data_b = data.import_global_value(ModuleExtName::user(0, 4));
+        let _func_a = data.import_function(ModuleRelocTarget::user(0, 0));
+        let func_b = data.import_function(ModuleRelocTarget::user(0, 1));
+        let func_c = data.import_function(ModuleRelocTarget::user(0, 2));
+        let _data_a = data.import_global_value(ModuleRelocTarget::user(0, 3));
+        let data_b = data.import_global_value(ModuleRelocTarget::user(0, 4));
 
         data.write_function_addr(8, func_b);
         data.write_function_addr(16, func_c);

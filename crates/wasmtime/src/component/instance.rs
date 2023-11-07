@@ -194,18 +194,22 @@ impl InstanceData {
         instance.get_export_by_index(idx)
     }
 
+    #[inline]
     pub fn instance(&self) -> &ComponentInstance {
         &self.state
     }
 
+    #[inline]
     pub fn instance_ptr(&self) -> *mut ComponentInstance {
         self.state.instance_ptr()
     }
 
+    #[inline]
     pub fn component_types(&self) -> &Arc<ComponentTypes> {
         self.component.types()
     }
 
+    #[inline]
     pub fn ty(&self) -> InstanceType<'_> {
         InstanceType::new(self.instance())
     }

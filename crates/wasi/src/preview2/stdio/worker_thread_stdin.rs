@@ -1,140 +1,173 @@
-use crate::preview2::{HostInputStream, StreamState};
-use anyhow::Error;
+//! Handling for standard in using a worker task.
+//!
+//! Standard input is a global singleton resource for the entire program which
+//! needs special care. Currently this implementation adheres to a few
+//! constraints which make this nontrivial to implement.
+//!
+//! * Any number of guest wasm programs can read stdin. While this doesn't make
+//!   a ton of sense semantically they shouldn't block forever. Instead it's a
+//!   race to see who actually reads which parts of stdin.
+//!
+//! * Data from stdin isn't actually read unless requested. This is done to try
+//!   to be a good neighbor to others running in the process. Under the
+//!   assumption that most programs have one "thing" which reads stdin the
+//!   actual consumption of bytes is delayed until the wasm guest is dynamically
+//!   chosen to be that "thing". Before that data from stdin is not consumed to
+//!   avoid taking it from other components in the process.
+//!
+//! * Tokio's documentation indicates that "interactive stdin" is best done with
+//!   a helper thread to avoid blocking shutdown of the event loop. That's
+//!   respected here where all stdin reading happens on a blocking helper thread
+//!   that, at this time, is never shut down.
+//!
+//! This module is one that's likely to change over time though as new systems
+//! are encountered along with preexisting bugs.
+
+use crate::preview2::poll::Subscribe;
+use crate::preview2::stdio::StdinStream;
+use crate::preview2::{HostInputStream, StreamError};
 use bytes::{Bytes, BytesMut};
-use std::io::Read;
-use std::sync::Arc;
-use tokio::sync::watch;
+use std::io::{IsTerminal, Read};
+use std::mem;
+use std::sync::{Condvar, Mutex, OnceLock};
+use tokio::sync::Notify;
 
-// wasmtime cant use std::sync::OnceLock yet because of a llvm regression in
-// 1.70. when 1.71 is released, we can switch to using std here.
-use once_cell::sync::OnceCell as OnceLock;
-
-use std::sync::Mutex;
-
+#[derive(Default)]
 struct GlobalStdin {
-    // Worker thread uses this to notify of new events. Ready checks use this
-    // to create a new Receiver via .subscribe(). The newly created receiver
-    // will only wait for events created after the call to subscribe().
-    tx: Arc<watch::Sender<()>>,
-    // Worker thread and receivers share this state to get bytes read off
-    // stdin, or the error/closed state.
-    state: Arc<Mutex<StdinState>>,
+    state: Mutex<StdinState>,
+    read_requested: Condvar,
+    read_completed: Notify,
 }
 
-#[derive(Debug)]
-struct StdinState {
-    // Bytes read off stdin.
-    buffer: BytesMut,
-    // Error read off stdin, if any.
-    error: Option<std::io::Error>,
-    // If an error has occured in the past, we consider the stream closed.
-    closed: bool,
+#[derive(Default, Debug)]
+enum StdinState {
+    #[default]
+    ReadNotRequested,
+    ReadRequested,
+    Data(BytesMut),
+    Error(std::io::Error),
+    Closed,
 }
 
-static STDIN: OnceLock<GlobalStdin> = OnceLock::new();
+impl GlobalStdin {
+    fn get() -> &'static GlobalStdin {
+        static STDIN: OnceLock<GlobalStdin> = OnceLock::new();
+        STDIN.get_or_init(|| create())
+    }
+}
 
 fn create() -> GlobalStdin {
-    let (tx, _rx) = watch::channel(());
-    let tx = Arc::new(tx);
+    std::thread::spawn(|| {
+        let state = GlobalStdin::get();
+        loop {
+            // Wait for a read to be requested, but don't hold the lock across
+            // the blocking read.
+            let mut lock = state.state.lock().unwrap();
+            lock = state
+                .read_requested
+                .wait_while(lock, |state| !matches!(state, StdinState::ReadRequested))
+                .unwrap();
+            drop(lock);
 
-    let state = Arc::new(Mutex::new(StdinState {
-        buffer: BytesMut::new(),
-        error: None,
-        closed: false,
-    }));
-
-    let ret = GlobalStdin {
-        state: state.clone(),
-        tx: tx.clone(),
-    };
-
-    std::thread::spawn(move || loop {
-        let mut bytes = BytesMut::zeroed(1024);
-        match std::io::stdin().lock().read(&mut bytes) {
-            // Reading `0` indicates that stdin has reached EOF, so we break
-            // the loop to allow the thread to exit.
-            Ok(0) => break,
-
-            Ok(nbytes) => {
-                // Append to the buffer:
-                bytes.truncate(nbytes);
-                let mut locked = state.lock().unwrap();
-                locked.buffer.extend_from_slice(&bytes);
-            }
-            Err(e) => {
-                // Set the error, and mark the stream as closed:
-                let mut locked = state.lock().unwrap();
-                if locked.error.is_none() {
-                    locked.error = Some(e)
+            let mut bytes = BytesMut::zeroed(1024);
+            let (new_state, done) = match std::io::stdin().read(&mut bytes) {
+                Ok(0) => (StdinState::Closed, true),
+                Ok(nbytes) => {
+                    bytes.truncate(nbytes);
+                    (StdinState::Data(bytes), false)
                 }
-                locked.closed = true;
+                Err(e) => (StdinState::Error(e), true),
+            };
+
+            // After the blocking read completes the state should not have been
+            // tampered with.
+            debug_assert!(matches!(
+                *state.state.lock().unwrap(),
+                StdinState::ReadRequested
+            ));
+            *state.state.lock().unwrap() = new_state;
+            state.read_completed.notify_waiters();
+            if done {
+                break;
             }
         }
-        // Receivers may or may not exist - fine if they dont, new
-        // ones will be created with subscribe()
-        let _ = tx.send(());
     });
-    ret
+
+    GlobalStdin::default()
 }
 
 /// Only public interface is the [`HostInputStream`] impl.
 #[derive(Clone)]
 pub struct Stdin;
-impl Stdin {
-    // Private! Only required internally.
-    fn get_global() -> &'static GlobalStdin {
-        STDIN.get_or_init(|| create())
-    }
-}
 
 pub fn stdin() -> Stdin {
     Stdin
 }
 
-impl is_terminal::IsTerminal for Stdin {
-    fn is_terminal(&self) -> bool {
+impl StdinStream for Stdin {
+    fn stream(&self) -> Box<dyn HostInputStream> {
+        Box::new(Stdin)
+    }
+
+    fn isatty(&self) -> bool {
         std::io::stdin().is_terminal()
     }
 }
 
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
-    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        let g = Stdin::get_global();
+    fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
+        let g = GlobalStdin::get();
         let mut locked = g.state.lock().unwrap();
-
-        if let Some(e) = locked.error.take() {
-            return Err(e.into());
-        }
-        let size = locked.buffer.len().min(size);
-        let bytes = locked.buffer.split_to(size);
-        let state = if locked.buffer.is_empty() && locked.closed {
-            StreamState::Closed
-        } else {
-            StreamState::Open
-        };
-        Ok((bytes.freeze(), state))
-    }
-
-    async fn ready(&mut self) -> Result<(), Error> {
-        let g = Stdin::get_global();
-
-        // Block makes sure we dont hold the mutex across the await:
-        let mut rx = {
-            let locked = g.state.lock().unwrap();
-            // read() will only return (empty, open) when the buffer is empty,
-            // AND there is no error AND the stream is still open:
-            if !locked.buffer.is_empty() || locked.error.is_some() || locked.closed {
-                return Ok(());
+        match mem::replace(&mut *locked, StdinState::ReadRequested) {
+            StdinState::ReadNotRequested => {
+                g.read_requested.notify_one();
+                Ok(Bytes::new())
             }
-            // Sender will take the mutex before updating the state of
-            // subscribe, so this ensures we will only await for any stdin
-            // events that are recorded after we drop the mutex:
-            g.tx.subscribe()
+            StdinState::ReadRequested => Ok(Bytes::new()),
+            StdinState::Data(mut data) => {
+                let size = data.len().min(size);
+                let bytes = data.split_to(size);
+                *locked = if data.is_empty() {
+                    StdinState::ReadNotRequested
+                } else {
+                    StdinState::Data(data)
+                };
+                Ok(bytes.freeze())
+            }
+            StdinState::Error(e) => {
+                *locked = StdinState::Closed;
+                Err(StreamError::LastOperationFailed(e.into()))
+            }
+            StdinState::Closed => {
+                *locked = StdinState::Closed;
+                Err(StreamError::Closed)
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Subscribe for Stdin {
+    async fn ready(&mut self) {
+        let g = GlobalStdin::get();
+
+        // Scope the synchronous `state.lock()` to this block which does not
+        // `.await` inside of it.
+        let notified = {
+            let mut locked = g.state.lock().unwrap();
+            match *locked {
+                // If a read isn't requested yet
+                StdinState::ReadNotRequested => {
+                    g.read_requested.notify_one();
+                    *locked = StdinState::ReadRequested;
+                    g.read_completed.notified()
+                }
+                StdinState::ReadRequested => g.read_completed.notified(),
+                StdinState::Data(_) | StdinState::Closed | StdinState::Error(_) => return,
+            }
         };
 
-        rx.changed().await.expect("impossible for sender to drop");
-
-        Ok(())
+        notified.await;
     }
 }

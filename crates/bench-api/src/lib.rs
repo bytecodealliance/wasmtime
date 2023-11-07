@@ -143,7 +143,7 @@ use std::slice;
 use std::{env, path::PathBuf};
 use target_lexicon::Triple;
 use wasmtime::{Engine, Instance, Linker, Module, Store};
-use wasmtime_cli_flags::{CommonOptions, WasiModules};
+use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wasi::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
 
 pub type ExitCode = c_int;
@@ -305,30 +305,30 @@ pub extern "C" fn wasm_bench_create(
                     .with_context(|| format!("failed to create {}", stdout_path.display()))?;
                 let stdout = cap_std::fs::File::from_std(stdout);
                 let stdout = wasi_cap_std_sync::file::File::from_cap_std(stdout);
-                cx = cx.stdout(Box::new(stdout));
+                cx.stdout(Box::new(stdout));
 
                 let stderr = std::fs::File::create(&stderr_path)
                     .with_context(|| format!("failed to create {}", stderr_path.display()))?;
                 let stderr = cap_std::fs::File::from_std(stderr);
                 let stderr = wasi_cap_std_sync::file::File::from_cap_std(stderr);
-                cx = cx.stderr(Box::new(stderr));
+                cx.stderr(Box::new(stderr));
 
                 if let Some(stdin_path) = &stdin_path {
                     let stdin = std::fs::File::open(stdin_path)
                         .with_context(|| format!("failed to open {}", stdin_path.display()))?;
                     let stdin = cap_std::fs::File::from_std(stdin);
                     let stdin = wasi_cap_std_sync::file::File::from_cap_std(stdin);
-                    cx = cx.stdin(Box::new(stdin));
+                    cx.stdin(Box::new(stdin));
                 }
 
                 // Allow access to the working directory so that the benchmark can read
                 // its input workload(s).
-                cx = cx.preopened_dir(working_dir.try_clone()?, ".")?;
+                cx.preopened_dir(working_dir.try_clone()?, ".")?;
 
                 // Pass this env var along so that the benchmark program can use smaller
                 // input workload(s) if it has them and that has been requested.
                 if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
-                    cx = cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
+                    cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
                 }
 
                 Ok(cx.build())
@@ -423,7 +423,7 @@ struct HostState {
 
 impl BenchState {
     fn new(
-        options: CommonOptions,
+        mut options: CommonOptions,
         compilation_timer: *mut u8,
         compilation_start: extern "C" fn(*mut u8),
         compilation_end: extern "C" fn(*mut u8),
@@ -456,18 +456,16 @@ impl BenchState {
             Ok(())
         })?;
 
-        let epoch_interruption = options.epoch_interruption;
-        let fuel = options.fuel;
+        let epoch_interruption = options.wasm.epoch_interruption.unwrap_or(false);
+        let fuel = options.wasm.fuel;
 
-        let wasi_modules = options.wasi_modules.unwrap_or(WasiModules::default());
-
-        if wasi_modules.wasi_common {
+        if options.wasi.common != Some(false) {
             wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
         }
 
         #[cfg(feature = "wasi-nn")]
-        if wasi_modules.wasi_nn {
-            wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
+        if options.wasi.nn == Some(true) {
+            wasmtime_wasi_nn::witx::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
         }
 
         Ok(Self {
@@ -509,7 +507,10 @@ impl BenchState {
         let host = HostState {
             wasi: (self.make_wasi_cx)().context("failed to create a WASI context")?,
             #[cfg(feature = "wasi-nn")]
-            wasi_nn: wasmtime_wasi_nn::WasiNnCtx::new()?,
+            wasi_nn: {
+                let (backends, registry) = wasmtime_wasi_nn::preload(&[])?;
+                wasmtime_wasi_nn::WasiNnCtx::new(backends, registry)
+            },
         };
 
         // NB: Start measuring instantiation time *after* we've created the WASI
@@ -521,7 +522,7 @@ impl BenchState {
             store.set_epoch_deadline(1);
         }
         if let Some(fuel) = self.fuel {
-            store.add_fuel(fuel).unwrap();
+            store.set_fuel(fuel).unwrap();
         }
 
         let instance = self.linker.instantiate(&mut store, &module)?;

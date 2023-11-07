@@ -3,10 +3,12 @@
 // ISLE integration glue.
 pub(super) mod isle;
 
+use crate::ir::pcc::{FactContext, PccResult};
 use crate::ir::{types, ExternalName, Inst as IRInst, LibCall, Opcode, Type};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
+use crate::isa::x64::pcc;
 use crate::isa::{x64::X64Backend, CallConv};
 use crate::machinst::abi::SmallInstVec;
 use crate::machinst::lower::*;
@@ -337,4 +339,16 @@ impl LowerBackend for X64Backend {
     fn maybe_pinned_reg(&self) -> Option<Reg> {
         Some(regs::pinned_reg())
     }
+
+    fn check_fact(
+        &self,
+        ctx: &FactContext<'_>,
+        vcode: &mut VCode<Self::MInst>,
+        inst: InsnIndex,
+        state: &mut pcc::FactFlowState,
+    ) -> PccResult<()> {
+        pcc::check(ctx, vcode, inst, state)
+    }
+
+    type FactFlowState = pcc::FactFlowState;
 }

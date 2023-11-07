@@ -795,16 +795,16 @@ where
         Opcode::BandImm => binary(DataValueExt::and, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::BorImm => binary(DataValueExt::or, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::BxorImm => binary(DataValueExt::xor, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::Rotl => binary(DataValueExt::rotl, arg(0), arg(1))?,
-        Opcode::Rotr => binary(DataValueExt::rotr, arg(0), arg(1))?,
-        Opcode::RotlImm => binary(DataValueExt::rotl, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::RotrImm => binary(DataValueExt::rotr, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::Ishl => binary(DataValueExt::shl, arg(0), arg(1))?,
-        Opcode::Ushr => binary(DataValueExt::ushr, arg(0), arg(1))?,
-        Opcode::Sshr => binary(DataValueExt::sshr, arg(0), arg(1))?,
-        Opcode::IshlImm => binary(DataValueExt::shl, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::UshrImm => binary(DataValueExt::ushr, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::SshrImm => binary(DataValueExt::sshr, arg(0), imm_as_ctrl_ty()?)?,
+        Opcode::Rotl => binary(DataValueExt::rotl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
+        Opcode::Rotr => binary(DataValueExt::rotr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
+        Opcode::RotlImm => binary(DataValueExt::rotl, arg(0), shift_amt(ctrl_ty, imm())?)?,
+        Opcode::RotrImm => binary(DataValueExt::rotr, arg(0), shift_amt(ctrl_ty, imm())?)?,
+        Opcode::Ishl => binary(DataValueExt::shl, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
+        Opcode::Ushr => binary(DataValueExt::ushr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
+        Opcode::Sshr => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, arg(1))?)?,
+        Opcode::IshlImm => binary(DataValueExt::shl, arg(0), shift_amt(ctrl_ty, imm())?)?,
+        Opcode::UshrImm => binary(DataValueExt::ushr, arg(0), shift_amt(ctrl_ty, imm())?)?,
+        Opcode::SshrImm => binary(DataValueExt::sshr, arg(0), shift_amt(ctrl_ty, imm())?)?,
         Opcode::Bitrev => unary(DataValueExt::reverse_bits, arg(0))?,
         Opcode::Bswap => unary(DataValueExt::swap_bytes, arg(0))?,
         Opcode::Clz => unary(DataValueExt::leading_zeros, arg(0))?,
@@ -994,13 +994,7 @@ where
             }
             assign(DataValueExt::vector(new, types::I8X16)?)
         }
-        Opcode::Splat => {
-            let mut new_vector = SimdVec::new();
-            for _ in 0..ctrl_ty.lane_count() {
-                new_vector.push(arg(0));
-            }
-            assign(vectorizelanes(&new_vector, ctrl_ty)?)
-        }
+        Opcode::Splat => assign(splat(ctrl_ty, arg(0))?),
         Opcode::Insertlane => {
             let idx = imm().into_int_unsigned()? as usize;
             let mut vector = extractlanes(&arg(0), ctrl_ty)?;
@@ -1015,7 +1009,10 @@ where
         Opcode::VhighBits => {
             // `ctrl_ty` controls the return type for this, so the input type
             // must be retrieved via `inst_context`.
-            let vector_type = inst_context.type_of(inst_context.args()[0]).unwrap();
+            let vector_type = inst_context
+                .type_of(inst_context.args()[0])
+                .unwrap()
+                .as_int();
             let a = extractlanes(&arg(0), vector_type)?;
             let mut result: u128 = 0;
             for (i, val) in a.into_iter().enumerate() {
@@ -1025,15 +1022,18 @@ where
             assign(DataValueExt::int(result as i128, ctrl_ty)?)
         }
         Opcode::VanyTrue => {
-            let lane_ty = ctrl_ty.lane_type();
+            let simd_ty = ctrl_ty.as_int();
+            let lane_ty = simd_ty.lane_type();
             let init = DataValue::bool(false, true, lane_ty)?;
-            let any = fold_vector(arg(0), ctrl_ty, init.clone(), |acc, lane| acc.or(lane))?;
+            let any = fold_vector(arg(0), simd_ty, init.clone(), |acc, lane| acc.or(lane))?;
             assign(DataValue::bool(any != init, false, types::I8)?)
         }
         Opcode::VallTrue => assign(DataValue::bool(
-            !(arg(0).iter_lanes(ctrl_ty)?.try_fold(false, |acc, lane| {
-                Ok::<bool, ValueError>(acc | lane.is_zero()?)
-            })?),
+            !(arg(0)
+                .iter_lanes(ctrl_ty.as_int())?
+                .try_fold(false, |acc, lane| {
+                    Ok::<bool, ValueError>(acc | lane.is_zero()?)
+                })?),
             false,
             types::I8,
         )?),
@@ -1574,4 +1574,18 @@ fn bitselect(c: DataValue, x: DataValue, y: DataValue) -> ValueResult<DataValue>
     let mask_x = DataValueExt::and(c.clone(), x)?;
     let mask_y = DataValueExt::and(DataValueExt::not(c)?, y)?;
     DataValueExt::or(mask_x, mask_y)
+}
+
+fn splat(ty: Type, val: DataValue) -> ValueResult<DataValue> {
+    let mut new_vector = SimdVec::new();
+    for _ in 0..ty.lane_count() {
+        new_vector.push(val.clone());
+    }
+    vectorizelanes(&new_vector, ty)
+}
+
+// Prepares the shift amount for a shift/rotate operation.
+// The shift amount must be the same type and have the same number of lanes as the vector.
+fn shift_amt(ty: Type, val: DataValue) -> ValueResult<DataValue> {
+    splat(ty, val.convert(ValueConversionKind::Exact(ty.lane_type()))?)
 }

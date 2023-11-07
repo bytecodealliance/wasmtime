@@ -1,7 +1,8 @@
 test interpret
 test run
 target aarch64
-target riscv64gc has_v
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 ; s390x and x86_64 do not support 64-bit vectors.
 
 function %valltrue_i8x8_f() -> i8 {

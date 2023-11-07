@@ -188,19 +188,6 @@ where
             .checked_sub(1)
             .expect("generation_by_depth cannot be empty")
     }
-
-    /// Remote an entry.
-    pub fn remove(&mut self, key: &K) -> Option<V> {
-        self.map.remove(key).and_then(|val| {
-            let entry_generation = val.generation;
-            let entry_depth = val.level as usize;
-            if self.generation_by_depth.get(entry_depth).cloned() == Some(entry_generation) {
-                Some(val.value)
-            } else {
-                None
-            }
-        })
-    }
 }
 
 #[cfg(test)]

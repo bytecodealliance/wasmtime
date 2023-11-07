@@ -23,7 +23,7 @@
 ;;    c:	 4883ec08             	sub	rsp, 8
 ;;   10:	 e800000000           	call	0x15
 ;;   15:	 4883c408             	add	rsp, 8
-;;   19:	 48c7c001000000       	mov	rax, 1
-;;   20:	 4883c408             	add	rsp, 8
-;;   24:	 5d                   	pop	rbp
-;;   25:	 c3                   	ret	
+;;   19:	 b801000000           	mov	eax, 1
+;;   1e:	 4883c408             	add	rsp, 8
+;;   22:	 5d                   	pop	rbp
+;;   23:	 c3                   	ret	

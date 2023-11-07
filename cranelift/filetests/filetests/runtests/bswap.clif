@@ -5,6 +5,7 @@ target aarch64
 target s390x
 target riscv64
 target riscv64 has_zbb
+target riscv64 has_c has_zcb
 
 function %bswap_i16(i16) -> i16 {
 block0(v0: i16):

@@ -7,7 +7,7 @@ use crate::ir::PrimaryMap;
 use crate::ir::Type;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// A dynamic type object which has a base vector type and a scaling factor.
 #[derive(Clone, PartialEq, Hash)]

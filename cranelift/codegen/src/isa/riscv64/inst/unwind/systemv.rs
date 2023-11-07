@@ -16,7 +16,7 @@ pub fn create_cie() -> CommonInformationEntry {
             format: Format::Dwarf32,
             version: 1,
         },
-        4,  // Code alignment factor
+        2,  // Code alignment factor
         -8, // Data alignment factor
         Register(regs::link_reg().to_real_reg().unwrap().hw_enc() as u16),
     );
@@ -72,7 +72,6 @@ mod tests {
     use crate::settings::{builder, Flags};
     use crate::Context;
     use gimli::write::Address;
-    use std::str::FromStr;
     use target_lexicon::triple;
 
     #[test]
@@ -145,7 +144,7 @@ mod tests {
 
         assert_eq!(
             format!("{:?}", fde),
-            "FrameDescriptionEntry { address: Constant(4321), length: 20, lsda: None, instructions: [] }"
+            "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [] }"
         );
     }
 

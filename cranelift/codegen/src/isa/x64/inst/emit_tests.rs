@@ -13,7 +13,7 @@
 //!   -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;
-use crate::ir::UserExternalNameRef;
+use crate::ir::{MemFlags, UserExternalNameRef};
 use crate::isa::x64;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -2856,7 +2856,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size8,
-            simm64: i8::MIN as u64,
+            simm32: i8::MIN as i32,
             dst: Amode::imm_reg(99, rax).into(),
         },
         "C6406380",
@@ -2866,7 +2866,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size8,
-            simm64: i8::MAX as u64,
+            simm32: i8::MAX as i32,
             dst: Amode::imm_reg(99, r8).into(),
         },
         "41C640637F",
@@ -2876,7 +2876,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size16,
-            simm64: i16::MIN as u64,
+            simm32: i16::MIN as i32,
             dst: Amode::imm_reg(99, rcx).into(),
         },
         "66C741630080",
@@ -2886,7 +2886,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size16,
-            simm64: i16::MAX as u64,
+            simm32: i16::MAX as i32,
             dst: Amode::imm_reg(99, r9).into(),
         },
         "6641C74163FF7F",
@@ -2896,7 +2896,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size32,
-            simm64: i32::MIN as u64,
+            simm32: i32::MIN,
             dst: Amode::imm_reg(99, rdx).into(),
         },
         "C7426300000080",
@@ -2906,7 +2906,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size32,
-            simm64: i32::MAX as u64,
+            simm32: i32::MAX,
             dst: Amode::imm_reg(99, r10).into(),
         },
         "41C74263FFFFFF7F",
@@ -2916,7 +2916,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size64,
-            simm64: i32::MIN as u64,
+            simm32: i32::MIN,
             dst: Amode::imm_reg(99, rbx).into(),
         },
         "48C7436300000080",
@@ -2926,7 +2926,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size64,
-            simm64: i32::MAX as u64,
+            simm32: i32::MAX,
             dst: Amode::imm_reg(99, r11).into(),
         },
         "49C74363FFFFFF7F",
@@ -2936,7 +2936,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size8,
-            simm64: 0u64,
+            simm32: 0i32,
             dst: Amode::imm_reg(99, rsp).into(),
         },
         "C644246300",
@@ -2946,7 +2946,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size16,
-            simm64: 0u64,
+            simm32: 0i32,
             dst: Amode::imm_reg(99, r12).into(),
         },
         "6641C74424630000",
@@ -2956,7 +2956,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size32,
-            simm64: 0u64,
+            simm32: 0i32,
             dst: Amode::imm_reg(99, rbp).into(),
         },
         "C7456300000000",
@@ -2966,7 +2966,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::MovImmM {
             size: OperandSize::Size64,
-            simm64: 0u64,
+            simm32: 0i32,
             dst: Amode::imm_reg(99, r13).into(),
         },
         "49C7456300000000",
@@ -4215,8 +4215,8 @@ fn test_x64_emit() {
 
     // ========================================================
     // Ret
-    insns.push((Inst::ret(vec![], 0), "C3", "ret"));
-    insns.push((Inst::ret(vec![], 8), "C20800", "ret 8"));
+    insns.push((Inst::ret(0), "C3", "ret"));
+    insns.push((Inst::ret(8), "C20800", "ret 8"));
 
     // ========================================================
     // JmpKnown skipped for now
@@ -5051,26 +5051,6 @@ fn test_x64_emit() {
         "664C0F6EFF",
         "movq    %rdi, %xmm15",
     ));
-    insns.push((
-        Inst::gpr_to_xmm(
-            SseOpcode::Cvtsi2ss,
-            RegMem::reg(rdi),
-            OperandSize::Size32,
-            w_xmm15,
-        ),
-        "F3440F2AFF",
-        "cvtsi2ss %edi, %xmm15",
-    ));
-    insns.push((
-        Inst::gpr_to_xmm(
-            SseOpcode::Cvtsi2sd,
-            RegMem::reg(rsi),
-            OperandSize::Size64,
-            w_xmm1,
-        ),
-        "F2480F2ACE",
-        "cvtsi2sd %rsi, %xmm1",
-    ));
 
     // ========================================================
     // XmmRmi
@@ -5157,6 +5137,77 @@ fn test_x64_emit() {
         Inst::xmm_unary_rm_r_imm(SseOpcode::Roundpd, RegMem::reg(xmm15), w_xmm15, 0),
         "66450F3A09FF00",
         "roundpd $0, %xmm15, %xmm15",
+    ));
+
+    // ========================================================
+    // XmmRmiRVex
+
+    // Standard instruction w/ XmmMemImm::Reg operand.
+    insns.push((
+        Inst::XmmRmiRVex {
+            op: AvxOpcode::Vpmaxub,
+            dst: Writable::from_reg(Xmm::new(xmm13).unwrap()),
+            src1: Xmm::new(xmm1).unwrap(),
+            src2: XmmMemImm::new(xmm12.into()).unwrap(),
+        },
+        "C44171DEEC",
+        "vpmaxub %xmm1, %xmm12, %xmm13",
+    ));
+
+    // Standard instruction w/ XmmMemImm::Mem operand.
+    insns.push((
+        Inst::XmmRmiRVex {
+            op: AvxOpcode::Vpmaxub,
+            dst: Writable::from_reg(Xmm::new(xmm13).unwrap()),
+            src1: Xmm::new(xmm1).unwrap(),
+            src2: XmmMemImm::new(RegMemImm::Mem {
+                addr: Amode::ImmReg {
+                    simm32: 10,
+                    base: rax,
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+            })
+            .unwrap(),
+        },
+        "C571DE680A",
+        "vpmaxub %xmm1, 10(%rax), %xmm13",
+    ));
+
+    // When there's an immediate.
+    insns.push((
+        Inst::XmmRmiRVex {
+            op: AvxOpcode::Vpsrlw,
+            dst: Writable::from_reg(Xmm::new(xmm13).unwrap()),
+            src1: Xmm::new(xmm1).unwrap(),
+            src2: XmmMemImm::new(RegMemImm::Imm { simm32: 36 }).unwrap(),
+        },
+        "C59171D124",
+        "vpsrlw  %xmm1, $36, %xmm13",
+    ));
+
+    // Certain commutative ops get their operands swapped to avoid relying on an
+    // extra prefix byte, when possible. Note that these two instructions encode
+    // to the same bytes, and are 4-byte encodings rather than 5-byte encodings.
+    insns.push((
+        Inst::XmmRmiRVex {
+            op: AvxOpcode::Vmulsd,
+            dst: Writable::from_reg(Xmm::new(xmm13).unwrap()),
+            src1: Xmm::new(xmm1).unwrap(),
+            src2: XmmMemImm::new(xmm12.into()).unwrap(),
+        },
+        "C51B59E9",
+        "vmulsd  %xmm1, %xmm12, %xmm13",
+    ));
+    insns.push((
+        Inst::XmmRmiRVex {
+            op: AvxOpcode::Vmulsd,
+            dst: Writable::from_reg(Xmm::new(xmm13).unwrap()),
+            src1: Xmm::new(xmm12).unwrap(),
+            src2: XmmMemImm::new(xmm1.into()).unwrap(),
+        },
+        "C51B59E9",
+        "vmulsd  %xmm12, %xmm1, %xmm13",
     ));
 
     // ========================================================

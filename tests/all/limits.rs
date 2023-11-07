@@ -1,5 +1,6 @@
 use anyhow::Result;
 use wasmtime::*;
+use wasmtime_runtime::MpkEnabled;
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
@@ -355,7 +356,8 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.total_memories(2)
         .max_memories_per_module(2)
-        .memory_pages(5);
+        .memory_pages(5)
+        .memory_protection_keys(MpkEnabled::Disable);
     let mut config = Config::new();
     config.wasm_multi_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
@@ -541,7 +543,6 @@ impl ResourceLimiterAsync for MemoryContext {
     ) -> Result<bool> {
         Ok(true)
     }
-    fn table_grow_failed(&mut self, _e: &anyhow::Error) {}
 }
 
 #[tokio::test]
@@ -724,16 +725,18 @@ impl ResourceLimiter for FailureDetector {
         self.memory_desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: &anyhow::Error) {
+    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
         self.memory_error = Some(err.to_string());
+        Ok(())
     }
     fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> Result<bool> {
         self.table_current = current;
         self.table_desired = desired;
         Ok(true)
     }
-    fn table_grow_failed(&mut self, err: &anyhow::Error) {
+    fn table_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
         self.table_error = Some(err.to_string());
+        Ok(())
     }
 }
 
@@ -826,8 +829,9 @@ impl ResourceLimiterAsync for FailureDetector {
         self.memory_desired = desired;
         Ok(true)
     }
-    fn memory_grow_failed(&mut self, err: &anyhow::Error) {
+    fn memory_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
         self.memory_error = Some(err.to_string());
+        Ok(())
     }
 
     async fn table_growing(
@@ -840,8 +844,9 @@ impl ResourceLimiterAsync for FailureDetector {
         self.table_desired = desired;
         Ok(true)
     }
-    fn table_grow_failed(&mut self, err: &anyhow::Error) {
+    fn table_grow_failed(&mut self, err: anyhow::Error) -> Result<()> {
         self.table_error = Some(err.to_string());
+        Ok(())
     }
 }
 

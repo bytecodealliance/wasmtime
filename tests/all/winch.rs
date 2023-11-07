@@ -40,8 +40,35 @@ const MODULE: &'static str = r#"
     )
     "#;
 
+const MIXED: &'static str = r#"
+    (module
+      (import "" "" (func $id_float (param f64 f64 f64 f64 f32 f32 f32 f32 f64 i32 i64) (result f64)))
+      (func $call_id_float (param f64 f64 f64 f64 f32 f32 f32 f32 f64 i32 i64) (result f64)
+         (local.get 0)
+         (local.get 1)
+         (local.get 2)
+         (local.get 3)
+         (local.get 4)
+         (local.get 5)
+         (local.get 6)
+         (local.get 7)
+         (local.get 8)
+         (local.get 9)
+         (local.get 10)
+         (call $id_float)
+      )
+      (export "call_id_float" (func $call_id_float)))
+"#;
+
 fn add_fn(store: impl AsContextMut) -> Func {
     Func::wrap(store, |a: i32, b: i32| a + b)
+}
+
+fn id_float(store: impl AsContextMut) -> Func {
+    Func::wrap(
+        store,
+        |_: f64, _: f64, _: f64, _: f64, _: f32, _: f32, _: f32, _: f32, x: f64, _: i32, _: i64| x,
+    )
 }
 
 #[test]
@@ -113,12 +140,36 @@ fn wasm_to_native() -> Result<()> {
 
     let instance = Instance::new(&mut store, &module, &[add_fn.into()])?;
 
-    let f = instance.get_typed_func::<(i32, i32), i32>(&mut store, "call_add")?;
-
-    let args = (41, 1);
-    let result = f.call(&mut store, args)?;
-
+    let call_add = instance.get_typed_func::<(i32, i32), i32>(&mut store, "call_add")?;
+    let result = call_add.call(&mut store, (41, 1))?;
     assert_eq!(result, 42);
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn mixed_roundtrip() -> Result<()> {
+    let mut c = Config::new();
+    c.strategy(Strategy::Winch);
+    let engine = Engine::new(&c)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(&engine, MIXED)?;
+    let import = id_float(store.as_context_mut());
+
+    let instance = Instance::new(&mut store, &module, &[import.into()])?;
+    let call_id_float = instance
+        .get_typed_func::<(f64, f64, f64, f64, f32, f32, f32, f32, f64, i32, i64), f64>(
+            &mut store,
+            "call_id_float",
+        )?;
+
+    let result = call_id_float.call(
+        &mut store,
+        (1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 0, 5),
+    )?;
+    assert_eq!(result, 1.9);
     Ok(())
 }
 

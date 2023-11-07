@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
 use indexmap::{IndexMap, IndexSet};
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
@@ -100,8 +100,6 @@ indices! {
     pub struct TypeFlagsIndex(u32);
     /// Index pointing to an enum type in the component model.
     pub struct TypeEnumIndex(u32);
-    /// Index pointing to a union type in the component model.
-    pub struct TypeUnionIndex(u32);
     /// Index pointing to an option type in the component model (aka a
     /// `Option<T, E>`)
     pub struct TypeOptionIndex(u32);
@@ -232,7 +230,7 @@ pub enum ComponentItem {
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),
-    Type(wasmparser::types::TypeId),
+    Type(types::ComponentAnyTypeId),
 }
 
 /// Runtime information about the type information contained within a component.
@@ -252,7 +250,6 @@ pub struct ComponentTypes {
     tuples: PrimaryMap<TypeTupleIndex, TypeTuple>,
     enums: PrimaryMap<TypeEnumIndex, TypeEnum>,
     flags: PrimaryMap<TypeFlagsIndex, TypeFlags>,
-    unions: PrimaryMap<TypeUnionIndex, TypeUnion>,
     options: PrimaryMap<TypeOptionIndex, TypeOption>,
     results: PrimaryMap<TypeResultIndex, TypeResult>,
     resource_tables: PrimaryMap<TypeResourceTableIndex, TypeResourceTable>,
@@ -293,7 +290,6 @@ impl ComponentTypes {
             InterfaceType::Tuple(i) => &self[*i].abi,
             InterfaceType::Flags(i) => &self[*i].abi,
             InterfaceType::Enum(i) => &self[*i].abi,
-            InterfaceType::Union(i) => &self[*i].abi,
             InterfaceType::Option(i) => &self[*i].abi,
             InterfaceType::Result(i) => &self[*i].abi,
         }
@@ -323,6 +319,7 @@ macro_rules! impl_index {
     ($(impl Index<$ty:ident> for ComponentTypes { $output:ident => $field:ident })*) => ($(
         impl std::ops::Index<$ty> for ComponentTypes {
             type Output = $output;
+            #[inline]
             fn index(&self, idx: $ty) -> &$output {
                 &self.$field[idx]
             }
@@ -340,7 +337,6 @@ impl_index! {
     impl Index<TypeTupleIndex> for ComponentTypes { TypeTuple => tuples }
     impl Index<TypeEnumIndex> for ComponentTypes { TypeEnum => enums }
     impl Index<TypeFlagsIndex> for ComponentTypes { TypeFlags => flags }
-    impl Index<TypeUnionIndex> for ComponentTypes { TypeUnion => unions }
     impl Index<TypeOptionIndex> for ComponentTypes { TypeOption => options }
     impl Index<TypeResultIndex> for ComponentTypes { TypeResult => results }
     impl Index<TypeListIndex> for ComponentTypes { TypeList => lists }
@@ -372,7 +368,6 @@ pub struct ComponentTypesBuilder {
     tuples: HashMap<TypeTuple, TypeTupleIndex>,
     enums: HashMap<TypeEnum, TypeEnumIndex>,
     flags: HashMap<TypeFlags, TypeFlagsIndex>,
-    unions: HashMap<TypeUnion, TypeUnionIndex>,
     options: HashMap<TypeOption, TypeOptionIndex>,
     results: HashMap<TypeResult, TypeResultIndex>,
 
@@ -445,9 +440,9 @@ impl ComponentTypesBuilder {
     pub fn convert_component_func_type(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentFuncTypeId,
     ) -> Result<TypeFuncIndex> {
-        let ty = types[id].unwrap_component_func();
+        let ty = &types[id];
         let params = ty
             .params
             .iter()
@@ -485,9 +480,13 @@ impl ComponentTypesBuilder {
             types::ComponentEntityType::Func(id) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::ComponentEntityType::Type { created, .. } => match types[created] {
-                types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, created)?),
-                types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, created)),
+            types::ComponentEntityType::Type { created, .. } => match created {
+                types::ComponentAnyTypeId::Defined(id) => {
+                    TypeDef::Interface(self.defined_type(types, id)?)
+                }
+                types::ComponentAnyTypeId::Resource(id) => {
+                    TypeDef::Resource(self.resource_id(id.resource()))
+                }
                 _ => bail!("unsupported type export"),
             },
             types::ComponentEntityType::Value(_) => bail!("values not supported"),
@@ -498,31 +497,33 @@ impl ComponentTypesBuilder {
     pub fn convert_type(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentAnyTypeId,
     ) -> Result<TypeDef> {
-        Ok(match &types[id] {
-            types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, id)?),
-            types::Type::Module(_) => TypeDef::Module(self.convert_module(types, id)?),
-            types::Type::Component(_) => TypeDef::Component(self.convert_component(types, id)?),
-            types::Type::ComponentInstance(_) => {
+        Ok(match id {
+            types::ComponentAnyTypeId::Defined(id) => {
+                TypeDef::Interface(self.defined_type(types, id)?)
+            }
+            types::ComponentAnyTypeId::Component(id) => {
+                TypeDef::Component(self.convert_component(types, id)?)
+            }
+            types::ComponentAnyTypeId::Instance(id) => {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
-            types::Type::ComponentFunc(_) => {
+            types::ComponentAnyTypeId::Func(id) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::Type::Instance(_) | types::Type::Sub(_) => {
-                unreachable!()
+            types::ComponentAnyTypeId::Resource(id) => {
+                TypeDef::Resource(self.resource_id(id.resource()))
             }
-            types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, id)),
         })
     }
 
     fn convert_component(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentTypeId,
     ) -> Result<TypeComponentIndex> {
-        let ty = types[id].unwrap_component();
+        let ty = &types[id];
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
             result.imports.insert(
@@ -542,9 +543,9 @@ impl ComponentTypesBuilder {
     fn convert_instance(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentInstanceTypeId,
     ) -> Result<TypeComponentInstanceIndex> {
-        let ty = types[id].unwrap_component_instance();
+        let ty = &types[id];
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
             result.exports.insert(
@@ -558,9 +559,9 @@ impl ComponentTypesBuilder {
     fn convert_module(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentCoreModuleTypeId,
     ) -> Result<TypeModuleIndex> {
-        let ty = &types[id].unwrap_module();
+        let ty = &types[id];
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
@@ -597,9 +598,9 @@ impl ComponentTypesBuilder {
     fn defined_type(
         &mut self,
         types: types::TypesRef<'_>,
-        id: types::TypeId,
+        id: types::ComponentDefinedTypeId,
     ) -> Result<InterfaceType> {
-        let ret = match types[id].unwrap_defined() {
+        let ret = match &types[id] {
             types::ComponentDefinedType::Primitive(ty) => ty.into(),
             types::ComponentDefinedType::Record(e) => {
                 InterfaceType::Record(self.record_type(types, e)?)
@@ -613,18 +614,17 @@ impl ComponentTypesBuilder {
             }
             types::ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
             types::ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
-            types::ComponentDefinedType::Union(e) => {
-                InterfaceType::Union(self.union_type(types, e)?)
-            }
             types::ComponentDefinedType::Option(e) => {
                 InterfaceType::Option(self.option_type(types, e)?)
             }
             types::ComponentDefinedType::Result { ok, err } => {
                 InterfaceType::Result(self.result_type(types, ok, err)?)
             }
-            types::ComponentDefinedType::Own(r) => InterfaceType::Own(self.resource_id(types, *r)),
+            types::ComponentDefinedType::Own(r) => {
+                InterfaceType::Own(self.resource_id(r.resource()))
+            }
             types::ComponentDefinedType::Borrow(r) => {
-                InterfaceType::Borrow(self.resource_id(types, *r))
+                InterfaceType::Borrow(self.resource_id(r.resource()))
             }
         };
         let info = self.type_information(&ret);
@@ -734,24 +734,6 @@ impl ComponentTypesBuilder {
         self.add_enum_type(TypeEnum { names, abi, info })
     }
 
-    fn union_type(
-        &mut self,
-        types: types::TypesRef<'_>,
-        ty: &types::UnionType,
-    ) -> Result<TypeUnionIndex> {
-        let types = ty
-            .types
-            .iter()
-            .map(|ty| self.valtype(types, ty))
-            .collect::<Result<Box<[_]>>>()?;
-        let (info, abi) = VariantInfo::new(
-            types
-                .iter()
-                .map(|t| Some(self.component_types.canonical_abi(t))),
-        );
-        Ok(self.add_union_type(TypeUnion { types, abi, info }))
-    }
-
     fn option_type(
         &mut self,
         types: types::TypesRef<'_>,
@@ -794,12 +776,7 @@ impl ComponentTypesBuilder {
 
     /// Converts a wasmparser `id`, which must point to a resource, to its
     /// corresponding `TypeResourceTableIndex`.
-    pub fn resource_id(
-        &mut self,
-        types: types::TypesRef<'_>,
-        id: types::TypeId,
-    ) -> TypeResourceTableIndex {
-        let id = types[id].unwrap_resource();
+    pub fn resource_id(&mut self, id: types::ResourceId) -> TypeResourceTableIndex {
         self.resources.convert(id, &mut self.component_types)
     }
 
@@ -826,11 +803,6 @@ impl ComponentTypesBuilder {
     /// Interns a new variant type within this type information.
     pub fn add_variant_type(&mut self, ty: TypeVariant) -> TypeVariantIndex {
         intern_and_fill_flat_types!(self, variants, ty)
-    }
-
-    /// Interns a new union type within this type information.
-    pub fn add_union_type(&mut self, ty: TypeUnion) -> TypeUnionIndex {
-        intern_and_fill_flat_types!(self, unions, ty)
     }
 
     /// Interns a new enum type within this type information.
@@ -918,7 +890,6 @@ impl ComponentTypesBuilder {
             InterfaceType::Tuple(i) => &self.type_info.tuples[*i],
             InterfaceType::Flags(i) => &self.type_info.flags[*i],
             InterfaceType::Enum(i) => &self.type_info.enums[*i],
-            InterfaceType::Union(i) => &self.type_info.unions[*i],
             InterfaceType::Option(i) => &self.type_info.options[*i],
             InterfaceType::Result(i) => &self.type_info.results[*i],
         }
@@ -1065,7 +1036,6 @@ pub enum InterfaceType {
     Tuple(TypeTupleIndex),
     Flags(TypeFlagsIndex),
     Enum(TypeEnumIndex),
-    Union(TypeUnionIndex),
     Option(TypeOptionIndex),
     Result(TypeResultIndex),
     Own(TypeResourceTableIndex),
@@ -1511,21 +1481,6 @@ pub struct TypeEnum {
     pub info: VariantInfo,
 }
 
-/// Shape of a "union" type in interface types.
-///
-/// Note that this can be viewed as a specialization of the `variant` interface
-/// type where each type here has a name that's numbered. This is still a
-/// tagged union.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
-pub struct TypeUnion {
-    /// The list of types this is a union over.
-    pub types: Box<[InterfaceType]>,
-    /// Byte information about this type in the canonical ABI.
-    pub abi: CanonicalAbiInfo,
-    /// Byte information about this variant type.
-    pub info: VariantInfo,
-}
-
 /// Shape of an "option" interface type.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TypeOption {
@@ -1715,7 +1670,6 @@ struct TypeInformationCache {
     tuples: PrimaryMap<TypeTupleIndex, TypeInformation>,
     enums: PrimaryMap<TypeEnumIndex, TypeInformation>,
     flags: PrimaryMap<TypeFlagsIndex, TypeInformation>,
-    unions: PrimaryMap<TypeUnionIndex, TypeInformation>,
     options: PrimaryMap<TypeOptionIndex, TypeInformation>,
     results: PrimaryMap<TypeResultIndex, TypeInformation>,
     lists: PrimaryMap<TypeListIndex, TypeInformation>,
@@ -1894,10 +1848,6 @@ impl TypeInformation {
                 .iter()
                 .map(|c| c.ty.as_ref().map(|ty| types.type_information(ty))),
         )
-    }
-
-    fn unions(&mut self, types: &ComponentTypesBuilder, ty: &TypeUnion) {
-        self.build_variant(ty.types.iter().map(|t| Some(types.type_information(t))))
     }
 
     fn results(&mut self, types: &ComponentTypesBuilder, ty: &TypeResult) {

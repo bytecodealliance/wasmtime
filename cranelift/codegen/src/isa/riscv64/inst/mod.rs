@@ -1,9 +1,5 @@
 //! This module defines riscv64-specific machine instruction types.
 
-// Some variants are not constructed, but we still want them as options in the future.
-#![allow(dead_code)]
-#![allow(non_camel_case_types)]
-
 use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpMasking};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
@@ -44,25 +40,16 @@ mod emit_tests;
 
 use std::fmt::{Display, Formatter};
 
-pub(crate) type OptionReg = Option<Reg>;
-pub(crate) type OptionImm12 = Option<Imm12>;
-pub(crate) type VecBranchTarget = Vec<BranchTarget>;
-pub(crate) type OptionUimm5 = Option<UImm5>;
-pub(crate) type OptionFloatRoundingMode = Option<FRM>;
 pub(crate) type VecU8 = Vec<u8>;
-pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
+
 //=============================================================================
 // Instructions (top level): definition
 
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, FClassResult, FFlagsException, FloatRoundOP, FloatSelectOP,
-    FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
+    AluOPRRI, AluOPRRR, AtomicOP, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FloatRoundOP,
+    FpuOPRR, FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
 };
-use crate::isa::riscv64::lower::isle::generated_code::{MInst, VecAluOpRRImm5, VecAluOpRRR};
-
-type BoxCallInfo = Box<CallInfo>;
-type BoxCallIndInfo = Box<CallIndInfo>;
-type BoxReturnCallInfo = Box<ReturnCallInfo>;
+use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
 /// the Inst enum.
@@ -102,61 +89,41 @@ pub struct ReturnCallInfo {
     pub new_stack_arg_size: u32,
 }
 
-/// A branch target. Either unresolved (basic-block index) or resolved (offset
-/// from end of current instruction).
+/// A conditional branch target.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BranchTarget {
+pub enum CondBrTarget {
     /// An unresolved reference to a Label, as passed into
     /// `lower_branch_group()`.
     Label(MachLabel),
-    /// A fixed PC offset.
-    ResolvedOffset(i32),
+    /// No jump; fall through to the next instruction.
+    Fallthrough,
 }
 
-impl BranchTarget {
+impl CondBrTarget {
     /// Return the target's label, if it is a label-based target.
     pub(crate) fn as_label(self) -> Option<MachLabel> {
         match self {
-            BranchTarget::Label(l) => Some(l),
+            CondBrTarget::Label(l) => Some(l),
             _ => None,
         }
     }
-    /// offset zero.
-    #[inline]
-    pub(crate) fn zero() -> Self {
-        Self::ResolvedOffset(0)
-    }
-    #[inline]
-    pub(crate) fn offset(off: i32) -> Self {
-        Self::ResolvedOffset(off)
-    }
-    #[inline]
-    pub(crate) fn is_zero(self) -> bool {
-        match self {
-            BranchTarget::Label(_) => false,
-            BranchTarget::ResolvedOffset(off) => off == 0,
-        }
-    }
-    #[inline]
-    pub(crate) fn as_offset(self) -> Option<i32> {
-        match self {
-            BranchTarget::Label(_) => None,
-            BranchTarget::ResolvedOffset(off) => Some(off),
-        }
+
+    pub(crate) fn is_fallthrouh(&self) -> bool {
+        self == &CondBrTarget::Fallthrough
     }
 }
 
-impl Display for BranchTarget {
+impl Display for CondBrTarget {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
-            BranchTarget::ResolvedOffset(off) => write!(f, "{}", off),
+            CondBrTarget::Label(l) => write!(f, "{}", l.to_string()),
+            CondBrTarget::Fallthrough => write!(f, "0"),
         }
     }
 }
 
 pub(crate) fn enc_auipc(rd: Writable<Reg>, imm: Imm20) -> u32 {
-    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.as_u32() << 12;
+    let x = 0b0010111 | reg_to_gpr_num(rd.to_reg()) << 7 | imm.bits() << 12;
     x
 }
 
@@ -165,7 +132,7 @@ pub(crate) fn enc_jalr(rd: Writable<Reg>, base: Reg, offset: Imm12) -> u32 {
         | reg_to_gpr_num(rd.to_reg()) << 7
         | 0b000 << 12
         | reg_to_gpr_num(base) << 15
-        | offset.as_u32() << 20;
+        | offset.bits() << 20;
     x
 }
 
@@ -182,7 +149,10 @@ pub(crate) fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst>
 }
 
 impl Inst {
-    const INSTRUCTION_SIZE: i32 = 4;
+    /// RISC-V can have multiple instruction sizes. 2 bytes for compressed
+    /// instructions, 4 for regular instructions, 6 and 8 byte instructions
+    /// are also being considered.
+    const UNCOMPRESSED_INSTRUCTION_SIZE: i32 = 4;
 
     #[inline]
     pub(crate) fn load_imm12(rd: Writable<Reg>, imm: Imm12) -> Inst {
@@ -195,23 +165,23 @@ impl Inst {
     }
 
     /// Immediates can be loaded using lui and addi instructions.
-    fn load_const_imm<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> Option<SmallInstVec<Inst>> {
-        Inst::generate_imm(value, |imm20, imm12| {
+    fn load_const_imm(rd: Writable<Reg>, value: u64) -> Option<SmallInstVec<Inst>> {
+        Inst::generate_imm(value).map(|(imm20, imm12)| {
             let mut insts = SmallVec::new();
 
-            let rs = if let Some(imm) = imm20 {
-                let rd = if imm12.is_some() { alloc_tmp(I64) } else { rd };
-                insts.push(Inst::Lui { rd, imm });
+            let imm20_is_zero = imm20.as_i32() == 0;
+            let imm12_is_zero = imm12.as_i16() == 0;
+
+            let rs = if !imm20_is_zero {
+                insts.push(Inst::Lui { rd, imm: imm20 });
                 rd.to_reg()
             } else {
                 zero_reg()
             };
 
-            if let Some(imm12) = imm12 {
+            // We also need to emit the addi if the value is 0, otherwise we just
+            // won't produce any instructions.
+            if !imm12_is_zero || (imm20_is_zero && imm12_is_zero) {
                 insts.push(Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Addi,
                     rd,
@@ -224,27 +194,26 @@ impl Inst {
         })
     }
 
-    pub(crate) fn load_constant_u32<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
+    pub(crate) fn load_constant_u32(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value);
         insts.unwrap_or_else(|| {
-            smallvec![Inst::LoadConst32 {
+            smallvec![Inst::LoadInlineConst {
                 rd,
-                imm: value as u32
+                ty: I32,
+                imm: value
             }]
         })
     }
 
-    pub fn load_constant_u64<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> SmallInstVec<Inst> {
-        let insts = Inst::load_const_imm(rd, value, alloc_tmp);
-        insts.unwrap_or_else(|| smallvec![Inst::LoadConst64 { rd, imm: value }])
+    pub fn load_constant_u64(rd: Writable<Reg>, value: u64) -> SmallInstVec<Inst> {
+        let insts = Inst::load_const_imm(rd, value);
+        insts.unwrap_or_else(|| {
+            smallvec![Inst::LoadInlineConst {
+                rd,
+                ty: I64,
+                imm: value
+            }]
+        })
     }
 
     pub(crate) fn construct_auipc_and_jalr(
@@ -252,19 +221,20 @@ impl Inst {
         tmp: Writable<Reg>,
         offset: i64,
     ) -> [Inst; 2] {
-        Inst::generate_imm(offset as u64, |imm20, imm12| {
-            let a = Inst::Auipc {
-                rd: tmp,
-                imm: imm20.unwrap_or_default(),
-            };
-            let b = Inst::Jalr {
-                rd: link.unwrap_or(writable_zero_reg()),
-                base: tmp.to_reg(),
-                offset: imm12.unwrap_or_default(),
-            };
-            [a, b]
-        })
-        .expect("code range is too big.")
+        Inst::generate_imm(offset as u64)
+            .map(|(imm20, imm12)| {
+                let a = Inst::Auipc {
+                    rd: tmp,
+                    imm: imm20,
+                };
+                let b = Inst::Jalr {
+                    rd: link.unwrap_or(writable_zero_reg()),
+                    base: tmp.to_reg(),
+                    offset: imm12,
+                };
+                [a, b]
+            })
+            .expect("code range is too big.")
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
@@ -275,13 +245,9 @@ impl Inst {
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallVec::new();
         let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u32(
-            tmp,
-            const_data as u64,
-            &mut alloc_tmp,
-        ));
+        insts.extend(Self::load_constant_u32(tmp, const_data as u64));
         insts.push(Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::move_x_to_f_op(F32),
             rd,
             rs: tmp.to_reg(),
@@ -297,9 +263,9 @@ impl Inst {
     ) -> SmallVec<[Inst; 4]> {
         let mut insts = SmallInstVec::new();
         let tmp = alloc_tmp(I64);
-        insts.extend(Self::load_constant_u64(tmp, const_data, &mut alloc_tmp));
+        insts.extend(Self::load_constant_u64(tmp, const_data));
         insts.push(Inst::FpuRR {
-            frm: None,
+            frm: FRM::RNE,
             alu_op: FpuOPRR::move_x_to_f_op(F64),
             rd,
             rs: tmp.to_reg(),
@@ -388,8 +354,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::Auipc { rd, .. } => collector.reg_def(rd),
         &Inst::Lui { rd, .. } => collector.reg_def(rd),
-        &Inst::LoadConst32 { rd, .. } => collector.reg_def(rd),
-        &Inst::LoadConst64 { rd, .. } => collector.reg_def(rd),
+        &Inst::LoadInlineConst { rd, .. } => collector.reg_def(rd),
         &Inst::AluRRR { rd, rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
@@ -402,6 +367,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::AluRRImm12 { rd, rs, .. } => {
             collector.reg_use(rs);
+            collector.reg_def(rd);
+        }
+        &Inst::CsrReg { rd, rs, .. } => {
+            collector.reg_use(rs);
+            collector.reg_def(rd);
+        }
+        &Inst::CsrImm { rd, .. } => {
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
@@ -422,17 +394,17 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_def(arg.vreg, arg.preg);
             }
         }
-        &Inst::Ret { ref rets, .. } => {
+        &Inst::Rets { ref rets } => {
             for ret in rets {
                 collector.reg_fixed_use(ret.vreg, ret.preg);
             }
         }
+        &Inst::Ret { .. } => {}
 
         &Inst::Extend { rd, rn, .. } => {
             collector.reg_use(rn);
             collector.reg_def(rd);
         }
-        &Inst::AdjustSp { .. } => {}
         &Inst::Call { ref info } => {
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
@@ -473,16 +445,23 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
         }
-        &Inst::TrapIf { test, .. } => {
-            collector.reg_use(test);
+        &Inst::Jal { .. } => {
+            // JAL technically has a rd register, but we currently always
+            // hardcode it to x0.
         }
-        &Inst::Jal { .. } => {}
         &Inst::CondBr { kind, .. } => {
             collector.reg_use(kind.rs1);
             collector.reg_use(kind.rs2);
         }
         &Inst::LoadExtName { rd, .. } => {
             collector.reg_def(rd);
+        }
+        &Inst::ElfTlsGetAddr { rd, .. } => {
+            // x10 is a0 which is both the first argument and the first return value.
+            collector.reg_fixed_def(rd, a0());
+            let mut clobbers = Riscv64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
+            clobbers.remove(px_reg(10));
+            collector.reg_clobbers(clobbers);
         }
         &Inst::LoadAddr { rd, mem } => {
             if let Some(r) = mem.get_allocatable_register() {
@@ -501,8 +480,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::Fence { .. } => {}
-        &Inst::FenceI => {}
-        &Inst::ECall => {}
         &Inst::EBreak => {}
         &Inst::Udf { .. } => {}
         &Inst::FpuRR { rd, rs, .. } => {
@@ -532,11 +509,25 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             y,
             ..
         } => {
-            collector.reg_use(condition);
+            collector.reg_use(condition.rs1);
+            collector.reg_use(condition.rs2);
             collector.reg_uses(x.regs());
             collector.reg_uses(y.regs());
-            for d in dst.iter() {
-                collector.reg_early_def(d.clone());
+            // If there's more than one destination register then use
+            // `reg_early_def` to prevent destination registers from overlapping
+            // with any operands. This ensures that the lowering doesn't have to
+            // deal with a situation such as when the input registers need to be
+            // swapped when moved to the destination.
+            //
+            // When there's only one destination register though don't use an
+            // early def because once the register is written no other inputs
+            // are read so it's ok for the destination to overlap the sources.
+            if dst.regs().len() > 1 {
+                for d in dst.regs() {
+                    collector.reg_early_def(d.clone());
+                }
+            } else {
+                collector.reg_defs(dst.regs());
             }
         }
         &Inst::AtomicCas {
@@ -552,42 +543,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
-        &Inst::IntSelect {
-            ref dst,
-            ref x,
-            ref y,
-            ..
-        } => {
-            collector.reg_uses(x.regs());
-            collector.reg_uses(y.regs());
-            for d in dst.iter() {
-                collector.reg_early_def(d.clone());
-            }
-        }
 
-        &Inst::Icmp { rd, a, b, .. } => {
-            collector.reg_uses(a.regs());
-            collector.reg_uses(b.regs());
-            collector.reg_def(rd);
-        }
-
-        &Inst::SelectReg {
-            rd,
-            rs1,
-            rs2,
-            condition,
-        } => {
-            collector.reg_use(condition.rs1);
-            collector.reg_use(condition.rs2);
-            collector.reg_use(rs1);
-            collector.reg_use(rs2);
-            collector.reg_def(rd);
-        }
-        &Inst::FcvtToInt { rd, rs, tmp, .. } => {
-            collector.reg_use(rs);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(rd);
-        }
         &Inst::RawData { .. } => {}
         &Inst::AtomicStore { src, p, .. } => {
             collector.reg_use(src);
@@ -609,7 +565,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(t0);
             collector.reg_early_def(dst);
         }
-        &Inst::TrapIfC { rs1, rs2, .. } => {
+        &Inst::TrapIf { rs1, rs2, .. } => {
             collector.reg_use(rs1);
             collector.reg_use(rs2);
         }
@@ -629,13 +585,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(f_tmp);
             collector.reg_early_def(rd);
         }
-        &Inst::FloatSelect {
-            rd, tmp, rs1, rs2, ..
-        } => {
-            collector.reg_uses(&[rs1, rs2]);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(rd);
-        }
         &Inst::Popcnt {
             sum, step, rs, tmp, ..
         } => {
@@ -643,12 +592,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(tmp);
             collector.reg_early_def(step);
             collector.reg_early_def(sum);
-        }
-        &Inst::Rev8 { rs, rd, tmp, step } => {
-            collector.reg_use(rs);
-            collector.reg_early_def(tmp);
-            collector.reg_early_def(step);
-            collector.reg_early_def(rd);
         }
         &Inst::Cltz {
             sum, step, tmp, rs, ..
@@ -712,7 +655,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 
             // If the operation forbids source/destination overlap we need to
             // ensure that the source and destination registers are different.
-            if op.forbids_src_dst_overlaps() {
+            if op.forbids_overlaps(mask) {
                 collector.reg_late_use(vs2);
                 collector.reg_use(vd_src);
                 collector.reg_reuse_def(vd, 1); // `vd` == `vd_src`.
@@ -742,7 +685,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // If the operation forbids source/destination overlap, then we must
             // register it as an early_def. This encodes the constraint that
             // these must not overlap.
-            if op.forbids_src_dst_overlaps() {
+            if op.forbids_overlaps(mask) {
                 collector.reg_early_def(vd);
             } else {
                 collector.reg_def(vd);
@@ -765,7 +708,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // If the operation forbids source/destination overlap, then we must
             // register it as an early_def. This encodes the constraint that
             // these must not overlap.
-            if op.forbids_src_dst_overlaps() {
+            if op.forbids_overlaps(mask) {
                 collector.reg_early_def(vd);
             } else {
                 collector.reg_def(vd);
@@ -788,7 +731,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // If the operation forbids source/destination overlap, then we must
             // register it as an early_def. This encodes the constraint that
             // these must not overlap.
-            if op.forbids_src_dst_overlaps() {
+            if op.forbids_overlaps(mask) {
                 collector.reg_early_def(vd);
             } else {
                 collector.reg_def(vd);
@@ -796,8 +739,11 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 
             vec_mask_operands(mask, collector);
         }
-        &Inst::VecAluRImm5 { vd, ref mask, .. } => {
+        &Inst::VecAluRImm5 {
+            op, vd, ref mask, ..
+        } => {
             debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
+            debug_assert!(!op.forbids_overlaps(mask));
 
             collector.reg_def(vd);
             vec_mask_operands(mask, collector);
@@ -899,11 +845,15 @@ impl MachInst for Inst {
             &Inst::Jal { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
             &Inst::Jalr { .. } => MachTerminator::Uncond,
-            &Inst::Ret { .. } => MachTerminator::Ret,
+            &Inst::Rets { .. } => MachTerminator::Ret,
             &Inst::BrTable { .. } => MachTerminator::Indirect,
             &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             _ => MachTerminator::None,
         }
+    }
+
+    fn is_mem_access(&self) -> bool {
+        panic!("TODO FILL ME OUT")
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
@@ -962,14 +912,12 @@ impl MachInst for Inst {
     }
 
     fn gen_jump(target: MachLabel) -> Inst {
-        Inst::Jal {
-            dest: BranchTarget::Label(target),
-        }
+        Inst::Jal { label: target }
     }
 
     fn worst_case_size() -> CodeOffset {
         // calculate by test function riscv64_worst_case_instruction_size()
-        116
+        124
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {
@@ -978,7 +926,7 @@ impl MachInst for Inst {
 
     fn function_alignment() -> FunctionAlignment {
         FunctionAlignment {
-            minimum: 4,
+            minimum: 2,
             preferred: 4,
         }
     }
@@ -995,8 +943,7 @@ pub fn reg_name(reg: Reg) -> String {
                 2 => "sp".into(),
                 3 => "gp".into(),
                 4 => "tp".into(),
-                5 => "t0".into(),
-                6..=7 => format!("t{}", real.hw_enc() - 5),
+                5..=7 => format!("t{}", real.hw_enc() - 5),
                 8 => "fp".into(),
                 9 => "s1".into(),
                 10..=17 => format!("a{}", real.hw_enc() - 10),
@@ -1080,12 +1027,8 @@ impl Inst {
             x
         };
 
-        fn format_frm(rounding_mode: Option<FRM>) -> String {
-            if let Some(r) = rounding_mode {
-                format!(",{}", r.to_static_str(),)
-            } else {
-                "".into()
-            }
+        fn format_frm(rounding_mode: FRM) -> String {
+            format!(",{}", rounding_mode.to_static_str())
         }
 
         let mut empty_allocs = AllocationConsumer::default();
@@ -1126,29 +1069,6 @@ impl Inst {
                     rs,
                     int_tmp,
                     f_tmp,
-                    ty
-                )
-            }
-            &Inst::FloatSelect {
-                op,
-                rd,
-                tmp,
-                rs1,
-                rs2,
-                ty,
-            } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "f{}.{} {},{},{}##tmp={} ty={}",
-                    op.op_name(),
-                    if ty == F32 { "s" } else { "d" },
-                    rd,
-                    rs1,
-                    rs2,
-                    tmp,
                     ty
                 )
             }
@@ -1240,13 +1160,6 @@ impl Inst {
                 let sum = format_reg(sum.to_reg(), allocs);
                 format!("popcnt {},{}##ty={} tmp={} step={}", sum, rs, ty, tmp, step)
             }
-            &Inst::Rev8 { rs, rd, tmp, step } => {
-                let rs = format_reg(rs, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let step = format_reg(step.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("rev8 {},{}##step={} tmp={}", rd, rs, step, tmp)
-            }
             &Inst::Cltz {
                 sum,
                 step,
@@ -1269,48 +1182,6 @@ impl Inst {
                     step
                 )
             }
-            &Inst::FcvtToInt {
-                is_sat,
-                rd,
-                rs,
-                is_signed,
-                in_type,
-                out_type,
-                tmp,
-            } => {
-                let rs = format_reg(rs, allocs);
-                let tmp = format_reg(tmp.to_reg(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "fcvt_to_{}int{}.{} {},{}##in_ty={} tmp={}",
-                    if is_signed { "s" } else { "u" },
-                    if is_sat { "_sat" } else { "" },
-                    out_type,
-                    rd,
-                    rs,
-                    in_type,
-                    tmp
-                )
-            }
-            &Inst::SelectReg {
-                rd,
-                rs1,
-                rs2,
-                ref condition,
-            } => {
-                let c_rs1 = format_reg(condition.rs1, allocs);
-                let c_rs2 = format_reg(condition.rs2, allocs);
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!(
-                    "select_reg {},{},{}##condition={}",
-                    rd,
-                    rs1,
-                    rs2,
-                    format!("({} {} {})", c_rs1, condition.kind.to_static_str(), c_rs2),
-                )
-            }
             &Inst::AtomicCas {
                 offset,
                 t0,
@@ -1331,32 +1202,12 @@ impl Inst {
                     ty, dst, e, v, addr, t0, offset,
                 )
             }
-            &Inst::Icmp { cc, rd, a, b, ty } => {
-                let a = format_regs(a.regs(), allocs);
-                let b = format_regs(b.regs(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{},{}##ty={}", cc.to_static_str(), rd, a, b, ty)
-            }
-            &Inst::IntSelect {
-                op,
-                ref dst,
-                x,
-                y,
-                ty,
-            } => {
-                let x = format_regs(x.regs(), allocs);
-                let y = format_regs(y.regs(), allocs);
-                let dst: Vec<_> = dst.iter().map(|r| r.to_reg()).collect();
-                let dst = format_regs(&dst[..], allocs);
-                format!("{} {},{},{}##ty={}", op.op_name(), dst, x, y, ty,)
-            }
             &Inst::BrTable {
                 index,
                 tmp1,
                 tmp2,
                 ref targets,
             } => {
-                let targets: Vec<_> = targets.iter().map(|x| x.as_label().unwrap()).collect();
                 format!(
                     "{} {},{}##tmp1={},tmp2={}",
                     "br_table",
@@ -1371,32 +1222,28 @@ impl Inst {
                     "{} {},{}",
                     "auipc",
                     format_reg(rd.to_reg(), allocs),
-                    imm.bits
+                    imm.as_i32(),
                 )
             }
             &Inst::Jalr { rd, base, offset } => {
                 let base = format_reg(base, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}({})", "jalr", rd, offset.bits, base)
+                format!("{} {},{}({})", "jalr", rd, offset.as_i16(), base)
             }
             &Inst::Lui { rd, ref imm } => {
-                format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
+                format!(
+                    "{} {},{}",
+                    "lui",
+                    format_reg(rd.to_reg(), allocs),
+                    imm.as_i32()
+                )
             }
-            &Inst::LoadConst32 { rd, imm } => {
+            &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let mut buf = String::new();
                 write!(&mut buf, "auipc {},0; ", rd).unwrap();
                 write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
-                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 4).unwrap();
-                write!(&mut buf, ".4byte 0x{:x}", imm).unwrap();
-                buf
-            }
-            &Inst::LoadConst64 { rd, imm } => {
-                let rd = format_reg(rd.to_reg(), allocs);
-                let mut buf = String::new();
-                write!(&mut buf, "auipc {},0; ", rd).unwrap();
-                write!(&mut buf, "ld {},12({}); ", rd, rd).unwrap();
-                write!(&mut buf, "j {}; ", Inst::INSTRUCTION_SIZE + 8).unwrap();
+                write!(&mut buf, "j {}; ", Inst::UNCOMPRESSED_INSTRUCTION_SIZE + 8).unwrap();
                 write!(&mut buf, ".8byte 0x{:x}", imm).unwrap();
                 buf
             }
@@ -1426,7 +1273,18 @@ impl Inst {
             } => {
                 let rs = format_reg(rs, allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{}{}", alu_op.op_name(), rd, rs, format_frm(frm))
+                let frm = match alu_op {
+                    FpuOPRR::FmvXW
+                    | FpuOPRR::FmvWX
+                    | FpuOPRR::FmvXD
+                    | FpuOPRR::FmvDX
+                    | FpuOPRR::FclassS
+                    | FpuOPRR::FclassD
+                    | FpuOPRR::FcvtDW
+                    | FpuOPRR::FcvtDWU => String::new(),
+                    _ => format_frm(frm),
+                };
+                format!("{} {rd},{rs}{frm}", alu_op.op_name())
             }
             &Inst::FpuRRR {
                 alu_op,
@@ -1441,35 +1299,32 @@ impl Inst {
                 let rs1_is_rs2 = rs1 == rs2;
                 if rs1_is_rs2 && alu_op.is_copy_sign() {
                     // this is move instruction.
-                    format!(
-                        "fmv.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fmv.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else if rs1_is_rs2 && alu_op.is_copy_neg_sign() {
-                    format!(
-                        "fneg.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fneg.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else if rs1_is_rs2 && alu_op.is_copy_xor_sign() {
-                    format!(
-                        "fabs.{} {},{}",
-                        if alu_op.is_32() { "s" } else { "d" },
-                        rd,
-                        rs1
-                    )
+                    format!("fabs.{} {rd},{rs1}", if alu_op.is_32() { "s" } else { "d" })
                 } else {
-                    format!(
-                        "{} {},{},{}{}",
-                        alu_op.op_name(),
-                        rd,
-                        rs1,
-                        rs2,
-                        format_frm(frm)
-                    )
+                    let frm = match alu_op {
+                        FpuOPRRR::FsgnjS
+                        | FpuOPRRR::FsgnjnS
+                        | FpuOPRRR::FsgnjxS
+                        | FpuOPRRR::FsgnjD
+                        | FpuOPRRR::FsgnjnD
+                        | FpuOPRRR::FsgnjxD
+                        | FpuOPRRR::FminS
+                        | FpuOPRRR::FminD
+                        | FpuOPRRR::FmaxS
+                        | FpuOPRRR::FmaxD
+                        | FpuOPRRR::FeqS
+                        | FpuOPRRR::FeqD
+                        | FpuOPRRR::FltS
+                        | FpuOPRRR::FltD
+                        | FpuOPRRR::FleS
+                        | FpuOPRRR::FleD => String::new(),
+                        _ => format_frm(frm),
+                    };
+                    format!("{} {rd},{rs1},{rs2}{frm}", alu_op.op_name())
                 }
             }
             &Inst::FpuRRRR {
@@ -1526,6 +1381,31 @@ impl Inst {
                     }
                 }
             }
+            &Inst::CsrReg { op, rd, rs, csr } => {
+                let rs_s = format_reg(rs, allocs);
+                let rd_s = format_reg(rd.to_reg(), allocs);
+
+                match (op, csr, rd) {
+                    (CsrRegOP::CsrRW, CSR::Frm, rd) if rd.to_reg() == zero_reg() => {
+                        format!("fsrm {rs_s}")
+                    }
+                    _ => {
+                        format!("{op} {rd_s},{csr},{rs_s}")
+                    }
+                }
+            }
+            &Inst::CsrImm { op, rd, csr, imm } => {
+                let rd_s = format_reg(rd.to_reg(), allocs);
+
+                match (op, csr, rd) {
+                    (CsrImmOP::CsrRWI, CSR::Frm, rd) if rd.to_reg() != zero_reg() => {
+                        format!("fsrmi {rd_s},{imm}")
+                    }
+                    _ => {
+                        format!("{op} {rd_s},{csr},{imm}")
+                    }
+                }
+            }
             &Inst::Load {
                 rd,
                 op,
@@ -1556,16 +1436,8 @@ impl Inst {
                 }
                 s
             }
-            &Inst::Ret {
-                ref rets,
-                stack_bytes_to_pop,
-            } => {
-                let mut s = if stack_bytes_to_pop == 0 {
-                    "ret".to_string()
-                } else {
-                    format!("add sp, sp, #{stack_bytes_to_pop} ; ret")
-                };
-
+            &Inst::Rets { ref rets } => {
+                let mut s = "rets".to_string();
                 let mut empty_allocs = AllocationConsumer::default();
                 for ret in rets {
                     let preg = format_reg(ret.preg, &mut empty_allocs);
@@ -1574,6 +1446,7 @@ impl Inst {
                 }
                 s
             }
+            &Inst::Ret {} => "ret".to_string(),
 
             &MInst::Extend {
                 rd,
@@ -1591,9 +1464,6 @@ impl Inst {
                     let shift_bits = (64 - from_bits) as i16;
                     format!("slli {rd},{rn},{shift_bits}; {op} {rd},{rd},{shift_bits}")
                 };
-            }
-            &MInst::AdjustSp { amount } => {
-                format!("{} sp,{:+}", "add", amount)
             }
             &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),
             &MInst::CallInd { ref info } => {
@@ -1628,10 +1498,7 @@ impl Inst {
                 }
                 s
             }
-            &MInst::TrapIf { test, trap_code } => {
-                format!("trap_if {},{}", format_reg(test, allocs), trap_code,)
-            }
-            &MInst::TrapIfC {
+            &MInst::TrapIf {
                 rs1,
                 rs2,
                 cc,
@@ -1639,10 +1506,10 @@ impl Inst {
             } => {
                 let rs1 = format_reg(rs1, allocs);
                 let rs2 = format_reg(rs2, allocs);
-                format!("trap_ifc {}##({} {} {})", trap_code, rs1, cc, rs2)
+                format!("trap_if {trap_code}##({rs1} {cc} {rs2})")
             }
-            &MInst::Jal { dest, .. } => {
-                format!("{} {}", "j", dest)
+            &MInst::Jal { label } => {
+                format!("j {}", label.to_string())
             }
             &MInst::CondBr {
                 taken,
@@ -1652,9 +1519,8 @@ impl Inst {
             } => {
                 let rs1 = format_reg(kind.rs1, allocs);
                 let rs2 = format_reg(kind.rs2, allocs);
-                if not_taken.is_zero() && taken.as_label().is_none() {
-                    let off = taken.as_offset().unwrap();
-                    format!("{} {},{},{}", kind.op_name(), rs1, rs2, off)
+                if not_taken.is_fallthrouh() && taken.as_label().is_none() {
+                    format!("{} {},{},0", kind.op_name(), rs1, rs2)
                 } else {
                     let x = format!(
                         "{} {},{},taken({}),not_taken({})",
@@ -1692,6 +1558,10 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
             }
+            &Inst::ElfTlsGetAddr { rd, ref name } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                format!("elf_tls_get_addr {rd},{}", name.display(None))
+            }
             &MInst::LoadAddr { ref rd, ref mem } => {
                 let rs = mem.to_string_with_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1726,24 +1596,30 @@ impl Inst {
                     Inst::fence_req_to_string(succ),
                 )
             }
-            &MInst::FenceI => "fence.i".into(),
             &MInst::Select {
                 ref dst,
                 condition,
                 ref x,
                 ref y,
-                ty,
             } => {
-                let condition = format_reg(condition, allocs);
+                let c_rs1 = format_reg(condition.rs1, allocs);
+                let c_rs2 = format_reg(condition.rs2, allocs);
                 let x = format_regs(x.regs(), allocs);
                 let y = format_regs(y.regs(), allocs);
-                let dst: Vec<_> = dst.clone().into_iter().map(|r| r.to_reg()).collect();
-                let dst = format_regs(&dst[..], allocs);
-                format!("select_{} {},{},{}##condition={}", ty, dst, x, y, condition)
+                let dst = dst.map(|r| r.to_reg());
+                let dst = format_regs(dst.regs(), allocs);
+                format!(
+                    "select {},{},{}##condition=({} {} {})",
+                    dst,
+                    x,
+                    y,
+                    c_rs1,
+                    condition.kind.to_static_str(),
+                    c_rs2
+                )
             }
             &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
-            &MInst::ECall {} => String::from("ecall"),
             &Inst::VecAluRRRR {
                 op,
                 vd,
@@ -1946,6 +1822,9 @@ pub enum LabelUse {
     /// Since we currently don't support offsets in labels, this relocation has
     /// an implicit offset of 4.
     PCRelLo12I,
+
+    /// 11-bit PC-relative jump offset. Equivalent to the `RVC_JUMP` relocation
+    RVCJump,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -1961,6 +1840,7 @@ impl MachInstLabelUse for LabelUse {
                 Inst::imm_max() as CodeOffset
             }
             LabelUse::B12 => ((1 << 11) - 1) * 2,
+            LabelUse::RVCJump => ((1 << 10) - 1) * 2,
         }
     }
 
@@ -1975,6 +1855,7 @@ impl MachInstLabelUse for LabelUse {
     /// Size of window into code needed to do the patch.
     fn patch_size(self) -> CodeOffset {
         match self {
+            LabelUse::RVCJump => 2,
             LabelUse::Jal20 | LabelUse::B12 | LabelUse::PCRelHi20 | LabelUse::PCRelLo12I => 4,
             LabelUse::PCRel32 => 8,
         }
@@ -1982,8 +1863,8 @@ impl MachInstLabelUse for LabelUse {
 
     /// Perform the patch.
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
-        assert!(use_offset % 4 == 0);
-        assert!(label_offset % 4 == 0);
+        assert!(use_offset % 2 == 0);
+        assert!(label_offset % 2 == 0);
         let offset = (label_offset as i64) - (use_offset as i64);
 
         // re-check range
@@ -2001,7 +1882,7 @@ impl MachInstLabelUse for LabelUse {
     /// Is a veneer supported for this label reference type?
     fn supports_veneer(self) -> bool {
         match self {
-            Self::Jal20 | Self::B12 => true,
+            Self::Jal20 | Self::B12 | Self::RVCJump => true,
             _ => false,
         }
     }
@@ -2009,9 +1890,13 @@ impl MachInstLabelUse for LabelUse {
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
         match self {
-            Self::B12 | Self::Jal20 => 8,
+            Self::B12 | Self::Jal20 | Self::RVCJump => 8,
             _ => unreachable!(),
         }
+    }
+
+    fn worst_case_veneer_size() -> CodeOffset {
+        8
     }
 
     /// Generate a veneer into the buffer, given that this veneer is at `veneer_offset`, and return
@@ -2023,14 +1908,14 @@ impl MachInstLabelUse for LabelUse {
     ) -> (CodeOffset, LabelUse) {
         let base = writable_spilltmp_reg();
         {
-            let x = enc_auipc(base, Imm20::from_bits(0)).to_le_bytes();
+            let x = enc_auipc(base, Imm20::ZERO).to_le_bytes();
             buffer[0] = x[0];
             buffer[1] = x[1];
             buffer[2] = x[2];
             buffer[3] = x[3];
         }
         {
-            let x = enc_jalr(writable_zero_reg(), base.to_reg(), Imm12::from_bits(0)).to_le_bytes();
+            let x = enc_jalr(writable_zero_reg(), base.to_reg(), Imm12::ZERO).to_le_bytes();
             buffer[4] = x[0];
             buffer[5] = x[1];
             buffer[6] = x[2];
@@ -2041,13 +1926,14 @@ impl MachInstLabelUse for LabelUse {
 
     fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
         match (reloc, addend) {
-            (Reloc::RiscvCall, _) => Some(Self::PCRel32),
+            (Reloc::RiscvCallPlt, _) => Some(Self::PCRel32),
             _ => None,
         }
     }
 }
 
 impl LabelUse {
+    #[allow(dead_code)] // in case it's needed in the future
     fn offset_in_range(self, offset: i64) -> bool {
         let min = -(self.max_neg_range() as i64);
         let max = self.max_pos_range() as i64;
@@ -2055,7 +1941,11 @@ impl LabelUse {
     }
 
     fn patch_raw_offset(self, buffer: &mut [u8], offset: i64) {
-        let insn = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+        let insn = match self {
+            LabelUse::RVCJump => u16::from_le_bytes(buffer[..2].try_into().unwrap()) as u32,
+            _ => u32::from_le_bytes(buffer[..4].try_into().unwrap()),
+        };
+
         match self {
             LabelUse::Jal20 => {
                 let offset = offset as u32;
@@ -2067,22 +1957,21 @@ impl LabelUse {
             }
             LabelUse::PCRel32 => {
                 let insn2 = u32::from_le_bytes([buffer[4], buffer[5], buffer[6], buffer[7]]);
-                Inst::generate_imm(offset as u64, |imm20, imm12| {
-                    let imm20 = imm20.unwrap_or_default();
-                    let imm12 = imm12.unwrap_or_default();
-                    // Encode the OR-ed-in value with zero_reg(). The
-                    // register parameter must be in the original
-                    // encoded instruction and or'ing in zeroes does not
-                    // change it.
-                    buffer[0..4].clone_from_slice(&u32::to_le_bytes(
-                        insn | enc_auipc(writable_zero_reg(), imm20),
-                    ));
-                    buffer[4..8].clone_from_slice(&u32::to_le_bytes(
-                        insn2 | enc_jalr(writable_zero_reg(), zero_reg(), imm12),
-                    ));
-                })
-                // expect make sure we handled.
-                .expect("we have check the range before,this is a compiler error.");
+                Inst::generate_imm(offset as u64)
+                    .map(|(imm20, imm12)| {
+                        // Encode the OR-ed-in value with zero_reg(). The
+                        // register parameter must be in the original
+                        // encoded instruction and or'ing in zeroes does not
+                        // change it.
+                        buffer[0..4].clone_from_slice(&u32::to_le_bytes(
+                            insn | enc_auipc(writable_zero_reg(), imm20),
+                        ));
+                        buffer[4..8].clone_from_slice(&u32::to_le_bytes(
+                            insn2 | enc_jalr(writable_zero_reg(), zero_reg(), imm12),
+                        ));
+                    })
+                    // expect make sure we handled.
+                    .expect("we have check the range before,this is a compiler error.");
             }
 
             LabelUse::B12 => {
@@ -2121,6 +2010,18 @@ impl LabelUse {
                 let lo12 = (offset + 4) as u32 & 0xFFF;
                 let insn = (insn & 0xFFFFF) | (lo12 << 20);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
+            }
+            LabelUse::RVCJump => {
+                debug_assert!(offset & 1 == 0);
+
+                // We currently only support this for the C.J operation, so assert that is the opcode in
+                // the buffer.
+                debug_assert_eq!(insn & 0xFFFF, 0xA001);
+
+                buffer[0..2].clone_from_slice(&u16::to_le_bytes(encode_cj_type(
+                    CjOp::CJ,
+                    Imm12::from_i16(i16::try_from(offset).unwrap()),
+                )));
             }
         }
     }

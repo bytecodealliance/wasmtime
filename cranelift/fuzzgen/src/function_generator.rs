@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::cranelift_arbitrary::CraneliftArbitrary;
+use crate::target_isa_extras::TargetIsaExtras;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
@@ -21,6 +22,7 @@ use cranelift::prelude::{
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
+use std::str::FromStr;
 use target_lexicon::{Architecture, Triple};
 
 type BlockSignature = Vec<Type>;
@@ -130,7 +132,14 @@ fn insert_stack_load(
 ) -> Result<()> {
     let typevar = rets[0];
     let type_size = typevar.bytes();
-    let (slot, slot_size) = fgen.stack_slot_with_size(type_size)?;
+    let (slot, slot_size, category) = fgen.stack_slot_with_size(type_size)?;
+
+    // `stack_load` doesen't support setting MemFlags, and it does not set any
+    // alias analysis bits, so we can only emit it for `Other` slots.
+    if category != AACategory::Other {
+        return Err(arbitrary::Error::IncorrectFormat.into());
+    }
+
     let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
 
     let val = builder.ins().stack_load(typevar, slot, offset);
@@ -149,7 +158,15 @@ fn insert_stack_store(
 ) -> Result<()> {
     let typevar = args[0];
     let type_size = typevar.bytes();
-    let (slot, slot_size) = fgen.stack_slot_with_size(type_size)?;
+
+    let (slot, slot_size, category) = fgen.stack_slot_with_size(type_size)?;
+
+    // `stack_store` doesen't support setting MemFlags, and it does not set any
+    // alias analysis bits, so we can only emit it for `Other` slots.
+    if category != AACategory::Other {
+        return Err(arbitrary::Error::IncorrectFormat.into());
+    }
+
     let offset = fgen.u.int_in_range(0..=(slot_size - type_size))? as i32;
 
     let arg0 = fgen.get_variable_of_type(typevar)?;
@@ -512,28 +529,10 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5474
                 (Opcode::Urem | Opcode::Srem, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5466
-                (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/3370
                 (
                     Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
                     &[I128, I128]
-                ),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bnot, &[F32 | F64]),
-                (
-                    Opcode::Band
-                        | Opcode::Bor
-                        | Opcode::Bxor
-                        | Opcode::BandNot
-                        | Opcode::BorNot
-                        | Opcode::BxorNot,
-                    &([F32, F32] | [F64, F64])
-                ),
-                // https://github.com/bytecodealliance/wasmtime/issues/5041
-                (
-                    Opcode::BandNot | Opcode::BorNot | Opcode::BxorNot,
-                    &([I8, I8] | [I16, I16] | [I32, I32] | [I64, I64] | [I128, I128])
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5107
                 (Opcode::Cls, &[I8], &[I8]),
@@ -541,15 +540,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Cls, &[I32], &[I32]),
                 (Opcode::Cls, &[I64], &[I64]),
                 (Opcode::Cls, &[I128], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5197
-                (
-                    Opcode::Bitselect,
-                    &([I8, I8, I8]
-                        | [I16, I16, I16]
-                        | [I32, I32, I32]
-                        | [I64, I64, I64]
-                        | [I128, I128, I128])
-                ),
+                // TODO
+                (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
                 (
@@ -614,6 +606,15 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[],
                     &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
                 ),
+                // TODO
+                (
+                    Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
+                    &[I8X16 | I16X8 | I32X4 | I64X2, I128]
+                ),
+                (
+                    Opcode::Rotr | Opcode::Rotl,
+                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
+                ),
             )
         }
 
@@ -627,8 +628,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5472
                 (Opcode::Urem | Opcode::Srem, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5467
-                (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4313
                 (
                     Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
@@ -653,7 +652,8 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                         | Opcode::FcvtToUintSat
                         | Opcode::FcvtToSint
                         | Opcode::FcvtToSintSat,
-                    &[F32 | F64]
+                    &[F32 | F64],
+                    &[I128]
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4933
                 (
@@ -672,6 +672,18 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // https://github.com/bytecodealliance/wasmtime/issues/6104
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
+                // TODO
+                (
+                    Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
+                    &[I8X16 | I16X8 | I32X4 | I64X2, I128]
+                ),
+                (
+                    Opcode::Rotr | Opcode::Rotl,
+                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
+                ),
+                // TODO
+                (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
+                (Opcode::VhighBits, &[F32X4 | F64X2]),
             )
         }
 
@@ -714,16 +726,12 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // https://github.com/bytecodealliance/wasmtime/issues/6104
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
+                // TODO
+                (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
             )
         }
 
         Architecture::Riscv64(_) => {
-            // RISC-V Does not support SIMD at all
-            let is_simd = args.iter().chain(rets).any(|t| t.is_vector());
-            if is_simd {
-                return false;
-            }
-
             exceptions!(
                 op,
                 args,
@@ -750,7 +758,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (
                     Opcode::FcvtToUintSat | Opcode::FcvtToSintSat,
                     &[F32 | F64],
-                    &[I8 | I16 | I128]
+                    &[I128]
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
                 (
@@ -761,6 +769,18 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // https://github.com/bytecodealliance/wasmtime/issues/6104
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
+                // TODO
+                (
+                    Opcode::SelectSpectreGuard,
+                    &[_, _, _],
+                    &[F32 | F64 | I8X16 | I16X8 | I32X4 | I64X2 | F64X2 | F32X4]
+                ),
+                // TODO
+                (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
+                (
+                    Opcode::Rotr | Opcode::Rotl,
+                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
+                ),
             )
         }
 
@@ -777,6 +797,17 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
         I8X16, I16X8, I32X4, I64X2, // SIMD Integers
         F32X4, F64X2, // SIMD Floats
     ];
+
+    // When this env variable is passed, we only generate instructions for the opcodes listed in
+    // the comma-separated list. This is useful for debugging, as it allows us to focus on a few
+    // specific opcodes.
+    let allowed_opcodes = std::env::var("FUZZGEN_ALLOWED_OPS").ok().map(|s| {
+        s.split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| Opcode::from_str(s).expect("Unrecoginzed opcode"))
+            .collect::<Vec<_>>()
+    });
 
     Opcode::all()
         .iter()
@@ -890,7 +921,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::TableAddr),
                 (Opcode::Null),
                 (Opcode::X86Blendv),
-                (Opcode::VallTrue),
                 (Opcode::IcmpImm),
                 (Opcode::X86Pmulhrsw),
                 (Opcode::IaddImm),
@@ -918,146 +948,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::ScalarToVector),
                 (Opcode::X86Pmaddubsw),
                 (Opcode::X86Cvtt2dq),
-                (Opcode::Select, &[I8, F32, F32], &[F32]),
-                (Opcode::Select, &[I16, F32, F32], &[F32]),
-                (Opcode::Select, &[I32, F32, F32], &[F32]),
-                (Opcode::Select, &[I64, F32, F32], &[F32]),
-                (Opcode::Select, &[I128, F32, F32], &[F32]),
-                (Opcode::Select, &[I8, F64, F64], &[F64]),
-                (Opcode::Select, &[I16, F64, F64], &[F64]),
-                (Opcode::Select, &[I32, F64, F64], &[F64]),
-                (Opcode::Select, &[I64, F64, F64], &[F64]),
-                (Opcode::Select, &[I128, F64, F64], &[F64]),
-                (Opcode::Select, &[I8, I8X16, I8X16], &[I8X16]),
-                (Opcode::Select, &[I16, I8X16, I8X16], &[I8X16]),
-                (Opcode::Select, &[I32, I8X16, I8X16], &[I8X16]),
-                (Opcode::Select, &[I64, I8X16, I8X16], &[I8X16]),
-                (Opcode::Select, &[I128, I8X16, I8X16], &[I8X16]),
-                (Opcode::Select, &[I8, I16X8, I16X8], &[I16X8]),
-                (Opcode::Select, &[I16, I16X8, I16X8], &[I16X8]),
-                (Opcode::Select, &[I32, I16X8, I16X8], &[I16X8]),
-                (Opcode::Select, &[I64, I16X8, I16X8], &[I16X8]),
-                (Opcode::Select, &[I128, I16X8, I16X8], &[I16X8]),
-                (Opcode::Select, &[I8, I32X4, I32X4], &[I32X4]),
-                (Opcode::Select, &[I16, I32X4, I32X4], &[I32X4]),
-                (Opcode::Select, &[I32, I32X4, I32X4], &[I32X4]),
-                (Opcode::Select, &[I64, I32X4, I32X4], &[I32X4]),
-                (Opcode::Select, &[I128, I32X4, I32X4], &[I32X4]),
-                (Opcode::Select, &[I8, I64X2, I64X2], &[I64X2]),
-                (Opcode::Select, &[I16, I64X2, I64X2], &[I64X2]),
-                (Opcode::Select, &[I32, I64X2, I64X2], &[I64X2]),
-                (Opcode::Select, &[I64, I64X2, I64X2], &[I64X2]),
-                (Opcode::Select, &[I128, I64X2, I64X2], &[I64X2]),
-                (Opcode::Select, &[I8, F32X4, F32X4], &[F32X4]),
-                (Opcode::Select, &[I16, F32X4, F32X4], &[F32X4]),
-                (Opcode::Select, &[I32, F32X4, F32X4], &[F32X4]),
-                (Opcode::Select, &[I64, F32X4, F32X4], &[F32X4]),
-                (Opcode::Select, &[I128, F32X4, F32X4], &[F32X4]),
-                (Opcode::Select, &[I8, F64X2, F64X2], &[F64X2]),
-                (Opcode::Select, &[I16, F64X2, F64X2], &[F64X2]),
-                (Opcode::Select, &[I32, F64X2, F64X2], &[F64X2]),
-                (Opcode::Select, &[I64, F64X2, F64X2], &[F64X2]),
-                (Opcode::Select, &[I128, F64X2, F64X2], &[F64X2]),
-                (Opcode::SelectSpectreGuard, &[I8, F32, F32], &[F32]),
-                (Opcode::SelectSpectreGuard, &[I16, F32, F32], &[F32]),
-                (Opcode::SelectSpectreGuard, &[I32, F32, F32], &[F32]),
-                (Opcode::SelectSpectreGuard, &[I64, F32, F32], &[F32]),
-                (Opcode::SelectSpectreGuard, &[I128, F32, F32], &[F32]),
-                (Opcode::SelectSpectreGuard, &[I8, F64, F64], &[F64]),
-                (Opcode::SelectSpectreGuard, &[I16, F64, F64], &[F64]),
-                (Opcode::SelectSpectreGuard, &[I32, F64, F64], &[F64]),
-                (Opcode::SelectSpectreGuard, &[I64, F64, F64], &[F64]),
-                (Opcode::SelectSpectreGuard, &[I128, F64, F64], &[F64]),
-                (Opcode::SelectSpectreGuard, &[I8, I8X16, I8X16], &[I8X16]),
-                (Opcode::SelectSpectreGuard, &[I16, I8X16, I8X16], &[I8X16]),
-                (Opcode::SelectSpectreGuard, &[I32, I8X16, I8X16], &[I8X16]),
-                (Opcode::SelectSpectreGuard, &[I64, I8X16, I8X16], &[I8X16]),
-                (Opcode::SelectSpectreGuard, &[I128, I8X16, I8X16], &[I8X16]),
-                (Opcode::SelectSpectreGuard, &[I8, I16X8, I16X8], &[I16X8]),
-                (Opcode::SelectSpectreGuard, &[I16, I16X8, I16X8], &[I16X8]),
-                (Opcode::SelectSpectreGuard, &[I32, I16X8, I16X8], &[I16X8]),
-                (Opcode::SelectSpectreGuard, &[I64, I16X8, I16X8], &[I16X8]),
-                (Opcode::SelectSpectreGuard, &[I128, I16X8, I16X8], &[I16X8]),
-                (Opcode::SelectSpectreGuard, &[I8, I32X4, I32X4], &[I32X4]),
-                (Opcode::SelectSpectreGuard, &[I16, I32X4, I32X4], &[I32X4]),
-                (Opcode::SelectSpectreGuard, &[I32, I32X4, I32X4], &[I32X4]),
-                (Opcode::SelectSpectreGuard, &[I64, I32X4, I32X4], &[I32X4]),
-                (Opcode::SelectSpectreGuard, &[I128, I32X4, I32X4], &[I32X4]),
-                (Opcode::SelectSpectreGuard, &[I8, I64X2, I64X2], &[I64X2]),
-                (Opcode::SelectSpectreGuard, &[I16, I64X2, I64X2], &[I64X2]),
-                (Opcode::SelectSpectreGuard, &[I32, I64X2, I64X2], &[I64X2]),
-                (Opcode::SelectSpectreGuard, &[I64, I64X2, I64X2], &[I64X2]),
-                (Opcode::SelectSpectreGuard, &[I128, I64X2, I64X2], &[I64X2]),
-                (Opcode::SelectSpectreGuard, &[I8, F32X4, F32X4], &[F32X4]),
-                (Opcode::SelectSpectreGuard, &[I16, F32X4, F32X4], &[F32X4]),
-                (Opcode::SelectSpectreGuard, &[I32, F32X4, F32X4], &[F32X4]),
-                (Opcode::SelectSpectreGuard, &[I64, F32X4, F32X4], &[F32X4]),
-                (Opcode::SelectSpectreGuard, &[I128, F32X4, F32X4], &[F32X4]),
-                (Opcode::SelectSpectreGuard, &[I8, F64X2, F64X2], &[F64X2]),
-                (Opcode::SelectSpectreGuard, &[I16, F64X2, F64X2], &[F64X2]),
-                (Opcode::SelectSpectreGuard, &[I32, F64X2, F64X2], &[F64X2]),
-                (Opcode::SelectSpectreGuard, &[I64, F64X2, F64X2], &[F64X2]),
-                (Opcode::SelectSpectreGuard, &[I128, F64X2, F64X2], &[F64X2]),
-                (Opcode::Bitselect, &[F32, F32, F32], &[F32]),
-                (Opcode::Bitselect, &[F64, F64, F64], &[F64]),
-                (Opcode::Bitselect, &[F32X4, F32X4, F32X4], &[F32X4]),
-                (Opcode::Bitselect, &[F64X2, F64X2, F64X2], &[F64X2]),
-                (Opcode::VanyTrue, &[F32X4], &[I8]),
-                (Opcode::VanyTrue, &[F64X2], &[I8]),
-                (Opcode::VhighBits, &[F32X4], &[I8]),
-                (Opcode::VhighBits, &[F64X2], &[I8]),
-                (Opcode::VhighBits, &[I8X16], &[I16]),
-                (Opcode::VhighBits, &[I16X8], &[I16]),
-                (Opcode::VhighBits, &[I32X4], &[I16]),
-                (Opcode::VhighBits, &[I64X2], &[I16]),
-                (Opcode::VhighBits, &[F32X4], &[I16]),
-                (Opcode::VhighBits, &[F64X2], &[I16]),
-                (Opcode::VhighBits, &[I8X16], &[I32]),
-                (Opcode::VhighBits, &[I16X8], &[I32]),
-                (Opcode::VhighBits, &[I32X4], &[I32]),
-                (Opcode::VhighBits, &[I64X2], &[I32]),
-                (Opcode::VhighBits, &[F32X4], &[I32]),
-                (Opcode::VhighBits, &[F64X2], &[I32]),
-                (Opcode::VhighBits, &[I8X16], &[I64]),
-                (Opcode::VhighBits, &[I16X8], &[I64]),
-                (Opcode::VhighBits, &[I32X4], &[I64]),
-                (Opcode::VhighBits, &[I64X2], &[I64]),
-                (Opcode::VhighBits, &[F32X4], &[I64]),
-                (Opcode::VhighBits, &[F64X2], &[I64]),
-                (Opcode::VhighBits, &[I8X16], &[I128]),
-                (Opcode::VhighBits, &[I16X8], &[I128]),
-                (Opcode::VhighBits, &[I32X4], &[I128]),
-                (Opcode::VhighBits, &[I64X2], &[I128]),
-                (Opcode::VhighBits, &[F32X4], &[I128]),
-                (Opcode::VhighBits, &[F64X2], &[I128]),
-                (Opcode::VhighBits, &[I8X16], &[I8X16]),
-                (Opcode::VhighBits, &[I16X8], &[I8X16]),
-                (Opcode::VhighBits, &[I32X4], &[I8X16]),
-                (Opcode::VhighBits, &[I64X2], &[I8X16]),
-                (Opcode::VhighBits, &[F32X4], &[I8X16]),
-                (Opcode::VhighBits, &[F64X2], &[I8X16]),
-                (Opcode::VhighBits, &[I8X16], &[I16X8]),
-                (Opcode::VhighBits, &[I16X8], &[I16X8]),
-                (Opcode::VhighBits, &[I32X4], &[I16X8]),
-                (Opcode::VhighBits, &[I64X2], &[I16X8]),
-                (Opcode::VhighBits, &[F32X4], &[I16X8]),
-                (Opcode::VhighBits, &[F64X2], &[I16X8]),
-                (Opcode::VhighBits, &[I8X16], &[I32X4]),
-                (Opcode::VhighBits, &[I16X8], &[I32X4]),
-                (Opcode::VhighBits, &[I32X4], &[I32X4]),
-                (Opcode::VhighBits, &[I64X2], &[I32X4]),
-                (Opcode::VhighBits, &[F32X4], &[I32X4]),
-                (Opcode::VhighBits, &[F64X2], &[I32X4]),
-                (Opcode::VhighBits, &[I8X16], &[I64X2]),
-                (Opcode::VhighBits, &[I16X8], &[I64X2]),
-                (Opcode::VhighBits, &[I32X4], &[I64X2]),
-                (Opcode::VhighBits, &[I64X2], &[I64X2]),
-                (Opcode::VhighBits, &[F32X4], &[I64X2]),
-                (Opcode::VhighBits, &[F64X2], &[I64X2]),
-                (Opcode::Ineg, &[I8X16], &[I8X16]),
-                (Opcode::Ineg, &[I16X8], &[I16X8]),
-                (Opcode::Ineg, &[I32X4], &[I32X4]),
-                (Opcode::Ineg, &[I64X2], &[I64X2]),
                 (Opcode::Umulhi, &[I128, I128], &[I128]),
                 (Opcode::Smulhi, &[I128, I128], &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/6073
@@ -1068,106 +958,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::Isplit, &[I64], &[I32, I32]),
                 (Opcode::Isplit, &[I32], &[I16, I16]),
                 (Opcode::Isplit, &[I16], &[I8, I8]),
-                (Opcode::Rotl, &[I8X16, I8], &[I8X16]),
-                (Opcode::Rotl, &[I8X16, I16], &[I8X16]),
-                (Opcode::Rotl, &[I8X16, I32], &[I8X16]),
-                (Opcode::Rotl, &[I8X16, I64], &[I8X16]),
-                (Opcode::Rotl, &[I8X16, I128], &[I8X16]),
-                (Opcode::Rotl, &[I16X8, I8], &[I16X8]),
-                (Opcode::Rotl, &[I16X8, I16], &[I16X8]),
-                (Opcode::Rotl, &[I16X8, I32], &[I16X8]),
-                (Opcode::Rotl, &[I16X8, I64], &[I16X8]),
-                (Opcode::Rotl, &[I16X8, I128], &[I16X8]),
-                (Opcode::Rotl, &[I32X4, I8], &[I32X4]),
-                (Opcode::Rotl, &[I32X4, I16], &[I32X4]),
-                (Opcode::Rotl, &[I32X4, I32], &[I32X4]),
-                (Opcode::Rotl, &[I32X4, I64], &[I32X4]),
-                (Opcode::Rotl, &[I32X4, I128], &[I32X4]),
-                (Opcode::Rotl, &[I64X2, I8], &[I64X2]),
-                (Opcode::Rotl, &[I64X2, I16], &[I64X2]),
-                (Opcode::Rotl, &[I64X2, I32], &[I64X2]),
-                (Opcode::Rotl, &[I64X2, I64], &[I64X2]),
-                (Opcode::Rotl, &[I64X2, I128], &[I64X2]),
-                (Opcode::Rotr, &[I8X16, I8], &[I8X16]),
-                (Opcode::Rotr, &[I8X16, I16], &[I8X16]),
-                (Opcode::Rotr, &[I8X16, I32], &[I8X16]),
-                (Opcode::Rotr, &[I8X16, I64], &[I8X16]),
-                (Opcode::Rotr, &[I8X16, I128], &[I8X16]),
-                (Opcode::Rotr, &[I16X8, I8], &[I16X8]),
-                (Opcode::Rotr, &[I16X8, I16], &[I16X8]),
-                (Opcode::Rotr, &[I16X8, I32], &[I16X8]),
-                (Opcode::Rotr, &[I16X8, I64], &[I16X8]),
-                (Opcode::Rotr, &[I16X8, I128], &[I16X8]),
-                (Opcode::Rotr, &[I32X4, I8], &[I32X4]),
-                (Opcode::Rotr, &[I32X4, I16], &[I32X4]),
-                (Opcode::Rotr, &[I32X4, I32], &[I32X4]),
-                (Opcode::Rotr, &[I32X4, I64], &[I32X4]),
-                (Opcode::Rotr, &[I32X4, I128], &[I32X4]),
-                (Opcode::Rotr, &[I64X2, I8], &[I64X2]),
-                (Opcode::Rotr, &[I64X2, I16], &[I64X2]),
-                (Opcode::Rotr, &[I64X2, I32], &[I64X2]),
-                (Opcode::Rotr, &[I64X2, I64], &[I64X2]),
-                (Opcode::Rotr, &[I64X2, I128], &[I64X2]),
-                (Opcode::Ishl, &[I8X16, I8], &[I8X16]),
-                (Opcode::Ishl, &[I8X16, I16], &[I8X16]),
-                (Opcode::Ishl, &[I8X16, I32], &[I8X16]),
-                (Opcode::Ishl, &[I8X16, I64], &[I8X16]),
-                (Opcode::Ishl, &[I8X16, I128], &[I8X16]),
-                (Opcode::Ishl, &[I16X8, I8], &[I16X8]),
-                (Opcode::Ishl, &[I16X8, I16], &[I16X8]),
-                (Opcode::Ishl, &[I16X8, I32], &[I16X8]),
-                (Opcode::Ishl, &[I16X8, I64], &[I16X8]),
-                (Opcode::Ishl, &[I16X8, I128], &[I16X8]),
-                (Opcode::Ishl, &[I32X4, I8], &[I32X4]),
-                (Opcode::Ishl, &[I32X4, I16], &[I32X4]),
-                (Opcode::Ishl, &[I32X4, I32], &[I32X4]),
-                (Opcode::Ishl, &[I32X4, I64], &[I32X4]),
-                (Opcode::Ishl, &[I32X4, I128], &[I32X4]),
-                (Opcode::Ishl, &[I64X2, I8], &[I64X2]),
-                (Opcode::Ishl, &[I64X2, I16], &[I64X2]),
-                (Opcode::Ishl, &[I64X2, I32], &[I64X2]),
-                (Opcode::Ishl, &[I64X2, I64], &[I64X2]),
-                (Opcode::Ishl, &[I64X2, I128], &[I64X2]),
-                (Opcode::Ushr, &[I8X16, I8], &[I8X16]),
-                (Opcode::Ushr, &[I8X16, I16], &[I8X16]),
-                (Opcode::Ushr, &[I8X16, I32], &[I8X16]),
-                (Opcode::Ushr, &[I8X16, I64], &[I8X16]),
-                (Opcode::Ushr, &[I8X16, I128], &[I8X16]),
-                (Opcode::Ushr, &[I16X8, I8], &[I16X8]),
-                (Opcode::Ushr, &[I16X8, I16], &[I16X8]),
-                (Opcode::Ushr, &[I16X8, I32], &[I16X8]),
-                (Opcode::Ushr, &[I16X8, I64], &[I16X8]),
-                (Opcode::Ushr, &[I16X8, I128], &[I16X8]),
-                (Opcode::Ushr, &[I32X4, I8], &[I32X4]),
-                (Opcode::Ushr, &[I32X4, I16], &[I32X4]),
-                (Opcode::Ushr, &[I32X4, I32], &[I32X4]),
-                (Opcode::Ushr, &[I32X4, I64], &[I32X4]),
-                (Opcode::Ushr, &[I32X4, I128], &[I32X4]),
-                (Opcode::Ushr, &[I64X2, I8], &[I64X2]),
-                (Opcode::Ushr, &[I64X2, I16], &[I64X2]),
-                (Opcode::Ushr, &[I64X2, I32], &[I64X2]),
-                (Opcode::Ushr, &[I64X2, I64], &[I64X2]),
-                (Opcode::Ushr, &[I64X2, I128], &[I64X2]),
-                (Opcode::Sshr, &[I8X16, I8], &[I8X16]),
-                (Opcode::Sshr, &[I8X16, I16], &[I8X16]),
-                (Opcode::Sshr, &[I8X16, I32], &[I8X16]),
-                (Opcode::Sshr, &[I8X16, I64], &[I8X16]),
-                (Opcode::Sshr, &[I8X16, I128], &[I8X16]),
-                (Opcode::Sshr, &[I16X8, I8], &[I16X8]),
-                (Opcode::Sshr, &[I16X8, I16], &[I16X8]),
-                (Opcode::Sshr, &[I16X8, I32], &[I16X8]),
-                (Opcode::Sshr, &[I16X8, I64], &[I16X8]),
-                (Opcode::Sshr, &[I16X8, I128], &[I16X8]),
-                (Opcode::Sshr, &[I32X4, I8], &[I32X4]),
-                (Opcode::Sshr, &[I32X4, I16], &[I32X4]),
-                (Opcode::Sshr, &[I32X4, I32], &[I32X4]),
-                (Opcode::Sshr, &[I32X4, I64], &[I32X4]),
-                (Opcode::Sshr, &[I32X4, I128], &[I32X4]),
-                (Opcode::Sshr, &[I64X2, I8], &[I64X2]),
-                (Opcode::Sshr, &[I64X2, I16], &[I64X2]),
-                (Opcode::Sshr, &[I64X2, I32], &[I64X2]),
-                (Opcode::Sshr, &[I64X2, I64], &[I64X2]),
-                (Opcode::Sshr, &[I64X2, I128], &[I64X2]),
                 (Opcode::Fmin, &[F32X4, F32X4], &[F32X4]),
                 (Opcode::Fmin, &[F64X2, F64X2], &[F64X2]),
                 (Opcode::Fmax, &[F32X4, F32X4], &[F32X4]),
@@ -1270,6 +1060,11 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::FcvtFromSint, &[I32X4], &[F64X2]),
             )
         })
+        .filter(|(op, ..)| {
+            allowed_opcodes
+                .as_ref()
+                .map_or(true, |opcodes| opcodes.contains(op))
+        })
         .collect()
 });
 
@@ -1355,6 +1150,45 @@ enum BlockTerminatorKind {
     TailCallIndirect,
 }
 
+/// Alias Analysis Category
+///
+/// Our alias analysis pass supports 4 categories of accesses to distinguish
+/// different regions. The "Other" region is the general case, and is the default
+/// Although they have highly suggestive names there is no difference between any
+/// of the categories.
+///
+/// We assign each stack slot a category when we first generate them, and then
+/// ensure that all accesses to that stack slot are correctly tagged. We already
+/// ensure that memory accesses never cross stack slots, so there is no risk
+/// of a memory access being tagged with the wrong category.
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum AACategory {
+    Other,
+    Heap,
+    Table,
+    VmCtx,
+}
+
+impl AACategory {
+    pub fn all() -> &'static [Self] {
+        &[
+            AACategory::Other,
+            AACategory::Heap,
+            AACategory::Table,
+            AACategory::VmCtx,
+        ]
+    }
+
+    pub fn update_memflags(&self, flags: &mut MemFlags) {
+        match self {
+            AACategory::Other => {}
+            AACategory::Heap => flags.set_heap(),
+            AACategory::Table => flags.set_table(),
+            AACategory::VmCtx => flags.set_vmctx(),
+        }
+    }
+}
+
 #[derive(Default)]
 struct Resources {
     vars: HashMap<Type, Vec<Variable>>,
@@ -1362,7 +1196,10 @@ struct Resources {
     blocks_without_params: Vec<Block>,
     block_terminators: Vec<BlockTerminator>,
     func_refs: Vec<(Signature, SigRef, FuncRef)>,
-    stack_slots: Vec<(StackSlot, StackSize)>,
+    /// This field is required to be sorted by stack slot size at all times.
+    /// We use this invariant when searching for stack slots with a given size.
+    /// See [FunctionGenerator::stack_slot_with_size]
+    stack_slots: Vec<(StackSlot, StackSize, AACategory)>,
     usercalls: Vec<(UserExternalName, Signature)>,
     libcalls: Vec<LibCall>,
 }
@@ -1445,11 +1282,11 @@ where
     }
 
     /// Finds a stack slot with size of at least n bytes
-    fn stack_slot_with_size(&mut self, n: u32) -> Result<(StackSlot, StackSize)> {
+    fn stack_slot_with_size(&mut self, n: u32) -> Result<(StackSlot, StackSize, AACategory)> {
         let first = self
             .resources
             .stack_slots
-            .partition_point(|&(_slot, size)| size < n);
+            .partition_point(|&(_slot, size, _category)| size < n);
         Ok(*self.u.choose(&self.resources.stack_slots[first..])?)
     }
 
@@ -1470,11 +1307,11 @@ where
         builder: &mut FunctionBuilder,
         min_size: u32,
         aligned: bool,
-    ) -> Result<(Value, u32)> {
+    ) -> Result<(Value, u32, AACategory)> {
         // TODO: Currently our only source of addresses is stack_addr, but we
         // should add global_value, symbol_value eventually
-        let (addr, available_size) = {
-            let (ss, slot_size) = self.stack_slot_with_size(min_size)?;
+        let (addr, available_size, category) = {
+            let (ss, slot_size, category) = self.stack_slot_with_size(min_size)?;
 
             // stack_slot_with_size guarantees that slot_size >= min_size
             let max_offset = slot_size - min_size;
@@ -1486,7 +1323,7 @@ where
 
             let base_addr = builder.ins().stack_addr(I64, ss, offset as i32);
             let available_size = slot_size.saturating_sub(offset);
-            (base_addr, available_size)
+            (base_addr, available_size, category)
         };
 
         // TODO: Insert a bunch of amode opcodes here to modify the address!
@@ -1494,7 +1331,7 @@ where
         // Now that we have an address and a size, we just choose a random offset to return to the
         // caller. Preserving min_size bytes.
         let max_offset = available_size.saturating_sub(min_size);
-        Ok((addr, max_offset))
+        Ok((addr, max_offset, category))
     }
 
     // Generates an address and memflags for a load or store.
@@ -1534,7 +1371,11 @@ where
             flags.set_notrap();
         }
 
-        let (address, max_offset) = self.generate_load_store_address(builder, min_size, aligned)?;
+        let (address, max_offset, category) =
+            self.generate_load_store_address(builder, min_size, aligned)?;
+
+        // Set the Alias Analysis bits on the memflags
+        category.update_memflags(&mut flags);
 
         // Pick an offset to pass into the load/store.
         let offset = if aligned {
@@ -1557,9 +1398,9 @@ where
     /// Generates an instruction(`iconst`/`fconst`/etc...) to introduce a constant value
     fn generate_const(&mut self, builder: &mut FunctionBuilder, ty: Type) -> Result<Value> {
         Ok(match self.u.datavalue(ty)? {
-            DataValue::I8(i) => builder.ins().iconst(ty, i as i64),
-            DataValue::I16(i) => builder.ins().iconst(ty, i as i64),
-            DataValue::I32(i) => builder.ins().iconst(ty, i as i64),
+            DataValue::I8(i) => builder.ins().iconst(ty, i as u8 as i64),
+            DataValue::I16(i) => builder.ins().iconst(ty, i as u16 as i64),
+            DataValue::I32(i) => builder.ins().iconst(ty, i as u32 as i64),
             DataValue::I64(i) => builder.ins().iconst(ty, i as i64),
             DataValue::I128(i) => {
                 let hi = builder.ins().iconst(I64, (i >> 64) as i64);
@@ -1770,12 +1611,16 @@ where
             let bytes = self.param(&self.config.static_stack_slot_size)? as u32;
             let ss_data = StackSlotData::new(StackSlotKind::ExplicitSlot, bytes);
             let slot = builder.create_sized_stack_slot(ss_data);
-            self.resources.stack_slots.push((slot, bytes));
+
+            // Generate one Alias Analysis Category for each slot
+            let category = *self.u.choose(AACategory::all())?;
+
+            self.resources.stack_slots.push((slot, bytes, category));
         }
 
         self.resources
             .stack_slots
-            .sort_unstable_by_key(|&(_slot, bytes)| bytes);
+            .sort_unstable_by_key(|&(_slot, bytes, _category)| bytes);
 
         Ok(())
     }
@@ -1788,7 +1633,7 @@ where
         let i64_zero = builder.ins().iconst(I64, 0);
         let i128_zero = builder.ins().uextend(I128, i64_zero);
 
-        for &(slot, init_size) in self.resources.stack_slots.iter() {
+        for &(slot, init_size, category) in self.resources.stack_slots.iter() {
             let mut size = init_size;
 
             // Insert the largest available store for the remaining size.
@@ -1801,7 +1646,16 @@ where
                     sz if sz / 2 > 0 => (i16_zero, 2),
                     _ => (i8_zero, 1),
                 };
-                builder.ins().stack_store(val, slot, offset);
+                let addr = builder.ins().stack_addr(I64, slot, offset);
+
+                // Each stack slot has an associated category, that means we have to set the
+                // correct memflags for it. So we can't use `stack_store` directly.
+                let mut flags = MemFlags::new();
+                flags.set_notrap();
+                category.update_memflags(&mut flags);
+
+                builder.ins().store(flags, val, addr, 0);
+
                 size -= filled;
             }
         }
@@ -2008,7 +1862,7 @@ where
 
         let mut params = Vec::with_capacity(param_count);
         for _ in 0..param_count {
-            params.push(self.u._type(self.isa.triple().architecture)?);
+            params.push(self.u._type((&*self.isa).supports_simd())?);
         }
         Ok(params)
     }
@@ -2028,7 +1882,7 @@ where
 
         // Create a pool of vars that are going to be used in this function
         for _ in 0..self.param(&self.config.vars_per_function)? {
-            let ty = self.u._type(self.isa.triple().architecture)?;
+            let ty = self.u._type((&*self.isa).supports_simd())?;
             let value = self.generate_const(builder, ty)?;
             vars.push((ty, value));
         }

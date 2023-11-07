@@ -244,6 +244,7 @@ impl ComponentInstance {
 
     /// Returns a pointer to the "may leave" flag for this instance specified
     /// for canonical lowering and lifting operations.
+    #[inline]
     pub fn instance_flags(&self, instance: RuntimeComponentInstanceIndex) -> InstanceFlags {
         unsafe {
             let ptr = self
@@ -560,6 +561,7 @@ impl ComponentInstance {
     }
 
     /// Returns the runtime state of resources associated with this component.
+    #[inline]
     pub fn component_resource_tables(
         &mut self,
     ) -> &mut PrimaryMap<TypeResourceTableIndex, ResourceTable> {

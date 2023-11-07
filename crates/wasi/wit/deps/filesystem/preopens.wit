@@ -1,6 +1,6 @@
 interface preopens {
-    use types.{descriptor}
+    use types.{descriptor};
 
     /// Return the set of preopened directories, and their path.
-    get-directories: func() -> list<tuple<descriptor, string>>
+    get-directories: func() -> list<tuple<descriptor, string>>;
 }

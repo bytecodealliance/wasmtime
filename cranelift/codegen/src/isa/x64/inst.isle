@@ -32,7 +32,7 @@
        (AluRmRVex (size OperandSize)
                   (op AluRmROpcode)
                   (src1 Gpr)
-                  (src2 Gpr)
+                  (src2 GprMem)
                   (dst WritableGpr))
 
        ;; Production of a zero value into a register of the specified size.
@@ -52,6 +52,13 @@
                     (op UnaryRmRVexOpcode)
                     (src GprMem)
                     (dst WritableGpr))
+
+       ;; Same as `UnaryRmRVex` but with an immediate
+       (UnaryRmRImmVex (size OperandSize)
+                       (op UnaryRmRImmVexOpcode)
+                       (src GprMem)
+                       (dst WritableGpr)
+                       (imm u8))
 
        ;; Bitwise not.
        (Not (size OperandSize) ;; 1, 2, 4, or 8
@@ -171,7 +178,7 @@
 
        ;; Immediate store.
        (MovImmM (size OperandSize)
-		(simm64 u64)
+		(simm32 i32)
 		(dst SyntheticAmode))
 
        ;; Integer stores: mov (b w l q) reg addr.
@@ -430,6 +437,23 @@
                  (dst WritableXmm)
                  (src_size OperandSize))
 
+       ;; Conversion from signed integers to floats, the `{v,}`cvtsi2s{s,d}`
+       ;; instructions.
+       ;;
+       ;; Note that this is special in that `src1` is an xmm/float register
+       ;; while `src2` is a general purpose register as this is converting an
+       ;; integer in a gpr to an equivalent float in an xmm reg.
+       (CvtIntToFloat (op SseOpcode)
+                      (src1 Xmm)
+                      (src2 GprMem)
+                      (dst WritableXmm)
+                      (src2_size OperandSize))
+       (CvtIntToFloatVex (op AvxOpcode)
+                         (src1 Xmm)
+                         (src2 GprMem)
+                         (dst WritableXmm)
+                         (src2_size OperandSize))
+
        ;; Converts an unsigned int64 to a float32/float64.
        (CvtUint64ToFloatSeq (dst_size OperandSize) ;; 4 or 8
                             (src Gpr)
@@ -505,9 +529,12 @@
        (Args
         (args VecArgPair))
 
+       ;; A pseudo-instruction that moves vregs to return registers.
+       (Rets
+        (rets VecRetPair))
+
        ;; Return.
-       (Ret (rets VecRetPair)
-            (stack_bytes_to_pop u32))
+       (Ret (stack_bytes_to_pop u32))
 
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))
@@ -701,26 +728,6 @@
 (type BoxCallInfo extern (enum))
 (type BoxReturnCallInfo extern (enum))
 
-(type BoxVecMachLabel extern (enum))
-
-(type MachLabelSlice extern (enum))
-
-;; The size of the jump table.
-(decl jump_table_size (BoxVecMachLabel) u32)
-(extern constructor jump_table_size jump_table_size)
-
-;; Extract a the target from a MachLabelSlice with exactly one target.
-(decl single_target (MachLabel) MachLabelSlice)
-(extern extractor single_target single_target)
-
-;; Extract a the targets from a MachLabelSlice with exactly two targets.
-(decl two_targets (MachLabel MachLabel) MachLabelSlice)
-(extern extractor two_targets two_targets)
-
-;; Extract the default target and jump table from a MachLabelSlice.
-(decl jump_table_targets (MachLabel BoxVecMachLabel) MachLabelSlice)
-(extern extractor jump_table_targets jump_table_targets)
-
 ;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
 (decl operand_size_of_type_32_64 (Type) OperandSize)
 (extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
@@ -746,8 +753,12 @@
             Xor
             Mul))
 
-(type AluRmROpcode extern
-      (enum Andn))
+(type AluRmROpcode
+      (enum Andn
+            Sarx
+            Shrx
+            Shlx
+            Bzhi))
 
 (type UnaryRmROpcode extern
       (enum Bsr
@@ -760,6 +771,9 @@
       (enum Blsi
             Blsmsk
             Blsr))
+
+(type UnaryRmRImmVexOpcode
+      (enum Rorx))
 
 (type SseOpcode extern
       (enum Addps
@@ -1034,56 +1048,93 @@
 ;; Converts a `Value` and a static offset into an `Amode` for x64, attempting
 ;; to be as fancy as possible with offsets/registers/shifts/etc to make maximal
 ;; use of the x64 addressing modes.
+;;
+;; This is a bit subtle unfortunately due to a few constraints. This function
+;; was originally written recursively but that can lead to stack overflow
+;; for certain inputs due to the recursion being defined by user-controlled
+;; input. This means that nowadays this function is not recursive and has a
+;; specific structure to handle that.
+;;
+;; Additionally currently in CLIF all loads/stores have an `Offset32` immediate
+;; to go with them, but the wasm lowering to CLIF doesn't use this meaning that
+;; it's frequently 0. Additionally mid-end optimizations do not fold `iconst`
+;; values into this `Offset32`, meaning that it's left up to backends to hunt
+;; for constants for good codegen. That means that one important aspect of this
+;; function is that it searches for constants to fold into the `Offset32` to
+;; avoid unnecessary instructions.
+;;
+;; Note, though, that the "optimal addressing modes" are only guaranteed to be
+;; generated if egraph-based optimizations have run. For example this will only
+;; attempt to find one constant as opposed to many, and that'll only happen
+;; with constant folding from optimizations.
+;;
+;; Finally there's two primary entry points for this function. One is this
+;; function here, `to_amode,` and another is `to_amode_add`. The latter is used
+;; by the lowering of `iadd` in the x64 backend to use the `lea` instruction
+;; where the input is two `Value` operands instead of just one. Most of the
+;; logic here is then deferred through `to_amode_add`.
+;;
+;; In the future if mid-end optimizations fold constants into `Offset32` then
+;; this in theory can "simply" delegate to the `amode_imm_reg` helper, and
+;; below can delegate to `amode_imm_reg_reg_shift`, or something like that.
 (decl to_amode (MemFlags Value Offset32) Amode)
-
-;; Base case, "just put it in a register"
-(rule (to_amode flags base offset)
-      (Amode.ImmReg offset base flags))
-
-;; Slightly-more-fancy case, if the address is the addition of two things then
-;; delegate to the `to_amode_add` helper.
+(rule 0 (to_amode flags base offset)
+        (amode_imm_reg flags base offset))
 (rule 1 (to_amode flags (iadd x y) offset)
-      (to_amode_add flags x y offset))
+        (to_amode_add flags x y offset))
 
 ;; Same as `to_amode`, except that the base address is computed via the addition
 ;; of the two `Value` arguments provided.
+;;
+;; The primary purpose of this is to hunt for constants within the two `Value`
+;; operands provided. Failing that this will defer to `amode_imm_reg` or
+;; `amode_imm_reg_reg_shift` which is the final step in amode lowering and
+;; performs final pattern matches related to shifts to see if that can be
+;; peeled out into the amode.
+;;
+;; In other words this function's job is to find constants and then defer to
+;; `amode_imm_reg*`.
 (decl to_amode_add (MemFlags Value Value Offset32) Amode)
 
-;; Base case, "just put things in registers". Note that the shift value of 0
-;; here  means `x + (y << 0)` which is the same as `x + y`.
-(rule (to_amode_add flags x y offset)
-      (Amode.ImmRegRegShift offset x y 0 flags))
-
-;; If the one of the arguments being added is itself a constant shift then
-;; that can be modeled directly so long as the shift is a modestly small amount.
-(rule 1 (to_amode_add flags x (ishl y (iconst (uimm8 shift))) offset)
-      (if (u32_lteq (u8_as_u32 shift) 3))
-      (Amode.ImmRegRegShift offset x y shift flags))
-(rule 2 (to_amode_add flags (ishl y (iconst (uimm8 shift))) x offset)
-      (if (u32_lteq (u8_as_u32 shift) 3))
-      (Amode.ImmRegRegShift offset x y shift flags))
-
-;; Constant extraction rules.
-;;
-;; These rules attempt to find a constant within one of `x` or `y`, or deeper
-;; within them if they have their own adds. These only succeed if the constant
-;; itself can be represented with 32-bits and can be infallibly added to the
-;; offset that we already have.
-;;
-;; Note the recursion here where this rule is defined in terms of itself to
-;; "peel" layers of constants.
+(rule 0 (to_amode_add flags x y offset)
+        (amode_imm_reg_reg_shift flags x y offset))
+(rule 1 (to_amode_add flags x (iconst (simm32 c)) offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg flags x sum))
+(rule 2 (to_amode_add flags (iconst (simm32 c)) x offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg flags x sum))
 (rule 3 (to_amode_add flags (iadd x (iconst (simm32 c))) y offset)
-      (if-let sum (s32_add_fallible offset c))
-      (to_amode_add flags x y sum))
-(rule 4 (to_amode_add flags x (iadd y (iconst (simm32 c))) offset)
-      (if-let sum (s32_add_fallible offset c))
-      (to_amode_add flags x y sum))
-(rule 5 (to_amode_add flags x (iconst (simm32 c)) offset)
-      (if-let sum (s32_add_fallible offset c))
-      (to_amode flags x sum))
-(rule 6 (to_amode_add flags (iconst (simm32 c)) x offset)
-      (if-let sum (s32_add_fallible offset c))
-      (to_amode flags x sum))
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 4 (to_amode_add flags (iadd (iconst (simm32 c)) x) y offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 5 (to_amode_add flags x (iadd y (iconst (simm32 c))) offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+(rule 6 (to_amode_add flags x (iadd (iconst (simm32 c)) y) offset)
+        (if-let sum (s32_add_fallible offset c))
+        (amode_imm_reg_reg_shift flags x y sum))
+
+;; Final cases of amode lowering. Does not hunt for constants and only attempts
+;; to pattern match add-of-shifts to generate fancier `ImmRegRegShift` modes,
+;; otherwise falls back on `ImmReg`.
+(decl amode_imm_reg (MemFlags Value Offset32) Amode)
+(rule 0 (amode_imm_reg flags base offset)
+        (Amode.ImmReg offset base flags))
+(rule 1 (amode_imm_reg flags (iadd x y) offset)
+        (amode_imm_reg_reg_shift flags x y offset))
+
+(decl amode_imm_reg_reg_shift (MemFlags Value Value Offset32) Amode)
+(rule 0 (amode_imm_reg_reg_shift flags x y offset)
+        (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
+(rule 1 (amode_imm_reg_reg_shift flags x (ishl y (iconst (uimm8 shift))) offset)
+        (if (u32_lteq (u8_as_u32 shift) 3))
+        (Amode.ImmRegRegShift offset x y shift flags))
+(rule 2 (amode_imm_reg_reg_shift flags (ishl y (iconst (uimm8 shift))) x offset)
+        (if (u32_lteq (u8_as_u32 shift) 3))
+        (Amode.ImmRegRegShift offset x y shift flags))
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
@@ -1396,6 +1447,14 @@
 (decl imm8_reg_to_imm8_gpr (Imm8Reg) Imm8Gpr)
 (extern constructor imm8_reg_to_imm8_gpr imm8_reg_to_imm8_gpr)
 
+;; Convert an `Imm8Gpr` into a `Gpr`.
+(decl gpr_from_imm8_gpr (Gpr) Imm8Gpr)
+(extern extractor gpr_from_imm8_gpr gpr_from_imm8_gpr)
+
+;; Convert an `Imm8Gpr` into an `Imm8`.
+(decl imm8_from_imm8_gpr (u8) Imm8Gpr)
+(extern extractor imm8_from_imm8_gpr imm8_from_imm8_gpr)
+
 ;; Convert a `WritableGpr` to a `WritableReg`.
 (decl writable_gpr_to_reg (WritableGpr) WritableReg)
 (extern constructor writable_gpr_to_reg writable_gpr_to_reg)
@@ -1610,15 +1669,6 @@
 (decl xmi_imm (u32) XmmMemImm)
 (extern constructor xmi_imm xmi_imm)
 
-;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-
-;; This is a direct import of `IntCC::without_equal`.
-;; Get the corresponding IntCC with the equal component removed.
-;; For conditions without a zero component, this is a no-op.
-(decl intcc_without_eq (IntCC) IntCC)
-(extern constructor intcc_without_eq intcc_without_eq)
-
 ;;;; Helpers for determining the register class of a value type ;;;;;;;;;;;;;;;;
 
 (type RegisterClass
@@ -1665,6 +1715,9 @@
 
 (decl pure use_bmi1 () bool)
 (extern constructor use_bmi1 use_bmi1)
+
+(decl pure use_bmi2 () bool)
+(extern constructor use_bmi2 use_bmi2)
 
 (decl pure use_popcnt () bool)
 (extern constructor use_popcnt use_popcnt)
@@ -1799,7 +1852,7 @@
         dst))
 
 ;; Helper for emitting `MInst.AluRmRVex` instructions.
-(decl alu_rm_r_vex (Type AluRmROpcode Gpr Gpr) Gpr)
+(decl alu_rm_r_vex (Type AluRmROpcode Gpr GprMem) Gpr)
 (rule (alu_rm_r_vex ty opcode src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
@@ -2023,6 +2076,25 @@
             (_ Unit (emit (MInst.UnaryRmRVex size op src dst))))
         dst))
 
+;; Helper for creating `MInst.UnaryRmRImmVex` instructions.
+(decl unary_rm_r_imm_vex (UnaryRmRImmVexOpcode GprMem OperandSize u8) Gpr)
+(rule (unary_rm_r_imm_vex op src size imm)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.UnaryRmRImmVex size op src dst imm))))
+        dst))
+
+(decl cvt_int_to_float (SseOpcode Xmm GprMem OperandSize) Xmm)
+(rule (cvt_int_to_float op src1 src2 size)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.CvtIntToFloat op src1 src2 dst size))))
+        dst))
+
+(decl cvt_int_to_float_vex (AvxOpcode Xmm GprMem OperandSize) Xmm)
+(rule (cvt_int_to_float_vex op src1 src2 size)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.CvtIntToFloatVex op src1 src2 dst size))))
+        dst))
+
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
 (rule (cvt_u64_to_float_seq ty src)
       (let ((size OperandSize (raw_operand_size_of_type ty))
@@ -2091,7 +2163,7 @@
 ;; even not generate a zero-extended move in this case.
 (rule 1 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
         (if-let $true (value32_zeros_upper32 src))
-        src)
+        (add_range_fact src 64 0 0xffff_ffff))
 
 (rule (extend_to_gpr (and val (value_type from_ty))
                      to_ty
@@ -2368,6 +2440,11 @@
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
 
+(decl x64_movimm_m (Type SyntheticAmode i32) SideEffectNoResult)
+(rule (x64_movimm_m ty addr imm)
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (SideEffectNoResult.Inst (MInst.MovImmM size imm addr))))
+
 (decl xmm_movrm (SseOpcode SyntheticAmode Xmm) SideEffectNoResult)
 (rule (xmm_movrm op addr data)
       (SideEffectNoResult.Inst (MInst.XmmMovRM op data addr)))
@@ -2542,7 +2619,7 @@
                  src1
                  src2))
 
-(decl x64_andn (Type Gpr Gpr) Gpr)
+(decl x64_andn (Type Gpr GprMem) Gpr)
 (rule (x64_andn ty src1 src2)
       (alu_rm_r_vex ty (AluRmROpcode.Andn) src1 src2))
 
@@ -2627,26 +2704,55 @@
 (decl x64_rotl (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_rotl ty src1 src2)
       (shift_r ty (ShiftKind.RotateLeft) src1 src2))
+(rule 1 (x64_rotl (ty_32_or_64 ty) src (imm8_from_imm8_gpr imm))
+        (if-let $true (use_bmi2))
+        (x64_rorx ty src (u8_sub (ty_bits ty) imm)))
 
 ;; Helper for creating `rotr` instructions.
 (decl x64_rotr (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_rotr ty src1 src2)
       (shift_r ty (ShiftKind.RotateRight) src1 src2))
+(rule 1 (x64_rotr (ty_32_or_64 ty) src (imm8_from_imm8_gpr imm))
+        (if-let $true (use_bmi2))
+        (x64_rorx ty src imm))
 
 ;; Helper for creating `shl` instructions.
 (decl x64_shl (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_shl ty src1 src2)
       (shift_r ty (ShiftKind.ShiftLeft) src1 src2))
+;; With BMI2 the `shlx` instruction is also available, and it's unconditionally
+;; used for registers shifted by registers since it provides more freedom
+;; in regalloc since nothing is constrained. Note that the `shlx` instruction
+;; doesn't encode an immediate so any immediate-based shift still uses `shl`.
+(rule 1 (x64_shl (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+        (if-let $true (use_bmi2))
+        (x64_shlx ty src1 src2))
 
 ;; Helper for creating logical shift-right instructions.
 (decl x64_shr (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_shr ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightLogical) src1 src2))
+;; see `x64_shl` for more info about this rule
+(rule 1 (x64_shr (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+        (if-let $true (use_bmi2))
+        (x64_shrx ty src1 src2))
 
 ;; Helper for creating arithmetic shift-right instructions.
 (decl x64_sar (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_sar ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightArithmetic) src1 src2))
+;; see `x64_shl` for more info about this rule
+(rule 1 (x64_sar (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+        (if-let $true (use_bmi2))
+        (x64_sarx ty src1 src2))
+
+;; Helper for creating zeroing-of-high-bits instructions bzhi
+;;
+;; Note that the `src` operands are swapped here. The amount-to-shift-by
+;; is stored in `vvvv` which is `src1` in the `AluRmRVex` instruction shape.
+(decl x64_bzhi (Type GprMem Gpr) Gpr)
+(rule (x64_bzhi ty src1 src2)
+      (alu_rm_r_vex ty (AluRmROpcode.Bzhi) src2 src1))
 
 ;; Helper for creating byteswap instructions.
 ;; In x64, 32- and 64-bit registers use BSWAP instruction, and
@@ -3326,12 +3432,6 @@
 (rule 1 (x64_divpd src1 src2)
       (if-let $true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vdivpd) src1 src2))
-
-;; Helper for creating `blendvp{d,s}` and `pblendvb` instructions.
-(decl x64_blend (Type Xmm XmmMem Xmm) Xmm)
-(rule 1 (x64_blend $F32X4 mask src1 src2) (x64_blendvps src2 src1 mask))
-(rule 1 (x64_blend $F64X2 mask src1 src2) (x64_blendvpd src2 src1 mask))
-(rule 0 (x64_blend (multi_lane _ _) mask src1 src2) (x64_pblendvb src2 src1 mask))
 
 ;; Helper for creating `blendvpd` instructions.
 (decl x64_blendvpd (Xmm XmmMem Xmm) Xmm)
@@ -4060,6 +4160,29 @@
 (rule (x64_blsr ty src)
       (unary_rm_r_vex (UnaryRmRVexOpcode.Blsr) src (operand_size_of_type_32_64 ty)))
 
+;; Helper for creating `sarx` instructions.
+(decl x64_sarx (Type GprMem Gpr) Gpr)
+(rule (x64_sarx ty val amt)
+      (alu_rm_r_vex ty (AluRmROpcode.Sarx) amt val))
+
+;; Helper for creating `shrx` instructions.
+(decl x64_shrx (Type GprMem Gpr) Gpr)
+(rule (x64_shrx ty val amt)
+      (alu_rm_r_vex ty (AluRmROpcode.Shrx) amt val))
+
+;; Helper for creating `shlx` instructions.
+(decl x64_shlx (Type GprMem Gpr) Gpr)
+(rule (x64_shlx ty val amt)
+      (alu_rm_r_vex ty (AluRmROpcode.Shlx) amt val))
+
+;; Helper for creating `rorx` instructions.
+(decl x64_rorx (Type GprMem u8) Gpr)
+(rule (x64_rorx ty src imm)
+      (unary_rm_r_imm_vex (UnaryRmRImmVexOpcode.Rorx)
+                          src
+                          (operand_size_of_type_32_64 ty)
+                          imm))
+
 ;; Helper for creating `popcnt` instructions.
 (decl x64_popcnt (Type Gpr) Gpr)
 (rule (x64_popcnt ty src)
@@ -4228,20 +4351,20 @@
         (xmm_unary_rm_r_vex (AvxOpcode.Vcvtdq2pd) x))
 
 ;; Helper for creating `cvtsi2ss` instructions.
-(decl x64_cvtsi2ss (Type GprMem) Xmm)
-(rule (x64_cvtsi2ss ty x)
-      (gpr_to_xmm (SseOpcode.Cvtsi2ss) x (raw_operand_size_of_type ty)))
-(rule 1 (x64_cvtsi2ss ty x)
+(decl x64_cvtsi2ss (Type Xmm GprMem) Xmm)
+(rule (x64_cvtsi2ss ty x y)
+      (cvt_int_to_float (SseOpcode.Cvtsi2ss) x y (raw_operand_size_of_type ty)))
+(rule 1 (x64_cvtsi2ss ty x y)
         (if-let $true (use_avx))
-        (gpr_to_xmm_vex (AvxOpcode.Vcvtsi2ss) x (raw_operand_size_of_type ty)))
+        (cvt_int_to_float_vex (AvxOpcode.Vcvtsi2ss) x y (raw_operand_size_of_type ty)))
 
 ;; Helper for creating `cvtsi2sd` instructions.
-(decl x64_cvtsi2sd (Type GprMem) Xmm)
-(rule (x64_cvtsi2sd ty x)
-      (gpr_to_xmm (SseOpcode.Cvtsi2sd) x (raw_operand_size_of_type ty)))
-(rule 1 (x64_cvtsi2sd ty x)
+(decl x64_cvtsi2sd (Type Xmm GprMem) Xmm)
+(rule (x64_cvtsi2sd ty x y)
+      (cvt_int_to_float (SseOpcode.Cvtsi2sd) x y (raw_operand_size_of_type ty)))
+(rule 1 (x64_cvtsi2sd ty x y)
         (if-let $true (use_avx))
-        (gpr_to_xmm_vex (AvxOpcode.Vcvtsi2sd) x (raw_operand_size_of_type ty)))
+        (cvt_int_to_float_vex (AvxOpcode.Vcvtsi2sd) x y (raw_operand_size_of_type ty)))
 
 ;; Helper for creating `cvttps2dq` instructions.
 (decl x64_cvttps2dq (XmmMem) Xmm)
@@ -4554,12 +4677,12 @@
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (icmp_cond_result (x64_cmp size b a) cc)))
 
-;; As a special case, reverse the arguments to the comparison when the LHS is a
+;; As a special case, swap the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
 (rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
       (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size a b) (intcc_reverse cc))))
+        (icmp_cond_result (x64_cmp size a b) (intcc_swap_args cc))))
 
 ;; Special case: use the test instruction for comparisons with 0.
 (rule 2 (emit_cmp cc a @ (value_type ty) (u64_from_iconst 0))
@@ -4570,7 +4693,7 @@
 (rule 3 (emit_cmp cc (u64_from_iconst 0) b @ (value_type ty))
       (let ((size OperandSize (raw_operand_size_of_type ty))
             (b Gpr (put_in_reg b)))
-        (icmp_cond_result (x64_test size b b) (intcc_reverse cc))))
+        (icmp_cond_result (x64_test size b b) (intcc_swap_args cc))))
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.

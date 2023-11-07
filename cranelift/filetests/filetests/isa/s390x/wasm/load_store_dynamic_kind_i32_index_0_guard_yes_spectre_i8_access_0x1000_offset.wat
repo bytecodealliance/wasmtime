@@ -53,14 +53,14 @@
 ;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   llgfr %r2, %r2
-;;   lghi %r5, -4097
-;;   ag %r5, 8(%r4)
-;;   lgr %r7, %r2
+;;   llgfr %r5, %r2
+;;   lg %r2, 8(%r4)
+;;   aghi %r2, -4097
+;;   lgr %r7, %r5
 ;;   ag %r7, 0(%r4)
 ;;   aghik %r4, %r7, 4096
 ;;   lghi %r7, 0
-;;   clgr %r2, %r5
+;;   clgr %r5, %r2
 ;;   locgrh %r4, %r7
 ;;   stc %r3, 0(%r4)
 ;;   jg label1
@@ -72,16 +72,15 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lgr %r5, %r3
 ;;   llgfr %r4, %r2
-;;   lghi %r3, -4097
-;;   ag %r3, 8(%r5)
+;;   lg %r5, 8(%r3)
+;;   aghi %r5, -4097
 ;;   lgr %r2, %r4
-;;   ag %r2, 0(%r5)
+;;   ag %r2, 0(%r3)
 ;;   aghi %r2, 4096
-;;   lghi %r5, 0
-;;   clgr %r4, %r3
-;;   locgrh %r2, %r5
+;;   lghi %r3, 0
+;;   clgr %r4, %r5
+;;   locgrh %r2, %r3
 ;;   llc %r2, 0(%r2)
 ;;   jg label1
 ;; block1:

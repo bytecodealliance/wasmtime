@@ -1,6 +1,6 @@
 use crate::component::{ComponentTranslation, ComponentTypes, TrampolineIndex};
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::any::Any;
 
 /// A triple of related functions/trampolines variants with differing calling

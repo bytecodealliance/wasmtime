@@ -193,7 +193,7 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $-1, %ecx
+;   movl    $65535, %ecx
 ;   movd    %ecx, %xmm1
 ;   pshuflw $0, %xmm1, %xmm3
 ;   pshufd  $0, %xmm3, %xmm0
@@ -206,7 +206,7 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0xffffffff, %ecx
+;   movl $0xffff, %ecx
 ;   movd %ecx, %xmm1
 ;   pshuflw $0, %xmm1, %xmm3
 ;   pshufd $0, %xmm3, %xmm0

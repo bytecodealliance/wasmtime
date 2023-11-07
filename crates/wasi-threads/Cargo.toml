@@ -17,4 +17,6 @@ log = { workspace = true }
 rand = "0.8"
 wasi-common = { workspace = true }
 wasmtime = { workspace = true }
-wasmtime-wasi = { workspace = true, features = ["exit"] }
+wasmtime-wasi = { workspace = true, default-features = true, features = [
+    "exit",
+] }

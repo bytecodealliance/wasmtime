@@ -380,14 +380,14 @@ fn call_wasm_many_args() -> Result<()> {
         r#"
             (func (export "run") (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)
                 i32.const 1
-                get_local 0
+                local.get 0
                 i32.ne
                 if
                     unreachable
                 end
 
                 i32.const 10
-                get_local 9
+                local.get 9
                 i32.ne
                 if
                     unreachable

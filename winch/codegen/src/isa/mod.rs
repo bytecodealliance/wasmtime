@@ -1,4 +1,4 @@
-use crate::TrampolineKind;
+use crate::{BuiltinFunctions, TrampolineKind};
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
@@ -10,7 +10,7 @@ use std::{
 };
 use target_lexicon::{Architecture, Triple};
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{ModuleTranslation, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, ModuleTypes, WasmFuncType};
 
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
@@ -77,6 +77,7 @@ pub(crate) enum LookupError {
 /// This enum is a reduced subset of the calling conventions defined in
 /// [cranelift_codegen::isa::CallConv]. Introducing this enum makes it easier
 /// to enforce the invariant of all the calling conventions supported by Winch.
+#[derive(Copy, Clone)]
 pub enum CallingConvention {
     /// See [cranelift_codegen::isa::CallConv::WasmtimeSystemV]
     WasmtimeSystemV,
@@ -150,6 +151,8 @@ pub trait TargetIsa: Send + Sync {
         sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
+        types: &ModuleTypes,
+        builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
 

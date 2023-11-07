@@ -2,9 +2,10 @@ use super::regs;
 use crate::{
     abi::{ABIArg, ABIResult, ABISig, ABI},
     isa::{reg::Reg, CallingConvention},
+    masm::OperandSize,
 };
 use smallvec::SmallVec;
-use wasmtime_environ::{WasmFuncType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
 
 /// Helper environment to track argument-register
 /// assignment in x64.
@@ -96,10 +97,14 @@ impl ABI for X64ABI {
         64
     }
 
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+    fn sig_from(
+        params: &[WasmType],
+        returns: &[WasmType],
+        call_conv: &CallingConvention,
+    ) -> ABISig {
         assert!(call_conv.is_fastcall() || call_conv.is_systemv() || call_conv.is_default());
 
-        if wasm_sig.returns().len() > 1 {
+        if returns.len() > 1 {
             panic!("multi-value not supported");
         }
 
@@ -114,25 +119,38 @@ impl ABI for X64ABI {
             (0, RegIndexEnv::default())
         };
 
-        let params: SmallVec<[ABIArg; 6]> = wasm_sig
-            .params()
+        let params: SmallVec<[ABIArg; 6]> = params
             .iter()
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env, is_fastcall))
             .collect();
 
-        let result = Self::result(wasm_sig.returns(), call_conv);
+        let result = Self::result(returns, call_conv);
         ABISig::new(params, result, stack_offset)
     }
 
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
+    }
+
     fn result(returns: &[WasmType], _call_conv: &CallingConvention) -> ABIResult {
-        // The `Default`, `WasmtimeFastcall` and `WasmtimeSystemV use `rax`.
-        // NOTE This should be updated when supporting multi-value.
-        let reg = regs::rax();
         // This invariant will be lifted once support for multi-value is added.
         assert!(returns.len() <= 1, "multi-value not supported");
-
         let ty = returns.get(0).copied();
-        ABIResult::reg(ty, reg)
+        ty.map(|ty| {
+            let reg = match ty {
+                // The `Default`, `WasmtimeFastcall` and `WasmtimeSystemV use `rax` and `xmm0`.
+                // NOTE This should be updated when supporting multi-value.
+                WasmType::I32 | WasmType::I64 => regs::rax(),
+                WasmType::F32 | WasmType::F64 => regs::xmm0(),
+                WasmType::Ref(rt) => {
+                    assert!(rt.heap_type == WasmHeapType::Func);
+                    regs::rax()
+                }
+                t => panic!("Unsupported return type {:?}", t),
+            };
+            ABIResult::reg(ty, reg)
+        })
+        .unwrap_or_else(|| ABIResult::void())
     }
 
     fn scratch_reg() -> Reg {
@@ -151,8 +169,20 @@ impl ABI for X64ABI {
         regs::vmctx()
     }
 
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> {
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
         regs::callee_saved(call_conv)
+    }
+
+    fn stack_arg_slot_size_for_type(ty: WasmType) -> u32 {
+        match ty {
+            WasmType::Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => Self::word_bytes(),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
+            WasmType::F64 | WasmType::I32 | WasmType::I64 => Self::word_bytes(),
+            WasmType::F32 => Self::word_bytes() / 2,
+            ty => unimplemented!("Support for WasmType: {ty}"),
+        }
     }
 }
 
@@ -164,6 +194,11 @@ impl X64ABI {
         fastcall: bool,
     ) -> ABIArg {
         let (reg, ty) = match wasm_arg {
+            ty @ WasmType::Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => (Self::int_reg_for(index_env.next_gpr(), fastcall), ty),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
+
             ty @ (WasmType::I32 | WasmType::I64) => {
                 (Self::int_reg_for(index_env.next_gpr(), fastcall), ty)
             }
@@ -172,12 +207,12 @@ impl X64ABI {
                 (Self::float_reg_for(index_env.next_fpr(), fastcall), ty)
             }
 
-            ty => unreachable!("Unsupported argument type {:?}", ty),
+            ty => unimplemented!("Support for argument of WasmType: {ty}"),
         };
 
         let default = || {
             let arg = ABIArg::stack_offset(*stack_offset, *ty);
-            let size = Self::word_bytes();
+            let size = Self::stack_arg_slot_size_for_type(*ty);
             *stack_offset += size;
             arg
         };

@@ -5,10 +5,10 @@
 
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
-    self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
-    DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
-    JumpTableData, Layout, Opcode, SigRef, Signature, SourceLocs, StackSlot, StackSlotData,
-    StackSlots, Table, TableData, Type,
+    self, pcc::Fact, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData,
+    DynamicStackSlots, DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst,
+    JumpTable, JumpTableData, Layout, MemoryType, MemoryTypeData, Opcode, SigRef, Signature,
+    SourceLocs, StackSlot, StackSlotData, StackSlots, Table, TableData, Type,
 };
 use crate::isa::CallConv;
 use crate::write::write_function;
@@ -64,7 +64,10 @@ impl<'de> Deserialize<'de> for VersionMarker {
 /// Function parameters used when creating this function, and that will become applied after
 /// compilation to materialize the final `CompiledCode`.
 #[derive(Clone, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct FunctionParameters {
     /// The first `SourceLoc` appearing in the function, serving as a base for every relative
     /// source loc in the function.
@@ -146,7 +149,10 @@ impl FunctionParameters {
 /// Additionally, these fields can be the same for two functions that would be compiled the same
 /// way, and finalized by applying `FunctionParameters` onto their `CompiledCodeStencil`.
 #[derive(Clone, PartialEq, Hash)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct FunctionStencil {
     /// A version marker used to ensure that serialized clif ir is never deserialized with a
     /// different version of Cranelift.
@@ -165,6 +171,12 @@ pub struct FunctionStencil {
 
     /// Global values referenced.
     pub global_values: PrimaryMap<ir::GlobalValue, ir::GlobalValueData>,
+
+    /// Global value proof-carrying-code facts.
+    pub global_value_facts: SecondaryMap<ir::GlobalValue, Option<Fact>>,
+
+    /// Memory types for proof-carrying code.
+    pub memory_types: PrimaryMap<ir::MemoryType, ir::MemoryTypeData>,
 
     /// Tables referenced.
     pub tables: PrimaryMap<ir::Table, ir::TableData>,
@@ -195,6 +207,8 @@ impl FunctionStencil {
         self.sized_stack_slots.clear();
         self.dynamic_stack_slots.clear();
         self.global_values.clear();
+        self.global_value_facts.clear();
+        self.memory_types.clear();
         self.tables.clear();
         self.dfg.clear();
         self.layout.clear();
@@ -227,6 +241,11 @@ impl FunctionStencil {
     /// Declares a global value accessible to the function.
     pub fn create_global_value(&mut self, data: GlobalValueData) -> GlobalValue {
         self.global_values.push(data)
+    }
+
+    /// Declares a memory type for use by the function.
+    pub fn create_memory_type(&mut self, data: MemoryTypeData) -> MemoryType {
+        self.memory_types.push(data)
     }
 
     /// Find the global dyn_scale value associated with given DynamicType.
@@ -308,7 +327,17 @@ impl FunctionStencil {
     pub fn is_leaf(&self) -> bool {
         // Conservative result: if there's at least one function signature referenced in this
         // function, assume it is not a leaf.
-        self.dfg.signatures.is_empty()
+        let has_signatures = !self.dfg.signatures.is_empty();
+
+        // Under some TLS models, retrieving the address of a TLS variable requires calling a
+        // function. Conservatively assume that any function that references a tls global value
+        // is not a leaf.
+        let has_tls = self.global_values.values().any(|gv| match gv {
+            GlobalValueData::Symbol { tls, .. } => *tls,
+            _ => false,
+        });
+
+        !has_signatures && !has_tls
     }
 
     /// Replace the `dst` instruction's data with the `src` instruction's data
@@ -392,6 +421,8 @@ impl Function {
                 sized_stack_slots: StackSlots::new(),
                 dynamic_stack_slots: DynamicStackSlots::new(),
                 global_values: PrimaryMap::new(),
+                global_value_facts: SecondaryMap::new(),
+                memory_types: PrimaryMap::new(),
                 tables: PrimaryMap::new(),
                 dfg: DataFlowGraph::new(),
                 layout: Layout::new(),

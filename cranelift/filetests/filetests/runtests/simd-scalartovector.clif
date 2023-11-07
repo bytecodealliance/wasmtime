@@ -5,6 +5,7 @@ target s390x
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %scalartovector_i32(i32) -> i32x4 {
 block0(v0: i32):
@@ -14,6 +15,14 @@ block0(v0: i32):
 ; run: %scalartovector_i32(1) == [1 0 0 0]
 ; run: %scalartovector_i32(4294967295) == [4294967295 0 0 0]
 
+function %scalartovector_i32_imm(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = iconst.i32 7
+    v2 = scalar_to_vector.i32x4 v1
+    return v2
+}
+; run: %scalartovector_i32_imm(1) == [7 0 0 0]
+
 function %scalartovector_i64(i64) -> i64x2 {
 block0(v0: i64):
     v1 = scalar_to_vector.i64x2 v0
@@ -22,6 +31,14 @@ block0(v0: i64):
 ; run: %scalartovector_i64(0) == [0 0]
 ; run: %scalartovector_i64(1) == [1 0]
 ; run: %scalartovector_i64(18446744073709551615) == [18446744073709551615 0]
+
+function %scalartovector_i64_imm(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = iconst.i64 7
+    v2 = scalar_to_vector.i64x2 v1
+    return v2
+}
+; run: %scalartovector_i64_imm(1) == [7 0]
 
 function %scalartovector_f32(f32) -> f32x4 {
 block0(v0: f32):

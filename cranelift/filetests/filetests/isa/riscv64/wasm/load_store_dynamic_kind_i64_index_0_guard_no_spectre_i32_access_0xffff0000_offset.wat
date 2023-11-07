@@ -41,19 +41,20 @@
 
 ;; function u0:0:
 ;; block0:
-;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0004
-;;   add t3,a0,t4
-;;   ult t0,t3,a0##ty=i64
-;;   trap_if t0,heap_oob
-;;   ld t0,8(a2)
-;;   ugt t0,t3,t0##ty=i64
-;;   bne t0,zero,taken(label3),not_taken(label1)
+;;   lui a5,262140
+;;   addi a3,a5,1
+;;   slli a3,a3,2
+;;   add a3,a0,a3
+;;   trap_if heap_oob##(a3 ult a0)
+;;   ld a4,8(a2)
+;;   bgtu a3,a4,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld t1,0(a2)
-;;   add t1,t1,a0
-;;   auipc t2,0; ld t2,12(t2); j 12; .8byte 0xffff0000
-;;   add t1,t1,t2
-;;   sw a1,0(t1)
+;;   ld a3,0(a2)
+;;   add a3,a3,a0
+;;   lui a2,65535
+;;   slli a4,a2,4
+;;   add a3,a3,a4
+;;   sw a1,0(a3)
 ;;   j label2
 ;; block2:
 ;;   ret
@@ -62,19 +63,20 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0004
-;;   add t3,a0,t4
-;;   ult t0,t3,a0##ty=i64
-;;   trap_if t0,heap_oob
-;;   ld t0,8(a1)
-;;   ugt t0,t3,t0##ty=i64
-;;   bne t0,zero,taken(label3),not_taken(label1)
+;;   lui a5,262140
+;;   addi a2,a5,1
+;;   slli a3,a2,2
+;;   add a2,a0,a3
+;;   trap_if heap_oob##(a2 ult a0)
+;;   ld a3,8(a1)
+;;   bgtu a2,a3,taken(label3),not_taken(label1)
 ;; block1:
-;;   ld t1,0(a1)
-;;   add t1,t1,a0
-;;   auipc t2,0; ld t2,12(t2); j 12; .8byte 0xffff0000
-;;   add t1,t1,t2
-;;   lw a0,0(t1)
+;;   ld a3,0(a1)
+;;   add a3,a3,a0
+;;   lui a2,65535
+;;   slli a4,a2,4
+;;   add a3,a3,a4
+;;   lw a0,0(a3)
 ;;   j label2
 ;; block2:
 ;;   ret

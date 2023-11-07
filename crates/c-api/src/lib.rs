@@ -11,6 +11,8 @@
 
 #![allow(non_snake_case, non_camel_case_types, non_upper_case_globals)]
 
+pub use wasmtime;
+
 mod config;
 mod engine;
 mod error;
@@ -46,6 +48,11 @@ pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::val::*;
 pub use crate::vec::*;
+
+#[cfg(feature = "async")]
+mod r#async;
+#[cfg(feature = "async")]
+pub use crate::r#async::*;
 
 #[cfg(feature = "wasi")]
 mod wasi;

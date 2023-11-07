@@ -41,16 +41,17 @@ fn create_handle(
         let module = Arc::new(module);
         let runtime_info =
             &BareModuleInfo::maybe_imported_func(module, one_signature).into_traitobj();
-        let handle = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0)
-            .allocate_module(InstanceAllocationRequest {
-                imports,
-                host_state,
-                store: StorePtr::new(store.traitobj()),
-                runtime_info,
-                wmemcheck: false,
-            })?;
+        let allocator = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0);
+        let handle = allocator.allocate_module(InstanceAllocationRequest {
+            imports,
+            host_state,
+            store: StorePtr::new(store.traitobj()),
+            runtime_info,
+            wmemcheck: false,
+            pkey: None,
+        })?;
 
-        Ok(store.add_instance(handle, true))
+        Ok(store.add_dummy_instance(handle))
     }
 }
 

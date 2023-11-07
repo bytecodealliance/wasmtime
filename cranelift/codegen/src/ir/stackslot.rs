@@ -17,7 +17,7 @@ use crate::ir::{DynamicTypeData, GlobalValueData};
 use crate::ir::types::*;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// The size of an object on the stack, or the size of a stack frame.
 ///

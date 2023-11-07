@@ -15,7 +15,7 @@ use core::slice;
 use core::u32;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Trait for extracting keys from values stored in a `SparseMap`.
 ///

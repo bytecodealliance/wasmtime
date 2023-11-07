@@ -10,7 +10,7 @@ use core::fmt::{self, Display, Formatter};
 use core::slice::{Iter, IterMut};
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Contents of a jump table.
 ///

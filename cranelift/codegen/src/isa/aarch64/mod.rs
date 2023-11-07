@@ -15,16 +15,14 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
-use regalloc2::MachineEnv;
 use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple};
 
 // New backend:
 mod abi;
 pub mod inst;
 mod lower;
+mod pcc;
 pub mod settings;
-
-use inst::create_reg_env;
 
 use self::inst::EmitInfo;
 
@@ -33,7 +31,6 @@ pub struct AArch64Backend {
     triple: Triple,
     flags: shared_settings::Flags,
     isa_flags: aarch64_settings::Flags,
-    machine_env: MachineEnv,
 }
 
 impl AArch64Backend {
@@ -43,12 +40,10 @@ impl AArch64Backend {
         flags: shared_settings::Flags,
         isa_flags: aarch64_settings::Flags,
     ) -> AArch64Backend {
-        let machine_env = create_reg_env(&flags);
         AArch64Backend {
             triple,
             flags,
             isa_flags,
-            machine_env,
         }
     }
 
@@ -112,10 +107,6 @@ impl TargetIsa for AArch64Backend {
         &self.flags
     }
 
-    fn machine_env(&self) -> &MachineEnv {
-        &self.machine_env
-    }
-
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
     }
@@ -132,10 +123,10 @@ impl TargetIsa for AArch64Backend {
     fn emit_unwind_info(
         &self,
         result: &CompiledCode,
-        kind: crate::machinst::UnwindInfoKind,
+        kind: crate::isa::unwind::UnwindInfoKind,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         use crate::isa::unwind::UnwindInfo;
-        use crate::machinst::UnwindInfoKind;
+        use crate::isa::unwind::UnwindInfoKind;
         Ok(match kind {
             UnwindInfoKind::SystemV => {
                 let mapper = self::inst::unwind::systemv::RegisterMapper;

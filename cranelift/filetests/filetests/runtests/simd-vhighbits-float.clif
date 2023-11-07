@@ -1,0 +1,27 @@
+test interpret
+test run
+target s390x
+target x86_64 has_sse3 has_ssse3 has_sse41
+target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %vhighbits_f32x4(f32x4) -> i8 {
+block0(v0: f32x4):
+    v1 = vhigh_bits.i8 v0
+    return v1
+}
+; run: %vhighbits_f32x4([0.0 0.0 0.0 0.0]) == 0
+; run: %vhighbits_f32x4([0.0 -0.0 0.0 0.0]) == 2
+; run: %vhighbits_f32x4([-0.0 -0.0 -0.0 -0.0]) == 0xF
+; run: %vhighbits_f32x4([0x1.0 0x1.0 0x1.0 0x1.0]) == 0
+
+function %vhighbits_f64x2(f64x2) -> i8 {
+block0(v0: f64x2):
+    v1 = vhigh_bits.i8 v0
+    return v1
+}
+; run: %vhighbits_f64x2([0.0 0.0]) == 0
+; run: %vhighbits_f64x2([0.0 -0.0]) == 2
+; run: %vhighbits_f64x2([-0.0 -0.0]) == 3
+; run: %vhighbits_f64x2([0x1.0 0x1.0]) == 0

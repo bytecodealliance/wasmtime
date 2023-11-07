@@ -261,6 +261,10 @@ impl<'dummy_environment> TargetEnvironment for DummyFuncEnvironment<'dummy_envir
     fn heap_access_spectre_mitigation(&self) -> bool {
         false
     }
+
+    fn proof_carrying_code(&self) -> bool {
+        false
+    }
 }
 
 impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environment> {
@@ -297,17 +301,19 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: addr,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
-            readonly: true,
+            flags: ir::MemFlags::trusted().with_readonly(),
         });
 
         Ok(self.heaps.push(HeapData {
             base: gv,
             min_size: 0,
+            max_size: None,
             offset_guard_size: 0x8000_0000,
             style: HeapStyle::Static {
                 bound: 0x1_0000_0000,
             },
             index_type: I32,
+            memory_type: None,
         }))
     }
 
@@ -318,13 +324,14 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: vmctx,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
-            readonly: true, // when tables in wasm become "growable", revisit whether this can be readonly or not.
+            // When tables in wasm become "growable", revisit whether this can be readonly or not.
+            flags: ir::MemFlags::trusted().with_readonly(),
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
             offset: Offset32::new(0),
             global_type: I32,
-            readonly: true,
+            flags: ir::MemFlags::trusted().with_readonly(),
         });
 
         Ok(func.create_table(ir::TableData {
@@ -509,7 +516,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _heap: Heap,
         _val: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_memory_size(
@@ -518,7 +525,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _index: MemoryIndex,
         _heap: Heap,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_memory_copy(
@@ -570,7 +577,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _index: TableIndex,
         _table: ir::Table,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_table_grow(
@@ -581,7 +588,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _delta: ir::Value,
         _init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_table_get(
@@ -660,7 +667,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         mut pos: FuncCursor,
         _global_index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_custom_global_set(
@@ -681,7 +688,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _expected: ir::Value,
         _timeout: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Ok(pos.ins().iconst(I32, -1))
+        Ok(pos.ins().iconst(I32, -1i32 as u32 as i64))
     }
 
     fn translate_atomic_notify(
@@ -708,6 +715,10 @@ impl TargetEnvironment for DummyEnvironment {
     }
 
     fn heap_access_spectre_mitigation(&self) -> bool {
+        false
+    }
+
+    fn proof_carrying_code(&self) -> bool {
         false
     }
 }

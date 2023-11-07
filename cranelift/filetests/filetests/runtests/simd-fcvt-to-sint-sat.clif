@@ -1,0 +1,19 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %fcvt_to_sint_sat(f32x4) -> i32x4 {
+block0(v0:f32x4):
+    v1 = fcvt_to_sint_sat.i32x4 v0
+    return v1
+}
+; run: %fcvt_to_sint_sat([0x0.0 -0x1.0 0x1.0 0x1.0p100]) == [0 -1 1 0x7FFFFFFF]
+; run: %fcvt_to_sint_sat([-0x8.1 0x0.0 0x0.0 -0x1.0p100]) == [-8 0 0 0x80000000]
+; run: %fcvt_to_sint_sat([+NaN +NaN +NaN +NaN]) == [0 0 0 0]

@@ -1,0 +1,36 @@
+test interpret
+test run
+target riscv64
+target aarch64
+target s390x
+
+function %a_f32(f32) -> i16 {
+block0(v0: f32):
+    v1 = fcvt_to_uint_sat.i16 v0
+    return v1
+}
+; run: %a_f32(0x1.949400p21) == -1
+
+
+function %b_f32(f32) -> i8 {
+block0(v0: f32):
+    v1 = fcvt_to_uint_sat.i8 v0
+    return v1
+}
+; run: %b_f32(0x1.949400p21) == -1
+
+
+function %a_f64(f64) -> i16 {
+block0(v0: f64):
+    v1 = fcvt_to_uint_sat.i16 v0
+    return v1
+}
+; run: %a_f64(0x1.949400p21) == -1
+
+
+function %b_f64(f64) -> i8 {
+block0(v0: f64):
+    v1 = fcvt_to_uint_sat.i8 v0
+    return v1
+}
+; run: %b_f64(0x1.949400p21) == -1

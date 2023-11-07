@@ -26,10 +26,12 @@ num_cpus = "1.8.0"
 target-lexicon = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-similar ={ workspace = true }
+similar = { workspace = true }
 wat.workspace = true
 toml = { workspace = true }
 serde = { workspace = true }
+serde_derive = { workspace = true }
 cranelift-wasm.workspace = true
 wasmparser.workspace = true
 cranelift.workspace = true
+smallvec = { workspace = true }

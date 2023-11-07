@@ -1,12 +1,8 @@
 use crate::file::convert_systimespec;
 use fs_set_times::SetTimes;
-use io_lifetimes::AsFilelike;
-use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
-use std::fs::File;
-use std::io;
-use std::io::{Read, Write};
+use std::io::{self, IsTerminal, Read, Write};
 use system_interface::io::ReadReady;
 
 #[cfg(windows)]
@@ -50,7 +46,7 @@ impl WasiFile for Stdin {
         }
     }
     async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
-        let n = (&*self.0.as_filelike_view::<File>()).read_vectored(bufs)?;
+        let n = self.0.lock().read_vectored(bufs)?;
         Ok(n.try_into().map_err(|_| Error::range())?)
     }
     async fn read_vectored_at<'a>(
@@ -79,7 +75,10 @@ impl WasiFile for Stdin {
         Ok(self.0.num_ready_bytes()?)
     }
     fn isatty(&self) -> bool {
-        self.0.is_terminal()
+        #[cfg(unix)]
+        return self.0.as_fd().is_terminal();
+        #[cfg(windows)]
+        return self.0.as_handle().is_terminal();
     }
 }
 #[cfg(windows)]
@@ -128,7 +127,12 @@ macro_rules! wasi_file_write_impl {
                 Ok(FdFlags::APPEND)
             }
             async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                let n = (&*self.0.as_filelike_view::<File>()).write_vectored(bufs)?;
+                let mut io = self.0.lock();
+                let n = io.write_vectored(bufs)?;
+                // On a successful write additionally flush out the bytes to
+                // handle stdio buffering done by libstd since WASI interfaces
+                // here aren't buffered.
+                io.flush()?;
                 Ok(n.try_into().map_err(|_| {
                     Error::range().context("converting write_vectored total length")
                 })?)

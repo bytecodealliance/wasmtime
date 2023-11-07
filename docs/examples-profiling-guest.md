@@ -10,5 +10,5 @@ To use this profiler with the Wasmtime CLI, pass the
 - `path` is where to write the profile, `wasmtime-guest-profile.json` by default
 - `interval` is the duration between samples, 10ms by default
 
-When used with `--wasm-timeout`, the timeout will be rounded up to the nearest
+When used with `-W timeout=N`, the timeout will be rounded up to the nearest
 multiple of the profiling interval.

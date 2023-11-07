@@ -8,7 +8,7 @@ use std::str::FromStr;
 use wasmtime_environ::{CompilerBuilder, FlagValue, Setting, SettingKind};
 
 /// Displays available Cranelift settings for a target.
-#[derive(Parser)]
+#[derive(Parser, PartialEq)]
 #[clap(name = "run")]
 pub struct SettingsCommand {
     /// The target triple to get the settings for; defaults to the host triple.
@@ -36,7 +36,7 @@ impl Serialize for SettingData {
 }
 
 // Gather together all of the setting data to displays
-#[derive(Serialize)]
+#[derive(serde_derive::Serialize)]
 struct Settings {
     triple: String,
 
@@ -45,7 +45,7 @@ struct Settings {
     bools: Vec<SettingData>,
     presets: Vec<SettingData>,
 
-    inferred: Option<Vec<String>>,
+    inferred: Option<Vec<&'static str>>,
 }
 
 impl Settings {

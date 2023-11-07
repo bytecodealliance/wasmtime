@@ -2,10 +2,6 @@
 //! crate.
 //!
 //! Reads Wasm binary/text files, translates the functions' code to Cranelift IR.
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(clippy::too_many_arguments, clippy::cognitive_complexity)
-)]
 
 use crate::disasm::print_all;
 use anyhow::{Context as _, Result};

@@ -1,5 +1,4 @@
 use crate::isa::riscv64::inst::AllocationConsumer;
-use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::VecAluOpRRRR;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAvl,
@@ -235,7 +234,15 @@ impl VecOpCategory {
     }
 }
 
+impl Copy for VecOpMasking {}
 impl VecOpMasking {
+    pub fn is_enabled(&self) -> bool {
+        match self {
+            VecOpMasking::Enabled { .. } => true,
+            VecOpMasking::Disabled => false,
+        }
+    }
+
     pub fn encode(&self) -> u32 {
         match self {
             VecOpMasking::Enabled { .. } => 0,
@@ -300,6 +307,12 @@ impl VecAluOpRRRR {
     }
 }
 
+impl VecInstOverlapInfo for VecAluOpRRRR {
+    fn forbids_src_dst_overlaps(&self) -> bool {
+        false
+    }
+}
+
 impl fmt::Display for VecAluOpRRRR {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = format!("{self:?}");
@@ -336,9 +349,10 @@ impl VecAluOpRRRImm5 {
             VecAluOpRRRImm5::VslideupVI => true,
         }
     }
+}
 
-    /// Some instructions do not allow the source and destination registers to overlap.
-    pub fn forbids_src_dst_overlaps(&self) -> bool {
+impl VecInstOverlapInfo for VecAluOpRRRImm5 {
+    fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
             VecAluOpRRRImm5::VslideupVI => true,
         }
@@ -569,9 +583,10 @@ impl VecAluOpRRR {
             _ => unreachable!(),
         }
     }
+}
 
-    /// Some instructions do not allow the source and destination registers to overlap.
-    pub fn forbids_src_dst_overlaps(&self) -> bool {
+impl VecInstOverlapInfo for VecAluOpRRR {
+    fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
             VecAluOpRRR::VrgatherVV
             | VecAluOpRRR::VrgatherVX
@@ -593,6 +608,37 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VwsubWV
             | VecAluOpRRR::VwsubWX => true,
             _ => false,
+        }
+    }
+
+    // Only mask writing operations, and reduction operations (`vred*`) allow mask / dst overlaps.
+    fn forbids_mask_dst_overlaps(&self) -> bool {
+        match self {
+            VecAluOpRRR::VredmaxuVS
+            | VecAluOpRRR::VredminuVS
+            | VecAluOpRRR::VmandMM
+            | VecAluOpRRR::VmorMM
+            | VecAluOpRRR::VmnandMM
+            | VecAluOpRRR::VmnorMM
+            | VecAluOpRRR::VmseqVX
+            | VecAluOpRRR::VmsneVX
+            | VecAluOpRRR::VmsltuVX
+            | VecAluOpRRR::VmsltVX
+            | VecAluOpRRR::VmsleuVX
+            | VecAluOpRRR::VmsleVX
+            | VecAluOpRRR::VmsgtuVX
+            | VecAluOpRRR::VmsgtVX
+            | VecAluOpRRR::VmfeqVV
+            | VecAluOpRRR::VmfneVV
+            | VecAluOpRRR::VmfltVV
+            | VecAluOpRRR::VmfleVV
+            | VecAluOpRRR::VmfeqVF
+            | VecAluOpRRR::VmfneVF
+            | VecAluOpRRR::VmfltVF
+            | VecAluOpRRR::VmfleVF
+            | VecAluOpRRR::VmfgtVF
+            | VecAluOpRRR::VmfgeVF => false,
+            _ => true,
         }
     }
 }
@@ -704,12 +750,26 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VmsgtVI => false,
         }
     }
+}
 
-    /// Some instructions do not allow the source and destination registers to overlap.
-    pub fn forbids_src_dst_overlaps(&self) -> bool {
+impl VecInstOverlapInfo for VecAluOpRRImm5 {
+    fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
             VecAluOpRRImm5::VrgatherVI => true,
             _ => false,
+        }
+    }
+
+    // Only mask writing operations, and reduction operations (`vred*`) allow mask / dst overlaps.
+    fn forbids_mask_dst_overlaps(&self) -> bool {
+        match self {
+            VecAluOpRRImm5::VmseqVI
+            | VecAluOpRRImm5::VmsneVI
+            | VecAluOpRRImm5::VmsleuVI
+            | VecAluOpRRImm5::VmsleVI
+            | VecAluOpRRImm5::VmsgtuVI
+            | VecAluOpRRImm5::VmsgtVI => false,
+            _ => true,
         }
     }
 }
@@ -752,6 +812,14 @@ impl VecAluOpRR {
             | VecAluOpRR::VsextVF8 => 0b010010,
             VecAluOpRR::VfsqrtV => 0b010011,
             VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => 0b010111,
+            VecAluOpRR::VfcvtxufV
+            | VecAluOpRR::VfcvtxfV
+            | VecAluOpRR::VfcvtrtzxufV
+            | VecAluOpRR::VfcvtrtzxfV
+            | VecAluOpRR::VfcvtfxuV
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => 0b010010,
         }
     }
 
@@ -766,7 +834,16 @@ impl VecAluOpRR {
             | VecAluOpRR::VsextVF4
             | VecAluOpRR::VsextVF8 => VecOpCategory::OPMVV,
             VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => VecOpCategory::OPFVF,
-            VecAluOpRR::VfmvFS | VecAluOpRR::VfsqrtV => VecOpCategory::OPFVV,
+            VecAluOpRR::VfmvFS
+            | VecAluOpRR::VfsqrtV
+            | VecAluOpRR::VfcvtxufV
+            | VecAluOpRR::VfcvtxfV
+            | VecAluOpRR::VfcvtrtzxufV
+            | VecAluOpRR::VfcvtrtzxfV
+            | VecAluOpRR::VfcvtfxuV
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => VecOpCategory::OPFVV,
             VecAluOpRR::VmvVV => VecOpCategory::OPIVV,
             VecAluOpRR::VmvVX => VecOpCategory::OPIVX,
         }
@@ -792,6 +869,18 @@ impl VecAluOpRR {
             VecAluOpRR::VsextVF4 => 0b00101,
             VecAluOpRR::VzextVF2 => 0b00110,
             VecAluOpRR::VsextVF2 => 0b00111,
+            // VFUNARY0
+            // single-width converts
+            VecAluOpRR::VfcvtxufV => 0b00000,
+            VecAluOpRR::VfcvtxfV => 0b00001,
+            VecAluOpRR::VfcvtrtzxufV => 0b00110,
+            VecAluOpRR::VfcvtrtzxfV => 0b00111,
+            VecAluOpRR::VfcvtfxuV => 0b00010,
+            VecAluOpRR::VfcvtfxV => 0b00011,
+            // widening converts
+            VecAluOpRR::VfwcvtffV => 0b01100,
+            // narrowing converts
+            VecAluOpRR::VfncvtffW => 0b10100,
             // These don't have a explicit encoding table, but Section 11.16 Vector Integer Move Instruction states:
             // > The first operand specifier (vs2) must contain v0, and any other vector register number in vs2 is reserved.
             VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => 0,
@@ -811,7 +900,15 @@ impl VecAluOpRR {
             | VecAluOpRR::VzextVF8
             | VecAluOpRR::VsextVF2
             | VecAluOpRR::VsextVF4
-            | VecAluOpRR::VsextVF8 => true,
+            | VecAluOpRR::VsextVF8
+            | VecAluOpRR::VfcvtxufV
+            | VecAluOpRR::VfcvtxfV
+            | VecAluOpRR::VfcvtrtzxufV
+            | VecAluOpRR::VfcvtrtzxfV
+            | VecAluOpRR::VfcvtfxuV
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => true,
             VecAluOpRR::VmvSX
             | VecAluOpRR::VfmvSF
             | VecAluOpRR::VmvVV
@@ -833,7 +930,15 @@ impl VecAluOpRR {
             | VecAluOpRR::VzextVF8
             | VecAluOpRR::VsextVF2
             | VecAluOpRR::VsextVF4
-            | VecAluOpRR::VsextVF8 => RegClass::Vector,
+            | VecAluOpRR::VsextVF8
+            | VecAluOpRR::VfcvtxufV
+            | VecAluOpRR::VfcvtxfV
+            | VecAluOpRR::VfcvtrtzxufV
+            | VecAluOpRR::VfcvtrtzxfV
+            | VecAluOpRR::VfcvtfxuV
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => RegClass::Vector,
             VecAluOpRR::VmvXS => RegClass::Int,
             VecAluOpRR::VfmvFS => RegClass::Float,
         }
@@ -850,21 +955,32 @@ impl VecAluOpRR {
             | VecAluOpRR::VzextVF8
             | VecAluOpRR::VsextVF2
             | VecAluOpRR::VsextVF4
-            | VecAluOpRR::VsextVF8 => RegClass::Vector,
+            | VecAluOpRR::VsextVF8
+            | VecAluOpRR::VfcvtxufV
+            | VecAluOpRR::VfcvtxfV
+            | VecAluOpRR::VfcvtrtzxufV
+            | VecAluOpRR::VfcvtrtzxfV
+            | VecAluOpRR::VfcvtfxuV
+            | VecAluOpRR::VfcvtfxV
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => RegClass::Vector,
             VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => RegClass::Float,
             VecAluOpRR::VmvSX | VecAluOpRR::VmvVX => RegClass::Int,
         }
     }
+}
 
-    /// Some instructions do not allow the source and destination registers to overlap.
-    pub fn forbids_src_dst_overlaps(&self) -> bool {
+impl VecInstOverlapInfo for VecAluOpRR {
+    fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
             VecAluOpRR::VzextVF2
             | VecAluOpRR::VzextVF4
             | VecAluOpRR::VzextVF8
             | VecAluOpRR::VsextVF2
             | VecAluOpRR::VsextVF4
-            | VecAluOpRR::VsextVF8 => true,
+            | VecAluOpRR::VsextVF8
+            | VecAluOpRR::VfwcvtffV
+            | VecAluOpRR::VfncvtffW => true,
             _ => false,
         }
     }
@@ -887,6 +1003,14 @@ impl fmt::Display for VecAluOpRR {
             VecAluOpRR::VmvVV => "vmv.v.v",
             VecAluOpRR::VmvVX => "vmv.v.x",
             VecAluOpRR::VfmvVF => "vfmv.v.f",
+            VecAluOpRR::VfcvtxufV => "vfcvt.xu.f.v",
+            VecAluOpRR::VfcvtxfV => "vfcvt.x.f.v",
+            VecAluOpRR::VfcvtrtzxufV => "vfcvt.rtz.xu.f.v",
+            VecAluOpRR::VfcvtrtzxfV => "vfcvt.rtz.x.f.v",
+            VecAluOpRR::VfcvtfxuV => "vfcvt.f.xu.v",
+            VecAluOpRR::VfcvtfxV => "vfcvt.f.x.v",
+            VecAluOpRR::VfwcvtffV => "vfwcvt.f.f.v",
+            VecAluOpRR::VfncvtffW => "vfncvt.f.f.w",
         })
     }
 }
@@ -923,6 +1047,14 @@ impl VecAluOpRImm5 {
     }
 }
 
+impl VecInstOverlapInfo for VecAluOpRImm5 {
+    fn forbids_src_dst_overlaps(&self) -> bool {
+        match self {
+            VecAluOpRImm5::VmvVI => false,
+        }
+    }
+}
+
 impl fmt::Display for VecAluOpRImm5 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(match self {
@@ -949,12 +1081,6 @@ impl VecAMode {
             VecAMode::UnitStride { base } => VecAMode::UnitStride {
                 base: base.with_allocs(allocs),
             },
-        }
-    }
-
-    pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
-        match self {
-            VecAMode::UnitStride { base, .. } => base.get_offset_with_state(state),
         }
     }
 
@@ -992,5 +1118,45 @@ impl VecAMode {
         match self {
             VecAMode::UnitStride { .. } => 0b000,
         }
+    }
+}
+
+pub trait VecInstOverlapInfo {
+    /// § 5.2 Vector Operands states:
+    ///
+    /// A destination vector register group can overlap a source vector register group
+    /// only if one of the following holds:
+    ///
+    ///  * The destination EEW equals the source EEW.
+    ///
+    ///  * The destination EEW is smaller than the source EEW and the overlap is
+    ///  in the lowest-numbered part of the source register group (e.g., when LMUL=1,
+    ///  vnsrl.wi v0, v0, 3 is legal, but a destination of v1 is not).
+    ///
+    ///  * The destination EEW is greater than the source EEW, the source EMUL is at
+    ///  least 1, and the overlap is in the highest-numbered part of the destination register
+    ///  group (e.g., when LMUL=8, vzext.vf4 v0, v6 is legal, but a source of v0, v2, or v4 is not).
+    ///
+    /// For the purpose of determining register group overlap constraints, mask elements have EEW=1.
+    fn forbids_src_dst_overlaps(&self) -> bool;
+
+    /// § 5.3 Vector Masking states:
+    ///
+    /// > The destination vector register group for a masked vector instruction
+    /// > cannot overlap the source mask register (v0), unless the destination
+    /// > vector register is being written with a mask value (e.g., compares) or
+    /// > the scalar result of a reduction. These instruction encodings are reserved.
+    ///
+    /// In almost all instructions we should not allow the mask to be re-used as
+    /// a destination register.
+    fn forbids_mask_dst_overlaps(&self) -> bool {
+        true
+    }
+
+    /// There are two broad categories of overlaps (see above). But we can't represent such
+    /// fine grained overlaps to regalloc. So if any of the two come into play we forbid
+    /// all source and destination overlaps (including masks).
+    fn forbids_overlaps(&self, mask: &VecOpMasking) -> bool {
+        self.forbids_src_dst_overlaps() || (mask.is_enabled() && self.forbids_mask_dst_overlaps())
     }
 }

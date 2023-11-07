@@ -36,3 +36,24 @@ block0(v1: i64, v2: i64):
 ;     return v4
 ; }
 
+function %icmp_simplify_does_not_build_iconst_i128() -> i8 {
+block0:
+    v0 = iconst.i64 0x6350_5050_5050_3750
+    v1 = iconcat v0, v0
+    v2 = bmask.i8 v1
+    v3 = iconst.i8 0
+    v4 = icmp ugt v2, v3
+    return v4
+}
+
+; function %icmp_simplify_does_not_build_iconst_i128() -> i8 fast {
+; block0:
+;     v0 = iconst.i64 0x6350_5050_5050_3750
+;     v1 = iconcat v0, v0  ; v0 = 0x6350_5050_5050_3750, v0 = 0x6350_5050_5050_3750
+;     v2 = bmask.i8 v1
+;     v3 = iconst.i8 0
+;     v5 = icmp ne v2, v3  ; v3 = 0
+;     v6 -> v5
+;     return v5
+; }
+

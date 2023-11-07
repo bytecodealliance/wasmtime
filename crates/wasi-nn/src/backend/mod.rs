@@ -7,9 +7,11 @@ mod openvino;
 
 use self::openvino::OpenvinoBackend;
 use crate::backend::kserve::{KServeBackend, KServeClient};
-use crate::wit::types::{ExecutionTarget, Tensor};
-use crate::{ExecutionContext, Graph, GraphRegistry};
+use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
+use crate::{Backend, ExecutionContext, Graph, GraphRegistry};
 use std::{error::Error, fmt, path::Path, str::FromStr};
+use std::path::Path;
+
 use thiserror::Error;
 use wiggle::async_trait_crate::async_trait;
 use wiggle::GuestError;
@@ -27,8 +29,8 @@ pub fn build_kserve_registry(server_url: &String) -> Box<dyn GraphRegistry> {
 }
 
 /// A [Backend] contains the necessary state to load [Graph]s.
-pub trait Backend: Send + Sync {
-    fn name(&self) -> &str;
+pub trait BackendInner: Send + Sync {
+    fn encoding(&self) -> GraphEncoding;
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError>;
     fn as_dir_loadable<'a>(&'a mut self) -> Option<&'a mut dyn BackendFromDir>;
 }
@@ -36,7 +38,7 @@ pub trait Backend: Send + Sync {
 /// Some [Backend]s support loading a [Graph] from a directory on the
 /// filesystem; this is not a general requirement for backends but is useful for
 /// the Wasmtime CLI.
-pub trait BackendFromDir: Backend {
+pub trait BackendFromDir: BackendInner {
     fn load_from_dir(
         &mut self,
         builders: &Path,
@@ -46,7 +48,7 @@ pub trait BackendFromDir: Backend {
 
 #[async_trait]
 /// A [BackendGraph] can create [BackendExecutionContext]s; this is the backing
-/// implementation for a [crate::witx::types::Graph].
+/// implementation for the user-facing graph.
 pub trait BackendGraph: Send + Sync {
     async fn init_execution_context(&self) -> Result<ExecutionContext, BackendError>;
 }

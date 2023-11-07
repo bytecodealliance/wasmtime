@@ -98,11 +98,11 @@
 ;; (x | -x) sets the sign bit to 1 if x is nonzero, and 0 if x is zero. sshr propagates
 ;; the sign bit to the rest of the value.
 (rule (simplify (sshr ty (bor ty x (ineg ty x)) (iconst ty (u64_from_imm64 shift_amt))))
-      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
       (bmask ty x))
 
 (rule (simplify (sshr ty (bor ty (ineg ty x) x) (iconst ty (u64_from_imm64 shift_amt))))
-      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
       (bmask ty x))
 
 ;; Matches any expressions that preserve "truthiness".
@@ -129,7 +129,7 @@
 ;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
 (rule (simplify (ne cty v (iconst _ (u64_from_imm64 0))))
       (if-let c (truthy v))
-      (if-let (value_type ty) c)
+      (if-let (value_type (ty_int_ref_scalar_64 ty)) c)
       (ne cty c (iconst ty (imm64 0))))
 
 
@@ -145,3 +145,54 @@
 
 ;; (bitrev (bitrev x)) == x
 (rule (simplify (bitrev ty (bitrev ty x))) (subsume x))
+
+;; WebAssembly doesn't have a native byte-swapping instruction at this time so
+;; languages which have a byte-swapping operation will compile it down to bit
+;; shifting and twiddling. This attempts to pattern match what LLVM currently
+;; generates today for the Rust code `a.swap_bytes()`. This might be a bit
+;; brittle over time and/or with other possible LLVM backend optimizations, but
+;; it's at least one way to generate a byte swap.
+;;
+;; Technically this could be permuted quite a few ways and currently there's no
+;; easy way to match all of them, so only one is matched here.
+(rule (simplify (bor ty @ $I32
+    (bor ty
+      (ishl ty x (iconst ty (u64_from_imm64 24)))
+      (ishl ty
+        (band ty x (iconst ty (u64_from_imm64 0xff00)))
+        (iconst ty (u64_from_imm64 8))))
+    (bor ty
+      (band ty
+        (ushr ty x (iconst ty (u64_from_imm64 8)))
+        (iconst ty (u64_from_imm64 0xff00)))
+      (ushr ty x (iconst ty (u64_from_imm64 24))))))
+  (bswap ty x))
+
+(rule (simplify (bor ty @ $I64
+    (bor ty
+      (bor ty
+        (ishl ty x (iconst ty (u64_from_imm64 56)))
+        (ishl ty
+          (band ty x (iconst ty (u64_from_imm64 0xff00)))
+          (iconst ty (u64_from_imm64 40))))
+      (bor ty
+        (ishl ty
+          (band ty x (iconst ty (u64_from_imm64 0xff_0000)))
+          (iconst ty (u64_from_imm64 24)))
+        (ishl ty
+          (band ty x (iconst ty (u64_from_imm64 0xff00_0000)))
+          (iconst ty (u64_from_imm64 8)))))
+    (bor ty
+      (bor ty
+        (band ty
+          (ushr ty x (iconst ty (u64_from_imm64 8)))
+          (iconst ty (u64_from_imm64 0xff00_0000)))
+        (band ty
+          (ushr ty x (iconst ty (u64_from_imm64 24)))
+          (iconst ty (u64_from_imm64 0xff_0000))))
+      (bor ty
+        (band ty
+          (ushr ty x (iconst ty (u64_from_imm64 40)))
+          (iconst ty (u64_from_imm64 0xff00)))
+        (ushr ty x (iconst ty (u64_from_imm64 56)))))))
+  (bswap ty x))

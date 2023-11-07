@@ -27,9 +27,21 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-unknown-linux-gnu`                 |
 | WASI Proposal        | `wasi_snapshot_preview1`                   |
 | WASI Proposal        | `wasi_unstable`                            |
-| WebAssembly Proposal | `bulk-memory`                              |
-| WebAssembly Proposal | `reference-types`                          |
-| WebAssembly Proposal | `simd`                                     |
+| WebAssembly Proposal | [`mutable-globals`]                        |
+| WebAssembly Proposal | [`sign-extension-ops`]                     |
+| WebAssembly Proposal | [`nontrapping-float-to-int-conversion`]    |
+| WebAssembly Proposal | [`multi-value`]                            |
+| WebAssembly Proposal | [`bulk-memory`]                            |
+| WebAssembly Proposal | [`reference-types`]                        |
+| WebAssembly Proposal | [`simd`]                                   |
+
+[`mutable-globals`]: https://github.com/WebAssembly/mutable-global/blob/master/proposals/mutable-global/Overview.md
+[`sign-extension-ops`]: https://github.com/WebAssembly/spec/blob/master/proposals/sign-extension-ops/Overview.md
+[`nontrapping-float-to-int-conversion`]: https://github.com/WebAssembly/spec/blob/master/proposals/nontrapping-float-to-int-conversion/Overview.md
+[`multi-value`]: https://github.com/WebAssembly/spec/blob/master/proposals/multi-value/Overview.md
+[`bulk-memory`]: https://github.com/WebAssembly/bulk-memory-operations/blob/master/proposals/bulk-memory-operations/Overview.md
+[`reference-types`]: https://github.com/WebAssembly/reference-types/blob/master/proposals/reference-types/Overview.md
+[`simd`]: https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md
 
 #### Tier 2
 
@@ -38,8 +50,31 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-unknown-linux-gnu`| Continuous fuzzing          |
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
-| WebAssembly Proposal | `memory64`                 | Unstable wasm proposal      |
-| WebAssembly Proposal | `multi-memory`             | Unstable wasm proposal      |
+| WebAssembly Proposal | [`memory64`]]              | Unstable wasm proposal      |
+| WebAssembly Proposal | [`multi-memory`]           | Unstable wasm proposal      |
+| WebAssembly Proposal | [`threads`]                | Unstable wasm proposal      |
+| WebAssembly Proposal | [`component-model`]        | Unstable wasm proposal      |
+| WebAssembly Proposal | [`tail-call`]              | Unstable wasm proposal, performance work |
+| WebAssembly Proposal | [`relaxed-simd`]           | Unstable wasm proposal      |
+| WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
+| WASI Proposal        | [`wasi-io`]                | Unstable WASI proposal      |
+| WASI Proposal        | [`wasi-clocks`]            | Unstable WASI proposal      |
+| WASI Proposal        | [`wasi-filesystem`]        | Unstable WASI proposal      |
+| WASI Proposal        | [`wasi-random`]            | Unstable WASI proposal      |
+| WASI Proposal        | [`wasi-poll`]              | Unstable WASI proposal      |
+
+[`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
+[`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
+[`threads`]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
+[`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
+[`tail-call`]: https://github.com/WebAssembly/tail-call/blob/main/proposals/tail-call/Overview.md
+[`relaxed-simd`]: https://github.com/WebAssembly/relaxed-simd/blob/main/proposals/relaxed-simd/Overview.md
+[`function-references`]: https://github.com/WebAssembly/function-references/blob/main/proposals/function-references/Overview.md
+[`wasi-clocks`]: https://github.com/WebAssembly/wasi-clocks
+[`wasi-filesystem`]: https://github.com/WebAssembly/wasi-filesystem
+[`wasi-io`]: https://github.com/WebAssembly/wasi-io
+[`wasi-random`]: https://github.com/WebAssembly/wasi-random
+[`wasi-poll`]: https://github.com/WebAssembly/wasi-poll
 
 #### Tier 3
 
@@ -48,11 +83,17 @@ For explanations of what each tier means see below.
 | Target               | `aarch64-apple-darwin`            | CI testing                  |
 | Target               | `aarch64-pc-windows-msvc`         | CI testing, unwinding, full-time maintainer |
 | Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
-| WASI Proposal        | `wasi-nn`                         | More expansive CI testing   |
-| WebAssembly Proposal | `threads`                         | Complete implementation     |
-| WebAssembly Proposal | `component-model`                 | Complete implementation     |
+| WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
+| WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
+| WASI Proposal        | [`wasi-sockets`]                  | Complete implementation     |
+| WASI Proposal        | [`wasi-http`]                     | Complete implementation     |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
 | *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
+
+[`wasi-sockets`]: https://github.com/WebAssembly/wasi-sockets
+[`wasi-nn`]: https://github.com/WebAssembly/wasi-nn
+[`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
+[`wasi-http`]: https://github.com/WebAssembly/wasi-http
 
 [^1]: This is intended to encompass features that Cranelift supports as a
 general-purpose code generator such as integer value types other than `i32` and
@@ -66,6 +107,46 @@ exercised by Wasmtime.
 support is currently best-effort. Additionally there are known shortcomings
 and bugs. At this time there's no developer time to improve the situation here
 as well.
+
+#### Unsupported features and platforms
+
+While this is not an exhaustive list, Wasmtime does not currently have support
+for the following features. Note that this is intended to document Wasmtime's
+current state and does not mean Wasmtime does not want to ever support these
+features; rather design discussion and PRs are welcome for many of the below
+features to figure out how best to implement them and at least move them to Tier
+3 above.
+
+* Target: ARM 32-bit
+* Target: WebAssembly (compiling Wasmtime to WebAssembly itself)
+* Target: [FreeBSD](https://github.com/bytecodealliance/wasmtime/issues/5499)
+* Target: [NetBSD/OpenBSD](https://github.com/bytecodealliance/wasmtime/issues/6962)
+* Target: [i686 (32-bit Intel targets)](https://github.com/bytecodealliance/wasmtime/issues/1980)
+* Target: Android
+* Target: MIPS
+* Target: SPARC
+* Target: PowerPC
+* Target: RISC-V 32-bit
+* [WebAssembly proposal: `branch-hinting`](https://github.com/WebAssembly/branch-hinting)
+* [WebAssembly proposal: `exception-handling`](https://github.com/WebAssembly/exception-handling)
+* [WebAssembly proposal: `extended-const`](https://github.com/WebAssembly/extended-const)
+* [WebAssembly proposal: `flexible-vectors`](https://github.com/WebAssembly/flexible-vectors)
+* [WebAssembly proposal: `gc`](https://github.com/WebAssembly/gc)
+* [WebAssembly proposal: `memory-control`](https://github.com/WebAssembly/memory-control)
+* [WebAssembly proposal: `stack-switching`](https://github.com/WebAssembly/stack-switching)
+* [WASI proposal: `proxy-wasm`](https://github.com/proxy-wasm/spec)
+* [WASI proposal: `wasi-blob-store`](https://github.com/WebAssembly/wasi-blob-store)
+* [WASI proposal: `wasi-crypto`](https://github.com/WebAssembly/wasi-crypto)
+* [WASI proposal: `wasi-data`](https://github.com/WebAssembly/wasi-data)
+* [WASI proposal: `wasi-distributed-lock-service`](https://github.com/WebAssembly/wasi-distributed-lock-service)
+* [WASI proposal: `wasi-grpc`](https://github.com/WebAssembly/wasi-grpc)
+* [WASI proposal: `wasi-kv-store`](https://github.com/WebAssembly/wasi-kv-store)
+* [WASI proposal: `wasi-message-queue`](https://github.com/WebAssembly/wasi-message-queue)
+* [WASI proposal: `wasi-parallel`](https://github.com/WebAssembly/wasi-parallel)
+* [WASI proposal: `wasi-pubsub`](https://github.com/WebAssembly/wasi-pubsub)
+* [WASI proposal: `wasi-runtime-config`](https://github.com/WebAssembly/wasi-runtime-config)
+* [WASI proposal: `wasi-sql`](https://github.com/WebAssembly/wasi-sql)
+* [WASI proposal: `wasi-url`](https://github.com/WebAssembly/wasi-url)
 
 ## Tier Details
 

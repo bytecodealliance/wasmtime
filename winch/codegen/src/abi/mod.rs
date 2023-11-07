@@ -44,9 +44,11 @@
 //! |                               | ----> Space allocated for calls
 //! |                               |
 use crate::isa::{reg::Reg, CallingConvention};
+use crate::masm::OperandSize;
 use smallvec::SmallVec;
+use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
-use wasmtime_environ::{WasmFuncType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
 
 pub(crate) mod local;
 pub(crate) use local::*;
@@ -70,6 +72,10 @@ pub(crate) trait ABI {
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
     fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
+
+    /// Construct an ABI signature from WasmType params and returns.
+    fn sig_from(params: &[WasmType], returns: &[WasmType], call_conv: &CallingConvention)
+        -> ABISig;
 
     /// Construct the ABI-specific result from a slice of
     /// [`wasmtime_environ::WasmtType`].
@@ -98,12 +104,15 @@ pub(crate) trait ABI {
 
     /// Returns the callee-saved registers for the given
     /// calling convention.
-    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]>;
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]>;
+
+    /// Returns the size of each argument stack slot per argument type.
+    fn stack_arg_slot_size_for_type(ty: WasmType) -> u32;
 }
 
 /// ABI-specific representation of a function argument.
-#[derive(Debug)]
-pub(crate) enum ABIArg {
+#[derive(Clone, Debug)]
+pub enum ABIArg {
     /// A register argument.
     Reg {
         /// Type of the argument.
@@ -158,35 +167,49 @@ impl ABIArg {
 /// ABI-specific representation of the function result.
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum ABIResult {
+    Void,
     Reg {
         /// Type of the result.
-        ty: Option<WasmType>,
+        ty: WasmType,
         /// Register to hold the result.
         reg: Reg,
     },
 }
 
+impl Default for ABIResult {
+    fn default() -> Self {
+        Self::Void
+    }
+}
+
 impl ABIResult {
     /// Create a register ABI result.
-    pub fn reg(ty: Option<WasmType>, reg: Reg) -> Self {
+    pub fn reg(ty: WasmType, reg: Reg) -> Self {
         Self::Reg { ty, reg }
     }
 
+    /// Createa void ABI result.
+    pub fn void() -> Self {
+        Self::Void
+    }
+
     /// Get the result reg.
-    pub fn result_reg(&self) -> Reg {
+    pub fn result_reg(&self) -> Option<Reg> {
         match self {
-            Self::Reg { reg, .. } => *reg,
+            Self::Reg { reg, .. } => Some(*reg),
+            _ => None,
         }
     }
 
     /// Checks if the result is void.
     pub fn is_void(&self) -> bool {
         match self {
-            Self::Reg { ty, .. } => ty.is_none(),
+            Self::Void => true,
+            _ => false,
         }
     }
 
-    /// Returns result's length.
+    /// Returns the length of the result.
     pub fn len(&self) -> usize {
         if self.is_void() {
             0
@@ -194,11 +217,20 @@ impl ABIResult {
             1
         }
     }
+
+    /// Returns an iterator over the result registers.
+    ///
+    /// NOTE: Currently only one or zero registers
+    /// will be returned until suport for multi-value is introduced.
+    pub fn regs(&self) -> impl Iterator<Item = Reg> + '_ {
+        std::iter::once(self.result_reg()).filter_map(|v| v)
+    }
 }
 
 pub(crate) type ABIParams = SmallVec<[ABIArg; 6]>;
 
 /// An ABI-specific representation of a function signature.
+#[derive(Debug, Clone)]
 pub(crate) struct ABISig {
     /// Function parameters.
     pub params: ABIParams,
@@ -206,15 +238,28 @@ pub(crate) struct ABISig {
     pub result: ABIResult,
     /// Stack space needed for stack arguments.
     pub stack_bytes: u32,
+    /// All the registers used in the [`ABISig`].
+    /// Note that this collection is guaranteed to
+    /// be unique: in some cases some registers might
+    /// be used as params as a well as returns (e.g. xmm0 in x64).
+    pub regs: HashSet<Reg>,
 }
 
 impl ABISig {
     /// Create a new ABI signature.
     pub fn new(params: ABIParams, result: ABIResult, stack_bytes: u32) -> Self {
+        let regs = params
+            .iter()
+            .filter_map(|r| r.get_reg())
+            .collect::<SmallVec<[Reg; 6]>>();
+        let result_regs = result.regs();
+        let chained = regs.into_iter().chain(result_regs);
+
         Self {
             params,
             result,
             stack_bytes,
+            regs: HashSet::from_iter(chained),
         }
     }
 }
@@ -224,7 +269,15 @@ pub(crate) fn ty_size(ty: &WasmType) -> u32 {
     match *ty {
         WasmType::I32 | WasmType::F32 => 4,
         WasmType::I64 | WasmType::F64 => 8,
-        _ => panic!(),
+        WasmType::Ref(rt) => match rt.heap_type {
+            // TODO: Similar to the comment in visitor.rs at impl From<WasmType> for
+            // OperandSize, Once Wasmtime supports 32-bit architectures, this will
+            // need to be updated to derive operand size from the target's pointer
+            // size.
+            WasmHeapType::Func => 8,
+            ht => unimplemented!("Support for WasmHeapType: {ht}"),
+        },
+        t => unimplemented!("Support for WasmType: {t}"),
     }
 }
 

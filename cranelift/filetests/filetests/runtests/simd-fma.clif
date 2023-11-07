@@ -4,6 +4,7 @@ target x86_64 has_avx has_fma
 target x86_64 has_avx=false has_fma=false
 target aarch64
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %fma_f32x4(f32x4, f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4, v2: f32x4):

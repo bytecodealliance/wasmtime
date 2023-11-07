@@ -300,7 +300,8 @@
 
 ;; `i128`.
 
-(rule 7 (lower (has_type $I128 (band x y)))
+(decl and_i128 (ValueRegs ValueRegs) ValueRegs)
+(rule (and_i128 x y)
       (let ((x_regs ValueRegs x)
             (x_lo Gpr (value_regs_get_gpr x_regs 0))
             (x_hi Gpr (value_regs_get_gpr x_regs 1))
@@ -309,6 +310,9 @@
             (y_hi Gpr (value_regs_get_gpr y_regs 1)))
         (value_gprs (x64_and $I64 x_lo y_lo)
                     (x64_and $I64 x_hi y_hi))))
+
+(rule 7 (lower (has_type $I128 (band x y)))
+      (and_i128 x y))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
@@ -343,21 +347,42 @@
 
 ;; Specialization of `blsr` for BMI1
 
-(rule 12 (lower (has_type (ty_32_or_64 ty) (band (isub x (iconst (u64_from_imm64 1))) x)))
+(decl pure partial val_minus_one (Value) Value)
+(rule 0 (val_minus_one (isub x (u64_from_iconst 1))) x)
+(rule 0 (val_minus_one (iadd x (i64_from_iconst -1))) x)
+(rule 1 (val_minus_one (iadd (i64_from_iconst -1) x)) x)
+
+(rule 12 (lower (has_type (ty_32_or_64 ty) (band x y)))
          (if-let $true (use_bmi1))
+         (if-let x (val_minus_one y))
          (x64_blsr ty x))
-(rule 13 (lower (has_type (ty_32_or_64 ty) (band x (isub x (iconst (u64_from_imm64 1))))))
+(rule 13 (lower (has_type (ty_32_or_64 ty) (band y x)))
          (if-let $true (use_bmi1))
+         (if-let x (val_minus_one y))
          (x64_blsr ty x))
 
 ;; Specialization of `blsi` for BMI1
 
-(rule 12 (lower (has_type (ty_32_or_64 ty) (band (ineg x) x)))
+(rule 14 (lower (has_type (ty_32_or_64 ty) (band (ineg x) x)))
          (if-let $true (use_bmi1))
          (x64_blsi ty x))
-(rule 13 (lower (has_type (ty_32_or_64 ty) (band x (ineg x))))
+(rule 15 (lower (has_type (ty_32_or_64 ty) (band x (ineg x))))
          (if-let $true (use_bmi1))
          (x64_blsi ty x))
+
+;; Specialization of `bzhi` for BMI2
+;;
+;; The `bzhi` instruction clears all bits indexed by the second operand of the
+;; first operand. This is pattern-matched here with a `band` against a mask
+;; which is generated to be N bits large. Note that if the index is larger than
+;; the bit-width of the type then `bzhi` doesn't have the same semantics as
+;; `ishl`, so an `and` instruction is required to mask the index to match the
+;; semantics of Cranelift's `ishl`.
+
+(rule 16 (lower (has_type (ty_32_or_64 ty) (band x y)))
+         (if-let $true (use_bmi2))
+         (if-let (ishl (u64_from_iconst 1) index) (val_minus_one y))
+         (x64_bzhi ty x (x64_and ty index (RegMemImm.Imm (u32_sub (ty_bits ty) 1)))))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -455,11 +480,13 @@
 
 ;; Specialization of `blsmsk` for BMI1
 
-(rule 8 (lower (has_type (ty_32_or_64 ty) (bxor (isub x (iconst (u64_from_imm64 1))) x)))
+(rule 8 (lower (has_type (ty_32_or_64 ty) (bxor x y)))
         (if-let $true (use_bmi1))
+        (if-let x (val_minus_one y))
         (x64_blsmsk ty x))
-(rule 9 (lower (has_type (ty_32_or_64 ty) (bxor x (isub x (iconst (u64_from_imm64 1))))))
+(rule 9 (lower (has_type (ty_32_or_64 ty) (bxor y x)))
         (if-let $true (use_bmi1))
+        (if-let x (val_minus_one y))
         (x64_blsmsk ty x))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -833,7 +860,7 @@
           (high32 Xmm (x64_psrad vec (xmi_imm 31)))
           (high32 Xmm (x64_pshufd high32 0b11_10_11_01))
           (low32  Xmm (x64_psrad vec (xmi_imm (u32_sub imm 32))))
-          (low32  Xmm (x64_pshufd low32 0b11_10_10_01))
+          (low32  Xmm (x64_pshufd low32 0b11_10_11_01))
         )
         (x64_punpckldq low32 high32)))
 
@@ -1238,6 +1265,27 @@
             (cmove ConsumesFlags (cmove ty (CC.S) src neg_result)))
         (with_flags_reg (produces_flags_ignore neg) cmove)))
 
+;; `i128`. Negate the low bits, `adc` to the higher bits, then negate high bits.
+(rule (lower (has_type $I128 (iabs x)))
+      ;; Get the high/low registers for `x`.
+      (let ((x_regs ValueRegs x)
+            (x_lo Gpr (value_regs_get_gpr x_regs 0))
+            (x_hi Gpr (value_regs_get_gpr x_regs 1))
+            ; negate low bits, then add 0 with carry to high bits.
+            (neg_lo ProducesFlags (x64_neg_paired $I64 x_lo))
+            (adc_hi ConsumesFlags (x64_adc_paired $I64 x_hi (imm $I64 0)))
+            (neg_adc_vals ValueRegs (with_flags neg_lo adc_hi))
+            ; negate high bits.
+            (neg_hi ProducesFlags (x64_neg_paired $I64 (value_regs_get neg_adc_vals 1)))
+            (neg_hi_flag_only ProducesFlags (produces_flags_ignore neg_hi))
+            ; cmove based on sign flag from hi negation.
+            (cmove_lo ConsumesFlags (cmove $I64 (CC.S) x_lo
+                                     (value_regs_get neg_adc_vals 0)))
+            (cmove_hi ConsumesFlags (cmove $I64 (CC.S) x_hi
+                                     (produces_flags_get_reg neg_hi)))
+            (cmoves ConsumesFlags (consumes_flags_concat cmove_lo cmove_hi)))
+        (with_flags neg_hi_flag_only cmoves)))
+
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fabs x)))
@@ -1370,10 +1418,7 @@
                                     if_false)))
       (if-let $true (use_sse41))
       (if (all_ones_or_all_zeros condition))
-      (x64_blend ty
-                 condition
-                 if_true
-                 if_false))
+      (x64_pblendvb if_false if_true condition))
 
 (decl pure partial all_ones_or_all_zeros (Value) bool)
 (rule (all_ones_or_all_zeros (and (icmp _ _ _) (value_type (multi_lane _ _)))) $true)
@@ -1397,6 +1442,24 @@
         (x64_maxps x y))
 (rule 3 (lower (has_type $F64X2 (bitselect (bitcast _ (fcmp (FloatCC.LessThan) y x)) x y)))
         (x64_maxpd x y))
+
+;; Scalar rules
+
+(rule 3 (lower (has_type $I128 (bitselect c t f)))
+      (let ((a ValueRegs (and_i128 c t))
+            (b ValueRegs (and_i128 (i128_not c) f)))
+        (or_i128 a b)))
+
+(rule 4 (lower (has_type (ty_int_ref_scalar_64 ty) (bitselect c t f)))
+      (let ((a Gpr (x64_and ty c t))
+            (b Gpr (x64_and ty (x64_not ty c) f)))
+        (x64_or ty a b)))
+
+(rule 5 (lower (has_type (ty_scalar_float ty) (bitselect c t f)))
+      (let ((a Xmm (sse_and ty c t))
+            (c_neg Xmm (x64_xor_vector ty c (vector_all_ones)))
+            (b Xmm (sse_and ty c_neg f)))
+        (sse_or ty a b)))
 
 ;;;; Rules for `x86_blendv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2019,8 +2082,7 @@
 ;; than one instruction for certain types (e.g., XMM-held, I128).
 
 (rule (lower (has_type ty (select (maybe_uextend (icmp cc a @ (value_type (fits_in_64 a_ty)) b)) x y)))
-      (let ((size OperandSize (raw_operand_size_of_type a_ty)))
-           (with_flags (x64_cmp size b a) (cmove_from_values ty cc x y))))
+      (lower_select_icmp ty (emit_cmp cc a b) x y))
 
 ;; Finally, we lower `select` from a condition value `c`. These rules are meant
 ;; to be the final, default lowerings if no other patterns matched above.
@@ -2035,6 +2097,10 @@
 (rule -2 (lower (has_type ty (select c @ (value_type $I128) x y)))
       (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
         (select_icmp cond_result x y)))
+
+(decl lower_select_icmp (Type IcmpCondResult Value Value) InstOutput)
+(rule (lower_select_icmp ty (IcmpCondResult.Condition flags cc) x y)
+      (with_flags flags (cmove_from_values ty cc x y)))
 
 ;; Specializations for floating-point compares to generate a `mins*` or a
 ;; `maxs*` instruction. These are equivalent to the "pseudo-m{in,ax}"
@@ -2893,6 +2959,11 @@
       (side_effect
        (x64_movrm $I32 (to_amode flags address offset) value)))
 
+;; IMM stores
+(rule 2 (lower (store flags (has_type (fits_in_64 ty) (iconst (simm32 value))) address offset))
+      (side_effect
+       (x64_movimm_m ty (to_amode flags address offset) value)))
+
 ;; F32 stores of values in XMM registers.
 (rule 1 (lower (store flags
                     value @ (value_type $F32)
@@ -3289,23 +3360,40 @@
 
 ;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Note that the `cvtsi2s{s,d}` instruction is not just an int-to-float
+;; conversion instruction in isolation, it also takes the upper 64-bits of an
+;; xmm register and places it into the destination. We don't actually want that
+;; to happen as it could accidentally create a false dependency with a
+;; previous instruction defining the register's upper 64-bits. See #7085 for
+;; an instance of this.
+;;
+;; This means that the first operand to all of the int-to-float conversions here
+;; are `(xmm_zero)` operands which is a guaranteed zero register that has no
+;; dependencies on other instructions.
+;;
+;; Ideally this would be lifted out to a higher level to get deduplicated
+;; between consecutive int-to-float operations but that's not easy
+;; to do at this time. One possibility would be a mid-end rule which rewrites
+;; `fcvt_from_sint` to an x86-specific opcode using a zero constant which would
+;; be subject to normal LICM, but that's not feasible today.
+
 (rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I8))))
-      (x64_cvtsi2ss $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2ss $I32 (xmm_zero $F32X4) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 2 (lower (has_type $F32 (fcvt_from_sint a @ (value_type $I16))))
-      (x64_cvtsi2ss $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2ss $I32 (xmm_zero $F32X4) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 1 (lower (has_type $F32 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
-      (x64_cvtsi2ss ty a))
+      (x64_cvtsi2ss ty (xmm_zero $F32X4) a))
 
 (rule 2 (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I8))))
-      (x64_cvtsi2sd $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2sd $I32 (xmm_zero $F64X2) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 2 (lower (has_type $F64 (fcvt_from_sint a @ (value_type $I16))))
-      (x64_cvtsi2sd $I32 (extend_to_gpr a $I32 (ExtendKind.Sign))))
+      (x64_cvtsi2sd $I32 (xmm_zero $F64X2) (extend_to_gpr a $I32 (ExtendKind.Sign))))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_sint a @ (value_type (ty_int (fits_in_64 ty))))))
-      (x64_cvtsi2sd ty a))
+      (x64_cvtsi2sd ty (xmm_zero $F64X2) a))
 
 (rule 0 (lower (fcvt_from_sint a @ (value_type $I32X4)))
       (x64_cvtdq2ps a))
@@ -3316,10 +3404,10 @@
 ;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (has_type $F32 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
-      (x64_cvtsi2ss $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
+      (x64_cvtsi2ss $I64 (xmm_zero $F32X4) (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
 (rule 1 (lower (has_type $F64 (fcvt_from_uint val @ (value_type (fits_in_32 (ty_int ty))))))
-      (x64_cvtsi2sd $I64 (extend_to_gpr val $I64 (ExtendKind.Zero))))
+      (x64_cvtsi2sd $I64 (xmm_zero $F64X2) (extend_to_gpr val $I64 (ExtendKind.Zero))))
 
 (rule (lower (has_type ty (fcvt_from_uint val @ (value_type $I64))))
       (cvt_u64_to_float_seq ty val))

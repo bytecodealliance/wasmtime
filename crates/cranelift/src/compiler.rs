@@ -6,7 +6,10 @@ use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
     self, InstBuilder, MemFlags, UserExternalName, UserExternalNameRef, UserFuncName, Value,
 };
-use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
+use cranelift_codegen::isa::{
+    unwind::{UnwindInfo, UnwindInfoKind},
+    OwnedTargetIsa, TargetIsa,
+};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{CompiledCode, MachStackMap};
@@ -20,7 +23,6 @@ use object::write::{Object, StandardSegment, SymbolId};
 use object::{RelocationEncoding, RelocationKind, SectionKind};
 use std::any::Any;
 use std::cmp;
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
@@ -194,7 +196,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
-            readonly: true,
+            flags: MemFlags::trusted().with_readonly(),
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
@@ -202,7 +204,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
-            readonly: false,
+            flags: MemFlags::trusted(),
         });
         context.func.stack_limit = Some(stack_limit);
         let FunctionBodyData { validator, body } = input;
@@ -519,11 +521,11 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.triple()
     }
 
-    fn flags(&self) -> BTreeMap<String, FlagValue> {
+    fn flags(&self) -> Vec<(&'static str, FlagValue<'static>)> {
         wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.flags().iter())
     }
 
-    fn isa_flags(&self) -> BTreeMap<String, FlagValue> {
+    fn isa_flags(&self) -> Vec<(&'static str, FlagValue<'static>)> {
         wasmtime_cranelift_shared::clif_flags_to_wasmtime(self.isa.isa_flags())
     }
 
@@ -1052,13 +1054,6 @@ impl FunctionCompiler<'_> {
             );
         }
 
-        if body_and_tunables
-            .map(|(_, t)| t.generate_native_debuginfo)
-            .unwrap_or(false)
-        {
-            compiled_function.set_value_labels_ranges(compiled_code.value_labels_ranges.clone());
-        }
-
         if isa.flags().unwind_info() {
             let unwind = compiled_code
                 .create_unwind_info(isa)
@@ -1066,6 +1061,27 @@ impl FunctionCompiler<'_> {
 
             if let Some(unwind_info) = unwind {
                 compiled_function.set_unwind_info(unwind_info);
+            }
+        }
+
+        if body_and_tunables
+            .map(|(_, t)| t.generate_native_debuginfo)
+            .unwrap_or(false)
+        {
+            compiled_function.set_value_labels_ranges(compiled_code.value_labels_ranges.clone());
+
+            // DWARF debugging needs the CFA-based unwind information even on Windows.
+            if !matches!(
+                compiled_function.metadata().unwind_info,
+                Some(UnwindInfo::SystemV(_))
+            ) {
+                let cfa_unwind = compiled_code
+                    .create_unwind_info_of_kind(isa, UnwindInfoKind::SystemV)
+                    .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+
+                if let Some(UnwindInfo::SystemV(cfa_unwind_info)) = cfa_unwind {
+                    compiled_function.set_cfa_unwind_info(cfa_unwind_info);
+                }
             }
         }
 

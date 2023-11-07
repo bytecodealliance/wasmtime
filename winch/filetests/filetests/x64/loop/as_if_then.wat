@@ -10,10 +10,10 @@
 ;;    8:	 4c893424             	mov	qword ptr [rsp], r14
 ;;    c:	 b801000000           	mov	eax, 1
 ;;   11:	 85c0                 	test	eax, eax
-;;   13:	 0f840c000000         	je	0x25
-;;   19:	 48c7c001000000       	mov	rax, 1
-;;   20:	 e907000000           	jmp	0x2c
-;;   25:	 48c7c002000000       	mov	rax, 2
-;;   2c:	 4883c408             	add	rsp, 8
-;;   30:	 5d                   	pop	rbp
-;;   31:	 c3                   	ret	
+;;   13:	 0f840a000000         	je	0x23
+;;   19:	 b801000000           	mov	eax, 1
+;;   1e:	 e905000000           	jmp	0x28
+;;   23:	 b802000000           	mov	eax, 2
+;;   28:	 4883c408             	add	rsp, 8
+;;   2c:	 5d                   	pop	rbp
+;;   2d:	 c3                   	ret	

@@ -1,9 +1,10 @@
 test run
 target aarch64
-; target s390x FIXME: This currently fails under qemu due to a qemu bug
+target s390x
 target x86_64
 target x86_64 skylake
-target riscv64gc has_v
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %fmin_pseudo_f32x4(f32x4, f32x4) -> f32x4 {
 block0(v0:f32x4, v1:f32x4):

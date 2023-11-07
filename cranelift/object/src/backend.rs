@@ -4,11 +4,11 @@ use anyhow::anyhow;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{self, ir, MachReloc};
+use cranelift_codegen::{self, ir, FinalizedMachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
-    ModuleExtName, ModuleReloc, ModuleResult,
+    ModuleReloc, ModuleRelocTarget, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -17,6 +17,7 @@ use object::write::{
 use object::{
     RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::mem;
 use target_lexicon::PointerWidth;
@@ -78,11 +79,24 @@ impl ObjectBuilder {
                         binary_format,
                     )));
                 }
-                // FIXME(#4994) get the right variant from the TargetIsa
+
+                // FIXME(#4994): Get the right float ABI variant from the TargetIsa
+                let mut eflags = object::elf::EF_RISCV_FLOAT_ABI_DOUBLE;
+
+                // Set the RVC eflag if we have the C extension enabled.
+                let has_c = isa
+                    .isa_flags()
+                    .iter()
+                    .filter(|f| f.name == "has_zca" || f.name == "has_zcd")
+                    .all(|f| f.as_bool().unwrap_or_default());
+                if has_c {
+                    eflags |= object::elf::EF_RISCV_RVC;
+                }
+
                 file_flags = object::FileFlags::Elf {
                     os_abi: object::elf::ELFOSABI_NONE,
                     abi_version: 0,
-                    e_flags: object::elf::EF_RISCV_RVC | object::elf::EF_RISCV_FLOAT_ABI_DOUBLE,
+                    e_flags: eflags,
                 };
                 object::Architecture::Riscv64
             }
@@ -130,6 +144,7 @@ pub struct ObjectModule {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
+    known_labels: HashMap<(FuncId, CodeOffset), SymbolId>,
     per_function_section: bool,
 }
 
@@ -149,6 +164,7 @@ impl ObjectModule {
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
             known_symbols: HashMap::new(),
+            known_labels: HashMap::new(),
             per_function_section: builder.per_function_section,
         }
     }
@@ -333,21 +349,18 @@ impl Module for ObjectModule {
         func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[MachReloc],
+        relocs: &[FinalizedMachReloc],
     ) -> ModuleResult<()> {
         info!("defining function {} with bytes", func_id);
         let decl = self.declarations.get_function_decl(func_id);
+        let decl_name = decl.linkage_name(func_id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(
-                decl.linkage_name(func_id).into_owned(),
-            ));
+            return Err(ModuleError::InvalidImportDefinition(decl_name.into_owned()));
         }
 
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(
-                decl.linkage_name(func_id).into_owned(),
-            ));
+            return Err(ModuleError::DuplicateDefinition(decl_name.into_owned()));
         }
         *defined = true;
 
@@ -371,7 +384,9 @@ impl Module for ObjectModule {
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func)))
+                .map(|record| {
+                    self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func, func_id))
+                })
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
@@ -528,9 +543,9 @@ impl ObjectModule {
 
     /// This should only be called during finish because it creates
     /// symbols for missing libcalls.
-    fn get_symbol(&mut self, name: &ModuleExtName) -> SymbolId {
+    fn get_symbol(&mut self, name: &ModuleRelocTarget) -> SymbolId {
         match *name {
-            ModuleExtName::User { .. } => {
+            ModuleRelocTarget::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let id = FuncId::from_name(name);
                     self.functions[id].unwrap().0
@@ -539,7 +554,7 @@ impl ObjectModule {
                     self.data_objects[id].unwrap().0
                 }
             }
-            ModuleExtName::LibCall(ref libcall) => {
+            ModuleRelocTarget::LibCall(ref libcall) => {
                 let name = (self.libcall_names)(*libcall);
                 if let Some(symbol) = self.object.symbol_id(name.as_bytes()) {
                     symbol
@@ -562,7 +577,7 @@ impl ObjectModule {
             }
             // These are "magic" names well-known to the linker.
             // They require special treatment.
-            ModuleExtName::KnownSymbol(ref known_symbol) => {
+            ModuleRelocTarget::KnownSymbol(ref known_symbol) => {
                 if let Some(symbol) = self.known_symbols.get(known_symbol) {
                     *symbol
                 } else {
@@ -590,6 +605,31 @@ impl ObjectModule {
                     });
                     self.known_symbols.insert(*known_symbol, symbol);
                     symbol
+                }
+            }
+
+            ModuleRelocTarget::FunctionOffset(func_id, offset) => {
+                match self.known_labels.entry((func_id, offset)) {
+                    Entry::Occupied(o) => *o.get(),
+                    Entry::Vacant(v) => {
+                        let func_symbol_id = self.functions[func_id].unwrap().0;
+                        let func_symbol = self.object.symbol(func_symbol_id);
+
+                        let name = format!(".L{}_{}", func_id.as_u32(), offset);
+                        let symbol_id = self.object.add_symbol(Symbol {
+                            name: name.as_bytes().to_vec(),
+                            value: func_symbol.value + offset as u64,
+                            size: 0,
+                            kind: SymbolKind::Label,
+                            scope: SymbolScope::Compilation,
+                            weak: false,
+                            section: SymbolSection::Section(func_symbol.section.id().unwrap()),
+                            flags: SymbolFlags::None,
+                        });
+
+                        v.insert(symbol_id);
+                        symbol_id
+                    }
                 }
             }
         }
@@ -678,30 +718,55 @@ impl ObjectModule {
                     12,
                 )
             }
-            Reloc::Aarch64TlsGdAdrPage21 => {
+            Reloc::Aarch64TlsDescAdrPage21 => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "Aarch64TlsGdAdrPrel21 is not supported for this file format"
+                    "Aarch64TlsDescAdrPage21 is not supported for this file format"
                 );
                 (
-                    RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADR_PAGE21),
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSDESC_ADR_PAGE21),
                     RelocationEncoding::Generic,
                     21,
                 )
             }
-            Reloc::Aarch64TlsGdAddLo12Nc => {
+            Reloc::Aarch64TlsDescLd64Lo12 => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "Aarch64TlsGdAddLo12Nc is not supported for this file format"
+                    "Aarch64TlsDescLd64Lo12 is not supported for this file format"
                 );
                 (
-                    RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADD_LO12_NC),
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSDESC_LD64_LO12),
                     RelocationEncoding::Generic,
                     12,
                 )
             }
+            Reloc::Aarch64TlsDescAddLo12 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64TlsDescAddLo12 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSDESC_ADD_LO12),
+                    RelocationEncoding::Generic,
+                    12,
+                )
+            }
+            Reloc::Aarch64TlsDescCall => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64TlsDescCall is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSDESC_CALL),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
+
             Reloc::Aarch64AdrGotPage21 => match self.object.format() {
                 object::BinaryFormat::Elf => (
                     RelocationKind::Elf(object::elf::R_AARCH64_ADR_GOT_PAGE),
@@ -764,14 +829,50 @@ impl ObjectModule {
                     0,
                 )
             }
-            Reloc::RiscvCall => {
+            Reloc::RiscvCallPlt => {
                 assert_eq!(
                     self.object.format(),
                     object::BinaryFormat::Elf,
-                    "RiscvCall is not supported for this file format"
+                    "RiscvCallPlt is not supported for this file format"
                 );
                 (
-                    RelocationKind::Elf(object::elf::R_RISCV_CALL),
+                    RelocationKind::Elf(object::elf::R_RISCV_CALL_PLT),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
+            Reloc::RiscvTlsGdHi20 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvTlsGdHi20 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_TLS_GD_HI20),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
+            Reloc::RiscvPCRelLo12I => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvPCRelLo12I is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_PCREL_LO12_I),
+                    RelocationEncoding::Generic,
+                    0,
+                )
+            }
+            Reloc::RiscvGotHi20 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "RiscvGotHi20 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_RISCV_GOT_HI20),
                     RelocationEncoding::Generic,
                     0,
                 )
@@ -846,7 +947,7 @@ struct SymbolRelocs {
 #[derive(Clone)]
 struct ObjectRelocRecord {
     offset: CodeOffset,
-    name: ModuleExtName,
+    name: ModuleRelocTarget,
     kind: RelocationKind,
     encoding: RelocationEncoding,
     size: u8,

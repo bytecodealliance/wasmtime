@@ -8,23 +8,23 @@ use core::fmt::{self, Display, Formatter};
 use core::str::FromStr;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Common traits of condition codes.
 pub trait CondCode: Copy {
-    /// Get the inverse condition code of `self`.
+    /// Get the complemented condition code of `self`.
     ///
-    /// The inverse condition code produces the opposite result for all comparisons.
-    /// That is, `cmp CC, x, y` is true if and only if `cmp CC.inverse(), x, y` is false.
+    /// The complemented condition code produces the opposite result for all comparisons.
+    /// That is, `cmp CC, x, y` is true if and only if `cmp CC.complement(), x, y` is false.
     #[must_use]
-    fn inverse(self) -> Self;
+    fn complement(self) -> Self;
 
-    /// Get the reversed condition code for `self`.
+    /// Get the swapped args condition code for `self`.
     ///
-    /// The reversed condition code produces the same result as swapping `x` and `y` in the
-    /// comparison. That is, `cmp CC, x, y` is the same as `cmp CC.reverse(), y, x`.
+    /// The swapped args condition code produces the same result as swapping `x` and `y` in the
+    /// comparison. That is, `cmp CC, x, y` is the same as `cmp CC.swap_args(), y, x`.
     #[must_use]
-    fn reverse(self) -> Self;
+    fn swap_args(self) -> Self;
 }
 
 /// Condition code for comparing integers.
@@ -58,7 +58,7 @@ pub enum IntCC {
 }
 
 impl CondCode for IntCC {
-    fn inverse(self) -> Self {
+    fn complement(self) -> Self {
         use self::IntCC::*;
         match self {
             Equal => NotEqual,
@@ -74,7 +74,7 @@ impl CondCode for IntCC {
         }
     }
 
-    fn reverse(self) -> Self {
+    fn swap_args(self) -> Self {
         use self::IntCC::*;
         match self {
             Equal => Equal,
@@ -254,7 +254,7 @@ impl FloatCC {
 }
 
 impl CondCode for FloatCC {
-    fn inverse(self) -> Self {
+    fn complement(self) -> Self {
         use self::FloatCC::*;
         match self {
             Ordered => Unordered,
@@ -273,7 +273,7 @@ impl CondCode for FloatCC {
             UnorderedOrGreaterThanOrEqual => LessThan,
         }
     }
-    fn reverse(self) -> Self {
+    fn swap_args(self) -> Self {
         use self::FloatCC::*;
         match self {
             Ordered => Ordered,
@@ -347,21 +347,21 @@ mod tests {
     use std::string::ToString;
 
     #[test]
-    fn int_inverse() {
+    fn int_complement() {
         for r in IntCC::all() {
             let cc = *r;
-            let inv = cc.inverse();
+            let inv = cc.complement();
             assert!(cc != inv);
-            assert_eq!(inv.inverse(), cc);
+            assert_eq!(inv.complement(), cc);
         }
     }
 
     #[test]
-    fn int_reverse() {
+    fn int_swap_args() {
         for r in IntCC::all() {
             let cc = *r;
-            let rev = cc.reverse();
-            assert_eq!(rev.reverse(), cc);
+            let rev = cc.swap_args();
+            assert_eq!(rev.swap_args(), cc);
         }
     }
 
@@ -375,21 +375,21 @@ mod tests {
     }
 
     #[test]
-    fn float_inverse() {
+    fn float_complement() {
         for r in FloatCC::all() {
             let cc = *r;
-            let inv = cc.inverse();
+            let inv = cc.complement();
             assert!(cc != inv);
-            assert_eq!(inv.inverse(), cc);
+            assert_eq!(inv.complement(), cc);
         }
     }
 
     #[test]
-    fn float_reverse() {
+    fn float_swap_args() {
         for r in FloatCC::all() {
             let cc = *r;
-            let rev = cc.reverse();
-            assert_eq!(rev.reverse(), cc);
+            let rev = cc.swap_args();
+            assert_eq!(rev.swap_args(), cc);
         }
     }
 

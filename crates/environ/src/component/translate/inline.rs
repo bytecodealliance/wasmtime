@@ -50,6 +50,7 @@ use crate::component::translate::*;
 use crate::{EntityType, PrimaryMap};
 use indexmap::IndexMap;
 use std::borrow::Cow;
+use wasmparser::types::{ComponentAnyTypeId, ComponentEntityType, ComponentInstanceTypeId};
 
 pub(super) fn run(
     types: &mut ComponentTypesBuilder,
@@ -114,12 +115,9 @@ pub(super) fn run(
         if let TypeDef::Interface(_) = ty {
             continue;
         }
-        let index = inliner
-            .result
-            .import_types
-            .push((name.as_str().to_string(), ty));
+        let index = inliner.result.import_types.push((name.0.to_string(), ty));
         let path = ImportPath::root(index);
-        args.insert(name.as_str(), ComponentItemDef::from_import(path, ty)?);
+        args.insert(name.0, ComponentItemDef::from_import(path, ty)?);
     }
 
     // This will run the inliner to completion after being seeded with the
@@ -220,7 +218,7 @@ struct InlinerFrame<'a> {
     /// register resource types after instantiation has completed.
     ///
     /// This is `Some` for all subcomponents and `None` for the root component.
-    instance_ty: Option<TypeId>,
+    instance_ty: Option<ComponentInstanceTypeId>,
 }
 
 /// "Closure state" for a component which is resolved from the `ClosedOverVars`
@@ -431,7 +429,7 @@ impl<'a> Inliner<'a> {
             // was provided as an import at the instantiation-site to what was
             // needed during the component's instantiation.
             Import(name, ty) => {
-                let arg = match frame.args.get(name.as_str()) {
+                let arg = match frame.args.get(name.0) {
                     Some(arg) => arg,
 
                     // Not all arguments need to be provided for instantiation,
@@ -447,12 +445,11 @@ impl<'a> Inliner<'a> {
                     // skipped.
                     None => {
                         match ty {
-                            ComponentEntityType::Type { created, .. } => {
-                                match frame.translation.types_ref()[*created] {
-                                    wasmparser::types::Type::Resource(_) => unreachable!(),
-                                    _ => {}
-                                }
-                            }
+                            ComponentEntityType::Type {
+                                created: ComponentAnyTypeId::Resource(_),
+                                ..
+                            } => unreachable!(),
+                            ComponentEntityType::Type { .. } => {}
                             _ => unreachable!(),
                         }
                         return Ok(None);
@@ -643,16 +640,14 @@ impl<'a> Inliner<'a> {
                 // intended, though, since `ty` can't be referred to outside of
                 // this component.
                 let idx = self.result.resource_index(idx);
-                types
-                    .resources_mut()
-                    .register_resource(frame.translation.types_ref(), *ty, idx);
+                types.resources_mut().register_resource(ty.resource(), idx);
             }
 
             // Resource-related intrinsics are generally all the same.
             // Wasmparser type information is converted to wasmtime type
             // information and then new entries for each intrinsic are recorded.
             ResourceNew(id, ty) => {
-                let id = types.resource_id(frame.translation.types_ref(), *id);
+                let id = types.resource_id(id.resource());
                 let index = self
                     .result
                     .trampolines
@@ -660,7 +655,7 @@ impl<'a> Inliner<'a> {
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             ResourceRep(id, ty) => {
-                let id = types.resource_id(frame.translation.types_ref(), *id);
+                let id = types.resource_id(id.resource());
                 let index = self
                     .result
                     .trampolines
@@ -668,7 +663,7 @@ impl<'a> Inliner<'a> {
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             ResourceDrop(id, ty) => {
-                let id = types.resource_id(frame.translation.types_ref(), *id);
+                let id = types.resource_id(id.resource());
                 let index = self
                     .result
                     .trampolines
@@ -1105,7 +1100,7 @@ impl<'a> InlinerFrame<'a> {
         translation: &'a Translation<'a>,
         closure: ComponentClosure<'a>,
         args: HashMap<&'a str, ComponentItemDef<'a>>,
-        instance_ty: Option<TypeId>,
+        instance_ty: Option<ComponentInstanceTypeId>,
     ) -> Self {
         // FIXME: should iterate over the initializers of `translation` and
         // calculate the size of each index space to use `with_capacity` for
@@ -1229,7 +1224,7 @@ impl<'a> InlinerFrame<'a> {
     fn finish_instantiate(
         &mut self,
         def: ComponentInstanceDef<'a>,
-        ty: TypeId,
+        ty: ComponentInstanceTypeId,
         types: &mut ComponentTypesBuilder,
     ) {
         let (resources, types) = types.resources_mut_and_types();
@@ -1237,7 +1232,7 @@ impl<'a> InlinerFrame<'a> {
         let arg = ComponentItemDef::Instance(def);
         resources.register_component_entity_type(
             &self.translation.types_ref(),
-            wasmparser::types::ComponentEntityType::Instance(ty),
+            ComponentEntityType::Instance(ty),
             &mut path,
             &mut |path| arg.lookup_resource(path, types),
         );

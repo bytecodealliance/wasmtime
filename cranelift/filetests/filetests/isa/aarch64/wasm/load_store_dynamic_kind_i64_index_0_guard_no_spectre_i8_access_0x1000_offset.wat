@@ -42,8 +42,8 @@
 ;; function u0:0:
 ;; block0:
 ;;   ldr x8, [x2, #8]
-;;   movn x9, #4096
-;;   add x8, x8, x9
+;;   movz x9, #4097
+;;   sub x8, x8, x9
 ;;   subs xzr, x0, x8
 ;;   b.hi label3 ; b label1
 ;; block1:
@@ -59,8 +59,8 @@
 ;; function u0:1:
 ;; block0:
 ;;   ldr x8, [x1, #8]
-;;   movn x9, #4096
-;;   add x8, x8, x9
+;;   movz x9, #4097
+;;   sub x8, x8, x9
 ;;   subs xzr, x0, x8
 ;;   b.hi label3 ; b label1
 ;; block1:

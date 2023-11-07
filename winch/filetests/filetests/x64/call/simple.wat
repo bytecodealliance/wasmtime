@@ -44,7 +44,7 @@
 ;;   14:	 8b442408             	mov	eax, dword ptr [rsp + 8]
 ;;   18:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
 ;;   1c:	 0fafc8               	imul	ecx, eax
-;;   1f:	 4889c8               	mov	rax, rcx
-;;   22:	 4883c410             	add	rsp, 0x10
-;;   26:	 5d                   	pop	rbp
-;;   27:	 c3                   	ret	
+;;   1f:	 89c8                 	mov	eax, ecx
+;;   21:	 4883c410             	add	rsp, 0x10
+;;   25:	 5d                   	pop	rbp
+;;   26:	 c3                   	ret	

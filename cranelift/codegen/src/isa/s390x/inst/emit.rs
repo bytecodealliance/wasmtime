@@ -5,7 +5,7 @@ use crate::ir::{MemFlags, RelSourceLoc, TrapCode};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::machinst::{ABIMachineSpec, Reg, RegClass};
+use crate::machinst::{Reg, RegClass};
 use crate::trace;
 use core::convert::TryFrom;
 use cranelift_control::ControlPlane;
@@ -3545,19 +3545,9 @@ impl Inst {
                 }
             }
             &Inst::Args { .. } => {}
-            &Inst::Ret {
-                link,
-                stack_bytes_to_pop,
-                ..
-            } => {
+            &Inst::Rets { .. } => {}
+            &Inst::Ret { link } => {
                 debug_assert_eq!(link, gpr(14));
-
-                for inst in
-                    S390xMachineDeps::gen_sp_reg_adjust(i32::try_from(stack_bytes_to_pop).unwrap())
-                {
-                    inst.emit(&[], sink, emit_info, state);
-                }
-
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));
             }
@@ -3666,12 +3656,9 @@ impl Inst {
                 inst.emit(&[], sink, emit_info, state);
 
                 // Emit jump table (table of 32-bit offsets).
-                // The first entry is the default target, which is not emitted
-                // into the jump table, so we skip it here.  It is only in the
-                // list so MachTerminator will see the potential target.
                 sink.bind_label(table_label, &mut state.ctrl_plane);
                 let jt_off = sink.cur_offset();
-                for &target in targets.iter().skip(1) {
+                for &target in targets.iter() {
                     let word_off = sink.cur_offset();
                     let off_into_table = word_off - jt_off;
                     sink.use_label_at_offset(word_off, target, LabelUse::PCRel32);

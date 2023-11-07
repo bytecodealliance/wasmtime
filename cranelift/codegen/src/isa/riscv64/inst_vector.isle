@@ -285,6 +285,14 @@
   (VzextVF2)
   (VzextVF4)
   (VzextVF8)
+  (VfcvtxufV)
+  (VfcvtxfV)
+  (VfcvtrtzxufV)
+  (VfcvtrtzxfV)
+  (VfcvtfxuV)
+  (VfcvtfxV)
+  (VfwcvtffV)
+  (VfncvtffW)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
@@ -807,7 +815,7 @@
 ;; This is just a mnemonic for `vxor.vi vd, vs, -1`
 (decl rv_vnot_v (VReg VecOpMasking VState) VReg)
 (rule (rv_vnot_v vs2 mask vstate)
-  (if-let neg1 (imm5_from_i8 -1))
+  (if-let neg1 (i8_to_imm5 -1))
   (rv_vxor_vi vs2 neg1 mask vstate))
 
 ;; Helper for emitting the `vmax.vv` instruction.
@@ -1013,6 +1021,58 @@
 (decl rv_vfsqrt_v (VReg VecOpMasking VState) VReg)
 (rule (rv_vfsqrt_v vs mask vstate)
   (vec_alu_rr (VecAluOpRR.VfsqrtV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.xu.f.v` instruction.
+;; This instruction converts a float to an unsigned integer.
+(decl rv_vfcvt_xu_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_xu_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtxufV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.x.f.v` instruction.
+;; This instruction converts a float to a signed integer.
+(decl rv_vfcvt_x_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_x_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtxfV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.rtz.xu.f.v` instruction.
+;; This instruction converts a float to an unsigned integer
+;; using the Round to Zero (RTZ) rounding mode and ignoring
+;; the currently set FRM rounding mode.
+(decl rv_vfcvt_rtz_xu_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_rtz_xu_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtrtzxufV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.rtz.x.f.v` instruction.
+;; This instruction converts a float to a signed integer.
+;; using the Round to Zero (RTZ) rounding mode and ignoring
+;; the currently set FRM rounding mode.
+(decl rv_vfcvt_rtz_x_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_rtz_x_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtrtzxfV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.f.xu.v` instruction.
+;; This instruction converts a unsigned integer to a float.
+(decl rv_vfcvt_f_xu_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_f_xu_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtfxuV) vs mask vstate))
+
+;; Helper for emitting the `vfcvt.x.f.v` instruction.
+;; This instruction converts a signed integer to a float.
+(decl rv_vfcvt_f_x_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfcvt_f_x_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfcvtfxV) vs mask vstate))
+
+  ;; Helper for emitting the `vfwcvt.f.f.v` instruction.
+;; Convert single-width float to double-width float.
+(decl rv_vfwcvt_f_f_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfwcvt_f_f_v vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfwcvtffV) vs mask vstate))
+
+;; Helper for emitting the `vfncvt.f.f.w` instruction.
+;; Convert double-width float to single-width float.
+(decl rv_vfncvt_f_f_w (VReg VecOpMasking VState) VReg)
+(rule (rv_vfncvt_f_f_w vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VfncvtffW) vs mask vstate))
 
 ;; Helper for emitting the `vslidedown.vx` instruction.
 ;; `vslidedown` moves all elements in the vector down by n elements.
@@ -1505,8 +1565,8 @@
 ;; lanes are set to all zeros.
 (decl gen_expand_mask (Type VReg) VReg)
 (rule (gen_expand_mask ty mask)
-  (if-let zero (imm5_from_i8 0))
-  (if-let neg1 (imm5_from_i8 -1))
+  (if-let zero (i8_to_imm5 0))
+  (if-let neg1 (i8_to_imm5 -1))
   (rv_vmerge_vim (rv_vmv_vi zero ty) neg1 mask ty))
 
 
@@ -1525,11 +1585,13 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) (splat x) y)
   (rv_vmseq_vx y x (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) x (replicated_imm5 y))
-  (rv_vmseq_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmseq_vi x y_imm (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) (replicated_imm5 x) y)
-  (rv_vmseq_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.Equal) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmseq_vi y x_imm (unmasked) ty))
 
 ;; IntCC.NotEqual
 
@@ -1542,11 +1604,13 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) (splat x) y)
   (rv_vmsne_vx y x (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) x (replicated_imm5 y))
-  (rv_vmsne_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsne_vi x y_imm (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) (replicated_imm5 x) y)
-  (rv_vmsne_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.NotEqual) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsne_vi y x_imm (unmasked) ty))
 
 ;; IntCC.UnsignedLessThan
 
@@ -1559,8 +1623,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) (splat x) y)
   (rv_vmsgtu_vx y x (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) (replicated_imm5 x) y)
-  (rv_vmsgtu_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsgtu_vi y x_imm (unmasked) ty))
 
 ;; IntCC.SignedLessThan
 
@@ -1573,8 +1638,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) (splat x) y)
   (rv_vmsgt_vx y x (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) (replicated_imm5 x) y)
-  (rv_vmsgt_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsgt_vi y x_imm (unmasked) ty))
 
 ;; IntCC.UnsignedLessThanOrEqual
 
@@ -1584,8 +1650,9 @@
 (rule 1 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThanOrEqual) x (splat y))
   (rv_vmsleu_vx x y (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThanOrEqual) x (replicated_imm5 y))
-  (rv_vmsleu_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThanOrEqual) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsleu_vi x y_imm (unmasked) ty))
 
 ;; IntCC.SignedLessThanOrEqual
 
@@ -1595,8 +1662,9 @@
 (rule 1 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThanOrEqual) x (splat y))
   (rv_vmsle_vx x y (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThanOrEqual) x (replicated_imm5 y))
-  (rv_vmsle_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThanOrEqual) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsle_vi x y_imm (unmasked) ty))
 
 ;; IntCC.UnsignedGreaterThan
 
@@ -1609,8 +1677,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) (splat x) y)
   (rv_vmsltu_vx y x (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) x (replicated_imm5 y))
-  (rv_vmsgtu_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsgtu_vi x y_imm (unmasked) ty))
 
 ;; IntCC.SignedGreaterThan
 
@@ -1623,8 +1692,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) (splat x) y)
   (rv_vmslt_vx y x (unmasked) ty))
 
-(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) x (replicated_imm5 y))
-  (rv_vmsgt_vi x y (unmasked) ty))
+(rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) x y)
+  (if-let y_imm (replicated_imm5 y))
+  (rv_vmsgt_vi x y_imm (unmasked) ty))
 
 ;; IntCC.UnsignedGreaterThanOrEqual
 
@@ -1634,8 +1704,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) (splat x) y)
   (rv_vmsleu_vx y x (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) (replicated_imm5 x) y)
-  (rv_vmsleu_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsleu_vi y x_imm (unmasked) ty))
 
 ;; IntCC.SignedGreaterThanOrEqual
 
@@ -1645,8 +1716,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) (splat x) y)
   (rv_vmsle_vx y x (unmasked) ty))
 
-(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) (replicated_imm5 x) y)
-  (rv_vmsle_vi y x (unmasked) ty))
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) x y)
+  (if-let x_imm (replicated_imm5 x))
+  (rv_vmsle_vi y x_imm (unmasked) ty))
 
 
 
@@ -1771,3 +1843,57 @@
 
 (rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.UnorderedOrLessThanOrEqual) x y)
   (rv_vmnot_m (gen_fcmp_mask ty (FloatCC.GreaterThan) x y) ty))
+
+
+;; Emits a `vfcvt.x.f.v` instruction with the given rounding mode.
+(decl gen_vfcvt_x_f (VReg FRM VState) VReg)
+
+;; We have a special instruction for RTZ
+(rule 1 (gen_vfcvt_x_f x (FRM.RTZ) vstate)
+  (rv_vfcvt_rtz_x_f_v x (unmasked) vstate))
+
+;; In the general case we need to first switch into the appropriate rounding mode.
+(rule 0 (gen_vfcvt_x_f x frm vstate)
+  (let (;; Set the rounding mode and save the current mode
+        (saved_frm XReg (rv_fsrmi frm))
+        (res VReg (rv_vfcvt_x_f_v x (unmasked) vstate))
+        ;; Restore the previous rounding mode
+        (_ Unit (rv_fsrm saved_frm)))
+    res))
+
+
+;; Retruns the maximum value integer value that can be represented by a float
+(decl float_int_max (Type) u64)
+(rule (float_int_max $F32) 0x4B000000)
+(rule (float_int_max $F64) 0x4330000000000000)
+
+;; Builds the instruction sequence to round a vector register to FRM
+(decl gen_vec_round (VReg FRM Type) VReg)
+
+;; For floating-point round operations, if the input is NaN, +/-infinity, or +/-0, the
+;; same input is returned as the rounded result; this differs from behavior of
+;; RISCV fcvt instructions (which round out-of-range values to the nearest
+;; max or min value), therefore special handling is needed for these values.
+(rule (gen_vec_round x frm (ty_vec_fits_in_register ty))
+  (let ((scalar_ty Type (lane_type ty))
+        ;; if x is NaN/+-Infinity/+-Zero or if the exponent is larger than # of bits
+        ;; in mantissa, the result is the same as src, build a mask for those cases.
+        ;; (There is an additional fixup for NaN's at the end)
+        (abs VReg (rv_vfabs_v x (unmasked) ty))
+        (max FReg (imm scalar_ty (float_int_max scalar_ty)))
+        (exact VReg (rv_vmflt_vf abs max (unmasked) ty))
+
+        ;; The rounding is performed by converting from float to integer, with the
+        ;; desired rounding mode. And then converting back with the default rounding
+        ;; mode.
+        (int VReg (gen_vfcvt_x_f x frm ty))
+        (cvt VReg (rv_vfcvt_f_x_v int (unmasked) ty))
+        ;; Copy the sign bit from the original value.
+        (signed VReg (rv_vfsgnj_vv cvt x (unmasked) ty))
+
+        ;; We want to return a arithmetic nan if the input is a canonical nan.
+        ;; Convert them by adding 0.0 to the input.
+        (float_zero FReg (gen_bitcast (zero_reg) (float_int_of_same_size scalar_ty) scalar_ty))
+        (corrected_nan VReg (rv_vfadd_vf x float_zero (unmasked) ty)))
+    ;; Merge the original value if it does not need rounding, or the rounded value
+    (rv_vmerge_vvm corrected_nan signed exact ty)))

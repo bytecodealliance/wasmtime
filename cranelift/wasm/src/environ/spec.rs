@@ -51,6 +51,9 @@ pub trait TargetEnvironment: TypeConvert {
     /// Whether to enable Spectre mitigations for heap accesses.
     fn heap_access_spectre_mitigation(&self) -> bool;
 
+    /// Whether to add proof-carrying-code facts to verify memory accesses.
+    fn proof_carrying_code(&self) -> bool;
+
     /// Get the Cranelift integer type to use for native pointers.
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.
@@ -196,7 +199,6 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
     ///
     /// Return the call instruction whose results are the WebAssembly return values.
-    #[allow(clippy::too_many_arguments)]
     fn translate_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -237,7 +239,6 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// `i32`.
     ///
     /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
-    #[allow(clippy::too_many_arguments)]
     fn translate_return_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -349,7 +350,6 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// The `index` provided identifies the linear memory to query, and `heap` is the heap reference
     /// returned by `make_heap` for the same index. `seg_index` is the index of the segment to copy
     /// from.
-    #[allow(clippy::too_many_arguments)]
     fn translate_memory_init(
         &mut self,
         pos: FuncCursor,
@@ -402,7 +402,6 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<()>;
 
     /// Translate a `table.copy` WebAssembly instruction.
-    #[allow(clippy::too_many_arguments)]
     fn translate_table_copy(
         &mut self,
         pos: FuncCursor,
@@ -426,7 +425,6 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<()>;
 
     /// Translate a `table.init` WebAssembly instruction.
-    #[allow(clippy::too_many_arguments)]
     fn translate_table_init(
         &mut self,
         pos: FuncCursor,

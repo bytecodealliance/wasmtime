@@ -9,7 +9,7 @@ use regalloc2::{
 };
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// The first 192 vregs (64 int, 64 float, 64 vec) are "pinned" to
 /// physical registers: this means that they are always constrained to
@@ -216,6 +216,11 @@ impl std::convert::From<Reg> for regalloc2::VReg {
     /// registers also map to particular (special) VRegs, so this
     /// method can be used either on virtual or physical `Reg`s.
     fn from(reg: Reg) -> regalloc2::VReg {
+        reg.0
+    }
+}
+impl std::convert::From<&Reg> for regalloc2::VReg {
+    fn from(reg: &Reg) -> regalloc2::VReg {
         reg.0
     }
 }

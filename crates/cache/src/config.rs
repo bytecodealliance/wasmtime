@@ -17,14 +17,14 @@ use std::time::Duration;
 
 // wrapped, so we have named section in config,
 // also, for possible future compatibility
-#[derive(Deserialize, Debug)]
+#[derive(serde_derive::Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 struct Config {
     cache: CacheConfig,
 }
 
 /// Global configuration for how the cache is managed
-#[derive(Deserialize, Debug, Clone)]
+#[derive(serde_derive::Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct CacheConfig {
     enabled: bool,
@@ -137,7 +137,7 @@ pub fn create_new_config<P: AsRef<Path> + Debug>(config_file: Option<P>) -> Resu
 enabled = true
 ";
 
-    fs::write(&config_file, &content).with_context(|| {
+    fs::write(&config_file, content).with_context(|| {
         format!(
             "Failed to flush config to the disk, path: {}",
             config_file.display(),
@@ -366,7 +366,7 @@ impl CacheConfig {
 
     fn spawn_worker(&mut self) {
         if self.enabled {
-            self.worker = Some(Worker::start_new(self, None));
+            self.worker = Some(Worker::start_new(self));
         }
     }
 

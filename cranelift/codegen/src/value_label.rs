@@ -4,7 +4,7 @@ use crate::HashMap;
 use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 /// Value location range.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,10 +22,10 @@ pub struct ValueLocRange {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum LabelValueLoc {
-    /// New-backend Reg.
+    /// Register.
     Reg(Reg),
-    /// New-backend offset from stack pointer.
-    SPOffset(i64),
+    /// Offset from the Canonical Frame Address (aka CFA).
+    CFAOffset(i64),
 }
 
 /// Resulting map of Value labels and their ranges/locations.

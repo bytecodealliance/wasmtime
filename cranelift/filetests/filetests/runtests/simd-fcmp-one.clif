@@ -1,6 +1,7 @@
 test run
 target s390x
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %simd_fcmp_one_f32(f32x4, f32x4) -> i32x4 {
 block0(v0: f32x4, v1: f32x4):

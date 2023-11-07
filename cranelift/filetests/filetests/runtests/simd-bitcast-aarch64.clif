@@ -1,7 +1,8 @@
 test interpret
 test run
 target aarch64
-;; 64-bit vector types only supported on aarch64
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %bitcast_if32x2(i32x2) -> f32x2 {
 block0(v0: i32x2):

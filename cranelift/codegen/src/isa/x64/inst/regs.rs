@@ -6,9 +6,8 @@
 //! Note also that we make use of pinned VRegs to refer to PRegs.
 
 use crate::machinst::{AllocationConsumer, RealReg, Reg};
-use crate::settings;
 use alloc::string::ToString;
-use regalloc2::{MachineEnv, PReg, RegClass, VReg};
+use regalloc2::{PReg, RegClass, VReg};
 use std::string::String;
 
 // Hardware encodings (note the special rax, rcx, rdx, rbx order).
@@ -154,68 +153,6 @@ pub(crate) fn xmm14() -> Reg {
 }
 pub(crate) fn xmm15() -> Reg {
     fpr(15)
-}
-
-/// Create the register environment for x64.
-pub(crate) fn create_reg_env_systemv(flags: &settings::Flags) -> MachineEnv {
-    fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().into()
-    }
-
-    let mut env = MachineEnv {
-        preferred_regs_by_class: [
-            // Preferred GPRs: caller-saved in the SysV ABI.
-            vec![
-                preg(rsi()),
-                preg(rdi()),
-                preg(rax()),
-                preg(rcx()),
-                preg(rdx()),
-                preg(r8()),
-                preg(r9()),
-                preg(r10()),
-                preg(r11()),
-            ],
-            // Preferred XMMs: all of them.
-            vec![
-                preg(xmm0()),
-                preg(xmm1()),
-                preg(xmm2()),
-                preg(xmm3()),
-                preg(xmm4()),
-                preg(xmm5()),
-                preg(xmm6()),
-                preg(xmm7()),
-                preg(xmm8()),
-                preg(xmm9()),
-                preg(xmm10()),
-                preg(xmm11()),
-                preg(xmm12()),
-                preg(xmm13()),
-                preg(xmm14()),
-                preg(xmm15()),
-            ],
-            // The Vector Regclass is unused
-            vec![],
-        ],
-        non_preferred_regs_by_class: [
-            // Non-preferred GPRs: callee-saved in the SysV ABI.
-            vec![preg(rbx()), preg(r12()), preg(r13()), preg(r14())],
-            // Non-preferred XMMs: none.
-            vec![],
-            // The Vector Regclass is unused
-            vec![],
-        ],
-        fixed_stack_slots: vec![],
-        scratch_by_class: [None, None, None],
-    };
-
-    debug_assert_eq!(r15(), pinned_reg());
-    if !flags.enable_pinned_reg() {
-        env.non_preferred_regs_by_class[0].push(preg(r15()));
-    }
-
-    env
 }
 
 /// Give the name of a RealReg.

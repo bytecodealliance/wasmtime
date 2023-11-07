@@ -246,6 +246,7 @@ impl ResourceTables<'_> {
 
     /// Enters a new calling context, starting a fresh count of borrows and
     /// such.
+    #[inline]
     pub fn enter_call(&mut self) {
         self.calls.scopes.push(CallContext::default());
     }
@@ -255,6 +256,7 @@ impl ResourceTables<'_> {
     /// This requires all information to be available within this
     /// `ResourceTables` and is only called during lowering/lifting operations
     /// at this time.
+    #[inline]
     pub fn exit_call(&mut self) -> Result<()> {
         let cx = self.calls.scopes.pop().unwrap();
         if cx.borrow_count > 0 {

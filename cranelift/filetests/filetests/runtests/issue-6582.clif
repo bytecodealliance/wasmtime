@@ -5,6 +5,7 @@ target aarch64
 target aarch64 sign_return_address
 target aarch64 has_pauth sign_return_address
 target riscv64
+target riscv64 has_c has_zcb
 
 function %a(i8, i8, i8, i8, i8, i8, i8, i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 tail {
 block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8):

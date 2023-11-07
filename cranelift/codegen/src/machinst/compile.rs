@@ -1,11 +1,13 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
 use crate::dominator_tree::DominatorTree;
+use crate::ir::pcc;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::timing;
 use crate::trace;
+use crate::CodegenError;
 
 use regalloc2::RegallocOptions;
 
@@ -20,16 +22,15 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     sigs: SigSet,
     ctrl_plane: &mut ControlPlane,
 ) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output)> {
-    let machine_env = b.machine_env();
-
     // Compute lowered block order.
     let block_order = BlockLoweringOrder::new(f, domtree, ctrl_plane);
 
     // Build the lowering context.
-    let lower = crate::machinst::Lower::new(f, machine_env, abi, emit_info, block_order, sigs)?;
+    let lower =
+        crate::machinst::Lower::new(f, abi, emit_info, block_order, sigs, b.flags().clone())?;
 
     // Lower the IR.
-    let vcode = {
+    let mut vcode = {
         log::debug!(
             "Number of CLIF instructions to lower: {}",
             f.dfg.num_insts()
@@ -47,6 +48,11 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     log::debug!("Number of lowered vcode blocks: {}", vcode.num_blocks());
     trace!("vcode from lowering: \n{:?}", vcode);
 
+    // Perform validation of proof-carrying-code facts, if requested.
+    if b.flags().enable_pcc() {
+        pcc::check_vcode_facts(f, &mut vcode, b).map_err(CodegenError::Pcc)?;
+    }
+
     // Perform register allocation.
     let regalloc_result = {
         let _tt = timing::regalloc();
@@ -57,7 +63,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             options.validate_ssa = true;
         }
 
-        regalloc2::run(&vcode, machine_env, &options)
+        regalloc2::run(&vcode, vcode.machine_env(), &options)
             .map_err(|err| {
                 log::error!(
                     "Register allocation error for vcode\n{:?}\nError: {:?}\nCLIF for error:\n{:?}",
@@ -73,7 +79,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     // Run the regalloc checker, if requested.
     if b.flags().regalloc_checker() {
         let _tt = timing::regalloc_checker();
-        let mut checker = regalloc2::checker::Checker::new(&vcode, machine_env);
+        let mut checker = regalloc2::checker::Checker::new(&vcode, vcode.machine_env());
         checker.prepare(&regalloc_result);
         checker
             .run()

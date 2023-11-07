@@ -1,7 +1,7 @@
-//! Implements a `wasi-nn` [`Backend`] using OpenVINO.
+//! Implements a `wasi-nn` [`BackendInner`] using OpenVINO.
 
-use super::{Backend, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph};
-use crate::wit::types::{ExecutionTarget, Tensor, TensorType};
+use super::{BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner};
+use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use openvino::{InferenceError, Layout, Precision, SetupError, TensorDesc};
 use wiggle::async_trait_crate::async_trait;
@@ -9,13 +9,13 @@ use std::sync::{Arc, Mutex};
 use std::{fs::File, io::Read, path::Path};
 
 #[derive(Default)]
-pub(crate) struct OpenvinoBackend(Option<openvino::Core>);
+pub struct OpenvinoBackend(Option<openvino::Core>);
 unsafe impl Send for OpenvinoBackend {}
 unsafe impl Sync for OpenvinoBackend {}
 
-impl Backend for OpenvinoBackend {
-    fn name(&self) -> &str {
-        "openvino"
+impl BackendInner for OpenvinoBackend {
+    fn encoding(&self) -> GraphEncoding {
+        GraphEncoding::Openvino
     }
 
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
@@ -166,8 +166,10 @@ fn map_tensor_type_to_precision(tensor_type: TensorType) -> openvino::Precision 
     match tensor_type {
         TensorType::Fp16 => Precision::FP16,
         TensorType::Fp32 => Precision::FP32,
+        TensorType::Fp64 => Precision::FP64,
         TensorType::U8 => Precision::U8,
         TensorType::I32 => Precision::I32,
+        TensorType::I64 => Precision::I64,
         TensorType::Bf16 => todo!("not yet supported in `openvino` bindings"),
         TensorType::Bytes => Precision::BIN // TODO: Double check this
     }

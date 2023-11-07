@@ -603,10 +603,9 @@ block0(v0: i64):
 ;   lcgr %r4, %r2
 ;   ngr %r2, %r4
 ;   flogr %r2, %r2
-;   lgr %r3, %r2
-;   locghie %r3, -1
+;   locghie %r2, -1
 ;   lghi %r5, 63
-;   sgrk %r2, %r5, %r3
+;   sgrk %r2, %r5, %r2
 ;   br %r14
 ;
 ; Disassembled:
@@ -614,10 +613,9 @@ block0(v0: i64):
 ;   lcgr %r4, %r2
 ;   ngr %r2, %r4
 ;   flogr %r2, %r2
-;   lgr %r3, %r2
-;   locghie %r3, -1
+;   locghie %r2, -1
 ;   lghi %r5, 0x3f
-;   sgrk %r2, %r5, %r3
+;   sgrk %r2, %r5, %r2
 ;   br %r14
 
 function %ctz_i32(i32) -> i32 {
@@ -628,10 +626,9 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   lgr %r4, %r2
-;   oihl %r4, 1
-;   lcgr %r2, %r4
-;   ngr %r4, %r2
+;   oihl %r2, 1
+;   lcgr %r3, %r2
+;   ngrk %r4, %r2, %r3
 ;   flogr %r2, %r4
 ;   lhi %r5, 63
 ;   srk %r2, %r5, %r2
@@ -639,10 +636,9 @@ block0(v0: i32):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgr %r4, %r2
-;   oihl %r4, 1
-;   lcgr %r2, %r4
-;   ngr %r4, %r2
+;   oihl %r2, 1
+;   lcgr %r3, %r2
+;   ngrk %r4, %r2, %r3
 ;   flogr %r2, %r4
 ;   lhi %r5, 0x3f
 ;   srk %r2, %r5, %r2
@@ -656,10 +652,9 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   lgr %r4, %r2
-;   oilh %r4, 1
-;   lcgr %r2, %r4
-;   ngr %r4, %r2
+;   oilh %r2, 1
+;   lcgr %r3, %r2
+;   ngrk %r4, %r2, %r3
 ;   flogr %r2, %r4
 ;   lhi %r5, 63
 ;   srk %r2, %r5, %r2
@@ -667,10 +662,9 @@ block0(v0: i16):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgr %r4, %r2
-;   oilh %r4, 1
-;   lcgr %r2, %r4
-;   ngr %r4, %r2
+;   oilh %r2, 1
+;   lcgr %r3, %r2
+;   ngrk %r4, %r2, %r3
 ;   flogr %r2, %r4
 ;   lhi %r5, 0x3f
 ;   srk %r2, %r5, %r2
@@ -684,10 +678,9 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   lgr %r4, %r2
-;   oill %r4, 256
-;   lcgr %r2, %r4
-;   ngr %r4, %r2
+;   oill %r2, 256
+;   lcgr %r3, %r2
+;   ngrk %r4, %r2, %r3
 ;   flogr %r2, %r4
 ;   lhi %r5, 63
 ;   srk %r2, %r5, %r2
@@ -695,10 +688,9 @@ block0(v0: i8):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lgr %r4, %r2
-;   oill %r4, 0x100
-;   lcgr %r2, %r4
-;   ngr %r4, %r2
+;   oill %r2, 0x100
+;   lcgr %r3, %r2
+;   ngrk %r4, %r2, %r3
 ;   flogr %r2, %r4
 ;   lhi %r5, 0x3f
 ;   srk %r2, %r5, %r2

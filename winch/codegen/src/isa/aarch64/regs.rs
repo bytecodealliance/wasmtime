@@ -1,18 +1,23 @@
 //! AArch64 register definition.
 
-use crate::isa::reg::Reg;
+use crate::{isa::reg::Reg, masm::OperandSize};
 use regalloc2::{PReg, RegClass};
 use smallvec::{smallvec, SmallVec};
 
+/// FPR index bound.
+pub(crate) const MAX_FPR: u32 = 32;
+/// FPR index bound.
+pub(crate) const MAX_GPR: u32 = 32;
+
 /// Construct a X-register from an index.
 pub(crate) const fn xreg(num: u8) -> Reg {
-    assert!(num < 32);
+    assert!((num as u32) < MAX_GPR);
     Reg::new(PReg::new(num as usize, RegClass::Int))
 }
 
 /// Construct a V-register from an index.
 pub(crate) const fn vreg(num: u8) -> Reg {
-    assert!(num < 32);
+    assert!((num as u32) < MAX_FPR);
     Reg::new(PReg::new(num as usize, RegClass::Float))
 }
 
@@ -131,7 +136,8 @@ pub(crate) const fn shadow_sp() -> Reg {
     xreg(28)
 }
 
-const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
+/// Bitmask for non-allocatble GPR.
+pub(crate) const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
     | (1 << ip1().hw_enc())
     | (1 << platform().hw_enc())
     | (1 << fp().hw_enc())
@@ -148,10 +154,9 @@ pub(crate) const ALL_GPR: u32 = u32::MAX & !NON_ALLOCATABLE_GPR;
 /// This function will return the set of registers that need to be saved
 /// according to the system ABI and that are known not to be saved during the
 /// prologue emission.
-// TODO: Once float registers are supported,
-// account for callee-saved float registers.
-pub(crate) fn callee_saved() -> SmallVec<[Reg; 9]> {
-    smallvec![
+pub(crate) fn callee_saved() -> SmallVec<[(Reg, OperandSize); 18]> {
+    use OperandSize::*;
+    let regs: SmallVec<[_; 18]> = smallvec![
         xreg(19),
         xreg(20),
         xreg(21),
@@ -162,5 +167,17 @@ pub(crate) fn callee_saved() -> SmallVec<[Reg; 9]> {
         xreg(26),
         xreg(27),
         xreg(28),
-    ]
+        vreg(8),
+        vreg(9),
+        vreg(10),
+        vreg(11),
+        vreg(12),
+        vreg(13),
+        vreg(14),
+        vreg(15),
+    ];
+    // Aarch64's calling convention states that for VReg's only
+    // the lower 64 bits are callee-saved (D8-D15).  See
+    // https://developer.arm.com/documentation/102374/0101/Procedure-Call-Standard
+    regs.into_iter().map(|reg| (reg, S64)).collect()
 }

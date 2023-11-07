@@ -616,7 +616,6 @@ fn define_simd_arithmetic(
     );
 }
 
-#[allow(clippy::many_single_char_names)]
 pub(crate) fn define(
     all_instructions: &mut AllInstructions,
     formats: &Formats,
@@ -1592,7 +1591,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![Operand::new("a", TxN)])
-        .operands_out(vec![Operand::new("x", Int)]),
+        .operands_out(vec![Operand::new("x", NarrowInt)]),
     );
 
     ig.push(

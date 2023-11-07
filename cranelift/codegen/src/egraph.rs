@@ -162,6 +162,7 @@ where
                 let result = self.func.dfg.first_result(inst);
                 self.value_to_opt_value[result] = orig_result;
                 self.eclasses.union(result, orig_result);
+                self.func.dfg.merge_facts(result, orig_result);
                 self.stats.union += 1;
                 result
             } else {
@@ -256,6 +257,11 @@ where
                 // still works, but take *only* the subsuming
                 // value, and break now.
                 isle_ctx.ctx.eclasses.union(optimized_value, union_value);
+                isle_ctx
+                    .ctx
+                    .func
+                    .dfg
+                    .merge_facts(optimized_value, union_value);
                 union_value = optimized_value;
                 break;
             }
@@ -273,6 +279,11 @@ where
                 .ctx
                 .eclasses
                 .union(old_union_value, optimized_value);
+            isle_ctx
+                .ctx
+                .func
+                .dfg
+                .merge_facts(old_union_value, optimized_value);
             isle_ctx.ctx.eclasses.union(old_union_value, union_value);
         }
 
@@ -342,6 +353,7 @@ where
                 new_result
             );
             self.value_to_opt_value[result] = new_result;
+            self.func.dfg.merge_facts(result, new_result);
             true
         }
         // Otherwise, generic side-effecting op -- always keep it, and
@@ -658,7 +670,7 @@ pub(crate) struct Stats {
     pub(crate) elaborate_visit_node: u64,
     pub(crate) elaborate_memoize_hit: u64,
     pub(crate) elaborate_memoize_miss: u64,
-    pub(crate) elaborate_memoize_miss_remat: u64,
+    pub(crate) elaborate_remat: u64,
     pub(crate) elaborate_licm_hoist: u64,
     pub(crate) elaborate_func: u64,
     pub(crate) elaborate_func_pre_insts: u64,

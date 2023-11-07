@@ -31,7 +31,20 @@ pub struct Linker<T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-#[derive(Default)]
+impl<T> Clone for Linker<T> {
+    fn clone(&self) -> Linker<T> {
+        Linker {
+            engine: self.engine.clone(),
+            strings: self.strings.clone(),
+            map: self.map.clone(),
+            path: self.path.clone(),
+            allow_shadowing: self.allow_shadowing,
+            _marker: self._marker,
+        }
+    }
+}
+
+#[derive(Clone, Default)]
 pub struct Strings {
     string2idx: HashMap<Arc<str>, usize>,
     strings: Vec<Arc<str>>,
@@ -365,7 +378,34 @@ impl<T> LinkerInstance<'_, T> {
         }
     }
 
-    // TODO: define func_new_async
+    /// Define a new host-provided async function using dynamic types.
+    ///
+    /// This is exactly like [`Self::func_new`] except it takes an async
+    /// host function.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn func_new_async<F>(&mut self, component: &Component, name: &str, f: F) -> Result<()>
+    where
+        F: for<'a> Fn(
+                StoreContextMut<'a, T>,
+                &'a [Val],
+                &'a mut [Val],
+            ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
+            + Send
+            + Sync
+            + 'static,
+    {
+        assert!(
+            self.engine.config().async_support,
+            "cannot use `func_new_async` without enabling async support in the config"
+        );
+        let ff = move |mut store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
+            let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
+            let mut future = Pin::from(f(store.as_context_mut(), params, results));
+            unsafe { async_cx.block_on(future.as_mut()) }?
+        };
+        self.func_new(component, name, ff)
+    }
 
     /// Defines a [`Module`] within this instance.
     ///
@@ -396,17 +436,21 @@ impl<T> LinkerInstance<'_, T> {
     /// along with the representation of the resource that was just destroyed.
     ///
     /// [`Resource<U>`]: crate::component::Resource
+    ///
+    /// # Errors
+    ///
+    /// The provided `dtor` closure returns an error if something goes wrong
+    /// when a guest calls the `dtor` to drop a `Resource<T>` such as
+    /// a runtime trap or a runtime limit being exceeded.
     pub fn resource<U: 'static>(
         &mut self,
         name: &str,
-        dtor: impl Fn(StoreContextMut<'_, T>, u32) + Send + Sync + 'static,
+        dtor: impl Fn(StoreContextMut<'_, T>, u32) -> Result<()> + Send + Sync + 'static,
     ) -> Result<()> {
         let name = self.strings.intern(name);
         let dtor = Arc::new(crate::func::HostFunc::wrap(
             &self.engine,
-            move |mut cx: crate::Caller<'_, T>, param: u32| {
-                dtor(cx.as_context_mut(), param);
-            },
+            move |mut cx: crate::Caller<'_, T>, param: u32| dtor(cx.as_context_mut(), param),
         ));
         self.insert(name, Definition::Resource(ResourceType::host::<U>(), dtor))
     }

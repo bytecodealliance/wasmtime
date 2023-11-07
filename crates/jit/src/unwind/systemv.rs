@@ -14,7 +14,7 @@ extern "C" {
 }
 
 impl UnwindRegistration {
-    pub const SECTION_NAME: &str = ".eh_frame";
+    pub const SECTION_NAME: &'static str = ".eh_frame";
 
     /// Registers precompiled unwinding information with the system.
     ///

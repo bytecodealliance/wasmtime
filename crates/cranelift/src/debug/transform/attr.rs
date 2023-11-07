@@ -82,9 +82,6 @@ where
             AttributeValue::RangeListsRef(_) if attr.name() == gimli::DW_AT_ranges => {
                 continue;
             }
-            AttributeValue::Exprloc(_) if attr.name() == gimli::DW_AT_frame_base => {
-                continue;
-            }
             AttributeValue::DebugAddrBase(_) | AttributeValue::DebugStrOffsetsBase(_) => {
                 continue;
             }
@@ -98,6 +95,7 @@ where
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
+            AttributeValue::Block(d) => write::AttributeValue::Block(d.to_slice()?.to_vec()),
             AttributeValue::Udata(u) => write::AttributeValue::Udata(u),
             AttributeValue::Data1(d) => write::AttributeValue::Data1(d),
             AttributeValue::Data2(d) => write::AttributeValue::Data2(d),
@@ -201,6 +199,13 @@ where
                 }
                 let list_id = out_unit.locations.add(write::LocationList(result.unwrap()));
                 write::AttributeValue::LocationListRef(list_id)
+            }
+            AttributeValue::Exprloc(_) if attr.name() == gimli::DW_AT_frame_base => {
+                // We do not really "rewrite" the frame base so much as replace it outright.
+                // References to it through the DW_OP_fbreg opcode will be expanded below.
+                let mut cfa = write::Expression::new();
+                cfa.op(gimli::DW_OP_call_frame_cfa);
+                write::AttributeValue::Exprloc(cfa)
             }
             AttributeValue::Exprloc(ref expr) => {
                 let frame_base =

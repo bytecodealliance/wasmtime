@@ -25,8 +25,7 @@ use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use anyhow::{anyhow, bail, Context, Result};
 use object::write::{Object, StandardSegment};
 use object::{File, FileFlags, Object as _, ObjectSection, SectionKind};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
@@ -142,11 +141,12 @@ pub fn check_compatible(engine: &Engine, mmap: &MmapVec, expected: ObjectKind) -
         }
         ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
-    bincode::deserialize::<Metadata>(data)?.check_compatible(engine)
+    bincode::deserialize::<Metadata<'_>>(data)?.check_compatible(engine)
 }
 
-pub fn detect_precompiled(bytes: &[u8]) -> Option<Precompiled> {
-    let obj = File::parse(bytes).ok()?;
+fn detect_precompiled<'data, R: object::ReadRef<'data>>(
+    obj: File<'data, R>,
+) -> Option<Precompiled> {
     match obj.flags() {
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
@@ -162,11 +162,23 @@ pub fn detect_precompiled(bytes: &[u8]) -> Option<Precompiled> {
     }
 }
 
+pub fn detect_precompiled_bytes(bytes: &[u8]) -> Option<Precompiled> {
+    detect_precompiled(File::parse(bytes).ok()?)
+}
+
+pub fn detect_precompiled_file(path: impl AsRef<std::path::Path>) -> Result<Option<Precompiled>> {
+    let read_cache = object::ReadCache::new(std::fs::File::open(path)?);
+    let obj = File::parse(&read_cache)?;
+    Ok(detect_precompiled(obj))
+}
+
 #[derive(Serialize, Deserialize)]
-struct Metadata {
+struct Metadata<'a> {
     target: String,
-    shared_flags: BTreeMap<String, FlagValue>,
-    isa_flags: BTreeMap<String, FlagValue>,
+    #[serde(borrow)]
+    shared_flags: Vec<(&'a str, FlagValue<'a>)>,
+    #[serde(borrow)]
+    isa_flags: Vec<(&'a str, FlagValue<'a>)>,
     tunables: Tunables,
     features: WasmFeatures,
 }
@@ -189,9 +201,9 @@ struct WasmFeatures {
     function_references: bool,
 }
 
-impl Metadata {
+impl Metadata<'_> {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    fn new(engine: &Engine) -> Metadata {
+    fn new(engine: &Engine) -> Metadata<'static> {
         let wasmparser::WasmFeatures {
             reference_types,
             multi_value,
@@ -522,10 +534,9 @@ mod test {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
 
-        metadata.shared_flags.insert(
-            "preserve_frame_pointers".to_string(),
-            FlagValue::Bool(false),
-        );
+        metadata
+            .shared_flags
+            .push(("preserve_frame_pointers", FlagValue::Bool(false)));
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -548,7 +559,7 @@ Caused by:
 
         metadata
             .isa_flags
-            .insert("not_a_flag".to_string(), FlagValue::Bool(true));
+            .push(("not_a_flag", FlagValue::Bool(true)));
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -618,27 +629,27 @@ Caused by:
     #[test]
     fn test_feature_mismatch() -> Result<()> {
         let mut config = Config::new();
-        config.wasm_simd(true);
+        config.wasm_threads(true);
 
         let engine = Engine::new(&config)?;
         let mut metadata = Metadata::new(&engine);
-        metadata.features.simd = false;
+        metadata.features.threads = false;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled without WebAssembly SIMD support but it is enabled for the host"),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled without WebAssembly threads support but it is enabled for the host"),
         }
 
         let mut config = Config::new();
-        config.wasm_simd(false);
+        config.wasm_threads(false);
 
         let engine = Engine::new(&config)?;
         let mut metadata = Metadata::new(&engine);
-        metadata.features.simd = true;
+        metadata.features.threads = true;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled with WebAssembly SIMD support but it is not enabled for the host"),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled with WebAssembly threads support but it is not enabled for the host"),
         }
 
         Ok(())

@@ -156,7 +156,7 @@ impl Config {
             .wasm_memory64(self.module_config.config.memory64_enabled)
             .wasm_tail_call(self.module_config.config.tail_call_enabled)
             .wasm_threads(self.module_config.config.threads_enabled)
-            .native_unwind_info(self.wasmtime.native_unwind_info)
+            .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
             .consume_fuel(self.wasmtime.consume_fuel)
@@ -170,6 +170,10 @@ impl Config {
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
             .generate_address_map(self.wasmtime.generate_address_map);
+
+        if !self.module_config.config.simd_enabled {
+            cfg.wasm_relaxed_simd(false);
+        }
 
         let compiler_strategy = &self.wasmtime.compiler_strategy;
         let cranelift_strategy = *compiler_strategy == CompilerStrategy::Cranelift;
@@ -256,7 +260,7 @@ impl Config {
     pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
         if self.wasmtime.consume_fuel {
-            store.add_fuel(u64::max_value()).unwrap();
+            store.set_fuel(u64::MAX).unwrap();
         }
         if self.wasmtime.epoch_interruption {
             // Without fuzzing of async execution, we can't test the

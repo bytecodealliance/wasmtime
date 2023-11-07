@@ -1,0 +1,448 @@
+test compile precise-output
+target riscv64gc has_v has_zbkb has_zba has_zbb has_zbc has_zbs
+
+
+function %a(i16 sext, f32, f64x2, i32 sext, i8 sext, i64x2, i8, f32x4, i16x8, i8 sext, i8 sext) -> f64x2, i16x8, i8, f64x2, i16x8, i16x8, i16x8, i16x8 {
+    ss0 = explicit_slot 126
+    ss1 = explicit_slot 126
+    ss2 = explicit_slot 126
+
+block0(v0: i16, v1: f32, v2: f64x2, v3: i32, v4: i8, v5: i64x2, v6: i8, v7: f32x4, v8: i16x8, v9: i8, v10: i8):
+    v11 = iconst.i8 0
+    v12 = iconst.i16 0
+    v13 = iconst.i32 0
+    v14 = iconst.i64 0
+    v15 = uextend.i128 v14
+    stack_store v15, ss0
+    stack_store v15, ss0+16
+    stack_store v15, ss0+32
+    stack_store v15, ss0+48
+    stack_store v15, ss0+64
+    stack_store v15, ss0+80
+    stack_store v15, ss0+96
+    stack_store v14, ss0+112
+    stack_store v13, ss0+120
+    stack_store v12, ss0+124
+    stack_store v15, ss1
+    stack_store v15, ss1+16
+    stack_store v15, ss1+32
+    stack_store v15, ss1+48
+    stack_store v15, ss1+64
+    stack_store v15, ss1+80
+    stack_store v15, ss1+96
+    stack_store v14, ss1+112
+    stack_store v13, ss1+120
+    stack_store v12, ss1+124
+    stack_store v15, ss2
+    stack_store v15, ss2+16
+    stack_store v15, ss2+32
+    stack_store v15, ss2+48
+    stack_store v15, ss2+64
+    stack_store v15, ss2+80
+    stack_store v15, ss2+96
+    stack_store v14, ss2+112
+    stack_store v13, ss2+120
+    stack_store v12, ss2+124
+    v16 = select v3, v8, v8
+    v17 = select v3, v16, v16
+    v18 = select v3, v17, v17
+    v77 = sqrt v2
+    v78 = fcmp ne v77, v77
+    v79 = f64const +NaN
+    v80 = splat.f64x2 v79
+    v81 = bitcast.f64x2 v78
+    v19 = bitselect v81, v80, v77
+    v82 = sqrt v19
+    v83 = fcmp ne v82, v82
+    v84 = f64const +NaN
+    v85 = splat.f64x2 v84
+    v86 = bitcast.f64x2 v83
+    v20 = bitselect v86, v85, v82
+    v21 = select v3, v18, v18
+    v22 = umin v0, v0
+    v23 = select v3, v21, v21
+    v24 = select v3, v23, v23
+    v25 = select v3, v24, v24
+    v26 = select v3, v25, v25
+    v27 = select v3, v26, v26
+    v28 = select v3, v27, v27
+    v29 = select v3, v28, v28
+    v30 = iadd v3, v3
+    v31 = select v30, v29, v29
+    v32 = umin v22, v22
+    v33 = select v30, v31, v31
+    v34 = select v30, v33, v33
+    v35 = select v30, v34, v34
+    v36 = select v30, v35, v35
+    v37 = smax v5, v5
+    v38 = ishl v32, v32
+    v39 = select v30, v36, v36
+    v40 = stack_addr.i64 ss0+3
+    v41 = iadd_imm v40, 0
+    v42 = atomic_rmw.i8 and v41, v10
+    v43 = select v30, v39, v39
+    v44 = select v30, v43, v43
+    v45 = select v30, v44, v44
+    v46 = isub v38, v38
+    v47 = select v30, v45, v45
+    v48 = select v30, v47, v47
+    v49 = select v30, v48, v48
+    v50 = select v30, v49, v49
+    stack_store v37, ss0+33
+    v51 = select v30, v50, v50
+    v52 = select v30, v51, v51
+    v53 = select v30, v52, v52
+    v54 = select v30, v53, v53
+    v55 = select v30, v54, v54
+    v56 = select v30, v55, v55
+    v57 = select v30, v56, v56
+    v58 = select v30, v57, v57
+    v59 = select v30, v58, v58
+    v60 = select v30, v59, v59
+    v61 = select v30, v60, v60
+    v62 = select v30, v61, v61
+    v63 = select v30, v62, v62
+    v64 = select v30, v63, v63
+    v65 = select v30, v64, v64
+    v66 = select v30, v65, v65
+    v67 = select v30, v66, v66
+    v68 = select v30, v67, v67
+    v69 = select v30, v68, v68
+    v70 = select v30, v69, v69
+    v71 = select v30, v70, v70
+    v72 = select v30, v71, v71
+    v73 = select v30, v72, v72
+    v74 = select v30, v73, v73
+    v75 = select v30, v74, v74
+    v76 = select v30, v75, v75
+    return v20, v76, v42, v20, v76, v76, v76, v76
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-384
+; block0:
+;   vle8.v v11,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v15,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v10,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v12,64(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   li a2,0
+;   li a3,0
+;   li a4,0
+;   li a0,0
+;   sd a4,0(nominal_sp)
+;   sd a0,8(nominal_sp)
+;   sd a4,16(nominal_sp)
+;   sd a0,24(nominal_sp)
+;   sd a4,32(nominal_sp)
+;   sd a0,40(nominal_sp)
+;   sd a4,48(nominal_sp)
+;   sd a0,56(nominal_sp)
+;   sd a4,64(nominal_sp)
+;   sd a0,72(nominal_sp)
+;   sd a4,80(nominal_sp)
+;   sd a0,88(nominal_sp)
+;   sd a4,96(nominal_sp)
+;   sd a0,104(nominal_sp)
+;   sd a4,112(nominal_sp)
+;   sw a3,120(nominal_sp)
+;   sh a2,124(nominal_sp)
+;   sd a4,128(nominal_sp)
+;   sd a0,136(nominal_sp)
+;   sd a4,144(nominal_sp)
+;   sd a0,152(nominal_sp)
+;   sd a4,160(nominal_sp)
+;   sd a0,168(nominal_sp)
+;   sd a4,176(nominal_sp)
+;   sd a0,184(nominal_sp)
+;   sd a4,192(nominal_sp)
+;   sd a0,200(nominal_sp)
+;   sd a4,208(nominal_sp)
+;   sd a0,216(nominal_sp)
+;   sd a4,224(nominal_sp)
+;   sd a0,232(nominal_sp)
+;   sd a4,240(nominal_sp)
+;   sw a3,248(nominal_sp)
+;   sh a2,252(nominal_sp)
+;   sd a4,256(nominal_sp)
+;   sd a0,264(nominal_sp)
+;   sd a4,272(nominal_sp)
+;   sd a0,280(nominal_sp)
+;   sd a4,288(nominal_sp)
+;   sd a0,296(nominal_sp)
+;   sd a4,304(nominal_sp)
+;   sd a0,312(nominal_sp)
+;   sd a4,320(nominal_sp)
+;   sd a0,328(nominal_sp)
+;   sd a4,336(nominal_sp)
+;   sd a0,344(nominal_sp)
+;   sd a4,352(nominal_sp)
+;   sd a0,360(nominal_sp)
+;   sd a4,368(nominal_sp)
+;   sw a3,376(nominal_sp)
+;   sh a2,380(nominal_sp)
+;   sext.w a4,a1
+;   select v12,v12,v12##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v12,v12,v12##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v13,v12,v12##condition=(a4 ne zero)
+;   vfsqrt.v v11,v11 #avl=2, #vtype=(e64, m1, ta, ma)
+;   lui a3,4095
+;   slli a0,a3,39
+;   fmv.d.x fa1,a0
+;   vfmv.v.f v12,fa1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmfne.vv v0,v11,v11 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v14,v11,v12,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   vfsqrt.v v11,v14 #avl=2, #vtype=(e64, m1, ta, ma)
+;   lui a3,4095
+;   slli a0,a3,39
+;   fmv.d.x fa1,a0
+;   vfmv.v.f v14,fa1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmfne.vv v0,v11,v11 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vmerge.vvm v12,v11,v14,v0.t #avl=2, #vtype=(e64, m1, ta, ma)
+;   sext.w a4,a1
+;   select v13,v13,v13##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v13,v13,v13##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v13,v13,v13##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v13,v13,v13##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v13,v13,v13##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v13,v13,v13##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v13,v13,v13##condition=(a4 ne zero)
+;   sext.w a4,a1
+;   select v13,v13,v13##condition=(a4 ne zero)
+;   addw a0,a1,a1
+;   select v11,v13,v13##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v13,v11,v11##condition=(a0 ne zero)
+;   vmax.vv v11,v15,v15 #avl=2, #vtype=(e64, m1, ta, ma)
+;   select v13,v13,v13##condition=(a0 ne zero)
+;   load_addr a1,3(nominal_sp)
+;   addi a1,a1,0
+;   andi a3,a1,3
+;   slli a2,a3,3
+;   andi a1,a1,-4
+;   atomic_rmw.i8 and a4,a5,(a1)##t0=a3 offset=a2
+;   mv a5,a4
+;   select v10,v13,v13##condition=(a0 ne zero)
+;   select v10,v10,v10##condition=(a0 ne zero)
+;   select v10,v10,v10##condition=(a0 ne zero)
+;   select v10,v10,v10##condition=(a0 ne zero)
+;   select v10,v10,v10##condition=(a0 ne zero)
+;   select v10,v10,v10##condition=(a0 ne zero)
+;   select v10,v10,v10##condition=(a0 ne zero)
+;   vse64.v v11,33(nominal_sp) #avl=2, #vtype=(e64, m1, ta, ma)
+;   select v11,v10,v10##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   select v11,v11,v11##condition=(a0 ne zero)
+;   vse8.v v12,0(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,16(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,32(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,48(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,64(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,80(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,96(a6) #avl=16, #vtype=(e8, m1, ta, ma)
+;   mv a0,a5
+;   addi sp,sp,384
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x180
+; block1: ; offset 0x14
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x87, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x07, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x40
+;   .byte 0x07, 0x86, 0x0f, 0x02
+;   mv a2, zero
+;   mv a3, zero
+;   mv a4, zero
+;   mv a0, zero
+;   sd a4, 0(sp)
+;   sd a0, 8(sp)
+;   sd a4, 0x10(sp)
+;   sd a0, 0x18(sp)
+;   sd a4, 0x20(sp)
+;   sd a0, 0x28(sp)
+;   sd a4, 0x30(sp)
+;   sd a0, 0x38(sp)
+;   sd a4, 0x40(sp)
+;   sd a0, 0x48(sp)
+;   sd a4, 0x50(sp)
+;   sd a0, 0x58(sp)
+;   sd a4, 0x60(sp)
+;   sd a0, 0x68(sp)
+;   sd a4, 0x70(sp)
+;   sw a3, 0x78(sp)
+;   sh a2, 0x7c(sp)
+;   sd a4, 0x80(sp)
+;   sd a0, 0x88(sp)
+;   sd a4, 0x90(sp)
+;   sd a0, 0x98(sp)
+;   sd a4, 0xa0(sp)
+;   sd a0, 0xa8(sp)
+;   sd a4, 0xb0(sp)
+;   sd a0, 0xb8(sp)
+;   sd a4, 0xc0(sp)
+;   sd a0, 0xc8(sp)
+;   sd a4, 0xd0(sp)
+;   sd a0, 0xd8(sp)
+;   sd a4, 0xe0(sp)
+;   sd a0, 0xe8(sp)
+;   sd a4, 0xf0(sp)
+;   sw a3, 0xf8(sp)
+;   sh a2, 0xfc(sp)
+;   sd a4, 0x100(sp)
+;   sd a0, 0x108(sp)
+;   sd a4, 0x110(sp)
+;   sd a0, 0x118(sp)
+;   sd a4, 0x120(sp)
+;   sd a0, 0x128(sp)
+;   sd a4, 0x130(sp)
+;   sd a0, 0x138(sp)
+;   sd a4, 0x140(sp)
+;   sd a0, 0x148(sp)
+;   sd a4, 0x150(sp)
+;   sd a0, 0x158(sp)
+;   sd a4, 0x160(sp)
+;   sd a0, 0x168(sp)
+;   sd a4, 0x170(sp)
+;   sw a3, 0x178(sp)
+;   sh a2, 0x17c(sp)
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   beqz a4, 0xc
+;   .byte 0xd7, 0x36, 0xc0, 0x9e
+;   j 8
+;   .byte 0xd7, 0x36, 0xc0, 0x9e
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0xd7, 0x15, 0xb0, 0x4e
+;   lui a3, 0xfff
+;   slli a0, a3, 0x27
+;   fmv.d.x fa1, a0
+;   .byte 0x57, 0xd6, 0x05, 0x5e
+;   .byte 0x57, 0x90, 0xb5, 0x72
+;   .byte 0x57, 0x07, 0xb6, 0x5c
+;   .byte 0xd7, 0x15, 0xe0, 0x4e
+;   lui a3, 0xfff
+;   slli a0, a3, 0x27
+;   fmv.d.x fa1, a0
+;   .byte 0x57, 0xd7, 0x05, 0x5e
+;   .byte 0x57, 0x90, 0xb5, 0x72
+;   .byte 0x57, 0x06, 0xb7, 0x5c
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   sext.w a4, a1
+;   addw a0, a1, a1
+;   beqz a0, 0xc
+;   .byte 0xd7, 0x35, 0xd0, 0x9e
+;   j 8
+;   .byte 0xd7, 0x35, 0xd0, 0x9e
+;   beqz a0, 0xc
+;   .byte 0xd7, 0x36, 0xb0, 0x9e
+;   j 8
+;   .byte 0xd7, 0x36, 0xb0, 0x9e
+;   .byte 0xd7, 0x85, 0xf7, 0x1e
+;   addi a1, sp, 3
+;   mv a1, a1
+;   andi a3, a1, 3
+;   slli a2, a3, 3
+;   andi a1, a1, -4
+;   lr.w.aqrl a4, (a1)
+;   srl a4, a4, a2
+;   andi a4, a4, 0xff
+;   and a3, a4, a5
+;   lr.w.aqrl t5, (a1)
+;   addi t6, zero, 0xff
+;   sll t6, t6, a2
+;   not t6, t6
+;   and t5, t5, t6
+;   andi t6, a3, 0xff
+;   sll t6, t6, a2
+;   or t5, t5, t6
+;   sc.w.aqrl a3, t5, (a1)
+;   bnez a3, -0x34
+;   mv a5, a4
+;   beqz a0, 0xc
+;   .byte 0x57, 0x35, 0xd0, 0x9e
+;   j 8
+;   .byte 0x57, 0x35, 0xd0, 0x9e
+;   addi t6, sp, 0x21
+;   .byte 0xa7, 0xf5, 0x0f, 0x02
+;   beqz a0, 0xc
+;   .byte 0xd7, 0x35, 0xa0, 0x9e
+;   j 8
+;   .byte 0xd7, 0x35, 0xa0, 0x9e
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x06, 0x08, 0x02
+;   addi t6, a6, 0x10
+;   .byte 0xa7, 0x85, 0x0f, 0x02
+;   addi t6, a6, 0x20
+;   .byte 0x27, 0x86, 0x0f, 0x02
+;   addi t6, a6, 0x30
+;   .byte 0xa7, 0x85, 0x0f, 0x02
+;   addi t6, a6, 0x40
+;   .byte 0xa7, 0x85, 0x0f, 0x02
+;   addi t6, a6, 0x50
+;   .byte 0xa7, 0x85, 0x0f, 0x02
+;   addi t6, a6, 0x60
+;   .byte 0xa7, 0x85, 0x0f, 0x02
+;   mv a0, a5
+;   addi sp, sp, 0x180
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

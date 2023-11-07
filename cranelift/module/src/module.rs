@@ -11,9 +11,11 @@ use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::function::{Function, VersionMarker};
+use cranelift_codegen::ir::ExternalName;
 use cranelift_codegen::settings::SetError;
-use cranelift_codegen::MachReloc;
-use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
+use cranelift_codegen::{
+    ir, isa, CodegenError, CompileError, Context, FinalizedMachReloc, FinalizedRelocTarget,
+};
 use cranelift_control::ControlPlane;
 use std::borrow::{Cow, ToOwned};
 use std::string::String;
@@ -27,22 +29,33 @@ pub struct ModuleReloc {
     /// The kind of relocation.
     pub kind: Reloc,
     /// The external symbol / name to which this relocation refers.
-    pub name: ModuleExtName,
+    pub name: ModuleRelocTarget,
     /// The addend to add to the symbol value.
     pub addend: i64,
 }
 
 impl ModuleReloc {
-    /// Converts a `MachReloc` produced from a `Function` into a `ModuleReloc`.
-    pub fn from_mach_reloc(mach_reloc: &MachReloc, func: &Function) -> Self {
-        let name = match mach_reloc.name {
-            ir::ExternalName::User(reff) => {
+    /// Converts a `FinalizedMachReloc` produced from a `Function` into a `ModuleReloc`.
+    pub fn from_mach_reloc(
+        mach_reloc: &FinalizedMachReloc,
+        func: &Function,
+        func_id: FuncId,
+    ) -> Self {
+        let name = match mach_reloc.target {
+            FinalizedRelocTarget::ExternalName(ExternalName::User(reff)) => {
                 let name = &func.params.user_named_funcs()[reff];
-                ModuleExtName::user(name.namespace, name.index)
+                ModuleRelocTarget::user(name.namespace, name.index)
             }
-            ir::ExternalName::TestCase(_) => unimplemented!(),
-            ir::ExternalName::LibCall(libcall) => ModuleExtName::LibCall(libcall),
-            ir::ExternalName::KnownSymbol(ks) => ModuleExtName::KnownSymbol(ks),
+            FinalizedRelocTarget::ExternalName(ExternalName::TestCase(_)) => unimplemented!(),
+            FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
+                ModuleRelocTarget::LibCall(libcall)
+            }
+            FinalizedRelocTarget::ExternalName(ExternalName::KnownSymbol(ks)) => {
+                ModuleRelocTarget::KnownSymbol(ks)
+            }
+            FinalizedRelocTarget::Func(offset) => {
+                ModuleRelocTarget::FunctionOffset(func_id, offset)
+            }
         };
         Self {
             offset: mach_reloc.offset,
@@ -55,12 +68,15 @@ impl ModuleReloc {
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct FuncId(u32);
 entity_impl!(FuncId, "funcid");
 
 /// Function identifiers are namespace 0 in `ir::ExternalName`
-impl From<FuncId> for ModuleExtName {
+impl From<FuncId> for ModuleRelocTarget {
     fn from(id: FuncId) -> Self {
         Self::User {
             namespace: 0,
@@ -71,8 +87,8 @@ impl From<FuncId> for ModuleExtName {
 
 impl FuncId {
     /// Get the `FuncId` for the function named by `name`.
-    pub fn from_name(name: &ModuleExtName) -> FuncId {
-        if let ModuleExtName::User { namespace, index } = name {
+    pub fn from_name(name: &ModuleRelocTarget) -> FuncId {
+        if let ModuleRelocTarget::User { namespace, index } = name {
             debug_assert_eq!(*namespace, 0);
             FuncId::from_u32(*index)
         } else {
@@ -83,12 +99,15 @@ impl FuncId {
 
 /// A data object identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct DataId(u32);
 entity_impl!(DataId, "dataid");
 
 /// Data identifiers are namespace 1 in `ir::ExternalName`
-impl From<DataId> for ModuleExtName {
+impl From<DataId> for ModuleRelocTarget {
     fn from(id: DataId) -> Self {
         Self::User {
             namespace: 1,
@@ -99,8 +118,8 @@ impl From<DataId> for ModuleExtName {
 
 impl DataId {
     /// Get the `DataId` for the data object named by `name`.
-    pub fn from_name(name: &ModuleExtName) -> DataId {
-        if let ModuleExtName::User { namespace, index } = name {
+    pub fn from_name(name: &ModuleRelocTarget) -> DataId {
+        if let ModuleRelocTarget::User { namespace, index } = name {
             debug_assert_eq!(*namespace, 1);
             DataId::from_u32(*index)
         } else {
@@ -111,7 +130,10 @@ impl DataId {
 
 /// Linkage refers to where an entity is defined and who can see it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub enum Linkage {
     /// Defined outside of a module.
     Import,
@@ -170,7 +192,10 @@ impl Linkage {
 
 /// A declared name may refer to either a function or data declaration
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub enum FuncOrDataId {
     /// When it's a FuncId
     Func(FuncId),
@@ -179,7 +204,7 @@ pub enum FuncOrDataId {
 }
 
 /// Mapping to `ModuleExtName` is trivial based on the `FuncId` and `DataId` mapping.
-impl From<FuncOrDataId> for ModuleExtName {
+impl From<FuncOrDataId> for ModuleRelocTarget {
     fn from(id: FuncOrDataId) -> Self {
         match id {
             FuncOrDataId::Func(funcid) => Self::from(funcid),
@@ -190,7 +215,10 @@ impl From<FuncOrDataId> for ModuleExtName {
 
 /// Information about a function which can be called.
 #[derive(Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct FunctionDeclaration {
     #[allow(missing_docs)]
     pub name: Option<String>,
@@ -348,7 +376,10 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
 
 /// Information about a data object which can be accessed.
 #[derive(Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct DataDeclaration {
     #[allow(missing_docs)]
     pub name: Option<String>,
@@ -386,8 +417,11 @@ impl DataDeclaration {
 
 /// A translated `ExternalName` into something global we can handle.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ModuleExtName {
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub enum ModuleRelocTarget {
     /// User defined function, converted from `ExternalName::User`.
     User {
         /// Arbitrary.
@@ -399,21 +433,24 @@ pub enum ModuleExtName {
     LibCall(ir::LibCall),
     /// Symbols known to the linker.
     KnownSymbol(ir::KnownSymbol),
+    /// A offset inside a function
+    FunctionOffset(FuncId, CodeOffset),
 }
 
-impl ModuleExtName {
+impl ModuleRelocTarget {
     /// Creates a user-defined external name.
     pub fn user(namespace: u32, index: u32) -> Self {
         Self::User { namespace, index }
     }
 }
 
-impl Display for ModuleExtName {
+impl Display for ModuleRelocTarget {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::User { namespace, index } => write!(f, "u{}:{}", namespace, index),
             Self::LibCall(lc) => write!(f, "%{}", lc),
             Self::KnownSymbol(ks) => write!(f, "{}", ks),
+            Self::FunctionOffset(fname, offset) => write!(f, "{fname}+{offset}"),
         }
     }
 }
@@ -665,10 +702,12 @@ impl ModuleDeclarations {
     }
 
     /// Return whether `name` names a function, rather than a data object.
-    pub fn is_function(name: &ModuleExtName) -> bool {
+    pub fn is_function(name: &ModuleRelocTarget) -> bool {
         match name {
-            ModuleExtName::User { namespace, .. } => *namespace == 0,
-            ModuleExtName::LibCall(_) | ModuleExtName::KnownSymbol(_) => {
+            ModuleRelocTarget::User { namespace, .. } => *namespace == 0,
+            ModuleRelocTarget::LibCall(_)
+            | ModuleRelocTarget::KnownSymbol(_)
+            | ModuleRelocTarget::FunctionOffset(..) => {
                 panic!("unexpected module ext name")
             }
         }
@@ -897,12 +936,12 @@ pub trait Module {
 
     /// TODO: Same as above.
     fn declare_func_in_data(&self, func_id: FuncId, data: &mut DataDescription) -> ir::FuncRef {
-        data.import_function(ModuleExtName::user(0, func_id.as_u32()))
+        data.import_function(ModuleRelocTarget::user(0, func_id.as_u32()))
     }
 
     /// TODO: Same as above.
     fn declare_data_in_data(&self, data_id: DataId, data: &mut DataDescription) -> ir::GlobalValue {
-        data.import_global_value(ModuleExtName::user(1, data_id.as_u32()))
+        data.import_global_value(ModuleRelocTarget::user(1, data_id.as_u32()))
     }
 
     /// Define a function, producing the function body from the given `Context`.
@@ -944,7 +983,7 @@ pub trait Module {
         func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[MachReloc],
+        relocs: &[FinalizedMachReloc],
     ) -> ModuleResult<()>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
@@ -1046,7 +1085,7 @@ impl<M: Module> Module for &mut M {
         func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[MachReloc],
+        relocs: &[FinalizedMachReloc],
     ) -> ModuleResult<()> {
         (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
     }

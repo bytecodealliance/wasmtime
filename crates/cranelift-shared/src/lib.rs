@@ -1,9 +1,8 @@
 use cranelift_codegen::{
     binemit,
     ir::{self, ExternalName, UserExternalNameRef},
-    settings, MachReloc, MachTrap,
+    settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
 };
-use std::collections::BTreeMap;
 use wasmtime_environ::{FlagValue, FuncIndex, Trap, TrapInformation};
 
 pub mod isa_builder;
@@ -37,16 +36,16 @@ pub enum RelocationTarget {
 /// Converts cranelift_codegen settings to the wasmtime_environ equivalent.
 pub fn clif_flags_to_wasmtime(
     flags: impl IntoIterator<Item = settings::Value>,
-) -> BTreeMap<String, FlagValue> {
+) -> Vec<(&'static str, FlagValue<'static>)> {
     flags
         .into_iter()
-        .map(|val| (val.name.to_string(), to_flag_value(&val)))
+        .map(|val| (val.name, to_flag_value(&val)))
         .collect()
 }
 
-fn to_flag_value(v: &settings::Value) -> FlagValue {
+fn to_flag_value(v: &settings::Value) -> FlagValue<'static> {
     match v.kind() {
-        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap().into()),
+        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap()),
         settings::SettingKind::Num => FlagValue::Num(v.as_num().unwrap()),
         settings::SettingKind::Bool => FlagValue::Bool(v.as_bool().unwrap()),
         settings::SettingKind::Preset => unreachable!(),
@@ -101,24 +100,26 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
 
 /// Converts machine relocations to relocation information
 /// to perform.
-fn mach_reloc_to_reloc<F>(reloc: &MachReloc, transform_user_func_ref: F) -> Relocation
+fn mach_reloc_to_reloc<F>(reloc: &FinalizedMachReloc, transform_user_func_ref: F) -> Relocation
 where
     F: Fn(UserExternalNameRef) -> (u32, u32),
 {
-    let &MachReloc {
+    let &FinalizedMachReloc {
         offset,
         kind,
-        ref name,
+        ref target,
         addend,
     } = reloc;
-    let reloc_target = if let ExternalName::User(user_func_ref) = *name {
-        let (namespace, index) = transform_user_func_ref(user_func_ref);
-        debug_assert_eq!(namespace, 0);
-        RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-    } else if let ExternalName::LibCall(libcall) = *name {
-        RelocationTarget::LibCall(libcall)
-    } else {
-        panic!("unrecognized external name")
+    let reloc_target = match *target {
+        FinalizedRelocTarget::ExternalName(ExternalName::User(user_func_ref)) => {
+            let (namespace, index) = transform_user_func_ref(user_func_ref);
+            debug_assert_eq!(namespace, 0);
+            RelocationTarget::UserFunc(FuncIndex::from_u32(index))
+        }
+        FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
+            RelocationTarget::LibCall(libcall)
+        }
+        _ => panic!("unrecognized external name"),
     };
     Relocation {
         reloc: kind,

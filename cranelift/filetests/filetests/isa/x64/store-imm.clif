@@ -1,0 +1,201 @@
+test compile precise-output
+target x86_64
+
+function %store_imm8(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i8 0x12
+    store v1, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movb    $18, 0(%rdi)
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movb $0x12, (%rdi) ; trap: heap_oob
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %store_imm16(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i16 0x1234
+    store v1, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movw    $4660, 0(%rdi)
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movw $0x1234, (%rdi) ; trap: heap_oob
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %store_imm32(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i32 0x1234_5678
+    store v1, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $305419896, 0(%rdi)
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $0x12345678, (%rdi) ; trap: heap_oob
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %store_imm64(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i64 0x1234_5678
+    store v1, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    $305419896, 0(%rdi)
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq $0x12345678, (%rdi) ; trap: heap_oob
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %store_max_i32_imm64(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i64 0x7fff_ffff
+    store v1, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    $2147483647, 0(%rdi)
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq $0x7fffffff, (%rdi) ; trap: heap_oob
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %store_min_i32_imm64(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i64 -2_147_483_648
+    store v1, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    $-2147483648, 0(%rdi)
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq $18446744071562067968, (%rdi) ; trap: heap_oob
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %store_max_i64_imm64(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i64 0x7fff_ffff_ffff_ffff
+    store v1, v0
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movabsq $9223372036854775807, %rax
+;   movq    %rax, 0(%rdi)
+;   movq    %rdi, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0x7fffffffffffffff, %rax
+;   movq %rax, (%rdi) ; trap: heap_oob
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

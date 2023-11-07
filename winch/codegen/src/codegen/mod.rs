@@ -1,25 +1,27 @@
 use crate::{
     abi::{ABISig, ABI},
-    masm::{MacroAssembler, OperandSize},
-    stack::Val,
-    CallingConvention,
+    isa::reg::Reg,
+    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
+    stack::{TypedReg, Val},
 };
 use anyhow::Result;
-use call::FnCall;
 use smallvec::SmallVec;
 use wasmparser::{BinaryReader, FuncValidator, Operator, ValidatorResources, VisitOperator};
-use wasmtime_environ::{FuncIndex, WasmFuncType, WasmType};
+use wasmtime_environ::{PtrSize, TableIndex, TypeIndex, WasmHeapType, WasmType, FUNCREF_MASK};
 
 mod context;
 pub(crate) use context::*;
 mod env;
 pub use env::*;
-pub mod call;
+mod call;
+pub(crate) use call::*;
 mod control;
 pub(crate) use control::*;
+mod builtin;
+pub use builtin::*;
 
 /// The code generation abstraction.
-pub(crate) struct CodeGen<'a, M>
+pub(crate) struct CodeGen<'a, 'translation: 'a, 'data: 'translation, M>
 where
     M: MacroAssembler,
 {
@@ -27,10 +29,10 @@ where
     sig: ABISig,
 
     /// The code generation context.
-    pub context: CodeGenContext<'a>,
+    pub context: CodeGenContext<'a, 'translation>,
 
     /// A reference to the function compilation environment.
-    pub env: FuncEnv<'a, M::Ptr>,
+    pub env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
 
     /// The MacroAssembler.
     pub masm: &'a mut M,
@@ -41,14 +43,14 @@ where
     pub control_frames: SmallVec<[ControlStackFrame; 64]>,
 }
 
-impl<'a, M> CodeGen<'a, M>
+impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
 where
     M: MacroAssembler,
 {
     pub fn new(
         masm: &'a mut M,
-        context: CodeGenContext<'a>,
-        env: FuncEnv<'a, M::Ptr>,
+        context: CodeGenContext<'a, 'translation>,
+        env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
         sig: ABISig,
     ) -> Self {
         Self {
@@ -101,8 +103,8 @@ where
         match frame {
             ControlStackFrame::If {
                 reachable,
-                original_sp_offset,
                 original_stack_len,
+                original_sp_offset,
                 ..
             } => {
                 if *reachable {
@@ -131,9 +133,9 @@ where
         if frame.is_next_sequence_reachable() {
             self.context.reachable = true;
 
-            let (value_stack_len, sp_offset) = frame.original_stack_len_and_sp_offset();
+            let (value_stack_len, target_sp) = frame.original_stack_len_and_sp_offset();
             // Reset the stack to the original length and offset.
-            Self::reset_stack(&mut self.context, self.masm, value_stack_len, sp_offset);
+            Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
             // If the current frame is the outermost frame, which corresponds to the
             // current function's body, only bind the exit label as we don't need to
             // push any more values to the value stack, else perform the entire `bind_end`
@@ -143,15 +145,42 @@ where
             } else {
                 frame.bind_end(self.masm, &mut self.context);
             }
+        } else if is_outermost {
+            // If we reach the end of the function in an unreachable
+            // state, perform the necessary cleanup to leave the stack
+            // and SP in the expected state.  The compiler can enter
+            // in this state through an infinite loop.
+            let (value_stack_len, target_sp) = frame.original_stack_len_and_sp_offset();
+            Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
         }
     }
 
     /// Helper function to reset value and stack pointer to the given length and stack pointer
     /// offset respectively. This function is only used when restoring the code generation's
     /// reachabiliy state when handling an unreachable `end` or `else`.
-    fn reset_stack(context: &mut CodeGenContext, masm: &mut M, stack_len: usize, sp_offset: u32) {
-        masm.reset_stack_pointer(sp_offset);
-        context.drop_last(context.stack.len() - stack_len);
+    pub fn reset_stack(
+        context: &mut CodeGenContext,
+        masm: &mut M,
+        target_stack_len: usize,
+        target_sp: u32,
+    ) {
+        // `CodeGenContext::reset_stack` only gets called when
+        // handling unreachable end or unreachable else, so we only
+        // care about freeing any registers in the provided range.
+        let mut bytes_freed = 0;
+        context.drop_last(
+            context.stack.len() - target_stack_len,
+            |regalloc, val| match val {
+                Val::Reg(tr) => regalloc.free(tr.reg),
+                Val::Memory(m) => bytes_freed += m.slot.size,
+                _ => {}
+            },
+        );
+        if masm.sp_offset() > target_sp {
+            let bytes = masm.sp_offset() - target_sp;
+            assert!(bytes_freed == bytes);
+            masm.free_stack(bytes);
+        }
     }
 
     fn emit_body(
@@ -161,8 +190,7 @@ where
     ) -> Result<()> {
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
-        self.masm
-            .zero_mem_range(defined_locals_range.as_range(), &mut self.context.regalloc);
+        self.masm.zero_mem_range(defined_locals_range.as_range());
 
         // Save the vmctx pointer to its local slot in case we need to reload it
         // at any point.
@@ -217,7 +245,7 @@ where
             fn is_reachable(&self) -> bool;
         }
 
-        impl<'a, M: MacroAssembler> ReachableState for CodeGen<'a, M> {
+        impl<'a, 'b, 'c, M: MacroAssembler> ReachableState for CodeGen<'a, 'b, 'c, M> {
             fn is_reachable(&self) -> bool {
                 self.context.reachable
             }
@@ -235,51 +263,48 @@ where
         }
     }
 
-    /// Emit a direct function call.
-    pub fn emit_call(&mut self, index: FuncIndex) {
-        let callee = self.env.callee_from_index(index);
-        let (sig, callee_addr): (ABISig, Option<<M as MacroAssembler>::Address>) = if callee.import
-        {
-            let mut params = vec![WasmType::I64, WasmType::I64];
-            params.extend_from_slice(callee.ty.params());
-            let sig = WasmFuncType::new(params.into(), callee.ty.returns().into());
+    /// Emits a a series of instructions that will type check a function reference call.
+    pub fn emit_typecheck_funcref(&mut self, funcref_ptr: Reg, type_index: TypeIndex) {
+        let ptr_size: OperandSize = self.env.ptr_type().into();
+        let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_signature_index();
+        let sig_size = OperandSize::from_bytes(sig_index_bytes);
+        let sig_index = self.env.translation.module.types[type_index].unwrap_function();
+        let sig_offset = sig_index
+            .as_u32()
+            .checked_mul(sig_index_bytes.into())
+            .unwrap();
+        let signatures_base_offset = self.env.vmoffsets.vmctx_signature_ids_array();
+        let scratch = <M::ABI as ABI>::scratch_reg();
+        let funcref_sig_offset = self.env.vmoffsets.ptr.vm_func_ref_type_index();
 
-            let caller_vmctx = <M::ABI as ABI>::vmctx_reg();
-            let callee_vmctx = self.context.any_gpr(self.masm);
-            let callee_vmctx_offset = self.env.vmoffsets.vmctx_vmfunction_import_vmctx(index);
-            let callee_vmctx_addr = self.masm.address_at_reg(caller_vmctx, callee_vmctx_offset);
-            // FIXME Remove harcoded operand size, this will be needed
-            // once 32-bit architectures are supported.
+        // Load the signatures address into the scratch register.
+        self.masm.load(
+            self.masm.address_at_vmctx(signatures_base_offset),
+            scratch,
+            ptr_size,
+        );
+
+        // Get the caller id.
+        let caller_id = self.context.any_gpr(self.masm);
+        self.masm.load(
+            self.masm.address_at_reg(scratch, sig_offset),
+            caller_id,
+            sig_size,
+        );
+
+        let callee_id = self.context.any_gpr(self.masm);
+        self.masm.load(
             self.masm
-                .load(callee_vmctx_addr, callee_vmctx, OperandSize::S64);
+                .address_at_reg(funcref_ptr, funcref_sig_offset.into()),
+            callee_id,
+            sig_size,
+        );
 
-            let callee_body_offset = self.env.vmoffsets.vmctx_vmfunction_import_wasm_call(index);
-            let callee_addr = self.masm.address_at_reg(caller_vmctx, callee_body_offset);
-
-            // Put the callee / caller vmctx at the start of the
-            // range of the stack so that they are used as first
-            // and second arguments.
-            let stack = &mut self.context.stack;
-            let location = stack.len() - (sig.params().len() - 2);
-            stack.insert(location as usize, Val::reg(caller_vmctx));
-            stack.insert(location as usize, Val::reg(callee_vmctx));
-            (
-                <M::ABI as ABI>::sig(&sig, &CallingConvention::Default),
-                Some(callee_addr),
-            )
-        } else {
-            (
-                <M::ABI as ABI>::sig(&callee.ty, &CallingConvention::Default),
-                None,
-            )
-        };
-
-        let fncall = FnCall::new::<M>(&sig, &mut self.context, self.masm);
-        if let Some(addr) = callee_addr {
-            fncall.indirect::<M>(self.masm, &mut self.context, addr);
-        } else {
-            fncall.direct::<M>(self.masm, &mut self.context, index);
-        }
+        // Typecheck.
+        self.masm.cmp(callee_id.into(), caller_id, OperandSize::S32);
+        self.masm.trapif(IntCmpKind::Ne, TrapCode::BadSignature);
+        self.context.free_reg(callee_id);
+        self.context.free_reg(caller_id);
     }
 
     /// Emit the usual function end instruction sequence.
@@ -289,20 +314,8 @@ where
         Ok(())
     }
 
-    /// Returns the control stack frame at the given depth.
-    ///
-    /// # Panics
-    /// This function panics if the given depth cannot be associated
-    /// with a control stack frame.
-    pub fn control_at(frames: &mut [ControlStackFrame], depth: u32) -> &mut ControlStackFrame {
-        let index = (frames.len() - 1)
-            .checked_sub(depth as usize)
-            .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth));
-
-        &mut frames[index]
-    }
-
     fn spill_register_arguments(&mut self) {
+        use WasmType::*;
         self.sig
             .params
             .iter()
@@ -321,10 +334,103 @@ where
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    WasmType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
-                    WasmType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
-                    _ => panic!("Unsupported type {:?}", ty),
+                    I32 | I64 | F32 | F64 => self.masm.store(src.into(), addr, ty.into()),
+                    Ref(rt) => match rt.heap_type {
+                        WasmHeapType::Func => self.masm.store_ptr(src.into(), addr),
+                        ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                    },
+                    _ => unimplemented!("Support for WasmType {ty}"),
                 }
             });
     }
+
+    /// Pops the value at the stack top and assigns it to the local at
+    ///
+    /// the given index, returning the typed register holding the
+    /// source value.
+    pub fn emit_set_local(&mut self, addr: M::Address, size: OperandSize) -> TypedReg {
+        let src = self.context.pop_to_reg(self.masm, None);
+        self.masm.store(RegImm::reg(src.reg), addr, size);
+
+        src
+    }
+
+    pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) {
+        let table_data = self.env.resolve_table_data(table_index);
+        let ptr_type = self.env.ptr_type();
+        let builtin = self
+            .context
+            .builtins
+            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
+
+        // Request the builtin's  result register and use it to hold the
+        // table element value. We preemptively request this register to
+        // avoid conflict at the control flow merge below.
+        // Requesting the result register is safe since we know ahead-of-time
+        // the builtin's signature.
+        let elem_value: Reg = self
+            .context
+            .reg(builtin.sig().result.result_reg().unwrap(), self.masm)
+            .into();
+
+        let index = self.context.pop_to_reg(self.masm, None);
+        let base = self.context.any_gpr(self.masm);
+
+        let elem_addr =
+            self.masm
+                .table_elem_address(index.into(), base, &table_data, &mut self.context);
+        self.masm.load_ptr(elem_addr, elem_value);
+        // Free the register used as base, once we have loaded the element
+        // address into the element value register.
+        self.context.free_reg(base);
+
+        let (defined, cont) = (self.masm.get_label(), self.masm.get_label());
+
+        // Push the built-in arguments to the stack.
+        self.context.stack.extend([
+            TypedReg::new(ptr_type, <M::ABI as ABI>::vmctx_reg()).into(),
+            table_index.as_u32().try_into().unwrap(),
+            index.into(),
+        ]);
+
+        self.masm.branch(
+            IntCmpKind::Ne,
+            elem_value.into(),
+            elem_value,
+            defined,
+            ptr_type.into(),
+        );
+        // Free the element value register.
+        // This is safe since the FnCall::emit call below, will ensure
+        // that the result register is placed on the value stack.
+        self.context.free_reg(elem_value);
+        FnCall::emit::<M, M::Ptr, _>(self.masm, &mut self.context, |_| {
+            Callee::Builtin(builtin.clone())
+        });
+
+        // We know the signature of the libcall in this case, so we assert that there's
+        // one element in the stack and that it's  the ABI signature's result register.
+        let top = self.context.stack.peek().unwrap();
+        let top = top.get_reg();
+        debug_assert!(top.reg == elem_value);
+        self.masm.jmp(cont);
+
+        // In the defined case, mask the funcref address in place, by peeking into the
+        // last element of the value stack, which was pushed by the `indirect` function
+        // call above.
+        self.masm.bind(defined);
+        let imm = RegImm::i64(FUNCREF_MASK as i64);
+        let dst = top.into();
+        self.masm.and(dst, dst, imm, top.ty.into());
+
+        self.masm.bind(cont);
+    }
+}
+
+/// Returns the index of the [`ControlStackFrame`] for the given
+/// depth.
+pub fn control_index(depth: u32, control_length: usize) -> usize {
+    (control_length - 1)
+        .checked_sub(depth as usize)
+        .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth))
 }

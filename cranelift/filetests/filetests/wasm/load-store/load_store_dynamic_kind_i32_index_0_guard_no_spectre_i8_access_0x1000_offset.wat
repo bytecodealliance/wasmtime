@@ -47,13 +47,15 @@
 ;;                                 block0(v0: i32, v1: i32, v2: i64):
 ;; @0040                               v3 = uextend.i64 v0
 ;; @0040                               v4 = global_value.i64 gv1
-;; @0040                               v5 = iadd_imm v4, -4097
-;; @0040                               v6 = icmp ugt v3, v5
-;; @0040                               trapnz v6, heap_oob
-;; @0040                               v7 = global_value.i64 gv2
-;; @0040                               v8 = iadd v7, v3
-;; @0040                               v9 = iadd_imm v8, 4096
-;; @0040                               istore8 little heap v1, v9
+;; @0040                               v5 = iconst.i64 4097
+;; @0040                               v6 = isub v4, v5  ; v5 = 4097
+;; @0040                               v7 = icmp ugt v3, v6
+;; @0040                               trapnz v7, heap_oob
+;; @0040                               v8 = global_value.i64 gv2
+;; @0040                               v9 = iadd v8, v3
+;; @0040                               v10 = iconst.i64 4096
+;; @0040                               v11 = iadd v9, v10  ; v10 = 4096
+;; @0040                               istore8 little heap v1, v11
 ;; @0044                               jump block1
 ;;
 ;;                                 block1:
@@ -68,14 +70,16 @@
 ;;                                 block0(v0: i32, v1: i64):
 ;; @0049                               v3 = uextend.i64 v0
 ;; @0049                               v4 = global_value.i64 gv1
-;; @0049                               v5 = iadd_imm v4, -4097
-;; @0049                               v6 = icmp ugt v3, v5
-;; @0049                               trapnz v6, heap_oob
-;; @0049                               v7 = global_value.i64 gv2
-;; @0049                               v8 = iadd v7, v3
-;; @0049                               v9 = iadd_imm v8, 4096
-;; @0049                               v10 = uload8.i32 little heap v9
-;; @004d                               jump block1(v10)
+;; @0049                               v5 = iconst.i64 4097
+;; @0049                               v6 = isub v4, v5  ; v5 = 4097
+;; @0049                               v7 = icmp ugt v3, v6
+;; @0049                               trapnz v7, heap_oob
+;; @0049                               v8 = global_value.i64 gv2
+;; @0049                               v9 = iadd v8, v3
+;; @0049                               v10 = iconst.i64 4096
+;; @0049                               v11 = iadd v9, v10  ; v10 = 4096
+;; @0049                               v12 = uload8.i32 little heap v11
+;; @004d                               jump block1(v12)
 ;;
 ;;                                 block1(v2: i32):
 ;; @004d                               return v2

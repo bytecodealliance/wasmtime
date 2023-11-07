@@ -2,6 +2,7 @@
 test run
 target aarch64
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 ; x86_64 and s390x do not currently support 64-bit vectors, or
 ; `avg_round` on `i64x2` values.
 ; x86_64 also does not currently support `avg_round.i32x4`.

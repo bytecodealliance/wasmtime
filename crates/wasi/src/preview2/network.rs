@@ -1,32 +1,57 @@
-use crate::preview2::{Table, TableError};
+use crate::preview2::bindings::sockets::network::{Ipv4Address, Ipv6Address};
+use crate::preview2::bindings::wasi::sockets::network::ErrorCode;
+use crate::preview2::{TableError, TrappableError};
 use cap_std::net::Pool;
 
-pub(crate) struct HostNetwork(pub(crate) Pool);
+pub struct Network {
+    pub pool: Pool,
+    pub allow_ip_name_lookup: bool,
+}
 
-impl HostNetwork {
-    pub fn new(pool: Pool) -> Self {
-        Self(pool)
+pub type SocketResult<T> = Result<T, SocketError>;
+
+pub type SocketError = TrappableError<ErrorCode>;
+
+impl From<TableError> for SocketError {
+    fn from(error: TableError) -> Self {
+        Self::trap(error)
     }
 }
 
-pub(crate) trait TableNetworkExt {
-    fn push_network(&mut self, network: HostNetwork) -> Result<u32, TableError>;
-    fn delete_network(&mut self, fd: u32) -> Result<HostNetwork, TableError>;
-    fn is_network(&self, fd: u32) -> bool;
-    fn get_network(&self, fd: u32) -> Result<&HostNetwork, TableError>;
+impl From<std::io::Error> for SocketError {
+    fn from(error: std::io::Error) -> Self {
+        ErrorCode::from(error).into()
+    }
 }
 
-impl TableNetworkExt for Table {
-    fn push_network(&mut self, network: HostNetwork) -> Result<u32, TableError> {
-        self.push(Box::new(network))
+impl From<rustix::io::Errno> for SocketError {
+    fn from(error: rustix::io::Errno) -> Self {
+        ErrorCode::from(error).into()
     }
-    fn delete_network(&mut self, fd: u32) -> Result<HostNetwork, TableError> {
-        self.delete(fd)
-    }
-    fn is_network(&self, fd: u32) -> bool {
-        self.is::<HostNetwork>(fd)
-    }
-    fn get_network(&self, fd: u32) -> Result<&HostNetwork, TableError> {
-        self.get(fd)
-    }
+}
+
+#[derive(Copy, Clone)]
+pub enum SocketAddressFamily {
+    Ipv4,
+    Ipv6 { v6only: bool },
+}
+
+pub(crate) fn to_ipv4_addr(addr: Ipv4Address) -> std::net::Ipv4Addr {
+    let (x0, x1, x2, x3) = addr;
+    std::net::Ipv4Addr::new(x0, x1, x2, x3)
+}
+
+pub(crate) fn from_ipv4_addr(addr: std::net::Ipv4Addr) -> Ipv4Address {
+    let [x0, x1, x2, x3] = addr.octets();
+    (x0, x1, x2, x3)
+}
+
+pub(crate) fn to_ipv6_addr(addr: Ipv6Address) -> std::net::Ipv6Addr {
+    let (x0, x1, x2, x3, x4, x5, x6, x7) = addr;
+    std::net::Ipv6Addr::new(x0, x1, x2, x3, x4, x5, x6, x7)
+}
+
+pub(crate) fn from_ipv6_addr(addr: std::net::Ipv6Addr) -> Ipv6Address {
+    let [x0, x1, x2, x3, x4, x5, x6, x7] = addr.segments();
+    (x0, x1, x2, x3, x4, x5, x6, x7)
 }

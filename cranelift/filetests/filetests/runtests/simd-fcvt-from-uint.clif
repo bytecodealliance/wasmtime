@@ -1,0 +1,19 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %fcvt_from_uint(i32x4) -> f32x4 {
+block0(v0: i32x4):
+    v1 = fcvt_from_uint.f32x4 v0
+    return v1
+}
+; run: %fcvt_from_uint([0 0 0 0]) == [0x0.0 0x0.0 0x0.0 0x0.0]
+; run: %fcvt_from_uint([0xFFFFFFFF 0 1 123456789]) == [0x100000000.0 0.0 0x1.0 0x75bcd18.0]
+; Note that 0xFFFFFFFF is decimal 4,294,967,295 and is rounded up 1 to 4,294,967,296 in f32x4.

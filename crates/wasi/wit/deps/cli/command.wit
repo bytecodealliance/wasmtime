@@ -1,33 +1,7 @@
-package wasi:cli
+package wasi:cli@0.2.0-rc-2023-11-05;
 
 world command {
-  import wasi:clocks/wall-clock
-  import wasi:clocks/monotonic-clock
-  import wasi:clocks/timezone
-  import wasi:filesystem/types
-  import wasi:filesystem/preopens
-  import wasi:sockets/instance-network
-  import wasi:sockets/ip-name-lookup
-  import wasi:sockets/network
-  import wasi:sockets/tcp-create-socket
-  import wasi:sockets/tcp
-  import wasi:sockets/udp-create-socket
-  import wasi:sockets/udp
-  import wasi:random/random
-  import wasi:random/insecure
-  import wasi:random/insecure-seed
-  import wasi:poll/poll
-  import wasi:io/streams
+  include reactor;
 
-  import environment
-  import exit
-  import stdin
-  import stdout
-  import stderr
-  import terminal-input
-  import terminal-output
-  import terminal-stdin
-  import terminal-stdout
-  import terminal-stderr
-  export run
+  export run;
 }

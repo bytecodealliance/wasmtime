@@ -1,7 +1,7 @@
 use crate::{mach_reloc_to_reloc, mach_trap_to_trap, Relocation};
 use cranelift_codegen::{
-    ir, ir::UserExternalNameRef, isa::unwind::UnwindInfo, Final, MachBufferFinalized, MachSrcLoc,
-    ValueLabelsRanges,
+    ir, ir::UserExternalNameRef, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo, Final,
+    MachBufferFinalized, MachSrcLoc, ValueLabelsRanges,
 };
 use wasmtime_environ::{FilePos, InstructionAddressMap, TrapInformation};
 
@@ -46,6 +46,8 @@ pub struct CompiledFunctionMetadata {
     pub address_map: FunctionAddressMap,
     /// The unwind information.
     pub unwind_info: Option<UnwindInfo>,
+    /// CFA-based unwind information for DWARF debugging support.
+    pub cfa_unwind_info: Option<CfaUnwindInfo>,
     /// Mapping of value labels and their locations.
     pub value_labels_ranges: ValueLabelsRanges,
     /// Allocated stack slots.
@@ -152,6 +154,11 @@ where
     /// Set the unwind info in the function's metadata.
     pub fn set_unwind_info(&mut self, unwind: UnwindInfo) {
         self.metadata.unwind_info = Some(unwind);
+    }
+
+    /// Set the CFA-based unwind info in the function's metadata.
+    pub fn set_cfa_unwind_info(&mut self, unwind: CfaUnwindInfo) {
+        self.metadata.cfa_unwind_info = Some(unwind);
     }
 
     /// Set the sized stack slots.

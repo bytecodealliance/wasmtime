@@ -36,14 +36,11 @@ use crate::{
 };
 use alloc::vec::Vec;
 use regalloc2::PReg;
-use smallvec::SmallVec;
 use std::boxed::Box;
 use std::convert::TryFrom;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
-type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
-type MachLabelSlice = [MachLabel];
 type VecArgPair = Vec<ArgPair>;
 
 pub struct SinkableLoad {
@@ -268,6 +265,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn use_bmi1(&mut self) -> bool {
         self.backend.x64_flags.use_bmi1()
+    }
+
+    #[inline]
+    fn use_bmi2(&mut self) -> bool {
+        self.backend.x64_flags.use_bmi2()
     }
 
     #[inline]
@@ -585,6 +587,20 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         Imm8Gpr::new(Imm8Reg::Imm8 { imm }).unwrap()
     }
 
+    fn gpr_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<Gpr> {
+        match val.clone().to_imm8_reg() {
+            Imm8Reg::Reg { reg } => Some(Gpr::new(reg).unwrap()),
+            Imm8Reg::Imm8 { .. } => None,
+        }
+    }
+
+    fn imm8_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<u8> {
+        match val.clone().to_imm8_reg() {
+            Imm8Reg::Imm8 { imm } => Some(imm),
+            Imm8Reg::Reg { .. } => None,
+        }
+    }
+
     #[inline]
     fn type_register_class(&mut self, ty: Type) -> Option<RegisterClass> {
         if is_int_or_ref_ty(ty) || ty == I128 {
@@ -605,11 +621,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             types::R32 => panic!("shouldn't have 32-bits refs on x64"),
             _ => None,
         }
-    }
-
-    #[inline]
-    fn intcc_without_eq(&mut self, x: &IntCC) -> IntCC {
-        x.without_equal()
     }
 
     #[inline]
@@ -735,43 +746,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         .expect("Failed to emit LibCall");
 
         output_reg.to_reg()
-    }
-
-    #[inline]
-    fn single_target(&mut self, targets: &MachLabelSlice) -> Option<MachLabel> {
-        if targets.len() == 1 {
-            Some(targets[0])
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn two_targets(&mut self, targets: &MachLabelSlice) -> Option<(MachLabel, MachLabel)> {
-        if targets.len() == 2 {
-            Some((targets[0], targets[1]))
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn jump_table_targets(
-        &mut self,
-        targets: &MachLabelSlice,
-    ) -> Option<(MachLabel, BoxVecMachLabel)> {
-        if targets.is_empty() {
-            return None;
-        }
-
-        let default_label = targets[0];
-        let jt_targets = Box::new(SmallVec::from(&targets[1..]));
-        Some((default_label, jt_targets))
-    }
-
-    #[inline]
-    fn jump_table_size(&mut self, targets: &BoxVecMachLabel) -> u32 {
-        targets.len() as u32
     }
 
     #[inline]

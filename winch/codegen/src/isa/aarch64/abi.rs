@@ -1,6 +1,7 @@
 use super::regs;
 use crate::abi::{ABIArg, ABIResult, ABISig, ABI};
 use crate::isa::{reg::Reg, CallingConvention};
+use crate::masm::OperandSize;
 use smallvec::SmallVec;
 use wasmtime_environ::{WasmFuncType, WasmType};
 
@@ -64,38 +65,50 @@ impl ABI for Aarch64ABI {
     }
 
     fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+        Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
+    }
+
+    fn sig_from(
+        params: &[WasmType],
+        returns: &[WasmType],
+        call_conv: &CallingConvention,
+    ) -> ABISig {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
 
-        if wasm_sig.returns().len() > 1 {
+        if returns.len() > 1 {
             panic!("multi-value not supported");
         }
 
         let mut stack_offset = 0;
         let mut index_env = RegIndexEnv::default();
 
-        let params: SmallVec<[ABIArg; 6]> = wasm_sig
-            .params()
+        let params: SmallVec<[ABIArg; 6]> = params
             .iter()
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env))
             .collect();
 
-        let result = Self::result(wasm_sig.returns(), call_conv);
+        let result = Self::result(returns, call_conv);
         ABISig::new(params, result, stack_offset)
     }
 
     fn result(returns: &[WasmType], _call_conv: &CallingConvention) -> ABIResult {
-        // NOTE temporarily defaulting to x0;
-        let reg = regs::xreg(0);
-
         // This invariant will be lifted once support for multi-value is added.
         assert!(returns.len() <= 1, "multi-value not supported");
 
         let ty = returns.get(0).copied();
-        ABIResult::reg(ty, reg)
+        ty.map(|ty| {
+            let reg = match ty {
+                WasmType::I32 | WasmType::I64 => regs::xreg(0),
+                WasmType::F32 | WasmType::F64 => regs::vreg(0),
+                t => panic!("Unsupported return type {:?}", t),
+            };
+            ABIResult::reg(ty, reg)
+        })
+        .unwrap_or_else(|| ABIResult::void())
     }
 
     fn scratch_reg() -> Reg {
-        todo!()
+        regs::scratch()
     }
 
     fn sp_reg() -> Reg {
@@ -110,8 +123,12 @@ impl ABI for Aarch64ABI {
         regs::xreg(9)
     }
 
-    fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> {
+    fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[(Reg, OperandSize); 18]> {
         regs::callee_saved()
+    }
+
+    fn stack_arg_slot_size_for_type(_ty: WasmType) -> u32 {
+        todo!()
     }
 }
 

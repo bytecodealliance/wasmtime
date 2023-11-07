@@ -328,79 +328,6 @@ impl fmt::Debug for Enum {
     }
 }
 
-/// Represents runtime union values
-#[derive(PartialEq, Eq, Clone)]
-pub struct Union {
-    ty: types::Union,
-    discriminant: u32,
-    value: Option<Box<Val>>,
-}
-
-impl Union {
-    /// Instantiate the specified type with the specified `discriminant` and `value`.
-    pub fn new(ty: &types::Union, discriminant: u32, value: Val) -> Result<Self> {
-        if let Some(case_ty) = ty.types().nth(usize::try_from(discriminant)?) {
-            case_ty
-                .check(&value)
-                .with_context(|| format!("type mismatch for case {discriminant} of union"))?;
-
-            Ok(Self {
-                ty: ty.clone(),
-                discriminant,
-                value: Some(Box::new(value)),
-            })
-        } else {
-            Err(anyhow!(
-                "discriminant {discriminant} out of range: [0,{})",
-                ty.types().len()
-            ))
-        }
-    }
-
-    /// Returns the type of this value.
-    pub fn ty(&self) -> &types::Union {
-        &self.ty
-    }
-
-    /// Returns name of the discriminant of this value within the union type.
-    pub fn discriminant(&self) -> u32 {
-        self.discriminant
-    }
-
-    /// Returns the payload value for this union.
-    pub fn payload(&self) -> &Val {
-        self.value.as_ref().unwrap()
-    }
-
-    fn as_generic<'a>(
-        &'a self,
-        types: &'a ComponentTypes,
-        ty: InterfaceType,
-    ) -> GenericVariant<'a> {
-        let ty = match ty {
-            InterfaceType::Union(i) => &types[i],
-            _ => bad_type_info(),
-        };
-        GenericVariant {
-            discriminant: self.discriminant,
-            abi: &ty.abi,
-            info: &ty.info,
-            payload: self
-                .value
-                .as_deref()
-                .zip(Some(ty.types[self.discriminant as usize])),
-        }
-    }
-}
-
-impl fmt::Debug for Union {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple(&format!("U{}", self.discriminant()))
-            .field(self.payload())
-            .finish()
-    }
-}
-
 /// Represents runtime option values
 #[derive(PartialEq, Eq, Clone)]
 pub struct OptionVal {
@@ -652,7 +579,6 @@ pub enum Val {
     Tuple(Tuple),
     Variant(Variant),
     Enum(Enum),
-    Union(Union),
     Option(OptionVal),
     Result(ResultVal),
     Flags(Flags),
@@ -681,7 +607,6 @@ impl Val {
             Val::Tuple(Tuple { ty, .. }) => Type::Tuple(ty.clone()),
             Val::Variant(Variant { ty, .. }) => Type::Variant(ty.clone()),
             Val::Enum(Enum { ty, .. }) => Type::Enum(ty.clone()),
-            Val::Union(Union { ty, .. }) => Type::Union(ty.clone()),
             Val::Option(OptionVal { ty, .. }) => Type::Option(ty.clone()),
             Val::Result(ResultVal { ty, .. }) => Type::Result(ty.clone()),
             Val::Flags(Flags { ty, .. }) => Type::Flags(ty.clone()),
@@ -767,20 +692,6 @@ impl Val {
                 Val::Enum(Enum {
                     ty: types::Enum::from(i, &cx.instance_type()),
                     discriminant,
-                })
-            }
-            InterfaceType::Union(i) => {
-                let (discriminant, value) = lift_variant(
-                    cx,
-                    cx.types.canonical_abi(&ty).flat_count(usize::MAX).unwrap(),
-                    cx.types[i].types.iter().copied().map(Some),
-                    src,
-                )?;
-
-                Val::Union(Union {
-                    ty: types::Union::from(i, &cx.instance_type()),
-                    discriminant,
-                    value,
                 })
             }
             InterfaceType::Option(i) => {
@@ -881,17 +792,6 @@ impl Val {
                 Val::Enum(Enum {
                     ty: types::Enum::from(i, &cx.instance_type()),
                     discriminant,
-                })
-            }
-            InterfaceType::Union(i) => {
-                let ty = &cx.types[i];
-                let (discriminant, value) =
-                    load_variant(cx, &ty.info, ty.types.iter().copied().map(Some), bytes)?;
-
-                Val::Union(Union {
-                    ty: types::Union::from(i, &cx.instance_type()),
-                    discriminant,
-                    value,
                 })
             }
             InterfaceType::Option(i) => {
@@ -997,7 +897,6 @@ impl Val {
                 }
             }
             Val::Variant(v) => v.as_generic(cx.types, ty).lower(cx, dst)?,
-            Val::Union(v) => v.as_generic(cx.types, ty).lower(cx, dst)?,
             Val::Option(v) => v.as_generic(cx.types, ty).lower(cx, dst)?,
             Val::Result(v) => v.as_generic(cx.types, ty).lower(cx, dst)?,
             Val::Enum(Enum { discriminant, .. }) => {
@@ -1080,7 +979,6 @@ impl Val {
 
             Val::Variant(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
             Val::Enum(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
-            Val::Union(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
             Val::Option(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
             Val::Result(v) => v.as_generic(cx.types, ty).store(cx, offset)?,
 
@@ -1165,8 +1063,6 @@ impl PartialEq for Val {
             (Self::Variant(_), _) => false,
             (Self::Enum(l), Self::Enum(r)) => l == r,
             (Self::Enum(_), _) => false,
-            (Self::Union(l), Self::Union(r)) => l == r,
-            (Self::Union(_), _) => false,
             (Self::Option(l), Self::Option(r)) => l == r,
             (Self::Option(_), _) => false,
             (Self::Result(l), Self::Result(r)) => l == r,

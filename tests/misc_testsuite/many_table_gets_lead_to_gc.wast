@@ -9,7 +9,7 @@
     (loop $continue
       ;; Exit when our loop counter `$i` reaches zero.
       (if (i32.eqz (local.get $i))
-        (return)
+        (then (return))
       )
 
       ;; Get an `externref` out of the table. This could cause the

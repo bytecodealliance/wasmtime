@@ -32,12 +32,21 @@ const names = fs.readFileSync(process.argv[3]).toString();
 //   on CI.
 // * `isa` - changes to `cranelift/codegen/src/$isa` will automatically run this
 //   test suite.
+// * `rust` - the Rust version to install, and if unset this'll be set to
+//   `default`
 const array = [
   {
     "os": "ubuntu-latest",
     "name": "Test Linux x86_64",
     "filter": "linux-x64",
     "isa": "x64"
+  },
+  {
+    "os": "ubuntu-latest",
+    "name": "Test MSRV on Linux x86_64",
+    "filter": "linux-x64",
+    "isa": "x64",
+    "rust": "msrv",
   },
   {
     "os": "macos-latest",
@@ -82,13 +91,19 @@ const array = [
     "target": "riscv64gc-unknown-linux-gnu",
     "gcc_package": "gcc-riscv64-linux-gnu",
     "gcc": "riscv64-linux-gnu-gcc",
-    "qemu": "qemu-riscv64 -cpu rv64,v=true,vlen=256,vext_spec=v1.0,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true -L /usr/riscv64-linux-gnu",
+    "qemu": "qemu-riscv64 -cpu rv64,v=true,vlen=256,vext_spec=v1.0,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true,zcb=true -L /usr/riscv64-linux-gnu",
     "qemu_target": "riscv64-linux-user",
     "name": "Test Linux riscv64",
     "filter": "linux-riscv64",
-    "isa": "riscv64"
+    "isa": "riscv64",
   }
 ];
+
+for (let config of array) {
+  if (config.rust === undefined) {
+    config.rust = 'default';
+  }
+}
 
 function myFilter(item) {
   if (item.isa && names.includes(`cranelift/codegen/src/isa/${item.isa}`)) {

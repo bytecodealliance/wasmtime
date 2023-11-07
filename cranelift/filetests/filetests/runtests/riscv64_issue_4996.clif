@@ -2,6 +2,7 @@ test interpret
 test run
 set enable_llvm_abi_extensions=true
 target riscv64
+target riscv64 has_c has_zcb
 
 ; This is a regression test for https://github.com/bytecodealliance/wasmtime/issues/4996.
 function %issue4996() -> i128, i64 system_v {

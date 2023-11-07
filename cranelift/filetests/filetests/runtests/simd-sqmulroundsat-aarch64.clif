@@ -4,6 +4,7 @@ target aarch64
 target s390x
 ;; x86_64 hasn't implemented this for `i32x4`
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function %sqmulrs_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):

@@ -104,7 +104,7 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
             match unsafe {
                 libc::syscall(
                     {
-                        // The syscall isn't defined in `libc`, so we definfe the syscall number here.
+                        // The syscall isn't defined in `libc`, so we define the syscall number here.
                         // https://github.com/torvalds/linux/search?q=__NR_arch_specific_syscall
                         #[allow(non_upper_case_globals)]
                         const  __NR_arch_specific_syscall :i64 = 244;

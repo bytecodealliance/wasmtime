@@ -11,7 +11,7 @@ use core::str::FromStr;
 
 use cranelift_entity::EntityRef as _;
 #[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
+use serde_derive::{Deserialize, Serialize};
 
 use super::entities::UserExternalNameRef;
 use super::function::FunctionParameters;

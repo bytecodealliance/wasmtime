@@ -4,6 +4,7 @@ target x86_64
 target x86_64 has_avx
 target s390x
 target riscv64
+target riscv64 has_c has_zcb
 
 
 function %fcmp_uno_f32(f32, f32) -> i8 {

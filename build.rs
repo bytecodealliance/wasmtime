@@ -36,7 +36,13 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/function-references", strategy)?;
-            test_directory_module(out, "tests/misc_testsuite/winch", strategy)?;
+            // The testsuite of Winch is a subset of the official
+            // WebAssembly test suite, until parity is reached. This
+            // check is in place to prevent Cranelift from duplicating
+            // tests.
+            if *strategy == "Winch" {
+                test_directory_module(out, "tests/misc_testsuite/winch", strategy)?;
+            }
             Ok(())
         })?;
 
@@ -199,13 +205,34 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     // We ignore tests that assert for traps on windows, given
     // that Winch doesn't encode unwind information for Windows, yet.
     if strategy == "Winch" {
-        if testsuite != "winch" {
+        let assert_trap = [
+            "i32",
+            "i64",
+            "call_indirect",
+            "table_fill",
+            "table_init",
+            "table_copy",
+            "table_set",
+            "table_get",
+        ]
+        .contains(&testname);
+
+        if assert_trap && env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() == "windows" {
             return true;
         }
 
-        let assert_trap = ["i32", "i64"].contains(&testname);
+        if testsuite == "misc_testsuite" {
+            // The misc/call_indirect is fully supported by Winch.
+            if testname != "call_indirect" {
+                return true;
+            }
+        }
+        if testsuite == "spec_testsuite" {
+            // The official table init and table copy tests are now supported.
+            return !["table_init", "table_copy"].contains(&testname);
+        }
 
-        if assert_trap && env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() == "windows" {
+        if testsuite != "winch" {
             return true;
         }
     }
@@ -236,33 +263,19 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
     match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
         "s390x" => {
-            // FIXME: These tests fail under qemu due to a qemu bug.
-            testname == "simd_f32x4_pmin_pmax" || testname == "simd_f64x2_pmin_pmax"
-                // TODO(#6530): These tests require tail calls, but s390x
-                // doesn't support them yet.
-                || testsuite == "function_references" || testsuite == "tail_call"
+            // TODO(#6530): These tests require tail calls, but s390x
+            // doesn't support them yet.
+            testsuite == "function_references" || testsuite == "tail_call"
         }
 
         "riscv64" => {
-            if testsuite.contains("relaxed_simd") {
-                return true;
-            }
-
-            let known_failure = [
-                "canonicalize_nan",
-                "cvt_from_uint",
-                "issue_3327_bnot_lowering",
-                "simd_conversions",
-                "simd_f32x4_rounding",
-                "simd_f64x2_rounding",
-                "simd_i32x4_trunc_sat_f32x4",
-                "simd_i32x4_trunc_sat_f64x2",
-                "simd_load",
-                "simd_splat",
-            ]
-            .contains(&testname);
-
-            known_failure
+            // This test case is disabled because it relies on `fvpromote_low`
+            // not flipping the sign bit of the input when it is a NaN. This
+            // is allowed by the spec. It's worth keeping the testcase as is
+            // since it is stressing a specific codegen bug in another arch.
+            //
+            // See #6961 for more details
+            testname == "issue_3327_bnot_lowering"
         }
 
         _ => false,

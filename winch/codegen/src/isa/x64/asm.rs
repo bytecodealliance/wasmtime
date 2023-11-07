@@ -2,28 +2,29 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{CalleeKind, CmpKind, DivKind, OperandSize, RemKind, ShiftKind},
+    masm::{DivKind, IntCmpKind, OperandSize, RemKind, RoundingMode, ShiftKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
-    ir::{ExternalName, Opcode, TrapCode, UserExternalNameRef},
+    ir::{types, ConstantPool, ExternalName, LibCall, Opcode, TrapCode, UserExternalNameRef},
     isa::{
         x64::{
             args::{
                 self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
                 Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
-                ShiftKind as CraneliftShiftKind, SyntheticAmode, WritableGpr, CC,
+                ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
+                WritableXmm, Xmm, XmmMem, XmmMemAligned, CC,
             },
             settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
         },
         CallConv,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    Writable,
+    VCodeConstantData, VCodeConstants, Writable,
 };
 
 use super::address::Address;
-use smallvec::smallvec;
+use smallvec::{smallvec, SmallVec};
 
 // Conversions between winch-codegen x64 types and cranelift-codegen x64 types.
 
@@ -43,6 +44,13 @@ impl From<Reg> for WritableGpr {
     fn from(reg: Reg) -> Self {
         let writable = Writable::from_reg(reg.into());
         WritableGpr::from_writable_reg(writable).expect("valid writable gpr")
+    }
+}
+
+impl From<Reg> for WritableXmm {
+    fn from(reg: Reg) -> Self {
+        let writable = Writable::from_reg(reg.into());
+        WritableXmm::from_writable_reg(writable).expect("valid writable xmm")
     }
 }
 
@@ -70,11 +78,18 @@ impl From<Reg> for Imm8Gpr {
     }
 }
 
+impl From<Reg> for Xmm {
+    fn from(reg: Reg) -> Self {
+        Xmm::new(reg.into()).expect("valid Xmm register")
+    }
+}
+
 impl From<OperandSize> for args::OperandSize {
     fn from(size: OperandSize) -> Self {
         match size {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
+            s => panic!("Invalid operand size {:?}", s),
         }
     }
 }
@@ -88,19 +103,19 @@ impl From<DivKind> for DivSignedness {
     }
 }
 
-impl From<CmpKind> for CC {
-    fn from(value: CmpKind) -> Self {
+impl From<IntCmpKind> for CC {
+    fn from(value: IntCmpKind) -> Self {
         match value {
-            CmpKind::Eq => CC::Z,
-            CmpKind::Ne => CC::NZ,
-            CmpKind::LtS => CC::L,
-            CmpKind::LtU => CC::B,
-            CmpKind::GtS => CC::NLE,
-            CmpKind::GtU => CC::NBE,
-            CmpKind::LeS => CC::LE,
-            CmpKind::LeU => CC::BE,
-            CmpKind::GeS => CC::NL,
-            CmpKind::GeU => CC::NB,
+            IntCmpKind::Eq => CC::Z,
+            IntCmpKind::Ne => CC::NZ,
+            IntCmpKind::LtS => CC::L,
+            IntCmpKind::LtU => CC::B,
+            IntCmpKind::GtS => CC::NLE,
+            IntCmpKind::GtU => CC::NBE,
+            IntCmpKind::LeS => CC::LE,
+            IntCmpKind::LeU => CC::BE,
+            IntCmpKind::GeS => CC::NL,
+            IntCmpKind::GeU => CC::NB,
         }
     }
 }
@@ -127,6 +142,10 @@ pub(crate) struct Assembler {
     emit_state: EmitState,
     /// x64 flags.
     isa_flags: x64_settings::Flags,
+    /// Constant pool.
+    pool: ConstantPool,
+    /// Constants that will be emitted separately by the MachBuffer.
+    constants: VCodeConstants,
 }
 
 impl Assembler {
@@ -136,6 +155,8 @@ impl Assembler {
             buffer: MachBuffer::<Inst>::new(),
             emit_state: Default::default(),
             emit_info: EmitInfo::new(shared_flags, isa_flags.clone()),
+            constants: Default::default(),
+            pool: ConstantPool::new(),
             isa_flags,
         }
     }
@@ -146,11 +167,17 @@ impl Assembler {
         &mut self.buffer
     }
 
+    /// Adds a constant to the constant pool and returns its address.
+    pub fn add_constant(&mut self, constant: &[u8]) -> Address {
+        let handle = self.pool.insert(constant.into());
+        Address::constant(handle)
+    }
+
     /// Return the emitted code.
     pub fn finalize(mut self) -> MachBufferFinalized<Final> {
         let stencil = self
             .buffer
-            .finish(&Default::default(), self.emit_state.ctrl_plane_mut());
+            .finish(&self.constants, self.emit_state.ctrl_plane_mut());
         stencil.apply_base_srcloc(Default::default())
     }
 
@@ -158,10 +185,32 @@ impl Assembler {
         inst.emit(&[], &mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
-    fn to_synthetic_amode(addr: &Address) -> SyntheticAmode {
+    fn to_synthetic_amode(
+        addr: &Address,
+        pool: &mut ConstantPool,
+        constants: &mut VCodeConstants,
+        buffer: &mut MachBuffer<Inst>,
+    ) -> SyntheticAmode {
         match addr {
             Address::Offset { base, offset } => {
                 SyntheticAmode::real(Amode::imm_reg(*offset as i32, (*base).into()))
+            }
+            Address::Const(c) => {
+                // Defer the creation of the
+                // `SyntheticAmode::ConstantOffset` addressing mode
+                // until the address is referenced by an actual
+                // instrunction.
+                let constant_data = pool.get(*c);
+                let data = VCodeConstantData::Pool(*c, constant_data.clone());
+                // If the constaant data is not marked as used, it will be
+                // inserted, therefore, it needs to be registered.
+                let needs_registration = !constants.pool_uses(&data);
+                let constant = constants.insert(VCodeConstantData::Pool(*c, constant_data.clone()));
+
+                if needs_registration {
+                    buffer.register_constant(&constant, &data);
+                }
+                SyntheticAmode::ConstantOffset(constant)
             }
         }
     }
@@ -181,7 +230,6 @@ impl Assembler {
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret {
-            rets: vec![],
             stack_bytes_to_pop: 0,
         });
     }
@@ -197,7 +245,9 @@ impl Assembler {
 
     /// Register-to-memory move.
     pub fn mov_rm(&mut self, src: Reg, addr: &Address, size: OperandSize) {
-        let dst = Self::to_synthetic_amode(addr);
+        assert!(addr.is_offset());
+        let dst =
+            Self::to_synthetic_amode(addr, &mut self.pool, &mut self.constants, &mut self.buffer);
         self.emit(Inst::MovRM {
             size: size.into(),
             src: src.into(),
@@ -206,11 +256,13 @@ impl Assembler {
     }
 
     /// Immediate-to-memory move.
-    pub fn mov_im(&mut self, src: u64, addr: &Address, size: OperandSize) {
-        let dst = Self::to_synthetic_amode(addr);
+    pub fn mov_im(&mut self, src: i32, addr: &Address, size: OperandSize) {
+        assert!(addr.is_offset());
+        let dst =
+            Self::to_synthetic_amode(addr, &mut self.pool, &mut self.constants, &mut self.buffer);
         self.emit(Inst::MovImmM {
             size: size.into(),
-            simm64: src,
+            simm32: src,
             dst,
         });
     }
@@ -231,7 +283,8 @@ impl Assembler {
     pub fn mov_mr(&mut self, addr: &Address, dst: Reg, size: OperandSize) {
         use OperandSize::S64;
 
-        let src = Self::to_synthetic_amode(addr);
+        let src =
+            Self::to_synthetic_amode(addr, &mut self.pool, &mut self.constants, &mut self.buffer);
 
         if size == S64 {
             self.emit(Inst::Mov64MR {
@@ -246,6 +299,94 @@ impl Assembler {
                 dst: dst.into(),
             });
         }
+    }
+
+    /// Integer register conditional move.
+    pub fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize) {
+        self.emit(Inst::Cmove {
+            size: size.into(),
+            cc: cc.into(),
+            consequent: src.into(),
+            alternative: dst.into(),
+            dst: dst.into(),
+        })
+    }
+
+    /// Single and double precision floating point
+    /// register-to-register move.
+    pub fn xmm_mov_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        use OperandSize::*;
+
+        let op = match size {
+            S32 => SseOpcode::Movaps,
+            S64 => SseOpcode::Movapd,
+            S128 => SseOpcode::Movdqa,
+        };
+
+        self.emit(Inst::XmmUnaryRmRUnaligned {
+            op,
+            src: XmmMem::new(src.into()).expect("valid xmm unaligned"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Single and double precision floating point load.
+    pub fn xmm_mov_mr(&mut self, src: &Address, dst: Reg, size: OperandSize) {
+        use OperandSize::*;
+
+        assert!(dst.is_float());
+        let op = match size {
+            S32 => SseOpcode::Movss,
+            S64 => SseOpcode::Movsd,
+            S128 => SseOpcode::Movdqu,
+        };
+
+        let src =
+            Self::to_synthetic_amode(src, &mut self.pool, &mut self.constants, &mut self.buffer);
+        self.emit(Inst::XmmUnaryRmRUnaligned {
+            op,
+            src: XmmMem::new(RegMem::mem(src)).expect("valid xmm unaligned"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Single and double precision floating point store.
+    pub fn xmm_mov_rm(&mut self, src: Reg, dst: &Address, size: OperandSize) {
+        use OperandSize::*;
+
+        assert!(src.is_float());
+
+        let op = match size {
+            S32 => SseOpcode::Movss,
+            S64 => SseOpcode::Movsd,
+            S128 => SseOpcode::Movdqu,
+        };
+
+        let dst =
+            Self::to_synthetic_amode(dst, &mut self.pool, &mut self.constants, &mut self.buffer);
+        self.emit(Inst::XmmMovRM {
+            op,
+            src: src.into(),
+            dst,
+        });
+    }
+
+    /// Floating point register conditional move.
+    pub fn xmm_cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize) {
+        let ty = match size {
+            OperandSize::S32 => types::F32,
+            OperandSize::S64 => types::F64,
+            // Move the entire 128 bits via movdqa.
+            OperandSize::S128 => types::I128,
+        };
+
+        self.emit(Inst::XmmCmove {
+            ty,
+            cc: cc.into(),
+            consequent: XmmMemAligned::new(src.into()).expect("valid XmmMemAligned"),
+            alternative: dst.into(),
+            dst: dst.into(),
+        })
     }
 
     /// Subtract register and register
@@ -285,7 +426,6 @@ impl Assembler {
 
     pub fn and_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
-
         self.emit(Inst::AluRmiR {
             size: size.into(),
             op: AluRmiROpcode::And,
@@ -293,6 +433,53 @@ impl Assembler {
             src2: GprMemImm::new(imm).expect("valid immediate"),
             dst: dst.into(),
         });
+    }
+
+    /// "and" two float registers.
+    pub fn xmm_and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Andps,
+            OperandSize::S64 => SseOpcode::Andpd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmR {
+            op,
+            src1: dst.into(),
+            src2: XmmMemAligned::from(Xmm::from(src)),
+            dst: dst.into(),
+        });
+    }
+
+    /// "and not" two float registers.
+    pub fn xmm_andn_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Andnps,
+            OperandSize::S64 => SseOpcode::Andnpd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmR {
+            op,
+            src1: dst.into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    pub fn gpr_to_xmm(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Movd,
+            OperandSize::S64 => SseOpcode::Movq,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::GprToXmm {
+            op,
+            src: src.into(),
+            dst: dst.into(),
+            src_size: size.into(),
+        })
     }
 
     pub fn or_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
@@ -317,6 +504,21 @@ impl Assembler {
         });
     }
 
+    pub fn xmm_or_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Orps,
+            OperandSize::S64 => SseOpcode::Orpd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmR {
+            op,
+            src1: dst.into(),
+            src2: XmmMemAligned::from(Xmm::from(src)),
+            dst: dst.into(),
+        });
+    }
+
     /// Logical exclusive or with registers.
     pub fn xor_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         self.emit(Inst::AluRmiR {
@@ -336,6 +538,22 @@ impl Assembler {
             op: AluRmiROpcode::Xor,
             src1: dst.into(),
             src2: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Logical exclusive or with float registers.
+    pub fn xmm_xor_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Xorps,
+            OperandSize::S64 => SseOpcode::Xorpd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmR {
+            op,
+            src1: dst.into(),
+            src2: XmmMemAligned::from(Xmm::from(src)),
             dst: dst.into(),
         });
     }
@@ -544,8 +762,27 @@ impl Assembler {
         });
     }
 
+    /// Compares values in src and dst and sets ZF, PF, and CF flags in EFLAGS
+    /// register.
+    pub fn ucomis(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Ucomiss,
+            OperandSize::S64 => SseOpcode::Ucomisd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmCmpRmR {
+            op,
+            src: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
     pub fn popcnt(&mut self, src: Reg, size: OperandSize) {
-        assert!(self.isa_flags.has_popcnt(), "Requires has_popcnt flag");
+        assert!(
+            self.isa_flags.has_popcnt() && self.isa_flags.has_sse42(),
+            "Requires has_popcnt and has_sse42 flags"
+        );
         self.emit(Inst::UnaryRmR {
             size: size.into(),
             op: args::UnaryRmROpcode::Popcnt,
@@ -566,7 +803,23 @@ impl Assembler {
 
     /// Set value in dst to `0` or `1` based on flags in status register and
     /// [`CmpKind`].
-    pub fn setcc(&mut self, kind: CmpKind, dst: Reg) {
+    pub fn setcc(&mut self, kind: IntCmpKind, dst: Reg) {
+        self.setcc_impl(kind.into(), dst);
+    }
+
+    /// Set value in dst to `1` if parity flag in status register is set, `0`
+    /// otherwise.
+    pub fn setp(&mut self, dst: Reg) {
+        self.setcc_impl(CC::P, dst);
+    }
+
+    /// Set value in dst to `1` if parity flag in status register is not set,
+    /// `0` otherwise.
+    pub fn setnp(&mut self, dst: Reg) {
+        self.setcc_impl(CC::NP, dst);
+    }
+
+    fn setcc_impl(&mut self, cc: CC, dst: Reg) {
         // Clear the dst register or bits 1 to 31 may be incorrectly set.
         // Don't use xor since it updates the status register.
         self.emit(Inst::Imm {
@@ -576,7 +829,7 @@ impl Assembler {
         });
         // Copy correct bit from status register into dst register.
         self.emit(Inst::Setcc {
-            cc: kind.into(),
+            cc,
             dst: dst.into(),
         });
     }
@@ -636,41 +889,175 @@ impl Assembler {
         });
     }
 
-    /// Emit a function call to a known or unknown location.
-    ///
-    /// A known location is a locally defined function index.
-    /// An unknown location is an address whose value is located
-    /// ina register.
-    pub fn call(&mut self, callee: CalleeKind) {
-        match callee {
-            CalleeKind::Indirect(reg) => {
-                self.emit(Inst::CallUnknown {
-                    dest: RegMem::reg(reg.into()),
-                    info: Box::new(CallInfo {
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        clobbers: Default::default(),
-                        opcode: Opcode::Call,
-                        callee_pop_size: 0,
-                        callee_conv: CallConv::SystemV,
-                    }),
-                });
-            }
-            CalleeKind::Direct(index) => {
-                let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
-                self.emit(Inst::CallKnown {
-                    dest,
-                    info: Box::new(CallInfo {
-                        uses: smallvec![],
-                        defs: smallvec![],
-                        clobbers: Default::default(),
-                        opcode: Opcode::Call,
-                        callee_pop_size: 0,
-                        callee_conv: CallConv::SystemV,
-                    }),
-                });
-            }
-        }
+    /// Performs float addition on src and dst and places result in dst.
+    pub fn xmm_add_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Addss,
+            OperandSize::S64 => SseOpcode::Addsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmRUnaligned {
+            op,
+            src1: Xmm::from(dst).into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs float subtraction on src and dst and places result in dst.
+    pub fn xmm_sub_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Subss,
+            OperandSize::S64 => SseOpcode::Subsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmRUnaligned {
+            op,
+            src1: Xmm::from(dst).into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs float multiplication on src and dst and places result in dst.
+    pub fn xmm_mul_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Mulss,
+            OperandSize::S64 => SseOpcode::Mulsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmRUnaligned {
+            op,
+            src1: Xmm::from(dst).into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs float division on src and dst and places result in dst.
+    pub fn xmm_div_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Divss,
+            OperandSize::S64 => SseOpcode::Divsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmRmRUnaligned {
+            op,
+            src1: Xmm::from(dst).into(),
+            src2: Xmm::from(src).into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Mininum for src and dst XMM registers with results put in dst.
+    pub fn xmm_min_seq(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::XmmMinMaxSeq {
+            size: size.into(),
+            is_min: true,
+            lhs: src.into(),
+            rhs: dst.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Maximum for src and dst XMM registers with results put in dst.
+    pub fn xmm_max_seq(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::XmmMinMaxSeq {
+            size: size.into(),
+            is_min: false,
+            lhs: src.into(),
+            rhs: dst.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Perform rounding operation on float register src and place results in
+    /// float register dst.
+    pub fn xmm_rounds_rr(&mut self, src: Reg, dst: Reg, mode: RoundingMode, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Roundss,
+            OperandSize::S64 => SseOpcode::Roundsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        let imm: u8 = match mode {
+            RoundingMode::Nearest => 0x00,
+            RoundingMode::Down => 0x01,
+            RoundingMode::Up => 0x02,
+            RoundingMode::Zero => 0x03,
+        };
+
+        self.emit(Inst::XmmUnaryRmRImm {
+            op,
+            src: XmmMemAligned::from(Xmm::from(src)),
+            imm,
+            dst: dst.into(),
+        })
+    }
+
+    pub fn sqrt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => SseOpcode::Sqrtss,
+            OperandSize::S64 => SseOpcode::Sqrtsd,
+            OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmR {
+            op,
+            src: Xmm::from(src).into(),
+            dst: dst.into(),
+        })
+    }
+
+    /// Emit a call to an unknown location through a register.
+    pub fn call_with_reg(&mut self, callee: Reg) {
+        self.emit(Inst::CallUnknown {
+            dest: RegMem::reg(callee.into()),
+            info: Box::new(CallInfo {
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: Default::default(),
+                opcode: Opcode::Call,
+                callee_pop_size: 0,
+                callee_conv: CallConv::SystemV,
+            }),
+        });
+    }
+
+    /// Emit a call to a locally defined function through an index.
+    pub fn call_with_index(&mut self, index: u32) {
+        let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
+        self.emit(Inst::CallKnown {
+            dest,
+            info: Box::new(CallInfo {
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: Default::default(),
+                opcode: Opcode::Call,
+                callee_pop_size: 0,
+                callee_conv: CallConv::SystemV,
+            }),
+        });
+    }
+
+    /// Emit a call to a well-known libcall.
+    pub fn call_with_lib(&mut self, lib: LibCall) {
+        let dest = ExternalName::LibCall(lib);
+        self.emit(Inst::CallKnown {
+            dest,
+            info: Box::new(CallInfo {
+                uses: smallvec![],
+                defs: smallvec![],
+                clobbers: Default::default(),
+                opcode: Opcode::Call,
+                callee_pop_size: 0,
+                callee_conv: CallConv::SystemV,
+            }),
+        });
     }
 
     /// Emits a conditional jump to the given label.
@@ -686,8 +1073,34 @@ impl Assembler {
         self.emit(Inst::JmpKnown { dst: target });
     }
 
+    /// Emits a jump table sequence.
+    pub fn jmp_table(
+        &mut self,
+        targets: SmallVec<[MachLabel; 4]>,
+        default: MachLabel,
+        index: Reg,
+        tmp1: Reg,
+        tmp2: Reg,
+    ) {
+        self.emit(Inst::JmpTableSeq {
+            idx: index.into(),
+            tmp1: Writable::from_reg(tmp1.into()),
+            tmp2: Writable::from_reg(tmp2.into()),
+            default_target: default,
+            targets: Box::new(targets.to_vec()),
+        })
+    }
+
     /// Emit a trap instruction.
     pub fn trap(&mut self, code: TrapCode) {
         self.emit(Inst::Ud2 { trap_code: code })
+    }
+
+    /// Conditional trap.
+    pub fn trapif(&mut self, cc: IntCmpKind, trap_code: TrapCode) {
+        self.emit(Inst::TrapIf {
+            cc: cc.into(),
+            trap_code,
+        });
     }
 }

@@ -10,8 +10,8 @@ use super::{
     fp_reg, lower_condcode, lower_fp_condcode, stack_reg, writable_link_reg, writable_zero_reg,
     zero_reg, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallIndInfo, CallInfo, Cond, CondBrKind,
     ExtendOp, FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC,
-    JTSequenceInfo, MachLabel, MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg,
-    SImm9, ScalarSize, ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
+    MachLabel, MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg, SImm9, ScalarSize,
+    ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
 };
 use crate::ir::condcodes;
 use crate::isa;
@@ -43,7 +43,6 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type VecMachLabel = Vec<MachLabel>;
-type BoxJTSequenceInfo = Box<JTSequenceInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecArgPair = Vec<ArgPair>;
 
@@ -267,6 +266,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         extend: &generated_code::ImmExtend,
         value: u64,
     ) -> Reg {
+        let pcc = self.backend.flags.enable_pcc();
         let bits = ty.bits();
         let value = if bits < 64 {
             if *extend == generated_code::ImmExtend::Sign {
@@ -296,6 +296,14 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                     imm: MoveWideConst::maybe_with_shift(!lower_halfword, 0).unwrap(),
                     size,
                 });
+                if pcc {
+                    self.lower_ctx.add_range_fact(
+                        rd.to_reg(),
+                        64,
+                        u64::from(lower_halfword),
+                        u64::from(lower_halfword),
+                    );
+                }
             } else {
                 self.emit(&MInst::MovWide {
                     op: MoveWideOp::MovZ,
@@ -303,6 +311,14 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                     imm: MoveWideConst::maybe_with_shift(lower_halfword, 0).unwrap(),
                     size,
                 });
+                if pcc {
+                    self.lower_ctx.add_range_fact(
+                        rd.to_reg(),
+                        64,
+                        u64::from(lower_halfword),
+                        u64::from(lower_halfword),
+                    );
+                }
 
                 if upper_halfword != 0 {
                     let tmp = self.temp_writable_reg(I64);
@@ -312,6 +328,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                         imm: MoveWideConst::maybe_with_shift(upper_halfword, 16).unwrap(),
                         size,
                     });
+                    if pcc {
+                        self.lower_ctx
+                            .add_range_fact(tmp.to_reg(), 64, value, value);
+                    }
                     return tmp.to_reg();
                 }
             };
@@ -325,6 +345,10 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                 imm: MoveWideConst::zero(),
                 size,
             });
+            if pcc {
+                self.lower_ctx
+                    .add_range_fact(rd.to_reg(), 64, u64::MAX, u64::MAX);
+            }
             return rd.to_reg();
         };
 
@@ -348,6 +372,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             .collect();
 
         let mut prev_result = None;
+        let mut running_value: u64 = 0;
         for (i, imm16) in halfwords {
             let shift = i * 16;
             let rd = self.temp_writable_reg(I64);
@@ -355,6 +380,11 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             if let Some(rn) = prev_result {
                 let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
                 self.emit(&MInst::MovK { rd, rn, imm, size });
+                if pcc {
+                    running_value |= imm16 << shift;
+                    self.lower_ctx
+                        .add_range_fact(rd.to_reg(), 64, running_value, running_value);
+                }
             } else {
                 if first_is_inverted {
                     let imm =
@@ -365,6 +395,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                         imm,
                         size,
                     });
+                    if pcc {
+                        running_value = !(imm16 << shift);
+                        self.lower_ctx.add_range_fact(
+                            rd.to_reg(),
+                            64,
+                            running_value,
+                            running_value,
+                        );
+                    }
                 } else {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
                     self.emit(&MInst::MovWide {
@@ -373,6 +412,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                         imm,
                         size,
                     });
+                    if pcc {
+                        running_value = imm16 << shift;
+                        self.lower_ctx.add_range_fact(
+                            rd.to_reg(),
+                            64,
+                            running_value,
+                            running_value,
+                        );
+                    }
                 }
             }
 
@@ -596,32 +644,15 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         super::regs::pinned_reg().to_real_reg().unwrap().into()
     }
 
-    fn branch_target(&mut self, elements: &VecMachLabel, idx: u8) -> BranchTarget {
-        BranchTarget::Label(elements[idx as usize])
+    fn branch_target(&mut self, label: MachLabel) -> BranchTarget {
+        BranchTarget::Label(label)
     }
 
-    fn targets_jt_size(&mut self, elements: &VecMachLabel) -> u32 {
-        (elements.len() - 1) as u32
-    }
-
-    fn targets_jt_space(&mut self, elements: &VecMachLabel) -> CodeOffset {
+    fn targets_jt_space(&mut self, elements: &BoxVecMachLabel) -> CodeOffset {
         // calculate the number of bytes needed for the jumptable sequence:
         // 4 bytes per instruction, with 8 instructions base + the size of
         // the jumptable more.
-        4 * (8 + self.targets_jt_size(elements))
-    }
-
-    fn targets_jt_info(&mut self, elements: &VecMachLabel) -> BoxJTSequenceInfo {
-        let targets: Vec<BranchTarget> = elements
-            .iter()
-            .skip(1)
-            .map(|bix| BranchTarget::Label(*bix))
-            .collect();
-        let default_target = BranchTarget::Label(elements[0]);
-        Box::new(JTSequenceInfo {
-            targets,
-            default_target,
-        })
+        (4 * (8 + elements.len())).try_into().unwrap()
     }
 
     fn min_fp_value(&mut self, signed: bool, in_bits: u8, out_bits: u8) -> Reg {
@@ -815,44 +846,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
     }
 
-    fn u128_replicated_u64(&mut self, val: u128) -> Option<u64> {
-        let low64 = val as u64 as u128;
-        if (low64 | (low64 << 64)) == val {
-            Some(low64 as u64)
-        } else {
-            None
-        }
-    }
-
-    fn u64_replicated_u32(&mut self, val: u64) -> Option<u64> {
-        let low32 = val as u32 as u64;
-        if (low32 | (low32 << 32)) == val {
-            Some(low32)
-        } else {
-            None
-        }
-    }
-
-    fn u32_replicated_u16(&mut self, val: u64) -> Option<u64> {
-        let val = val as u32;
-        let low16 = val as u16 as u32;
-        if (low16 | (low16 << 16)) == val {
-            Some(low16.into())
-        } else {
-            None
-        }
-    }
-
-    fn u16_replicated_u8(&mut self, val: u64) -> Option<u64> {
-        let val = val as u16;
-        let low8 = val as u8 as u16;
-        if (low8 | (low8 << 8)) == val {
-            Some(low8.into())
-        } else {
-            None
-        }
-    }
-
     fn shift_masked_imm(&mut self, ty: Type, imm: u64) -> u8 {
         (imm as u8) & ((ty.lane_bits() - 1) as u8)
     }
@@ -867,5 +860,16 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn uimm12_scaled_from_i64(&mut self, val: i64, ty: Type) -> Option<UImm12Scaled> {
         UImm12Scaled::maybe_from_i64(val, ty)
+    }
+
+    fn test_and_compare_bit_const(&mut self, ty: Type, n: u64) -> Option<u8> {
+        if n.count_ones() != 1 {
+            return None;
+        }
+        let bit = n.trailing_zeros();
+        if bit >= ty.bits() {
+            return None;
+        }
+        Some(bit as u8)
     }
 }

@@ -23,7 +23,11 @@ fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     let mut me = std::env::current_exe().expect("current_exe specified");
     me.pop(); // chop off the file name
     me.pop(); // chop off `deps`
-    me.push("wasmtime");
+    if cfg!(target_os = "windows") {
+        me.push("wasmtime.exe");
+    } else {
+        me.push("wasmtime");
+    }
     cmd.arg(me);
 
     cmd.arg("--");
@@ -62,8 +66,8 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
 pub fn test_debug_dwarf_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "--disable-cache",
-            "-g",
+            "-Ccache=n",
+            "-Ddebug-info",
             "--invoke",
             "fib",
             "tests/all/debug/testsuite/fib-wasm.wasm",
@@ -103,8 +107,8 @@ check: exited with status
 pub fn test_debug_dwarf5_lldb() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "--disable-cache",
-            "-g",
+            "-Ccache=n",
+            "-Ddebug-info",
             "--invoke",
             "fib",
             "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
@@ -144,10 +148,9 @@ check: exited with status
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[
-            "--disable-cache",
-            "-g",
-            "--opt-level",
-            "0",
+            "-Ccache=n",
+            "-Oopt-level=0",
+            "-Ddebug-info",
             "tests/all/debug/testsuite/fraction-norm.wasm",
         ],
         r#"b fraction-norm.cc:26
@@ -165,6 +168,81 @@ check: frame #0
 sameln: norm(n=(__ptr =
 check: = 27
 check: resuming
+"#,
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+pub fn test_debug_inst_offsets_are_correct_when_branches_are_removed() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Oopt-level=0",
+            "-Ddebug-info",
+            "tests/all/debug/testsuite/two_removed_branches.wasm",
+        ],
+        r#"r"#,
+    )?;
+
+    // We are simply checking that the output compiles.
+    check_lldb_output(
+        &output,
+        r#"
+check: exited with status
+"#,
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Oopt-level=0",
+            "-Ddebug-info",
+            "tests/all/debug/testsuite/spilled_frame_base.wasm",
+        ],
+        r#"b spilled_frame_base.c:8
+r
+fr v i
+n
+fr v i
+n
+fr v i
+n
+fr v i
+n
+fr v i
+n
+fr v i
+c
+"#,
+    )?;
+
+    // Check that if the frame base (shadow frame pointer) local
+    // is spilled, we can still read locals that reference it.
+    check_lldb_output(
+        &output,
+        r#"
+check: i = 0
+check: i = 1
+check: i = 1
+check: i = 1
+check: i = 1
+check: i = 1
+check: exited with status
 "#,
     )?;
     Ok(())

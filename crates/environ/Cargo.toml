@@ -17,7 +17,8 @@ wasmtime-types = { workspace = true }
 wasmparser = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
-serde = { version = "1.0.94", features = ["derive"] }
+serde = "1.0.188"
+serde_derive = "1.0.188"
 log = { workspace = true }
 gimli = { workspace = true, features = ["write"] }
 object = { workspace = true, features = ['write_core'] }
@@ -27,8 +28,7 @@ wasmprinter = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
 
 [dev-dependencies]
-atty = "0.2.14"
-clap = { workspace = true }
+clap = { workspace = true, features = ['default'] }
 env_logger = { workspace = true }
 wat = { workspace = true }
 

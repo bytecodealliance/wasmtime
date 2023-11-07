@@ -122,6 +122,7 @@ impl Mmap {
     /// # Panics
     ///
     /// Panics of the `range` provided is outside of the limits of this mmap.
+    #[inline]
     pub unsafe fn slice(&self, range: Range<usize>) -> &[u8] {
         assert!(range.start <= range.end);
         assert!(range.end <= self.len());
@@ -145,11 +146,13 @@ impl Mmap {
     }
 
     /// Return the allocated memory as a pointer to u8.
+    #[inline]
     pub fn as_ptr(&self) -> *const u8 {
         self.sys.as_ptr()
     }
 
     /// Return the allocated memory as a mutable pointer to u8.
+    #[inline]
     pub fn as_mut_ptr(&mut self) -> *mut u8 {
         self.sys.as_mut_ptr()
     }
@@ -158,6 +161,7 @@ impl Mmap {
     ///
     /// This is the byte length of this entire mapping which includes both
     /// addressible and non-addressible memory.
+    #[inline]
     pub fn len(&self) -> usize {
         self.sys.len()
     }

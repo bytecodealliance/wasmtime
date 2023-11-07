@@ -2,6 +2,7 @@ test interpret
 test run
 target s390x
 target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 ;; This file contains tests for the popcnt instruction with element sizes larger than i8.
 ;; X86 does not support these yet, but we should merge this with the main file once it does.
