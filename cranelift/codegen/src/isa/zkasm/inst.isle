@@ -51,6 +51,10 @@
       (rs1 Reg)
       (rs2 Reg))
 
+    (Ineg
+      (rd WritableReg)
+      (rs1 Reg))
+
     ;; An load
     (Load
       (rd WritableReg)
@@ -566,12 +570,6 @@
 (rule (rv_sub rs1 rs2)
   (alu_rrr (AluOPRRR.Sub) rs1 rs2))
 
-;; Helper for emitting the `neg` instruction.
-;; This instruction is a mnemonic for `sub rd, zero, rs1`.
-(decl rv_neg (XReg) XReg)
-(rule (rv_neg rs1)
-  (alu_rrr (AluOPRRR.Sub) (zero_reg) rs1))
-
 ;; Helper for emitting the `sll` ("Shift Left Logical") instruction.
 ;; rd ← rs1 << rs2
 (decl rv_sll (XReg XReg) XReg)
@@ -601,12 +599,6 @@
 (decl rv_xor (XReg XReg) XReg)
 (rule (rv_xor rs1 rs2)
   (alu_rrr (AluOPRRR.Xor) rs1 rs2))
-
-;; Helper for emitting the `not` instruction.
-;; This instruction is a mnemonic for `xori rd, rs1, -1`.
-; (decl rv_not (XReg) XReg)
-; (rule (rv_not rs1)
-;   (rv_xori rs1 (imm12_const -1)))
 
 ;; Helper for emitting the `and` instruction.
 ;; rd ← rs1 ∧ rs2
@@ -1394,16 +1386,6 @@
 ;; Args are: src, src_ty, dst_ty
 (decl gen_bitcast (Reg Type Type) Reg)
 (rule (gen_bitcast r _ _) r)
-
-;; Negates x
-;; Equivalent to 0 - x
-(decl neg (Type ValueRegs) ValueRegs)
-(rule 1 (neg (fits_in_64 (ty_int ty)) val)
-  (value_reg
-    (rv_neg (value_regs_get val 0))))
-
-(rule 2 (neg $I128 val)
-  (i128_sub (value_regs_zero) val))
 
 ;; Selects the greatest of two registers as signed values.
 (decl max (Type XReg XReg) XReg)

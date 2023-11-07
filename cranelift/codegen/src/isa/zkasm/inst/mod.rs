@@ -518,6 +518,10 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
         Inst::AddImm32 { rd, src1, src2 } => {
             collector.reg_def(*rd);
         }
+        Inst::Ineg { rd, rs1 } => {
+            collector.reg_use(*rs1);
+            collector.reg_def(*rd);
+        }
     }
 }
 
@@ -1014,7 +1018,12 @@ impl Inst {
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("{src1} + {src2} => {rd};")
             }
-
+            Inst::Ineg { rd, rs1 } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                let rs = format_reg(*rs1, allocs);
+                // FIXME: should this use a SUB?
+                format!("0 - {rs} => {rd}")
+            }
             &Inst::Load {
                 rd,
                 op,

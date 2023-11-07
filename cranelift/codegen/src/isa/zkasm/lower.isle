@@ -59,8 +59,11 @@
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (ty_int ty) (ineg val)))
-  (neg ty val))
+(rule (lower (ineg val))
+  (let
+    ((result WritableXReg (temp_writable_xreg))
+      (_ Unit (emit (MInst.Ineg result (value_regs_get val 0)))))
+    (output_xreg result)))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
