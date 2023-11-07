@@ -1,7 +1,7 @@
 //! Elaboration phase: lowers EGraph back to sequences of operations
 //! in CFG nodes.
 
-use super::cost::{pure_op_cost, Cost};
+use super::cost::Cost;
 use super::domtree::DomTreeWithChildren;
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
@@ -245,13 +245,10 @@ impl<'a> Elaborator<'a> {
                         // N.B.: at this point we know that the opcode is
                         // pure, so `pure_op_cost`'s precondition is
                         // satisfied.
-                        let cost = self
-                            .func
-                            .dfg
-                            .inst_values(inst)
-                            .fold(pure_op_cost(inst_data.opcode()), |cost, value| {
-                                cost + best[value].0
-                            });
+                        let cost = Cost::of_pure_op(
+                            inst_data.opcode(),
+                            self.func.dfg.inst_values(inst).map(|value| best[value].0),
+                        );
                         best[value] = BestEntry(cost, value);
                     }
                 }
