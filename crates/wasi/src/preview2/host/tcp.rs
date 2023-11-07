@@ -245,7 +245,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             util::tcp_accept(listener, Blocking::No)
         })?;
 
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
             // Manually inherit socket options from listener. We only have to
             // do this on platforms that don't already do this automatically
@@ -442,7 +442,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             }
         }
 
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
             socket.hop_limit = Some(value);
         }
@@ -469,7 +469,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         util::set_socket_recv_buffer_size(socket.tcp_socket(), value)?;
 
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
             socket.receive_buffer_size = Some(value);
         }
@@ -496,7 +496,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
 
         util::set_socket_send_buffer_size(socket.tcp_socket(), value)?;
 
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
             socket.send_buffer_size = Some(value);
         }

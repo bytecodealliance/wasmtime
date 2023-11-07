@@ -12,7 +12,7 @@ fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     let mut cmd = Command::new(&lldb_path);
 
     cmd.arg("--batch");
-    if cfg!(target_os = "macos") {
+    if cfg!(any(target_os = "macos", target_os = "ios")) {
         cmd.args(&["-o", "settings set plugin.jit-loader.gdb.enable on"]);
     }
     let mut script_file = NamedTempFile::new()?;
@@ -60,7 +60,7 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 pub fn test_debug_dwarf_lldb() -> Result<()> {
@@ -101,7 +101,7 @@ check: exited with status
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 pub fn test_debug_dwarf5_lldb() -> Result<()> {
@@ -142,7 +142,7 @@ check: exited with status
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 pub fn test_debug_dwarf_ref() -> Result<()> {
@@ -176,7 +176,7 @@ check: resuming
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 pub fn test_debug_inst_offsets_are_correct_when_branches_are_removed() -> Result<()> {
@@ -203,7 +203,7 @@ check: exited with status
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 pub fn test_spilled_frame_base_is_accessible() -> Result<()> {

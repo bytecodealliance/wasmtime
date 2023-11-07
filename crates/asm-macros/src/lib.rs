@@ -7,7 +7,7 @@
 //! should be visible to Rust but not visible externally outside of a `*.so`.
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "macos")] {
+    if #[cfg(any(target_os = "macos", target_os = "ios"))] {
         #[macro_export]
         macro_rules! asm_func {
             ($name:expr, $body:expr $(, $($args:tt)*)?) => {

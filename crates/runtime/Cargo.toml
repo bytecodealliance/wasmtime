@@ -30,7 +30,7 @@ encoding_rs = { version = "0.8.31", optional = true }
 sptr = "0.3.2"
 wasm-encoder = { workspace = true }
 
-[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 mach = "0.3.2"
 
 [target.'cfg(unix)'.dependencies]

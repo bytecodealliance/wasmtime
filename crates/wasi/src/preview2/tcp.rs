@@ -65,13 +65,13 @@ pub struct TcpSocket {
     pub(crate) family: SocketAddressFamily,
 
     /// The manually configured buffer size. `None` means: no preference, use system default.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     pub(crate) receive_buffer_size: Option<usize>,
     /// The manually configured buffer size. `None` means: no preference, use system default.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     pub(crate) send_buffer_size: Option<usize>,
     /// The manually configured TTL. `None` means: no preference, use system default.
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     pub(crate) hop_limit: Option<u8>,
 }
 
@@ -295,11 +295,11 @@ impl TcpSocket {
             tcp_state: TcpState::Default,
             listen_backlog_size: None,
             family,
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             receive_buffer_size: None,
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             send_buffer_size: None,
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             hop_limit: None,
         })
     }

@@ -365,7 +365,7 @@ pub(crate) mod util {
     pub fn udp_disconnect<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<()> {
         match rustix::net::connect_unspec(sockfd) {
             // BSD platforms return an error even if the UDP socket was disconnected successfully.
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
             r => r,
         }

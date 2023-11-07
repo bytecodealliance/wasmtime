@@ -27,7 +27,7 @@ fn check_wat(wat: &str) -> Result<()> {
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 fn test_debug_dwarf_simulate_simple_x86_64() -> Result<()> {
@@ -58,7 +58,7 @@ fn test_debug_dwarf_simulate_simple_x86_64() -> Result<()> {
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 fn test_debug_dwarf_simulate_with_imports_x86_64() -> Result<()> {
@@ -79,7 +79,7 @@ fn test_debug_dwarf_simulate_with_imports_x86_64() -> Result<()> {
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 fn test_debug_dwarf_simulate_with_invalid_name_x86_64() -> Result<()> {

@@ -1,6 +1,6 @@
 #[cfg(any(
     target_os = "linux",
-    all(target_os = "macos", feature = "posix-signals-on-macos")
+    all(any(target_os = "macos", target_os = "ios"), feature = "posix-signals-on-macos")
 ))]
 #[cfg(not(miri))]
 mod tests {

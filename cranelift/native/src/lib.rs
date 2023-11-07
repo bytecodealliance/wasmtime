@@ -115,7 +115,7 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
             isa_builder.enable("has_pauth").unwrap();
         }
 
-        if cfg!(target_os = "macos") {
+        if cfg!(any(target_os = "macos", target_os = "ios")) {
             // Pointer authentication is always available on Apple Silicon.
             isa_builder.enable("sign_return_address").unwrap();
             // macOS enforces the use of the B key for return addresses.
@@ -167,7 +167,10 @@ mod tests {
                 .finish(settings::Flags::new(flag_builder))
                 .unwrap();
 
-            if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            if cfg!(all(
+                any(target_os = "macos", target_os = "ios"),
+                target_arch = "aarch64"
+            )) {
                 assert_eq!(isa.default_call_conv(), CallConv::AppleAarch64);
             } else if cfg!(any(unix, target_os = "nebulet")) {
                 assert_eq!(isa.default_call_conv(), CallConv::SystemV);

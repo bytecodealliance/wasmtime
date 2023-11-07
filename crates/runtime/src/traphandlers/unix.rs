@@ -56,7 +56,7 @@ pub unsafe fn platform_init() {
 
     // Sometimes we need to handle SIGBUS too:
     // - On Darwin, guard page accesses are raised as SIGBUS.
-    if cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
+    if cfg!(any(target_os = "macos", target_os = "ios")) || cfg!(target_os = "freebsd") {
         register(&mut PREV_SIGBUS, libc::SIGBUS);
     }
 
@@ -138,7 +138,7 @@ unsafe extern "C" fn trap_handler(
         // done running" which will clear the sigaltstack flag and allow
         // reusing it for the next signal. Then upon resuming in our custom
         // code we blow away the stack anyway with a longjmp.
-        if cfg!(target_os = "macos") {
+        if cfg!(any(target_os = "macos", target_os = "ios")) {
             unsafe extern "C" fn wasmtime_longjmp_shim(jmp_buf: *const u8) {
                 wasmtime_longjmp(jmp_buf)
             }
@@ -178,7 +178,7 @@ unsafe extern "C" fn trap_handler(
 // more accurate definition. When that PR and/or issue is resolved then this
 // should no longer be necessary.
 #[repr(C)]
-#[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+#[cfg(all(target_arch = "aarch64", any(target_os = "macos", target_os = "ios")))]
 struct ucontext_t {
     uc_onstack: libc::c_int,
     uc_sigmask: libc::sigset_t,
@@ -222,13 +222,13 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
                 (cx.uc_mcontext.psw.addr - trap_offset) as *const u8,
                 *(cx.uc_mcontext.gregs[15] as *const usize),
             )
-        } else if #[cfg(all(target_os = "macos", target_arch = "x86_64"))] {
+        } else if #[cfg(all(any(target_os = "macos", target_os = "ios"), target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             (
                 (*cx.uc_mcontext).__ss.__rip as *const u8,
                 (*cx.uc_mcontext).__ss.__rbp as usize,
             )
-        } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
+        } else if #[cfg(all(any(target_os = "macos", target_os = "ios"), target_arch = "aarch64"))] {
             let cx = &*(cx as *const ucontext_t);
             (
                 (*cx.uc_mcontext).__ss.__pc as *const u8,
@@ -265,7 +265,9 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
 // See more comments above where this is called for what it's doing.
 unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
     cfg_if::cfg_if! {
-        if #[cfg(not(target_os = "macos"))] {
+        if #[cfg(
+            all(not(target_os = "macos"), not(target_os = "ios"))
+        )] {
             let _ = (cx, pc, arg1);
             unreachable!(); // not used on these platforms
         } else if #[cfg(target_arch = "x86_64")] {

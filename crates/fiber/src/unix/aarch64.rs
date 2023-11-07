@@ -22,7 +22,7 @@ use super::wasmtime_fiber_start;
 use wasmtime_asm_macros::asm_func;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "macos")] {
+    if #[cfg(any(target_os = "macos", target_os = "ios"))] {
         macro_rules! paci1716 { () => ("pacib1716\n"); }
         macro_rules! pacisp { () => ("pacibsp\n"); }
         macro_rules! autisp { () => ("autibsp\n"); }

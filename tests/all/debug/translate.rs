@@ -46,7 +46,7 @@ fn check_line_program(wasm_path: &str, directives: &str) -> Result<()> {
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 fn test_debug_dwarf_translate_dead_code() -> Result<()> {
@@ -70,7 +70,7 @@ check:      DW_AT_name	("baz")
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 fn test_debug_dwarf_translate() -> Result<()> {
@@ -103,7 +103,7 @@ check:        DW_AT_decl_line	(10)
 #[test]
 #[ignore]
 #[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
+    any(target_os = "linux", target_os = "macos", target_os = "ios"),
     target_pointer_width = "64"
 ))]
 fn test_debug_dwarf5_translate() -> Result<()> {

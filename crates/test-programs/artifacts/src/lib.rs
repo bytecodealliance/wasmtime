@@ -19,7 +19,7 @@ pub fn wasi_tests_environment() -> &'static [(&'static str, &'static str)] {
             ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
         ]
     }
-    #[cfg(all(unix, not(target_os = "macos")))]
+    #[cfg(all(unix, all(not(target_os = "macos"), not(target_os = "ios"))))]
     {
         &[
             ("ERRNO_MODE_UNIX", "1"),
@@ -27,7 +27,7 @@ pub fn wasi_tests_environment() -> &'static [(&'static str, &'static str)] {
             ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
         ]
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         &[
             ("ERRNO_MODE_MACOS", "1"),

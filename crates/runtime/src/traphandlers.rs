@@ -80,7 +80,7 @@ cfg_if::cfg_if! {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod macos;
 
 pub use sys::SignalHandler;
@@ -93,7 +93,7 @@ pub use sys::SignalHandler;
 static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
 
 /// Whether or not macOS is using mach ports.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 static mut MACOS_USE_MACH_PORTS: bool = false;
 
 /// This function is required to be called before any WebAssembly is entered.
@@ -118,7 +118,7 @@ pub fn init_traps(is_wasm_pc: fn(usize) -> bool, macos_use_mach_ports: bool) {
 
     INIT.call_once(|| unsafe {
         IS_WASM_PC = is_wasm_pc;
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
         if macos_use_mach_ports {
             MACOS_USE_MACH_PORTS = macos_use_mach_ports;
             return macos::platform_init();
@@ -126,7 +126,7 @@ pub fn init_traps(is_wasm_pc: fn(usize) -> bool, macos_use_mach_ports: bool) {
         sys::platform_init();
     });
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     unsafe {
         assert_eq!(
             MACOS_USE_MACH_PORTS, macos_use_mach_ports,
@@ -136,7 +136,7 @@ pub fn init_traps(is_wasm_pc: fn(usize) -> bool, macos_use_mach_ports: bool) {
 }
 
 fn lazy_per_thread_init() {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     unsafe {
         if MACOS_USE_MACH_PORTS {
             return macos::lazy_per_thread_init();
@@ -489,7 +489,7 @@ impl CallThreadState {
     ///   instance, and the trap handler should quickly return.
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
     ///   the wasm trap was succesfully handled.
-    #[cfg_attr(target_os = "macos", allow(dead_code))] // macOS is more raw and doesn't use this
+    #[cfg_attr(any(target_os = "macos", target_os = "ios"), allow(dead_code))] // macOS is more raw and doesn't use this
     fn take_jmp_buf_if_trap(
         &self,
         pc: *const u8,
