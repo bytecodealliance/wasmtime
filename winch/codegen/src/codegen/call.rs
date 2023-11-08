@@ -99,8 +99,7 @@ impl FnCall {
         let call_stack_space = Self::save(context, masm, &sig);
 
         let reserved_stack = masm.call(arg_stack_space, |masm| {
-            let scratch = <M::ABI as ABI>::scratch_reg();
-            Self::assign(sig, context, masm, scratch);
+            Self::assign(sig, context, masm);
             kind
         });
 
@@ -247,15 +246,11 @@ impl FnCall {
     }
 
     /// Assign arguments for the function call.
-    fn assign<M: MacroAssembler>(
-        sig: &ABISig,
-        context: &mut CodeGenContext,
-        masm: &mut M,
-        scratch: Reg,
-    ) {
+    fn assign<M: MacroAssembler>(sig: &ABISig, context: &mut CodeGenContext, masm: &mut M) {
         let arg_count = sig.params.len();
         let stack = &context.stack;
         let mut stack_values = stack.peekn(arg_count);
+
         for arg in &sig.params {
             let val = stack_values
                 .next()
@@ -267,6 +262,7 @@ impl FnCall {
                 &ABIArg::Stack { ty, offset } => {
                     let addr = masm.address_at_sp(*offset);
                     let size: OperandSize = (*ty).into();
+                    let scratch = <M::ABI as ABI>::scratch_for(&ty);
                     context.move_val_to_reg(val, scratch, masm);
                     masm.store(scratch.into(), addr, size);
                 }
