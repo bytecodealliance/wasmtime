@@ -6,7 +6,6 @@ mod cli_tests;
 mod code_too_large;
 mod component_model;
 mod coredump;
-mod custom_signal_handler;
 mod debug;
 mod epoch_interruption;
 mod externals;
