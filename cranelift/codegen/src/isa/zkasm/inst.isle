@@ -544,26 +544,6 @@
 (decl u8_as_i32 (u8) i32)
 (extern constructor u8_as_i32 u8_as_i32)
 
-;; ISA Extension helpers
-
-(decl pure has_v () bool)
-(extern constructor has_v has_v)
-
-(decl pure has_zbkb () bool)
-(extern constructor has_zbkb has_zbkb)
-
-(decl pure has_zba () bool)
-(extern constructor has_zba has_zba)
-
-(decl pure has_zbb () bool)
-(extern constructor has_zbb has_zbb)
-
-(decl pure has_zbc () bool)
-(extern constructor has_zbc has_zbc)
-
-(decl pure has_zbs () bool)
-(extern constructor has_zbs has_zbs)
-
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; RV32I Base Integer Instruction Set
@@ -1064,27 +1044,6 @@
   (let ((right XReg (value_regs_get val 0)))
     right))
 
-;; No point in trying to use `packh` here to zero extend 8 bit values
-;; since we can just use `andi` instead which is part of the base ISA.
-
-;; If we have the `zbkb` extension `packw` can be used to zero extend 16 bit values
-(rule 1 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
-  (if-let $true (has_zbkb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_packw val (zero_reg))))
-
-;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
-(rule 1 (extend val (ExtendOp.Zero) $I32 $I64)
-  (if-let $true (has_zbkb))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_pack val (zero_reg))))
-
-;; With `zba` we have a `zext.w` instruction
-(rule 2 (extend val (ExtendOp.Zero) $I32 $I64)
-  (if-let $true (has_zba))
-  (let ((val XReg (value_regs_get val 0)))
-    (rv_zextw val)))
-
 ;;; Unsigned rules extending to I128
 ;; Extend the bottom register to I64 and then just zero out the top half.
 (rule 3 (extend val (ExtendOp.Zero) (fits_in_64 from_ty) $I128)
@@ -1131,24 +1090,12 @@
 
 (decl lower_rotl (Type XReg XReg) XReg)
 
-(rule 1
-  (lower_rotl $I64 rs amount)
-  (if-let $true (has_zbb))
-  (rv_rol rs amount))
-
 (rule
   (lower_rotl $I64 rs amount)
-  (if-let $false (has_zbb))
   (lower_rotl_shift $I64 rs amount))
 
-(rule 1
-  (lower_rotl $I32 rs amount)
-  (if-let $true (has_zbb))
-  (rv_rolw rs amount))
-
 (rule
   (lower_rotl $I32 rs amount)
-  (if-let $false (has_zbb))
   (lower_rotl_shift $I32 rs amount))
 
 (rule -1
@@ -1181,23 +1128,12 @@
 
 (decl lower_rotr (Type XReg XReg) XReg)
 
-(rule 1
-  (lower_rotr $I64 rs amount)
-  (if-let $true (has_zbb))
-  (rv_ror rs amount))
 (rule
   (lower_rotr $I64 rs amount)
-  (if-let $false (has_zbb))
   (lower_rotr_shift $I64 rs amount))
 
-(rule 1
-  (lower_rotr $I32 rs amount)
-  (if-let $true (has_zbb))
-  (rv_rorw rs amount))
-
 (rule
   (lower_rotr $I32 rs amount)
-  (if-let $false (has_zbb))
   (lower_rotr_shift $I32 rs amount))
 
 (rule -1
@@ -1226,7 +1162,6 @@
 ;; bseti: Set a single bit in a register, indexed by a constant.
 (decl gen_bseti (Reg u64) Reg)
 (rule (gen_bseti val bit)
-  (if-let $false (has_zbs))
   (if-let $false (u64_le bit 12))
   (let ((const XReg (load_u64_constant (u64_shl 1 bit))))
     (rv_or val const)))
@@ -1578,15 +1513,10 @@
 (rule 2 (neg $I128 val)
   (i128_sub (value_regs_zero) val))
 
-
 ;; Selects the greatest of two registers as signed values.
 (decl max (Type XReg XReg) XReg)
-(rule (max (fits_in_64 (ty_int ty)) x y)
-  (if-let $true (has_zbb))
-  (rv_max x y))
 
 (rule (max (fits_in_64 (ty_int ty)) x y)
-  (if-let $false (has_zbb))
   (gen_select_reg (IntCC.SignedGreaterThan) x y x y))
 
 
@@ -1636,48 +1566,6 @@
   (let
     ((t XReg (zk_mul n m)))
     (rv_add t a)))
-
-;;;; Helpers for bmask ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl lower_bmask (Type Type ValueRegs) ValueRegs)
-
-;; Produces -1 if the 64-bit value is non-zero, and 0 otherwise.
-;; If the type is smaller than 64 bits, we need to mask off the
-;; high bits.
-(rule
-  0
-  (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
-  (let ((input XReg (truthy_to_reg in_ty (normalize_cmp_value in_ty val (ExtendOp.Zero))))
-        (non_zero XReg (rv_snez input)))
-    (value_reg (rv_neg non_zero))))
-
-;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
-;; though it was a 64-bit value.
-(rule
-  1
-  (lower_bmask (fits_in_64 ty) $I128 val)
-  (let ((lo XReg (value_regs_get val 0))
-        (hi XReg (value_regs_get val 1))
-        (combined XReg (rv_or lo hi)))
-    (lower_bmask ty $I64 (value_reg combined))))
-
-;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of the
-;; bmask of the 64-bit value into both result registers of the i128.
-(rule
-  2
-  (lower_bmask $I128 (fits_in_64 in_ty) val)
-  (let ((res ValueRegs (lower_bmask $I64 in_ty val)))
-    (value_regs (value_regs_get res 0) (value_regs_get res 0))))
-
-;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of
-;; bmasking the 128-bit value to a 64-bit value into both registers of the
-;; 128-bit result.
-(rule
-  3
-  (lower_bmask $I128 $I128 val)
-  (let ((res ValueRegs (lower_bmask $I64 $I128 val)))
-    (value_regs (value_regs_get res 0) (value_regs_get res 0))))
-
 
 ;;;; Helpers for physical registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

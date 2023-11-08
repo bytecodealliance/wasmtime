@@ -323,30 +323,6 @@ impl generated_code::Context for ZkAsmIsleContext<'_, '_, MInst, ZkAsmBackend> {
         todo!()
     }
 
-    fn has_v(&mut self) -> bool {
-        self.backend.isa_flags.has_v()
-    }
-
-    fn has_zbkb(&mut self) -> bool {
-        self.backend.isa_flags.has_zbkb()
-    }
-
-    fn has_zba(&mut self) -> bool {
-        self.backend.isa_flags.has_zba()
-    }
-
-    fn has_zbb(&mut self) -> bool {
-        self.backend.isa_flags.has_zbb()
-    }
-
-    fn has_zbc(&mut self) -> bool {
-        self.backend.isa_flags.has_zbc()
-    }
-
-    fn has_zbs(&mut self) -> bool {
-        self.backend.isa_flags.has_zbs()
-    }
-
     fn offset32_imm(&mut self, offset: i32) -> Offset32 {
         Offset32::new(offset)
     }
