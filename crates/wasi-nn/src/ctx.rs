@@ -144,8 +144,8 @@ where
 
 #[cfg(test)]
 mod test {
-    use wiggle::async_trait;
     use crate::registry::GraphRegistry;
+    use wiggle::async_trait;
 
     use super::*;
 
