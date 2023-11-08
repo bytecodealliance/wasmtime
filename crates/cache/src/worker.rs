@@ -758,11 +758,7 @@ fn write_stats_file(path: &Path, stats: &ModuleCacheStatistics) -> bool {
             )
         })
         .and_then(|serialized| {
-            if fs_write_atomic(path, "stats", serialized.as_bytes()) {
-                Ok(())
-            } else {
-                Err(())
-            }
+            fs_write_atomic(path, "stats", serialized.as_bytes()).map_err(|_| ())
         })
         .is_ok()
 }
