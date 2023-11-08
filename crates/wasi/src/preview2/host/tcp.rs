@@ -415,7 +415,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(sockopt::set_socket_keepalive(socket.tcp_socket(), value)?)
     }
 
-    fn unicast_hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u8> {
+    fn hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u8> {
         let table = self.table();
         let socket = table.get(&this)?;
 
@@ -427,11 +427,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(ttl)
     }
 
-    fn set_unicast_hop_limit(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-        value: u8,
-    ) -> SocketResult<()> {
+    fn set_hop_limit(&mut self, this: Resource<tcp::TcpSocket>, value: u8) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 

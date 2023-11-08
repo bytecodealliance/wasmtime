@@ -126,7 +126,7 @@ interface tcp {
         /// - `address-family`
         /// - `ipv6-only`
         /// - `keep-alive`
-        /// - `unicast-hop-limit`
+        /// - `hop-limit`
         /// - `receive-buffer-size`
         /// - `send-buffer-size`
         ///
@@ -209,8 +209,8 @@ interface tcp {
         /// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
         /// - `invalid-state`:        (set) The socket is already in the Connection state.
         /// - `invalid-state`:        (set) The socket is already in the Listener state.
-        unicast-hop-limit: func() -> result<u8, error-code>;
-        set-unicast-hop-limit: func(value: u8) -> result<_, error-code>;
+        hop-limit: func() -> result<u8, error-code>;
+        set-hop-limit: func(value: u8) -> result<_, error-code>;
 
         /// The kernel buffer space reserved for sends/receives on this socket.
         ///
