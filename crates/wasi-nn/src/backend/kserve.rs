@@ -976,6 +976,7 @@ fn test_kserve_model_config_deserialization() {
     "#;
 
     let output = serde_json::from_str::<KServeModelConfig>(json).unwrap();
+    println!("{:?}", output)
 }
 
 #[test]
@@ -1007,4 +1008,5 @@ fn test_deserialization() {
     "#;
 
     let output = serde_json::from_str::<KServeRepositoryLoadRequest>(json).unwrap();
+    println!("{:?}", output)
 }
