@@ -1,6 +1,6 @@
 use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
 
-use super::ControlStackFrame;
+use super::{CodeGen, ControlStackFrame};
 use crate::{
     abi::{ABIResult, ABI},
     codegen::BuiltinFunctions,
@@ -351,10 +351,11 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         Self::spill_impl(&mut self.stack, &mut self.regalloc, &mut self.frame, masm);
     }
 
-    /// Prepares the compiler to emit an uncoditional jump to the
-    /// given destination branch.  This process involves:
-    /// * Balancing the machine stack pointer by popping it to
-    ///   match the destination branch.
+    /// Prepares the compiler to emit an uncoditional jump to the given
+    /// destination branch.  This process involves:
+    /// * Balancing the machine
+    ///   stack pointer and value stack by popping it to match the destination
+    ///   branch.
     /// * Updating the reachability state.
     /// * Marking the destination frame as a destination target.
     pub fn unconditional_jump<M, F>(&mut self, dest: &mut ControlStackFrame, masm: &mut M, mut f: F)
@@ -362,41 +363,38 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         M: MacroAssembler,
         F: FnMut(&mut M, &mut Self, &mut ControlStackFrame),
     {
-        let (_, target_sp) = dest.original_stack_len_and_sp_offset();
+        let (target_value_stack, target_sp) = dest.original_stack_len_and_sp_offset();
         // Invariant: The SP, must be greater or equal to the target
         // SP, given that we haven't popped any results by this point
         // yet. But it may happen in the callback.
         assert!(masm.sp_offset() >= target_sp);
         f(masm, self, dest);
 
-        // The following snippet, pops the stack pointer to ensure
-        // that it is correctly placed according to the expectations
-        // of the destination branch.
+        // The following snippet, pops the stack pointer and value stack to
+        // ensure that it is correctly placed according to the expectations of
+        // the destination branch.
         //
-        // This is done in the context of unconditional jumps, as the
-        // machine stack might be left unbalanced at the jump site,
-        // due to register spills. In this context unbalanced refers
-        // to possible extra space created at the jump site, which
-        // might cause invalid memory accesses. Note that in some cases
-        // the stack pointer offset might be already less than or
-        // equal to the original stack pointer offset registered when
-        // entering the destination control stack frame, which
-        // effectively means that when reaching the jump site no extra
-        // space was allocated similar to what would happen in a fall
-        // through in which we assume that the program has allocated
-        // and deallocated the right amount of stack space.
+        // This is done in the context of unconditional jumps, as the machine
+        // stack and value stack might be left unbalanced at the jump site, due
+        // to register spills or extra values in the value stack. Note that in
+        // some cases the stack pointer offset might be already less than or
+        // equal to the original stack pointer offset registered when entering
+        // the destination control stack frame, which effectively means that
+        // when reaching the jump site no extra space was allocated similar to
+        // what would happen in a fall through in which we assume that the
+        // program has allocated and deallocated the right amount of stack
+        // space.
         //
-        // More generally speaking the current stack pointer will be
-        // less than the original stack pointer offset in cases in
-        // which the top value in the value stack is a memory entry
-        // which needs to be popped into the return location according
-        // to the ABI (a register for single value returns and a
-        // memory slot for 1+ returns). This could happen in the
+        // More generally speaking the current stack pointer will be less than
+        // the original stack pointer offset in cases in which the top value in
+        // the value stack is a memory entry which needs to be popped into the
+        // return location according to the ABI (a register for single value
+        // returns and a memory slot for 1+ returns). This could happen in the
         // callback invocation above if the callback invokes
         // `CodeGenContext::pop_abi_results` (e.g. `br` instruction).
         let current_sp = masm.sp_offset();
         if current_sp > target_sp {
-            masm.free_stack(current_sp - target_sp);
+            CodeGen::reset_stack(self, masm, target_value_stack, target_sp);
         }
 
         dest.set_as_target();
