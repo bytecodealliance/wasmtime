@@ -3,10 +3,7 @@
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
 use crate::{
-    ir::types,
-    ir::AtomicRmwOp,
-    isa, isle_common_prelude_methods, isle_lower_prelude_methods,
-    machinst::{InputSourceInst, Reg, Writable},
+    ir::types, ir::AtomicRmwOp, isa, isle_common_prelude_methods, isle_lower_prelude_methods,
 };
 use generated_code::{Context, MInst, RegisterClass};
 
@@ -22,12 +19,9 @@ use crate::{
         types::*,
         BlockCall, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
     },
-    isa::{
-        unwind::UnwindInst,
-        x64::{
-            abi::X64CallSite,
-            inst::{args::*, regs, CallInfo, ReturnCallInfo},
-        },
+    isa::x64::{
+        abi::X64CallSite,
+        inst::{args::*, regs, CallInfo, ReturnCallInfo},
     },
     machinst::{
         isle::*, valueregs, ArgPair, InsnInput, InstOutput, Lower, MachAtomicRmwOp, MachInst,

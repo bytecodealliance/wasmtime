@@ -16,10 +16,10 @@ use crate::machinst::isle::*;
 use crate::machinst::{MachLabel, Reg};
 use crate::{
     ir::{
-        condcodes::*, immediates::*, types::*, ArgumentPurpose, AtomicRmwOp, BlockCall, Endianness,
-        Inst, InstructionData, KnownSymbol, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
+        condcodes::*, immediates::*, types::*, ArgumentExtension, ArgumentPurpose, AtomicRmwOp,
+        BlockCall, Endianness, Inst, InstructionData, KnownSymbol, LibCall, MemFlags, Opcode,
+        TrapCode, Value, ValueList,
     },
-    isa::unwind::UnwindInst,
     isa::CallConv,
     machinst::abi::ABIMachineSpec,
     machinst::{

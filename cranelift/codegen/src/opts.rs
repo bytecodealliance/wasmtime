@@ -4,12 +4,11 @@ use crate::egraph::{NewOrExistingInst, OptimizeCtx};
 use crate::ir::condcodes;
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
-pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, Uimm8, V128Imm};
+pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
 pub use crate::ir::types::*;
 pub use crate::ir::{
-    dynamic_to_fixed, AtomicRmwOp, Block, BlockCall, Constant, DataFlowGraph, DynamicStackSlot,
-    FuncRef, GlobalValue, Immediate, InstructionData, JumpTable, MemFlags, Opcode, StackSlot,
-    Table, TrapCode, Type, Value,
+    dynamic_to_fixed, AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue,
+    Immediate, InstructionData, MemFlags, Opcode, StackSlot, Table, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
