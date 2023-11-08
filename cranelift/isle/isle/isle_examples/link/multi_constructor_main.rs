@@ -3,6 +3,8 @@ use multi_constructor::{ContextIter, IntoContextIter};
 
 struct Context;
 
+const MAX_ISLE_RETURNS: usize = 100;
+
 #[derive(Default)]
 struct It {
     i: u32,

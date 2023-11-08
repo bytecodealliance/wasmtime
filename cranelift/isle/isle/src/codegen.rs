@@ -236,6 +236,16 @@ pub trait IntoContextIter {{
     fn into_context_iter(self) -> Self::IntoIter;
 }}
 
+pub trait Length {{
+    fn len(&self) -> usize;
+}}
+
+impl<T> Length for std::vec::Vec<T> {{
+    fn len(&self) -> usize {{
+        std::vec::Vec::len(self)
+    }}
+}}
+
 pub struct ContextIterWrapper<I, C> {{
     iter: I,
     _ctx: std::marker::PhantomData<C>,
@@ -288,6 +298,11 @@ impl<I: IntoIterator, C: Context> IntoContextIter for ContextIterWrapper<I, C> {
 impl<T, E: Extend<T>, C> Extend<T> for ContextIterWrapper<E, C> {{
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {{
         self.iter.extend(iter);
+    }}
+}}
+impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
+    fn len(&self) -> usize {{
+        self.iter.len()
     }}
 }}
            "#,
@@ -406,7 +421,7 @@ impl<T, E: Extend<T>, C> Extend<T> for ContextIterWrapper<E, C> {{
             if let ReturnKind::Iterator = sig.ret_kind {
                 writeln!(
                     ctx.out,
-                    "{}    returns: &mut impl Extend<{}>,",
+                    "{}    returns: &mut (impl Extend<{}> + Length),",
                     &ctx.indent, ret
                 )?;
             }
@@ -635,7 +650,14 @@ impl<T, E: Extend<T>, C> Extend<T> for ContextIterWrapper<E, C> {{
                     match ret_kind {
                         ReturnKind::Plain => writeln!(ctx.out, ";")?,
                         ReturnKind::Option => writeln!(ctx.out, ");")?,
-                        ReturnKind::Iterator => writeln!(ctx.out, "));")?,
+                        ReturnKind::Iterator => {
+                            writeln!(ctx.out, "));")?;
+                            writeln!(
+                                ctx.out,
+                                "{}if returns.len() >= MAX_ISLE_RETURNS {{ return; }}",
+                                ctx.indent
+                            )?;
+                        }
                     }
                 }
             }

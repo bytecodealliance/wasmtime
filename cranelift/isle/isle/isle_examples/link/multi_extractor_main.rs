@@ -2,6 +2,8 @@ mod multi_extractor;
 
 use multi_extractor::{ContextIter, IntoContextIter};
 
+const MAX_ISLE_RETURNS: usize = 100;
+
 #[derive(Clone)]
 pub enum A {
     B,
