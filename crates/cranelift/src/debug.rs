@@ -11,7 +11,7 @@ pub enum ModuleMemoryOffset {
     Imported(u32),
 }
 
-pub use write_debuginfo::{emit_dwarf, DwarfSection, DwarfSectionRelocTarget};
+pub use write_debuginfo::{emit_dwarf, DwarfSectionRelocTarget};
 
 mod gc;
 mod transform;

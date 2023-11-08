@@ -13,12 +13,12 @@ use super::{
     MachLabel, MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg, SImm9, ScalarSize,
     ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
 };
-use crate::ir::condcodes;
+use crate::ir::{condcodes, ArgumentExtension};
 use crate::isa;
 use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInfo};
 use crate::isa::aarch64::AArch64Backend;
+use crate::machinst::isle::*;
 use crate::machinst::valueregs;
-use crate::machinst::{isle::*, InputSourceInst};
 use crate::{
     binemit::CodeOffset,
     ir::{
@@ -28,7 +28,6 @@ use crate::{
     isa::aarch64::abi::AArch64CallSite,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::inst::SImm7Scaled,
-    isa::unwind::UnwindInst,
     machinst::{
         abi::ArgPair, ty_bits, InstOutput, Lower, MachInst, VCodeConstant, VCodeConstantData,
     },
