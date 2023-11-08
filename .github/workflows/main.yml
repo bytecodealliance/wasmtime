@@ -316,6 +316,10 @@ jobs:
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk
     - run: cargo ndk -t arm64-v8a check -p wasmtime
 
+    # Check whether `wasmtime` cross-compiles to aarch64-apple-ios
+    - run: rustup target add aarch64-apple-ios
+    - run: cargo check -p wasmtime --target aarch64-apple-ios
+
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
       if: failure() && github.event_name != 'pull_request'
