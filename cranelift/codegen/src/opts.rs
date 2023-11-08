@@ -27,7 +27,7 @@ pub type ValueArray3 = [Value; 3];
 pub type ConstructorVec<T> = SmallVec<[T; 8]>;
 
 pub(crate) mod generated_code;
-use generated_code::ContextIter;
+use generated_code::{ContextIter, IntoContextIter};
 
 pub(crate) struct IsleContext<'a, 'b, 'c> {
     pub(crate) ctx: &'a mut OptimizeCtx<'b, 'c>,
@@ -39,6 +39,18 @@ pub(crate) struct InstDataEtorIter<'a, 'b, 'c> {
     _phantom2: PhantomData<&'b ()>,
     _phantom3: PhantomData<&'c ()>,
 }
+
+impl Default for InstDataEtorIter<'_, '_, '_> {
+    fn default() -> Self {
+        InstDataEtorIter {
+            stack: SmallVec::default(),
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
+            _phantom3: PhantomData,
+        }
+    }
+}
+
 impl<'a, 'b, 'c> InstDataEtorIter<'a, 'b, 'c> {
     fn new(root: Value) -> Self {
         debug_assert_ne!(root, Value::reserved_value());
@@ -85,13 +97,27 @@ where
     }
 }
 
+impl<'a, 'b, 'c> IntoContextIter for InstDataEtorIter<'a, 'b, 'c>
+where
+    'b: 'a,
+    'c: 'b,
+{
+    type Context = IsleContext<'a, 'b, 'c>;
+    type Output = (Type, InstructionData);
+    type IntoIter = Self;
+
+    fn into_context_iter(self) -> Self {
+        self
+    }
+}
+
 impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     isle_common_prelude_methods!();
 
-    type inst_data_etor_iter = InstDataEtorIter<'a, 'b, 'c>;
+    type inst_data_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
 
-    fn inst_data_etor(&mut self, eclass: Value) -> InstDataEtorIter<'a, 'b, 'c> {
-        InstDataEtorIter::new(eclass)
+    fn inst_data_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
+        *returns = InstDataEtorIter::new(eclass);
     }
 
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {
