@@ -222,6 +222,7 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn get_fuel_clamps_at_zero() -> Result<()> {
     let engine = Engine::new(Config::new().consume_fuel(true))?;
     let mut store = Store::new(&engine, ());
