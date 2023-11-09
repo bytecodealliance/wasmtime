@@ -430,6 +430,10 @@ pub(crate) mod util {
         sockfd: Fd,
         value: usize,
     ) -> rustix::io::Result<()> {
+        if value == 0 {
+            return Err(Errno::INVAL);
+        }
+
         let value = normalize_set_buffer_size(value);
 
         match sockopt::set_socket_recv_buffer_size(sockfd, value) {
@@ -450,6 +454,10 @@ pub(crate) mod util {
         sockfd: Fd,
         value: usize,
     ) -> rustix::io::Result<()> {
+        if value == 0 {
+            return Err(Errno::INVAL);
+        }
+
         let value = normalize_set_buffer_size(value);
 
         match sockopt::set_socket_send_buffer_size(sockfd, value) {

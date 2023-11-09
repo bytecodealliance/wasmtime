@@ -382,6 +382,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
+        if value == 0 {
+            return Err(ErrorCode::InvalidArgument.into());
+        }
+
         // Silently clamp backlog size. This is OK for us to do, because operating systems do this too.
         let value = value
             .try_into()

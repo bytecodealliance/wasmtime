@@ -199,8 +199,12 @@ interface tcp {
 
         /// Hints the desired listen queue size. Implementations are free to ignore this.
         ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        ///
         /// # Typical errors
         /// - `not-supported`:        (set) The platform does not support changing the backlog size after the initial listen.
+        /// - `invalid-argument`:     (set) The provided value was 0.
         /// - `invalid-state`:        (set) The socket is already in the Connection state.
         set-listen-backlog-size: func(value: u64) -> result<_, error-code>;
 
@@ -209,6 +213,8 @@ interface tcp {
         set-keep-alive: func(value: bool) -> result<_, error-code>;
 
         /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
+        ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
         ///
         /// # Typical errors
         /// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
@@ -219,16 +225,14 @@ interface tcp {
 
         /// The kernel buffer space reserved for sends/receives on this socket.
         ///
-        /// Note #1: an implementation may choose to cap or round the buffer size when setting the value.
-        ///     In other words, after setting a value, reading the same setting back may return a different value.
-        ///
-        /// Note #2: there is not necessarily a direct relationship between the kernel buffer size and the bytes of
-        ///     actual data to be sent/received by the application, because the kernel might also use the buffer space
-        ///     for internal metadata structures.
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        /// I.e. after setting a value, reading the same setting back may return a different value.
         ///
         /// Equivalent to the SO_RCVBUF and SO_SNDBUF socket options.
         ///
         /// # Typical errors
+        /// - `invalid-argument`:     (set) The provided value was 0.
         /// - `invalid-state`:        (set) The socket is already in the Connection state.
         /// - `invalid-state`:        (set) The socket is already in the Listener state.
         receive-buffer-size: func() -> result<u64, error-code>;
