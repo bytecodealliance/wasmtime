@@ -2,6 +2,7 @@
 interface tcp {
     use wasi:io/streams@0.2.0-rc-2023-11-05.{input-stream, output-stream};
     use wasi:io/poll@0.2.0-rc-2023-11-05.{pollable};
+    use wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-05.{duration};
     use network.{network, error-code, ip-socket-address, ip-address-family};
 
     enum shutdown-type {
@@ -125,7 +126,10 @@ interface tcp {
         /// The returned socket is bound and in the Connection state. The following properties are inherited from the listener socket:
         /// - `address-family`
         /// - `ipv6-only`
-        /// - `keep-alive`
+        /// - `keep-alive-enabled`
+        /// - `keep-alive-idle-time`
+        /// - `keep-alive-interval`
+        /// - `keep-alive-count`
         /// - `hop-limit`
         /// - `receive-buffer-size`
         /// - `send-buffer-size`
@@ -208,9 +212,56 @@ interface tcp {
         /// - `invalid-state`:        (set) The socket is already in the Connection state.
         set-listen-backlog-size: func(value: u64) -> result<_, error-code>;
 
+        /// Enables or disables keepalive.
+        ///
+        /// The keepalive behavior can be adjusted using:
+        /// - `keep-alive-idle-time`
+        /// - `keep-alive-interval`
+        /// - `keep-alive-count`
+        /// These properties can be configured while `keep-alive-enabled` is false, but only come into effect when `keep-alive-enabled` is true.
+        ///
         /// Equivalent to the SO_KEEPALIVE socket option.
-        keep-alive: func() -> result<bool, error-code>;
-        set-keep-alive: func(value: bool) -> result<_, error-code>;
+        keep-alive-enabled: func() -> result<bool, error-code>;
+        set-keep-alive-enabled: func(value: bool) -> result<_, error-code>;
+
+        /// Amount of time the connection has to be idle before TCP starts sending keepalive packets.
+        ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        /// I.e. after setting a value, reading the same setting back may return a different value.
+        ///
+        /// Equivalent to the TCP_KEEPIDLE socket option. (TCP_KEEPALIVE on MacOS)
+        ///
+        /// # Typical errors
+        /// - `invalid-argument`:     (set) The provided value was 0.
+        keep-alive-idle-time: func() -> result<duration, error-code>;
+        set-keep-alive-idle-time: func(value: duration) -> result<_, error-code>;
+
+        /// The time between keepalive packets.
+        ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        /// I.e. after setting a value, reading the same setting back may return a different value.
+        ///
+        /// Equivalent to the TCP_KEEPINTVL socket option.
+        ///
+        /// # Typical errors
+        /// - `invalid-argument`:     (set) The provided value was 0.
+        keep-alive-interval: func() -> result<duration, error-code>;
+        set-keep-alive-interval: func(value: duration) -> result<_, error-code>;
+
+        /// The maximum amount of keepalive packets TCP should send before aborting the connection.
+        ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        /// I.e. after setting a value, reading the same setting back may return a different value.
+        ///
+        /// Equivalent to the TCP_KEEPCNT socket option.
+        ///
+        /// # Typical errors
+        /// - `invalid-argument`:     (set) The provided value was 0.
+        keep-alive-count: func() -> result<u32, error-code>;
+        set-keep-alive-count: func(value: u32) -> result<_, error-code>;
 
         /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
         ///

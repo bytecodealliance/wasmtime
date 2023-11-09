@@ -15,6 +15,7 @@ use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
 
@@ -417,16 +418,74 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         }
     }
 
-    fn keep_alive(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
+    fn keep_alive_enabled(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
         let table = self.table();
         let socket = table.get(&this)?;
         Ok(sockopt::get_socket_keepalive(socket.tcp_socket())?)
     }
 
-    fn set_keep_alive(&mut self, this: Resource<tcp::TcpSocket>, value: bool) -> SocketResult<()> {
+    fn set_keep_alive_enabled(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: bool,
+    ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get(&this)?;
         Ok(sockopt::set_socket_keepalive(socket.tcp_socket(), value)?)
+    }
+
+    fn keep_alive_idle_time(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(sockopt::get_tcp_keepidle(socket.tcp_socket())?.as_nanos() as u64)
+    }
+
+    fn set_keep_alive_idle_time(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: u64,
+    ) -> SocketResult<()> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(util::set_tcp_keepidle(
+            socket.tcp_socket(),
+            Duration::from_nanos(value),
+        )?)
+    }
+
+    fn keep_alive_interval(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(sockopt::get_tcp_keepintvl(socket.tcp_socket())?.as_nanos() as u64)
+    }
+
+    fn set_keep_alive_interval(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: u64,
+    ) -> SocketResult<()> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(util::set_tcp_keepintvl(
+            socket.tcp_socket(),
+            Duration::from_nanos(value),
+        )?)
+    }
+
+    fn keep_alive_count(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u32> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(sockopt::get_tcp_keepcnt(socket.tcp_socket())?)
+    }
+
+    fn set_keep_alive_count(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: u32,
+    ) -> SocketResult<()> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(util::set_tcp_keepcnt(socket.tcp_socket(), value)?)
     }
 
     fn hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u8> {

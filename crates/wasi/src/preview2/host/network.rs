@@ -213,6 +213,7 @@ impl From<cap_net_ext::AddressFamily> for IpAddressFamily {
 
 pub(crate) mod util {
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+    use std::time::Duration;
 
     use crate::preview2::bindings::sockets::network::ErrorCode;
     use crate::preview2::network::SocketAddressFamily;
@@ -369,6 +370,52 @@ pub(crate) mod util {
             Err(Errno::INVAL | Errno::AFNOSUPPORT) => Ok(()),
             r => r,
         }
+    }
+
+    pub fn set_tcp_keepidle<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
+        if value <= Duration::ZERO {
+            return Err(Errno::INVAL);
+        }
+
+        // Ensure that the value passed to the actual syscall never gets rounded down to 0.
+        const MIN_SECS: u64 = 1;
+
+        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+        const MAX_SECS: u64 = i16::MAX as u64;
+
+        sockopt::set_tcp_keepidle(
+            sockfd,
+            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
+        )
+    }
+
+    pub fn set_tcp_keepintvl<Fd: AsFd>(sockfd: Fd, value: Duration) -> rustix::io::Result<()> {
+        if value <= Duration::ZERO {
+            return Err(Errno::INVAL);
+        }
+
+        // Ensure that any fractional value passed to the actual syscall never gets rounded down to 0.
+        const MIN_SECS: u64 = 1;
+
+        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+        const MAX_SECS: u64 = i16::MAX as u64;
+
+        sockopt::set_tcp_keepintvl(
+            sockfd,
+            value.clamp(Duration::from_secs(MIN_SECS), Duration::from_secs(MAX_SECS)),
+        )
+    }
+
+    pub fn set_tcp_keepcnt<Fd: AsFd>(sockfd: Fd, value: u32) -> rustix::io::Result<()> {
+        if value == 0 {
+            return Err(Errno::INVAL);
+        }
+
+        const MIN_CNT: u32 = 1;
+        // Cap it at Linux' maximum, which appears to have the lowest limit across our supported platforms.
+        const MAX_CNT: u32 = i8::MAX as u32;
+
+        sockopt::set_tcp_keepcnt(sockfd, value.clamp(MIN_CNT, MAX_CNT))
     }
 
     pub fn get_ip_ttl<Fd: AsFd>(sockfd: Fd) -> rustix::io::Result<u8> {
