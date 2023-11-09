@@ -350,7 +350,8 @@ where
     pub fn emit_set_local(&mut self, index: u32) -> TypedReg {
         let src = self.context.pop_to_reg(self.masm, None);
         // Need to get address of local after `pop_to_reg` since `pop_to_reg`
-        // may change the local's offset from the SP.
+        // will pop the machine stack causing an incorrect address to be
+        // calculated.
         let (ty, addr) = self.context.frame.get_local_address(index, self.masm);
         self.masm.store(RegImm::reg(src.reg), addr, ty.into());
 
