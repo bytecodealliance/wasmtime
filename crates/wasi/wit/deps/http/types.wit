@@ -45,8 +45,12 @@ interface types {
     TLS-protocol-error,
     TLS-certificate-error,
     TLS-alert-received(TLS-alert-received-payload),
-    HTTP-request-error(HTTP-request-error-payload),
     HTTP-request-denied,
+    HTTP-request-length-required,
+    HTTP-request-content-too-large,
+    HTTP-request-URI-too-long,
+    HTTP-request-header-section-size(option<u32>),
+    HTTP-request-header-size(option<field-size-payload>),
     HTTP-response-incomplete,
     HTTP-response-header-section-size(option<u32>),
     HTTP-response-header-size(field-size-payload),
@@ -74,12 +78,6 @@ interface types {
   record TLS-alert-received-payload {
     alert-ID: option<u8>,
     alert-message: option<string>
-  }
-
-  /// Defines the case payload type for `HTTP-request-error` above:
-  record HTTP-request-error-payload {
-    status-code: option<u16>,
-    status-phrase: option<string>
   }
 
   /// Defines the case payload type for `HTTP-response-{header,trailer}-size` above:

@@ -3,7 +3,6 @@ use crate::{
         outgoing_handler,
         types::{self, Scheme},
     },
-    http_request_error,
     types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequest},
     WasiHttpView,
 };
@@ -35,32 +34,27 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
         let req = self.table().delete(request_id)?;
 
         let method = match req.method {
-            crate::bindings::http::types::Method::Get => Method::GET,
-            crate::bindings::http::types::Method::Head => Method::HEAD,
-            crate::bindings::http::types::Method::Post => Method::POST,
-            crate::bindings::http::types::Method::Put => Method::PUT,
-            crate::bindings::http::types::Method::Delete => Method::DELETE,
-            crate::bindings::http::types::Method::Connect => Method::CONNECT,
-            crate::bindings::http::types::Method::Options => Method::OPTIONS,
-            crate::bindings::http::types::Method::Trace => Method::TRACE,
-            crate::bindings::http::types::Method::Patch => Method::PATCH,
-            crate::bindings::http::types::Method::Other(method) => {
-                return Ok(Err(http_request_error(
-                    405,
-                    format!("unknown method {method}"),
-                )));
+            types::Method::Get => Method::GET,
+            types::Method::Head => Method::HEAD,
+            types::Method::Post => Method::POST,
+            types::Method::Put => Method::PUT,
+            types::Method::Delete => Method::DELETE,
+            types::Method::Connect => Method::CONNECT,
+            types::Method::Options => Method::OPTIONS,
+            types::Method::Trace => Method::TRACE,
+            types::Method::Patch => Method::PATCH,
+            types::Method::Other(_) => {
+                // We can't support arbitrary methods
+                return Ok(Err(types::ErrorCode::HttpProtocolError));
             }
         };
 
         let (use_tls, scheme, port) = match req.scheme.unwrap_or(Scheme::Https) {
             Scheme::Http => (false, "http://", 80),
             Scheme::Https => (true, "https://", 443),
-            Scheme::Other(scheme) => {
-                return Ok(Err(http_request_error(
-                    400,
-                    format!("unsupported scheme {scheme}"),
-                )))
-            }
+
+            // We can only support http/https
+            Scheme::Other(_) => return Ok(Err(types::ErrorCode::HttpProtocolError)),
         };
 
         let authority = if let Some(authority) = req.authority {

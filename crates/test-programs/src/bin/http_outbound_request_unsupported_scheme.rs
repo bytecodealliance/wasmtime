@@ -1,4 +1,4 @@
-use test_programs::wasi::http::types::{ErrorCode, HttpRequestErrorPayload, Method, Scheme};
+use test_programs::wasi::http::types::{ErrorCode, Method, Scheme};
 
 fn main() {
     let res = test_programs::http::request(
@@ -14,9 +14,6 @@ fn main() {
         res.unwrap_err()
             .downcast::<ErrorCode>()
             .expect("expected a wasi-http ErrorCode"),
-        ErrorCode::HttpRequestError(HttpRequestErrorPayload {
-            status_code: Some(400),
-            ..
-        }),
+        ErrorCode::HttpProtocolError,
     ));
 }

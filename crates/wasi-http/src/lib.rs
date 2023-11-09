@@ -43,15 +43,3 @@ pub(crate) fn dns_error(rcode: String, info_code: u16) -> bindings::http::types:
         info_code: Some(info_code),
     })
 }
-
-pub(crate) fn http_request_error(
-    status_code: u16,
-    status_phrase: String,
-) -> bindings::http::types::ErrorCode {
-    bindings::http::types::ErrorCode::HttpRequestError(
-        bindings::http::types::HttpRequestErrorPayload {
-            status_code: Some(status_code),
-            status_phrase: Some(status_phrase),
-        },
-    )
-}
