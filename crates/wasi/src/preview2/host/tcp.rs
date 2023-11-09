@@ -317,6 +317,16 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(addr.into())
     }
 
+    fn is_listening(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, anyhow::Error> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+
+        match socket.tcp_state {
+            TcpState::Listening => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
     fn address_family(
         &mut self,
         this: Resource<tcp::TcpSocket>,
@@ -335,7 +345,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let socket = table.get(&this)?;
 
         // Instead of just calling the OS we return our own internal state, because
-        // MacOS doesn't propogate the V6ONLY state on to accepted client sockets.
+        // MacOS doesn't propagate the V6ONLY state on to accepted client sockets.
 
         match socket.family {
             SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),

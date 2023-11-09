@@ -32,6 +32,7 @@ fn test_tcp_unbound_state_invariants(family: IpAddressFamily) {
         sock.remote_address(),
         Err(ErrorCode::InvalidState)
     ));
+    assert_eq!(sock.is_listening(), false);
     assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {
@@ -90,6 +91,7 @@ fn test_tcp_bound_state_invariants(net: &Network, family: IpAddressFamily) {
         sock.remote_address(),
         Err(ErrorCode::InvalidState)
     ));
+    assert_eq!(sock.is_listening(), false);
     assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {
@@ -152,6 +154,7 @@ fn test_tcp_listening_state_invariants(net: &Network, family: IpAddressFamily) {
         sock.remote_address(),
         Err(ErrorCode::InvalidState)
     ));
+    assert_eq!(sock.is_listening(), true);
     assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {
@@ -214,6 +217,7 @@ fn test_tcp_connected_state_invariants(net: &Network, family: IpAddressFamily) {
 
     assert!(matches!(sock.local_address(), Ok(_)));
     assert!(matches!(sock.remote_address(), Ok(_)));
+    assert_eq!(sock.is_listening(), false);
     assert_eq!(sock.address_family(), family);
 
     if family == IpAddressFamily::Ipv6 {

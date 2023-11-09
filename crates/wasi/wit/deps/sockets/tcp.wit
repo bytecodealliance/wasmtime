@@ -176,6 +176,11 @@ interface tcp {
         /// - <https://man.freebsd.org/cgi/man.cgi?query=getpeername&sektion=2&n=1>
         remote-address: func() -> result<ip-socket-address, error-code>;
 
+        /// Whether the socket is listening for new connections.
+        ///
+        /// Equivalent to the SO_ACCEPTCONN socket option.
+        is-listening: func() -> bool;
+
         /// Whether this is a IPv4 or IPv6 socket.
         ///
         /// Equivalent to the SO_DOMAIN socket option.
