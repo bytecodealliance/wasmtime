@@ -256,8 +256,18 @@ fn compile_module(
     config: &generators::Config,
 ) -> Option<Module> {
     log_wasm(bytes);
+
+    fn is_pcc_error(e: &anyhow::Error) -> bool {
+        // NOTE: please keep this predicate in sync with the display format of CodegenError,
+        // defined in `wasmtime/cranelift/codegen/src/result.rs`
+        e.to_string().to_lowercase().contains("proof-carrying-code")
+    }
+
     match config.compile(engine, bytes) {
         Ok(module) => Some(module),
+        Err(e) if is_pcc_error(&e) => {
+            panic!("pcc error in input: {e:#?}");
+        }
         Err(_) if known_valid == KnownValid::No => None,
         Err(e) => {
             if let generators::InstanceAllocationStrategy::Pooling(c) = &config.wasmtime.strategy {
