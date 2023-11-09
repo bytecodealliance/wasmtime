@@ -67,10 +67,10 @@ pub fn is_intel_cpu() -> bool {
     // To read the CPU vendor string, we pass 0 in EAX and read 12 ASCII bytes
     // from EBX, EDX, and ECX (in that order).
     let result = unsafe { std::arch::x86_64::__cpuid(0) };
-    // Then we check if the string matches "GenuineIntel".
-    result.ebx == 0x756e6547 /* "Genu" */
-        && result.edx == 0x49656e69 /* "ineI" */
-        && result.ecx == 0x6c65746e /* "ntel" */
+    // Then we check if the vendor string matches "GenuineIntel".
+    result.ebx == u32::from_le_bytes(*b"Genu")
+        && result.edx == u32::from_le_bytes(*b"ineI")
+        && result.ecx == u32::from_le_bytes(*b"ntel")
 }
 
 #[cfg(test)]
