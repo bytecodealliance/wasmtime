@@ -142,29 +142,6 @@ interface types {
         truncate,
     }
 
-    /// Permissions mode used by `open-at`, `change-file-permissions-at`, and
-    /// similar.
-    flags modes {
-        /// True if the resource is considered readable by the containing
-        /// filesystem.
-        readable,
-        /// True if the resource is considered writable by the containing
-        /// filesystem.
-        writable,
-        /// True if the resource is considered executable by the containing
-        /// filesystem. This does not apply to directories.
-        executable,
-    }
-
-    /// Access type used by `access-at`.
-    variant access-type {
-        /// Test for readability, writeability, or executability.
-        access(modes),
-
-        /// Test whether the path exists.
-        exists,
-    }
-
     /// Number of hard links to an inode.
     type link-count = u64;
 
@@ -538,8 +515,6 @@ interface types {
             open-flags: open-flags,
             /// Flags to use for the resulting descriptor.
             %flags: descriptor-flags,
-            /// Permissions to use when creating a new file.
-            modes: modes
         ) -> result<descriptor, error-code>;
 
         /// Read the contents of a symbolic link.
@@ -588,25 +563,6 @@ interface types {
             new-path: string,
         ) -> result<_, error-code>;
 
-        /// Check accessibility of a filesystem path.
-        ///
-        /// Check whether the given filesystem path names an object which is
-        /// readable, writable, or executable, or whether it exists.
-        ///
-        /// This does not a guarantee that subsequent accesses will succeed, as
-        /// filesystem permissions may be modified asynchronously by external
-        /// entities.
-        ///
-        /// Note: This is similar to `faccessat` with the `AT_EACCESS` flag in POSIX.
-        access-at: func(
-            /// Flags determining the method of how the path is resolved.
-            path-flags: path-flags,
-            /// The relative path to check.
-            path: string,
-            /// The type of check to perform.
-            %type: access-type
-        ) -> result<_, error-code>;
-
         /// Unlink a filesystem object that is not a directory.
         ///
         /// Return `error-code::is-directory` if the path refers to a directory.
@@ -614,40 +570,6 @@ interface types {
         unlink-file-at: func(
             /// The relative path to a file to unlink.
             path: string,
-        ) -> result<_, error-code>;
-
-        /// Change the permissions of a filesystem object that is not a directory.
-        ///
-        /// Note that the ultimate meanings of these permissions is
-        /// filesystem-specific.
-        ///
-        /// Note: This is similar to `fchmodat` in POSIX.
-        change-file-permissions-at: func(
-            /// Flags determining the method of how the path is resolved.
-            path-flags: path-flags,
-            /// The relative path to operate on.
-            path: string,
-            /// The new permissions for the filesystem object.
-            modes: modes,
-        ) -> result<_, error-code>;
-
-        /// Change the permissions of a directory.
-        ///
-        /// Note that the ultimate meanings of these permissions is
-        /// filesystem-specific.
-        ///
-        /// Unlike in POSIX, the `executable` flag is not reinterpreted as a "search"
-        /// flag. `read` on a directory implies readability and searchability, and
-        /// `execute` is not valid for directories.
-        ///
-        /// Note: This is similar to `fchmodat` in POSIX.
-        change-directory-permissions-at: func(
-            /// Flags determining the method of how the path is resolved.
-            path-flags: path-flags,
-            /// The relative path to operate on.
-            path: string,
-            /// The new permissions for the directory.
-            modes: modes,
         ) -> result<_, error-code>;
 
         /// Test whether two descriptors refer to the same filesystem object.
