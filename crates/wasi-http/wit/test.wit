@@ -1,3 +1,5 @@
+package wasmtime:wasi;
+
 // only used as part of `test-programs`
 world test-reactor {
   include wasi:cli/reactor@0.2.0-rc-2023-11-05;

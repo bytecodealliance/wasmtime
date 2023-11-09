@@ -45,7 +45,7 @@ pub mod bindings {
     #[cfg(feature = "reactor")]
     wit_bindgen::generate!({
         path: "../wasi/wit",
-        world: "wasmtime:wasi/preview1-adapter-reactor",
+        world: "wasi:cli/reactor",
         std_feature,
         raw_strings,
         // Automatically generated bindings for these functions will allocate
