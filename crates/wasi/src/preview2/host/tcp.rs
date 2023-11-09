@@ -265,6 +265,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             {
                 _ = util::set_ipv6_unicast_hops(&connection, ttl); // Ignore potential error.
             }
+
+            if let Some(value) = socket.keep_alive_idle_time {
+                _ = util::set_tcp_keepidle(&connection, value); // Ignore potential error.
+            }
         }
 
         let mut tcp_socket = TcpSocket::from_tcp_stream(connection, socket.family)?;
@@ -445,12 +449,19 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         this: Resource<tcp::TcpSocket>,
         value: u64,
     ) -> SocketResult<()> {
-        let table = self.table();
-        let socket = table.get(&this)?;
-        Ok(util::set_tcp_keepidle(
-            socket.tcp_socket(),
-            Duration::from_nanos(value),
-        )?)
+        let table = self.table_mut();
+        let socket = table.get_mut(&this)?;
+
+        let duration = Duration::from_nanos(value);
+
+        util::set_tcp_keepidle(socket.tcp_socket(), duration)?;
+
+        #[cfg(target_os = "macos")]
+        {
+            socket.keep_alive_idle_time = Some(duration);
+        }
+
+        Ok(())
     }
 
     fn keep_alive_interval(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
