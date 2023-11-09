@@ -3,6 +3,7 @@
 use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::ir::Type;
+use crate::isa::x64::args::AvxOpcode;
 use crate::isa::x64::inst::args::{
     AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SyntheticAmode,
     ToWritableReg, CC,
@@ -533,38 +534,69 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
+        // NOTE: it's assumed that all of these cases perform 128-bit loads, but this hasn't been
+        // verified. The effect of this will be spurious PCC failures when these instructions are
+        // involved.
         Inst::XmmRmRUnaligned { dst, ref src2, .. }
-        | Inst::XmmRmRImmVex { dst, ref src2, .. }
-        | Inst::XmmRmRVex3 {
-            dst,
-            src3: ref src2,
-            ..
-        }
-        | Inst::XmmRmRBlendVex { dst, ref src2, .. }
-        | Inst::XmmUnaryRmRVex {
-            dst, src: ref src2, ..
-        }
-        | Inst::XmmUnaryRmRImmVex {
-            dst, src: ref src2, ..
-        }
         | Inst::XmmRmREvex { dst, ref src2, .. }
         | Inst::XmmUnaryRmRImmEvex {
             dst, src: ref src2, ..
-        }
-        | Inst::XmmRmREvex3 {
-            dst,
-            src3: ref src2,
-            ..
         }
         | Inst::XmmUnaryRmRUnaligned {
             dst, src: ref src2, ..
         }
         | Inst::XmmUnaryRmREvex {
             dst, src: ref src2, ..
+        }
+        | Inst::XmmRmREvex3 {
+            dst,
+            src3: ref src2,
+            ..
         } => {
             match <&RegMem>::from(src2) {
                 RegMem::Mem { ref addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
+        Inst::XmmRmRImmVex {
+            op, dst, ref src2, ..
+        }
+        | Inst::XmmRmRVex3 {
+            op,
+            dst,
+            src3: ref src2,
+            ..
+        }
+        | Inst::XmmRmRBlendVex {
+            op, dst, ref src2, ..
+        }
+        | Inst::XmmUnaryRmRVex {
+            op,
+            dst,
+            src: ref src2,
+            ..
+        }
+        | Inst::XmmUnaryRmRImmVex {
+            op,
+            dst,
+            src: ref src2,
+            ..
+        } => {
+            let size = match op {
+                AvxOpcode::Vmovss => 32,
+                AvxOpcode::Vmovsd => 64,
+
+                // We assume all other operations happen on 128-bit values.
+                _ => 128,
+            };
+
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, I8X16, size)?;
                 }
                 RegMem::Reg { .. } => {}
             }
