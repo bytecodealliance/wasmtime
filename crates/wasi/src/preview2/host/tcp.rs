@@ -15,6 +15,7 @@ use io_lifetimes::AsSocketlike;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
 
@@ -264,6 +265,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
             {
                 _ = util::set_ipv6_unicast_hops(&connection, ttl); // Ignore potential error.
             }
+
+            if let Some(value) = socket.keep_alive_idle_time {
+                _ = util::set_tcp_keepidle(&connection, value); // Ignore potential error.
+            }
         }
 
         let mut tcp_socket = TcpSocket::from_tcp_stream(connection, socket.family)?;
@@ -317,6 +322,16 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(addr.into())
     }
 
+    fn is_listening(&mut self, this: Resource<tcp::TcpSocket>) -> Result<bool, anyhow::Error> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+
+        match socket.tcp_state {
+            TcpState::Listening => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
     fn address_family(
         &mut self,
         this: Resource<tcp::TcpSocket>,
@@ -335,7 +350,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let socket = table.get(&this)?;
 
         // Instead of just calling the OS we return our own internal state, because
-        // MacOS doesn't propogate the V6ONLY state on to accepted client sockets.
+        // MacOS doesn't propagate the V6ONLY state on to accepted client sockets.
 
         match socket.family {
             SocketAddressFamily::Ipv4 => Err(ErrorCode::NotSupported.into()),
@@ -372,6 +387,10 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 
+        if value == 0 {
+            return Err(ErrorCode::InvalidArgument.into());
+        }
+
         // Silently clamp backlog size. This is OK for us to do, because operating systems do this too.
         let value = value
             .try_into()
@@ -403,19 +422,84 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         }
     }
 
-    fn keep_alive(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
+    fn keep_alive_enabled(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<bool> {
         let table = self.table();
         let socket = table.get(&this)?;
         Ok(sockopt::get_socket_keepalive(socket.tcp_socket())?)
     }
 
-    fn set_keep_alive(&mut self, this: Resource<tcp::TcpSocket>, value: bool) -> SocketResult<()> {
+    fn set_keep_alive_enabled(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: bool,
+    ) -> SocketResult<()> {
         let table = self.table();
         let socket = table.get(&this)?;
         Ok(sockopt::set_socket_keepalive(socket.tcp_socket(), value)?)
     }
 
-    fn unicast_hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u8> {
+    fn keep_alive_idle_time(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(sockopt::get_tcp_keepidle(socket.tcp_socket())?.as_nanos() as u64)
+    }
+
+    fn set_keep_alive_idle_time(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: u64,
+    ) -> SocketResult<()> {
+        let table = self.table_mut();
+        let socket = table.get_mut(&this)?;
+
+        let duration = Duration::from_nanos(value);
+
+        util::set_tcp_keepidle(socket.tcp_socket(), duration)?;
+
+        #[cfg(target_os = "macos")]
+        {
+            socket.keep_alive_idle_time = Some(duration);
+        }
+
+        Ok(())
+    }
+
+    fn keep_alive_interval(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u64> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(sockopt::get_tcp_keepintvl(socket.tcp_socket())?.as_nanos() as u64)
+    }
+
+    fn set_keep_alive_interval(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: u64,
+    ) -> SocketResult<()> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(util::set_tcp_keepintvl(
+            socket.tcp_socket(),
+            Duration::from_nanos(value),
+        )?)
+    }
+
+    fn keep_alive_count(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u32> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(sockopt::get_tcp_keepcnt(socket.tcp_socket())?)
+    }
+
+    fn set_keep_alive_count(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+        value: u32,
+    ) -> SocketResult<()> {
+        let table = self.table();
+        let socket = table.get(&this)?;
+        Ok(util::set_tcp_keepcnt(socket.tcp_socket(), value)?)
+    }
+
+    fn hop_limit(&mut self, this: Resource<tcp::TcpSocket>) -> SocketResult<u8> {
         let table = self.table();
         let socket = table.get(&this)?;
 
@@ -427,11 +511,7 @@ impl<T: WasiView> crate::preview2::host::tcp::tcp::HostTcpSocket for T {
         Ok(ttl)
     }
 
-    fn set_unicast_hop_limit(
-        &mut self,
-        this: Resource<tcp::TcpSocket>,
-        value: u8,
-    ) -> SocketResult<()> {
+    fn set_hop_limit(&mut self, this: Resource<tcp::TcpSocket>, value: u8) -> SocketResult<()> {
         let table = self.table_mut();
         let socket = table.get_mut(&this)?;
 

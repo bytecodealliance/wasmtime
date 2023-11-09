@@ -64,15 +64,17 @@ pub struct TcpSocket {
 
     pub(crate) family: SocketAddressFamily,
 
-    /// The manually configured buffer size. `None` means: no preference, use system default.
+    // The socket options below are not automatically inherited from the listener
+    // on all platforms. So we keep track of which options have been explicitly
+    // set and manually apply those values to newly accepted clients.
     #[cfg(target_os = "macos")]
     pub(crate) receive_buffer_size: Option<usize>,
-    /// The manually configured buffer size. `None` means: no preference, use system default.
     #[cfg(target_os = "macos")]
     pub(crate) send_buffer_size: Option<usize>,
-    /// The manually configured TTL. `None` means: no preference, use system default.
     #[cfg(target_os = "macos")]
     pub(crate) hop_limit: Option<u8>,
+    #[cfg(target_os = "macos")]
+    pub(crate) keep_alive_idle_time: Option<std::time::Duration>,
 }
 
 pub(crate) struct TcpReadStream {
@@ -301,6 +303,8 @@ impl TcpSocket {
             send_buffer_size: None,
             #[cfg(target_os = "macos")]
             hop_limit: None,
+            #[cfg(target_os = "macos")]
+            keep_alive_idle_time: None,
         })
     }
 
