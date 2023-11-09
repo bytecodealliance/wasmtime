@@ -914,8 +914,7 @@ where
 
     // TODO: verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
-        let (ty, slot) = self.context.frame.get_local_address(index, self.masm);
-        let src = self.emit_set_local(slot, ty.into());
+        let src = self.emit_set_local(index);
         self.context.free_reg(src);
     }
 
@@ -1247,8 +1246,7 @@ where
     }
 
     fn visit_local_tee(&mut self, index: u32) {
-        let (ty, slot) = self.context.frame.get_local_address(index, self.masm);
-        let typed_reg = self.emit_set_local(slot, ty.into());
+        let typed_reg = self.emit_set_local(index);
         self.context.stack.push(typed_reg.into());
     }
 

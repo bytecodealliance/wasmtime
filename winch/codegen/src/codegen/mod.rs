@@ -345,12 +345,14 @@ where
     }
 
     /// Pops the value at the stack top and assigns it to the local at
-    ///
     /// the given index, returning the typed register holding the
     /// source value.
-    pub fn emit_set_local(&mut self, addr: M::Address, size: OperandSize) -> TypedReg {
+    pub fn emit_set_local(&mut self, index: u32) -> TypedReg {
         let src = self.context.pop_to_reg(self.masm, None);
-        self.masm.store(RegImm::reg(src.reg), addr, size);
+        // Need to get address of local after `pop_to_reg` since `pop_to_reg`
+        // may change the local's offset from the SP.
+        let (ty, addr) = self.context.frame.get_local_address(index, self.masm);
+        self.masm.store(RegImm::reg(src.reg), addr, ty.into());
 
         src
     }
