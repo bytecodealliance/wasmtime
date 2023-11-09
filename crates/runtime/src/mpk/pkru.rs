@@ -53,16 +53,24 @@ pub fn write(pkru: u32) {
     }
 }
 
-/// Check the `ECX.PKU` flag (bit 3) of the `07h` `CPUID` leaf; see the
-/// Intel Software Development Manual, vol 3a, section 2.7.
+/// Check the `ECX.PKU` flag (bit 3) of the `07h` `CPUID` leaf; see the Intel
+/// Software Development Manual, vol 3a, section 2.7. This flag is only set on
+/// Intel CPUs, so this function also checks the `CPUID` vendor string.
 pub fn has_cpuid_bit_set() -> bool {
-    // TODO: disable MPK support until the following issue is resolved:
-    // https://github.com/bytecodealliance/wasmtime/issues/7445
-    if true {
-        return false;
-    }
     let result = unsafe { std::arch::x86_64::__cpuid(0x07) };
-    (result.ecx & 0b100) != 0
+    is_intel_cpu() && (result.ecx & 0b100) != 0
+}
+
+/// Check the `CPUID` vendor string for `GenuineIntel`; see the Intel Software
+/// Development Manual, vol 2a, `CPUID` description.
+pub fn is_intel_cpu() -> bool {
+    // To read the CPU vendor string, we pass 0 in EAX and read 12 ASCII bytes
+    // from EBX, EDX, and ECX (in that order).
+    let result = unsafe { std::arch::x86_64::__cpuid(0) };
+    // Then we check if the string matches "GenuineIntel".
+    result.ebx == 0x756e6547 /* "Genu" */
+        && result.edx == 0x49656e69 /* "ineI" */
+        && result.ecx == 0x6c65746e /* "ntel" */
 }
 
 #[cfg(test)]
