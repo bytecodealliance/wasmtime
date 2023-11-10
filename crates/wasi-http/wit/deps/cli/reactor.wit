@@ -3,7 +3,6 @@ package wasi:cli@0.2.0-rc-2023-11-05;
 world reactor {
   import wasi:clocks/wall-clock@0.2.0-rc-2023-11-05;
   import wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-05;
-  import wasi:clocks/timezone@0.2.0-rc-2023-11-05;
   import wasi:filesystem/types@0.2.0-rc-2023-11-05;
   import wasi:filesystem/preopens@0.2.0-rc-2023-11-05;
   import wasi:sockets/instance-network@0.2.0-rc-2023-11-05;
