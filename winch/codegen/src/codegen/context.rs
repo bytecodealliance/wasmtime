@@ -404,6 +404,13 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         self.reachable = false;
     }
 
+    /// A combination of [Self::pop_abi_results] and [Self::push_abi_results]
+    /// to be used on conditional branches: br_if and br_table.
+    pub fn top_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
+        self.pop_abi_results(result, masm);
+        self.push_abi_results(result, masm);
+    }
+
     /// Handles the emission of the ABI result. This function is used at the end
     /// of a block or function to pop the results from the value stack into the
     /// corresponding ABI result representation.

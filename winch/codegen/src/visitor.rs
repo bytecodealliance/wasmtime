@@ -1170,8 +1170,7 @@ where
             self.masm,
             |ctx, masm| ctx.pop_to_reg(masm, None),
         );
-        self.context.pop_abi_results(&result, self.masm);
-        self.context.push_abi_results(&result, self.masm);
+        self.context.top_abi_results(&result, self.masm);
         self.masm.branch(
             IntCmpKind::Ne,
             top.reg.into(),
@@ -1191,15 +1190,17 @@ where
         let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
 
         let default_index = control_index(targets.default(), self.control_frames.len());
-        let default_result = self.control_frames[default_index].as_target_result();
+        let default_frame = &self.control_frames[default_index];
+        let default_result = default_frame.as_target_result();
         let (index, tmp) = self.context.maybe_without1::<(TypedReg, _), M, _>(
             default_result.result_reg(),
             self.masm,
             |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
         );
 
-        self.context.pop_abi_results(&default_result, self.masm);
-        self.context.push_abi_results(&default_result, self.masm);
+        // Materialize any constants or locals into their result representation,
+        // so that when reachability is restored, they are correctly located.
+        self.context.top_abi_results(&default_result, self.masm);
         self.masm.jmp_table(&labels, index.into(), tmp);
 
         for (t, l) in targets
@@ -1209,18 +1210,16 @@ where
             .zip(labels.iter())
         {
             let control_index = control_index(t.unwrap(), self.control_frames.len());
+            let frame = &mut self.control_frames[control_index];
 
+            // NB: We don't perform any result handling as it was
+            // already taken care of above before jumping to the
+            // jump table above.
             self.masm.bind(*l);
-            self.context.unconditional_jump(
-                &mut self.control_frames[control_index],
-                self.masm,
-                // NB: We don't perform any result handling as it was
-                // already taken care of above before jumping to the
-                // jump table above. The call to `unconditional_jump`,
-                // will stil take care of the proper stack alignment.
-                |_, _, _| {},
-            )
+            self.masm.jmp(*frame.label());
+            frame.set_as_target();
         }
+        self.context.reachable = false;
         self.context.free_reg(index.reg);
         self.context.free_reg(tmp);
     }
