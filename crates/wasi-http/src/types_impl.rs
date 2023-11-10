@@ -2,7 +2,7 @@ use crate::{
     bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers},
     body::{FinishMessage, HostFutureTrailers, HostIncomingBody, HostOutgoingBody},
     types::{
-        FieldMap, FieldMapMutability, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
+        FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
         HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
     },
     WasiHttpView,
@@ -35,22 +35,32 @@ fn move_fields(table: &mut Table, id: Resource<HostFields>) -> wasmtime::Result<
     }
 }
 
-fn get_fields_mut<'a>(
+fn get_fields<'a>(
     table: &'a mut Table,
     id: &Resource<HostFields>,
-) -> wasmtime::Result<(FieldMapMutability, &'a mut FieldMap)> {
+) -> wasmtime::Result<&'a FieldMap> {
     let fields = table.get(&id)?;
     if let HostFields::Ref { parent, get_fields } = *fields {
         let entry = table.get_any_mut(parent)?;
-        return Ok((FieldMapMutability::Immutable, get_fields(entry)));
+        return Ok(get_fields(entry));
     }
 
     match table.get_mut(&id)? {
-        HostFields::Owned { fields } => Ok((FieldMapMutability::Mutable, fields)),
+        HostFields::Owned { fields } => Ok(fields),
         // NB: ideally the `if let` above would go here instead. That makes
         // the borrow-checker unhappy. Unclear why. If you, dear reader, can
         // refactor this to remove the `unreachable!` please do.
         HostFields::Ref { .. } => unreachable!(),
+    }
+}
+
+fn get_fields_mut<'a>(
+    table: &'a mut Table,
+    id: &Resource<HostFields>,
+) -> wasmtime::Result<Result<&'a mut FieldMap, types::HeaderError>> {
+    match table.get_mut(&id)? {
+        HostFields::Owned { fields } => Ok(Ok(fields)),
+        HostFields::Ref { .. } => Ok(Err(types::HeaderError::Immutable)),
     }
 }
 
@@ -131,9 +141,8 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             Err(_) => return Ok(vec![]),
         };
 
-        let res = get_fields_mut(self.table(), &fields)
+        let res = get_fields(self.table(), &fields)
             .context("[fields_get] getting fields")?
-            .1
             .get_all(header)
             .into_iter()
             .map(|val| val.as_bytes().to_owned())
@@ -164,18 +173,15 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             }
         }
 
-        let (mutability, m) =
-            get_fields_mut(self.table(), &fields).context("[fields_set] getting mutable fields")?;
-        if mutability.is_immutable() {
-            return Ok(Err(types::HeaderError::Immutable));
-        }
-
-        m.remove(&header);
-        for value in values {
-            m.append(&header, value);
-        }
-
-        Ok(Ok(()))
+        Ok(get_fields_mut(self.table(), &fields)
+            .context("[fields_set] getting mutable fields")?
+            .map(|fields| {
+                fields.remove(&header);
+                for value in values {
+                    fields.append(&header, value);
+                }
+                ()
+            }))
     }
 
     fn delete(
@@ -192,13 +198,10 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
-        let (mutability, m) = get_fields_mut(self.table(), &fields)?;
-        if mutability.is_immutable() {
-            return Ok(Err(types::HeaderError::Immutable));
-        }
-
-        m.remove(header);
-        Ok(Ok(()))
+        Ok(get_fields_mut(self.table(), &fields)?.map(|fields| {
+            fields.remove(header);
+            ()
+        }))
     }
 
     fn append(
@@ -221,32 +224,27 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        let (mutability, m) = get_fields_mut(self.table(), &fields)
-            .context("[fields_append] getting mutable fields")?;
-        if mutability.is_immutable() {
-            return Ok(Err(types::HeaderError::Immutable));
-        }
-
-        m.append(header, value);
-        Ok(Ok(()))
+        Ok(get_fields_mut(self.table(), &fields)
+            .context("[fields_append] getting mutable fields")?
+            .map(|fields| {
+                fields.append(header, value);
+                ()
+            }))
     }
 
     fn entries(
         &mut self,
         fields: Resource<HostFields>,
     ) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
-        let (_, fields) = get_fields_mut(self.table(), &fields)?;
-        let result = fields
+        Ok(get_fields(self.table(), &fields)?
             .iter()
             .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_owned()))
-            .collect();
-        Ok(result)
+            .collect())
     }
 
     fn clone(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<Resource<HostFields>> {
-        let fields = get_fields_mut(self.table(), &fields)
+        let fields = get_fields(self.table(), &fields)
             .context("[fields_clone] getting fields")?
-            .1
             .clone();
 
         let id = self

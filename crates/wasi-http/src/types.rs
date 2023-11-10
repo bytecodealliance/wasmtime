@@ -323,18 +323,6 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FieldMapMutability {
-    Mutable,
-    Immutable,
-}
-
-impl FieldMapMutability {
-    pub fn is_immutable(&self) -> bool {
-        *self == Self::Immutable
-    }
-}
-
 pub type FieldMap = hyper::HeaderMap;
 
 pub enum HostFields {
