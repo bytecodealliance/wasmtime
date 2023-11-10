@@ -6,7 +6,7 @@
 # in same directory as wasmtime.
 
 set -o pipefail
-set -eox
+set -eux
 
 # Flags and default modes
 PREINSTALLED=true
@@ -63,7 +63,7 @@ for file in "$BASE_DIR/cranelift/zkasm_data/generated"/*; do
   # it seems like zkasmtest sets 1 if smth goes wrong but don't set 0
   # if everything is OK
   exit_code=0
-  
+
   if [[ $filename == $FAIL_PREFIX* ]]; then
     # If the file name starts with "_should_fail_", we should expect a non-zero exit code
     $NODE_CMD "$file" > /dev/null 2>&1 || exit_code=$?
