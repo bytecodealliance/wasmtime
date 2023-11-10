@@ -366,15 +366,21 @@ pub enum FinishMessage {
     Abort,
 }
 
+pub type OutgoingBodyLen = Arc<std::sync::atomic::AtomicU64>;
+
 pub struct HostOutgoingBody {
     pub body_output_stream: Option<Box<dyn HostOutputStream>>,
-    pub finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
+    size: Option<OutgoingBodyLen>,
+    finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
 }
 
 impl HostOutgoingBody {
-    pub fn new() -> (Self, HyperOutgoingBody) {
+    pub fn new(size: Option<u64>) -> (Self, HyperOutgoingBody) {
+        let size = size.map(|len| Arc::new(std::sync::atomic::AtomicU64::new(len)));
+
         use tokio::sync::oneshot::error::RecvError;
         struct BodyImpl {
+            size: Option<OutgoingBodyLen>,
             body_receiver: mpsc::Receiver<Bytes>,
             finish_receiver: Option<oneshot::Receiver<FinishMessage>>,
         }
@@ -387,7 +393,25 @@ impl HostOutgoingBody {
             ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
                 match self.as_mut().body_receiver.poll_recv(cx) {
                     Poll::Pending => Poll::Pending,
-                    Poll::Ready(Some(frame)) => Poll::Ready(Some(Ok(Frame::data(frame)))),
+                    Poll::Ready(Some(frame)) => {
+                        if let Some(len) = self.size.as_ref() {
+                            let frame_len = frame.len() as u64;
+                            let old_len =
+                                len.fetch_sub(frame_len, std::sync::atomic::Ordering::Relaxed);
+
+                            // This frame wrote too much, so let's write 0 in so that it's not
+                            // possible to raise an error for not writing enough as well.
+                            if old_len < frame_len {
+                                len.store(0, std::sync::atomic::Ordering::Relaxed);
+
+                                return Poll::Ready(Some(Err(types::Error::ProtocolError(
+                                    "too much written to output stream".to_owned(),
+                                ))));
+                            }
+                        }
+
+                        Poll::Ready(Some(Ok(Frame::data(frame))))
+                    }
 
                     // This means that the `body_sender` end of the channel has been dropped.
                     Poll::Ready(None) => {
@@ -419,6 +443,7 @@ impl HostOutgoingBody {
         let (body_sender, body_receiver) = mpsc::channel(2);
         let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
+            size: size.clone(),
             body_receiver,
             finish_receiver: Some(finish_receiver),
         }
@@ -427,10 +452,58 @@ impl HostOutgoingBody {
             Self {
                 // TODO: this capacity constant is arbitrary, and should be configurable
                 body_output_stream: Some(Box::new(BodyWriteStream::new(1024 * 1024, body_sender))),
+                size,
                 finish_sender: Some(finish_sender),
             },
             body_impl,
         )
+    }
+
+    pub fn finish(mut self, ts: Option<FieldMap>) -> Result<(), types::Error> {
+        // Make sure that the output stream has been dropped, so that the BodyImpl poll function
+        // will immediately pick up the finish sender.
+        drop(self.body_output_stream);
+
+        let sender = self
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        // TODO: does sending guarantee that the message was received, or could it be queued to
+        // receive?
+        if let Some(len) = self.size {
+            let remaining = len.load(std::sync::atomic::Ordering::Relaxed);
+            if remaining > 0 {
+                let _ = sender.send(FinishMessage::Abort);
+                return Err(types::Error::ProtocolError(
+                    "not enough body written".to_owned(),
+                ));
+            }
+        }
+
+        let message = if let Some(ts) = ts {
+            FinishMessage::Trailers(ts)
+        } else {
+            FinishMessage::Finished
+        };
+
+        // Ignoring failure: receiver died sending body, but we can't report that here.
+        let _ = sender.send(message.into());
+
+        Ok(())
+    }
+
+    pub fn abort(mut self) {
+        // Make sure that the output stream has been dropped, so that the BodyImpl poll function
+        // will immediately pick up the finish sender.
+        drop(self.body_output_stream);
+
+        let sender = self
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        let _ = sender.send(FinishMessage::Abort);
     }
 }
 
