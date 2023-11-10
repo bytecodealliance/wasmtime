@@ -366,21 +366,46 @@ pub enum FinishMessage {
     Abort,
 }
 
-pub type OutgoingBodyLen = Arc<std::sync::atomic::AtomicU64>;
+#[derive(Clone)]
+struct WrittenState {
+    expected: u64,
+    written: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl WrittenState {
+    fn new(expected_size: u64) -> Self {
+        Self {
+            expected: expected_size,
+            written: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        }
+    }
+
+    fn update(&self, len: u64) -> bool {
+        let old = self
+            .written
+            .fetch_add(len, std::sync::atomic::Ordering::Relaxed);
+        old + len <= self.expected
+    }
+
+    fn finish(self) -> bool {
+        let written = self.written.load(std::sync::atomic::Ordering::Relaxed);
+        written == self.expected
+    }
+}
 
 pub struct HostOutgoingBody {
     pub body_output_stream: Option<Box<dyn HostOutputStream>>,
-    size: Option<OutgoingBodyLen>,
+    written: Option<WrittenState>,
     finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
 }
 
 impl HostOutgoingBody {
     pub fn new(size: Option<u64>) -> (Self, HyperOutgoingBody) {
-        let size = size.map(|len| Arc::new(std::sync::atomic::AtomicU64::new(len)));
+        let written = size.map(WrittenState::new);
 
         use tokio::sync::oneshot::error::RecvError;
         struct BodyImpl {
-            size: Option<OutgoingBodyLen>,
+            written: Option<WrittenState>,
             body_receiver: mpsc::Receiver<Bytes>,
             finish_receiver: Option<oneshot::Receiver<FinishMessage>>,
         }
@@ -394,16 +419,9 @@ impl HostOutgoingBody {
                 match self.as_mut().body_receiver.poll_recv(cx) {
                     Poll::Pending => Poll::Pending,
                     Poll::Ready(Some(frame)) => {
-                        if let Some(len) = self.size.as_ref() {
-                            let frame_len = frame.len() as u64;
-                            let old_len =
-                                len.fetch_sub(frame_len, std::sync::atomic::Ordering::Relaxed);
-
-                            // This frame wrote too much, so let's write 0 in so that it's not
-                            // possible to raise an error for not writing enough as well.
-                            if old_len < frame_len {
-                                len.store(0, std::sync::atomic::Ordering::Relaxed);
-
+                        if let Some(written) = self.written.as_ref() {
+                            if !written.update(frame.len() as u64) {
+                                // This frame wrote too much, so raise an error.
                                 return Poll::Ready(Some(Err(types::Error::ProtocolError(
                                     "too much written to output stream".to_owned(),
                                 ))));
@@ -443,7 +461,7 @@ impl HostOutgoingBody {
         let (body_sender, body_receiver) = mpsc::channel(2);
         let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
-            size: size.clone(),
+            written: written.clone(),
             body_receiver,
             finish_receiver: Some(finish_receiver),
         }
@@ -452,7 +470,7 @@ impl HostOutgoingBody {
             Self {
                 // TODO: this capacity constant is arbitrary, and should be configurable
                 body_output_stream: Some(Box::new(BodyWriteStream::new(1024 * 1024, body_sender))),
-                size,
+                written,
                 finish_sender: Some(finish_sender),
             },
             body_impl,
@@ -471,9 +489,8 @@ impl HostOutgoingBody {
 
         // TODO: does sending guarantee that the message was received, or could it be queued to
         // receive?
-        if let Some(len) = self.size {
-            let remaining = len.load(std::sync::atomic::Ordering::Relaxed);
-            if remaining > 0 {
+        if let Some(w) = self.written {
+            if !w.finish() {
                 let _ = sender.send(FinishMessage::Abort);
                 return Err(types::Error::ProtocolError(
                     "not enough body written".to_owned(),
