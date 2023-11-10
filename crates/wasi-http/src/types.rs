@@ -323,6 +323,18 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FieldMapMutability {
+    Mutable,
+    Immutable,
+}
+
+impl FieldMapMutability {
+    pub fn is_immutable(&self) -> bool {
+        *self == Self::Immutable
+    }
+}
+
 pub type FieldMap = hyper::HeaderMap;
 
 pub enum HostFields {
@@ -333,6 +345,9 @@ pub enum HostFields {
         // always be registered as a child of the entry with the `parent` id. This ensures that the
         // entry will always exist while this `HostFields::Ref` entry exists in the table, thus we
         // don't need to account for failure when fetching the fields ref from the parent.
+        //
+        // NOTE: references are always considered immutable -- the only way to modify fields is to
+        // create an owned version first.
         get_fields: for<'a> fn(elem: &'a mut (dyn Any + 'static)) -> &'a mut FieldMap,
     },
     Owned {

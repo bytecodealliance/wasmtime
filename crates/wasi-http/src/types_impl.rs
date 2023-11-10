@@ -2,7 +2,7 @@ use crate::{
     bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers},
     body::{FinishMessage, HostFutureTrailers, HostIncomingBody, HostOutgoingBody},
     types::{
-        FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
+        FieldMap, FieldMapMutability, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
         HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
     },
     WasiHttpView,
@@ -20,30 +20,33 @@ use wasmtime_wasi::preview2::{
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {}
 
 /// Take ownership of the underlying [`FieldMap`] associated with this fields resource. If the
-/// fields resource references another fields, the returned [`FieldMap`] will be cloned.
+/// fields resource references another fields, the returned [`FieldMap`] will be cloned. We throw
+/// away the `immutable` status of the original fields, as the new context will determine how the
+/// [`FieldMap`] is used.
 fn move_fields(table: &mut Table, id: Resource<HostFields>) -> wasmtime::Result<FieldMap> {
     match table.delete(id)? {
         HostFields::Ref { parent, get_fields } => {
             let entry = table.get_any_mut(parent)?;
-            Ok(get_fields(entry).clone())
+            let fields = get_fields(entry);
+            Ok(fields.clone())
         }
 
-        HostFields::Owned { fields } => Ok(fields),
+        HostFields::Owned { fields, .. } => Ok(fields),
     }
 }
 
 fn get_fields_mut<'a>(
     table: &'a mut Table,
     id: &Resource<HostFields>,
-) -> wasmtime::Result<&'a mut FieldMap> {
+) -> wasmtime::Result<(FieldMapMutability, &'a mut FieldMap)> {
     let fields = table.get(&id)?;
     if let HostFields::Ref { parent, get_fields } = *fields {
         let entry = table.get_any_mut(parent)?;
-        return Ok(get_fields(entry));
+        return Ok((FieldMapMutability::Immutable, get_fields(entry)));
     }
 
     match table.get_mut(&id)? {
-        HostFields::Owned { fields } => Ok(fields),
+        HostFields::Owned { fields } => Ok((FieldMapMutability::Mutable, fields)),
         // NB: ideally the `if let` above would go here instead. That makes
         // the borrow-checker unhappy. Unclear why. If you, dear reader, can
         // refactor this to remove the `unreachable!` please do.
@@ -83,7 +86,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         &mut self,
         entries: Vec<(String, Vec<u8>)>,
     ) -> wasmtime::Result<Result<Resource<HostFields>, types::HeaderError>> {
-        let mut map = hyper::HeaderMap::new();
+        let mut fields = hyper::HeaderMap::new();
 
         for (header, value) in entries {
             let header = match hyper::header::HeaderName::from_bytes(header.as_bytes()) {
@@ -100,12 +103,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
                 Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             };
 
-            map.append(header, value);
+            fields.append(header, value);
         }
 
         let id = self
             .table()
-            .push(HostFields::Owned { fields: map })
+            .push(HostFields::Owned { fields })
             .context("[new_fields] pushing fields")?;
 
         Ok(Ok(id))
@@ -130,6 +133,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
 
         let res = get_fields_mut(self.table(), &fields)
             .context("[fields_get] getting fields")?
+            .1
             .get_all(header)
             .into_iter()
             .map(|val| val.as_bytes().to_owned())
@@ -160,8 +164,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             }
         }
 
-        let m =
+        let (mutability, m) =
             get_fields_mut(self.table(), &fields).context("[fields_set] getting mutable fields")?;
+        if mutability.is_immutable() {
+            return Ok(Err(types::HeaderError::Immutable));
+        }
+
         m.remove(&header);
         for value in values {
             m.append(&header, value);
@@ -184,7 +192,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
-        let m = get_fields_mut(self.table(), &fields)?;
+        let (mutability, m) = get_fields_mut(self.table(), &fields)?;
+        if mutability.is_immutable() {
+            return Ok(Err(types::HeaderError::Immutable));
+        }
+
         m.remove(header);
         Ok(Ok(()))
     }
@@ -209,8 +221,11 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        let m = get_fields_mut(self.table(), &fields)
+        let (mutability, m) = get_fields_mut(self.table(), &fields)
             .context("[fields_append] getting mutable fields")?;
+        if mutability.is_immutable() {
+            return Ok(Err(types::HeaderError::Immutable));
+        }
 
         m.append(header, value);
         Ok(Ok(()))
@@ -220,7 +235,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         &mut self,
         fields: Resource<HostFields>,
     ) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
-        let fields = get_fields_mut(self.table(), &fields)?;
+        let (_, fields) = get_fields_mut(self.table(), &fields)?;
         let result = fields
             .iter()
             .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_owned()))
@@ -231,6 +246,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
     fn clone(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<Resource<HostFields>> {
         let fields = get_fields_mut(self.table(), &fields)
             .context("[fields_clone] getting fields")?
+            .1
             .clone();
 
         let id = self
@@ -837,7 +853,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
             .expect("outgoing-body trailer_sender consumed by a non-owning function");
 
         let message = if let Some(ts) = ts {
-            FinishMessage::Trailers(get_fields_mut(self.table(), &ts)?.clone().into())
+            FinishMessage::Trailers(move_fields(self.table(), ts)?)
         } else {
             FinishMessage::Finished
         };

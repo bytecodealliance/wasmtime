@@ -42,6 +42,7 @@ interface types {
   variant header-error {
     invalid-syntax,
     forbidden,
+    immutable
   }
 
   /// Field keys are always strings.
