@@ -32,10 +32,10 @@ fn move_fields(table: &mut Table, id: Resource<HostFields>) -> wasmtime::Result<
     }
 }
 
-fn get_fields_mut<'a>(
+fn get_fields<'a>(
     table: &'a mut Table,
     id: &Resource<HostFields>,
-) -> wasmtime::Result<&'a mut FieldMap> {
+) -> wasmtime::Result<&'a FieldMap> {
     let fields = table.get(&id)?;
     if let HostFields::Ref { parent, get_fields } = *fields {
         let entry = table.get_any_mut(parent)?;
@@ -48,6 +48,16 @@ fn get_fields_mut<'a>(
         // the borrow-checker unhappy. Unclear why. If you, dear reader, can
         // refactor this to remove the `unreachable!` please do.
         HostFields::Ref { .. } => unreachable!(),
+    }
+}
+
+fn get_fields_mut<'a>(
+    table: &'a mut Table,
+    id: &Resource<HostFields>,
+) -> wasmtime::Result<Result<&'a mut FieldMap, types::HeaderError>> {
+    match table.get_mut(&id)? {
+        HostFields::Owned { fields } => Ok(Ok(fields)),
+        HostFields::Ref { .. } => Ok(Err(types::HeaderError::Immutable)),
     }
 }
 
@@ -83,7 +93,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
         &mut self,
         entries: Vec<(String, Vec<u8>)>,
     ) -> wasmtime::Result<Result<Resource<HostFields>, types::HeaderError>> {
-        let mut map = hyper::HeaderMap::new();
+        let mut fields = hyper::HeaderMap::new();
 
         for (header, value) in entries {
             let header = match hyper::header::HeaderName::from_bytes(header.as_bytes()) {
@@ -100,12 +110,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
                 Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
             };
 
-            map.append(header, value);
+            fields.append(header, value);
         }
 
         let id = self
             .table()
-            .push(HostFields::Owned { fields: map })
+            .push(HostFields::Owned { fields })
             .context("[new_fields] pushing fields")?;
 
         Ok(Ok(id))
@@ -128,7 +138,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             Err(_) => return Ok(vec![]),
         };
 
-        let res = get_fields_mut(self.table(), &fields)
+        let res = get_fields(self.table(), &fields)
             .context("[fields_get] getting fields")?
             .get_all(header)
             .into_iter()
@@ -160,14 +170,14 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             }
         }
 
-        let m =
-            get_fields_mut(self.table(), &fields).context("[fields_set] getting mutable fields")?;
-        m.remove(&header);
-        for value in values {
-            m.append(&header, value);
-        }
-
-        Ok(Ok(()))
+        Ok(get_fields_mut(self.table(), &fields)
+            .context("[fields_set] getting mutable fields")?
+            .map(|fields| {
+                fields.remove(&header);
+                for value in values {
+                    fields.append(&header, value);
+                }
+            }))
     }
 
     fn delete(
@@ -184,9 +194,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             return Ok(Err(types::HeaderError::Forbidden));
         }
 
-        let m = get_fields_mut(self.table(), &fields)?;
-        m.remove(header);
-        Ok(Ok(()))
+        Ok(get_fields_mut(self.table(), &fields)?.map(|fields| {
+            fields.remove(header);
+        }))
     }
 
     fn append(
@@ -209,27 +219,25 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             Err(_) => return Ok(Err(types::HeaderError::InvalidSyntax)),
         };
 
-        let m = get_fields_mut(self.table(), &fields)
-            .context("[fields_append] getting mutable fields")?;
-
-        m.append(header, value);
-        Ok(Ok(()))
+        Ok(get_fields_mut(self.table(), &fields)
+            .context("[fields_append] getting mutable fields")?
+            .map(|fields| {
+                fields.append(header, value);
+            }))
     }
 
     fn entries(
         &mut self,
         fields: Resource<HostFields>,
     ) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
-        let fields = get_fields_mut(self.table(), &fields)?;
-        let result = fields
+        Ok(get_fields(self.table(), &fields)?
             .iter()
             .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_owned()))
-            .collect();
-        Ok(result)
+            .collect())
     }
 
     fn clone(&mut self, fields: Resource<HostFields>) -> wasmtime::Result<Resource<HostFields>> {
-        let fields = get_fields_mut(self.table(), &fields)
+        let fields = get_fields(self.table(), &fields)
             .context("[fields_clone] getting fields")?
             .clone();
 
@@ -837,7 +845,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
             .expect("outgoing-body trailer_sender consumed by a non-owning function");
 
         let message = if let Some(ts) = ts {
-            FinishMessage::Trailers(get_fields_mut(self.table(), &ts)?.clone().into())
+            FinishMessage::Trailers(move_fields(self.table(), ts)?)
         } else {
             FinishMessage::Finished
         };
