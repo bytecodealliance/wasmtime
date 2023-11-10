@@ -1893,14 +1893,7 @@ impl<
         };
         drop(t);
         let fd = self
-            .open_at(
-                dirfd,
-                dirflags.into(),
-                path,
-                oflags.into(),
-                flags,
-                filesystem::Modes::READABLE | filesystem::Modes::WRITABLE,
-            )
+            .open_at(dirfd, dirflags.into(), path, oflags.into(), flags)
             .await
             .map_err(|e| {
                 e.try_into()

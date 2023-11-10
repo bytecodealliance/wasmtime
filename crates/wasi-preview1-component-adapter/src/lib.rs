@@ -45,7 +45,7 @@ pub mod bindings {
     #[cfg(feature = "reactor")]
     wit_bindgen::generate!({
         path: "../wasi/wit",
-        world: "wasmtime:wasi/preview1-adapter-reactor",
+        world: "wasi:cli/reactor",
         std_feature,
         raw_strings,
         // Automatically generated bindings for these functions will allocate
@@ -1456,7 +1456,6 @@ pub unsafe extern "C" fn path_open(
     let at_flags = at_flags_from_lookupflags(dirflags);
     let o_flags = o_flags_from_oflags(oflags);
     let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
-    let mode = filesystem::Modes::READABLE | filesystem::Modes::WRITABLE;
     let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
     State::with(|state| {
@@ -1464,7 +1463,7 @@ pub unsafe extern "C" fn path_open(
             .descriptors()
             .get_dir(fd)?
             .fd
-            .open_at(at_flags, path, o_flags, flags, mode)?;
+            .open_at(at_flags, path, o_flags, flags)?;
         let descriptor_type = result.get_type()?;
         let desc = Descriptor::Streams(Streams {
             input: OnceCell::new(),

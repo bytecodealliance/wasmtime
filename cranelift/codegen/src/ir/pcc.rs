@@ -1655,7 +1655,7 @@ pub fn check_vcode_facts<B: LowerBackend + TargetIsa>(
         for inst in vcode.block_insns(block).iter() {
             // Check any output facts on this inst.
             if let Err(e) = backend.check_fact(&ctx, vcode, inst, &mut flow_state) {
-                log::error!("Error checking instruction: {:?}", vcode[inst]);
+                log::info!("Error checking instruction: {:?}", vcode[inst]);
                 return Err(e);
             }
 
