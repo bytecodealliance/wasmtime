@@ -20,18 +20,15 @@ use wasmtime_wasi::preview2::{
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {}
 
 /// Take ownership of the underlying [`FieldMap`] associated with this fields resource. If the
-/// fields resource references another fields, the returned [`FieldMap`] will be cloned. We throw
-/// away the `immutable` status of the original fields, as the new context will determine how the
-/// [`FieldMap`] is used.
+/// fields resource references another fields, the returned [`FieldMap`] will be cloned.
 fn move_fields(table: &mut Table, id: Resource<HostFields>) -> wasmtime::Result<FieldMap> {
     match table.delete(id)? {
         HostFields::Ref { parent, get_fields } => {
             let entry = table.get_any_mut(parent)?;
-            let fields = get_fields(entry);
-            Ok(fields.clone())
+            Ok(get_fields(entry).clone())
         }
 
-        HostFields::Owned { fields, .. } => Ok(fields),
+        HostFields::Owned { fields } => Ok(fields),
     }
 }
 
@@ -180,7 +177,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
                 for value in values {
                     fields.append(&header, value);
                 }
-                ()
             }))
     }
 
@@ -200,7 +196,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
 
         Ok(get_fields_mut(self.table(), &fields)?.map(|fields| {
             fields.remove(header);
-            ()
         }))
     }
 
@@ -228,7 +223,6 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
             .context("[fields_append] getting mutable fields")?
             .map(|fields| {
                 fields.append(header, value);
-                ()
             }))
     }
 
