@@ -32,7 +32,7 @@ pub trait HostInputStream: Subscribe {
     }
 }
 
-/// Representation of the `error` resource type in the `wasi:io/streams`
+/// Representation of the `error` resource type in the `wasi:io/error`
 /// interface.
 ///
 /// This is currently `anyhow::Error` to retain full type information for
