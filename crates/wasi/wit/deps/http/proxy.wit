@@ -8,7 +8,6 @@ world proxy {
   /// HTTP proxies have access to time and randomness.
   import wasi:clocks/wall-clock@0.2.0-rc-2023-11-05;
   import wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-05;
-  import wasi:clocks/timezone@0.2.0-rc-2023-11-05;
   import wasi:random/random@0.2.0-rc-2023-11-05;
 
   /// Proxies have standard output and error streams which are expected to
