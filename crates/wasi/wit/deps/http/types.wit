@@ -27,7 +27,7 @@ interface types {
     other(string)
   }
 
-  /// The cases of this variant correspond to the IANA HTTP Proxy Error Types:
+  /// These cases are inspired by the IANA HTTP Proxy Error Types:
   ///   https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types
   variant error-code {
     DNS-timeout,
@@ -47,14 +47,18 @@ interface types {
     TLS-alert-received(TLS-alert-received-payload),
     HTTP-request-denied,
     HTTP-request-length-required,
-    HTTP-request-content-too-large,
+    HTTP-request-body-size(option<u64>),
+    HTTP-request-method-invalid,
+    HTTP-request-URI-invalid,
     HTTP-request-URI-too-long,
     HTTP-request-header-section-size(option<u32>),
     HTTP-request-header-size(option<field-size-payload>),
+    HTTP-request-trailer-section-size(option<u32>),
+    HTTP-request-trailer-size(field-size-payload),
     HTTP-response-incomplete,
     HTTP-response-header-section-size(option<u32>),
     HTTP-response-header-size(field-size-payload),
-    HTTP-response-body-size(option<u32>),
+    HTTP-response-body-size(option<u64>),
     HTTP-response-trailer-section-size(option<u32>),
     HTTP-response-trailer-size(field-size-payload),
     HTTP-response-transfer-coding(option<string>),
@@ -62,10 +66,14 @@ interface types {
     HTTP-response-timeout,
     HTTP-upgrade-failed,
     HTTP-protocol-error,
-    proxy-internal-response,
-    proxy-internal-error,
-    proxy-configuration-error,
-    proxy-loop-detected
+    loop-detected,
+    configuration-error,
+    /// This is a catch-all error for anything that doesn't fit cleanly into a
+    /// more specific case. It also includes an optional string for an
+    /// unstructured description of the error. Users should not depend on the
+    /// string for diagnosing errors, as it's not required to be consistent
+    /// between implementations.
+    internal-error(option<string>)
   }
 
   /// Defines the case payload type for `DNS-error` above:
@@ -76,7 +84,7 @@ interface types {
 
   /// Defines the case payload type for `TLS-alert-received` above:
   record TLS-alert-received-payload {
-    alert-ID: option<u8>,
+    alert-id: option<u8>,
     alert-message: option<string>
   }
 
@@ -84,14 +92,6 @@ interface types {
   record field-size-payload {
     field-name: option<string>,
     field-size: option<u32>
-  }
-
-  /// This tyep enumerates the different kinds of errors that may occur when
-  /// setting or appending to a `fields` resource.
-  variant header-error {
-    invalid-syntax,
-    forbidden,
-    immutable
   }
 
   /// Attempts to extract a http-related `error` from the stream `error`
@@ -104,13 +104,23 @@ interface types {
   ///
   /// Note that this function is fallible because not all stream-related errors
   /// are http-related errors.
-  http-error: func(err: borrow<stream-error>) -> option<error-code>;
+  http-error-code: func(err: borrow<stream-error>) -> option<error-code>;
 
-  /// This tyep enumerates the different kinds of errors that may occur when
+  /// This type enumerates the different kinds of errors that may occur when
   /// setting or appending to a `fields` resource.
   variant header-error {
+    /// This error indicates that a `field-key` or `field-value` was
+    /// syntactically invalid when used with an operation that sets headers in a
+    /// `fields`.
     invalid-syntax,
+
+    /// This error indicates that a forbidden `field-key` was used when trying
+    /// to set a header in a `fields`.
     forbidden,
+
+    /// This error indicates that the operation on the `fields` was not
+    /// permitted because the fields are immutable.
+    immutable,
   }
 
   /// Field keys are always strings.
@@ -151,21 +161,14 @@ interface types {
 
     /// Set all of the values for a key. Clears any existing values for that
     /// key, if they have been set.
-    ///
-    /// The operation can fail if the name or value arguments are invalid, or if
-    /// the name is forbidden.
     set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
 
     /// Delete all values for a key. Does nothing if no values for the key
-    /// exist. Returns and error if the `field-key` is syntactically invalid, or
-    /// if the `field-key` is forbidden.
+    /// exist.
     delete: func(name: field-key) -> result<_, header-error>;
 
     /// Append a value for a key. Does not change or delete any existing
     /// values for that key.
-    ///
-    /// The operation can fail if the name or value arguments are invalid, or if
-    /// the name is forbidden.
     append: func(name: field-key, value: field-value) -> result<_, header-error>;
 
     /// Retrieve the full set of keys and values in the Fields. Like the
@@ -218,7 +221,7 @@ interface types {
   resource outgoing-request {
 
     /// Construct a new `outgoing-request` with a default `method` of `GET`, and
-    /// default values for `path-with-query`, `scheme`, and `authority.
+    /// `none` values for `path-with-query`, `scheme`, and `authority`.
     ///
     /// * `headers` is the HTTP Headers for the Request.
     ///

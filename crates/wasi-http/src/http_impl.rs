@@ -32,8 +32,9 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .unwrap_or(std::time::Duration::from_millis(600 * 1000));
 
         let req = self.table().delete(request_id)?;
+        let mut builder = hyper::Request::builder();
 
-        let method = match req.method {
+        builder = builder.method(match req.method {
             types::Method::Get => Method::GET,
             types::Method::Head => Method::HEAD,
             types::Method::Post => Method::POST,
@@ -43,15 +44,15 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             types::Method::Options => Method::OPTIONS,
             types::Method::Trace => Method::TRACE,
             types::Method::Patch => Method::PATCH,
-            types::Method::Other(_) => {
-                // We can't support arbitrary methods
-                return Ok(Err(types::ErrorCode::HttpProtocolError));
-            }
-        };
+            types::Method::Other(m) => match hyper::Method::from_bytes(m.as_bytes()) {
+                Ok(method) => method,
+                Err(_) => return Ok(Err(types::ErrorCode::HttpRequestMethodInvalid)),
+            },
+        });
 
         let (use_tls, scheme, port) = match req.scheme.unwrap_or(Scheme::Https) {
-            Scheme::Http => (false, "http://", 80),
-            Scheme::Https => (true, "https://", 443),
+            Scheme::Http => (false, http::uri::Scheme::HTTP, 80),
+            Scheme::Https => (true, http::uri::Scheme::HTTPS, 443),
 
             // We can only support http/https
             Scheme::Other(_) => return Ok(Err(types::ErrorCode::HttpProtocolError)),
@@ -66,14 +67,20 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
         } else {
             String::new()
         };
+        builder = builder.header(hyper::header::HOST, &authority);
 
-        let mut builder = hyper::Request::builder()
-            .method(method)
-            .uri(format!(
-                "{scheme}{authority}{}",
-                req.path_with_query.as_ref().map_or("", String::as_ref)
-            ))
-            .header(hyper::header::HOST, &authority);
+        let mut uri = http::Uri::builder()
+            .scheme(scheme)
+            .authority(authority.clone());
+
+        if let Some(path) = req.path_with_query {
+            uri = uri.path_and_query(path);
+        }
+
+        builder = builder.uri(uri.build().map_err(|e| {
+            eprintln!("uri build error: {e:#?}");
+            types::ErrorCode::HttpRequestUriInvalid
+        })?);
 
         for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
@@ -81,11 +88,11 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
 
         let body = req
             .body
-            .unwrap_or_else(|| Empty::<Bytes>::new().map_err(|_| unreachable!()).boxed());
+            .unwrap_or_else(|| Empty::<Bytes>::new().map_err(|_| todo!("thing")).boxed());
 
         let request = builder
             .body(body)
-            .map_err(|_| types::ErrorCode::HttpProtocolError)?;
+            .map_err(|err| types::ErrorCode::InternalError(Some(err.to_string())))?;
 
         Ok(Ok(self.send_request(OutgoingRequest {
             use_tls,

@@ -369,10 +369,8 @@ impl hyper::service::Service<Request> for ProxyHandler {
                 body.map_err(|err| {
                     if err.is_timeout() {
                         http_types::ErrorCode::HttpResponseTimeout
-                    } else if err.is_parse_too_large() {
-                        http_types::ErrorCode::HttpRequestContentTooLarge
                     } else {
-                        http_types::ErrorCode::HttpProtocolError
+                        http_types::ErrorCode::InternalError(Some(err.message().to_string()))
                     }
                 })
                 .boxed()

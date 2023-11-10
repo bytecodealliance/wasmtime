@@ -18,7 +18,7 @@ use wasmtime_wasi::preview2::{
 };
 
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
-    fn http_error(
+    fn http_error_code(
         &mut self,
         _err: wasmtime::component::Resource<types::StreamError>,
     ) -> wasmtime::Result<Option<types::ErrorCode>> {
