@@ -131,8 +131,8 @@ async fn handler(
     let (mut sender, worker) = if use_tls {
         #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
         {
-            return Err(crate::bindings::http::types::ErrorCode::UnexpectedError(
-                "unsupported architecture for SSL".to_string(),
+            return Err(crate::bindings::http::types::ErrorCode::InternalError(
+                Some("unsupported architecture for SSL".to_string()),
             ));
         }
 
