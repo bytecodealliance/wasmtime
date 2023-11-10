@@ -845,7 +845,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         &mut self,
         id: Resource<HostOutgoingBody>,
         ts: Option<Resource<Trailers>>,
-    ) -> wasmtime::Result<()> {
+    ) -> wasmtime::Result<Result<(), types::Error>> {
         let mut body = self.table().delete(id)?;
 
         let sender = body
@@ -862,7 +862,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         // Ignoring failure: receiver died sending body, but we can't report that here.
         let _ = sender.send(message.into());
 
-        Ok(())
+        Ok(Ok(()))
     }
 
     fn drop(&mut self, id: Resource<HostOutgoingBody>) -> wasmtime::Result<()> {

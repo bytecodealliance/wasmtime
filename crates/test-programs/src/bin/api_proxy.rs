@@ -42,7 +42,8 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
             .expect("writing response");
 
         drop(out);
-        bindings::wasi::http::types::OutgoingBody::finish(body, None);
+        bindings::wasi::http::types::OutgoingBody::finish(body, None)
+            .expect("outgoing-body.finish");
     }
 }
 
