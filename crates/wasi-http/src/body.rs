@@ -1,3 +1,4 @@
+use crate::internal_error;
 use crate::{bindings::http::types, types::FieldMap};
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -422,7 +423,7 @@ impl HostOutgoingBody {
                         if let Some(written) = self.written.as_ref() {
                             if !written.update(frame.len() as u64) {
                                 // This frame wrote too much, so raise an error.
-                                return Poll::Ready(Some(Err(types::Error::ProtocolError(
+                                return Poll::Ready(Some(Err(internal_error(
                                     "too much written to output stream".to_owned(),
                                 ))));
                             }
@@ -477,7 +478,7 @@ impl HostOutgoingBody {
         )
     }
 
-    pub fn finish(mut self, ts: Option<FieldMap>) -> Result<(), types::Error> {
+    pub fn finish(mut self, ts: Option<FieldMap>) -> Result<(), types::ErrorCode> {
         // Make sure that the output stream has been dropped, so that the BodyImpl poll function
         // will immediately pick up the finish sender.
         drop(self.body_output_stream);
@@ -492,9 +493,7 @@ impl HostOutgoingBody {
         if let Some(w) = self.written {
             if !w.finish() {
                 let _ = sender.send(FinishMessage::Abort);
-                return Err(types::Error::ProtocolError(
-                    "not enough body written".to_owned(),
-                ));
+                return Err(internal_error("not enough body written".to_owned()));
             }
         }
 

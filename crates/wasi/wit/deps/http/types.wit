@@ -480,7 +480,7 @@ interface types {
     finish: static func(
       this: outgoing-body,
       trailers: option<trailers>
-    ) -> result<_, error>;
+    ) -> result<_, error-code>;
   }
 
   /// Represents a future which may eventaully return an incoming HTTP

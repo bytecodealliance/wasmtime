@@ -29,22 +29,16 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 /// Extract the `Content-Length` header value from a [`FieldMap`], returning `None` if it's not
 /// present. This can fail with an http protocol error if it's not possible to parse the
 /// `Content-Length` header.
-fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, Error> {
+fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
     let val = fields.get(hyper::header::CONTENT_LENGTH);
     if val.is_none() {
         return Ok(None);
     }
 
-    let val = val
-        .unwrap()
-        .to_str()
-        .map_err(|_| Error::ProtocolError("Invalid Content-Length header".to_owned()))?;
-
+    let val = val.unwrap().to_str().map_err(|_| ())?;
     match val.parse() {
         Ok(len) => Ok(Some(len)),
-        Err(_) => Err(Error::ProtocolError(
-            "Invalid Content-Length header".to_owned(),
-        )),
+        Err(_) => Err(()),
     }
 }
 
@@ -398,9 +392,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
 
         let size = match get_content_length(&req.headers) {
             Ok(size) => size,
-
-            // TODO: change the return type of `body`?
-            Err(_) => return Ok(Err(())),
+            Err(e) => return Ok(Err(e)),
         };
 
         let (host_body, hyper_body) = HostOutgoingBody::new(size);
@@ -744,9 +736,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
 
         let size = match get_content_length(&resp.headers) {
             Ok(size) => size,
-
-            // TODO: change the return type of `body`?
-            Err(_) => return Ok(Err(())),
+            Err(e) => return Ok(Err(e)),
         };
 
         let (host, body) = HostOutgoingBody::new(size);
@@ -881,7 +871,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         &mut self,
         id: Resource<HostOutgoingBody>,
         ts: Option<Resource<Trailers>>,
-    ) -> wasmtime::Result<Result<(), types::Error>> {
+    ) -> wasmtime::Result<Result<(), types::ErrorCode>> {
         let body = self.table().delete(id)?;
 
         let ts = if let Some(ts) = ts {

@@ -43,3 +43,7 @@ pub(crate) fn dns_error(rcode: String, info_code: u16) -> bindings::http::types:
         info_code: Some(info_code),
     })
 }
+
+pub(crate) fn internal_error(msg: String) -> bindings::http::types::ErrorCode {
+    bindings::http::types::ErrorCode::InternalError(Some(msg))
+}
