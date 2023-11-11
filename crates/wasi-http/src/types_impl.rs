@@ -1,5 +1,5 @@
 use crate::{
-    bindings::http::types::{self, Error, Headers, Method, Scheme, StatusCode, Trailers},
+    bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{FinishMessage, HostFutureTrailers, HostIncomingBody, HostOutgoingBody},
     types::{
         FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
@@ -17,7 +17,14 @@ use wasmtime_wasi::preview2::{
     Pollable, Table,
 };
 
-impl<T: WasiHttpView> crate::bindings::http::types::Host for T {}
+impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
+    fn http_error_code(
+        &mut self,
+        _err: wasmtime::component::Resource<types::StreamError>,
+    ) -> wasmtime::Result<Option<types::ErrorCode>> {
+        todo!()
+    }
+}
 
 /// Take ownership of the underlying [`FieldMap`] associated with this fields resource. If the
 /// fields resource references another fields, the returned [`FieldMap`] will be cloned.
@@ -525,7 +532,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostResponseOutparam for T {
     fn set(
         &mut self,
         id: Resource<HostResponseOutparam>,
-        resp: Result<Resource<HostOutgoingResponse>, Error>,
+        resp: Result<Resource<HostOutgoingResponse>, types::ErrorCode>,
     ) -> wasmtime::Result<()> {
         let val = match resp {
             Ok(resp) => Ok(self.table().delete(resp)?.try_into()?),
@@ -620,7 +627,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureTrailers for T {
     fn get(
         &mut self,
         id: Resource<HostFutureTrailers>,
-    ) -> wasmtime::Result<Option<Result<Option<Resource<Trailers>>, Error>>> {
+    ) -> wasmtime::Result<Option<Result<Option<Resource<Trailers>>, types::ErrorCode>>> {
         let trailers = self.table().get_mut(&id)?;
         match trailers {
             HostFutureTrailers::Waiting(_) => return Ok(None),
@@ -773,7 +780,9 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
     fn get(
         &mut self,
         id: Resource<HostFutureIncomingResponse>,
-    ) -> wasmtime::Result<Option<Result<Result<Resource<HostIncomingResponse>, Error>, ()>>> {
+    ) -> wasmtime::Result<
+        Option<Result<Result<Resource<HostIncomingResponse>, types::ErrorCode>, ()>>,
+    > {
         let resp = self.table().get_mut(&id)?;
 
         match resp {
@@ -786,7 +795,7 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
             match std::mem::replace(resp, HostFutureIncomingResponse::Consumed).unwrap_ready() {
                 Err(e) => {
                     // Trapping if it's not possible to downcast to an wasi-http error
-                    let e = e.downcast::<Error>()?;
+                    let e = e.downcast::<types::ErrorCode>()?;
                     return Ok(Some(Ok(Err(e))));
                 }
 

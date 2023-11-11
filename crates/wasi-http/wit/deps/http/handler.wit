@@ -22,7 +22,9 @@ interface incoming-handler {
 /// This interface defines a handler of outgoing HTTP Requests. It should be
 /// imported by components which wish to make HTTP Requests.
 interface outgoing-handler {
-  use types.{outgoing-request, request-options, future-incoming-response, error};
+  use types.{
+    outgoing-request, request-options, future-incoming-response, error-code
+  };
 
   /// This function is invoked with an outgoing HTTP Request, and it returns
   /// a resource `future-incoming-response` which represents an HTTP Response
@@ -37,5 +39,5 @@ interface outgoing-handler {
   handle: func(
     request: outgoing-request,
     options: option<request-options>
-  ) -> result<future-incoming-response, error>;
+  ) -> result<future-incoming-response, error-code>;
 }

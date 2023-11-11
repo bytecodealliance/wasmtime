@@ -1,4 +1,4 @@
-use test_programs::wasi::http::types::{Method, Scheme};
+use test_programs::wasi::http::types::{ErrorCode, Method, Scheme};
 
 fn main() {
     let res = test_programs::http::request(
@@ -10,9 +10,13 @@ fn main() {
         None,
     );
 
-    let error = res.unwrap_err().to_string();
+    let e = res.unwrap_err();
     assert!(
-        error.starts_with("Error::InvalidUrl(\""),
-        "bad error: {error}"
+        matches!(
+            e.downcast_ref::<ErrorCode>()
+                .expect("expected a wasi-http ErrorCode"),
+            ErrorCode::DnsError(_) | ErrorCode::ConnectionRefused,
+        ),
+        "Unexpected error: {e:#?}"
     );
 }
