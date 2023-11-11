@@ -10,10 +10,13 @@ fn main() {
         None,
     );
 
-    assert!(matches!(
-        res.unwrap_err()
-            .downcast::<ErrorCode>()
-            .expect("expected a wasi-http ErrorCode"),
-        ErrorCode::DnsError(_)
-    ));
+    let e = res.unwrap_err();
+    assert!(
+        matches!(
+            e.downcast_ref::<ErrorCode>()
+                .expect("expected a wasi-http ErrorCode"),
+            ErrorCode::DnsError(_)
+        ),
+        "Unexpected error: {e:#?}"
+    );
 }
