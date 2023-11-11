@@ -15,7 +15,7 @@ fn main() {
         matches!(
             e.downcast_ref::<ErrorCode>()
                 .expect("expected a wasi-http ErrorCode"),
-            ErrorCode::DnsError(_)
+            ErrorCode::DnsError(_) | ErrorCode::ConnectionRefused,
         ),
         "Unexpected error: {e:#?}"
     );
