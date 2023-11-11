@@ -388,9 +388,9 @@ impl WrittenState {
         old + len <= self.expected
     }
 
-    fn finish(self) -> bool {
+    fn finish(self) -> std::cmp::Ordering {
         let written = self.written.load(std::sync::atomic::Ordering::Relaxed);
-        written == self.expected
+        written.cmp(&self.expected)
     }
 }
 
@@ -406,7 +406,6 @@ impl HostOutgoingBody {
 
         use tokio::sync::oneshot::error::RecvError;
         struct BodyImpl {
-            written: Option<WrittenState>,
             body_receiver: mpsc::Receiver<Bytes>,
             finish_receiver: Option<oneshot::Receiver<FinishMessage>>,
         }
@@ -419,18 +418,7 @@ impl HostOutgoingBody {
             ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
                 match self.as_mut().body_receiver.poll_recv(cx) {
                     Poll::Pending => Poll::Pending,
-                    Poll::Ready(Some(frame)) => {
-                        if let Some(written) = self.written.as_ref() {
-                            if !written.update(frame.len() as u64) {
-                                // This frame wrote too much, so raise an error.
-                                return Poll::Ready(Some(Err(internal_error(
-                                    "too much written to output stream".to_owned(),
-                                ))));
-                            }
-                        }
-
-                        Poll::Ready(Some(Ok(Frame::data(frame))))
-                    }
+                    Poll::Ready(Some(frame)) => Poll::Ready(Some(Ok(Frame::data(frame)))),
 
                     // This means that the `body_sender` end of the channel has been dropped.
                     Poll::Ready(None) => {
@@ -462,15 +450,17 @@ impl HostOutgoingBody {
         let (body_sender, body_receiver) = mpsc::channel(2);
         let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
-            written: written.clone(),
             body_receiver,
             finish_receiver: Some(finish_receiver),
         }
         .boxed();
+
+        // TODO: this capacity constant is arbitrary, and should be configurable
+        let output_stream = BodyWriteStream::new(1024 * 1024, body_sender, written.clone());
+
         (
             Self {
-                // TODO: this capacity constant is arbitrary, and should be configurable
-                body_output_stream: Some(Box::new(BodyWriteStream::new(1024 * 1024, body_sender))),
+                body_output_stream: Some(Box::new(output_stream)),
                 written,
                 finish_sender: Some(finish_sender),
             },
@@ -491,9 +481,17 @@ impl HostOutgoingBody {
         // TODO: does sending guarantee that the message was received, or could it be queued to
         // receive?
         if let Some(w) = self.written {
-            if !w.finish() {
+            use std::cmp::Ordering;
+            let res = w.finish();
+            if res != Ordering::Equal {
+                let msg = match res {
+                    Ordering::Less => "not enough",
+                    Ordering::Greater => "too much",
+                    Ordering::Equal => unreachable!(),
+                };
+
                 let _ = sender.send(FinishMessage::Abort);
-                return Err(internal_error("not enough body written".to_owned()));
+                return Err(internal_error(format!("{msg} written to body stream")));
             }
         }
 
@@ -524,19 +522,25 @@ impl HostOutgoingBody {
 }
 
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
-pub struct BodyWriteStream {
+struct BodyWriteStream {
     writer: mpsc::Sender<Bytes>,
     write_budget: usize,
+    written: Option<WrittenState>,
 }
 
 impl BodyWriteStream {
     /// Create a [`BodyWriteStream`].
-    pub fn new(write_budget: usize, writer: mpsc::Sender<Bytes>) -> Self {
+    fn new(
+        write_budget: usize,
+        writer: mpsc::Sender<Bytes>,
+        written: Option<WrittenState>,
+    ) -> Self {
         // at least one capacity is required to send a message
         assert!(writer.max_capacity() >= 1);
         BodyWriteStream {
             writer,
             write_budget,
+            written,
         }
     }
 }
@@ -544,10 +548,21 @@ impl BodyWriteStream {
 #[async_trait::async_trait]
 impl HostOutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        let len = bytes.len();
         match self.writer.try_send(bytes) {
             // If the message was sent then it's queued up now in hyper to get
             // received.
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                if let Some(written) = self.written.as_ref() {
+                    if !written.update(len as u64) {
+                        return Err(StreamError::LastOperationFailed(anyhow!(internal_error(
+                            "too much written to output stream".to_owned()
+                        ))));
+                    }
+                }
+
+                Ok(())
+            }
 
             // If this channel is full then that means `check_write` wasn't
             // called. The call to `check_write` always guarantees that there's

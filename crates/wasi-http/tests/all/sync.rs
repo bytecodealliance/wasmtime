@@ -83,3 +83,9 @@ fn http_outbound_request_response_build() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server)
 }
+
+#[test_log::test]
+fn http_outbound_request_content_length() -> Result<()> {
+    let server = Server::http1()?;
+    run(HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server)
+}
