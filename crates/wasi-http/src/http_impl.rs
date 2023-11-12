@@ -77,10 +77,10 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             uri = uri.path_and_query(path);
         }
 
-        builder = builder.uri(uri.build().map_err(|e| {
-            eprintln!("uri build error: {e:#?}");
-            types::ErrorCode::HttpRequestUriInvalid
-        })?);
+        builder = builder.uri(
+            uri.build()
+                .map_err(|_| types::ErrorCode::HttpRequestUriInvalid)?,
+        );
 
         for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
