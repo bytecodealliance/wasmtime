@@ -113,19 +113,16 @@ pub fn request(
     http_types::OutgoingBody::finish(outgoing_body, None);
 
     let incoming_response = match future_response.get() {
-        Some(result) => result.map_err(|_| anyhow!("incoming response errored"))?,
+        Some(result) => result.map_err(|()| anyhow!("response already taken"))?,
         None => {
             let pollable = future_response.subscribe();
             pollable.block();
             future_response
                 .get()
                 .expect("incoming response available")
-                .map_err(|_| anyhow!("incoming response errored"))?
+                .map_err(|()| anyhow!("response already taken"))?
         }
-    }
-    // TODO: maybe anything that appears in the Result<_, E> position should impl
-    // Error? anyway, just use its Debug here:
-    .map_err(|e| anyhow!("{e:?}"))?;
+    }?;
 
     drop(future_response);
 

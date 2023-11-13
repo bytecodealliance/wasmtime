@@ -14,7 +14,9 @@ use wasmtime::{Engine, Store, StoreLimits};
 use wasmtime_wasi::preview2::{
     self, StreamError, StreamResult, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
-use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::{
+    bindings::http::types as http_types, body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView,
+};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -363,9 +365,16 @@ impl hyper::service::Service<Request> for ProxyHandler {
 
             let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
 
-            let req = store
-                .data_mut()
-                .new_incoming_request(req.map(|body| body.map_err(|e| e.into()).boxed()))?;
+            let req = store.data_mut().new_incoming_request(req.map(|body| {
+                body.map_err(|err| {
+                    if err.is_timeout() {
+                        http_types::ErrorCode::HttpResponseTimeout
+                    } else {
+                        http_types::ErrorCode::InternalError(Some(err.message().to_string()))
+                    }
+                })
+                .boxed()
+            }))?;
 
             let out = store.data_mut().new_response_outparam(sender)?;
 

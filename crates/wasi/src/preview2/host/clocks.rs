@@ -2,7 +2,6 @@
 
 use crate::preview2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
-    clocks::timezone::{self, TimezoneDisplay},
     clocks::wall_clock::{self, Datetime},
 };
 use crate::preview2::poll::{subscribe, Subscribe};
@@ -100,15 +99,5 @@ impl Subscribe for Deadline {
             Deadline::Instant(instant) => tokio::time::sleep_until(*instant).await,
             Deadline::Never => std::future::pending().await,
         }
-    }
-}
-
-impl<T: WasiView> timezone::Host for T {
-    fn display(&mut self, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
-        todo!("timezone display is not implemented")
-    }
-
-    fn utc_offset(&mut self, when: Datetime) -> anyhow::Result<i32> {
-        todo!("timezone utc_offset is not implemented")
     }
 }

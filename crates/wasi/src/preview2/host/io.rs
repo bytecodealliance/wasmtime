@@ -1,9 +1,12 @@
 use crate::preview2::{
+    bindings::io::error,
     bindings::io::streams::{self, InputStream, OutputStream},
     poll::subscribe,
     Pollable, StreamError, StreamResult, WasiView,
 };
 use wasmtime::component::Resource;
+
+impl<T: WasiView> error::Host for T {}
 
 impl<T: WasiView> streams::Host for T {
     fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
@@ -17,7 +20,7 @@ impl<T: WasiView> streams::Host for T {
     }
 }
 
-impl<T: WasiView> streams::HostError for T {
+impl<T: WasiView> error::HostError for T {
     fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
         self.table_mut().delete(err)?;
         Ok(())
@@ -226,8 +229,8 @@ impl<T: WasiView> streams::HostInputStream for T {
 pub mod sync {
     use crate::preview2::{
         bindings::io::streams::{
-            self as async_streams, Host as AsyncHost, HostError as AsyncHostError,
-            HostInputStream as AsyncHostInputStream, HostOutputStream as AsyncHostOutputStream,
+            self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,
+            HostOutputStream as AsyncHostOutputStream,
         },
         bindings::sync_io::io::poll::Pollable,
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
@@ -250,16 +253,6 @@ pub mod sync {
             err: StreamError,
         ) -> anyhow::Result<streams::StreamError> {
             Ok(AsyncHost::convert_stream_error(self, err)?.into())
-        }
-    }
-
-    impl<T: WasiView> streams::HostError for T {
-        fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
-            AsyncHostError::drop(self, err)
-        }
-
-        fn to_debug_string(&mut self, err: Resource<streams::Error>) -> anyhow::Result<String> {
-            AsyncHostError::to_debug_string(self, err)
         }
     }
 

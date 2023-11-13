@@ -14,7 +14,7 @@ use wasmtime_wasi::preview2::{
     Subscribe,
 };
 
-pub type HyperIncomingBody = BoxBody<Bytes, types::Error>;
+pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;
 
 /// Small wrapper around `BoxBody` which adds a timeout to every frame.
 struct BodyWithTimeout {
@@ -45,12 +45,12 @@ impl BodyWithTimeout {
 
 impl Body for BodyWithTimeout {
     type Data = Bytes;
-    type Error = types::Error;
+    type Error = types::ErrorCode;
 
     fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Bytes>, types::Error>>> {
+    ) -> Poll<Option<Result<Frame<Bytes>, types::ErrorCode>>> {
         let me = Pin::into_inner(self);
 
         // If the timeout timer needs to be reset, do that now relative to the
@@ -66,9 +66,7 @@ impl Body for BodyWithTimeout {
         // Register interest in this context on the sleep timer, and if the
         // sleep elapsed that means that we've timed out.
         if let Poll::Ready(()) = me.timeout.as_mut().poll(cx) {
-            return Poll::Ready(Some(Err(types::Error::TimeoutError(
-                "frame timed out".to_string(),
-            ))));
+            return Poll::Ready(Some(Err(types::ErrorCode::ConnectionReadTimeout)));
         }
 
         // Without timeout business now handled check for the frame. If a frame
@@ -222,7 +220,7 @@ impl Subscribe for HostIncomingBodyStream {
 }
 
 impl HostIncomingBodyStream {
-    fn record_frame(&mut self, frame: Option<Result<Frame<Bytes>, types::Error>>) {
+    fn record_frame(&mut self, frame: Option<Result<Frame<Bytes>, types::ErrorCode>>) {
         match frame {
             Some(Ok(frame)) => match frame.into_data() {
                 // A data frame was received, so queue up the buffered data for
@@ -300,7 +298,7 @@ pub enum HostFutureTrailers {
     ///
     /// Note that `Ok(None)` means that there were no trailers for this request
     /// while `Ok(Some(_))` means that trailers were found in the request.
-    Done(Result<Option<FieldMap>, types::Error>),
+    Done(Result<Option<FieldMap>, types::ErrorCode>),
 }
 
 #[async_trait::async_trait]
@@ -328,9 +326,7 @@ impl Subscribe for HostFutureTrailers {
                 // this just in case though.
                 Err(_) => {
                     debug_assert!(false, "should be unreachable");
-                    *self = HostFutureTrailers::Done(Err(types::Error::ProtocolError(
-                        "stream hung up before trailers were received".to_string(),
-                    )));
+                    *self = HostFutureTrailers::Done(Err(types::ErrorCode::ConnectionTerminated));
                 }
             }
         }
@@ -362,7 +358,7 @@ impl Subscribe for HostFutureTrailers {
     }
 }
 
-pub type HyperOutgoingBody = BoxBody<Bytes, types::Error>;
+pub type HyperOutgoingBody = BoxBody<Bytes, types::ErrorCode>;
 
 pub enum FinishMessage {
     Finished,
@@ -384,7 +380,7 @@ impl HostOutgoingBody {
         }
         impl Body for BodyImpl {
             type Data = Bytes;
-            type Error = types::Error;
+            type Error = types::ErrorCode;
             fn poll_frame(
                 mut self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
@@ -406,9 +402,9 @@ impl HostOutgoingBody {
                                     FinishMessage::Trailers(trailers) => {
                                         Poll::Ready(Some(Ok(Frame::trailers(trailers))))
                                     }
-                                    FinishMessage::Abort => Poll::Ready(Some(Err(
-                                        types::Error::ProtocolError("response corrupted".into()),
-                                    ))),
+                                    FinishMessage::Abort => {
+                                        Poll::Ready(Some(Err(types::ErrorCode::HttpProtocolError)))
+                                    }
                                 },
                                 Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),
                             }
