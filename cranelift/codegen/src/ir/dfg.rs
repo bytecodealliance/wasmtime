@@ -459,6 +459,13 @@ impl DataFlowGraph {
             debug_assert_ne!(ty, types::INVALID);
 
             self.values[dest] = ValueData::Alias { ty, original }.into();
+
+            if let Some(fact) = &self.facts[dest] {
+                if self.facts[original].is_none() {
+                    let fact = fact.clone();
+                    self.facts[original] = Some(fact);
+                }
+            }
         }
 
         self.clear_results(dest_inst);

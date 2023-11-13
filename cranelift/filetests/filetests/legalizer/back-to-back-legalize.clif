@@ -11,8 +11,10 @@ block0:
 
 ; check: v1 = iconst.i32 1
 ; check: v4 = iconst.i32 1
-; check: v2 = iadd v1, v4
-; check: v5 = iconst.i32 1
-; check: v3 = iadd v2, v5
+; check: v5 = iadd v1, v4
+; check: v2 -> v5
+; check: v6 = iconst.i32 1
+; check: v7 = iadd v2, v6
+; check: v3 -> v7
 ; check: return v3
 

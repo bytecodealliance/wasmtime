@@ -1232,7 +1232,7 @@ impl IsleTarget {
         matches!(self, IsleTarget::Opt)
     }
     fn match_type(&self) -> bool {
-        matches!(self, IsleTarget::Opt)
+        matches!(self, IsleTarget::Opt | IsleTarget::Legalize)
     }
 }
 
@@ -1585,14 +1585,13 @@ fn gen_common_isle(
             // which delegates to a `make_inst` helper. Note that this
             // constructor has the same signature as the extractor above, so
             // don't give it a prefix.
-            IsleTarget::Opt => gen_insn_constructor(fmt, inst, "", "make_inst", "Value"),
+            IsleTarget::Opt => gen_insn_constructor(fmt, inst, "make_inst"),
 
             // During legalization new instructions are either inserted just
             // before the current instruction with `ins_*` or they're replacing
             // the current instruction with `replace_*`.
             IsleTarget::Legalize => {
-                gen_insn_constructor(fmt, inst, "ins_", "ins", "Inst");
-                gen_insn_constructor(fmt, inst, "replace_", "replace", "Inst");
+                gen_insn_constructor(fmt, inst, "ins");
             }
         }
 
@@ -1620,36 +1619,9 @@ fn gen_isle_enum(name: &str, mut variants: Vec<&str>, fmt: &mut Formatter) {
     fmt.empty_line();
 }
 
-fn gen_insn_constructor(
-    fmt: &mut Formatter,
-    inst: &Instruction,
-    prefix: &str,
-    common_ctor: &str,
-    ret_ty: &str,
-) {
+fn gen_insn_constructor(fmt: &mut Formatter, inst: &Instruction, common_ctor: &str) {
     if inst.format.has_value_list {
         return;
-    }
-    // Generate a constructor if this is the mid-end prelude.
-    let input_tys = inst
-        .operands_in
-        .iter()
-        .map(|o| {
-            let ty = o.kind.rust_type;
-            if ty == "&[Value]" {
-                "ValueSlice"
-            } else {
-                ty.rsplit("::").next().unwrap()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-    if prefix != "" {
-        fmtln!(
-            fmt,
-            "(decl {prefix}{} (Type {input_tys}) {ret_ty})",
-            inst.name
-        );
     }
     let input_args = inst
         .operands_in
@@ -1657,7 +1629,7 @@ fn gen_insn_constructor(
         .map(|o| o.name)
         .collect::<Vec<_>>()
         .join(" ");
-    fmtln!(fmt, "(rule ({prefix}{} ty {input_args})", inst.name);
+    fmtln!(fmt, "(rule ({} ty {input_args})", inst.name);
     fmt.indent(|fmt| {
         let mut s = format!(
             "({common_ctor} ty (InstructionData.{} (Opcode.{})",

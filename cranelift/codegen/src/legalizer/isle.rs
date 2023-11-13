@@ -19,6 +19,7 @@ pub fn run<T>(
         pos,
         cfg,
         replace: None,
+        last_ins: None,
     };
     let func_begin = cx.pos.position();
     cx.pos.set_position(func_begin);
@@ -27,13 +28,19 @@ pub fn run<T>(
         while let Some(inst) = cx.pos.next_inst() {
             trace!("legalizing {}", cx.pos.func.dfg.display_inst(inst));
             cx.replace = Some(inst);
+            cx.last_ins = None;
             match constructor_legalize(&mut cx, inst) {
                 Some(pos) => {
                     trace!("moving to {pos:?}");
+                    if let Some(ins) = cx.last_ins.take() {
+                        cx.pos.func.dfg.replace_with_aliases(inst, ins);
+                        cx.pos.remove_inst();
+                    }
                     cx.pos.set_position(pos);
                 }
                 None => {
                     trace!("fallthrough");
+                    debug_assert!(cx.last_ins.is_none());
                     cx.prev_position = cx.pos.position();
                 }
             }
@@ -45,7 +52,16 @@ pub struct LegalizeContext<'a, T> {
     pub backend: &'a T,
     pub pos: FuncCursor<'a>,
     pub cfg: &'a mut ControlFlowGraph,
+    /// Instruction that is currently being legalized by this context and will
+    /// be replaced if an instruction is inserted.
     pub replace: Option<Inst>,
+    /// Last-inserted instruction.
+    ///
+    /// If this is set then all the values of `replace` will be turned into
+    /// aliases to the results of this instruction.
+    pub last_ins: Option<Inst>,
+    /// The previous position before this context started legalizing, used to
+    /// rewind backwards and re-legalize instructions that were just added.
     pub prev_position: CursorPosition,
 }
 
@@ -55,8 +71,9 @@ macro_rules! isle_common_legalizer_methods {
     () => {
         crate::isle_common_prelude_methods!();
 
-        fn inst_data(&mut self, inst: Inst) -> InstructionData {
-            self.pos.func.dfg.insts[inst]
+        fn inst_data(&mut self, inst: Inst) -> (Type, InstructionData) {
+            let ty = self.pos.func.dfg.ctrl_typevar(inst);
+            (ty, self.pos.func.dfg.insts[inst])
         }
 
         fn gv_data(&mut self, gv: GlobalValue) -> GlobalValueData {
@@ -66,13 +83,7 @@ macro_rules! isle_common_legalizer_methods {
         fn ins(&mut self, ty: Type, data: &InstructionData) -> Inst {
             let ret = self.pos.ins().build(data.clone(), ty).0;
             crate::trace!("ins {}", self.pos.func.dfg.display_inst(ret));
-            ret
-        }
-
-        fn replace(&mut self, ty: Type, data: &InstructionData) -> Inst {
-            let ins = self.pos.func.dfg.replace(self.replace.unwrap());
-            let ret = ins.build(data.clone(), ty).0;
-            crate::trace!("replace {}", self.pos.func.dfg.display_inst(ret));
+            self.last_ins = Some(ret);
             ret
         }
 
@@ -179,7 +190,7 @@ macro_rules! isle_common_legalizer_methods {
             self.pos.func.dfg.facts[constant] = Some(Fact::constant(bits, unsigned_offset));
         }
 
-        fn replace_vmctx_addr(&mut self, global_value: ir::GlobalValue) -> CursorPosition {
+        fn vmctx_addr(&mut self, global_value: ir::GlobalValue) -> CursorPosition {
             // Get the value representing the `vmctx` argument.
             let vmctx = self
                 .pos
@@ -230,13 +241,6 @@ macro_rules! isle_common_legalizer_methods {
             self.backend
                 .flags()
                 .enable_table_access_spectre_mitigation()
-        }
-
-        fn replace_with_aliases(&mut self, val: Value) -> Inst {
-            let new_inst = self.pos.func.dfg.value_def(val).inst().unwrap();
-            let inst = self.replace.unwrap();
-            self.pos.func.dfg.replace_with_aliases(inst, new_inst);
-            crate::cursor::Cursor::remove_inst(&mut self.pos)
         }
 
         fn enable_nan_canonicalization(&mut self) -> bool {

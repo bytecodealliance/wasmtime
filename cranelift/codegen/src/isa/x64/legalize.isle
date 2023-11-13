@@ -1,6 +1,6 @@
 ;; ========= `fcvt_from_uint` =================================================
 
-(rule (legalize (has_type ty (fcvt_from_uint v @ (value_type $I64))))
+(rule (legalize (fcvt_from_uint ty v @ (value_type $I64)))
   (x64_replace_fcvt_from_u64 ty v))
 
 (decl x64_replace_fcvt_from_u64 (Type Value) CursorPosition)

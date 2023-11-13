@@ -1,7 +1,7 @@
 ;; ========= `{u,s}extend` ====================================================
 
-(rule (legalize (has_type $I128 (uextend x)))
-  (replace_uextend_i128 x))
+(rule (legalize (uextend $I128 x))
+  (uextend_i128 x))
 
-(rule (legalize (has_type $I128 (sextend x)))
-  (replace_sextend_i128 x))
+(rule (legalize (sextend $I128 x))
+  (sextend_i128 x))

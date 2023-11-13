@@ -50,9 +50,10 @@
 ;;   clgr %r4, %r2
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   ag %r4, 0(%r5)
-;;   lghi %r5, 4096
-;;   strv %r3, 0(%r5,%r4)
+;;   lg %r5, 0(%r5)
+;;   agr %r5, %r4
+;;   lghi %r2, 4096
+;;   strv %r3, 0(%r2,%r5)
 ;;   jg label2
 ;; block2:
 ;;   br %r14
@@ -65,14 +66,16 @@
 ;; block0:
 ;;   lgr %r4, %r3
 ;;   llgfr %r3, %r2
-;;   lg %r2, 8(%r4)
-;;   aghi %r2, -4100
-;;   clgr %r3, %r2
+;;   lgr %r5, %r4
+;;   lg %r4, 8(%r5)
+;;   aghi %r4, -4100
+;;   clgr %r3, %r4
 ;;   jgh label3 ; jg label1
 ;; block1:
-;;   ag %r3, 0(%r4)
-;;   lghi %r4, 4096
-;;   lrv %r2, 0(%r4,%r3)
+;;   lg %r5, 0(%r5)
+;;   agr %r5, %r3
+;;   lghi %r2, 4096
+;;   lrv %r2, 0(%r2,%r5)
 ;;   jg label2
 ;; block2:
 ;;   br %r14

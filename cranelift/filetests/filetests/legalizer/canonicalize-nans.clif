@@ -13,7 +13,8 @@ block0(v0: f32):
 ;     v2 = ceil v0
 ;     v3 = fcmp ne v2, v2
 ;     v4 = f32const +NaN
-;     v1 = select v3, v4, v2  ; v4 = +NaN
+;     v5 = select v3, v4, v2  ; v4 = +NaN
+;     v1 -> v5
 ;     return v1
 ; }
 
@@ -28,7 +29,8 @@ block0(v0: f64):
 ;     v2 = floor v0
 ;     v3 = fcmp ne v2, v2
 ;     v4 = f64const +NaN
-;     v1 = select v3, v4, v2  ; v4 = +NaN
+;     v5 = select v3, v4, v2  ; v4 = +NaN
+;     v1 -> v5
 ;     return v1
 ; }
 
@@ -45,7 +47,8 @@ block0(v0: f32x4):
 ;     v4 = f32const +NaN
 ;     v5 = splat.f32x4 v4  ; v4 = +NaN
 ;     v6 = bitcast.f32x4 v3
-;     v1 = bitselect v6, v5, v2
+;     v7 = bitselect v6, v5, v2
+;     v1 -> v7
 ;     return v1
 ; }
 
@@ -62,7 +65,8 @@ block0(v0: f64x2):
 ;     v4 = splat.f64x2 v3  ; v3 = +NaN
 ;     v5 = fcmp ne v2, v2
 ;     v6 = bitcast.f64x2 v5
-;     v1 = bitselect v6, v4, v2
+;     v7 = bitselect v6, v4, v2
+;     v1 -> v7
 ;     return v1
 ; }
 
@@ -77,7 +81,8 @@ block0(v0: f32):
 ;     v2 = trunc v0
 ;     v3 = fcmp ne v2, v2
 ;     v4 = f32const +NaN
-;     v1 = select v3, v4, v2  ; v4 = +NaN
+;     v5 = select v3, v4, v2  ; v4 = +NaN
+;     v1 -> v5
 ;     return v1
 ; }
 
@@ -92,7 +97,8 @@ block0(v0: f32, v1: f32):
 ;     v3 = fadd v0, v1
 ;     v4 = fcmp ne v3, v3
 ;     v5 = f32const +NaN
-;     v2 = select v4, v5, v3  ; v5 = +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
 ;     return v2
 ; }
 
@@ -107,7 +113,8 @@ block0(v0: f32, v1: f32):
 ;     v3 = fsub v0, v1
 ;     v4 = fcmp ne v3, v3
 ;     v5 = f32const +NaN
-;     v2 = select v4, v5, v3  ; v5 = +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
 ;     return v2
 ; }
 
@@ -122,7 +129,8 @@ block0(v0: f64, v1: f64):
 ;     v3 = fdiv v0, v1
 ;     v4 = fcmp ne v3, v3
 ;     v5 = f64const +NaN
-;     v2 = select v4, v5, v3  ; v5 = +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
 ;     return v2
 ; }
 
@@ -137,7 +145,8 @@ block0(v0: f64, v1: f64):
 ;     v3 = fmul v0, v1
 ;     v4 = fcmp ne v3, v3
 ;     v5 = f64const +NaN
-;     v2 = select v4, v5, v3  ; v5 = +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
 ;     return v2
 ; }
 
@@ -152,7 +161,8 @@ block0(v0: f64, v1: f64):
 ;     v3 = fmax v0, v1
 ;     v4 = fcmp ne v3, v3
 ;     v5 = f64const +NaN
-;     v2 = select v4, v5, v3  ; v5 = +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
 ;     return v2
 ; }
 
@@ -167,7 +177,8 @@ block0(v0: f64, v1: f64):
 ;     v3 = fmin v0, v1
 ;     v4 = fcmp ne v3, v3
 ;     v5 = f64const +NaN
-;     v2 = select v4, v5, v3  ; v5 = +NaN
+;     v6 = select v4, v5, v3  ; v5 = +NaN
+;     v2 -> v6
 ;     return v2
 ; }
 
@@ -182,7 +193,8 @@ block0(v0: f64, v1: f64, v2: f64):
 ;     v4 = fma v0, v1, v2
 ;     v5 = fcmp ne v4, v4
 ;     v6 = f64const +NaN
-;     v3 = select v5, v6, v4  ; v6 = +NaN
+;     v7 = select v5, v6, v4  ; v6 = +NaN
+;     v3 -> v7
 ;     return v3
 ; }
 
