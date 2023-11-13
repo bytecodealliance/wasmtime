@@ -84,3 +84,9 @@ async fn http_outbound_request_response_build() -> Result<()> {
     let server = Server::http1()?;
     run(HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT, &server).await
 }
+
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn http_outbound_request_content_length() -> Result<()> {
+    let server = Server::http1()?;
+    run(HTTP_OUTBOUND_REQUEST_CONTENT_LENGTH_COMPONENT, &server).await
+}
