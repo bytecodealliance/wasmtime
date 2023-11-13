@@ -24,7 +24,7 @@ pub struct Pollable {
 }
 
 #[async_trait::async_trait]
-pub trait Subscribe: Send + Sync + 'static {
+pub trait Subscribe: Send + Sync {
     async fn ready(&mut self);
 }
 
@@ -37,11 +37,11 @@ pub trait Subscribe: Send + Sync + 'static {
 /// deleted while the `pollable` is still alive.
 pub fn subscribe<T>(table: &mut Table, resource: Resource<T>) -> Result<Resource<Pollable>>
 where
-    T: Subscribe,
+    T: Subscribe + 'static,
 {
     fn make_future<'a, T>(stream: &'a mut dyn Any) -> PollableFuture<'a>
     where
-        T: Subscribe,
+        T: Subscribe + 'static,
     {
         stream.downcast_mut::<T>().unwrap().ready()
     }
