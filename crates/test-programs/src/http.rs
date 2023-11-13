@@ -110,7 +110,7 @@ pub fn request(
 
     let future_response = outgoing_handler::handle(request, None)?;
 
-    http_types::OutgoingBody::finish(outgoing_body, None);
+    http_types::OutgoingBody::finish(outgoing_body, None)?;
 
     let incoming_response = match future_response.get() {
         Some(result) => result.map_err(|()| anyhow!("response already taken"))?,
