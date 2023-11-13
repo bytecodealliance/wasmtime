@@ -482,8 +482,6 @@ impl HostOutgoingBody {
             .take()
             .expect("outgoing-body trailer_sender consumed by a non-owning function");
 
-        // TODO: does sending guarantee that the message was received, or could it be queued to
-        // receive?
         if let Some(w) = self.written {
             use std::cmp::Ordering;
             let res = w.finish();
