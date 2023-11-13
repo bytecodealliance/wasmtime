@@ -58,7 +58,7 @@ pub mod bindings {
     });
 }
 
-#[export_name = "wasi:cli/run@0.2.0-rc-2023-11-05#run"]
+#[export_name = "wasi:cli/run@0.2.0-rc-2023-11-10#run"]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
@@ -1784,7 +1784,7 @@ pub unsafe extern "C" fn poll_oneoff(
             });
         }
 
-        #[link(wasm_import_module = "wasi:io/poll@0.2.0-rc-2023-11-05")]
+        #[link(wasm_import_module = "wasi:io/poll@0.2.0-rc-2023-11-10")]
         #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
         extern "C" {
             #[link_name = "poll"]
@@ -2511,7 +2511,7 @@ impl State {
 
     fn get_environment(&self) -> &[StrTuple] {
         if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-11-05")]
+            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-11-10")]
             extern "C" {
                 #[link_name = "get-environment"]
                 fn get_environment_import(rval: *mut StrTupleList);
@@ -2535,7 +2535,7 @@ impl State {
 
     fn get_args(&self) -> &[WasmStr] {
         if self.args.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-11-05")]
+            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-11-10")]
             extern "C" {
                 #[link_name = "get-arguments"]
                 fn get_args_import(rval: *mut WasmStrList);
