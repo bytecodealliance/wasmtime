@@ -263,9 +263,10 @@
     ;; re-legalize the previous instrs to legalize the new `global_value` node
     (prev_position)))
 
-(rule (legalize (global_value (gv_iadd_imm base offset ty)))
-  (let ((base Value (ins_global_value_copy_facts ty base))
-        (_ Inst (replace_iadd_imm ty base offset)))
+(rule (legalize (global_value (gv_iadd_imm gv_base offset ty)))
+  (let ((base Value (ins_global_value_copy_facts ty gv_base))
+        (offset Value (ins_iconst_with_fact ty offset gv_base))
+        (_ Inst (replace_iadd ty base offset)))
     ;; re-legalize the previous instrs to legalize the new `global_value` node
     (prev_position)))
 
@@ -332,8 +333,15 @@
   (let ((ret Inst (ins_global_value ty gv))
         (_ Unit (update_inst_facts_with_gv gv ret)))
     ret))
+(decl ins_iconst_with_fact (Type Imm64 GlobalValue) Inst)
+(rule (ins_iconst_with_fact ty imm gv)
+  (let ((ret Inst (ins_iconst ty imm))
+        (_ Unit (update_const_facts ty imm gv ret)))
+    ret))
 (decl update_inst_facts_with_gv (GlobalValue Value) Unit)
 (extern constructor update_inst_facts_with_gv update_inst_facts_with_gv)
+(decl update_const_facts (Type Imm64 GlobalValue Value) Unit)
+(extern constructor update_const_facts update_const_facts)
 
 ;; ========= `table_addr` =====================================================
 

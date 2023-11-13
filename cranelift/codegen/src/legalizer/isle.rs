@@ -170,6 +170,15 @@ macro_rules! isle_common_legalizer_methods {
             }
         }
 
+        fn update_const_facts(&mut self, ty: Type, imm: Imm64, gv: GlobalValue, constant: Value) {
+            if self.pos.func.global_value_facts[gv].is_none() {
+                return;
+            }
+            let bits = u16::try_from(ty.bits()).unwrap();
+            let unsigned_offset = imm.bits() as u64; // Safety: reinterpret i64 bits as u64.
+            self.pos.func.dfg.facts[constant] = Some(Fact::constant(bits, unsigned_offset));
+        }
+
         fn replace_vmctx_addr(&mut self, global_value: ir::GlobalValue) -> CursorPosition {
             // Get the value representing the `vmctx` argument.
             let vmctx = self
