@@ -912,7 +912,6 @@ where
         }
     }
 
-    // TODO: verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
         let src = self.emit_set_local(index);
         self.context.free_reg(src);

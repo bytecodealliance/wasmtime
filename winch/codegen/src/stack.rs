@@ -155,6 +155,14 @@ impl Val {
         }
     }
 
+    /// Check whether the value is local with a particular index.
+    pub fn is_local_at_index(&self, index: u32) -> bool {
+        match *self {
+            Self::Local(Local { index: i, .. }) if i == index => true,
+            _ => false,
+        }
+    }
+
     /// Get the register representation of the value.
     ///
     /// # Panics
@@ -273,6 +281,11 @@ impl Stack {
 
         let partition = len - n;
         self.inner.range(partition..)
+    }
+
+    /// Returns an iterator of the stack in top-most to bottom-most order.
+    pub fn iter(&self) -> impl Iterator<Item = &Val> + '_ {
+        self.inner.iter().rev()
     }
 
     /// Pops the top element of the stack, if any.
