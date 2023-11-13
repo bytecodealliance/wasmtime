@@ -23,7 +23,16 @@ pub type Range = (usize, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 
-pub type ConstructorVec<T> = SmallVec<[T; 8]>;
+const MAX_ISLE_RETURNS: usize = 8;
+
+pub type ConstructorVec<T> = SmallVec<[T; MAX_ISLE_RETURNS]>;
+
+impl<T: smallvec::Array> generated_code::Length for SmallVec<T> {
+    #[inline]
+    fn len(&self) -> usize {
+        SmallVec::len(self)
+    }
+}
 
 pub(crate) mod generated_code;
 use generated_code::{ContextIter, IntoContextIter};
