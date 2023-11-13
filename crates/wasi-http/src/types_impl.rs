@@ -27,16 +27,20 @@ impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
 }
 
 /// Extract the `Content-Length` header value from a [`FieldMap`], returning `None` if it's not
-/// present. This can fail with an http protocol error if it's not possible to parse the
-/// `Content-Length` header.
+/// present. This function will return `Err` if it's not possible to parse the `Content-Length`
+/// header.
 fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
-    let val = fields.get(hyper::header::CONTENT_LENGTH);
-    if val.is_none() {
-        return Ok(None);
-    }
+    let header_val = match fields.get(hyper::header::CONTENT_LENGTH) {
+        Some(val) => val,
+        None => return Ok(None),
+    };
 
-    let val = val.unwrap().to_str().map_err(|_| ())?;
-    match val.parse() {
+    let header_str = match header_val.to_str() {
+        Ok(val) => val,
+        Err(_) => return Err(()),
+    };
+
+    match header_str.parse() {
         Ok(len) => Ok(Some(len)),
         Err(_) => Err(()),
     }

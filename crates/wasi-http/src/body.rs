@@ -381,13 +381,17 @@ impl WrittenState {
         }
     }
 
-    fn update(&self, len: u64) -> bool {
+    /// Add `len` to the total number of bytes written. Returns `false` if the new total exceeds
+    /// the number of bytes expected to be written.
+    fn update(&self, len: usize) -> bool {
+        let len = len as u64;
         let old = self
             .written
             .fetch_add(len, std::sync::atomic::Ordering::Relaxed);
         old + len <= self.expected
     }
 
+    /// Return a comparison of total bytes written to the number of bytes expected to be written.
     fn finish(self) -> std::cmp::Ordering {
         let written = self.written.load(std::sync::atomic::Ordering::Relaxed);
         written.cmp(&self.expected)
@@ -554,7 +558,7 @@ impl HostOutputStream for BodyWriteStream {
             // received.
             Ok(()) => {
                 if let Some(written) = self.written.as_ref() {
-                    if !written.update(len as u64) {
+                    if !written.update(len) {
                         return Err(StreamError::LastOperationFailed(anyhow!(internal_error(
                             "too much written to output stream".to_owned()
                         ))));
