@@ -17,6 +17,7 @@ pub mod bindings {
         tracing: true,
         async: false,
         with: {
+            "wasi:io/error": wasmtime_wasi::preview2::bindings::io::error,
             "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
             "wasi:io/poll": wasmtime_wasi::preview2::bindings::io::poll,
 
