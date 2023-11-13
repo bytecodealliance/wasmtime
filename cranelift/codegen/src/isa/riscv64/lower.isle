@@ -1210,18 +1210,31 @@
   (rv_sll x (value_regs_get y 0)))
 
 ;; If the shift amount is known. We can mask it and encode it in the instruction.
-(rule 2 (lower (has_type (int_fits_in_32 ty) (ishl x (maybe_uextend (imm12_from_value y)))))
-  (rv_slliw x (imm12_and y (ty_shift_mask ty))))
+(rule 2 (lower (has_type (int_fits_in_32 ty) (ishl x y)))
+  (if-let shift (const_shift ty y))
+  (rv_slliw x shift))
 
-;; We technically don't need to mask the shift amount here. The instruction
-;; does the right thing. But it's neater when pretty printing it.
-(rule 3 (lower (has_type ty @ $I64 (ishl x (maybe_uextend (imm12_from_value y)))))
-  (rv_slli x (imm12_and y (ty_shift_mask ty))))
+(rule 3 (lower (has_type ty @ $I64 (ishl x y)))
+  (if-let shift (const_shift $I64 y))
+  (rv_slli x shift))
 
 ;; With `Zba` we have a shift that zero extends the LHS argument.
-(rule 4 (lower (has_type $I64 (ishl (uextend x @ (value_type $I32)) (maybe_uextend (imm12_from_value y)))))
+(rule 4 (lower (has_type $I64 (ishl (uextend x @ (value_type $I32)) y)))
   (if-let $true (has_zba))
-  (rv_slliuw x y))
+  (if-let shift (const_shift $I64 y))
+  (rv_slliuw x shift))
+
+;; Helper for extracting a constant shift value from the `Value` input.
+;;
+;; This will return an appropriate `Imm12` for a shift instruction which is
+;; masked to the width of the input `Type`.
+(decl pure partial const_shift (Type Value) Imm12)
+(rule 0 (const_shift ty (imm12_from_value n))
+  (imm12_and n (ty_shift_mask ty)))
+(rule 1 (const_shift ty (iconcat lower _))
+  (const_shift ty lower))
+(rule 1 (const_shift ty (uextend lower))
+  (const_shift ty lower))
 
 ;; I128 cases
 (rule 4 (lower (has_type $I128 (ishl x y)))
@@ -1250,8 +1263,15 @@
 (rule 5 (lower (has_type (ty_vec_fits_in_register ty) (ishl x y)))
   (rv_vsll_vx x (value_regs_get y 0) (unmasked) ty))
 
-(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (ishl x (maybe_uextend (uimm5_from_value y)))))
-  (rv_vsll_vi x y (unmasked) ty))
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (ishl x y)))
+  (if-let uimm5 (const_vector_shift ty y))
+  (rv_vsll_vi x uimm5 (unmasked) ty))
+
+(decl pure partial const_vector_shift (Type Value) UImm5)
+(rule (const_vector_shift ty val)
+  (if-let (u64_from_imm12 imm12) (const_shift (lane_type ty) val))
+  (if-let (uimm5_from_u64 uimm5) imm12)
+  uimm5)
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1270,14 +1290,17 @@
   (rv_srl x (value_regs_get y 0)))
 
 ;; When the RHS is known we can just encode it in the instruction.
-(rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x (maybe_uextend (imm12_from_value y)))))
-  (rv_srliw (zext x) (imm12_and y (ty_shift_mask ty))))
+(rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x y)))
+  (if-let shift (const_shift ty y))
+  (rv_srliw (zext x) shift))
 
-(rule 3 (lower (has_type $I32 (ushr x (maybe_uextend (imm12_from_value y)))))
-  (rv_srliw x y))
+(rule 3 (lower (has_type $I32 (ushr x y)))
+  (if-let shift (const_shift $I32 y))
+  (rv_srliw x shift))
 
-(rule 3 (lower (has_type $I64 (ushr x (maybe_uextend (imm12_from_value y)))))
-  (rv_srli x y))
+(rule 3 (lower (has_type $I64 (ushr x y)))
+  (if-let shift (const_shift $I64 y))
+  (rv_srli x shift))
 
 (rule 3 (lower (has_type $I128 (ushr x y)))
   (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
@@ -1305,8 +1328,9 @@
 (rule 4 (lower (has_type (ty_vec_fits_in_register ty) (ushr x y)))
   (rv_vsrl_vx x (value_regs_get y 0) (unmasked) ty))
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (ushr x (maybe_uextend (uimm5_from_value y)))))
-  (rv_vsrl_vi x y (unmasked) ty))
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (ushr x y)))
+  (if-let uimm5 (const_vector_shift ty y))
+  (rv_vsrl_vi x uimm5 (unmasked) ty))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1325,14 +1349,17 @@
   (rv_sra x (value_regs_get y 0)))
 
 ;; When the RHS is known we can just encode it in the instruction.
-(rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x (maybe_uextend (imm12_from_value y)))))
-  (rv_sraiw (sext x) (imm12_and y (ty_shift_mask ty))))
+(rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x y)))
+  (if-let shift (const_shift ty y))
+  (rv_sraiw (sext x) shift))
 
-(rule 3 (lower (has_type $I32 (sshr x (maybe_uextend (imm12_from_value y)))))
-  (rv_sraiw x y))
+(rule 3 (lower (has_type $I32 (sshr x y)))
+  (if-let shift (const_shift $I32 y))
+  (rv_sraiw x shift))
 
-(rule 3 (lower (has_type $I64 (sshr x (maybe_uextend (imm12_from_value y)))))
-  (rv_srai x y))
+(rule 3 (lower (has_type $I64 (sshr x y)))
+  (if-let shift (const_shift $I64 y))
+  (rv_srai x shift))
 
 (rule 3 (lower (has_type $I128 (sshr x y)))
   (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
@@ -1365,9 +1392,9 @@
 (rule 4 (lower (has_type (ty_vec_fits_in_register ty) (sshr x y)))
   (rv_vsra_vx x (value_regs_get y 0) (unmasked) ty))
 
-(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (sshr x (maybe_uextend (uimm5_from_value y)))))
-  (rv_vsra_vi x y (unmasked) ty))
-
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (sshr x y)))
+  (if-let uimm5 (const_vector_shift ty y))
+  (rv_vsra_vi x uimm5 (unmasked) ty))
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

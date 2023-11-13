@@ -1876,7 +1876,7 @@
 (decl pure partial imm12_add (Imm12 i32) Imm12)
 (extern constructor imm12_add imm12_add)
 
-(decl imm12_and (Imm12 u64) Imm12)
+(decl pure imm12_and (Imm12 u64) Imm12)
 (extern constructor imm12_and imm12_and)
 
 ;; Imm12 Extractors
@@ -1904,6 +1904,9 @@
 
 (decl pure imm12_is_zero () Imm12)
 (extern extractor imm12_is_zero imm12_is_zero)
+
+(decl u64_from_imm12 (u64) Imm12)
+(extern extractor u64_from_imm12 u64_from_imm12)
 
 ;; Imm20
 
