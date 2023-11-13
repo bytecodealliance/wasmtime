@@ -350,13 +350,7 @@ where
     pub fn emit_set_local(&mut self, index: u32) -> TypedReg {
         // Materialize any references to the same local index that are in the
         // value stack by spilling.
-        let stack_contains_latent_local = self
-            .context
-            .stack
-            .iter()
-            .skip(1) // top-most element is popped below.
-            .any(|v| v.is_local_at_index(index));
-        if stack_contains_latent_local {
+        if self.context.stack.contains_latent_local(index) {
             self.context.spill(self.masm);
         }
         let src = self.context.pop_to_reg(self.masm, None);
