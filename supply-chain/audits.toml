@@ -3100,6 +3100,12 @@ user-id = 539 # Josh Stone (cuviper)
 start = "2023-02-05"
 end = "2024-07-11"
 
+[[trusted.errno]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2023-08-29"
+end = "2024-11-14"
+
 [[trusted.fd-lock]]
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
