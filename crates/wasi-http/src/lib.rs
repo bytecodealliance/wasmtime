@@ -10,9 +10,9 @@ pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
         interfaces: "
-            import wasi:http/incoming-handler@0.2.0-rc-2023-11-05;
-            import wasi:http/outgoing-handler@0.2.0-rc-2023-11-05;
-            import wasi:http/types@0.2.0-rc-2023-11-05;
+            import wasi:http/incoming-handler@0.2.0-rc-2023-11-10;
+            import wasi:http/outgoing-handler@0.2.0-rc-2023-11-10;
+            import wasi:http/types@0.2.0-rc-2023-11-10;
         ",
         tracing: true,
         async: false,
@@ -42,4 +42,8 @@ pub(crate) fn dns_error(rcode: String, info_code: u16) -> bindings::http::types:
         rcode: Some(rcode),
         info_code: Some(info_code),
     })
+}
+
+pub(crate) fn internal_error(msg: String) -> bindings::http::types::ErrorCode {
+    bindings::http::types::ErrorCode::InternalError(Some(msg))
 }

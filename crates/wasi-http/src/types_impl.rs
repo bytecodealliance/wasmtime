@@ -1,6 +1,6 @@
 use crate::{
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
-    body::{FinishMessage, HostFutureTrailers, HostIncomingBody, HostOutgoingBody},
+    body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody},
     types::{
         FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
         HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
@@ -20,9 +20,29 @@ use wasmtime_wasi::preview2::{
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     fn http_error_code(
         &mut self,
-        _err: wasmtime::component::Resource<types::StreamError>,
+        _err: wasmtime::component::Resource<types::IoError>,
     ) -> wasmtime::Result<Option<types::ErrorCode>> {
         todo!()
+    }
+}
+
+/// Extract the `Content-Length` header value from a [`FieldMap`], returning `None` if it's not
+/// present. This function will return `Err` if it's not possible to parse the `Content-Length`
+/// header.
+fn get_content_length(fields: &FieldMap) -> Result<Option<u64>, ()> {
+    let header_val = match fields.get(hyper::header::CONTENT_LENGTH) {
+        Some(val) => val,
+        None => return Ok(None),
+    };
+
+    let header_str = match header_val.to_str() {
+        Ok(val) => val,
+        Err(_) => return Err(()),
+    };
+
+    match header_str.parse() {
+        Ok(len) => Ok(Some(len)),
+        Err(_) => Err(()),
     }
 }
 
@@ -374,7 +394,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingRequest for T {
             return Ok(Err(()));
         }
 
-        let (host_body, hyper_body) = HostOutgoingBody::new();
+        let size = match get_content_length(&req.headers) {
+            Ok(size) => size,
+            Err(e) => return Ok(Err(e)),
+        };
+
+        let (host_body, hyper_body) = HostOutgoingBody::new(size);
 
         req.body = Some(hyper_body);
 
@@ -713,7 +738,12 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingResponse for T {
             return Ok(Err(()));
         }
 
-        let (host, body) = HostOutgoingBody::new();
+        let size = match get_content_length(&resp.headers) {
+            Ok(size) => size,
+            Err(e) => return Ok(Err(e)),
+        };
+
+        let (host, body) = HostOutgoingBody::new(size);
 
         resp.body.replace(body);
 
@@ -845,37 +875,20 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostOutgoingBody for T {
         &mut self,
         id: Resource<HostOutgoingBody>,
         ts: Option<Resource<Trailers>>,
-    ) -> wasmtime::Result<()> {
-        let mut body = self.table().delete(id)?;
+    ) -> wasmtime::Result<Result<(), types::ErrorCode>> {
+        let body = self.table().delete(id)?;
 
-        let sender = body
-            .finish_sender
-            .take()
-            .expect("outgoing-body trailer_sender consumed by a non-owning function");
-
-        let message = if let Some(ts) = ts {
-            FinishMessage::Trailers(move_fields(self.table(), ts)?)
+        let ts = if let Some(ts) = ts {
+            Some(move_fields(self.table(), ts)?)
         } else {
-            FinishMessage::Finished
+            None
         };
 
-        // Ignoring failure: receiver died sending body, but we can't report that here.
-        let _ = sender.send(message.into());
-
-        Ok(())
+        Ok(body.finish(ts))
     }
 
     fn drop(&mut self, id: Resource<HostOutgoingBody>) -> wasmtime::Result<()> {
-        let mut body = self.table().delete(id)?;
-
-        let sender = body
-            .finish_sender
-            .take()
-            .expect("outgoing-body trailer_sender consumed by a non-owning function");
-
-        // Ignoring failure: receiver died sending body, but we can't report that here.
-        let _ = sender.send(FinishMessage::Abort);
-
+        self.table().delete(id)?.abort();
         Ok(())
     }
 }
