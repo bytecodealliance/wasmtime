@@ -15,8 +15,7 @@ use wasmtime_wasi::preview2::{
     self, StreamError, StreamResult, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{
-    bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
-    WasiHttpCtx, WasiHttpView,
+    body::HyperOutgoingBody, hyper_response_error, WasiHttpCtx, WasiHttpView,
 };
 
 #[cfg(feature = "wasi-nn")]
