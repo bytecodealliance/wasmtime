@@ -3,6 +3,7 @@ use crate::{
         outgoing_handler,
         types::{self, Scheme},
     },
+    http_request_error, internal_error,
     types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequest},
     WasiHttpView,
 };
@@ -77,22 +78,21 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             uri = uri.path_and_query(path);
         }
 
-        builder = builder.uri(
-            uri.build()
-                .map_err(|_| types::ErrorCode::HttpRequestUriInvalid)?,
-        );
+        builder = builder.uri(uri.build().map_err(http_request_error)?);
 
         for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
         }
 
-        let body = req
-            .body
-            .unwrap_or_else(|| Empty::<Bytes>::new().map_err(|_| todo!("thing")).boxed());
+        let body = req.body.unwrap_or_else(|| {
+            Empty::<Bytes>::new()
+                .map_err(|_| unreachable!("Infallible error"))
+                .boxed()
+        });
 
         let request = builder
             .body(body)
-            .map_err(|err| types::ErrorCode::InternalError(Some(err.to_string())))?;
+            .map_err(|err| internal_error(err.to_string()))?;
 
         Ok(Ok(self.send_request(OutgoingRequest {
             use_tls,

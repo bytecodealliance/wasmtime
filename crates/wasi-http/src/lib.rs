@@ -48,3 +48,52 @@ pub(crate) fn dns_error(rcode: String, info_code: u16) -> bindings::http::types:
 pub(crate) fn internal_error(msg: String) -> bindings::http::types::ErrorCode {
     bindings::http::types::ErrorCode::InternalError(Some(msg))
 }
+
+/// Translate a [`http::Error`] to a wasi-http `ErrorCode` in the context of a request.
+pub fn http_request_error(err: http::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+
+    tracing::warn!("http request error: {err:?}");
+
+    if err.is::<http::uri::InvalidUri>() {
+        return ErrorCode::HttpRequestUriInvalid;
+    }
+
+    ErrorCode::HttpProtocolError
+}
+
+/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
+pub fn hyper_request_error(err: hyper::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+
+    tracing::warn!("hyper request error: {err:?}");
+
+    // If it's a user error, we might be able to extract a wasi-http error from it.
+    if let Some(cause) = err.into_cause() {
+        if let Ok(err) = cause.downcast::<ErrorCode>() {
+            return *err.clone();
+        }
+    }
+
+    ErrorCode::HttpProtocolError
+}
+
+/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a response.
+pub fn hyper_response_error(err: hyper::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+
+    tracing::warn!("hyper request error: {err:?}");
+
+    if err.is_timeout() {
+        return ErrorCode::HttpResponseTimeout;
+    }
+
+    // If it's a user error, we might be able to extract a wasi-http error from it.
+    if let Some(cause) = err.into_cause() {
+        if let Ok(err) = cause.downcast::<ErrorCode>() {
+            return *err.clone();
+        }
+    }
+
+    ErrorCode::HttpProtocolError
+}
