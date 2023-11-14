@@ -49,7 +49,7 @@ use crate::masm::{OperandSize, SPOffset};
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
-use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmType};
 
 pub(crate) mod local;
 pub(crate) use local::*;
@@ -130,17 +130,7 @@ pub(crate) trait ABI {
     fn stack_slot_size() -> u32;
 
     /// Returns the size in bytes of the given [`WasmType`].
-    fn sizeof(ty: &WasmType) -> u32 {
-        match ty {
-            WasmType::Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func => Self::word_bytes(),
-                ht => unimplemented!("Support for WasmHeapType: {ht}"),
-            },
-            WasmType::F64 | WasmType::I64 => Self::word_bytes(),
-            WasmType::F32 | WasmType::I32 => Self::word_bytes() / 2,
-            ty => unimplemented!("Support for WasmType: {ty}"),
-        }
-    }
+    fn sizeof(ty: &WasmType) -> u32;
 }
 
 /// ABI-specific representation of function argument or result.
@@ -303,6 +293,12 @@ impl ABIResultsData {
 
 impl ABIResults {
     /// Creates [`ABIResults`] from a slice of `WasmType`.
+    /// This function maps the given return types to their ABI specific
+    /// representation. It does so, by iterating over them and applying the
+    /// given `map` closure. The map closure takes a [WasmType], maps its ABI
+    /// representation, according to the calling convention. In the case of
+    /// results, one result is stored in registers and the rest at particular
+    /// offsets in the stack.
     pub fn from<F>(returns: &[WasmType], call_conv: &CallingConvention, mut map: F) -> Self
     where
         F: FnMut(&WasmType, u32) -> (ABIOperand, u32),
@@ -359,7 +355,8 @@ impl ABIResults {
         Self { operands }
     }
 
-    /// Returns an iterator over the result registers.
+    /// Returns a reference to a [HashSet<Reg>], which includes
+    /// all the registers used to hold function results.
     pub fn regs(&self) -> &HashSet<Reg> {
         &self.operands.regs
     }
@@ -387,7 +384,7 @@ impl ABIResults {
     /// # Panics
     /// This function panics if the function signature contains more
     pub fn unwrap_singleton(&self) -> &ABIOperand {
-        assert!(self.len() == 1);
+        debug_assert_eq!(self.len(), 1);
         &self.operands.inner[0]
     }
 
@@ -415,6 +412,12 @@ pub(crate) struct ABIParams {
 
 impl ABIParams {
     /// Creates [`ABIParams`] from a slice of `WasmType`.
+    /// This function maps the given param types to their ABI specific
+    /// representation. It does so, by iterating over them and applying the
+    /// given `map` closure. The map closure takes a [WasmType], maps its ABI
+    /// representation, according to the calling convention. In the case of
+    /// params, multiple params may be passed in registers and the rest on the
+    /// stack depending on the calling convention.
     pub fn from<F, A: ABI>(
         params: &[WasmType],
         initial_bytes: u32,
@@ -515,7 +518,7 @@ impl ABIParams {
     /// This function panics if the [ABIParams] doesn't have a stack results
     /// parameter.
     pub fn unwrap_results_area_operand(&self) -> &ABIOperand {
-        assert!(self.has_retptr);
+        debug_assert!(self.has_retptr);
         self.operands.inner.last().unwrap()
     }
 }

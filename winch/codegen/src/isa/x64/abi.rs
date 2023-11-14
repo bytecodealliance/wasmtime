@@ -181,6 +181,18 @@ impl ABI for X64ABI {
     fn stack_slot_size() -> u32 {
         Self::word_bytes()
     }
+
+    fn sizeof(ty: &WasmType) -> u32 {
+        match ty {
+            WasmType::Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => Self::word_bytes(),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
+            WasmType::F64 | WasmType::I64 => Self::word_bytes(),
+            WasmType::F32 | WasmType::I32 => Self::word_bytes() / 2,
+            ty => unimplemented!("Support for WasmType: {ty}"),
+        }
+    }
 }
 
 impl X64ABI {

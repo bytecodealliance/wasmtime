@@ -3,7 +3,7 @@ use crate::abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrRe
 use crate::isa::{reg::Reg, CallingConvention};
 use crate::masm::OperandSize;
 use smallvec::SmallVec;
-use wasmtime_environ::{WasmFuncType, WasmType};
+use wasmtime_environ::{WasmFuncType, WasmHeapType, WasmType};
 
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
@@ -153,6 +153,18 @@ impl ABI for Aarch64ABI {
 
     fn stack_slot_size() -> u32 {
         Self::word_bytes()
+    }
+
+    fn sizeof(ty: &WasmType) -> u32 {
+        match ty {
+            WasmType::Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func => Self::word_bytes(),
+                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+            },
+            WasmType::F64 | WasmType::I64 => Self::word_bytes(),
+            WasmType::F32 | WasmType::I32 => Self::word_bytes() / 2,
+            ty => unimplemented!("Support for WasmType: {ty}"),
+        }
     }
 }
 
