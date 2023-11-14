@@ -455,6 +455,13 @@ impl MachInstEmit for Inst {
                     sink,
                 );
             }
+            Inst::Ineg { rd, rs1 } => {
+                let rs = allocs.next(*rs1);
+                let rd = allocs.next(rd.to_reg());
+                // TODO(nagisa): this wants to conditionally use the `SUB` instruction instead (if
+                // the negation is for 64 bits)
+                put_string(&format!("0 - {} => {}\n", reg_name(rs), reg_name(rd)), sink);
+            }
             &Inst::MulArith { rd, rs1, rs2 } => {
                 let rs1 = allocs.next(rs1);
                 let rs2 = allocs.next(rs2);
