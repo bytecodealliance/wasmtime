@@ -70,11 +70,19 @@ fn main() {
 
         {
             let request_body = outgoing_body.write().unwrap();
-            request_body
+            let e = request_body
                 .blocking_write_and_flush("more than 11 bytes".as_bytes())
                 .expect_err("write should fail");
 
-            // TODO: show how to use http-error-code to unwrap this error
+            let e = match e {
+                test_programs::wasi::io::streams::StreamError::LastOperationFailed(e) => e,
+                test_programs::wasi::io::streams::StreamError::Closed => panic!("request closed"),
+            };
+
+            assert!(matches!(
+                http_types::http_error_code(&e),
+                Some(http_types::ErrorCode::InternalError(Some(msg)))
+                  if msg == "too much written to output stream"));
         }
 
         let e =

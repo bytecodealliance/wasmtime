@@ -4,7 +4,7 @@
 use crate::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
-    dns_error,
+    dns_error, hyper_request_error,
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
@@ -156,12 +156,14 @@ async fn handler(
             let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
             let mut parts = authority.split(":");
             let host = parts.next().unwrap_or(&authority);
-            let domain = rustls::ServerName::try_from(host)
-                .map_err(|_| dns_error("invalid dns name".to_string(), 0))?;
-            let stream = connector
-                .connect(domain, tcp_stream)
-                .await
-                .map_err(|_| types::ErrorCode::TlsProtocolError)?;
+            let domain = rustls::ServerName::try_from(host).map_err(|e| {
+                tracing::warn!("dns lookup error: {e:?}");
+                dns_error("invalid dns name".to_string(), 0)
+            })?;
+            let stream = connector.connect(domain, tcp_stream).await.map_err(|e| {
+                tracing::warn!("tls protocol error: {e:?}");
+                types::ErrorCode::TlsProtocolError
+            })?;
 
             let (sender, conn) = timeout(
                 connect_timeout,
@@ -169,7 +171,7 @@ async fn handler(
             )
             .await
             .map_err(|_| types::ErrorCode::ConnectionTimeout)?
-            .map_err(|_| types::ErrorCode::ConnectionTimeout)?;
+            .map_err(hyper_request_error)?;
 
             let worker = preview2::spawn(async move {
                 match conn.await {
@@ -190,7 +192,7 @@ async fn handler(
         )
         .await
         .map_err(|_| types::ErrorCode::ConnectionTimeout)?
-        .map_err(|_| types::ErrorCode::HttpProtocolError)?;
+        .map_err(hyper_request_error)?;
 
         let worker = preview2::spawn(async move {
             match conn.await {
@@ -206,11 +208,8 @@ async fn handler(
     let resp = timeout(first_byte_timeout, sender.send_request(request))
         .await
         .map_err(|_| types::ErrorCode::ConnectionReadTimeout)?
-        .map_err(|_| types::ErrorCode::HttpProtocolError)?
-        .map(|body| {
-            body.map_err(|_| types::ErrorCode::HttpProtocolError)
-                .boxed()
-        });
+        .map_err(hyper_request_error)?
+        .map(|body| body.map_err(hyper_request_error).boxed());
 
     Ok(IncomingResponseInternal {
         resp,
@@ -318,7 +317,7 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
             Some(body) => builder.body(body),
             None => builder.body(
                 Empty::<bytes::Bytes>::new()
-                    .map_err(|_| unreachable!())
+                    .map_err(|_| unreachable!("Infallible error"))
                     .boxed(),
             ),
         }
