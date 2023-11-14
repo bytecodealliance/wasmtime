@@ -27,11 +27,9 @@
 //! instruction is a control instruction, we could avoid emitting
 //! a [`crate::masm::MacroAssembler::cmp_with_set`] and instead emit
 //! a conditional jump inline when emitting the control flow instruction.
-
-// TODO: Add more docs, rename `BlockTypeInfo`?
 use super::{CodeGenContext, MacroAssembler, OperandSize};
 use crate::{
-    abi::{ABIResultsData, StackResultsBase},
+    abi::ABIResultsData,
     codegen::env::BlockTypeInfo,
     masm::{IntCmpKind, SPOffset},
 };
@@ -179,39 +177,12 @@ impl ControlStackFrame {
     }
 
     fn init<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+        assert!(self.block_type_info().param_count == 0);
+        assert!(self.block_type_info().result_count < 2);
         // Save any live registers and locals.
         context.spill(masm);
         self.set_base_stack_len(context.stack.len());
         self.set_base_sp(masm.sp_offset());
-
-        // Duplicate the stack values that will be consumed the if, so that
-        // in the presence of an else, there's no need to keep a side copy
-        // of the stack, instead the value stack will already contain the
-        // right number of values.
-        if self.is_if() {
-            let block_type_info = self.block_type_info();
-            if block_type_info.param_count > 0 {
-                context.stack.dup(block_type_info.param_count);
-            }
-        }
-
-        // TODO: Consider doing this sp
-        if let Some(data) = self.results() {
-            let results_size = data.results.size();
-            if results_size > 0 {
-                masm.reserve_stack(results_size);
-                self.set_results_base(StackResultsBase::sp(masm.sp_offset()));
-            }
-        }
-    }
-
-    fn set_results_base(&mut self, base: StackResultsBase) {
-        use ControlStackFrame::*;
-
-        match self {
-            If { results_data, .. } | Block { results_data, .. } => results_data.base = Some(base),
-            _ => {}
-        }
     }
 
     fn set_base_stack_len(&mut self, len: usize) {
@@ -249,13 +220,6 @@ impl ControlStackFrame {
             | Block {
                 block_type_info, ..
             } => block_type_info,
-        }
-    }
-
-    fn is_if(&self) -> bool {
-        match self {
-            ControlStackFrame::If { .. } => true,
-            _ => false,
         }
     }
 
@@ -359,24 +323,8 @@ impl ControlStackFrame {
                 base_stack_len,
                 block_type_info,
                 ..
-            } => {
-                assert!(
-                    // [Self::init] duplicates the stack values when pushing an if;
-                    // this ensures that the current length of the value stack
-                    // is representative of such duplication, since no else was found.
-                    (*base_stack_len + block_type_info.result_count + block_type_info.param_count
-                        - block_type_info.param_count)
-                        == context.stack.len()
-                );
-
-                context.pop_abi_results(results_data, masm);
-                context.drop_last(block_type_info.param_count, |_, _| {});
-                // Assert that once the block results are popped and once the duplicate
-                // values are dropped, the value stack length is the expected one.
-                assert!(*base_stack_len - block_type_info.param_count == context.stack.len());
-                self.bind_end(masm, context);
             }
-            Else {
+            | Else {
                 results_data,
                 base_stack_len,
                 block_type_info,

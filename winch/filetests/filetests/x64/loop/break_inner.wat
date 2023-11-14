@@ -20,36 +20,46 @@
 ;;   15:	 b800000000           	mov	eax, 0
 ;;   1a:	 8944240c             	mov	dword ptr [rsp + 0xc], eax
 ;;   1e:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
-;;   23:	 4153                 	push	r11
-;;   25:	 b801000000           	mov	eax, 1
-;;   2a:	 59                   	pop	rcx
-;;   2b:	 01c1                 	add	ecx, eax
-;;   2d:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
-;;   31:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
-;;   36:	 4153                 	push	r11
-;;   38:	 b802000000           	mov	eax, 2
-;;   3d:	 59                   	pop	rcx
-;;   3e:	 01c1                 	add	ecx, eax
-;;   40:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
-;;   44:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
-;;   49:	 4153                 	push	r11
-;;   4b:	 b804000000           	mov	eax, 4
-;;   50:	 59                   	pop	rcx
-;;   51:	 01c1                 	add	ecx, eax
-;;   53:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
-;;   57:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
-;;   5c:	 4153                 	push	r11
-;;   5e:	 b808000000           	mov	eax, 8
-;;   63:	 59                   	pop	rcx
-;;   64:	 01c1                 	add	ecx, eax
-;;   66:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
-;;   6a:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
-;;   6f:	 4153                 	push	r11
-;;   71:	 b810000000           	mov	eax, 0x10
-;;   76:	 59                   	pop	rcx
-;;   77:	 01c1                 	add	ecx, eax
-;;   79:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
-;;   7d:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
-;;   81:	 4883c410             	add	rsp, 0x10
-;;   85:	 5d                   	pop	rbp
-;;   86:	 c3                   	ret	
+;;   23:	 4883ec04             	sub	rsp, 4
+;;   27:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   2b:	 b801000000           	mov	eax, 1
+;;   30:	 8b0c24               	mov	ecx, dword ptr [rsp]
+;;   33:	 4883c404             	add	rsp, 4
+;;   37:	 01c1                 	add	ecx, eax
+;;   39:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
+;;   3d:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
+;;   42:	 4883ec04             	sub	rsp, 4
+;;   46:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   4a:	 b802000000           	mov	eax, 2
+;;   4f:	 8b0c24               	mov	ecx, dword ptr [rsp]
+;;   52:	 4883c404             	add	rsp, 4
+;;   56:	 01c1                 	add	ecx, eax
+;;   58:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
+;;   5c:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
+;;   61:	 4883ec04             	sub	rsp, 4
+;;   65:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   69:	 b804000000           	mov	eax, 4
+;;   6e:	 8b0c24               	mov	ecx, dword ptr [rsp]
+;;   71:	 4883c404             	add	rsp, 4
+;;   75:	 01c1                 	add	ecx, eax
+;;   77:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
+;;   7b:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
+;;   80:	 4883ec04             	sub	rsp, 4
+;;   84:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   88:	 b808000000           	mov	eax, 8
+;;   8d:	 8b0c24               	mov	ecx, dword ptr [rsp]
+;;   90:	 4883c404             	add	rsp, 4
+;;   94:	 01c1                 	add	ecx, eax
+;;   96:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
+;;   9a:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
+;;   9f:	 4883ec04             	sub	rsp, 4
+;;   a3:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   a7:	 b810000000           	mov	eax, 0x10
+;;   ac:	 8b0c24               	mov	ecx, dword ptr [rsp]
+;;   af:	 4883c404             	add	rsp, 4
+;;   b3:	 01c1                 	add	ecx, eax
+;;   b5:	 894c240c             	mov	dword ptr [rsp + 0xc], ecx
+;;   b9:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
+;;   bd:	 4883c410             	add	rsp, 0x10
+;;   c1:	 5d                   	pop	rbp
+;;   c2:	 c3                   	ret	

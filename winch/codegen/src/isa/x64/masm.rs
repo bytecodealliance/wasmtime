@@ -223,19 +223,30 @@ impl Masm for MacroAssembler {
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
+        let scratch = <Self::ABI as ABI>::scratch_reg();
+        let float_scratch = <Self::ABI as ABI>::float_scratch_reg();
         match src {
             RegImm::Imm(imm) => match imm {
                 I::I32(v) => self.asm.mov_im(v as i32, &dst, size),
                 I::I64(v) => match v.try_into() {
                     Ok(v) => self.asm.mov_im(v, &dst, size),
                     Err(_) => {
-                        panic!("Immediate-to-memory moves require immediate operand to sign-extend to 64 bits.");
+                        // If the immediate doesn't sign extend, use a scratch
+                        // register.
+                        self.asm.mov_ir(v, scratch, size);
+                        self.asm.mov_rm(scratch, &dst, size);
                     }
                 },
-                // Immediate to memory moves are currently only used
-                // to zero a memory range, which only involves
-                // ints. See [`MacroAssembler::zero_mem_range`].
-                i => panic!("Cannot store immediate {:?}", i),
+                I::F32(v) => {
+                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    self.asm.xmm_mov_mr(&addr, float_scratch, size);
+                    self.asm.xmm_mov_rm(float_scratch, &dst, size);
+                }
+                I::F64(v) => {
+                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
+                    self.asm.xmm_mov_mr(&addr, float_scratch, size);
+                    self.asm.xmm_mov_rm(float_scratch, &dst, size);
+                }
             },
             RegImm::Reg(reg) => {
                 if reg.is_int() {

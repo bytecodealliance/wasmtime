@@ -2,7 +2,7 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
 
 use super::{CodeGen, ControlStackFrame};
 use crate::{
-    abi::{ABIOperand, ABIResultsData, StackResultsBase, ABI},
+    abi::{ABIOperand, ABIResultsData, RetArea, ABI},
     codegen::BuiltinFunctions,
     frame::Frame,
     isa::reg::RegClass,
@@ -156,13 +156,14 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         };
 
         if val.is_mem() {
-            // TODO: assert that the offset of the memory is the current sp offset.
+            let mem = val.unwrap_mem();
+            debug_assert!(mem.slot.offset.as_u32() == masm.sp_offset().as_u32());
             masm.pop(reg, val.ty().into());
         } else {
             self.move_val_to_reg(&val, reg, masm);
             // Free the source value if it is a register.
             if val.is_reg() {
-                self.free_reg(val.get_reg());
+                self.free_reg(val.unwrap_reg());
             }
         }
 
@@ -345,7 +346,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
 
     /// Drops the last `n` elements of the stack, calling the provided
     /// function for each `n` stack value.
-    // TODO: Add tha the are passed in top to bottom order.
+    /// The values are dropped in top-to-bottom order.
     pub fn drop_last<F>(&mut self, last: usize, mut f: F)
     where
         F: FnMut(&mut RegAlloc, &Val),
@@ -421,7 +422,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
 
     /// A combination of [Self::pop_abi_results] and [Self::push_abi_results]
     /// to be used on conditional branches: br_if and br_table.
-    pub fn top_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
+    pub fn top_abi_results<M: MacroAssembler>(&mut self, result: &ABIResultsData, masm: &mut M) {
         self.pop_abi_results(result, masm);
         self.push_abi_results(result, masm);
     }
@@ -433,8 +434,8 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         let retptr = data
             .results
             .has_stack_results()
-            .then(|| match data.unwrap_base() {
-                StackResultsBase::Slot(slot) => {
+            .then(|| match data.unwrap_ret_area() {
+                RetArea::Slot(slot) => {
                     let base = self
                         .without::<_, M, _>(data.results.regs(), masm, |cx, masm| cx.any_gpr(masm));
                     let local_addr = masm.local_address(slot);
@@ -445,7 +446,9 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
             })
             .flatten();
 
-        // TODO: Document why rev here too.
+        // Results are popped in reverse order, starting from registers, continuing
+        // to memory values in order to maintain the value stack ordering invariant.
+        // See comments in [ABIResults] for more details.
         for operand in data.results.operands().iter().rev() {
             match operand {
                 ABIOperand::Reg { reg, .. } => {
@@ -453,12 +456,12 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                     self.free_reg(reg);
                 }
                 ABIOperand::Stack { offset, .. } => {
-                    let addr = match data.unwrap_base() {
-                        StackResultsBase::SP(base) => {
+                    let addr = match data.unwrap_ret_area() {
+                        RetArea::SP(base) => {
                             let slot_offset = base.as_u32() - *offset;
                             masm.address_from_sp(SPOffset::from_u32(slot_offset))
                         }
-                        StackResultsBase::Slot(_) => masm.address_at_reg(retptr.unwrap(), *offset),
+                        RetArea::Slot(_) => masm.address_at_reg(retptr.unwrap(), *offset),
                     };
 
                     self.pop_to_addr(masm, addr);
@@ -482,8 +485,8 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                     let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm));
                     self.stack.push(typed_reg.into());
                 }
-                ABIOperand::Stack { ty, offset, size } => match data.unwrap_base() {
-                    StackResultsBase::SP(sp_offset) => {
+                ABIOperand::Stack { ty, offset, size } => match data.unwrap_ret_area() {
+                    RetArea::SP(sp_offset) => {
                         let slot =
                             StackSlot::new(SPOffset::from_u32(sp_offset.as_u32() - offset), *size);
                         self.stack.push(Val::mem(*ty, slot));

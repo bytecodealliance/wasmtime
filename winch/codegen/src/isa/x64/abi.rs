@@ -154,7 +154,6 @@ impl ABI for X64ABI {
         })
     }
 
-    // TODO: For both functions, use a different name.
     fn scratch_reg() -> Reg {
         regs::scratch()
     }
@@ -296,7 +295,6 @@ impl X64ABI {
                 (6, Params) => Some(regs::xmm6()),
                 (7, Params) => Some(regs::xmm7()),
                 (0, Returns) => Some(regs::xmm0()),
-                (1, Returns) => Some(regs::xmm1()),
                 _ => None,
             };
         }
@@ -377,9 +375,9 @@ mod tests {
         match_stack_arg(params.get(6).unwrap(), I64, 0);
         match_stack_arg(params.get(7).unwrap(), I32, 8);
 
-        match_reg_arg(results.get(0).unwrap(), I32, regs::rax());
+        match_stack_arg(results.get(0).unwrap(), I32, 4);
         match_stack_arg(results.get(1).unwrap(), I32, 0);
-        match_stack_arg(results.get(2).unwrap(), I32, 4);
+        match_reg_arg(results.get(2).unwrap(), I32, regs::rax());
     }
 
     #[test]
@@ -483,11 +481,11 @@ mod tests {
         match_stack_arg(params.get(5).unwrap(), F32, 40);
 
         match_reg_arg(results.get(0).unwrap(), I32, regs::rax());
-        match_reg_arg(results.get(1).unwrap(), F32, regs::xmm0());
 
-        match_stack_arg(results.get(2).unwrap(), I32, 0);
-        match_stack_arg(results.get(3).unwrap(), F32, 4);
-        match_stack_arg(results.get(4).unwrap(), I64, 8);
+        match_stack_arg(results.get(1).unwrap(), F32, 0);
+        match_stack_arg(results.get(2).unwrap(), I32, 4);
+        match_stack_arg(results.get(3).unwrap(), F32, 8);
+        match_stack_arg(results.get(4).unwrap(), I64, 12);
     }
 
     #[cfg(test)]

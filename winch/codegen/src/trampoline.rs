@@ -13,7 +13,7 @@
 // TODO: Are guardrails needed for params/results? Especially when dealing
 // with the array calling convention.
 use crate::{
-    abi::{ABIOperand, ABIParams, ABISig, StackResultsBase, ABI},
+    abi::{ABIOperand, ABIParams, ABISig, RetArea, ABI},
     codegen::ptr_type_from_ptr_size,
     isa::CallingConvention,
     masm::{CalleeKind, MacroAssembler, OperandSize, RegImm, SPOffset},
@@ -35,6 +35,9 @@ pub enum TrampolineKind {
     /// Calling from Wasm to native.
     WasmToNative,
 }
+
+/// The max value size of an element in the array calling convention.
+const VALUE_SIZE: usize = mem::size_of::<u128>();
 
 /// The main trampoline abstraction.
 pub(crate) struct Trampoline<'a, M>
@@ -130,7 +133,7 @@ where
             // Move the values register to the scratch
             // register for argument assignment.
             masm.mov(val_ptr, self.scratch_reg.into(), OperandSize::S64);
-            Self::assign_args_from_array(
+            Self::load_values_from_array(
                 masm,
                 &wasm_sig,
                 ret_area.as_ref(),
@@ -151,15 +154,21 @@ where
             OperandSize::S64,
         );
 
-        // TODO: Move this to a function: store_values_to_array
-        // The max size a value can be when reading from the params
-        // memory location.
-        let value_size = mem::size_of::<u128>();
-        // TODO: Document the `.rev`; if this ordering works perhaps there's a
-        // way to encode this in the calling convention itself?
-        for (i, operand) in wasm_sig.results().iter().enumerate() {
-            // TODO wrap?
-            let value_offset = (i * value_size) as u32;
+        self.store_results_to_array(&wasm_sig, ret_area.as_ref());
+
+        if wasm_sig.results.has_stack_results() {
+            self.masm.free_stack(wasm_sig.results.size());
+        }
+
+        self.epilogue_with_callee_saved_restore(spill_size);
+        Ok(())
+    }
+
+    /// Stores the results into the values array used by the array calling
+    /// convention.
+    fn store_results_to_array(&mut self, sig: &ABISig, ret_area: Option<&RetArea>) {
+        for (i, operand) in sig.results().iter().enumerate() {
+            let value_offset = (i * VALUE_SIZE) as u32;
             match operand {
                 ABIOperand::Reg { ty, reg, .. } => self.masm.store(
                     (*reg).into(),
@@ -168,8 +177,7 @@ where
                 ),
                 ABIOperand::Stack { ty, offset, .. } => {
                     let addr = match ret_area.unwrap() {
-                        StackResultsBase::SP(sp_offset) => {
-                            // TODO: Overflow.
+                        RetArea::SP(sp_offset) => {
                             let elem_offs = SPOffset::from_u32(sp_offset.as_u32() - offset);
                             self.masm.address_from_sp(elem_offs)
                         }
@@ -184,13 +192,6 @@ where
                 }
             }
         }
-
-        if wasm_sig.results.has_stack_results() {
-            self.masm.free_stack(wasm_sig.results.size());
-        }
-
-        self.epilogue_with_callee_saved_restore(spill_size);
-        Ok(())
     }
 
     /// Emit a native-to-wasm trampoline.
@@ -228,8 +229,8 @@ where
             );
             Self::assign_args(
                 masm,
-                &wasm_sig.params_without_results_param(),
-                &native_sig.params_without_results_param()[2..],
+                &wasm_sig.params_without_retptr(),
+                &native_sig.params_without_retptr()[2..],
                 &offsets[2..],
                 self.scratch_reg,
             );
@@ -247,24 +248,24 @@ where
         Ok(())
     }
 
-    // TODO Docs
-    fn make_ret_area(&mut self, sig: &ABISig) -> Option<StackResultsBase> {
+    /// Creates the return area in the caller's frame.
+    fn make_ret_area(&mut self, sig: &ABISig) -> Option<RetArea> {
         sig.results.has_stack_results().then(|| {
             self.masm.reserve_stack(sig.results.size());
             let offs = self.masm.sp_offset();
-            StackResultsBase::sp(offs)
+            RetArea::sp(offs)
         })
     }
 
-    // TODO: Docs
-    fn load_retptr(masm: &mut M, ret_area: Option<&StackResultsBase>, callee: &ABISig) {
+    /// Loads the return area pointer into its [ABIOperand] destination.
+    fn load_retptr(masm: &mut M, ret_area: Option<&RetArea>, callee: &ABISig) {
         if let Some(area) = ret_area {
             match (area, callee.params.unwrap_results_area_operand()) {
-                (StackResultsBase::SP(sp_offset), ABIOperand::Reg { ty, reg, .. }) => {
+                (RetArea::SP(sp_offset), ABIOperand::Reg { ty, reg, .. }) => {
                     let addr = masm.address_from_sp(*sp_offset);
                     masm.load_addr(addr, *reg, (*ty).into());
                 }
-                (StackResultsBase::SP(sp_offset), ABIOperand::Stack { ty, offset, .. }) => {
+                (RetArea::SP(sp_offset), ABIOperand::Stack { ty, offset, .. }) => {
                     let retptr = masm.address_from_sp(*sp_offset);
                     let scratch = <M::ABI as ABI>::scratch_reg();
                     masm.load_addr(retptr, scratch, (*ty).into());
@@ -276,13 +277,13 @@ where
         }
     }
 
-    // TODO: Docs
+    /// Forwards results from callee to caller; it loads results from the
+    /// callee's return area and stores them into the caller's return area.
     fn forward_results(
         &mut self,
         callee_sig: &ABISig,
         caller_sig: &ABISig,
-        // TODO: Can probably use ABIResultData as the callee signifier.
-        callee_ret_area: Option<&StackResultsBase>,
+        callee_ret_area: Option<&RetArea>,
         caller_retptr_offset: Option<&SPOffset>,
     ) {
         // Spill any result registers used by the callee to avoid
@@ -331,13 +332,10 @@ where
                         ..
                     },
                 ) => {
-                    // TODO: unwrap_sp, unwrap_slot
-                    let addr = match callee_ret_area.unwrap() {
-                        StackResultsBase::SP(base) => {
-                            let slot_offset = base.as_u32() - *offset;
-                            self.masm.address_from_sp(SPOffset::from_u32(slot_offset))
-                        }
-                        _ => unreachable!(),
+                    let addr = {
+                        let base = callee_ret_area.unwrap().unwrap_sp();
+                        let slot_offset = base.as_u32() - *offset;
+                        self.masm.address_from_sp(SPOffset::from_u32(slot_offset))
                     };
 
                     self.masm.load(addr, self.alloc_scratch_reg, (*ty).into());
@@ -349,12 +347,10 @@ where
                     );
                 }
                 (ABIOperand::Stack { ty, offset, .. }, ABIOperand::Reg { reg, .. }) => {
-                    let addr = match callee_ret_area.unwrap() {
-                        StackResultsBase::SP(base) => {
-                            let slot_offset = base.as_u32() - *offset;
-                            self.masm.address_from_sp(SPOffset::from_u32(slot_offset))
-                        }
-                        _ => unreachable!(),
+                    let addr = {
+                        let base = callee_ret_area.unwrap().unwrap_sp();
+                        let slot_offset = base.as_u32() - *offset;
+                        self.masm.address_from_sp(SPOffset::from_u32(slot_offset))
                     };
 
                     self.masm.load(addr, *reg, (*ty).into());
@@ -411,8 +407,8 @@ where
 
             Self::assign_args(
                 masm,
-                &native_sig.params_without_results_param(),
-                &wasm_sig.params_without_results_param(),
+                &native_sig.params_without_retptr(),
+                &wasm_sig.params_without_retptr(),
                 &offsets,
                 self.scratch_reg,
             );
@@ -600,23 +596,21 @@ where
         (offsets, spill_size)
     }
 
-    /// Assigns arguments for the callee, loading them from a register.
-    fn assign_args_from_array(
+    /// Loads and assigns values from the value array used in the array
+    /// calling convention.
+    fn load_values_from_array(
         masm: &mut M,
         callee_sig: &ABISig,
-        ret_area: Option<&StackResultsBase>,
+        ret_area: Option<&RetArea>,
         values_reg: Reg,
         scratch: Reg,
     ) {
-        // The max size a value can be when reading from the params
-        // memory location.
-        let value_size = mem::size_of::<u128>();
         callee_sig
-            .params_without_results_param()
+            .params_without_retptr()
             .iter()
             .enumerate()
             .for_each(|(i, param)| {
-                let value_offset = (i * value_size) as u32;
+                let value_offset = (i * VALUE_SIZE) as u32;
 
                 match param {
                     ABIOperand::Reg { reg, ty, .. } => masm.load(
@@ -643,7 +637,7 @@ where
         if let Some(offs) = ret_area {
             let results_area_operand = callee_sig.params.unwrap_results_area_operand();
             let addr = match offs {
-                StackResultsBase::SP(sp_offset) => masm.address_from_sp(*sp_offset),
+                RetArea::SP(sp_offset) => masm.address_from_sp(*sp_offset),
                 _ => unreachable!(),
             };
             match results_area_operand {

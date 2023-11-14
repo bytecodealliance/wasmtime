@@ -84,7 +84,7 @@ pub(crate) enum LookupError {
 /// it generates is tightly coupled to how Wasmtime expects multiple returns
 /// to be handled: the first return in a register, dictated by the calling
 /// convention and the rest, if any, via a return pointer.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum CallingConvention {
     /// See [cranelift_codegen::isa::CallConv::WasmtimeSystemV]
     SystemV,

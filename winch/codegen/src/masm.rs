@@ -405,8 +405,8 @@ pub(crate) trait MacroAssembler {
     /// Perform a conditional move.
     fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize);
 
-    /// Performs a memmove of bytes from src to dest.
-    /// Bytes are moved in blocks of 8 bytes  where possible.
+    /// Performs a memory move of bytes from src to dest.
+    /// Bytes are moved in blocks of 8 bytes, where possible.
     fn memmove(&mut self, src: SPOffset, dst: SPOffset, bytes: u32) {
         debug_assert!(dst.as_u32() < src.as_u32());
         // At least 4 byte aligned.

@@ -34,24 +34,31 @@
 ;;   20:	 85c0                 	test	eax, eax
 ;;   22:	 0f8409000000         	je	0x31
 ;;   28:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
-;;   2c:	 e933000000           	jmp	0x64
+;;   2c:	 e958000000           	jmp	0x89
 ;;   31:	 8b44240c             	mov	eax, dword ptr [rsp + 0xc]
 ;;   35:	 83e801               	sub	eax, 1
-;;   38:	 50                   	push	rax
-;;   39:	 4883ec08             	sub	rsp, 8
-;;   3d:	 8b7c2408             	mov	edi, dword ptr [rsp + 8]
-;;   41:	 e800000000           	call	0x46
-;;   46:	 4883c410             	add	rsp, 0x10
-;;   4a:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
-;;   4e:	 83e902               	sub	ecx, 2
-;;   51:	 50                   	push	rax
-;;   52:	 51                   	push	rcx
-;;   53:	 8b3c24               	mov	edi, dword ptr [rsp]
-;;   56:	 e800000000           	call	0x5b
-;;   5b:	 4883c408             	add	rsp, 8
-;;   5f:	 59                   	pop	rcx
-;;   60:	 01c1                 	add	ecx, eax
-;;   62:	 89c8                 	mov	eax, ecx
-;;   64:	 4883c410             	add	rsp, 0x10
-;;   68:	 5d                   	pop	rbp
-;;   69:	 c3                   	ret	
+;;   38:	 4883ec04             	sub	rsp, 4
+;;   3c:	 890424               	mov	dword ptr [rsp], eax
+;;   3f:	 4883ec0c             	sub	rsp, 0xc
+;;   43:	 8b7c240c             	mov	edi, dword ptr [rsp + 0xc]
+;;   47:	 e800000000           	call	0x4c
+;;   4c:	 4883c40c             	add	rsp, 0xc
+;;   50:	 4883c404             	add	rsp, 4
+;;   54:	 8b4c240c             	mov	ecx, dword ptr [rsp + 0xc]
+;;   58:	 83e902               	sub	ecx, 2
+;;   5b:	 4883ec04             	sub	rsp, 4
+;;   5f:	 890424               	mov	dword ptr [rsp], eax
+;;   62:	 4883ec04             	sub	rsp, 4
+;;   66:	 890c24               	mov	dword ptr [rsp], ecx
+;;   69:	 4883ec08             	sub	rsp, 8
+;;   6d:	 8b7c2408             	mov	edi, dword ptr [rsp + 8]
+;;   71:	 e800000000           	call	0x76
+;;   76:	 4883c408             	add	rsp, 8
+;;   7a:	 4883c404             	add	rsp, 4
+;;   7e:	 8b0c24               	mov	ecx, dword ptr [rsp]
+;;   81:	 4883c404             	add	rsp, 4
+;;   85:	 01c1                 	add	ecx, eax
+;;   87:	 89c8                 	mov	eax, ecx
+;;   89:	 4883c410             	add	rsp, 0x10
+;;   8d:	 5d                   	pop	rbp
+;;   8e:	 c3                   	ret	

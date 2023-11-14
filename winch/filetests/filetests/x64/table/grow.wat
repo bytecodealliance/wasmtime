@@ -23,7 +23,8 @@
 ;;   29:	 ba0a000000           	mov	edx, 0xa
 ;;   2e:	 488b4c2418           	mov	rcx, qword ptr [rsp + 0x18]
 ;;   33:	 ffd3                 	call	rbx
-;;   35:	 4883c410             	add	rsp, 0x10
-;;   39:	 4883c410             	add	rsp, 0x10
-;;   3d:	 5d                   	pop	rbp
-;;   3e:	 c3                   	ret	
+;;   35:	 4883c408             	add	rsp, 8
+;;   39:	 4883c408             	add	rsp, 8
+;;   3d:	 4883c410             	add	rsp, 0x10
+;;   41:	 5d                   	pop	rbp
+;;   42:	 c3                   	ret	

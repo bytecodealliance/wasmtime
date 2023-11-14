@@ -28,13 +28,16 @@
 ;;    c:	 b901000000           	mov	ecx, 1
 ;;   11:	 b80c000000           	mov	eax, 0xc
 ;;   16:	 85c9                 	test	ecx, ecx
-;;   18:	 0f8517000000         	jne	0x35
-;;   1e:	 50                   	push	rax
-;;   1f:	 8b3c24               	mov	edi, dword ptr [rsp]
-;;   22:	 be02000000           	mov	esi, 2
-;;   27:	 ba03000000           	mov	edx, 3
-;;   2c:	 e800000000           	call	0x31
-;;   31:	 4883c408             	add	rsp, 8
-;;   35:	 4883c408             	add	rsp, 8
-;;   39:	 5d                   	pop	rbp
-;;   3a:	 c3                   	ret	
+;;   18:	 0f8526000000         	jne	0x44
+;;   1e:	 4883ec04             	sub	rsp, 4
+;;   22:	 890424               	mov	dword ptr [rsp], eax
+;;   25:	 4883ec04             	sub	rsp, 4
+;;   29:	 8b7c2404             	mov	edi, dword ptr [rsp + 4]
+;;   2d:	 be02000000           	mov	esi, 2
+;;   32:	 ba03000000           	mov	edx, 3
+;;   37:	 e800000000           	call	0x3c
+;;   3c:	 4883c404             	add	rsp, 4
+;;   40:	 4883c404             	add	rsp, 4
+;;   44:	 4883c408             	add	rsp, 8
+;;   48:	 5d                   	pop	rbp
+;;   49:	 c3                   	ret	

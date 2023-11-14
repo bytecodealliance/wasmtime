@@ -18,9 +18,10 @@
 ;;   15:	 b800000000           	mov	eax, 0
 ;;   1a:	 8944240c             	mov	dword ptr [rsp + 0xc], eax
 ;;   1e:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
-;;   23:	 4153                 	push	r11
-;;   25:	 e9fbffffff           	jmp	0x25
-;;   2a:	 4883c408             	add	rsp, 8
-;;   2e:	 4883c410             	add	rsp, 0x10
-;;   32:	 5d                   	pop	rbp
-;;   33:	 c3                   	ret	
+;;   23:	 4883ec04             	sub	rsp, 4
+;;   27:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   2b:	 e9fbffffff           	jmp	0x2b
+;;   30:	 4883c404             	add	rsp, 4
+;;   34:	 4883c410             	add	rsp, 0x10
+;;   38:	 5d                   	pop	rbp
+;;   39:	 c3                   	ret	

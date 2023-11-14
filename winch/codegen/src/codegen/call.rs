@@ -3,12 +3,14 @@
 //!
 //! This module exposes a single function [`FnCall::emit`], which is responsible
 //! of orchestrating the emission of calls. In general such orchestration
-//! takes place in 4 steps:
+//! takes place in 6 steps:
 //!
 //! 1. [`Callee`] resolution.
 //! 2. Mapping of the [`Callee`] to the [`CalleeKind`].
 //! 3. Calculation of the stack space consumed by the call.
-//! 4. Emission.
+//! 4. Calculate the return area, for 1+ results.
+//! 5. Emission.
+//! 6. Stack space cleanup.
 //!
 //! The stack space consumed by the function call; that is,
 //! the sum of:
@@ -58,7 +60,7 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    abi::{ABIOperand, ABIResultsData, ABISig, StackResultsBase, ABI},
+    abi::{ABIOperand, ABIResultsData, ABISig, RetArea, ABI},
     codegen::{
         ptr_type_from_ptr_size, BuiltinFunction, BuiltinType, Callee, CalleeInfo, CodeGenContext,
         TypedReg,
@@ -81,7 +83,8 @@ impl FnCall {
     /// 2. Maps the resolved [`Callee`] to the [`CalleeKind`].
     /// 3. Saves any live registers and calculates the stack space consumed
     ///    by the function call.
-    /// 4. Emits the call.
+    /// 4. Creates the stack space needed for the return area.
+    /// 5. Emits the call.
     pub fn emit<M: MacroAssembler, P: PtrSize, R>(
         masm: &mut M,
         context: &mut CodeGenContext,
@@ -99,8 +102,7 @@ impl FnCall {
         let ret_area = Self::make_ret_area(&sig, masm);
         let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
-            let scratch = <M::ABI as ABI>::scratch_reg();
-            Self::assign(sig, ret_area.as_ref(), context, masm, scratch);
+            Self::assign(sig, ret_area.as_ref(), context, masm);
             kind
         });
 
@@ -120,13 +122,10 @@ impl FnCall {
     }
 
     /// Calculates the return area for the callee, if any.
-    fn make_ret_area<M: MacroAssembler>(
-        callee_sig: &ABISig,
-        masm: &mut M,
-    ) -> Option<StackResultsBase> {
+    fn make_ret_area<M: MacroAssembler>(callee_sig: &ABISig, masm: &mut M) -> Option<RetArea> {
         callee_sig.results.has_stack_results().then(|| {
             masm.reserve_stack(callee_sig.results_stack_size());
-            StackResultsBase::sp(masm.sp_offset())
+            RetArea::sp(masm.sp_offset())
         })
     }
 
@@ -264,15 +263,14 @@ impl FnCall {
     /// Assign arguments for the function call.
     fn assign<M: MacroAssembler>(
         sig: &ABISig,
-        ret_area: Option<&StackResultsBase>,
+        ret_area: Option<&RetArea>,
         context: &mut CodeGenContext,
         masm: &mut M,
-        scratch: Reg,
     ) {
         let arg_count = sig.params.len_without_retptr();
         let stack = &context.stack;
         let stack_values = stack.peekn(arg_count);
-        for (arg, val) in sig.params_without_results_param().iter().zip(stack_values) {
+        for (arg, val) in sig.params_without_retptr().iter().zip(stack_values) {
             match arg {
                 &ABIOperand::Reg { reg, .. } => {
                     context.move_val_to_reg(&val, reg, masm);
@@ -280,6 +278,7 @@ impl FnCall {
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(offset));
                     let size: OperandSize = ty.into();
+                    let scratch = <M::ABI as ABI>::scratch_for(&ty);
                     context.move_val_to_reg(val, scratch, masm);
                     masm.store(scratch.into(), addr, size);
                 }
@@ -297,6 +296,9 @@ impl FnCall {
                 }
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let slot = masm.address_at_sp(SPOffset::from_u32(offset));
+                    // Don't rely on `ABI::scratch_for` as we always use
+                    // an int register as the return pointer.
+                    let scratch = <M::ABI as ABI>::scratch_reg();
                     masm.load_addr(addr, scratch, ty.into());
                     masm.store(scratch.into(), slot, ty.into());
                 }
@@ -332,7 +334,7 @@ impl FnCall {
     // |                  |  |
     // +------------------+  |
     fn save<M: MacroAssembler>(context: &mut CodeGenContext, masm: &mut M, sig: &ABISig) -> u32 {
-        let callee_params = &sig.params_without_results_param();
+        let callee_params = &sig.params_without_retptr();
         let stack = &context.stack;
         match callee_params.len() {
             0 => {
@@ -348,12 +350,13 @@ impl FnCall {
         }
     }
 
-    /// Cleanup stack space and free registers after emitting the call.
+    /// Cleanup stack space, handle multiple results, and free registers after
+    /// emitting the call.
     fn cleanup<M: MacroAssembler>(
         sig: &ABISig,
         reserved_space: u32,
         stack_consumed: u32,
-        ret_area: Option<StackResultsBase>,
+        ret_area: Option<RetArea>,
         masm: &mut M,
         context: &mut CodeGenContext,
     ) {
@@ -365,7 +368,8 @@ impl FnCall {
             if stack_consumed > 0 {
                 // Perform a memory move, by shuffling the result area to
                 // higher addresses. This is needed because the result area
-                // is located after any memory addresses located on the stack.
+                // is located after any memory addresses located on the stack,
+                // and after spilled values consumed by the call.
                 let sp = ret_area.unwrap_sp();
                 let result_bytes = sig.results_stack_size();
                 debug_assert!(sp.as_u32() >= stack_consumed + result_bytes);
@@ -396,12 +400,12 @@ impl FnCall {
         // the calculated stack space.
         context.drop_last(sig.params.len_without_retptr(), |regalloc, v| {
             if v.is_reg() {
-                regalloc.free(v.get_reg().into());
+                regalloc.free(v.unwrap_reg().into());
             }
         });
 
         let mut results_data = ABIResultsData::wrap(sig.results.clone());
-        results_data.base = ret_area;
+        results_data.ret_area = ret_area;
 
         context.push_abi_results(&results_data, masm);
     }

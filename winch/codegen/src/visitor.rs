@@ -935,7 +935,7 @@ where
         // push the funcref to the value stack.
         match self.env.translation.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
-                let funcref_ptr = self.context.stack.peek().map(|v| v.get_reg()).unwrap();
+                let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
                 self.masm
                     .trapz(funcref_ptr.into(), TrapCode::IndirectCallToNull);
                 self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
@@ -1211,7 +1211,7 @@ where
 
             // Materialize any constants or locals into their result representation,
             // so that when reachability is restored, they are correctly located.
-            self.context.top_abi_results(&default_result, self.masm);
+            self.context.top_abi_results(data, self.masm);
             index_and_tmp
         } else {
             (

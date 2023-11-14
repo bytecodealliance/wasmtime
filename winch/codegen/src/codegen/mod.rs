@@ -1,8 +1,8 @@
 use crate::{
-    abi::{ABIOperand, ABIResultsData, ABISig, StackResultsBase, ABI},
+    abi::{ABIOperand, ABIResultsData, ABISig, RetArea, ABI},
     codegen::BlockTypeInfo,
     isa::reg::Reg,
-    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
+    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
     stack::{TypedReg, Val},
 };
 use anyhow::Result;
@@ -83,10 +83,9 @@ where
 
         // If the function has multiple returns, assign the corresponding base.
         let mut results_data = ABIResultsData::wrap(self.sig.results.clone());
-        if self.sig.params.has_results_base_param() {
-            results_data.base = Some(StackResultsBase::slot(
-                self.context.frame.results_base_slot.unwrap(),
-            ));
+        if self.sig.params.has_retptr() {
+            results_data.ret_area =
+                Some(RetArea::slot(self.context.frame.results_base_slot.unwrap()));
         }
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
@@ -94,7 +93,7 @@ where
             .push(ControlStackFrame::function_body_block(
                 results_data,
                 BlockTypeInfo::new(
-                    self.sig.params_without_results_param().len(),
+                    self.sig.params_without_retptr().len(),
                     self.sig.results.len(),
                 ),
                 self.masm,
@@ -158,11 +157,7 @@ where
             // and SP in the expected state.  The compiler can enter
             // in this state through an infinite loop.
             let (value_stack_len, target_sp) = frame.base_stack_len_and_sp();
-            Self::reset_stack(&mut self.context, value_stack_len);
-            if self.masm.sp_offset().as_u32() > target_sp.as_u32() {
-                self.masm
-                    .free_stack(self.masm.sp_offset().as_u32() - target_sp.as_u32());
-            }
+            Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
         }
     }
 
@@ -212,7 +207,7 @@ where
             .store_ptr(<M::ABI as ABI>::vmctx_reg().into(), vmctx_addr);
 
         // Save the results base parameter register into its slot.
-        self.sig.params.has_results_base_param().then(|| {
+        self.sig.params.has_retptr().then(|| {
             match self.sig.params.unwrap_results_area_operand() {
                 ABIOperand::Reg { ty, reg, .. } => {
                     let results_base_slot = self.context.frame.results_base_slot.as_ref().unwrap();
@@ -346,7 +341,7 @@ where
         self.sig
             // Skip the results base param if any; [Self::emit_body],
             // will handle spilling the results base param if it's in a register.
-            .params_without_results_param()
+            .params_without_retptr()
             .iter()
             .enumerate()
             .filter(|(_, a)| a.is_reg())
@@ -451,7 +446,7 @@ where
         // We know the signature of the libcall in this case, so we assert that there's
         // one element in the stack and that it's  the ABI signature's result register.
         let top = self.context.stack.peek().unwrap();
-        let top = top.get_reg();
+        let top = top.unwrap_reg();
         debug_assert!(top.reg == elem_value);
         self.masm.jmp(cont);
 

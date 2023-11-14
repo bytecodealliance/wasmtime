@@ -106,7 +106,7 @@ impl Frame {
         let vmctx_offset =
             align_to(defined_locals_start + defined_locals.stack_size, ptr_size) + ptr_size;
 
-        let (results_base_slot, locals_size) = if sig.params.has_results_base_param() {
+        let (results_base_slot, locals_size) = if sig.params.has_retptr() {
             match sig.params.unwrap_results_area_operand() {
                 ABIOperand::Stack { ty, offset, .. } => (
                     Some(LocalSlot::stack_arg(
@@ -195,7 +195,7 @@ impl Frame {
         // Skip the results base param; if present, the [Frame] will create
         // a dedicated slot for it.
         let slots: Locals = sig
-            .params_without_results_param()
+            .params_without_retptr()
             .into_iter()
             .map(|arg| Self::abi_arg_slot(&arg, &mut next_stack, arg_base_offset))
             .collect();

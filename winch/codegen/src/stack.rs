@@ -167,7 +167,7 @@ impl Val {
     ///
     /// # Panics
     /// This method will panic if the value is not a register.
-    pub fn get_reg(&self) -> TypedReg {
+    pub fn unwrap_reg(&self) -> TypedReg {
         match self {
             Self::Reg(tr) => *tr,
             v => panic!("expected value {:?} to be a register", v),
@@ -178,7 +178,7 @@ impl Val {
     ///
     /// # Panics
     /// This method will panic if the value is not an i32.
-    pub fn get_i32(&self) -> i32 {
+    pub fn unwrap_i32(&self) -> i32 {
         match self {
             Self::I32(v) => *v,
             v => panic!("expected value {:?} to be i32", v),
@@ -189,10 +189,18 @@ impl Val {
     ///
     /// # Panics
     /// This method will panic if the value is not an i64.
-    pub fn get_i64(&self) -> i64 {
+    pub fn unwrap_i64(&self) -> i64 {
         match self {
             Self::I64(v) => *v,
             v => panic!("expected value {:?} to be i64", v),
+        }
+    }
+
+    /// Returns the underlying memory value if it is one, panics otherwise.
+    pub fn unwrap_mem(&self) -> Memory {
+        match self {
+            Self::Memory(m) => *m,
+            v => panic!("expected value {:?} to be a Memory", v),
         }
     }
 
@@ -301,6 +309,8 @@ impl Stack {
     }
 
     /// Duplicates the top `n` elements of the stack.
+    // Will be needed for control flow, it's just not integrated yet.
+    #[allow(dead_code)]
     pub fn dup(&mut self, n: usize) {
         let len = self.len();
         assert!(n <= len);
@@ -324,7 +334,7 @@ impl Stack {
     /// returns `None` otherwise.
     pub fn pop_i32_const(&mut self) -> Option<i32> {
         match self.peek() {
-            Some(v) => v.is_i32_const().then(|| self.pop().unwrap().get_i32()),
+            Some(v) => v.is_i32_const().then(|| self.pop().unwrap().unwrap_i32()),
             _ => None,
         }
     }
@@ -333,7 +343,7 @@ impl Stack {
     /// returns `None` otherwise.
     pub fn pop_i64_const(&mut self) -> Option<i64> {
         match self.peek() {
-            Some(v) => v.is_i64_const().then(|| self.pop().unwrap().get_i64()),
+            Some(v) => v.is_i64_const().then(|| self.pop().unwrap().unwrap_i64()),
             _ => None,
         }
     }
@@ -342,7 +352,7 @@ impl Stack {
     /// returns `None` otherwise.
     pub fn pop_reg(&mut self) -> Option<TypedReg> {
         match self.peek() {
-            Some(v) => v.is_reg().then(|| self.pop().unwrap().get_reg()),
+            Some(v) => v.is_reg().then(|| self.pop().unwrap().unwrap_reg()),
             _ => None,
         }
     }
@@ -352,7 +362,7 @@ impl Stack {
     pub fn pop_named_reg(&mut self, reg: Reg) -> Option<TypedReg> {
         match self.peek() {
             Some(v) => {
-                (v.is_reg() && v.get_reg().reg == reg).then(|| self.pop().unwrap().get_reg())
+                (v.is_reg() && v.unwrap_reg().reg == reg).then(|| self.pop().unwrap().unwrap_reg())
             }
             _ => None,
         }

@@ -166,7 +166,9 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     }
 
     /// Resolves the type of the block in terms of [`wasmtime_environ::WasmType`].
-    // TODO: Intern the ABIResults instead of recreating it every time.
+    // TODO::
+    // Profile this operation and if proven to be significantly expensive,
+    // intern ABIResultsData instead of recreating it every time.
     pub(crate) fn resolve_block_results_data<A: ABI>(&self, blockty: BlockType) -> ABIResultsData {
         use BlockType::*;
         match blockty {

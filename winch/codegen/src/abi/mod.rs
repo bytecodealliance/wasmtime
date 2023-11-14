@@ -56,7 +56,7 @@ pub(crate) use local::*;
 
 /// Internal classification for params or returns,
 /// mainly used for params and return register assignment.
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub(super) enum ParamsOrReturns {
     Params,
     Returns,
@@ -236,7 +236,7 @@ impl Default for ABIOperands {
 
 /// Machine stack location of the stack results.
 #[derive(Debug, Copy, Clone)]
-pub(crate) enum StackResultsBase {
+pub(crate) enum RetArea {
     /// Addressed from SP at the given offset.
     SP(SPOffset),
     /// The address of the results base is stored at a particular,
@@ -244,13 +244,13 @@ pub(crate) enum StackResultsBase {
     Slot(LocalSlot),
 }
 
-impl StackResultsBase {
-    /// Create a [StackResultsBase] addressed from SP at the given offset.
+impl RetArea {
+    /// Create a [RetArea] addressed from SP at the given offset.
     pub fn sp(offs: SPOffset) -> Self {
         Self::SP(offs)
     }
 
-    /// Create a [StackResultsBase] addressed stored at the given [LocalSlot].
+    /// Create a [RetArea] addressed stored at the given [LocalSlot].
     pub fn slot(local: LocalSlot) -> Self {
         Self::Slot(local)
     }
@@ -283,7 +283,7 @@ pub(crate) struct ABIResultsData {
     /// The results.
     pub results: ABIResults,
     /// The return pointer, if any.
-    pub base: Option<StackResultsBase>,
+    pub ret_area: Option<RetArea>,
 }
 
 impl ABIResultsData {
@@ -291,13 +291,13 @@ impl ABIResultsData {
     pub fn wrap(results: ABIResults) -> Self {
         Self {
             results,
-            base: None,
+            ret_area: None,
         }
     }
 
     /// Unwraps the stack results base.
-    pub fn unwrap_base(&self) -> &StackResultsBase {
-        self.base.as_ref().unwrap()
+    pub fn unwrap_ret_area(&self) -> &RetArea {
+        self.ret_area.as_ref().unwrap()
     }
 }
 
@@ -410,8 +410,7 @@ pub(crate) struct ABIParams {
     operands: ABIOperands,
     /// Whether [`ABIParams`] contains an extra paramter for the stack
     /// result area.
-    // TODO: Rename this retptr?
-    has_results_base_param: bool,
+    has_retptr: bool,
 }
 
 impl ABIParams {
@@ -467,7 +466,7 @@ impl ABIParams {
                 regs,
                 bytes: stack_bytes,
             },
-            has_results_base_param: needs_stack_results,
+            has_retptr: needs_stack_results,
         }
     }
 
@@ -497,7 +496,7 @@ impl ABIParams {
     /// Returns the length of the params, excluding the return pointer,
     /// if any.
     pub fn len_without_retptr(&self) -> usize {
-        if self.has_results_base_param {
+        if self.has_retptr {
             self.len() - 1
         } else {
             self.len()
@@ -505,8 +504,8 @@ impl ABIParams {
     }
 
     /// Returns true if the [ABISig] has an extra parameter for stack results.
-    pub fn has_results_base_param(&self) -> bool {
-        self.has_results_base_param
+    pub fn has_retptr(&self) -> bool {
+        self.has_retptr
     }
 
     /// Returns the last [ABIOperand] used as the pointer to the
@@ -516,7 +515,7 @@ impl ABIParams {
     /// This function panics if the [ABIParams] doesn't have a stack results
     /// parameter.
     pub fn unwrap_results_area_operand(&self) -> &ABIOperand {
-        assert!(self.has_results_base_param);
+        assert!(self.has_retptr);
         self.operands.inner.last().unwrap()
     }
 }
@@ -560,9 +559,8 @@ impl ABISig {
 
     /// Returns a slice over the signature params, excluding the results
     /// base paramter, if any.
-    // TODO: rename to `without_retptr`
-    pub fn params_without_results_param(&self) -> &[ABIOperand] {
-        if self.params.has_results_base_param() {
+    pub fn params_without_retptr(&self) -> &[ABIOperand] {
+        if self.params.has_retptr() {
             &self.params()[0..(self.params.len() - 1)]
         } else {
             self.params()
