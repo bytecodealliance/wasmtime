@@ -20,15 +20,16 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for T {
         let req_hdrs = request.headers();
 
         assert!(
-            !req_hdrs.get(&header).is_empty(),
-            "missing `custom-forbidden-header` from request"
+            req_hdrs.get(&header).is_empty(),
+            "forbidden `custom-forbidden-header` found in request"
         );
 
         assert!(req_hdrs.delete(&header).is_err());
+        assert!(req_hdrs.append(&header, &b"no".to_vec()).is_err());
 
         assert!(
-            !req_hdrs.get(&header).is_empty(),
-            "delete of forbidden header succeeded"
+            req_hdrs.get(&header).is_empty(),
+            "append of forbidden header succeeded"
         );
 
         let hdrs = bindings::wasi::http::types::Headers::new();
