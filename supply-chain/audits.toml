@@ -1663,6 +1663,12 @@ criteria = "safe-to-deploy"
 version = "0.46.0"
 notes = "one use of unsafe to call windows specific api to get console handle."
 
+[[audits.num_cpus]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.15.0 -> 1.16.0"
+notes = "Some minor platform updates but no major change to any code."
+
 [[audits.object]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -3099,6 +3105,12 @@ criteria = "safe-to-deploy"
 user-id = 539 # Josh Stone (cuviper)
 start = "2023-02-05"
 end = "2024-07-11"
+
+[[trusted.errno]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2023-08-29"
+end = "2024-11-14"
 
 [[trusted.fd-lock]]
 criteria = "safe-to-deploy"
