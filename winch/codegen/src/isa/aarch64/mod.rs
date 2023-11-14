@@ -91,13 +91,15 @@ impl TargetIsa for Aarch64 {
         builtins: &mut BuiltinFunctions,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
-        let vmoffsets = VMOffsets::new(self.pointer_bytes(), &translation.module);
+        let pointer_bytes = self.pointer_bytes();
+        let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
         let mut body = body.get_binary_reader();
-        let mut masm = Aarch64Masm::new(self.shared_flags.clone());
+        let mut masm = Aarch64Masm::new(pointer_bytes, self.shared_flags.clone());
         let stack = Stack::new();
         let abi_sig = abi::Aarch64ABI::sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
+        let defined_locals =
+            DefinedLocals::new::<abi::Aarch64ABI>(translation, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),

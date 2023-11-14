@@ -2,11 +2,11 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
 
 use super::{CodeGen, ControlStackFrame};
 use crate::{
-    abi::{ABIResult, ABI},
+    abi::{ABIOperand, ABIResultsData, RetArea, ABI},
     codegen::BuiltinFunctions,
     frame::Frame,
     isa::reg::RegClass,
-    masm::{MacroAssembler, OperandSize, RegImm},
+    masm::{MacroAssembler, OperandSize, RegImm, SPOffset, StackSlot},
     reg::Reg,
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
@@ -100,9 +100,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
 
     /// Executes the provided function, guaranteeing that the specified set of
     /// registers, if any, remain unallocatable throughout the function's
-    /// execution. Only the registers in the `free` iterator will be freed. The
-    /// caller must guarantee that in case the iterators are different, the free
-    /// iterator must be a subset of the alloc iterator.
+    /// execution.
     pub fn without<'r, T, M, F>(
         &mut self,
         regs: impl IntoIterator<Item = &'r Reg> + Copy,
@@ -124,19 +122,6 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         }
 
         result
-    }
-
-    /// Similar to [`Self::without`] but takes an optional, single register
-    /// as a paramter.
-    pub fn maybe_without1<T, M, F>(&mut self, reg: Option<Reg>, masm: &mut M, mut f: F) -> T
-    where
-        M: MacroAssembler,
-        F: FnMut(&mut Self, &mut M) -> T,
-    {
-        match reg {
-            Some(r) => self.without(&[r], masm, f),
-            None => f(self, masm),
-        }
     }
 
     /// Free the given register.
@@ -171,16 +156,49 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         };
 
         if val.is_mem() {
+            let mem = val.unwrap_mem();
+            debug_assert!(mem.slot.offset.as_u32() == masm.sp_offset().as_u32());
             masm.pop(reg, val.ty().into());
         } else {
             self.move_val_to_reg(&val, reg, masm);
             // Free the source value if it is a register.
             if val.is_reg() {
-                self.free_reg(val.get_reg());
+                self.free_reg(val.unwrap_reg());
             }
         }
 
         TypedReg::new(val.ty(), reg)
+    }
+
+    /// Pops the value stack top and stores it at the specified address.
+    fn pop_to_addr<M: MacroAssembler>(&mut self, masm: &mut M, addr: M::Address) {
+        let val = self.stack.pop().expect("a value at stack top");
+        let size: OperandSize = val.ty().into();
+        match val {
+            Val::Reg(tr) => {
+                masm.store(tr.reg.into(), addr, size);
+                self.free_reg(tr.reg);
+            }
+            Val::I32(v) => masm.store(RegImm::i32(v), addr, size),
+            Val::I64(v) => masm.store(RegImm::i64(v), addr, size),
+            Val::F32(v) => masm.store(RegImm::f32(v.bits()), addr, size),
+            Val::F64(v) => masm.store(RegImm::f64(v.bits()), addr, size),
+            Val::Local(local) => {
+                let slot = self
+                    .frame
+                    .get_local(local.index)
+                    .unwrap_or_else(|| panic!("invalid local at index = {}", local.index));
+                let scratch = <M::ABI as ABI>::scratch_reg();
+                let local_addr = masm.local_address(&slot);
+                masm.load(local_addr, scratch, size);
+                masm.store(scratch.into(), addr, size);
+            }
+            Val::Memory(_) => {
+                let scratch = <M::ABI as ABI>::scratch_reg();
+                masm.pop(scratch, size);
+                masm.store(scratch.into(), addr, size);
+            }
+        }
     }
 
     /// Move a stack value to the given register.
@@ -196,7 +214,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                 let slot = self
                     .frame
                     .get_local(local.index)
-                    .unwrap_or_else(|| panic!("valid local at index = {}", local.index));
+                    .unwrap_or_else(|| panic!("invalid local at index = {}", local.index));
                 let addr = masm.local_address(&slot);
                 masm.load(addr, dst, slot.ty.into());
             }
@@ -328,19 +346,23 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
 
     /// Drops the last `n` elements of the stack, calling the provided
     /// function for each `n` stack value.
+    /// The values are dropped in top-to-bottom order.
     pub fn drop_last<F>(&mut self, last: usize, mut f: F)
     where
         F: FnMut(&mut RegAlloc, &Val),
     {
-        let len = self.stack.len();
-        assert!(last <= len);
-        let truncate = self.stack.len() - last;
-        let stack_mut = &mut self.stack.inner_mut();
+        if last > 0 {
+            let len = self.stack.len();
+            assert!(last <= len);
+            let truncate = self.stack.len() - last;
+            let stack_mut = &mut self.stack.inner_mut();
 
-        for v in stack_mut.range(truncate..) {
-            f(&mut self.regalloc, v)
+            // Invoke the callback in top-to-bottom order.
+            for v in stack_mut.range(truncate..).rev() {
+                f(&mut self.regalloc, v)
+            }
+            stack_mut.truncate(truncate);
         }
-        stack_mut.truncate(truncate);
     }
 
     /// Convenience wrapper around [`Self::spill_callback`].
@@ -363,11 +385,11 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         M: MacroAssembler,
         F: FnMut(&mut M, &mut Self, &mut ControlStackFrame),
     {
-        let (target_value_stack, target_sp) = dest.original_stack_len_and_sp_offset();
+        let (target_value_stack, target_sp) = dest.base_stack_len_and_sp();
         // Invariant: The SP, must be greater or equal to the target
         // SP, given that we haven't popped any results by this point
         // yet. But it may happen in the callback.
-        assert!(masm.sp_offset() >= target_sp);
+        assert!(masm.sp_offset().as_u32() >= target_sp.as_u32());
         f(masm, self, dest);
 
         // The following snippet, pops the stack pointer and value stack to
@@ -392,11 +414,7 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         // returns and a memory slot for 1+ returns). This could happen in the
         // callback invocation above if the callback invokes
         // `CodeGenContext::pop_abi_results` (e.g. `br` instruction).
-        let current_sp = masm.sp_offset();
-        if current_sp > target_sp {
-            CodeGen::reset_stack(self, masm, target_value_stack, target_sp);
-        }
-
+        CodeGen::reset_stack(self, masm, target_value_stack, target_sp);
         dest.set_as_target();
         masm.jmp(*dest.label());
         self.reachable = false;
@@ -404,46 +422,90 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
 
     /// A combination of [Self::pop_abi_results] and [Self::push_abi_results]
     /// to be used on conditional branches: br_if and br_table.
-    pub fn top_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
+    pub fn top_abi_results<M: MacroAssembler>(&mut self, result: &ABIResultsData, masm: &mut M) {
         self.pop_abi_results(result, masm);
         self.push_abi_results(result, masm);
     }
 
     /// Handles the emission of the ABI result. This function is used at the end
     /// of a block or function to pop the results from the value stack into the
-    /// corresponding ABI result representation.
-    pub fn pop_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
-        match result {
-            ABIResult::Void => {}
-            ABIResult::Reg { reg, .. } => {
-                let TypedReg { reg, ty: _ } = self.pop_to_reg(masm, Some(*reg));
-                self.free_reg(reg);
+    /// corresponding ABI result location.
+    pub fn pop_abi_results<M: MacroAssembler>(&mut self, data: &ABIResultsData, masm: &mut M) {
+        let retptr = data
+            .results
+            .has_stack_results()
+            .then(|| match data.unwrap_ret_area() {
+                RetArea::Slot(slot) => {
+                    let base = self
+                        .without::<_, M, _>(data.results.regs(), masm, |cx, masm| cx.any_gpr(masm));
+                    let local_addr = masm.local_address(slot);
+                    masm.load_ptr(local_addr, base);
+                    Some(base)
+                }
+                _ => None,
+            })
+            .flatten();
+
+        // Results are popped in reverse order, starting from registers, continuing
+        // to memory values in order to maintain the value stack ordering invariant.
+        // See comments in [ABIResults] for more details.
+        for operand in data.results.operands().iter().rev() {
+            match operand {
+                ABIOperand::Reg { reg, .. } => {
+                    let TypedReg { reg, .. } = self.pop_to_reg(masm, Some(*reg));
+                    self.free_reg(reg);
+                }
+                ABIOperand::Stack { offset, .. } => {
+                    let addr = match data.unwrap_ret_area() {
+                        RetArea::SP(base) => {
+                            let slot_offset = base.as_u32() - *offset;
+                            masm.address_from_sp(SPOffset::from_u32(slot_offset))
+                        }
+                        RetArea::Slot(_) => masm.address_at_reg(retptr.unwrap(), *offset),
+                    };
+
+                    self.pop_to_addr(masm, addr);
+                }
             }
+        }
+
+        if let Some(reg) = retptr {
+            self.free_reg(reg);
         }
     }
 
-    /// Push ABI results in to the value stack. This function is used at the end
+    /// Push ABI results into the value stack. This function is used at the end
     /// of a block or after a function call to push the corresponding ABI
     /// results into the value stack.
-    pub fn push_abi_results<M: MacroAssembler>(&mut self, result: &ABIResult, masm: &mut M) {
-        match result {
-            ABIResult::Void => {}
-            ABIResult::Reg { ty, reg } => {
-                assert!(self.regalloc.reg_available(*reg));
-                let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm));
-                self.stack.push(typed_reg.into());
+    pub fn push_abi_results<M: MacroAssembler>(&mut self, data: &ABIResultsData, masm: &mut M) {
+        for operand in data.results.operands().iter() {
+            match operand {
+                ABIOperand::Reg { reg, ty, .. } => {
+                    assert!(self.regalloc.reg_available(*reg));
+                    let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm));
+                    self.stack.push(typed_reg.into());
+                }
+                ABIOperand::Stack { ty, offset, size } => match data.unwrap_ret_area() {
+                    RetArea::SP(sp_offset) => {
+                        let slot =
+                            StackSlot::new(SPOffset::from_u32(sp_offset.as_u32() - offset), *size);
+                        self.stack.push(Val::mem(*ty, slot));
+                    }
+                    // This function is only expected to be called when dealing
+                    // with control flow and when calling functions; as a
+                    // callee, only [Self::pop_abi_results] is needed when
+                    // finalizing the function compilation.
+                    _ => unreachable!(),
+                },
             }
         }
     }
 
     /// Spill locals and registers to memory.
-    // TODO optimize the spill range;
-    //
-    // At any point in the program, the stack
-    // might already contain Memory entries;
-    // we could effectively ignore that range;
-    // only focusing on the range that contains
-    // spillable values.
+    // TODO: optimize the spill range;
+    // At any point in the program, the stack might already contain memory
+    // entries; we could effectively ignore that range; only focusing on the
+    // range that contains spillable values.
     fn spill_impl<M: MacroAssembler>(
         stack: &mut Stack,
         regalloc: &mut RegAlloc,

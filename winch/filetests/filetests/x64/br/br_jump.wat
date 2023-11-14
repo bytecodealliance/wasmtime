@@ -17,14 +17,16 @@
 ;;    4:	 4883ec10             	sub	rsp, 0x10
 ;;    8:	 48c744240800000000   	
 ;; 				mov	qword ptr [rsp + 8], 0
-;;   11:	 4c89742404           	mov	qword ptr [rsp + 4], r14
-;;   16:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
-;;   1b:	 4153                 	push	r11
-;;   1d:	 448b5c2414           	mov	r11d, dword ptr [rsp + 0x14]
-;;   22:	 4153                 	push	r11
-;;   24:	 4883c408             	add	rsp, 8
-;;   28:	 e9f0ffffff           	jmp	0x1d
-;;   2d:	 4883c408             	add	rsp, 8
-;;   31:	 4883c410             	add	rsp, 0x10
-;;   35:	 5d                   	pop	rbp
-;;   36:	 c3                   	ret	
+;;   11:	 4c893424             	mov	qword ptr [rsp], r14
+;;   15:	 448b5c240c           	mov	r11d, dword ptr [rsp + 0xc]
+;;   1a:	 4883ec04             	sub	rsp, 4
+;;   1e:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   22:	 448b5c2410           	mov	r11d, dword ptr [rsp + 0x10]
+;;   27:	 4883ec04             	sub	rsp, 4
+;;   2b:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   2f:	 4883c404             	add	rsp, 4
+;;   33:	 e9eaffffff           	jmp	0x22
+;;   38:	 4883c404             	add	rsp, 4
+;;   3c:	 4883c410             	add	rsp, 0x10
+;;   40:	 5d                   	pop	rbp
+;;   41:	 c3                   	ret	
