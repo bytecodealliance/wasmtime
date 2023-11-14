@@ -2,13 +2,13 @@ use crate::{
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody},
     types::{
-        FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
-        HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
+        is_forbidden_header, remove_forbidden_headers, FieldMap, HostFields,
+        HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse, HostOutgoingRequest,
+        HostOutgoingResponse, HostResponseOutparam,
     },
     WasiHttpView,
 };
 use anyhow::Context;
-use hyper::header::HeaderName;
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::Resource;
@@ -86,22 +86,6 @@ fn get_fields_mut<'a>(
         HostFields::Owned { fields } => Ok(Ok(fields)),
         HostFields::Ref { .. } => Ok(Err(types::HeaderError::Immutable)),
     }
-}
-
-fn is_forbidden_header<T: WasiHttpView>(view: &mut T, name: &HeaderName) -> bool {
-    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
-        hyper::header::CONNECTION,
-        HeaderName::from_static("keep-alive"),
-        hyper::header::PROXY_AUTHENTICATE,
-        hyper::header::PROXY_AUTHORIZATION,
-        HeaderName::from_static("proxy-connection"),
-        hyper::header::TE,
-        hyper::header::TRANSFER_ENCODING,
-        hyper::header::UPGRADE,
-        HeaderName::from_static("http2-settings"),
-    ];
-
-    FORBIDDEN_HEADERS.contains(name) || view.is_forbidden_header(name)
 }
 
 impl<T: WasiHttpView> crate::bindings::http::types::HostFields for T {
@@ -833,11 +817,13 @@ impl<T: WasiHttpView> crate::bindings::http::types::HostFutureIncomingResponse f
                 Ok(Err(e)) => return Ok(Some(Ok(Err(e)))),
             };
 
-        let (parts, body) = resp.resp.into_parts();
+        let (mut parts, body) = resp.resp.into_parts();
+
+        remove_forbidden_headers(self, &mut parts.headers);
 
         let resp = self.table().push(HostIncomingResponse {
             status: parts.status.as_u16(),
-            headers: FieldMap::from(parts.headers),
+            headers: parts.headers,
             body: Some({
                 let mut body = HostIncomingBody::new(body, resp.between_bytes_timeout);
                 body.retain_worker(&resp.worker);

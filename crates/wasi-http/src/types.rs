@@ -35,17 +35,18 @@ pub trait WasiHttpView: Send {
     fn new_incoming_request(
         &mut self,
         req: hyper::Request<HyperIncomingBody>,
-    ) -> wasmtime::Result<Resource<HostIncomingRequest>> {
+    ) -> wasmtime::Result<Resource<HostIncomingRequest>>
+    where
+        Self: Sized,
+    {
         let (parts, body) = req.into_parts();
         let body = HostIncomingBody::new(
             body,
             // TODO: this needs to be plumbed through
             std::time::Duration::from_millis(600 * 1000),
         );
-        Ok(self.table().push(HostIncomingRequest {
-            parts,
-            body: Some(body),
-        })?)
+        let incoming_req = HostIncomingRequest::new(self, parts, Some(body));
+        Ok(self.table().push(incoming_req)?)
     }
 
     fn new_response_outparam(
@@ -70,6 +71,41 @@ pub trait WasiHttpView: Send {
 
     fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
         false
+    }
+}
+
+/// Returns `true` when the header is forbidden according to this [`WasiHttpView`] implementation.
+pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName) -> bool {
+    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
+        hyper::header::CONNECTION,
+        HeaderName::from_static("keep-alive"),
+        hyper::header::PROXY_AUTHENTICATE,
+        hyper::header::PROXY_AUTHORIZATION,
+        HeaderName::from_static("proxy-connection"),
+        hyper::header::TE,
+        hyper::header::TRANSFER_ENCODING,
+        hyper::header::UPGRADE,
+        HeaderName::from_static("http2-settings"),
+    ];
+
+    FORBIDDEN_HEADERS.contains(name) || view.is_forbidden_header(name)
+}
+
+/// Removes forbidden headers from a [`hyper::HeaderMap`].
+pub(crate) fn remove_forbidden_headers(
+    view: &mut dyn WasiHttpView,
+    headers: &mut hyper::HeaderMap,
+) {
+    let forbidden_keys = Vec::from_iter(headers.keys().filter_map(|name| {
+        if is_forbidden_header(view, name) {
+            Some(name.clone())
+        } else {
+            None
+        }
+    }));
+
+    for name in forbidden_keys {
+        headers.remove(name);
     }
 }
 
@@ -264,8 +300,19 @@ impl TryInto<http::Method> for types::Method {
 }
 
 pub struct HostIncomingRequest {
-    pub parts: http::request::Parts,
+    pub(crate) parts: http::request::Parts,
     pub body: Option<HostIncomingBody>,
+}
+
+impl HostIncomingRequest {
+    pub fn new(
+        view: &mut dyn WasiHttpView,
+        mut parts: http::request::Parts,
+        body: Option<HostIncomingBody>,
+    ) -> Self {
+        remove_forbidden_headers(view, &mut parts.headers);
+        Self { parts, body }
+    }
 }
 
 pub struct HostResponseOutparam {
