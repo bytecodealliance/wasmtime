@@ -17,6 +17,7 @@ pub mod bindings {
         tracing: true,
         async: false,
         with: {
+            "wasi:io/error": wasmtime_wasi::preview2::bindings::io::error,
             "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
             "wasi:io/poll": wasmtime_wasi::preview2::bindings::io::poll,
 
@@ -46,4 +47,55 @@ pub(crate) fn dns_error(rcode: String, info_code: u16) -> bindings::http::types:
 
 pub(crate) fn internal_error(msg: String) -> bindings::http::types::ErrorCode {
     bindings::http::types::ErrorCode::InternalError(Some(msg))
+}
+
+/// Translate a [`http::Error`] to a wasi-http `ErrorCode` in the context of a request.
+pub fn http_request_error(err: http::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+
+    if err.is::<http::uri::InvalidUri>() {
+        return ErrorCode::HttpRequestUriInvalid;
+    }
+
+    tracing::warn!("http request error: {err:?}");
+
+    ErrorCode::HttpProtocolError
+}
+
+/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
+pub fn hyper_request_error(err: hyper::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+    use std::error::Error;
+
+    // If there's a source, we might be able to extract a wasi-http error from it.
+    if let Some(cause) = err.source() {
+        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
+            return err.clone();
+        }
+    }
+
+    tracing::warn!("hyper request error: {err:?}");
+
+    ErrorCode::HttpProtocolError
+}
+
+/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a response.
+pub fn hyper_response_error(err: hyper::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+    use std::error::Error;
+
+    if err.is_timeout() {
+        return ErrorCode::HttpResponseTimeout;
+    }
+
+    // If there's a source, we might be able to extract a wasi-http error from it.
+    if let Some(cause) = err.source() {
+        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
+            return err.clone();
+        }
+    }
+
+    tracing::warn!("hyper response error: {err:?}");
+
+    ErrorCode::HttpProtocolError
 }

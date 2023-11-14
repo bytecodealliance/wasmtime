@@ -20,9 +20,10 @@ use wasmtime_wasi::preview2::{
 impl<T: WasiHttpView> crate::bindings::http::types::Host for T {
     fn http_error_code(
         &mut self,
-        _err: wasmtime::component::Resource<types::IoError>,
+        err: wasmtime::component::Resource<types::IoError>,
     ) -> wasmtime::Result<Option<types::ErrorCode>> {
-        todo!()
+        let e = self.table().get(&err)?;
+        Ok(e.downcast_ref::<types::ErrorCode>().cloned())
     }
 }
 
