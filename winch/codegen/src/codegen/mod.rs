@@ -348,6 +348,11 @@ where
     /// the given index, returning the typed register holding the
     /// source value.
     pub fn emit_set_local(&mut self, index: u32) -> TypedReg {
+        // Materialize any references to the same local index that are in the
+        // value stack by spilling.
+        if self.context.stack.contains_latent_local(index) {
+            self.context.spill(self.masm);
+        }
         let src = self.context.pop_to_reg(self.masm, None);
         // Need to get address of local after `pop_to_reg` since `pop_to_reg`
         // will pop the machine stack causing an incorrect address to be

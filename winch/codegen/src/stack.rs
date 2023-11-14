@@ -155,6 +155,14 @@ impl Val {
         }
     }
 
+    /// Check whether the value is local with a particular index.
+    pub fn is_local_at_index(&self, index: u32) -> bool {
+        match *self {
+            Self::Local(Local { index: i, .. }) if i == index => true,
+            _ => false,
+        }
+    }
+
     /// Get the register representation of the value.
     ///
     /// # Panics
@@ -230,6 +238,23 @@ impl Stack {
         Self {
             inner: Default::default(),
         }
+    }
+
+    /// Returns true if the stack contains a local with the provided index
+    /// except if the only time the local appears is the top element.
+    pub fn contains_latent_local(&self, index: u32) -> bool {
+        self.inner
+            .iter()
+            // Iterate top-to-bottom so we can skip the top element and stop
+            // when we see a memory element.
+            .rev()
+            // The local is not latent if it's the top element because the top
+            // element will be popped next which materializes the local.
+            .skip(1)
+            // Stop when we see a memory element because that marks where we
+            // spilled up to so there will not be any locals past this point.
+            .take_while(|v| !v.is_mem())
+            .any(|v| v.is_local_at_index(index))
     }
 
     /// Extend the stack with the given elements.

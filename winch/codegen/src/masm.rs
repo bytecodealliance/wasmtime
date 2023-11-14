@@ -292,7 +292,7 @@ pub enum RoundingMode {
 
 pub(crate) trait MacroAssembler {
     /// The addressing mode.
-    type Address: Copy;
+    type Address: Copy + Debug;
 
     /// The pointer representation of the target ISA,
     /// used to access information from [`VMOffsets`].
