@@ -94,22 +94,29 @@ impl Streams {
 
 pub enum StreamType {
     /// Streams for implementing stdio.
-    Stdio(IsATTY),
+    Stdio(Stdio),
 
     /// Streaming data with a file.
     File(File),
 }
 
-pub enum IsATTY {
-    Yes,
-    No,
+pub enum Stdio {
+    Stdin,
+    Stdout,
+    Stderr,
 }
 
-impl IsATTY {
+impl Stdio {
     pub fn filetype(&self) -> wasi::Filetype {
-        match self {
-            IsATTY::Yes => wasi::FILETYPE_CHARACTER_DEVICE,
-            IsATTY::No => wasi::FILETYPE_UNKNOWN,
+        let is_terminal = match self {
+            Stdio::Stdin => terminal_stdin::get_terminal_stdin().is_some(),
+            Stdio::Stdout => terminal_stdout::get_terminal_stdout().is_some(),
+            Stdio::Stderr => terminal_stderr::get_terminal_stderr().is_some(),
+        };
+        if is_terminal {
+            wasi::FILETYPE_CHARACTER_DEVICE
+        } else {
+            wasi::FILETYPE_UNKNOWN
         }
     }
 }
@@ -138,19 +145,6 @@ impl Descriptors {
             preopens: Cell::new(None),
         };
 
-        let stdin_isatty = match terminal_stdin::get_terminal_stdin() {
-            Some(_) => IsATTY::Yes,
-            None => IsATTY::No,
-        };
-        let stdout_isatty = match terminal_stdout::get_terminal_stdout() {
-            Some(_) => IsATTY::Yes,
-            None => IsATTY::No,
-        };
-        let stderr_isatty = match terminal_stderr::get_terminal_stderr() {
-            Some(_) => IsATTY::Yes,
-            None => IsATTY::No,
-        };
-
         fn new_once<T>(val: T) -> OnceCell<T> {
             let cell = OnceCell::new();
             let _ = cell.set(val);
@@ -160,19 +154,19 @@ impl Descriptors {
         d.push(Descriptor::Streams(Streams {
             input: new_once(stdin::get_stdin()),
             output: OnceCell::new(),
-            type_: StreamType::Stdio(stdin_isatty),
+            type_: StreamType::Stdio(Stdio::Stdin),
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: OnceCell::new(),
             output: new_once(stdout::get_stdout()),
-            type_: StreamType::Stdio(stdout_isatty),
+            type_: StreamType::Stdio(Stdio::Stdout),
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: OnceCell::new(),
             output: new_once(stderr::get_stderr()),
-            type_: StreamType::Stdio(stderr_isatty),
+            type_: StreamType::Stdio(Stdio::Stderr),
         }))
         .trapping_unwrap();
 

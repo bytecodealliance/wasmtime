@@ -568,7 +568,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             Descriptor::Streams(Streams {
                 input,
                 output,
-                type_: StreamType::Stdio(isatty),
+                type_: StreamType::Stdio(stdio),
             }) => {
                 let fs_flags = 0;
                 let mut fs_rights_base = 0;
@@ -580,7 +580,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                 }
                 let fs_rights_inheriting = fs_rights_base;
                 stat.write(Fdstat {
-                    fs_filetype: isatty.filetype(),
+                    fs_filetype: stdio.filetype(),
                     fs_flags,
                     fs_rights_base,
                     fs_rights_inheriting,
@@ -663,13 +663,13 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
             }
             // Stdio is all zero fields, except for filetype character device
             Descriptor::Streams(Streams {
-                type_: StreamType::Stdio(isatty),
+                type_: StreamType::Stdio(stdio),
                 ..
             }) => {
                 *buf = Filestat {
                     dev: 0,
                     ino: 0,
-                    filetype: isatty.filetype(),
+                    filetype: stdio.filetype(),
                     nlink: 0,
                     size: 0,
                     atim: 0,
