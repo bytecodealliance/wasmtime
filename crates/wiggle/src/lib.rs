@@ -402,7 +402,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     /// etc of the returned pointer.
     pub fn cast<U>(&self) -> GuestPtr<'a, U>
     where
-        T: Pointee<Pointer = u32>,
+        U: Pointee<Pointer = T::Pointer> + ?Sized,
     {
         GuestPtr::new(self.mem, self.pointer)
     }
