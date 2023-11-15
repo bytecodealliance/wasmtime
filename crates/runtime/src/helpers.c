@@ -4,26 +4,14 @@
 
 #ifdef CFG_TARGET_OS_windows
 
+// Windows is required to use normal `setjmp` and `longjmp`.
 #define platform_setjmp(buf) setjmp(buf)
 #define platform_longjmp(buf, arg) longjmp(buf, arg)
 typedef jmp_buf platform_jmp_buf;
 
-#elif defined(__clang__) && (defined(__aarch64__) || defined(__s390x__) || defined(__riscv))
+#elif defined(__GNUC__) || defined(__x86_64__)
 
-// Clang on aarch64, s390x and riscv doesn't support `__builtin_setjmp`, so use
-//`sigsetjmp` from libc.
-//
-// Note that `sigsetjmp` and `siglongjmp` are used here where possible to
-// explicitly pass a 0 argument to `sigsetjmp` that we don't need to preserve
-// the process signal mask. This should make this call a bit faster b/c it
-// doesn't need to touch the kernel signal handling routines.
-#define platform_setjmp(buf) sigsetjmp(buf, 0)
-#define platform_longjmp(buf, arg) siglongjmp(buf, arg)
-typedef sigjmp_buf platform_jmp_buf;
-
-#else
-
-// GCC and Clang both provide `__builtin_setjmp`/`__builtin_longjmp`, which
+// GCC and Clang on x86_64 provide `__builtin_setjmp`/`__builtin_longjmp`, which
 // differ from plain `setjmp` and `longjmp` in that they're implemented by
 // the compiler inline rather than in libc, and the compiler can avoid saving
 // and restoring most of the registers. See the [GCC docs] and [clang docs]
@@ -39,6 +27,18 @@ typedef sigjmp_buf platform_jmp_buf;
 #define platform_setjmp(buf) __builtin_setjmp(buf)
 #define platform_longjmp(buf, arg) __builtin_longjmp(buf, arg)
 typedef void *platform_jmp_buf[5]; // this is the documented size; see the docs links for details.
+
+#else
+
+// All other platforms/compilers funnel in here.
+//
+// Note that `sigsetjmp` and `siglongjmp` are used here where possible to
+// explicitly pass a 0 argument to `sigsetjmp` that we don't need to preserve
+// the process signal mask. This should make this call a bit faster b/c it
+// doesn't need to touch the kernel signal handling routines.
+#define platform_setjmp(buf) sigsetjmp(buf, 0)
+#define platform_longjmp(buf, arg) siglongjmp(buf, arg)
+typedef sigjmp_buf platform_jmp_buf;
 
 #endif
 
