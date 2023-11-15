@@ -4,7 +4,6 @@ use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::poll;
 use crate::bindings::wasi::io::streams;
 use crate::bindings::wasi::random::random;
-use crate::bindings::wasi::sockets::network;
 use core::cell::OnceCell;
 use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
 use core::cmp::min;
@@ -589,11 +588,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                 Ok(())
             }
             Descriptor::Closed(_) => Err(ERRNO_BADF),
-            Descriptor::Streams(Streams {
-                input: _,
-                output: _,
-                type_: StreamType::Socket(_),
-            }) => unreachable!(),
         }
     })
 }
@@ -1645,26 +1639,6 @@ impl Drop for Pollables {
     }
 }
 
-impl From<network::ErrorCode> for Errno {
-    fn from(error: network::ErrorCode) -> Errno {
-        match error {
-            network::ErrorCode::Unknown => unreachable!(), // TODO
-            /* TODO
-            // Use a black box to prevent the optimizer from generating a
-            // lookup table, which would require a static initializer.
-            ConnectionAborted => black_box(ERRNO_CONNABORTED),
-            ConnectionRefused => ERRNO_CONNREFUSED,
-            ConnectionReset => ERRNO_CONNRESET,
-            HostUnreachable => ERRNO_HOSTUNREACH,
-            NetworkDown => ERRNO_NETDOWN,
-            NetworkUnreachable => ERRNO_NETUNREACH,
-            Timedout => ERRNO_TIMEDOUT,
-            */
-            _ => unreachable!(),
-        }
-    }
-}
-
 /// Concurrently poll for the occurrence of a set of events.
 #[no_mangle]
 pub unsafe extern "C" fn poll_oneoff(
@@ -1852,25 +1826,6 @@ pub unsafe extern "C" fn poll_oneoff(
                                 }
                                 Err(e) => (e.into(), 1, 0),
                             },
-                            StreamType::Socket(_connection) => {
-                                unreachable!() // TODO
-                                               /*
-                                               match tcp::bytes_readable(*connection) {
-                                                   Ok(result) => (
-                                                       ERRNO_SUCCESS,
-                                                       result.0,
-                                                       if result.1 {
-                                                           EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                       } else {
-                                                           0
-                                                       }
-                                                   )
-                                                   Err(e) => {
-                                                       (e.into(), 1, 0)
-                                                   }
-                                               }
-                                               */
-                            }
                             StreamType::Stdio(_) => (ERRNO_SUCCESS, 1, 0),
                         },
                         _ => unreachable!(),
@@ -1885,25 +1840,6 @@ pub unsafe extern "C" fn poll_oneoff(
                     match desc {
                         Descriptor::Streams(streams) => match &streams.type_ {
                             StreamType::File(_) | StreamType::Stdio(_) => (ERRNO_SUCCESS, 1, 0),
-                            StreamType::Socket(_connection) => {
-                                unreachable!() // TODO
-                                               /*
-                                               match tcp::bytes_writable(connection) {
-                                                   Ok(result) => (
-                                                       ERRNO_SUCCESS,
-                                                       result.0,
-                                                       if result.1 {
-                                                           EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                       } else {
-                                                            0
-                                                       }
-                                                   )
-                                                   Err(e) => {
-                                                       (e.into(), 0, 0)
-                                                   }
-                                               }
-                                               */
-                            }
                         },
                         _ => unreachable!(),
                     }
