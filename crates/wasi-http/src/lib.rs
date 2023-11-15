@@ -10,13 +10,14 @@ pub mod bindings {
     wasmtime::component::bindgen!({
         path: "wit",
         interfaces: "
-            import wasi:http/incoming-handler@0.2.0-rc-2023-11-05;
-            import wasi:http/outgoing-handler@0.2.0-rc-2023-11-05;
-            import wasi:http/types@0.2.0-rc-2023-11-05;
+            import wasi:http/incoming-handler@0.2.0-rc-2023-11-10;
+            import wasi:http/outgoing-handler@0.2.0-rc-2023-11-10;
+            import wasi:http/types@0.2.0-rc-2023-11-10;
         ",
         tracing: true,
         async: false,
         with: {
+            "wasi:io/error": wasmtime_wasi::preview2::bindings::io::error,
             "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
             "wasi:io/poll": wasmtime_wasi::preview2::bindings::io::poll,
 
@@ -37,64 +38,64 @@ pub mod bindings {
     pub use wasi::http;
 }
 
-impl From<wasmtime_wasi::preview2::TableError> for crate::bindings::http::types::Error {
-    fn from(err: wasmtime_wasi::preview2::TableError) -> Self {
-        Self::UnexpectedError(err.to_string())
-    }
+pub(crate) fn dns_error(rcode: String, info_code: u16) -> bindings::http::types::ErrorCode {
+    bindings::http::types::ErrorCode::DnsError(bindings::http::types::DnsErrorPayload {
+        rcode: Some(rcode),
+        info_code: Some(info_code),
+    })
 }
 
-impl From<anyhow::Error> for crate::bindings::http::types::Error {
-    fn from(err: anyhow::Error) -> Self {
-        Self::UnexpectedError(err.to_string())
-    }
+pub(crate) fn internal_error(msg: String) -> bindings::http::types::ErrorCode {
+    bindings::http::types::ErrorCode::InternalError(Some(msg))
 }
 
-impl From<std::io::Error> for crate::bindings::http::types::Error {
-    fn from(err: std::io::Error) -> Self {
-        let message = err.to_string();
-        match err.kind() {
-            std::io::ErrorKind::InvalidInput => Self::InvalidUrl(message),
-            std::io::ErrorKind::AddrNotAvailable => Self::InvalidUrl(message),
-            _ => {
-                if message.starts_with("failed to lookup address information") {
-                    Self::InvalidUrl("invalid dnsname".to_string())
-                } else {
-                    Self::ProtocolError(message)
-                }
-            }
+/// Translate a [`http::Error`] to a wasi-http `ErrorCode` in the context of a request.
+pub fn http_request_error(err: http::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+
+    if err.is::<http::uri::InvalidUri>() {
+        return ErrorCode::HttpRequestUriInvalid;
+    }
+
+    tracing::warn!("http request error: {err:?}");
+
+    ErrorCode::HttpProtocolError
+}
+
+/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a request.
+pub fn hyper_request_error(err: hyper::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+    use std::error::Error;
+
+    // If there's a source, we might be able to extract a wasi-http error from it.
+    if let Some(cause) = err.source() {
+        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
+            return err.clone();
         }
     }
+
+    tracing::warn!("hyper request error: {err:?}");
+
+    ErrorCode::HttpProtocolError
 }
 
-impl From<hyper::Error> for crate::bindings::http::types::Error {
-    fn from(err: hyper::Error) -> Self {
-        let message = err.message().to_string();
-        if err.is_timeout() {
-            Self::TimeoutError(message)
-        } else if err.is_parse_status() || err.is_user() {
-            Self::InvalidUrl(message)
-        } else if err.is_body_write_aborted()
-            || err.is_canceled()
-            || err.is_closed()
-            || err.is_incomplete_message()
-            || err.is_parse()
-        {
-            Self::ProtocolError(message)
-        } else {
-            Self::UnexpectedError(message)
+/// Translate a [`hyper::Error`] to a wasi-http `ErrorCode` in the context of a response.
+pub fn hyper_response_error(err: hyper::Error) -> bindings::http::types::ErrorCode {
+    use bindings::http::types::ErrorCode;
+    use std::error::Error;
+
+    if err.is_timeout() {
+        return ErrorCode::HttpResponseTimeout;
+    }
+
+    // If there's a source, we might be able to extract a wasi-http error from it.
+    if let Some(cause) = err.source() {
+        if let Some(err) = cause.downcast_ref::<ErrorCode>() {
+            return err.clone();
         }
     }
-}
 
-impl From<tokio::time::error::Elapsed> for crate::bindings::http::types::Error {
-    fn from(err: tokio::time::error::Elapsed) -> Self {
-        Self::TimeoutError(err.to_string())
-    }
-}
+    tracing::warn!("hyper response error: {err:?}");
 
-#[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
-impl From<rustls::client::InvalidDnsNameError> for crate::bindings::http::types::Error {
-    fn from(_err: rustls::client::InvalidDnsNameError) -> Self {
-        Self::InvalidUrl("invalid dnsname".to_string())
-    }
+    ErrorCode::HttpProtocolError
 }

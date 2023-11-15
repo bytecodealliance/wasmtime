@@ -15,7 +15,7 @@ use wasmtime_wasi::preview2::{
     self, pipe::MemoryOutputPipe, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{
-    bindings::http::types::Error,
+    bindings::http::types::ErrorCode,
     body::HyperIncomingBody,
     types::{self, HostFutureIncomingResponse, IncomingResponseInternal, OutgoingRequest},
     WasiHttpCtx, WasiHttpView,
@@ -128,7 +128,7 @@ async fn run_wasi_http(
     component_filename: &str,
     req: hyper::Request<HyperIncomingBody>,
     send_request: Option<RequestSender>,
-) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, Error>> {
+) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
     let table = Table::new();
@@ -199,11 +199,18 @@ async fn run_wasi_http(
 
 #[test_log::test(tokio::test)]
 async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
-    let req = hyper::Request::builder()
-        .method(http::Method::GET)
-        .body(body::empty())?;
+    let mut req = hyper::Request::builder().method(http::Method::GET);
 
-    let resp = run_wasi_http(test_programs_artifacts::API_PROXY_COMPONENT, req, None).await?;
+    req.headers_mut()
+        .unwrap()
+        .append("custom-forbidden-header", "yes".parse().unwrap());
+
+    let resp = run_wasi_http(
+        test_programs_artifacts::API_PROXY_COMPONENT,
+        req.body(body::empty())?,
+        None,
+    )
+    .await?;
 
     match resp {
         Ok(resp) => println!("response: {resp:?}"),
@@ -450,7 +457,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
 
     let request = request.body(BoxBody::new(StreamBody::new(stream::iter(
         body.chunks(16 * 1024)
-            .map(|chunk| Ok::<_, Error>(Frame::data(Bytes::copy_from_slice(chunk))))
+            .map(|chunk| Ok::<_, ErrorCode>(Frame::data(Bytes::copy_from_slice(chunk))))
             .collect::<Vec<_>>(),
     ))))?;
 

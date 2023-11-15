@@ -258,7 +258,7 @@ fn respond(status: u16, response_out: ResponseOutparam) {
 
     ResponseOutparam::set(response_out, Ok(response));
 
-    OutgoingBody::finish(body, None);
+    OutgoingBody::finish(body, None).expect("outgoing-body.finish");
 }
 
 async fn hash(url: &Url) -> Result<String> {
@@ -390,7 +390,7 @@ mod executor {
             fn drop(&mut self) {
                 if let Some((stream, body)) = self.0.take() {
                     drop(stream);
-                    OutgoingBody::finish(body, None);
+                    OutgoingBody::finish(body, None).expect("outgoing-body.finish");
                 }
             }
         }
@@ -451,7 +451,7 @@ mod executor {
 
     pub fn outgoing_request_send(
         request: OutgoingRequest,
-    ) -> impl Future<Output = Result<IncomingResponse, types::Error>> {
+    ) -> impl Future<Output = Result<IncomingResponse, types::ErrorCode>> {
         future::poll_fn({
             let response = outgoing_handler::handle(request, None);
 

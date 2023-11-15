@@ -45,7 +45,7 @@ pub mod bindings {
     #[cfg(feature = "reactor")]
     wit_bindgen::generate!({
         path: "../wasi/wit",
-        world: "wasmtime:wasi/preview1-adapter-reactor",
+        world: "wasi:cli/reactor",
         std_feature,
         raw_strings,
         // Automatically generated bindings for these functions will allocate
@@ -58,7 +58,7 @@ pub mod bindings {
     });
 }
 
-#[export_name = "wasi:cli/run@0.2.0-rc-2023-11-05#run"]
+#[export_name = "wasi:cli/run@0.2.0-rc-2023-11-10#run"]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
@@ -1456,7 +1456,6 @@ pub unsafe extern "C" fn path_open(
     let at_flags = at_flags_from_lookupflags(dirflags);
     let o_flags = o_flags_from_oflags(oflags);
     let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
-    let mode = filesystem::Modes::READABLE | filesystem::Modes::WRITABLE;
     let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
     State::with(|state| {
@@ -1464,7 +1463,7 @@ pub unsafe extern "C" fn path_open(
             .descriptors()
             .get_dir(fd)?
             .fd
-            .open_at(at_flags, path, o_flags, flags, mode)?;
+            .open_at(at_flags, path, o_flags, flags)?;
         let descriptor_type = result.get_type()?;
         let desc = Descriptor::Streams(Streams {
             input: OnceCell::new(),
@@ -1785,7 +1784,7 @@ pub unsafe extern "C" fn poll_oneoff(
             });
         }
 
-        #[link(wasm_import_module = "wasi:io/poll@0.2.0-rc-2023-11-05")]
+        #[link(wasm_import_module = "wasi:io/poll@0.2.0-rc-2023-11-10")]
         #[allow(improper_ctypes)] // FIXME(bytecodealliance/wit-bindgen#684)
         extern "C" {
             #[link_name = "poll"]
@@ -2512,7 +2511,7 @@ impl State {
 
     fn get_environment(&self) -> &[StrTuple] {
         if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-11-05")]
+            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-11-10")]
             extern "C" {
                 #[link_name = "get-environment"]
                 fn get_environment_import(rval: *mut StrTupleList);
@@ -2536,7 +2535,7 @@ impl State {
 
     fn get_args(&self) -> &[WasmStr] {
         if self.args.get().is_none() {
-            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-11-05")]
+            #[link(wasm_import_module = "wasi:cli/environment@0.2.0-rc-2023-11-10")]
             extern "C" {
                 #[link_name = "get-arguments"]
                 fn get_args_import(rval: *mut WasmStrList);

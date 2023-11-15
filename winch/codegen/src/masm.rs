@@ -1,5 +1,5 @@
 use crate::abi::{self, align_to, LocalSlot};
-use crate::codegen::{CodeGenContext, TableData};
+use crate::codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData};
 use crate::isa::reg::Reg;
 use cranelift_codegen::{ir::LibCall, Final, MachBufferFinalized, MachLabel};
 use std::{fmt::Debug, ops::Range};
@@ -23,13 +23,33 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+/// Representation of the stack pointer offset.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct SPOffset(u32);
+
+impl SPOffset {
+    pub fn from_u32(offs: u32) -> Self {
+        Self(offs)
+    }
+
+    pub fn as_u32(&self) -> u32 {
+        self.0
+    }
+}
+
 /// A stack slot.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct StackSlot {
     /// The location of the slot, relative to the stack pointer.
-    pub offset: u32,
+    pub offset: SPOffset,
     /// The size of the slot, in bytes.
     pub size: u32,
+}
+
+impl StackSlot {
+    pub fn new(offs: SPOffset, size: u32) -> Self {
+        Self { offset: offs, size }
+    }
 }
 
 /// Kinds of integer binary comparison in WebAssembly. The [`MacroAssembler`]
@@ -292,7 +312,7 @@ pub enum RoundingMode {
 
 pub(crate) trait MacroAssembler {
     /// The addressing mode.
-    type Address: Copy;
+    type Address: Copy + Debug;
 
     /// The pointer representation of the target ISA,
     /// used to access information from [`VMOffsets`].
@@ -317,7 +337,7 @@ pub(crate) trait MacroAssembler {
     ///
     /// Used to reset the stack pointer to a given offset
     /// when dealing with unreachable code.
-    fn reset_stack_pointer(&mut self, offset: u32);
+    fn reset_stack_pointer(&mut self, offset: SPOffset);
 
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
@@ -338,11 +358,11 @@ pub(crate) trait MacroAssembler {
     /// Constructs an address with an offset that is relative to the
     /// current position of the stack pointer (e.g. [sp + (sp_offset -
     /// offset)].
-    fn address_from_sp(&self, offset: u32) -> Self::Address;
+    fn address_from_sp(&self, offset: SPOffset) -> Self::Address;
 
     /// Constructs an address with an offset that is absolute to the
     /// current position of the stack pointer (e.g. [sp + offset].
-    fn address_at_sp(&self, offset: u32) -> Self::Address;
+    fn address_at_sp(&self, offset: SPOffset) -> Self::Address;
 
     /// Alias for [`Self::address_at_reg`] using the VMContext register as
     /// a base. The VMContext register is derived from the ABI type that is
@@ -357,7 +377,7 @@ pub(crate) trait MacroAssembler {
     fn call(&mut self, stack_args_size: u32, f: impl FnMut(&mut Self) -> CalleeKind) -> u32;
 
     /// Get stack pointer offset.
-    fn sp_offset(&self) -> u32;
+    fn sp_offset(&self) -> SPOffset;
 
     /// Perform a stack store.
     fn store(&mut self, src: RegImm, dst: Self::Address, size: OperandSize);
@@ -368,6 +388,9 @@ pub(crate) trait MacroAssembler {
     /// Alias for `MacroAssembler::load` with the operand size corresponding
     /// to the pointer size of the target.
     fn load_ptr(&mut self, src: Self::Address, dst: Reg);
+
+    /// Loads the effective address into destination.
+    fn load_addr(&mut self, _src: Self::Address, _dst: Reg, _size: OperandSize);
 
     /// Alias for `MacroAssembler::store` with the operand size corresponding
     /// to the pointer size of the target.
@@ -381,6 +404,57 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a conditional move.
     fn cmov(&mut self, src: Reg, dst: Reg, cc: IntCmpKind, size: OperandSize);
+
+    /// Performs a memory move of bytes from src to dest.
+    /// Bytes are moved in blocks of 8 bytes, where possible.
+    fn memmove(&mut self, src: SPOffset, dst: SPOffset, bytes: u32) {
+        debug_assert!(dst.as_u32() < src.as_u32());
+        // At least 4 byte aligned.
+        debug_assert!(bytes % 4 == 0);
+        let mut remaining = bytes;
+        let word_bytes = <Self::ABI as abi::ABI>::word_bytes();
+        let scratch = <Self::ABI as abi::ABI>::scratch_reg();
+        let ptr_size: OperandSize = ptr_type_from_ptr_size(word_bytes as u8).into();
+
+        let mut dst_offs = dst.as_u32() - bytes;
+        let mut src_offs = src.as_u32() - bytes;
+
+        while remaining >= word_bytes {
+            remaining -= word_bytes;
+            dst_offs += word_bytes;
+            src_offs += word_bytes;
+
+            self.load(
+                self.address_from_sp(SPOffset::from_u32(src_offs)),
+                scratch,
+                ptr_size,
+            );
+            self.store(
+                scratch.into(),
+                self.address_from_sp(SPOffset::from_u32(dst_offs)),
+                ptr_size,
+            );
+        }
+
+        if remaining > 0 {
+            let half_word = word_bytes / 2;
+            let ptr_size = OperandSize::from_bytes(half_word as u8);
+            debug_assert!(remaining == half_word);
+            dst_offs += half_word;
+            src_offs += half_word;
+
+            self.load(
+                self.address_from_sp(SPOffset::from_u32(src_offs)),
+                scratch,
+                ptr_size,
+            );
+            self.store(
+                scratch.into(),
+                self.address_from_sp(SPOffset::from_u32(dst_offs)),
+                ptr_size,
+            );
+        }
+    }
 
     /// Perform add operation.
     fn add(&mut self, dst: Reg, lhs: Reg, rhs: RegImm, size: OperandSize);
@@ -483,7 +557,7 @@ pub(crate) trait MacroAssembler {
     /// false.
     fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize);
 
-    /// Count the number of trailing zeroes in src and put the result in dst.
+    /// Count the number of trailing zeroes in src and put the result in dst.masm
     /// In x64, this will emit multiple instructions if the `has_tzcnt` flag is
     /// false.
     fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize);

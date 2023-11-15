@@ -127,6 +127,14 @@ block0(v0: i8,v1: i8):
 ; run: %sub_i8(0xAB, 0x0B) == 0xA0
 ; run: %sub_i8(0xC0, 0xDE) == 0xE2
 
+function %isub_const_lhs(i8, i32) -> i32 {
+block0(v0: i8, v1: i32):
+    v376 = iconst.i32 0xffff_fffd
+    v1161 = isub v376, v1
+    return v1161
+}
+
+; run: %isub_const_lhs(68, 4474) == -4477
 
 function %mul_i64(i64, i64) -> i64 {
 block0(v0: i64,v1: i64):

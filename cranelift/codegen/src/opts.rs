@@ -4,12 +4,11 @@ use crate::egraph::{NewOrExistingInst, OptimizeCtx};
 use crate::ir::condcodes;
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
-pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, Uimm8, V128Imm};
+pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
 pub use crate::ir::types::*;
 pub use crate::ir::{
-    dynamic_to_fixed, AtomicRmwOp, Block, BlockCall, Constant, DataFlowGraph, DynamicStackSlot,
-    FuncRef, GlobalValue, Immediate, InstructionData, JumpTable, MemFlags, Opcode, StackSlot,
-    Table, TrapCode, Type, Value,
+    dynamic_to_fixed, AtomicRmwOp, BlockCall, Constant, DynamicStackSlot, FuncRef, GlobalValue,
+    Immediate, InstructionData, MemFlags, Opcode, StackSlot, Table, TrapCode, Type, Value,
 };
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
@@ -24,10 +23,19 @@ pub type Range = (usize, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 
-pub type ConstructorVec<T> = SmallVec<[T; 8]>;
+const MAX_ISLE_RETURNS: usize = 8;
+
+pub type ConstructorVec<T> = SmallVec<[T; MAX_ISLE_RETURNS]>;
+
+impl<T: smallvec::Array> generated_code::Length for SmallVec<T> {
+    #[inline]
+    fn len(&self) -> usize {
+        SmallVec::len(self)
+    }
+}
 
 pub(crate) mod generated_code;
-use generated_code::ContextIter;
+use generated_code::{ContextIter, IntoContextIter};
 
 pub(crate) struct IsleContext<'a, 'b, 'c> {
     pub(crate) ctx: &'a mut OptimizeCtx<'b, 'c>,
@@ -39,6 +47,18 @@ pub(crate) struct InstDataEtorIter<'a, 'b, 'c> {
     _phantom2: PhantomData<&'b ()>,
     _phantom3: PhantomData<&'c ()>,
 }
+
+impl Default for InstDataEtorIter<'_, '_, '_> {
+    fn default() -> Self {
+        InstDataEtorIter {
+            stack: SmallVec::default(),
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
+            _phantom3: PhantomData,
+        }
+    }
+}
+
 impl<'a, 'b, 'c> InstDataEtorIter<'a, 'b, 'c> {
     fn new(root: Value) -> Self {
         debug_assert_ne!(root, Value::reserved_value());
@@ -85,13 +105,27 @@ where
     }
 }
 
+impl<'a, 'b, 'c> IntoContextIter for InstDataEtorIter<'a, 'b, 'c>
+where
+    'b: 'a,
+    'c: 'b,
+{
+    type Context = IsleContext<'a, 'b, 'c>;
+    type Output = (Type, InstructionData);
+    type IntoIter = Self;
+
+    fn into_context_iter(self) -> Self {
+        self
+    }
+}
+
 impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     isle_common_prelude_methods!();
 
-    type inst_data_etor_iter = InstDataEtorIter<'a, 'b, 'c>;
+    type inst_data_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
 
-    fn inst_data_etor(&mut self, eclass: Value) -> InstDataEtorIter<'a, 'b, 'c> {
-        InstDataEtorIter::new(eclass)
+    fn inst_data_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
+        *returns = InstDataEtorIter::new(eclass);
     }
 
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {

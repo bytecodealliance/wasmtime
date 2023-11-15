@@ -107,7 +107,7 @@ impl TargetIsa for X64 {
         let stack = Stack::new();
         let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
+        let defined_locals = DefinedLocals::new::<abi::X64ABI>(translation, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         let gpr = RegBitSet::int(
             ALL_GPR.into(),

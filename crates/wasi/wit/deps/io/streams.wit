@@ -1,4 +1,4 @@
-package wasi:io@0.2.0-rc-2023-11-05;
+package wasi:io@0.2.0-rc-2023-11-10;
 
 /// WASI I/O is an I/O abstraction API which is currently focused on providing
 /// stream types.
@@ -6,6 +6,7 @@ package wasi:io@0.2.0-rc-2023-11-05;
 /// In the future, the component model is expected to add built-in stream types;
 /// when it does, they are expected to subsume this API.
 interface streams {
+    use error.{error};
     use poll.{pollable};
 
     /// An error for input-stream and output-stream operations.
@@ -20,26 +21,6 @@ interface streams {
         closed
     }
 
-    /// Contextual error information about the last failure that happened on
-    /// a read, write, or flush from an `input-stream` or `output-stream`.
-    ///
-    /// This type is returned through the `stream-error` type whenever an
-    /// operation on a stream directly fails or an error is discovered
-    /// after-the-fact, for example when a write's failure shows up through a
-    /// later `flush` or `check-write`.
-    ///
-    /// Interfaces such as `wasi:filesystem/types` provide functionality to
-    /// further "downcast" this error into interface-specific error information.
-    resource error {
-        /// Returns a string that's suitable to assist humans in debugging this
-        /// error.
-        ///
-        /// The returned string will change across platforms and hosts which
-        /// means that parsing it, for example, would be a
-        /// platform-compatibility hazard.
-        to-debug-string: func() -> string;
-    }
-
     /// An input bytestream.
     ///
     /// `input-stream`s are *non-blocking* to the extent practical on underlying
@@ -51,21 +32,20 @@ interface streams {
     resource input-stream {
         /// Perform a non-blocking read from the stream.
         ///
-        /// This function returns a list of bytes containing the data that was
-        /// read, along with a `stream-status` which, indicates whether further
-        /// reads are expected to produce data. The returned list will contain up to
-        /// `len` bytes; it may return fewer than requested, but not more. An
-        /// empty list and `stream-status:open` indicates no more data is
-        /// available at this time, and that the pollable given by `subscribe`
-        /// will be ready when more data is available.
+        /// This function returns a list of bytes containing the read data,
+        /// when successful. The returned list will contain up to `len` bytes;
+        /// it may return fewer than requested, but not more. The list is
+        /// empty when no bytes are available for reading at this time. The
+        /// pollable given by `subscribe` will be ready when more bytes are
+        /// available.
         ///
-        /// Once a stream has reached the end, subsequent calls to `read` or
-        /// `skip` will always report `stream-status:ended` rather than producing more
-        /// data.
+        /// This function fails with a `stream-error` when the operation
+        /// encounters an error, giving `last-operation-failed`, or when the
+        /// stream is closed, giving `closed`.
         ///
-        /// When the caller gives a `len` of 0, it represents a request to read 0
-        /// bytes. This read should  always succeed and return an empty list and
-        /// the current `stream-status`.
+        /// When the caller gives a `len` of 0, it represents a request to
+        /// read 0 bytes. If the stream is still open, this call should
+        /// succeed and return an empty list, or otherwise fail with `closed`.
         ///
         /// The `len` parameter is a `u64`, which could represent a list of u8 which
         /// is not possible to allocate in wasm32, or not desirable to allocate as
@@ -77,24 +57,16 @@ interface streams {
         ) -> result<list<u8>, stream-error>;
 
         /// Read bytes from a stream, after blocking until at least one byte can
-        /// be read. Except for blocking, identical to `read`.
+        /// be read. Except for blocking, behavior is identical to `read`.
         blocking-read: func(
             /// The maximum number of bytes to read
             len: u64
         ) -> result<list<u8>, stream-error>;
 
-        /// Skip bytes from a stream.
+        /// Skip bytes from a stream. Returns number of bytes skipped.
         ///
-        /// This is similar to the `read` function, but avoids copying the
-        /// bytes into the instance.
-        ///
-        /// Once a stream has reached the end, subsequent calls to read or
-        /// `skip` will always report end-of-stream rather than producing more
-        /// data.
-        ///
-        /// This function returns the number of bytes skipped, along with a
-        /// `stream-status` indicating whether the end of the stream was
-        /// reached. The returned value will be at most `len`; it may be less.
+        /// Behaves identical to `read`, except instead of returning a list
+        /// of bytes, returns the number of bytes consumed from the stream.
         skip: func(
             /// The maximum number of bytes to skip.
             len: u64,

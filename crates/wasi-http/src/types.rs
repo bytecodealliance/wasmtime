@@ -4,6 +4,7 @@
 use crate::{
     bindings::http::types::{self, Method, Scheme},
     body::{HostIncomingBody, HyperIncomingBody, HyperOutgoingBody},
+    dns_error, hyper_request_error,
 };
 use http_body_util::BodyExt;
 use hyper::header::HeaderName;
@@ -34,23 +35,24 @@ pub trait WasiHttpView: Send {
     fn new_incoming_request(
         &mut self,
         req: hyper::Request<HyperIncomingBody>,
-    ) -> wasmtime::Result<Resource<HostIncomingRequest>> {
+    ) -> wasmtime::Result<Resource<HostIncomingRequest>>
+    where
+        Self: Sized,
+    {
         let (parts, body) = req.into_parts();
         let body = HostIncomingBody::new(
             body,
             // TODO: this needs to be plumbed through
             std::time::Duration::from_millis(600 * 1000),
         );
-        Ok(self.table().push(HostIncomingRequest {
-            parts,
-            body: Some(body),
-        })?)
+        let incoming_req = HostIncomingRequest::new(self, parts, Some(body));
+        Ok(self.table().push(incoming_req)?)
     }
 
     fn new_response_outparam(
         &mut self,
         result: tokio::sync::oneshot::Sender<
-            Result<hyper::Response<HyperOutgoingBody>, types::Error>,
+            Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>,
         >,
     ) -> wasmtime::Result<Resource<HostResponseOutparam>> {
         let id = self.table().push(HostResponseOutparam { result })?;
@@ -69,6 +71,41 @@ pub trait WasiHttpView: Send {
 
     fn is_forbidden_header(&mut self, _name: &HeaderName) -> bool {
         false
+    }
+}
+
+/// Returns `true` when the header is forbidden according to this [`WasiHttpView`] implementation.
+pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName) -> bool {
+    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
+        hyper::header::CONNECTION,
+        HeaderName::from_static("keep-alive"),
+        hyper::header::PROXY_AUTHENTICATE,
+        hyper::header::PROXY_AUTHORIZATION,
+        HeaderName::from_static("proxy-connection"),
+        hyper::header::TE,
+        hyper::header::TRANSFER_ENCODING,
+        hyper::header::UPGRADE,
+        HeaderName::from_static("http2-settings"),
+    ];
+
+    FORBIDDEN_HEADERS.contains(name) || view.is_forbidden_header(name)
+}
+
+/// Removes forbidden headers from a [`hyper::HeaderMap`].
+pub(crate) fn remove_forbidden_headers(
+    view: &mut dyn WasiHttpView,
+    headers: &mut hyper::HeaderMap,
+) {
+    let forbidden_keys = Vec::from_iter(headers.keys().filter_map(|name| {
+        if is_forbidden_header(view, name) {
+            Some(name.clone())
+        } else {
+            None
+        }
+    }));
+
+    for name in forbidden_keys {
+        headers.remove(name);
     }
 }
 
@@ -108,16 +145,30 @@ async fn handler(
     first_byte_timeout: Duration,
     request: http::Request<HyperOutgoingBody>,
     between_bytes_timeout: Duration,
-) -> Result<IncomingResponseInternal, types::Error> {
+) -> Result<IncomingResponseInternal, types::ErrorCode> {
     let tcp_stream = TcpStream::connect(authority.clone())
         .await
-        .map_err(invalid_url)?;
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::AddrNotAvailable => {
+                dns_error("address not available".to_string(), 0)
+            }
+
+            _ => {
+                if e.to_string()
+                    .starts_with("failed to lookup address information")
+                {
+                    dns_error("address not available".to_string(), 0)
+                } else {
+                    types::ErrorCode::ConnectionRefused
+                }
+            }
+        })?;
 
     let (mut sender, worker) = if use_tls {
         #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
         {
-            return Err(crate::bindings::http::types::Error::UnexpectedError(
-                "unsupported architecture for SSL".to_string(),
+            return Err(crate::bindings::http::types::ErrorCode::InternalError(
+                Some("unsupported architecture for SSL".to_string()),
             ));
         }
 
@@ -141,18 +192,22 @@ async fn handler(
             let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(config));
             let mut parts = authority.split(":");
             let host = parts.next().unwrap_or(&authority);
-            let domain = rustls::ServerName::try_from(host)?;
-            let stream = connector
-                .connect(domain, tcp_stream)
-                .await
-                .map_err(|e| crate::bindings::http::types::Error::ProtocolError(e.to_string()))?;
+            let domain = rustls::ServerName::try_from(host).map_err(|e| {
+                tracing::warn!("dns lookup error: {e:?}");
+                dns_error("invalid dns name".to_string(), 0)
+            })?;
+            let stream = connector.connect(domain, tcp_stream).await.map_err(|e| {
+                tracing::warn!("tls protocol error: {e:?}");
+                types::ErrorCode::TlsProtocolError
+            })?;
 
             let (sender, conn) = timeout(
                 connect_timeout,
                 hyper::client::conn::http1::handshake(stream),
             )
             .await
-            .map_err(|_| timeout_error("connection"))??;
+            .map_err(|_| types::ErrorCode::ConnectionTimeout)?
+            .map_err(hyper_request_error)?;
 
             let worker = preview2::spawn(async move {
                 match conn.await {
@@ -172,7 +227,8 @@ async fn handler(
             hyper::client::conn::http1::handshake(tcp_stream),
         )
         .await
-        .map_err(|_| timeout_error("connection"))??;
+        .map_err(|_| types::ErrorCode::ConnectionTimeout)?
+        .map_err(hyper_request_error)?;
 
         let worker = preview2::spawn(async move {
             match conn.await {
@@ -187,9 +243,9 @@ async fn handler(
 
     let resp = timeout(first_byte_timeout, sender.send_request(request))
         .await
-        .map_err(|_| timeout_error("first byte"))?
-        .map_err(hyper_protocol_error)?
-        .map(|body| body.map_err(|e| e.into()).boxed());
+        .map_err(|_| types::ErrorCode::ConnectionReadTimeout)?
+        .map_err(hyper_request_error)?
+        .map(|body| body.map_err(hyper_request_error).boxed());
 
     Ok(IncomingResponseInternal {
         resp,
@@ -197,25 +253,6 @@ async fn handler(
         between_bytes_timeout,
     })
 }
-
-pub fn timeout_error(kind: &str) -> types::Error {
-    types::Error::TimeoutError(format!("{kind} timed out"))
-}
-
-pub fn http_protocol_error(e: http::Error) -> types::Error {
-    types::Error::ProtocolError(e.to_string())
-}
-
-pub fn hyper_protocol_error(e: hyper::Error) -> types::Error {
-    types::Error::ProtocolError(e.to_string())
-}
-
-fn invalid_url(e: std::io::Error) -> types::Error {
-    // TODO: DNS errors show up as a Custom io error, what subset of errors should we consider for
-    // InvalidUrl here?
-    types::Error::InvalidUrl(e.to_string())
-}
-
 impl From<http::Method> for types::Method {
     fn from(method: http::Method) -> Self {
         if method == http::Method::GET {
@@ -262,13 +299,24 @@ impl TryInto<http::Method> for types::Method {
 }
 
 pub struct HostIncomingRequest {
-    pub parts: http::request::Parts,
+    pub(crate) parts: http::request::Parts,
     pub body: Option<HostIncomingBody>,
+}
+
+impl HostIncomingRequest {
+    pub fn new(
+        view: &mut dyn WasiHttpView,
+        mut parts: http::request::Parts,
+        body: Option<HostIncomingBody>,
+    ) -> Self {
+        remove_forbidden_headers(view, &mut parts.headers);
+        Self { parts, body }
+    }
 }
 
 pub struct HostResponseOutparam {
     pub result:
-        tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::Error>>,
+        tokio::sync::oneshot::Sender<Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>>,
 }
 
 pub struct HostOutgoingRequest {
@@ -316,7 +364,7 @@ impl TryFrom<HostOutgoingResponse> for hyper::Response<HyperOutgoingBody> {
             Some(body) => builder.body(body),
             None => builder.body(
                 Empty::<bytes::Bytes>::new()
-                    .map_err(|_| unreachable!())
+                    .map_err(|_| unreachable!("Infallible error"))
                     .boxed(),
             ),
         }
@@ -347,11 +395,11 @@ pub struct IncomingResponseInternal {
 }
 
 type FutureIncomingResponseHandle =
-    AbortOnDropJoinHandle<anyhow::Result<Result<IncomingResponseInternal, types::Error>>>;
+    AbortOnDropJoinHandle<anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>>>;
 
 pub enum HostFutureIncomingResponse {
     Pending(FutureIncomingResponseHandle),
-    Ready(anyhow::Result<Result<IncomingResponseInternal, types::Error>>),
+    Ready(anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>>),
     Consumed,
 }
 
@@ -364,7 +412,9 @@ impl HostFutureIncomingResponse {
         matches!(self, Self::Ready(_))
     }
 
-    pub fn unwrap_ready(self) -> anyhow::Result<Result<IncomingResponseInternal, types::Error>> {
+    pub fn unwrap_ready(
+        self,
+    ) -> anyhow::Result<Result<IncomingResponseInternal, types::ErrorCode>> {
         match self {
             Self::Ready(res) => res,
             Self::Pending(_) | Self::Consumed => {

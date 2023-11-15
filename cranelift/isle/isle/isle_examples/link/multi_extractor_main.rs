@@ -1,8 +1,8 @@
 mod multi_extractor;
 
-use multi_extractor::ContextIter;
+use multi_extractor::{ContextIter, IntoContextIter};
 
-pub(crate) type ConstructorVec<T> = Vec<T>;
+const MAX_ISLE_RETURNS: usize = 100;
 
 #[derive(Clone)]
 pub enum A {
@@ -10,12 +10,13 @@ pub enum A {
     C,
 }
 
+#[derive(Default)]
 struct It {
     i: u32,
     arg: u32,
 }
 
-impl multi_extractor::ContextIter for It {
+impl ContextIter for It {
     type Context = Context;
     type Output = (A, u32);
     fn next(&mut self, _ctx: &mut Self::Context) -> Option<Self::Output> {
@@ -34,17 +35,29 @@ impl multi_extractor::ContextIter for It {
     }
 }
 
+impl IntoContextIter for It {
+    type Context = Context;
+    type IntoIter = It;
+    type Output = (A, u32);
+    fn into_context_iter(self) -> It {
+        self
+    }
+}
+
 struct Context;
 impl multi_extractor::Context for Context {
-    type e1_etor_iter = It;
-    fn e1_etor(&mut self, arg0: u32) -> It {
-        It { i: 0, arg: arg0 }
+    type e1_etor_returns = It;
+    fn e1_etor(&mut self, arg0: u32, returns: &mut It) {
+        returns.i = 0;
+        returns.arg = arg0;
     }
 }
 
 fn main() {
     let mut ctx = Context;
-    let x = multi_extractor::constructor_Rule(&mut ctx, 0xf0).next(&mut ctx);
-    let y = multi_extractor::constructor_Rule(&mut ctx, 0).next(&mut ctx);
+    let mut x = vec![];
+    multi_extractor::constructor_Rule(&mut ctx, 0xf0, &mut x);
+    let mut y = vec![];
+    multi_extractor::constructor_Rule(&mut ctx, 0, &mut y);
     println!("x = {:?} y = {:?}", x, y);
 }

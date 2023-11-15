@@ -1,7 +1,8 @@
 
 interface tcp {
-    use wasi:io/streams@0.2.0-rc-2023-11-05.{input-stream, output-stream};
-    use wasi:io/poll@0.2.0-rc-2023-11-05.{pollable};
+    use wasi:io/streams@0.2.0-rc-2023-11-10.{input-stream, output-stream};
+    use wasi:io/poll@0.2.0-rc-2023-11-10.{pollable};
+    use wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10.{duration};
     use network.{network, error-code, ip-socket-address, ip-address-family};
 
     enum shutdown-type {
@@ -125,8 +126,11 @@ interface tcp {
         /// The returned socket is bound and in the Connection state. The following properties are inherited from the listener socket:
         /// - `address-family`
         /// - `ipv6-only`
-        /// - `keep-alive`
-        /// - `unicast-hop-limit`
+        /// - `keep-alive-enabled`
+        /// - `keep-alive-idle-time`
+        /// - `keep-alive-interval`
+        /// - `keep-alive-count`
+        /// - `hop-limit`
         /// - `receive-buffer-size`
         /// - `send-buffer-size`
         ///
@@ -176,6 +180,11 @@ interface tcp {
         /// - <https://man.freebsd.org/cgi/man.cgi?query=getpeername&sektion=2&n=1>
         remote-address: func() -> result<ip-socket-address, error-code>;
 
+        /// Whether the socket is listening for new connections.
+        ///
+        /// Equivalent to the SO_ACCEPTCONN socket option.
+        is-listening: func() -> bool;
+
         /// Whether this is a IPv4 or IPv6 socket.
         ///
         /// Equivalent to the SO_DOMAIN socket option.
@@ -194,36 +203,87 @@ interface tcp {
 
         /// Hints the desired listen queue size. Implementations are free to ignore this.
         ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        ///
         /// # Typical errors
         /// - `not-supported`:        (set) The platform does not support changing the backlog size after the initial listen.
+        /// - `invalid-argument`:     (set) The provided value was 0.
         /// - `invalid-state`:        (set) The socket is already in the Connection state.
         set-listen-backlog-size: func(value: u64) -> result<_, error-code>;
 
+        /// Enables or disables keepalive.
+        ///
+        /// The keepalive behavior can be adjusted using:
+        /// - `keep-alive-idle-time`
+        /// - `keep-alive-interval`
+        /// - `keep-alive-count`
+        /// These properties can be configured while `keep-alive-enabled` is false, but only come into effect when `keep-alive-enabled` is true.
+        ///
         /// Equivalent to the SO_KEEPALIVE socket option.
-        keep-alive: func() -> result<bool, error-code>;
-        set-keep-alive: func(value: bool) -> result<_, error-code>;
+        keep-alive-enabled: func() -> result<bool, error-code>;
+        set-keep-alive-enabled: func(value: bool) -> result<_, error-code>;
+
+        /// Amount of time the connection has to be idle before TCP starts sending keepalive packets.
+        ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        /// I.e. after setting a value, reading the same setting back may return a different value.
+        ///
+        /// Equivalent to the TCP_KEEPIDLE socket option. (TCP_KEEPALIVE on MacOS)
+        ///
+        /// # Typical errors
+        /// - `invalid-argument`:     (set) The provided value was 0.
+        keep-alive-idle-time: func() -> result<duration, error-code>;
+        set-keep-alive-idle-time: func(value: duration) -> result<_, error-code>;
+
+        /// The time between keepalive packets.
+        ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        /// I.e. after setting a value, reading the same setting back may return a different value.
+        ///
+        /// Equivalent to the TCP_KEEPINTVL socket option.
+        ///
+        /// # Typical errors
+        /// - `invalid-argument`:     (set) The provided value was 0.
+        keep-alive-interval: func() -> result<duration, error-code>;
+        set-keep-alive-interval: func(value: duration) -> result<_, error-code>;
+
+        /// The maximum amount of keepalive packets TCP should send before aborting the connection.
+        ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        /// I.e. after setting a value, reading the same setting back may return a different value.
+        ///
+        /// Equivalent to the TCP_KEEPCNT socket option.
+        ///
+        /// # Typical errors
+        /// - `invalid-argument`:     (set) The provided value was 0.
+        keep-alive-count: func() -> result<u32, error-code>;
+        set-keep-alive-count: func(value: u32) -> result<_, error-code>;
 
         /// Equivalent to the IP_TTL & IPV6_UNICAST_HOPS socket options.
+        ///
+        /// If the provided value is 0, an `invalid-argument` error is returned.
         ///
         /// # Typical errors
         /// - `invalid-argument`:     (set) The TTL value must be 1 or higher.
         /// - `invalid-state`:        (set) The socket is already in the Connection state.
         /// - `invalid-state`:        (set) The socket is already in the Listener state.
-        unicast-hop-limit: func() -> result<u8, error-code>;
-        set-unicast-hop-limit: func(value: u8) -> result<_, error-code>;
+        hop-limit: func() -> result<u8, error-code>;
+        set-hop-limit: func(value: u8) -> result<_, error-code>;
 
         /// The kernel buffer space reserved for sends/receives on this socket.
         ///
-        /// Note #1: an implementation may choose to cap or round the buffer size when setting the value.
-        ///     In other words, after setting a value, reading the same setting back may return a different value.
-        ///
-        /// Note #2: there is not necessarily a direct relationship between the kernel buffer size and the bytes of
-        ///     actual data to be sent/received by the application, because the kernel might also use the buffer space
-        ///     for internal metadata structures.
+        /// If the provided value is 0, an `invalid-argument` error is returned.
+        /// Any other value will never cause an error, but it might be silently clamped and/or rounded.
+        /// I.e. after setting a value, reading the same setting back may return a different value.
         ///
         /// Equivalent to the SO_RCVBUF and SO_SNDBUF socket options.
         ///
         /// # Typical errors
+        /// - `invalid-argument`:     (set) The provided value was 0.
         /// - `invalid-state`:        (set) The socket is already in the Connection state.
         /// - `invalid-state`:        (set) The socket is already in the Listener state.
         receive-buffer-size: func() -> result<u64, error-code>;
