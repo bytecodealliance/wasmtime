@@ -175,7 +175,6 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
         path: String,
         oflags: sync_filesystem::OpenFlags,
         flags: sync_filesystem::DescriptorFlags,
-        mode: sync_filesystem::Modes,
     ) -> FsResult<Resource<sync_filesystem::Descriptor>> {
         in_tokio(async {
             async_filesystem::HostDescriptor::open_at(
@@ -185,7 +184,6 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
                 path,
                 oflags.into(),
                 flags.into(),
-                mode.into(),
             )
             .await
         })
@@ -242,63 +240,6 @@ impl<T: async_filesystem::HostDescriptor> sync_filesystem::HostDescriptor for T 
         path: String,
     ) -> FsResult<()> {
         in_tokio(async { async_filesystem::HostDescriptor::unlink_file_at(self, fd, path).await })
-    }
-
-    fn access_at(
-        &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-        path_flags: sync_filesystem::PathFlags,
-        path: String,
-        access: sync_filesystem::AccessType,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::access_at(
-                self,
-                fd,
-                path_flags.into(),
-                path,
-                access.into(),
-            )
-            .await
-        })
-    }
-
-    fn change_file_permissions_at(
-        &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-        path_flags: sync_filesystem::PathFlags,
-        path: String,
-        mode: sync_filesystem::Modes,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::change_file_permissions_at(
-                self,
-                fd,
-                path_flags.into(),
-                path,
-                mode.into(),
-            )
-            .await
-        })
-    }
-
-    fn change_directory_permissions_at(
-        &mut self,
-        fd: Resource<sync_filesystem::Descriptor>,
-        path_flags: sync_filesystem::PathFlags,
-        path: String,
-        mode: sync_filesystem::Modes,
-    ) -> FsResult<()> {
-        in_tokio(async {
-            async_filesystem::HostDescriptor::change_directory_permissions_at(
-                self,
-                fd,
-                path_flags.into(),
-                path,
-                mode.into(),
-            )
-            .await
-        })
     }
 
     fn read_via_stream(
@@ -564,30 +505,6 @@ impl From<sync_filesystem::DescriptorFlags> for async_filesystem::DescriptorFlag
             out |= Self::MUTATE_DIRECTORY;
         }
         out
-    }
-}
-impl From<sync_filesystem::Modes> for async_filesystem::Modes {
-    fn from(other: sync_filesystem::Modes) -> Self {
-        let mut out = Self::empty();
-        if other.contains(sync_filesystem::Modes::READABLE) {
-            out |= Self::READABLE;
-        }
-        if other.contains(sync_filesystem::Modes::WRITABLE) {
-            out |= Self::WRITABLE;
-        }
-        if other.contains(sync_filesystem::Modes::EXECUTABLE) {
-            out |= Self::EXECUTABLE;
-        }
-        out
-    }
-}
-impl From<sync_filesystem::AccessType> for async_filesystem::AccessType {
-    fn from(other: sync_filesystem::AccessType) -> Self {
-        use sync_filesystem::AccessType;
-        match other {
-            AccessType::Access(modes) => Self::Access(modes.into()),
-            AccessType::Exists => Self::Exists,
-        }
     }
 }
 impl From<async_filesystem::MetadataHashValue> for sync_filesystem::MetadataHashValue {

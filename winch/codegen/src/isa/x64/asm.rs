@@ -1103,4 +1103,15 @@ impl Assembler {
             trap_code,
         });
     }
+
+    /// Load effective address.
+    pub fn lea(&mut self, addr: &Address, dst: Reg, size: OperandSize) {
+        let addr =
+            Self::to_synthetic_amode(addr, &mut self.pool, &mut self.constants, &mut self.buffer);
+        self.emit(Inst::LoadEffectiveAddress {
+            addr,
+            dst: dst.into(),
+            size: size.into(),
+        });
+    }
 }

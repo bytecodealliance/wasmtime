@@ -1,14 +1,15 @@
 use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::{self, local::LocalSlot},
-    codegen::{CodeGenContext, TableData},
+    codegen::{ptr_type_from_ptr_size, CodeGenContext, TableData},
     isa::reg::Reg,
     masm::{
         CalleeKind, DivKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm,
-        OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, StackSlot, TrapCode,
+        OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, StackSlot, TrapCode,
     },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
+use wasmtime_environ::PtrSize;
 
 /// Aarch64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -16,14 +17,17 @@ pub(crate) struct MacroAssembler {
     asm: Assembler,
     /// Stack pointer offset.
     sp_offset: u32,
+    /// The target pointer size.
+    ptr_size: OperandSize,
 }
 
 impl MacroAssembler {
     /// Create an Aarch64 MacroAssembler.
-    pub fn new(shared_flags: settings::Flags) -> Self {
+    pub fn new(ptr_size: impl PtrSize, shared_flags: settings::Flags) -> Self {
         Self {
             asm: Assembler::new(shared_flags),
             sp_offset: 0u32,
+            ptr_size: ptr_type_from_ptr_size(ptr_size.size()).into(),
         }
     }
 }
@@ -78,8 +82,8 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn reset_stack_pointer(&mut self, offset: u32) {
-        self.sp_offset = offset;
+    fn reset_stack_pointer(&mut self, offset: SPOffset) {
+        self.sp_offset = offset.as_u32();
     }
 
     fn local_address(&mut self, local: &LocalSlot) -> Address {
@@ -111,11 +115,11 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn address_from_sp(&self, _offset: u32) -> Self::Address {
+    fn address_from_sp(&self, _offset: SPOffset) -> Self::Address {
         todo!()
     }
 
-    fn address_at_sp(&self, _offset: u32) -> Self::Address {
+    fn address_at_sp(&self, _offset: SPOffset) -> Self::Address {
         todo!()
     }
 
@@ -123,8 +127,8 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn store_ptr(&mut self, _src: Reg, _dst: Self::Address) {
-        todo!()
+    fn store_ptr(&mut self, src: Reg, dst: Self::Address) {
+        self.store(src.into(), dst, self.ptr_size);
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
@@ -161,12 +165,16 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn load_addr(&mut self, _src: Self::Address, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
     fn pop(&mut self, _dst: Reg, _size: OperandSize) {
         todo!()
     }
 
-    fn sp_offset(&self) -> u32 {
-        self.sp_offset
+    fn sp_offset(&self) -> SPOffset {
+        SPOffset::from_u32(self.sp_offset)
     }
 
     fn finalize(self) -> MachBufferFinalized<Final> {
@@ -338,7 +346,7 @@ impl Masm for MacroAssembler {
         self.asm.str(reg, address, OperandSize::S64);
 
         StackSlot {
-            offset: self.sp_offset,
+            offset: SPOffset::from_u32(self.sp_offset),
             size,
         }
     }

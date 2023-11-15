@@ -878,7 +878,9 @@ where
             if !is_outermost {
                 control.emit_end(self.masm, &mut self.context);
             } else {
-                self.context.pop_abi_results(control.result(), self.masm);
+                if let Some(data) = control.results() {
+                    self.context.pop_abi_results(data, self.masm);
+                }
                 control.bind_exit_label(self.masm);
             }
         }
@@ -912,10 +914,8 @@ where
         }
     }
 
-    // TODO: verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
-        let (ty, slot) = self.context.frame.get_local_address(index, self.masm);
-        let src = self.emit_set_local(slot, ty.into());
+        let src = self.emit_set_local(index);
         self.context.free_reg(src);
     }
 
@@ -935,7 +935,7 @@ where
         // push the funcref to the value stack.
         match self.env.translation.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
-                let funcref_ptr = self.context.stack.peek().map(|v| v.get_reg()).unwrap();
+                let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
                 self.masm
                     .trapz(funcref_ptr.into(), TrapCode::IndirectCallToNull);
                 self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
@@ -1116,8 +1116,9 @@ where
     fn visit_nop(&mut self) {}
 
     fn visit_if(&mut self, blockty: BlockType) {
-        self.control_frames.push(ControlStackFrame::if_(
-            &self.env.resolve_block_type(blockty),
+        self.control_frames.push(ControlStackFrame::r#if(
+            self.env.resolve_block_results_data::<M::ABI>(blockty),
+            self.env.resolve_block_type_info(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1137,15 +1138,16 @@ where
 
     fn visit_block(&mut self, blockty: BlockType) {
         self.control_frames.push(ControlStackFrame::block(
-            &self.env.resolve_block_type(blockty),
+            self.env.resolve_block_results_data::<M::ABI>(blockty),
+            self.env.resolve_block_type_info(blockty),
             self.masm,
             &mut self.context,
         ));
     }
 
     fn visit_loop(&mut self, blockty: BlockType) {
-        self.control_frames.push(ControlStackFrame::loop_(
-            &self.env.resolve_block_type(blockty),
+        self.control_frames.push(ControlStackFrame::r#loop(
+            self.env.resolve_block_type_info(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -1156,7 +1158,9 @@ where
         let frame = &mut self.control_frames[index];
         self.context
             .unconditional_jump(frame, self.masm, |masm, cx, frame| {
-                cx.pop_abi_results(&frame.as_target_result(), masm);
+                if let Some(r) = frame.as_target_results() {
+                    cx.pop_abi_results(r, masm);
+                }
             });
     }
 
@@ -1164,14 +1168,19 @@ where
         let index = control_index(depth, self.control_frames.len());
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
-        let result = frame.as_target_result();
-        let top = self.context.maybe_without1::<TypedReg, M, _>(
-            result.result_reg(),
-            self.masm,
-            |ctx, masm| ctx.pop_to_reg(masm, None),
-        );
-        self.context.pop_abi_results(&result, self.masm);
-        self.context.push_abi_results(&result, self.masm);
+
+        let top = if let Some(data) = frame.as_target_results() {
+            let top = self.context.without::<TypedReg, M, _>(
+                data.results.regs(),
+                self.masm,
+                |ctx, masm| ctx.pop_to_reg(masm, None),
+            );
+            self.context.top_abi_results(data, self.masm);
+            top
+        } else {
+            self.context.pop_to_reg(self.masm, None)
+        };
+
         self.masm.branch(
             IntCmpKind::Ne,
             top.reg.into(),
@@ -1191,15 +1200,26 @@ where
         let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
 
         let default_index = control_index(targets.default(), self.control_frames.len());
-        let default_result = self.control_frames[default_index].as_target_result();
-        let (index, tmp) = self.context.maybe_without1::<(TypedReg, _), M, _>(
-            default_result.result_reg(),
-            self.masm,
-            |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
-        );
+        let default_result = self.control_frames[default_index].as_target_results();
 
-        self.context.pop_abi_results(&default_result, self.masm);
-        self.context.push_abi_results(&default_result, self.masm);
+        let (index, tmp) = if let Some(data) = default_result {
+            let index_and_tmp = self.context.without::<(TypedReg, _), M, _>(
+                data.results.regs(),
+                self.masm,
+                |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
+            );
+
+            // Materialize any constants or locals into their result representation,
+            // so that when reachability is restored, they are correctly located.
+            self.context.top_abi_results(data, self.masm);
+            index_and_tmp
+        } else {
+            (
+                self.context.pop_to_reg(self.masm, None),
+                self.context.any_gpr(self.masm),
+            )
+        };
+
         self.masm.jmp_table(&labels, index.into(), tmp);
 
         for (t, l) in targets
@@ -1209,18 +1229,16 @@ where
             .zip(labels.iter())
         {
             let control_index = control_index(t.unwrap(), self.control_frames.len());
+            let frame = &mut self.control_frames[control_index];
 
+            // NB: We don't perform any result handling as it was
+            // already taken care of above before jumping to the
+            // jump table.
             self.masm.bind(*l);
-            self.context.unconditional_jump(
-                &mut self.control_frames[control_index],
-                self.masm,
-                // NB: We don't perform any result handling as it was
-                // already taken care of above before jumping to the
-                // jump table above. The call to `unconditional_jump`,
-                // will stil take care of the proper stack alignment.
-                |_, _, _| {},
-            )
+            self.masm.jmp(*frame.label());
+            frame.set_as_target();
         }
+        self.context.reachable = false;
         self.context.free_reg(index.reg);
         self.context.free_reg(tmp);
     }
@@ -1233,7 +1251,9 @@ where
         let outermost = &mut self.control_frames[0];
         self.context
             .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
-                cx.pop_abi_results(&frame.as_target_result(), masm);
+                if let Some(data) = frame.as_target_results() {
+                    cx.pop_abi_results(data, masm);
+                }
             });
     }
 
@@ -1247,8 +1267,7 @@ where
     }
 
     fn visit_local_tee(&mut self, index: u32) {
-        let (ty, slot) = self.context.frame.get_local_address(index, self.masm);
-        let typed_reg = self.emit_set_local(slot, ty.into());
+        let typed_reg = self.emit_set_local(index);
         self.context.stack.push(typed_reg.into());
     }
 
@@ -1300,7 +1319,7 @@ where
     wasmparser::for_each_operator!(def_unsupported);
 }
 
-impl<'a, 'b, 'c, M> CodeGen<'a, 'b, 'c, M>
+impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
 where
     M: MacroAssembler,
 {

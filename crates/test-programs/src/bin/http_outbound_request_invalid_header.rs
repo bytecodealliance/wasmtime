@@ -1,4 +1,4 @@
-use test_programs::wasi::http::types::{HeaderError, Headers};
+use test_programs::wasi::http::types::{HeaderError, Headers, OutgoingRequest};
 
 fn main() {
     let hdrs = Headers::new();
@@ -56,5 +56,23 @@ fn main() {
     assert!(matches!(
         Headers::from_list(&[("ok-header-name".to_owned(), b"bad\nvalue".to_vec())]),
         Err(HeaderError::InvalidSyntax)
+    ));
+
+    let req = OutgoingRequest::new(hdrs);
+    let hdrs = req.headers();
+
+    assert!(matches!(
+        hdrs.set(&"Content-Length".to_owned(), &[b"10".to_vec()]),
+        Err(HeaderError::Immutable),
+    ));
+
+    assert!(matches!(
+        hdrs.append(&"Content-Length".to_owned(), &b"10".to_vec()),
+        Err(HeaderError::Immutable),
+    ));
+
+    assert!(matches!(
+        hdrs.delete(&"Content-Length".to_owned()),
+        Err(HeaderError::Immutable),
     ));
 }

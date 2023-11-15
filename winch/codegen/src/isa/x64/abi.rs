@@ -1,6 +1,6 @@
 use super::regs;
 use crate::{
-    abi::{ABIArg, ABIResult, ABISig, ABI},
+    abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI},
     isa::{reg::Reg, CallingConvention},
     masm::OperandSize,
 };
@@ -103,58 +103,63 @@ impl ABI for X64ABI {
         call_conv: &CallingConvention,
     ) -> ABISig {
         assert!(call_conv.is_fastcall() || call_conv.is_systemv() || call_conv.is_default());
-
-        if returns.len() > 1 {
-            panic!("multi-value not supported");
-        }
-
         let is_fastcall = call_conv.is_fastcall();
         // In the fastcall calling convention, the callee gets a contiguous
         // stack area of 32 bytes (4 register arguments) just before its frame.
         // See
         // https://learn.microsoft.com/en-us/cpp/build/stack-usage?view=msvc-170#stack-allocation
-        let (mut stack_offset, mut index_env) = if is_fastcall {
+        let (params_stack_offset, mut params_index_env) = if is_fastcall {
             (32, RegIndexEnv::with_absolute_count())
         } else {
             (0, RegIndexEnv::default())
         };
 
-        let params: SmallVec<[ABIArg; 6]> = params
-            .iter()
-            .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env, is_fastcall))
-            .collect();
+        let results = Self::abi_results(returns, call_conv);
+        let params = ABIParams::from::<_, Self>(
+            params,
+            params_stack_offset,
+            results.has_stack_results(),
+            |ty, stack_offset| {
+                Self::to_abi_operand(
+                    ty,
+                    stack_offset,
+                    &mut params_index_env,
+                    call_conv,
+                    ParamsOrReturns::Params,
+                )
+            },
+        );
 
-        let result = Self::result(returns, call_conv);
-        ABISig::new(params, result, stack_offset)
+        ABISig::new(params, results)
     }
 
     fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
         Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
     }
 
-    fn result(returns: &[WasmType], _call_conv: &CallingConvention) -> ABIResult {
-        // This invariant will be lifted once support for multi-value is added.
-        assert!(returns.len() <= 1, "multi-value not supported");
-        let ty = returns.get(0).copied();
-        ty.map(|ty| {
-            let reg = match ty {
-                // The `Default`, `WasmtimeFastcall` and `WasmtimeSystemV use `rax` and `xmm0`.
-                // NOTE This should be updated when supporting multi-value.
-                WasmType::I32 | WasmType::I64 => regs::rax(),
-                WasmType::F32 | WasmType::F64 => regs::xmm0(),
-                WasmType::Ref(rt) => {
-                    assert!(rt.heap_type == WasmHeapType::Func);
-                    regs::rax()
-                }
-                t => panic!("Unsupported return type {:?}", t),
-            };
-            ABIResult::reg(ty, reg)
+    fn abi_results(returns: &[WasmType], call_conv: &CallingConvention) -> ABIResults {
+        // Use absolute count for results given that for Winch's
+        // default CallingConvention only one register is used for results
+        // independent of the register class. This also aligns with how
+        // multiple results are handled by Wasmtime.
+        let mut results_index_env = RegIndexEnv::with_absolute_count();
+        ABIResults::from(returns, call_conv, |ty, offset| {
+            Self::to_abi_operand(
+                ty,
+                offset,
+                &mut results_index_env,
+                call_conv,
+                ParamsOrReturns::Returns,
+            )
         })
-        .unwrap_or_else(|| ABIResult::void())
     }
 
     fn scratch_reg() -> Reg {
         regs::scratch()
+    }
+
+    fn float_scratch_reg() -> Reg {
+        regs::scratch_xmm()
     }
 
     fn fp_reg() -> Reg {
@@ -173,85 +178,140 @@ impl ABI for X64ABI {
         regs::callee_saved(call_conv)
     }
 
-    fn stack_arg_slot_size_for_type(ty: WasmType) -> u32 {
+    fn stack_slot_size() -> u32 {
+        Self::word_bytes()
+    }
+
+    fn sizeof(ty: &WasmType) -> u32 {
         match ty {
             WasmType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => Self::word_bytes(),
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
-            WasmType::F64 | WasmType::I32 | WasmType::I64 => Self::word_bytes(),
-            WasmType::F32 => Self::word_bytes() / 2,
+            WasmType::F64 | WasmType::I64 => Self::word_bytes(),
+            WasmType::F32 | WasmType::I32 => Self::word_bytes() / 2,
             ty => unimplemented!("Support for WasmType: {ty}"),
         }
     }
 }
 
 impl X64ABI {
-    fn to_abi_arg(
+    fn to_abi_operand(
         wasm_arg: &WasmType,
-        stack_offset: &mut u32,
+        stack_offset: u32,
         index_env: &mut RegIndexEnv,
-        fastcall: bool,
-    ) -> ABIArg {
+        call_conv: &CallingConvention,
+        params_or_returns: ParamsOrReturns,
+    ) -> (ABIOperand, u32) {
         let (reg, ty) = match wasm_arg {
             ty @ WasmType::Ref(rt) => match rt.heap_type {
-                WasmHeapType::Func => (Self::int_reg_for(index_env.next_gpr(), fastcall), ty),
+                WasmHeapType::Func => (
+                    Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
+                    ty,
+                ),
                 ht => unimplemented!("Support for WasmHeapType: {ht}"),
             },
 
-            ty @ (WasmType::I32 | WasmType::I64) => {
-                (Self::int_reg_for(index_env.next_gpr(), fastcall), ty)
-            }
+            ty @ (WasmType::I32 | WasmType::I64) => (
+                Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
+                ty,
+            ),
 
-            ty @ (WasmType::F32 | WasmType::F64) => {
-                (Self::float_reg_for(index_env.next_fpr(), fastcall), ty)
-            }
+            ty @ (WasmType::F32 | WasmType::F64) => (
+                Self::float_reg_for(index_env.next_fpr(), call_conv, params_or_returns),
+                ty,
+            ),
 
             ty => unimplemented!("Support for argument of WasmType: {ty}"),
         };
 
+        let ty_size = <Self as ABI>::sizeof(wasm_arg);
         let default = || {
-            let arg = ABIArg::stack_offset(*stack_offset, *ty);
-            let size = Self::stack_arg_slot_size_for_type(*ty);
-            *stack_offset += size;
-            arg
+            let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size);
+            let slot_size = Self::stack_slot_size();
+            // Stack slots for parameters are aligned to a fixed slot size,
+            // in the case of x64, 8 bytes.
+            // Stack slots for returns are type-size aligned.
+            let next_stack = if params_or_returns == ParamsOrReturns::Params {
+                align_to(stack_offset, slot_size) + slot_size
+            } else {
+                align_to(stack_offset, ty_size) + ty_size
+            };
+            (arg, next_stack)
         };
 
-        reg.map_or_else(default, |reg| ABIArg::reg(reg, *ty))
+        reg.map_or_else(default, |reg| {
+            (ABIOperand::reg(reg, *ty, ty_size), stack_offset)
+        })
     }
 
-    fn int_reg_for(index: u8, fastcall: bool) -> Option<Reg> {
-        match (fastcall, index) {
-            (false, 0) => Some(regs::rdi()),
-            (false, 1) => Some(regs::rsi()),
-            (false, 2) => Some(regs::rdx()),
-            (false, 3) => Some(regs::rcx()),
-            (false, 4) => Some(regs::r8()),
-            (false, 5) => Some(regs::r9()),
-            (true, 0) => Some(regs::rcx()),
-            (true, 1) => Some(regs::rdx()),
-            (true, 2) => Some(regs::r8()),
-            (true, 3) => Some(regs::r9()),
-            _ => None,
+    fn int_reg_for(
+        index: u8,
+        call_conv: &CallingConvention,
+        params_or_returns: ParamsOrReturns,
+    ) -> Option<Reg> {
+        use ParamsOrReturns::*;
+
+        if call_conv.is_fastcall() {
+            return match (index, params_or_returns) {
+                (0, Params) => Some(regs::rcx()),
+                (1, Params) => Some(regs::rdx()),
+                (2, Params) => Some(regs::r8()),
+                (3, Params) => Some(regs::r9()),
+                (0, Returns) => Some(regs::rax()),
+                _ => None,
+            };
         }
+
+        if call_conv.is_systemv() || call_conv.is_default() {
+            return match (index, params_or_returns) {
+                (0, Params) => Some(regs::rdi()),
+                (1, Params) => Some(regs::rsi()),
+                (2, Params) => Some(regs::rdx()),
+                (3, Params) => Some(regs::rcx()),
+                (4, Params) => Some(regs::r8()),
+                (5, Params) => Some(regs::r9()),
+                (0, Returns) => Some(regs::rax()),
+                _ => None,
+            };
+        }
+
+        None
     }
 
-    fn float_reg_for(index: u8, fastcall: bool) -> Option<Reg> {
-        match (fastcall, index) {
-            (false, 0) => Some(regs::xmm0()),
-            (false, 1) => Some(regs::xmm1()),
-            (false, 2) => Some(regs::xmm2()),
-            (false, 3) => Some(regs::xmm3()),
-            (false, 4) => Some(regs::xmm4()),
-            (false, 5) => Some(regs::xmm5()),
-            (false, 6) => Some(regs::xmm6()),
-            (false, 7) => Some(regs::xmm7()),
-            (true, 0) => Some(regs::xmm0()),
-            (true, 1) => Some(regs::xmm1()),
-            (true, 2) => Some(regs::xmm2()),
-            (true, 3) => Some(regs::xmm3()),
-            _ => None,
+    fn float_reg_for(
+        index: u8,
+        call_conv: &CallingConvention,
+        params_or_returns: ParamsOrReturns,
+    ) -> Option<Reg> {
+        use ParamsOrReturns::*;
+        if call_conv.is_fastcall() {
+            return match (index, params_or_returns) {
+                (0, Params) => Some(regs::xmm0()),
+                (1, Params) => Some(regs::xmm1()),
+                (2, Params) => Some(regs::xmm2()),
+                (3, Params) => Some(regs::xmm3()),
+                (0, Returns) => Some(regs::xmm0()),
+                _ => None,
+            };
         }
+
+        if call_conv.is_systemv() || call_conv.is_default() {
+            return match (index, params_or_returns) {
+                (0, Params) => Some(regs::xmm0()),
+                (1, Params) => Some(regs::xmm1()),
+                (2, Params) => Some(regs::xmm2()),
+                (3, Params) => Some(regs::xmm3()),
+                (4, Params) => Some(regs::xmm4()),
+                (5, Params) => Some(regs::xmm5()),
+                (6, Params) => Some(regs::xmm6()),
+                (7, Params) => Some(regs::xmm7()),
+                (0, Returns) => Some(regs::xmm0()),
+                _ => None,
+            };
+        }
+
+        None
     }
 }
 
@@ -259,7 +319,7 @@ impl X64ABI {
 mod tests {
     use super::{RegIndexEnv, X64ABI};
     use crate::{
-        abi::{ABIArg, ABI},
+        abi::{ABIOperand, ABI},
         isa::reg::Reg,
         isa::x64::regs,
         isa::CallingConvention,
@@ -305,6 +365,31 @@ mod tests {
         match_reg_arg(params.get(5).unwrap(), I32, regs::r9());
         match_stack_arg(params.get(6).unwrap(), I64, 0);
         match_stack_arg(params.get(7).unwrap(), I32, 8);
+    }
+
+    #[test]
+    fn int_abi_sig_multi_returns() {
+        let wasm_sig = WasmFuncType::new(
+            [I32, I64, I32, I64, I32, I32, I64, I32].into(),
+            [I32, I32, I32].into(),
+        );
+
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let params = sig.params;
+        let results = sig.results;
+
+        match_reg_arg(params.get(0).unwrap(), I32, regs::rdi());
+        match_reg_arg(params.get(1).unwrap(), I64, regs::rsi());
+        match_reg_arg(params.get(2).unwrap(), I32, regs::rdx());
+        match_reg_arg(params.get(3).unwrap(), I64, regs::rcx());
+        match_reg_arg(params.get(4).unwrap(), I32, regs::r8());
+        match_reg_arg(params.get(5).unwrap(), I32, regs::r9());
+        match_stack_arg(params.get(6).unwrap(), I64, 0);
+        match_stack_arg(params.get(7).unwrap(), I32, 8);
+
+        match_stack_arg(results.get(0).unwrap(), I32, 4);
+        match_stack_arg(results.get(1).unwrap(), I32, 0);
+        match_reg_arg(results.get(2).unwrap(), I32, regs::rax());
     }
 
     #[test]
@@ -356,7 +441,7 @@ mod tests {
             [].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WasmtimeSystemV);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::SystemV);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
@@ -388,9 +473,37 @@ mod tests {
         match_stack_arg(params.get(5).unwrap(), F32, 40);
     }
 
-    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_reg: Reg) {
+    #[test]
+    fn fastcall_call_conv_multi_returns() {
+        let wasm_sig = WasmFuncType::new(
+            [F32, I32, I64, F64, I32, F32, F64, F32, F64].into(),
+            [I32, F32, I32, F32, I64].into(),
+        );
+
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WindowsFastcall);
+        let params = sig.params;
+        let results = sig.results;
+
+        match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
+        match_reg_arg(params.get(1).unwrap(), I32, regs::rdx());
+        match_reg_arg(params.get(2).unwrap(), I64, regs::r8());
+        match_reg_arg(params.get(3).unwrap(), F64, regs::xmm3());
+        // Each argument stack slot is 8 bytes.
+        match_stack_arg(params.get(4).unwrap(), I32, 32);
+        match_stack_arg(params.get(5).unwrap(), F32, 40);
+
+        match_reg_arg(results.get(0).unwrap(), I32, regs::rax());
+
+        match_stack_arg(results.get(1).unwrap(), F32, 0);
+        match_stack_arg(results.get(2).unwrap(), I32, 4);
+        match_stack_arg(results.get(3).unwrap(), F32, 8);
+        match_stack_arg(results.get(4).unwrap(), I64, 12);
+    }
+
+    #[cfg(test)]
+    fn match_reg_arg(abi_arg: &ABIOperand, expected_ty: WasmType, expected_reg: Reg) {
         match abi_arg {
-            &ABIArg::Reg { reg, ty } => {
+            &ABIOperand::Reg { reg, ty, .. } => {
                 assert_eq!(reg, expected_reg);
                 assert_eq!(ty, expected_ty);
             }
@@ -398,13 +511,14 @@ mod tests {
         }
     }
 
-    fn match_stack_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_offset: u32) {
+    #[cfg(test)]
+    fn match_stack_arg(abi_arg: &ABIOperand, expected_ty: WasmType, expected_offset: u32) {
         match abi_arg {
-            &ABIArg::Stack { offset, ty } => {
+            &ABIOperand::Stack { offset, ty, .. } => {
                 assert_eq!(offset, expected_offset);
                 assert_eq!(ty, expected_ty);
             }
-            stack => panic!("Expected stack argument, got {:?}", stack),
+            reg => panic!("Expected stack argument, got {:?}", reg),
         }
     }
 }

@@ -487,9 +487,6 @@ impl<T: WasiView> HostDescriptor for T {
         path: String,
         oflags: types::OpenFlags,
         flags: types::DescriptorFlags,
-        // TODO: These are the permissions to use when creating a new file.
-        // Not implemented yet.
-        _mode: types::Modes,
     ) -> FsResult<Resource<types::Descriptor>> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt, OpenOptionsMaybeDirExt};
         use system_interface::fs::{FdFlags, GetSetFdFlags};
@@ -696,36 +693,6 @@ impl<T: WasiView> HostDescriptor for T {
         }
         Ok(d.spawn_blocking(move |d| d.remove_file_or_symlink(&path))
             .await?)
-    }
-
-    async fn access_at(
-        &mut self,
-        _fd: Resource<types::Descriptor>,
-        _path_flags: types::PathFlags,
-        _path: String,
-        _access: types::AccessType,
-    ) -> FsResult<()> {
-        todo!("filesystem access_at is not implemented")
-    }
-
-    async fn change_file_permissions_at(
-        &mut self,
-        _fd: Resource<types::Descriptor>,
-        _path_flags: types::PathFlags,
-        _path: String,
-        _mode: types::Modes,
-    ) -> FsResult<()> {
-        todo!("filesystem change_file_permissions_at is not implemented")
-    }
-
-    async fn change_directory_permissions_at(
-        &mut self,
-        _fd: Resource<types::Descriptor>,
-        _path_flags: types::PathFlags,
-        _path: String,
-        _mode: types::Modes,
-    ) -> FsResult<()> {
-        todo!("filesystem change_directory_permissions_at is not implemented")
     }
 
     fn read_via_stream(

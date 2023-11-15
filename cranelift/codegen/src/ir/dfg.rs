@@ -551,10 +551,15 @@ struct ValueDataPacked(u64);
 /// (and is implied by `mask`), by translating 2^32-1 (0xffffffff)
 /// into 2^n-1 and panic'ing on 2^n..2^32-1.
 fn encode_narrow_field(x: u32, bits: u8) -> u32 {
+    let max = (1 << bits) - 1;
     if x == 0xffff_ffff {
-        (1 << bits) - 1
+        max
     } else {
-        debug_assert!(x < (1 << bits));
+        debug_assert!(
+            x < max,
+            "{x} does not fit into {bits} bits (must be less than {max} to \
+             allow for a 0xffffffff sentinal)"
+        );
         x
     }
 }
@@ -630,7 +635,7 @@ impl From<ValueData> for ValueDataPacked {
                 Self::make(Self::TAG_ALIAS, ty, 0, original.as_bits())
             }
             ValueData::Union { ty, x, y } => {
-                Self::make(Self::TAG_ALIAS, ty, x.as_bits(), y.as_bits())
+                Self::make(Self::TAG_UNION, ty, x.as_bits(), y.as_bits())
             }
         }
     }

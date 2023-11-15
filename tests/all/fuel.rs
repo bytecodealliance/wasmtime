@@ -220,3 +220,40 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
     let consumed_fuel = init_fuel - store.get_fuel().unwrap();
     assert!(consumed_fuel > 0);
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn get_fuel_clamps_at_zero() -> Result<()> {
+    let engine = Engine::new(Config::new().consume_fuel(true))?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+(module
+  (func $add2 (export "add2") (param $n i32) (result i32)
+    (i32.add (local.get $n) (i32.const 2))
+  )
+)
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let add2 = instance.get_typed_func::<i32, i32>(&mut store, "add2")?;
+
+    // Start with 6 fuel and one invocation of this function should cost 4 fuel
+    store.set_fuel(6)?;
+    assert_eq!(store.get_fuel()?, 6);
+    add2.call(&mut store, 10)?;
+    assert_eq!(store.get_fuel()?, 2);
+
+    // One more invocation of the function would technically take us to -2 fuel,
+    // but that's not representable, so the store should report 0 fuel after
+    // this completes.
+    add2.call(&mut store, 10)?;
+    assert_eq!(store.get_fuel()?, 0);
+
+    // Any further attempts should fail.
+    assert!(add2.call(&mut store, 10).is_err());
+
+    Ok(())
+}

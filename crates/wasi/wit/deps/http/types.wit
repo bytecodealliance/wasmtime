@@ -2,9 +2,10 @@
 /// HTTP Requests and Responses, both incoming and outgoing, as well as
 /// their headers, trailers, and bodies.
 interface types {
-  use wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-05.{duration};
-  use wasi:io/streams@0.2.0-rc-2023-11-05.{input-stream, output-stream};
-  use wasi:io/poll@0.2.0-rc-2023-11-05.{pollable};
+  use wasi:clocks/monotonic-clock@0.2.0-rc-2023-11-10.{duration};
+  use wasi:io/streams@0.2.0-rc-2023-11-10.{input-stream, output-stream};
+  use wasi:io/error@0.2.0-rc-2023-11-10.{error as io-error};
+  use wasi:io/poll@0.2.0-rc-2023-11-10.{pollable};
 
   /// This type corresponds to HTTP standard Methods.
   variant method {
@@ -27,21 +28,101 @@ interface types {
     other(string)
   }
 
-  /// TODO: perhaps better align with HTTP semantics?
-  /// This type enumerates the different kinds of errors that may occur when
-  /// initially returning a response.
-  variant error {
-    invalid-url(string),
-    timeout-error(string),
-    protocol-error(string),
-    unexpected-error(string)
+  /// These cases are inspired by the IANA HTTP Proxy Error Types:
+  ///   https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types
+  variant error-code {
+    DNS-timeout,
+    DNS-error(DNS-error-payload),
+    destination-not-found,
+    destination-unavailable,
+    destination-IP-prohibited,
+    destination-IP-unroutable,
+    connection-refused,
+    connection-terminated,
+    connection-timeout,
+    connection-read-timeout,
+    connection-write-timeout,
+    connection-limit-reached,
+    TLS-protocol-error,
+    TLS-certificate-error,
+    TLS-alert-received(TLS-alert-received-payload),
+    HTTP-request-denied,
+    HTTP-request-length-required,
+    HTTP-request-body-size(option<u64>),
+    HTTP-request-method-invalid,
+    HTTP-request-URI-invalid,
+    HTTP-request-URI-too-long,
+    HTTP-request-header-section-size(option<u32>),
+    HTTP-request-header-size(option<field-size-payload>),
+    HTTP-request-trailer-section-size(option<u32>),
+    HTTP-request-trailer-size(field-size-payload),
+    HTTP-response-incomplete,
+    HTTP-response-header-section-size(option<u32>),
+    HTTP-response-header-size(field-size-payload),
+    HTTP-response-body-size(option<u64>),
+    HTTP-response-trailer-section-size(option<u32>),
+    HTTP-response-trailer-size(field-size-payload),
+    HTTP-response-transfer-coding(option<string>),
+    HTTP-response-content-coding(option<string>),
+    HTTP-response-timeout,
+    HTTP-upgrade-failed,
+    HTTP-protocol-error,
+    loop-detected,
+    configuration-error,
+    /// This is a catch-all error for anything that doesn't fit cleanly into a
+    /// more specific case. It also includes an optional string for an
+    /// unstructured description of the error. Users should not depend on the
+    /// string for diagnosing errors, as it's not required to be consistent
+    /// between implementations.
+    internal-error(option<string>)
   }
 
-  /// This tyep enumerates the different kinds of errors that may occur when
+  /// Defines the case payload type for `DNS-error` above:
+  record DNS-error-payload {
+    rcode: option<string>,
+    info-code: option<u16>
+  }
+
+  /// Defines the case payload type for `TLS-alert-received` above:
+  record TLS-alert-received-payload {
+    alert-id: option<u8>,
+    alert-message: option<string>
+  }
+
+  /// Defines the case payload type for `HTTP-response-{header,trailer}-size` above:
+  record field-size-payload {
+    field-name: option<string>,
+    field-size: option<u32>
+  }
+
+  /// Attempts to extract a http-related `error` from the wasi:io `error`
+  /// provided.
+  ///
+  /// Stream operations which return
+  /// `wasi:io/stream/stream-error::last-operation-failed` have a payload of
+  /// type `wasi:io/error/error` with more information about the operation
+  /// that failed. This payload can be passed through to this function to see
+  /// if there's http-related information about the error to return.
+  ///
+  /// Note that this function is fallible because not all io-errors are
+  /// http-related errors.
+  http-error-code: func(err: borrow<io-error>) -> option<error-code>;
+
+  /// This type enumerates the different kinds of errors that may occur when
   /// setting or appending to a `fields` resource.
   variant header-error {
+    /// This error indicates that a `field-key` or `field-value` was
+    /// syntactically invalid when used with an operation that sets headers in a
+    /// `fields`.
     invalid-syntax,
+
+    /// This error indicates that a forbidden `field-key` was used when trying
+    /// to set a header in a `fields`.
     forbidden,
+
+    /// This error indicates that the operation on the `fields` was not
+    /// permitted because the fields are immutable.
+    immutable,
   }
 
   /// Field keys are always strings.
@@ -55,12 +136,23 @@ interface types {
   /// This following block defines the `fields` resource which corresponds to
   /// HTTP standard Fields. Fields are a common representation used for both
   /// Headers and Trailers.
+  ///
+  /// A `fields` may be mutable or immutable. A `fields` created using the
+  /// constructor, `from-list`, or `clone` will be mutable, but a `fields`
+  /// resource given by other means (including, but not limited to,
+  /// `incoming-request.headers`, `outgoing-request.headers`) might be be
+  /// immutable. In an immutable fields, the `set`, `append`, and `delete`
+  /// operations will fail with `header-error.immutable`.
   resource fields {
 
     /// Construct an empty HTTP Fields.
+    ///
+    /// The resulting `fields` is mutable.
     constructor();
 
     /// Construct an HTTP Fields.
+    ///
+    /// The resulting `fields` is mutable.
     ///
     /// The list represents each key-value pair in the Fields. Keys
     /// which have multiple values are represented by multiple entries in this
@@ -83,21 +175,20 @@ interface types {
     /// Set all of the values for a key. Clears any existing values for that
     /// key, if they have been set.
     ///
-    /// The operation can fail if the name or value arguments are invalid, or if
-    /// the name is forbidden.
+    /// Fails with `header-error.immutable` if the `fields` are immutable.
     set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
 
     /// Delete all values for a key. Does nothing if no values for the key
     /// exist.
-    delete: func(name: field-key);
+    ///
+    /// Fails with `header-error.immutable` if the `fields` are immutable.
+    delete: func(name: field-key) -> result<_, header-error>;
 
     /// Append a value for a key. Does not change or delete any existing
     /// values for that key.
     ///
-    /// The operation can fail if the name or value arguments are invalid, or if
-    /// the name is forbidden.
+    /// Fails with `header-error.immutable` if the `fields` are immutable.
     append: func(name: field-key, value: field-value) -> result<_, header-error>;
-
 
     /// Retrieve the full set of keys and values in the Fields. Like the
     /// constructor, the list represents each key-value pair. 
@@ -108,7 +199,8 @@ interface types {
     entries: func() -> list<tuple<field-key,field-value>>;
 
     /// Make a deep copy of the Fields. Equivelant in behavior to calling the
-    /// `fields` constructor on the return value of `entries` 
+    /// `fields` constructor on the return value of `entries`. The resulting
+    /// `fields` is mutable.
     clone: func() -> fields;
   }
 
@@ -133,7 +225,10 @@ interface types {
     /// Returns the authority from the request, if it was present.
     authority: func() -> option<string>;
 
-    /// Returns the `headers` from the request.
+    /// Get the `headers` associated with the request.
+    ///
+    /// The returned `headers` resource is immutable: `set`, `append`, and
+    /// `delete` operations will fail with `header-error.immutable`.
     ///
     /// The `headers` returned are a child resource: it must be dropped before
     /// the parent `incoming-request` is dropped. Dropping this
@@ -149,7 +244,7 @@ interface types {
   resource outgoing-request {
 
     /// Construct a new `outgoing-request` with a default `method` of `GET`, and
-    /// default values for `path-with-query`, `scheme`, and `authority.
+    /// `none` values for `path-with-query`, `scheme`, and `authority`.
     ///
     /// * `headers` is the HTTP Headers for the Request.
     ///
@@ -166,7 +261,7 @@ interface types {
     /// Request.
     ///
     /// Returns success on the first call: the `outgoing-body` resource for
-    /// this `outgoing-response` can be retrieved at most once. Subsequent
+    /// this `outgoing-request` can be retrieved at most once. Subsequent
     /// calls will return error.
     body: func() -> result<outgoing-body>;
 
@@ -203,6 +298,9 @@ interface types {
     set-authority: func(authority: option<string>) -> result;
 
     /// Get the headers associated with the Request.
+    ///
+    /// The returned `headers` resource is immutable: `set`, `append`, and
+    /// `delete` operations will fail with `header-error.immutable`.
     ///
     /// This headers resource is a child: it must be dropped before the parent
     /// `outgoing-request` is dropped, or its ownership is transfered to
@@ -262,7 +360,7 @@ interface types {
     /// implementation determine how to respond with an HTTP error response.
     set: static func(
       param: response-outparam,
-      response: result<outgoing-response, error>,
+      response: result<outgoing-response, error-code>,
     );
   }
 
@@ -276,6 +374,12 @@ interface types {
     status: func() -> status-code;
 
     /// Returns the headers from the incoming response.
+    ///
+    /// The returned `headers` resource is immutable: `set`, `append`, and
+    /// `delete` operations will fail with `header-error.immutable`.
+    ///
+    /// This headers resource is a child: it must be dropped before the parent
+    /// `incoming-response` is dropped.
     headers: func() -> headers;
 
     /// Returns the incoming body. May be called at most once. Returns error
@@ -337,7 +441,12 @@ interface types {
     /// as well as any trailers, were received successfully, or that an error
     /// occured receiving them. The optional `trailers` indicates whether or not
     /// trailers were present in the body.
-    get: func() -> option<result<option<trailers>, error>>;
+    ///
+    /// When some `trailers` are returned by this method, the `trailers`
+    /// resource is immutable, and a child. Use of the `set`, `append`, or
+    /// `delete` methods will return an error, and the resource must be
+    /// dropped before the parent `future-trailers` is dropped.
+    get: func() -> option<result<option<trailers>, error-code>>;
   }
 
   /// Represents an outgoing HTTP Response.
@@ -358,6 +467,9 @@ interface types {
     set-status-code: func(status-code: status-code) -> result;
 
     /// Get the headers associated with the Request.
+    ///
+    /// The returned `headers` resource is immutable: `set`, `append`, and
+    /// `delete` operations will fail with `header-error.immutable`.
     ///
     /// This headers resource is a child: it must be dropped before the parent
     /// `outgoing-request` is dropped, or its ownership is transfered to
@@ -405,7 +517,15 @@ interface types {
     /// called to signal that the response is complete. If the `outgoing-body`
     /// is dropped without calling `outgoing-body.finalize`, the implementation
     /// should treat the body as corrupted.
-    finish: static func(this: outgoing-body, trailers: option<trailers>);
+    ///
+    /// Fails if the body's `outgoing-request` or `outgoing-response` was
+    /// constructed with a Content-Length header, and the contents written
+    /// to the body (via `write`) does not match the value given in the
+    /// Content-Length.
+    finish: static func(
+      this: outgoing-body,
+      trailers: option<trailers>
+    ) -> result<_, error-code>;
   }
 
   /// Represents a future which may eventaully return an incoming HTTP
@@ -433,7 +553,7 @@ interface types {
     /// occured. Errors may also occur while consuming the response body,
     /// but those will be reported by the `incoming-body` and its
     /// `output-stream` child.
-    get: func() -> option<result<result<incoming-response, error>>>;
+    get: func() -> option<result<result<incoming-response, error-code>>>;
 
   }
 }

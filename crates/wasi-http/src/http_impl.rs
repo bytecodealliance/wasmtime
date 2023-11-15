@@ -1,22 +1,23 @@
-use crate::bindings::http::{
-    outgoing_handler,
-    types::{self as http_types, Scheme},
+use crate::{
+    bindings::http::{
+        outgoing_handler,
+        types::{self, Scheme},
+    },
+    http_request_error, internal_error,
+    types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequest},
+    WasiHttpView,
 };
-use crate::types::{self, HostFutureIncomingResponse, OutgoingRequest};
-use crate::WasiHttpView;
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::Method;
-use types::HostOutgoingRequest;
 use wasmtime::component::Resource;
 
 impl<T: WasiHttpView> outgoing_handler::Host for T {
     fn handle(
         &mut self,
         request_id: Resource<HostOutgoingRequest>,
-        options: Option<Resource<http_types::RequestOptions>>,
-    ) -> wasmtime::Result<Result<Resource<HostFutureIncomingResponse>, outgoing_handler::Error>>
-    {
+        options: Option<Resource<types::RequestOptions>>,
+    ) -> wasmtime::Result<Result<Resource<HostFutureIncomingResponse>, types::ErrorCode>> {
         let opts = options.and_then(|opts| self.table().get(&opts).ok());
 
         let connect_timeout = opts
@@ -32,32 +33,30 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
             .unwrap_or(std::time::Duration::from_millis(600 * 1000));
 
         let req = self.table().delete(request_id)?;
+        let mut builder = hyper::Request::builder();
 
-        let method = match req.method {
-            crate::bindings::http::types::Method::Get => Method::GET,
-            crate::bindings::http::types::Method::Head => Method::HEAD,
-            crate::bindings::http::types::Method::Post => Method::POST,
-            crate::bindings::http::types::Method::Put => Method::PUT,
-            crate::bindings::http::types::Method::Delete => Method::DELETE,
-            crate::bindings::http::types::Method::Connect => Method::CONNECT,
-            crate::bindings::http::types::Method::Options => Method::OPTIONS,
-            crate::bindings::http::types::Method::Trace => Method::TRACE,
-            crate::bindings::http::types::Method::Patch => Method::PATCH,
-            crate::bindings::http::types::Method::Other(method) => {
-                return Ok(Err(outgoing_handler::Error::InvalidUrl(format!(
-                    "unknown method {method}"
-                ))));
-            }
-        };
+        builder = builder.method(match req.method {
+            types::Method::Get => Method::GET,
+            types::Method::Head => Method::HEAD,
+            types::Method::Post => Method::POST,
+            types::Method::Put => Method::PUT,
+            types::Method::Delete => Method::DELETE,
+            types::Method::Connect => Method::CONNECT,
+            types::Method::Options => Method::OPTIONS,
+            types::Method::Trace => Method::TRACE,
+            types::Method::Patch => Method::PATCH,
+            types::Method::Other(m) => match hyper::Method::from_bytes(m.as_bytes()) {
+                Ok(method) => method,
+                Err(_) => return Ok(Err(types::ErrorCode::HttpRequestMethodInvalid)),
+            },
+        });
 
         let (use_tls, scheme, port) = match req.scheme.unwrap_or(Scheme::Https) {
-            Scheme::Http => (false, "http://", 80),
-            Scheme::Https => (true, "https://", 443),
-            Scheme::Other(scheme) => {
-                return Ok(Err(outgoing_handler::Error::InvalidUrl(format!(
-                    "unsupported scheme {scheme}"
-                ))))
-            }
+            Scheme::Http => (false, http::uri::Scheme::HTTP, 80),
+            Scheme::Https => (true, http::uri::Scheme::HTTPS, 443),
+
+            // We can only support http/https
+            Scheme::Other(_) => return Ok(Err(types::ErrorCode::HttpProtocolError)),
         };
 
         let authority = if let Some(authority) = req.authority {
@@ -69,24 +68,31 @@ impl<T: WasiHttpView> outgoing_handler::Host for T {
         } else {
             String::new()
         };
+        builder = builder.header(hyper::header::HOST, &authority);
 
-        let mut builder = hyper::Request::builder()
-            .method(method)
-            .uri(format!(
-                "{scheme}{authority}{}",
-                req.path_with_query.as_ref().map_or("", String::as_ref)
-            ))
-            .header(hyper::header::HOST, &authority);
+        let mut uri = http::Uri::builder()
+            .scheme(scheme)
+            .authority(authority.clone());
+
+        if let Some(path) = req.path_with_query {
+            uri = uri.path_and_query(path);
+        }
+
+        builder = builder.uri(uri.build().map_err(http_request_error)?);
 
         for (k, v) in req.headers.iter() {
             builder = builder.header(k, v);
         }
 
-        let body = req
-            .body
-            .unwrap_or_else(|| Empty::<Bytes>::new().map_err(|_| unreachable!()).boxed());
+        let body = req.body.unwrap_or_else(|| {
+            Empty::<Bytes>::new()
+                .map_err(|_| unreachable!("Infallible error"))
+                .boxed()
+        });
 
-        let request = builder.body(body).map_err(types::http_protocol_error)?;
+        let request = builder
+            .body(body)
+            .map_err(|err| internal_error(err.to_string()))?;
 
         Ok(Ok(self.send_request(OutgoingRequest {
             use_tls,

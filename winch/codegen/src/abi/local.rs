@@ -5,7 +5,7 @@ use wasmtime_environ::WasmType;
 /// Slots for stack arguments are addressed from the frame pointer.
 /// Slots for function-defined locals and for registers are addressed
 /// from the stack pointer.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Copy, Debug)]
 enum Base {
     FP,
     SP,
@@ -15,7 +15,18 @@ enum Base {
 ///
 /// Represents the type, location and addressing mode of a local
 /// in the stack's local and argument area.
-#[derive(Clone)]
+/// LocalSlots are well known slots in the machine stack, and are generally
+/// reference by the stack pointer register (SP) or the base pointer register (FP).
+/// * Local slots that are referenced by the stack pointer register are the
+///   function defined locals and the param locals.
+/// * Local slots that represent arguments in the stack, are referenced through the
+///   base pointer register.
+/// A [crate::masm::StackSlot] is a generalized form of a [LocalSlot]: they
+/// represent dynamic chunks of memory that get created throughout the function
+/// compilation lifetime when spilling values (register and locals) into the
+/// machine stack. A [LocalSlot] on the other hand gets created at the beginning
+/// of a function compilation and gets cleaned up at the end.
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct LocalSlot {
     /// The offset of the local slot.
     pub offset: u32,

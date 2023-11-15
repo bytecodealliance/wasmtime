@@ -1,7 +1,7 @@
 //! Elaboration phase: lowers EGraph back to sequences of operations
 //! in CFG nodes.
 
-use super::cost::{pure_op_cost, Cost};
+use super::cost::Cost;
 use super::domtree::DomTreeWithChildren;
 use super::Stats;
 use crate::dominator_tree::DominatorTree;
@@ -42,7 +42,7 @@ pub(crate) struct Elaborator<'a> {
     value_to_elaborated_value: ScopedHashMap<Value, ElaboratedValue>,
     /// Map from Value to the best (lowest-cost) Value in its eclass
     /// (tree of union value-nodes).
-    value_to_best_value: SecondaryMap<Value, (Cost, Value)>,
+    value_to_best_value: SecondaryMap<Value, BestEntry>,
     /// Stack of blocks and loops in current elaboration path.
     loop_stack: SmallVec<[LoopStackEntry; 8]>,
     /// The current block into which we are elaborating.
@@ -62,6 +62,28 @@ pub(crate) struct Elaborator<'a> {
     /// Stats for various events during egraph processing, to help
     /// with optimization of this infrastructure.
     stats: &'a mut Stats,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BestEntry(Cost, Value);
+
+impl PartialOrd for BestEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BestEntry {
+    #[inline]
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0).then_with(|| {
+            // Note that this comparison is reversed. When costs are equal,
+            // prefer the value with the bigger index. This is a heuristic that
+            // prefers results of rewrites to the original value, since we
+            // expect that our rewrites are generally improvements.
+            self.1.cmp(&other.1).reverse()
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -120,7 +142,7 @@ impl<'a> Elaborator<'a> {
     ) -> Self {
         let num_values = func.dfg.num_values();
         let mut value_to_best_value =
-            SecondaryMap::with_default((Cost::infinity(), Value::reserved_value()));
+            SecondaryMap::with_default(BestEntry(Cost::infinity(), Value::reserved_value()));
         value_to_best_value.resize(num_values);
         Self {
             func,
@@ -208,7 +230,7 @@ impl<'a> Elaborator<'a> {
                     trace!(" -> {:?}", best[value]);
                 }
                 ValueDef::Param(_, _) => {
-                    best[value] = (Cost::zero(), value);
+                    best[value] = BestEntry(Cost::zero(), value);
                 }
                 // If the Inst is inserted into the layout (which is,
                 // at this point, only the side-effecting skeleton),
@@ -216,21 +238,18 @@ impl<'a> Elaborator<'a> {
                 // cost.
                 ValueDef::Result(inst, _) => {
                     if let Some(_) = self.func.layout.inst_block(inst) {
-                        best[value] = (Cost::zero(), value);
+                        best[value] = BestEntry(Cost::zero(), value);
                     } else {
                         trace!(" -> value {}: result, computing cost", value);
                         let inst_data = &self.func.dfg.insts[inst];
                         // N.B.: at this point we know that the opcode is
                         // pure, so `pure_op_cost`'s precondition is
                         // satisfied.
-                        let cost = self
-                            .func
-                            .dfg
-                            .inst_values(inst)
-                            .fold(pure_op_cost(inst_data.opcode()), |cost, value| {
-                                cost + best[value].0
-                            });
-                        best[value] = (cost, value);
+                        let cost = Cost::of_pure_op(
+                            inst_data.opcode(),
+                            self.func.dfg.inst_values(inst).map(|value| best[value].0),
+                        );
+                        best[value] = BestEntry(cost, value);
                     }
                 }
             };
@@ -319,7 +338,7 @@ impl<'a> Elaborator<'a> {
                     // value) here so we have a full view of the
                     // eclass.
                     trace!("looking up best value for {}", value);
-                    let (_, best_value) = self.value_to_best_value[value];
+                    let BestEntry(_, best_value) = self.value_to_best_value[value];
                     trace!("elaborate: value {} -> best {}", value, best_value);
                     debug_assert_ne!(best_value, Value::reserved_value());
 

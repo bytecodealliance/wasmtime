@@ -1,3 +1,5 @@
+package wasi:filesystem@0.2.0-rc-2023-11-10;
+
 interface preopens {
     use types.{descriptor};
 

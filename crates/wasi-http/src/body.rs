@@ -1,3 +1,4 @@
+use crate::internal_error;
 use crate::{bindings::http::types, types::FieldMap};
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -14,7 +15,7 @@ use wasmtime_wasi::preview2::{
     Subscribe,
 };
 
-pub type HyperIncomingBody = BoxBody<Bytes, types::Error>;
+pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;
 
 /// Small wrapper around `BoxBody` which adds a timeout to every frame.
 struct BodyWithTimeout {
@@ -45,12 +46,12 @@ impl BodyWithTimeout {
 
 impl Body for BodyWithTimeout {
     type Data = Bytes;
-    type Error = types::Error;
+    type Error = types::ErrorCode;
 
     fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Bytes>, types::Error>>> {
+    ) -> Poll<Option<Result<Frame<Bytes>, types::ErrorCode>>> {
         let me = Pin::into_inner(self);
 
         // If the timeout timer needs to be reset, do that now relative to the
@@ -66,9 +67,7 @@ impl Body for BodyWithTimeout {
         // Register interest in this context on the sleep timer, and if the
         // sleep elapsed that means that we've timed out.
         if let Poll::Ready(()) = me.timeout.as_mut().poll(cx) {
-            return Poll::Ready(Some(Err(types::Error::TimeoutError(
-                "frame timed out".to_string(),
-            ))));
+            return Poll::Ready(Some(Err(types::ErrorCode::ConnectionReadTimeout)));
         }
 
         // Without timeout business now handled check for the frame. If a frame
@@ -222,7 +221,7 @@ impl Subscribe for HostIncomingBodyStream {
 }
 
 impl HostIncomingBodyStream {
-    fn record_frame(&mut self, frame: Option<Result<Frame<Bytes>, types::Error>>) {
+    fn record_frame(&mut self, frame: Option<Result<Frame<Bytes>, types::ErrorCode>>) {
         match frame {
             Some(Ok(frame)) => match frame.into_data() {
                 // A data frame was received, so queue up the buffered data for
@@ -300,7 +299,7 @@ pub enum HostFutureTrailers {
     ///
     /// Note that `Ok(None)` means that there were no trailers for this request
     /// while `Ok(Some(_))` means that trailers were found in the request.
-    Done(Result<Option<FieldMap>, types::Error>),
+    Done(Result<Option<FieldMap>, types::ErrorCode>),
 }
 
 #[async_trait::async_trait]
@@ -328,9 +327,7 @@ impl Subscribe for HostFutureTrailers {
                 // this just in case though.
                 Err(_) => {
                     debug_assert!(false, "should be unreachable");
-                    *self = HostFutureTrailers::Done(Err(types::Error::ProtocolError(
-                        "stream hung up before trailers were received".to_string(),
-                    )));
+                    *self = HostFutureTrailers::Done(Err(types::ErrorCode::ConnectionTerminated));
                 }
             }
         }
@@ -362,7 +359,7 @@ impl Subscribe for HostFutureTrailers {
     }
 }
 
-pub type HyperOutgoingBody = BoxBody<Bytes, types::Error>;
+pub type HyperOutgoingBody = BoxBody<Bytes, types::ErrorCode>;
 
 pub enum FinishMessage {
     Finished,
@@ -370,13 +367,47 @@ pub enum FinishMessage {
     Abort,
 }
 
+#[derive(Clone)]
+struct WrittenState {
+    expected: u64,
+    written: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl WrittenState {
+    fn new(expected_size: u64) -> Self {
+        Self {
+            expected: expected_size,
+            written: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        }
+    }
+
+    /// Add `len` to the total number of bytes written. Returns `false` if the new total exceeds
+    /// the number of bytes expected to be written.
+    fn update(&self, len: usize) -> bool {
+        let len = len as u64;
+        let old = self
+            .written
+            .fetch_add(len, std::sync::atomic::Ordering::Relaxed);
+        old + len <= self.expected
+    }
+
+    /// Return a comparison of total bytes written to the number of bytes expected to be written.
+    fn finish(self) -> std::cmp::Ordering {
+        let written = self.written.load(std::sync::atomic::Ordering::Relaxed);
+        written.cmp(&self.expected)
+    }
+}
+
 pub struct HostOutgoingBody {
     pub body_output_stream: Option<Box<dyn HostOutputStream>>,
-    pub finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
+    written: Option<WrittenState>,
+    finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
 }
 
 impl HostOutgoingBody {
-    pub fn new() -> (Self, HyperOutgoingBody) {
+    pub fn new(size: Option<u64>) -> (Self, HyperOutgoingBody) {
+        let written = size.map(WrittenState::new);
+
         use tokio::sync::oneshot::error::RecvError;
         struct BodyImpl {
             body_receiver: mpsc::Receiver<Bytes>,
@@ -384,7 +415,7 @@ impl HostOutgoingBody {
         }
         impl Body for BodyImpl {
             type Data = Bytes;
-            type Error = types::Error;
+            type Error = types::ErrorCode;
             fn poll_frame(
                 mut self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
@@ -406,9 +437,9 @@ impl HostOutgoingBody {
                                     FinishMessage::Trailers(trailers) => {
                                         Poll::Ready(Some(Ok(Frame::trailers(trailers))))
                                     }
-                                    FinishMessage::Abort => Poll::Ready(Some(Err(
-                                        types::Error::ProtocolError("response corrupted".into()),
-                                    ))),
+                                    FinishMessage::Abort => {
+                                        Poll::Ready(Some(Err(types::ErrorCode::HttpProtocolError)))
+                                    }
                                 },
                                 Poll::Ready(Err(RecvError { .. })) => Poll::Ready(None),
                             }
@@ -427,31 +458,91 @@ impl HostOutgoingBody {
             finish_receiver: Some(finish_receiver),
         }
         .boxed();
+
+        // TODO: this capacity constant is arbitrary, and should be configurable
+        let output_stream = BodyWriteStream::new(1024 * 1024, body_sender, written.clone());
+
         (
             Self {
-                // TODO: this capacity constant is arbitrary, and should be configurable
-                body_output_stream: Some(Box::new(BodyWriteStream::new(1024 * 1024, body_sender))),
+                body_output_stream: Some(Box::new(output_stream)),
+                written,
                 finish_sender: Some(finish_sender),
             },
             body_impl,
         )
     }
+
+    pub fn finish(mut self, ts: Option<FieldMap>) -> Result<(), types::ErrorCode> {
+        // Make sure that the output stream has been dropped, so that the BodyImpl poll function
+        // will immediately pick up the finish sender.
+        drop(self.body_output_stream);
+
+        let sender = self
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        if let Some(w) = self.written {
+            use std::cmp::Ordering;
+            let res = w.finish();
+            if res != Ordering::Equal {
+                let msg = match res {
+                    Ordering::Less => "not enough",
+                    Ordering::Greater => "too much",
+                    Ordering::Equal => unreachable!(),
+                };
+
+                let _ = sender.send(FinishMessage::Abort);
+                return Err(internal_error(format!("{msg} written to body stream")));
+            }
+        }
+
+        let message = if let Some(ts) = ts {
+            FinishMessage::Trailers(ts)
+        } else {
+            FinishMessage::Finished
+        };
+
+        // Ignoring failure: receiver died sending body, but we can't report that here.
+        let _ = sender.send(message.into());
+
+        Ok(())
+    }
+
+    pub fn abort(mut self) {
+        // Make sure that the output stream has been dropped, so that the BodyImpl poll function
+        // will immediately pick up the finish sender.
+        drop(self.body_output_stream);
+
+        let sender = self
+            .finish_sender
+            .take()
+            .expect("outgoing-body trailer_sender consumed by a non-owning function");
+
+        let _ = sender.send(FinishMessage::Abort);
+    }
 }
 
 /// Provides a [`HostOutputStream`] impl from a [`tokio::sync::mpsc::Sender`].
-pub struct BodyWriteStream {
+struct BodyWriteStream {
     writer: mpsc::Sender<Bytes>,
     write_budget: usize,
+    written: Option<WrittenState>,
 }
 
 impl BodyWriteStream {
     /// Create a [`BodyWriteStream`].
-    pub fn new(write_budget: usize, writer: mpsc::Sender<Bytes>) -> Self {
+    fn new(
+        write_budget: usize,
+        writer: mpsc::Sender<Bytes>,
+        written: Option<WrittenState>,
+    ) -> Self {
         // at least one capacity is required to send a message
         assert!(writer.max_capacity() >= 1);
         BodyWriteStream {
             writer,
             write_budget,
+            written,
         }
     }
 }
@@ -459,10 +550,21 @@ impl BodyWriteStream {
 #[async_trait::async_trait]
 impl HostOutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        let len = bytes.len();
         match self.writer.try_send(bytes) {
             // If the message was sent then it's queued up now in hyper to get
             // received.
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                if let Some(written) = self.written.as_ref() {
+                    if !written.update(len) {
+                        return Err(StreamError::LastOperationFailed(anyhow!(internal_error(
+                            "too much written to output stream".to_owned()
+                        ))));
+                    }
+                }
+
+                Ok(())
+            }
 
             // If this channel is full then that means `check_write` wasn't
             // called. The call to `check_write` always guarantees that there's
