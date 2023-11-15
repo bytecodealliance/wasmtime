@@ -15,7 +15,8 @@ use wasmtime_wasi::preview2::{
     self, StreamError, StreamResult, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_http::{
-    body::HyperOutgoingBody, hyper_response_error, WasiHttpCtx, WasiHttpView,
+    bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
+    WasiHttpCtx, WasiHttpView,
 };
 
 #[cfg(feature = "wasi-nn")]
@@ -356,6 +357,37 @@ impl hyper::service::Service<Request> for ProxyHandler {
         // TODO: need to track the join handle, but don't want to block the response on it
         tokio::task::spawn(async move {
             let req_id = inner.next_req_id();
+            let (mut parts, body) = req.into_parts();
+
+            parts.uri = {
+                let uri_parts = parts.uri.into_parts();
+
+                let scheme = uri_parts.scheme.unwrap_or(http::uri::Scheme::HTTP);
+
+                let host = if let Some(val) = parts.headers.get(hyper::header::HOST) {
+                    std::str::from_utf8(val.as_bytes())
+                        .map_err(|_| http_types::ErrorCode::HttpRequestUriInvalid)?
+                } else {
+                    uri_parts
+                        .authority
+                        .as_ref()
+                        .ok_or(http_types::ErrorCode::HttpRequestUriInvalid)?
+                        .host()
+                };
+
+                let path_with_query = uri_parts
+                    .path_and_query
+                    .ok_or(http_types::ErrorCode::HttpRequestUriInvalid)?;
+
+                hyper::Uri::builder()
+                    .scheme(scheme)
+                    .authority(host)
+                    .path_and_query(path_with_query)
+                    .build()
+                    .map_err(|_| http_types::ErrorCode::HttpRequestUriInvalid)?
+            };
+
+            let req = hyper::Request::from_parts(parts, body.map_err(hyper_response_error).boxed());
 
             log::info!(
                 "Request {req_id} handling {} to {}",
@@ -365,10 +397,7 @@ impl hyper::service::Service<Request> for ProxyHandler {
 
             let mut store = inner.cmd.new_store(&inner.engine, req_id)?;
 
-            let req = store
-                .data_mut()
-                .new_incoming_request(req.map(|body| body.map_err(hyper_response_error).boxed()))?;
-
+            let req = store.data_mut().new_incoming_request(req)?;
             let out = store.data_mut().new_response_outparam(sender)?;
 
             let (proxy, _inst) =
