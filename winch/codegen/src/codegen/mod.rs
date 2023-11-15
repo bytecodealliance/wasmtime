@@ -2,8 +2,8 @@ use crate::{
     abi::{ABIOperand, ABIResultsData, ABISig, RetArea, ABI},
     codegen::BlockTypeInfo,
     isa::reg::Reg,
-    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, TrapCode},
-    stack::{TypedReg, Val},
+    masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
+    stack::TypedReg,
 };
 use anyhow::Result;
 use smallvec::SmallVec;
@@ -111,24 +111,14 @@ where
     /// are not visited.
     pub fn handle_unreachable_else(&mut self) {
         let frame = self.control_frames.last_mut().unwrap();
-        match frame {
-            ControlStackFrame::If {
-                reachable,
-                base_stack_len,
-                base_sp,
-                ..
-            } => {
-                if *reachable {
-                    // We entered an unreachable state when compiling the
-                    // if-then branch, but if the `if` was reachable at
-                    // entry, the if-else branch will be reachable.
-                    self.context.reachable = true;
-                    // Reset the stack to the original length and offset.
-                    Self::reset_stack(&mut self.context, self.masm, *base_stack_len, *base_sp);
-                    frame.bind_else(self.masm, self.context.reachable);
-                }
-            }
-            _ => unreachable!(),
+        debug_assert!(frame.is_if());
+        if frame.is_next_sequence_reachable() {
+            // We entered an unreachable state when compiling the
+            // if-then branch, but if the `if` was reachable at
+            // entry, the if-else branch will be reachable.
+            self.context.reachable = true;
+            self.context.ensure_stack_state(self.masm, &frame);
+            frame.bind_else(self.masm, self.context.reachable);
         }
     }
 
@@ -139,9 +129,7 @@ where
         if frame.is_next_sequence_reachable() {
             self.context.reachable = true;
 
-            let (value_stack_len, target_sp) = frame.base_stack_len_and_sp();
-            // Reset the stack to the original length and offset.
-            Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
+            self.context.ensure_stack_state(self.masm, &frame);
             // If the current frame is the outermost frame, which corresponds to the
             // current function's body, only bind the exit label as we don't need to
             // push any more values to the value stack, else perform the entire `bind_end`
@@ -156,38 +144,7 @@ where
             // state, perform the necessary cleanup to leave the stack
             // and SP in the expected state.  The compiler can enter
             // in this state through an infinite loop.
-            let (value_stack_len, target_sp) = frame.base_stack_len_and_sp();
-            Self::reset_stack(&mut self.context, self.masm, value_stack_len, target_sp);
-        }
-    }
-
-    /// Helper function to reset value and stack pointer to the given length and stack pointer
-    /// offset respectively. This function is only used when restoring the code generation's
-    /// reachabiliy state when handling an unreachable `end` or `else`.
-    pub fn reset_stack(
-        context: &mut CodeGenContext,
-        masm: &mut M,
-        target_stack_len: usize,
-        target_sp: SPOffset,
-    ) {
-        // `CodeGenContext::reset_stack` only gets called when
-        // handling unreachable end or unreachable else, so we only
-        // care about freeing any registers in the provided range.
-        let mut bytes_freed = 0;
-        if target_stack_len < context.stack.len() {
-            context.drop_last(
-                context.stack.len() - target_stack_len,
-                |regalloc, val| match val {
-                    Val::Reg(tr) => regalloc.free(tr.reg),
-                    Val::Memory(m) => bytes_freed += m.slot.size,
-                    _ => {}
-                },
-            );
-        }
-        if masm.sp_offset().as_u32() > target_sp.as_u32() {
-            let bytes = masm.sp_offset().as_u32() - target_sp.as_u32();
-            assert!(bytes_freed == bytes);
-            masm.free_stack(bytes);
+            self.context.ensure_stack_state(self.masm, &frame);
         }
     }
 

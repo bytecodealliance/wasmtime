@@ -19,7 +19,6 @@
 ;;   1a:	 4883ec04             	sub	rsp, 4
 ;;   1e:	 44891c24             	mov	dword ptr [rsp], r11d
 ;;   22:	 0f0b                 	ud2	
-;;   24:	 4883c404             	add	rsp, 4
-;;   28:	 4883c410             	add	rsp, 0x10
-;;   2c:	 5d                   	pop	rbp
-;;   2d:	 c3                   	ret	
+;;   24:	 4883c410             	add	rsp, 0x10
+;;   28:	 5d                   	pop	rbp
+;;   29:	 c3                   	ret	
