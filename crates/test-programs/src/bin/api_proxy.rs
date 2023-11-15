@@ -16,6 +16,10 @@ struct T;
 
 impl bindings::exports::wasi::http::incoming_handler::Guest for T {
     fn handle(request: IncomingRequest, outparam: ResponseOutparam) {
+        assert!(request.scheme().is_some());
+        assert!(request.authority().is_some());
+        assert!(request.path_with_query().is_some());
+
         let header = String::from("custom-forbidden-header");
         let req_hdrs = request.headers();
 
