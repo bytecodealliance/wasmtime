@@ -33,6 +33,8 @@ impl bindings::exports::wasi::http::incoming_handler::Guest for Handler {
 async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam) {
     let headers = request.headers().entries();
 
+    assert!(request.authority().is_some());
+
     match (request.method(), request.path_with_query().as_deref()) {
         (Method::Get, Some("/hash-all")) => {
             // Send outgoing GET requests to the specified URLs and stream the hashes of the response bodies as
