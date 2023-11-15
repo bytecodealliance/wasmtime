@@ -522,6 +522,10 @@ fn zkasm_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
             collector.reg_use(*rs1);
             collector.reg_def(*rd);
         }
+        Inst::Bnot { rd, rs1 } => {
+            collector.reg_use(*rs1);
+            collector.reg_def(*rd);
+        }
     }
 }
 
@@ -1021,8 +1025,14 @@ impl Inst {
             Inst::Ineg { rd, rs1 } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let rs = format_reg(*rs1, allocs);
-                // FIXME: should this use a SUB?
-                format!("0 - {rs} => {rd}")
+                // FIXME(#81): should this use a SUB?
+                format!("0n - {rs} => {rd}")
+            }
+            Inst::Bnot { rd, rs1 } => {
+                let rd = format_reg(rd.to_reg(), allocs);
+                let rs = format_reg(*rs1, allocs);
+                // FIXME(#81): should this use a SUB?
+                format!("{}n - {rs} => {rd}", u64::MAX)
             }
             &Inst::Load {
                 rd,

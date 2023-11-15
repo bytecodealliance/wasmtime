@@ -57,12 +57,18 @@
 (rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
   (rv_subw x y))
 
-;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `ineg`/`bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (ineg val))
   (let
     ((result WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.Ineg result (value_regs_get val 0)))))
+    (output_xreg result)))
+
+(rule (lower (bnot val))
+  (let
+    ((result WritableXReg (temp_writable_xreg))
+      (_ Unit (emit (MInst.Bnot result (value_regs_get val 0)))))
     (output_xreg result)))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

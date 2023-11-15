@@ -55,6 +55,10 @@
       (rd WritableReg)
       (rs1 Reg))
 
+    (Bnot
+      (rd WritableReg)
+      (rs1 Reg))
+
     ;; An load
     (Load
       (rd WritableReg)
