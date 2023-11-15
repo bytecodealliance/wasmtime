@@ -3,7 +3,6 @@ use crate::bindings::wasi::cli::{
 };
 use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams::{InputStream, OutputStream};
-use crate::bindings::wasi::sockets::tcp;
 use crate::{BlockingMode, BumpArena, File, ImportAlloc, TrappingUnwrap, WasmStr};
 use core::cell::{Cell, OnceCell, UnsafeCell};
 use core::mem::MaybeUninit;
@@ -93,16 +92,12 @@ impl Streams {
     }
 }
 
-#[allow(dead_code)] // until Socket is implemented
 pub enum StreamType {
     /// Streams for implementing stdio.
     Stdio(IsATTY),
 
     /// Streaming data with a file.
     File(File),
-
-    /// Streaming data with a socket connection.
-    Socket(tcp::TcpSocket),
 }
 
 pub enum IsATTY {
@@ -367,18 +362,6 @@ impl Descriptors {
             }) => Ok(file),
             Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
             _ => Err(error),
-        }
-    }
-
-    #[allow(dead_code)] // until Socket is implemented
-    pub fn get_socket(&self, fd: Fd) -> Result<&tcp::TcpSocket, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::Socket(socket),
-                ..
-            }) => Ok(&*socket),
-            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
-            _ => Err(wasi::ERRNO_INVAL),
         }
     }
 
