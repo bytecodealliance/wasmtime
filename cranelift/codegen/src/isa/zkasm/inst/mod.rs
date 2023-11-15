@@ -1025,14 +1025,14 @@ impl Inst {
             Inst::Ineg { rd, rs1 } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let rs = format_reg(*rs1, allocs);
-                // FIXME: should this use a SUB?
+                // FIXME(#81): should this use a SUB?
                 format!("0n - {rs} => {rd}")
             }
             Inst::Bnot { rd, rs1 } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let rs = format_reg(*rs1, allocs);
-                // FIXME: should this use a SUB?
-                format!("18446744073709551615n - {rs} => {rd}")
+                // FIXME(#81): should this use a SUB?
+                format!("{}n - {rs} => {rd}", u64::MAX)
             }
             &Inst::Load {
                 rd,
