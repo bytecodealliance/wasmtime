@@ -199,11 +199,10 @@ async fn run_wasi_http(
 
 #[test_log::test(tokio::test)]
 async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
-    let mut req = hyper::Request::builder().method(http::Method::GET);
-
-    req.headers_mut()
-        .unwrap()
-        .append("custom-forbidden-header", "yes".parse().unwrap());
+    let req = hyper::Request::builder()
+        .header("custom-forbidden-header", "yes")
+        .uri("http://example.com:8080/test-path")
+        .method(http::Method::GET);
 
     let resp = run_wasi_http(
         test_programs_artifacts::API_PROXY_COMPONENT,
@@ -326,7 +325,9 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         None
     };
 
-    let mut request = hyper::Request::get("/hash-all");
+    let mut request = hyper::Request::builder()
+        .method(http::Method::GET)
+        .uri("http://example.com:8080/hash-all");
     for path in bodies.keys() {
         request = request.header("url", format!("{prefix}{path}"));
     }
@@ -448,8 +449,10 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
         .collect::<Vec<_>>()
     };
 
-    let mut request =
-        hyper::Request::post(&format!("/{uri}")).header("content-type", "application/octet-stream");
+    let mut request = hyper::Request::builder()
+        .method(http::Method::POST)
+        .uri(format!("http://example.com:8080/{uri}"))
+        .header("content-type", "application/octet-stream");
 
     if let Some(url_header) = url_header {
         request = request.header("url", url_header);
