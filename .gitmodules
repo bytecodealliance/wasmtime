@@ -17,3 +17,7 @@
 	path = tests/wasi_testsuite/wasi-common
 	url = https://github.com/WebAssembly/wasi-testsuite.git
 	branch = prod/testsuite-base
+[submodule "deps/zkevm-proverjs"]
+	path = deps/zkevm-proverjs
+	url = https://github.com/0xPolygonHermez/zkevm-proverjs/
+	branch = feature/64bits
