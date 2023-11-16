@@ -212,7 +212,7 @@ fn preview1_readlink() {
 }
 #[test_log::test]
 fn preview1_remove_directory() {
-    run(PREVIEW1_REMOVE_DIRECTORY, false).unwrap()
+    run(PREVIEW1_REMOVE_DIRECTORY, true).unwrap()
 }
 #[test_log::test]
 fn preview1_remove_nonempty_directory() {

@@ -146,7 +146,6 @@ async fn preview1_file_unbuffered_write() {
     run(PREVIEW1_FILE_UNBUFFERED_WRITE, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)]
 async fn preview1_interesting_paths() {
     run(PREVIEW1_INTERESTING_PATHS, true).await.unwrap()
 }
@@ -224,7 +223,7 @@ async fn preview1_readlink() {
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_remove_directory() {
-    run(PREVIEW1_REMOVE_DIRECTORY, false).await.unwrap()
+    run(PREVIEW1_REMOVE_DIRECTORY, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_remove_nonempty_directory() {
