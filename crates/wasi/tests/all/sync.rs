@@ -175,9 +175,8 @@ fn preview1_readlink() {
     run(PREVIEW1_READLINK_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-#[should_panic]
-fn preview1_remove_directory_trailing_slashes() {
-    run(PREVIEW1_REMOVE_DIRECTORY_TRAILING_SLASHES_COMPONENT, false).unwrap()
+fn preview1_remove_directory() {
+    run(PREVIEW1_REMOVE_DIRECTORY_COMPONENT, false).unwrap()
 }
 #[test_log::test]
 fn preview1_remove_nonempty_directory() {

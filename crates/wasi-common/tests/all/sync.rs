@@ -216,9 +216,8 @@ fn preview1_readlink() {
     run(PREVIEW1_READLINK, true).unwrap()
 }
 #[test_log::test]
-#[should_panic]
-fn preview1_remove_directory_trailing_slashes() {
-    run(PREVIEW1_REMOVE_DIRECTORY_TRAILING_SLASHES, false).unwrap()
+fn preview1_remove_directory() {
+    run(PREVIEW1_REMOVE_DIRECTORY, false).unwrap()
 }
 #[test_log::test]
 fn preview1_remove_nonempty_directory() {

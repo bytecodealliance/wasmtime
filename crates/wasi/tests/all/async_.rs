@@ -218,9 +218,8 @@ async fn preview1_readlink() {
     run(PREVIEW1_READLINK_COMPONENT, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[should_panic]
-async fn preview1_remove_directory_trailing_slashes() {
-    run(PREVIEW1_REMOVE_DIRECTORY_TRAILING_SLASHES_COMPONENT, false)
+async fn preview1_remove_directory() {
+    run(PREVIEW1_REMOVE_DIRECTORY_COMPONENT, false)
         .await
         .unwrap()
 }
