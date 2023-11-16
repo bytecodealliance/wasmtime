@@ -31,9 +31,11 @@ if [ "$ALL_FILES" = false ] && [ -z "$1" ]; then
     exit 1
 fi
 
-BASE_DIR="."
+BASE_DIR="./../../"
+cd deps/zkevm-proverjs
+npm i
 
-NODE_CMD="node deps/zkevm-proverjs/test/zkasmtest.js --rows 2**18"
+NODE_CMD="node test/zkasmtest.js --rows 2**18"
 
 if [ "$ALL_FILES" = false ]; then
     $NODE_CMD "$BASE_DIR/$1"
