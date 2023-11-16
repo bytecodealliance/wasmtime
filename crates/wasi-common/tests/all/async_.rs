@@ -75,8 +75,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
 }
 
 // Below here is mechanical: there should be one test for every binary in
-// wasi-tests. The only differences should be should_panic annotations for
-// tests which fail.
+// wasi-tests.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_big_random_buf() {
     run(PREVIEW1_BIG_RANDOM_BUF, true).await.unwrap()

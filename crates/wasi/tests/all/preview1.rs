@@ -24,8 +24,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
 foreach_preview1!(assert_test_exists);
 
 // Below here is mechanical: there should be one test for every binary in
-// wasi-tests. The only differences should be should_panic annotations for
-// tests which fail.
+// wasi-tests.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_big_random_buf() {
     run(PREVIEW1_BIG_RANDOM_BUF, false).await.unwrap()
@@ -95,9 +94,8 @@ async fn preview1_file_unbuffered_write() {
     run(PREVIEW1_FILE_UNBUFFERED_WRITE, false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)]
 async fn preview1_interesting_paths() {
-    run(PREVIEW1_INTERESTING_PATHS, false).await.unwrap()
+    run(PREVIEW1_INTERESTING_PATHS, true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_regular_file_isatty() {

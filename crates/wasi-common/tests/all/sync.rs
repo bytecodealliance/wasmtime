@@ -67,8 +67,7 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
 }
 
 // Below here is mechanical: there should be one test for every binary in
-// wasi-tests. The only differences should be should_panic annotations for
-// tests which fail.
+// wasi-tests.
 #[test_log::test]
 fn preview1_big_random_buf() {
     run(PREVIEW1_BIG_RANDOM_BUF, true).unwrap()
@@ -138,7 +137,6 @@ fn preview1_file_unbuffered_write() {
     run(PREVIEW1_FILE_UNBUFFERED_WRITE, true).unwrap()
 }
 #[test_log::test]
-#[cfg_attr(windows, should_panic)]
 fn preview1_interesting_paths() {
     run(PREVIEW1_INTERESTING_PATHS, true).unwrap()
 }
