@@ -3,8 +3,10 @@
 //! implementations to maintain backend-specific state between calls.
 
 pub mod openvino;
+pub mod winml;
 
 use self::openvino::OpenvinoBackend;
+use self::winml::WinMLBackend;
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor};
 use crate::{Backend, ExecutionContext, Graph};
 use std::path::Path;
@@ -13,7 +15,8 @@ use wiggle::GuestError;
 
 /// Return a list of all available backend frameworks.
 pub fn list() -> Vec<crate::Backend> {
-    vec![Backend::from(OpenvinoBackend::default())]
+    // TODO: WinML only available on Windows 1809 and later.
+    vec![Backend::from(OpenvinoBackend::default()), Backend::from(WinMLBackend::default())]
 }
 
 /// A [Backend] contains the necessary state to load [Graph]s.
