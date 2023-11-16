@@ -47,7 +47,7 @@ jobs:
     - uses: actions/setup-node@v3
       with:
         node-version: '20.8.0'
-    - run: ./ci/test-zkasm.sh --install-zkwasm --all
+    - run: ./ci/test-zkasm.sh --all
 
   rustfmt:
     name: Rustfmt
