@@ -6,12 +6,17 @@ const fs = require('fs');
 const chalk = require('chalk');
 const zkasm = require('@0xpolygonhermez/zkasmcom');
 const smMain = require('@0xpolygonhermez/zkevm-proverjs/src/sm/sm_main/sm_main');
-const { compile, newCommitPolsArray } = require('pilcom');
+const {
+    compile,
+    newCommitPolsArray
+} = require('pilcom');
 const buildPoseidon = require('@0xpolygonhermez/zkevm-commonjs').getPoseidon;
 
 const emptyInput = require('@0xpolygonhermez/zkevm-proverjs/test/inputs/empty_input.json');
 
-const { argv } = require('yargs')
+const {
+    argv
+} = require('yargs')
     .alias('v', 'verbose');
 
 // Global paths to build Main PIL to fill polynomials in tests
@@ -26,7 +31,7 @@ async function main() {
     // Get all zkasm files
     const pathZkasm = path.join(process.cwd(), process.argv[2]);
     const files = await getTestFiles(pathZkasm);
-    
+
     let hasUnexpectedFailures = false;
     // Run all zkasm files
     // eslint-disable-next-line no-restricted-syntax
@@ -35,21 +40,25 @@ async function main() {
         if (file.includes('ignore'))
             continue;
 
-				let shouldFail = file.split("/").pop().startsWith("_should_fail_");
-				let testFailed = await runTest(file, cmPols);
-				hasUnexpectedFailures |= (testFailed && !shouldFail) || (shouldFail && !testFailed);
+        let shouldFail = file.split("/").pop().startsWith("_should_fail_");
+        let testFailed = await runTest(file, cmPols);
+        hasUnexpectedFailures |= (testFailed && !shouldFail) || (shouldFail && !testFailed);
     }
     if (hasUnexpectedFailures) {
-        process.exit(1); 
+        process.exit(1);
     }
 }
 
 async function compilePil() {
     if (!fs.existsSync(fileCachePil)) {
         const poseidon = await buildPoseidon();
-        const { F } = poseidon;
+        const {
+            F
+        } = poseidon;
         const pilConfig = {
-            defines: { N: 4096 },
+            defines: {
+                N: 4096
+            },
             namespaces: ['Main', 'Global'],
             disableUnusedError: true,
         };
