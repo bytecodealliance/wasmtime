@@ -106,7 +106,7 @@ pub(crate) trait ABI {
     /// Returns the designated scratch register for the given [WasmType].
     fn scratch_for(ty: &WasmType) -> Reg {
         match ty {
-            WasmType::I32 | WasmType::I64 => Self::scratch_reg(),
+            WasmType::I32 | WasmType::I64 | WasmType::Ref(_) => Self::scratch_reg(),
             WasmType::F32 | WasmType::F64 => Self::float_scratch_reg(),
             _ => unimplemented!(),
         }

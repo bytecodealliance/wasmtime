@@ -67,6 +67,7 @@ use crate::{
     },
     masm::{CalleeKind, MacroAssembler, OperandSize, SPOffset},
     reg::Reg,
+    stack::Val,
     CallingConvention,
 };
 use smallvec::SmallVec;
@@ -98,7 +99,7 @@ impl FnCall {
         let sig = sig.as_ref();
         let kind = Self::map(&context.vmoffsets, &callee, sig, context, masm);
 
-        let call_stack_space = Self::save(context, masm, &sig);
+        context.spill(masm);
         let ret_area = Self::make_ret_area(&sig, masm);
         let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
@@ -111,14 +112,7 @@ impl FnCall {
             _ => {}
         }
 
-        Self::cleanup(
-            sig,
-            reserved_stack,
-            call_stack_space,
-            ret_area,
-            masm,
-            context,
-        );
+        Self::cleanup(sig, reserved_stack, ret_area, masm, context);
     }
 
     /// Calculates the return area for the callee, if any.
@@ -306,56 +300,11 @@ impl FnCall {
         }
     }
 
-    /// Save any live registers prior to emitting the call.
-    //
-    // Here we perform a "spill" of the register entries
-    // in the Wasm value stack, we also count any memory
-    // values that will be used used as part of the callee
-    // arguments.  Saving the live registers is done by
-    // emitting push operations for every `Reg` entry in
-    // the Wasm value stack. We do this to be compliant
-    // with Winch's internal ABI, in which all registers
-    // are treated as caller-saved. For more details, see
-    // [ABI].
-    //
-    // The next few lines, partition the value stack into
-    // two sections:
-    // +------------------+--+--- (Stack top)
-    // |                  |  |
-    // |                  |  | 1. The top `n` elements, which are used for
-    // |                  |  |    function arguments; for which we save any
-    // |                  |  |    live registers, keeping track of the amount of registers
-    // +------------------+  |    saved plus the amount of memory values consumed by the function call;
-    // |                  |  |    with this information we can later reclaim the space used by the function call.
-    // |                  |  |
-    // +------------------+--+---
-    // |                  |  | 2. The rest of the items in the stack, for which
-    // |                  |  |    we only save any live registers.
-    // |                  |  |
-    // +------------------+  |
-    fn save<M: MacroAssembler>(context: &mut CodeGenContext, masm: &mut M, sig: &ABISig) -> u32 {
-        let callee_params = &sig.params_without_retptr();
-        let stack = &context.stack;
-        match callee_params.len() {
-            0 => {
-                let _ = context.save_live_registers_and_calculate_sizeof(masm, ..);
-                0u32
-            }
-            _ => {
-                assert!(stack.len() >= callee_params.len());
-                let partition = stack.len().checked_sub(callee_params.len()).unwrap_or(0);
-                let _ = context.save_live_registers_and_calculate_sizeof(masm, 0..partition);
-                context.save_live_registers_and_calculate_sizeof(masm, partition..)
-            }
-        }
-    }
-
     /// Cleanup stack space, handle multiple results, and free registers after
     /// emitting the call.
     fn cleanup<M: MacroAssembler>(
         sig: &ABISig,
         reserved_space: u32,
-        stack_consumed: u32,
         ret_area: Option<RetArea>,
         masm: &mut M,
         context: &mut CodeGenContext,
@@ -363,6 +312,15 @@ impl FnCall {
         // Deallocate the reserved space for stack arguments and for alignment,
         // which was allocated last.
         masm.free_stack(reserved_space);
+
+        // Drop params from value stack and calculate amount of machine stack
+        // space they consumed.
+        let mut stack_consumed = 0;
+        context.drop_last(sig.params.len_without_retptr(), |_regalloc, v| {
+            if let Val::Memory(mem) = v {
+                stack_consumed += mem.slot.size;
+            }
+        });
 
         if let Some(ret_area) = ret_area {
             if stack_consumed > 0 {
@@ -380,29 +338,6 @@ impl FnCall {
 
         // Free the bytes consumed by the call.
         masm.free_stack(stack_consumed);
-
-        // Only account for registers given that any memory entries
-        // consumed by the call (assigned to a register or to a stack
-        // slot) were freed by the previous call to
-        // `masm.free_stack`, so we only care about dropping them
-        // here.
-        //
-        // NOTE / TODO there's probably a path to getting rid of
-        // `save_live_registers_and_calculate_sizeof` and
-        // `call_stack_space`, making it a bit more obvious what's
-        // happening here. We could:
-        //
-        // * Modify the `spill` implementation so that it takes a
-        // filtering callback, to control which values the caller is
-        // interested in saving (e.g. save all if no function is provided)
-        // * Rely on the new implementation of `drop_last` to calcuate
-        // the stack memory entries consumed by the call and then free
-        // the calculated stack space.
-        context.drop_last(sig.params.len_without_retptr(), |regalloc, v| {
-            if v.is_reg() {
-                regalloc.free(v.unwrap_reg().into());
-            }
-        });
 
         let mut results_data = ABIResultsData::wrap(sig.results.clone());
         results_data.ret_area = ret_area;

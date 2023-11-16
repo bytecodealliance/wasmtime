@@ -925,6 +925,13 @@ where
     }
 
     fn visit_call_indirect(&mut self, type_index: u32, table_index: u32, _: u8) {
+        // Spill now because `emit_lazy_init_funcref` and the `FnCall::emit`
+        // invocations will both trigger spills since they both call functions.
+        // However, the machine instructions for the spill emitted by
+        // `emit_lazy_funcref` may be jumped over which may result in the
+        // machine stack becoming unbalanced.
+        self.context.spill(self.masm);
+
         let type_index = TypeIndex::from_u32(type_index);
         let table_index = TableIndex::from_u32(table_index);
 
