@@ -111,9 +111,8 @@ async fn preview1_file_unbuffered_write() {
         .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)]
 async fn preview1_interesting_paths() {
-    run(PREVIEW1_INTERESTING_PATHS_COMPONENT, false)
+    run(PREVIEW1_INTERESTING_PATHS_COMPONENT, true)
         .await
         .unwrap()
 }
