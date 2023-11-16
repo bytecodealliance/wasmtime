@@ -149,11 +149,6 @@ fn preview1_path_rename_dir_trailing_slashes() {
     run(PREVIEW1_PATH_RENAME_DIR_TRAILING_SLASHES_COMPONENT, false).unwrap()
 }
 #[test_log::test]
-#[should_panic]
-fn preview1_path_rename_file_trailing_slashes() {
-    run(PREVIEW1_PATH_RENAME_FILE_TRAILING_SLASHES_COMPONENT, false).unwrap()
-}
-#[test_log::test]
 fn preview1_path_rename() {
     run(PREVIEW1_PATH_RENAME_COMPONENT, false).unwrap()
 }

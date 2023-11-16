@@ -152,13 +152,6 @@ async fn preview1_path_rename_dir_trailing_slashes() {
         .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[should_panic]
-async fn preview1_path_rename_file_trailing_slashes() {
-    run(PREVIEW1_PATH_RENAME_FILE_TRAILING_SLASHES, false)
-        .await
-        .unwrap()
-}
-#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_rename() {
     run(PREVIEW1_PATH_RENAME, false).await.unwrap()
 }
