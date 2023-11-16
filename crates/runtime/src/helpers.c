@@ -2,6 +2,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#if (defined(__GNUC__) && !defined(__clang__))
+#define WASMTIME_GCC 1
+#endif
+
 #ifdef CFG_TARGET_OS_windows
 
 // Windows is required to use normal `setjmp` and `longjmp`.
@@ -9,7 +13,7 @@
 #define platform_longjmp(buf, arg) longjmp(buf, arg)
 typedef jmp_buf platform_jmp_buf;
 
-#elif defined(__GNUC__) || defined(__x86_64__)
+#elif defined(WASMTIME_GCC) || defined(__x86_64__)
 
 // GCC and Clang on x86_64 provide `__builtin_setjmp`/`__builtin_longjmp`, which
 // differ from plain `setjmp` and `longjmp` in that they're implemented by
