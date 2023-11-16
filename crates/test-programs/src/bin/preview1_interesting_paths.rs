@@ -35,12 +35,12 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
     );
     wasi::fd_close(file_fd).expect("closing a file");
 
-    // Now open it with a trailing NUL.
+    // Now open it with a trailing NUL. Windows will allow this.
     assert_errno!(
         wasi::path_open(dir_fd, 0, "dir/nested/file\0", 0, 0, 0, 0)
             .expect_err("opening a file with a trailing NUL"),
-        wasi::ERRNO_INVAL,
-        wasi::ERRNO_ILSEQ
+        unix => wasi::ERRNO_INVAL,
+        windows => wasi::ERRNO_NOENT
     );
 
     // Now open it with a trailing slash.
