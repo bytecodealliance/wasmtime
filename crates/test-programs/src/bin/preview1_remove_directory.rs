@@ -27,8 +27,7 @@ unsafe fn test_remove_directory(dir_fd: wasi::Fd) {
     assert_errno!(
         wasi::path_remove_directory(dir_fd, "file/")
             .expect_err("remove_directory with a trailing slash on a file should fail"),
-        unix => wasi::ERRNO_NOTDIR,
-        windows => wasi::ERRNO_NOENT
+        wasi::ERRNO_NOTDIR
     );
 
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
