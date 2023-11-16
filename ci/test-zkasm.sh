@@ -9,19 +9,16 @@ set -o pipefail
 set -eux
 
 # Flags and default modes
-PREINSTALLED=true
 ALL_FILES=false
 
 # Parse flags
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --all) ALL_FILES=true; shift ;;
-        --install-zkwasm) PREINSTALLED=false; shift ;;
         --help)
             echo "Usage: $0 [OPTIONS] [filename.zkasm]"
             echo "Options:"
             echo "  --all                           Test all zkasm files"
-            echo "  --install-zkwasm                Temporarily install and use zkevm-rom"
             echo "  --help                          Show this message"
             exit 0
             ;;
@@ -34,19 +31,9 @@ if [ "$ALL_FILES" = false ] && [ -z "$1" ]; then
     exit 1
 fi
 
-BASE_DIR="../wasmtime"
-
-if [ "$PREINSTALLED" = false ]; then
-    echo "Cloning zkevm-proverjs into /tmp directory..."
-    git clone https://github.com/0xPolygonHermez/zkevm-proverjs/ ./tmp/zkevm-proverjs > /dev/null 2>&1
-    cd ./tmp/zkevm-proverjs
-    npm install
-    BASE_DIR="../.."
-else
-    cd ../zkevm-proverjs
-fi
-
-git checkout feature/64bits
+BASE_DIR="./../../"
+cd deps/zkevm-proverjs
+npm i
 
 NODE_CMD="node test/zkasmtest.js --rows 2**18"
 
