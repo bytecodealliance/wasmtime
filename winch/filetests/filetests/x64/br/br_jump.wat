@@ -26,7 +26,6 @@
 ;;   2b:	 44891c24             	mov	dword ptr [rsp], r11d
 ;;   2f:	 4883c404             	add	rsp, 4
 ;;   33:	 e9eaffffff           	jmp	0x22
-;;   38:	 4883c404             	add	rsp, 4
-;;   3c:	 4883c410             	add	rsp, 0x10
-;;   40:	 5d                   	pop	rbp
-;;   41:	 c3                   	ret	
+;;   38:	 4883c410             	add	rsp, 0x10
+;;   3c:	 5d                   	pop	rbp
+;;   3d:	 c3                   	ret	

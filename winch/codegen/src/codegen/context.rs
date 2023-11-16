@@ -1,6 +1,6 @@
 use wasmtime_environ::{VMOffsets, WasmHeapType, WasmType};
 
-use super::{CodeGen, ControlStackFrame};
+use super::ControlStackFrame;
 use crate::{
     abi::{ABIOperand, ABIResultsData, RetArea, ABI},
     codegen::BuiltinFunctions,
@@ -385,27 +385,26 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         M: MacroAssembler,
         F: FnMut(&mut M, &mut Self, &mut ControlStackFrame),
     {
-        let (target_value_stack, target_sp) = dest.base_stack_len_and_sp();
+        let (_, target_sp) = dest.base_stack_len_and_sp();
         // Invariant: The SP, must be greater or equal to the target
         // SP, given that we haven't popped any results by this point
         // yet. But it may happen in the callback.
         assert!(masm.sp_offset().as_u32() >= target_sp.as_u32());
         f(masm, self, dest);
 
-        // The following snippet, pops the stack pointer and value stack to
-        // ensure that it is correctly placed according to the expectations of
-        // the destination branch.
+        // The following snippet, pops the stack pointer and to ensure that it
+        // is correctly placed according to the expectations of the destination
+        // branch.
         //
         // This is done in the context of unconditional jumps, as the machine
-        // stack and value stack might be left unbalanced at the jump site, due
-        // to register spills or extra values in the value stack. Note that in
-        // some cases the stack pointer offset might be already less than or
-        // equal to the original stack pointer offset registered when entering
-        // the destination control stack frame, which effectively means that
-        // when reaching the jump site no extra space was allocated similar to
-        // what would happen in a fall through in which we assume that the
-        // program has allocated and deallocated the right amount of stack
-        // space.
+        // stack might be left unbalanced at the jump site, due to register
+        // spills. Note that in some cases the stack pointer offset might be
+        // already less than or equal to the original stack pointer offset
+        // registered when entering the destination control stack frame, which
+        // effectively means that when reaching the jump site no extra space was
+        // allocated similar to what would happen in a fall through in which we
+        // assume that the program has allocated and deallocated the right
+        // amount of stack space.
         //
         // More generally speaking the current stack pointer will be less than
         // the original stack pointer offset in cases in which the top value in
@@ -414,7 +413,15 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
         // returns and a memory slot for 1+ returns). This could happen in the
         // callback invocation above if the callback invokes
         // `CodeGenContext::pop_abi_results` (e.g. `br` instruction).
-        CodeGen::reset_stack(self, masm, target_value_stack, target_sp);
+        //
+        // After an unconditional jump, the compiler will enter in an
+        // unreachable state; instead of immediately truncating the value stack
+        // to the expected length of the destination branch, we let the
+        // reachability analysis code decide what should happen with the length
+        // of the value stack once reachability is actually restored. At that
+        // point, the right stack pointer offset will also be restored, which
+        // should match the contents of the value stack.
+        masm.ensure_sp_for_jump(target_sp);
         dest.set_as_target();
         masm.jmp(*dest.label());
         self.reachable = false;
@@ -499,6 +506,42 @@ impl<'a, 'builtins> CodeGenContext<'a, 'builtins> {
                 },
             }
         }
+    }
+
+    /// Truncates the value stack to the specified target.
+    /// This function is intended to only be used when restoring the code
+    /// generation's reachability state, when handling an unreachable end or
+    /// else.
+    fn truncate_stack_to(&mut self, target: usize) {
+        if self.stack.len() > target {
+            self.drop_last(self.stack.len() - target, |regalloc, val| match val {
+                Val::Reg(tr) => regalloc.free(tr.reg),
+                _ => {}
+            });
+        }
+    }
+
+    /// This function ensures that the state of the -- machine and value --
+    /// stack  is the right one when reaching a control frame branch in which
+    /// reachability is restored or when reaching the end of a function in an
+    /// unreachable state. This function is intended to be called when handling
+    /// an unreachable else or end.
+    ///
+    /// This function will truncate the value stack to the length expected by
+    /// the control frame and will also set the stack pointer offset to
+    /// reflect the new length of the value stack.
+    pub fn ensure_stack_state<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        frame: &ControlStackFrame,
+    ) {
+        let (base_len, base_sp) = frame.base_stack_len_and_sp();
+        masm.reset_stack_pointer(base_sp);
+        self.truncate_stack_to(base_len);
+
+        // The size of the stack sometimes can be less given that locals are
+        // removed last, and not accounted as part of the [SPOffset].
+        debug_assert!(self.stack.sizeof(self.stack.len()) <= base_sp.as_u32());
     }
 
     /// Spill locals and registers to memory.

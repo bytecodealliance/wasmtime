@@ -372,6 +372,18 @@ impl Stack {
     pub fn inner_mut(&mut self) -> &mut VecDeque<Val> {
         &mut self.inner
     }
+
+    /// Calculates the size of, in bytes, of the top n [Memory] entries
+    /// in the value stack.
+    pub fn sizeof(&self, top: usize) -> u32 {
+        self.peekn(top).fold(0, |acc, v| {
+            if v.is_mem() {
+                acc + v.unwrap_mem().slot.size
+            } else {
+                acc
+            }
+        })
+    }
 }
 
 #[cfg(test)]

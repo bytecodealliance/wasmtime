@@ -486,4 +486,12 @@ impl ControlStackFrame {
     pub fn as_target_results(&self) -> Option<&ABIResultsData> {
         self.results()
     }
+
+    /// Returns true if the current frame is [ControlStackFrame::If].
+    pub fn is_if(&self) -> bool {
+        match self {
+            Self::If { .. } => true,
+            _ => false,
+        }
+    }
 }
