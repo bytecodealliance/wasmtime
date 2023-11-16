@@ -68,19 +68,19 @@ To test a `.zkasm` file:
 3. Execute the following from the `wasmtime/` directory to test the zk-asm:
 
    ```bash
-   ./ci/test-zk.sh --all
+   ./ci/test-zkasm.sh --all
    ```
 
    Or, for a specific file:
 
    ```bash
-   ./ci/test-zk.sh <filename>
+   ./ci/test-zkasm.sh <filename>
    ```
 
    For example:
 
    ```bash
-   ./ci/test-zk.sh zkasm_data/generated/add.zkasm
+   ./ci/test-zkasm.sh zkasm_data/generated/add.zkasm
    ```
 
 ## Logging during Compilation

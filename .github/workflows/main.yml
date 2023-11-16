@@ -37,15 +37,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:  
-  test_zkasm_64:
-    name: Test generated zkAsm on 64-bit zk processor
+  test_zkasm:
+    name: Test generated zkAsm on the ZK processor
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
       with:
         node-version: '20.8.0'
-    - run: ./ci/test-zk-64.sh --install-zkwasm --all
+    - run: ./ci/test-zkasm.sh --install-zkwasm --all
 
   rustfmt:
     name: Rustfmt
@@ -742,7 +742,7 @@ jobs:
     name: Record the result of testing and building steps
     runs-on: ubuntu-latest
     needs:
-      - test_zkasm_64
+      - test_zkasm
       - test
       - build
       - rustfmt
