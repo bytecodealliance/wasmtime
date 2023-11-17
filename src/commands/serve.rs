@@ -14,6 +14,7 @@ use wasmtime::{Engine, Store, StoreLimits};
 use wasmtime_wasi::preview2::{
     self, StreamError, StreamResult, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
+use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
     bindings::http::types as http_types, body::HyperOutgoingBody, hyper_response_error,
     WasiHttpCtx, WasiHttpView,
@@ -267,6 +268,7 @@ impl ServeCommand {
 
         loop {
             let (stream, _) = listener.accept().await?;
+            let stream = TokioIo::new(stream);
             let h = handler.clone();
             tokio::task::spawn(async move {
                 if let Err(e) = http1::Builder::new()
@@ -347,7 +349,7 @@ impl hyper::service::Service<Request> for ProxyHandler {
     type Error = anyhow::Error;
     type Future = Pin<Box<dyn std::future::Future<Output = Result<Self::Response>> + Send>>;
 
-    fn call(&mut self, req: Request) -> Self::Future {
+    fn call(&self, req: Request) -> Self::Future {
         use http_body_util::BodyExt;
 
         let ProxyHandler(inner) = self.clone();
